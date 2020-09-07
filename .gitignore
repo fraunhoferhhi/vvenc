@@ -1,0 +1,15 @@
+dec.yuv
+rec.yuv
+str.bin
+/build/
+/bin/
+/lib/
+core
+deploy
+/install/
+*.sdf
+*.suo
+.vs/
+.vscode/
+/CMakeSettings.json
+/out/
