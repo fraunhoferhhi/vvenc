@@ -399,10 +399,15 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_iThreadCount <= 0,                                                     "ThreadCount must be > 0" );
 
-  ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period must be GEZ" );
+  ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
+  ROTPARAMS( rcSrc.m_iIDRPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
+
+  ROTPARAMS( rcSrc.m_iTemporalRate  <= 0,                                                    "TemporalRate must be > 0" );
+  ROTPARAMS( rcSrc.m_iTemporalScale <= 0,                                                    "TemporalScale must be > 0" );
+
   ROTPARAMS( rcSrc.m_iGopSize != 1 && rcSrc.m_iGopSize != 16 && rcSrc.m_iGopSize != 32,     "GOP size 1, 16, 32 supported" );
 
-  if( 1 != rcSrc.m_iGopSize )
+  if( 1 != rcSrc.m_iGopSize && ( rcSrc.m_iIDRPeriod > 0  ))
   {
     ROTPARAMS( (rcSrc.m_eDecodingRefreshType == VVC_DRT_IDR || rcSrc.m_eDecodingRefreshType == VVC_DRT_CRA )&& (0 != rcSrc.m_iIDRPeriod % rcSrc.m_iGopSize),          "IDR period must be multiple of GOPSize" );
   }
@@ -465,7 +470,22 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   rcEncCfg.m_GOPSize                             = rcVVEncParameter.m_iGopSize;
   rcEncCfg.m_InputQueueSize                      = rcVVEncParameter.m_iGopSize;
 
-  rcEncCfg.m_IntraPeriod                         = rcVVEncParameter.m_iIDRPeriod;
+  if( rcVVEncParameter.m_iIDRPeriod >= rcVVEncParameter.m_iGopSize  )
+  {
+    rcEncCfg.m_IntraPeriod                       = rcVVEncParameter.m_iIDRPeriod;
+  }
+  else // use m_iIDRPeriodSec
+  {
+    unsigned int iIDRPeriod  = 16;
+    if     ( rcEncCfg.m_FrameRate >= 100 ){ iIDRPeriod  = 96; }
+    else if( rcEncCfg.m_FrameRate >= 80 ) { iIDRPeriod  = 80; }
+    else if( rcEncCfg.m_FrameRate >= 59 ) { iIDRPeriod  = 64; }
+    else if( rcEncCfg.m_FrameRate > 40  ) { iIDRPeriod  = 48; }
+    else if( rcEncCfg.m_FrameRate >= 23 ) { iIDRPeriod  = 32; }
+
+    rcEncCfg.m_IntraPeriod = iIDRPeriod * rcVVEncParameter.m_iIDRPeriodSec;
+  }
+
   if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_IDR )
   {
     rcEncCfg.m_DecodingRefreshType                 = 2;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
