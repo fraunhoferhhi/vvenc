@@ -100,10 +100,14 @@ public:
       if ( bFullHelp )
       {
         std::cout <<
-          "\t              faster        : best speed      : quality=0 \n"
-          "\t              fast          : fast mode       : quality=1 \n"
-          "\t              medium        : default quality : quality=2 \n"
-          "\t              slow          : best quality    : quality=3 \n";
+          "\t              faster        : best speed      : quality=0 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(0) << "\n\n"
+          "\t              fast          : fast mode       : quality=1 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n"
+          "\t              medium        : default quality : quality=2 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n"
+          "\t              slow          : best quality    : quality=3 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
       }
       std::cout <<
           "\t [--bitrate,-b  <int>     ] : Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second) [" << rcParams.m_iTargetBitRate << "]\n"

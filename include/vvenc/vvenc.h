@@ -475,6 +475,13 @@ public:
    */
    static const char* getErrorMsg( int nRet );
 
+   /**
+     This static function returns a string according to the passed parameter iQuality.
+     \param[in]  iQuality Quality (preset) as integer
+     \retval[ ]  std::string enabled encoding parameter as string
+   */
+   static const char* getPresetParamsAsStr( int iQuality );
+
 private:
    VVEncImpl*  m_pcVVEncImpl;
 };

@@ -67,7 +67,6 @@ vvc@hhi.fraunhofer.de
 
 int main( int argc, char* argv[] )
 {
-
   std::string cAppname = argv[0];
   std::size_t iPos = (int)cAppname.find_last_of("/");
   if( std::string::npos != iPos )
@@ -102,7 +101,6 @@ int main( int argc, char* argv[] )
   std::string cProfile = "main10";
   std::string cLevel   = "4.1";
   std::string cTier    = "main";
-
 
   int iMaxFrames = 0;
   int iInputBitdepth = 8;

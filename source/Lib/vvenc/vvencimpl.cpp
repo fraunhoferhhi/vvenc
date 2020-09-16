@@ -60,6 +60,7 @@ vvc@hhi.fraunhofer.de
 namespace vvenc {
 	
 std::string VVEncImpl::m_cTmpErrorString;
+std::string VVEncImpl::m_sPresetAsStr;
 int g_LogLevel = LL_ERROR;
 
 
@@ -381,6 +382,65 @@ double VVEncImpl::clockGetTimeDiffMs()
   return (double)(std::chrono::duration_cast<std::chrono::milliseconds>((m_cTPEnd)-(m_cTPStart)).count());
 }
 
+const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
+{
+  m_sPresetAsStr.clear();
+
+  std::stringstream css;
+  vvenc::EncCfg cEncCfg;
+  if( 0 != xInitPreset( cEncCfg, iQuality ))
+  {
+    css << "undefined preset " << iQuality;
+  }
+// tools
+  if( cEncCfg.m_RDOQ )           { css << "RDOQ " << cEncCfg.m_RDOQ << " ";}
+  if( cEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
+  if( cEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
+  if( cEncCfg.m_alf )
+  {
+    css << "ALF ";
+    if( cEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
+    if( cEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
+  }
+  if( cEncCfg.m_ccalf ){ css << "CCALF ";}
+
+// vvc tools
+  if( cEncCfg.m_BDOF )             { css << "BIO ";}
+  if( cEncCfg.m_DMVR )             { css << "DMVR ";}
+  if( cEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
+  if( cEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cEncCfg.m_AMVRspeed << " ";}
+  if( cEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
+  if( cEncCfg.m_EDO )              { css << "EncDbOpt ";}
+  if( cEncCfg.m_MRL )              { css << "MRL ";}
+  if( cEncCfg.m_MCTF )             { css << "MCTF "; }
+  if( cEncCfg.m_SMVD )             { css << "SMVD " << cEncCfg.m_SMVD << " ";}
+  if( cEncCfg.m_Affine )
+  {
+    css << "Affine " << cEncCfg.m_Affine << " ";
+    if( cEncCfg.m_PROF )           { css << "(Prof " << cEncCfg.m_PROF << " ";}
+    if( cEncCfg.m_AffineType )     { css << "Type " << cEncCfg.m_AffineType << ") ";}
+  }
+
+  if( cEncCfg.m_MMVD )             { css << "MMVD " << cEncCfg.m_MMVD << " ";}
+  if( cEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
+
+  if( cEncCfg.m_MIP )          { css << "MIP ";}
+  if( cEncCfg.m_useFastMIP )   { css << "FastMIP " << cEncCfg.m_useFastMIP << " ";}
+  if( cEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
+  if( cEncCfg.m_Geo )          { css << "Geo " << cEncCfg.m_Geo << " ";}
+  if( cEncCfg.m_LFNST )        { css << "LFNST ";}
+
+  if( cEncCfg.m_SBT )          { css << "SBT " ;}
+  if( cEncCfg.m_CIIP )         { css << "CIIP ";}
+
+  // fast tools
+  if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
+
+
+  m_sPresetAsStr = css.str();
+  return m_sPresetAsStr.c_str();
+}
+
 
 /* converting sdk params to internal (wrapper) params*/
 int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString )
@@ -450,7 +510,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     rcEncCfg.m_RCTargetBitrate       = 0;
   }
 
-
   rcEncCfg.m_internalBitDepth[0] = 10;
 
   if( rcVVEncParameter.m_iThreadCount > 1 )
@@ -459,11 +518,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
       rcEncCfg.m_ensureWppBitEqual = 1;
   }
 
-  rcEncCfg.m_intraQPOffset = -3;
-  rcEncCfg.m_lambdaFromQPEnable = true;
-
   rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
-
   rcEncCfg.m_framesToBeEncoded = 0;
 
   //======== Coding Structure =============
@@ -503,68 +558,14 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     rcEncCfg.m_DecodingRefreshType                 = 0;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
 
-  rcEncCfg.m_maxTempLayer = 5;
-  rcEncCfg.m_numRPLList0  = 20;
-  rcEncCfg.m_numRPLList1  = 20;
-
   //======== Profile ================
   rcEncCfg.m_profile   = (vvenc::Profile::Name)rcVVEncParameter.m_eProfile;
   rcEncCfg.m_levelTier = (vvenc::Level::Tier)rcVVEncParameter.m_eTier;
   rcEncCfg.m_level     = (vvenc::Level::Name)rcVVEncParameter.m_eLevel;
 
   rcEncCfg.m_bitDepthConstraintValue = 10;
-
-  rcEncCfg.m_rewriteParamSets = true;
-
-  rcEncCfg.m_internChromaFormat = vvenc::CHROMA_420;
-
-//  rcEncCfg.m_sliceArgument = 1500;
-//  rcEncCfg.m_MaxBTDepth = 2;
-
-  rcEncCfg.m_MaxCodingDepth = 5;
-  rcEncCfg.m_log2DiffMaxMinCodingBlockSize = 5;
-
-  rcEncCfg.m_bUseASR   = true;
-  rcEncCfg.m_bUseHADME = true;
-  rcEncCfg.m_RDOQ      = 1;
-  rcEncCfg.m_useRDOQTS = true;
-  rcEncCfg.m_useSelectiveRDOQ = false;
-  rcEncCfg.m_JointCbCrMode = true;
-  rcEncCfg.m_cabacInitPresent = true;
-  rcEncCfg.m_useFastLCTU = true;
-  rcEncCfg.m_usePbIntraFast = true;
-  rcEncCfg.m_useFastMrg = true;
-  rcEncCfg.m_useAMaxBT = true;
-  rcEncCfg.m_fastQtBtEnc = true;
-  rcEncCfg.m_contentBasedFastQtbt = true;
-  rcEncCfg.m_fastInterSearchMode = 1;
-
-  rcEncCfg.m_MTSImplicit = true;
-  rcEncCfg.m_SearchRange = 384;
-  rcEncCfg.m_minSearchWindow = 96;
-
-  rcEncCfg.m_AMVRspeed = 1;
-  rcEncCfg.m_LMChroma = true;
-
-  rcEncCfg.m_BDOF = true;
-  rcEncCfg.m_DMVR = true;
-  rcEncCfg.m_EDO = 1;
-  rcEncCfg.m_lumaReshapeEnable = true;
-
-  rcEncCfg.m_alf                   = true;
-
-  // adapt to RA config files
-  rcEncCfg.m_qpInValsCb.clear();
-  rcEncCfg.m_qpInValsCb.push_back(17);
-  rcEncCfg.m_qpInValsCb.push_back(22);
-  rcEncCfg.m_qpInValsCb.push_back(34);
-  rcEncCfg.m_qpInValsCb.push_back(42);
-
-  rcEncCfg.m_qpOutValsCb.clear();
-  rcEncCfg.m_qpOutValsCb.push_back(17);
-  rcEncCfg.m_qpOutValsCb.push_back(23);
-  rcEncCfg.m_qpOutValsCb.push_back(35);
-  rcEncCfg.m_qpOutValsCb.push_back(39);
+  rcEncCfg.m_rewriteParamSets        = true;
+  rcEncCfg.m_internChromaFormat      = vvenc::CHROMA_420;
 
   if( 0 != xInitPreset( rcEncCfg, rcVVEncParameter.m_iQuality  ) )
   {
@@ -587,6 +588,72 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 
 int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
 {
+  rcEncCfg.m_maxTempLayer = 5;
+  rcEncCfg.m_numRPLList0  = 20;
+  rcEncCfg.m_numRPLList1  = 20;
+
+  rcEncCfg.m_intraQPOffset = -3;
+  rcEncCfg.m_lambdaFromQPEnable = true;
+
+  rcEncCfg.m_MaxCodingDepth = 5;
+  rcEncCfg.m_log2DiffMaxMinCodingBlockSize = 5;
+
+  rcEncCfg.m_bUseASR   = true;
+  rcEncCfg.m_bUseHADME = true;
+  rcEncCfg.m_RDOQ      = 1;
+  rcEncCfg.m_useRDOQTS = true;
+  rcEncCfg.m_useSelectiveRDOQ = false;
+  rcEncCfg.m_JointCbCrMode = true;
+  rcEncCfg.m_cabacInitPresent = true;
+  rcEncCfg.m_useFastLCTU = true;
+  rcEncCfg.m_usePbIntraFast = true;
+  rcEncCfg.m_useFastMrg = 2;
+  rcEncCfg.m_fastLocalDualTreeMode = 1;
+  rcEncCfg.m_fastSubPel            = 1;
+  rcEncCfg.m_qtbttSpeedUp          = 1;
+
+  rcEncCfg.m_useAMaxBT = true;
+  rcEncCfg.m_fastQtBtEnc = true;
+  rcEncCfg.m_contentBasedFastQtbt = true;
+  rcEncCfg.m_fastInterSearchMode = 1;
+
+  rcEncCfg.m_MTSImplicit = true;
+
+  rcEncCfg.m_motionEstimationSearchMethod = 4;
+  rcEncCfg.m_SearchRange = 384;
+  rcEncCfg.m_minSearchWindow = 96;
+
+  rcEncCfg.m_AMVRspeed = 1;
+  rcEncCfg.m_LMChroma = true;
+
+  rcEncCfg.m_BDOF = true;
+  rcEncCfg.m_DMVR = true;
+  rcEncCfg.m_EDO = 1;
+  rcEncCfg.m_lumaReshapeEnable = true;
+  rcEncCfg.m_alf               = true;
+
+  rcEncCfg.m_LMCSOffset      = 6;
+
+  rcEncCfg.m_maxMTTDepth        = 1;
+  rcEncCfg.m_maxMTTDepthI       = 2;
+  rcEncCfg.m_maxMTTDepthIChroma = 2;
+  rcEncCfg.m_maxNumMergeCand    = 6;
+
+  rcEncCfg.m_useNonLinearAlfLuma   = false;
+  rcEncCfg.m_useNonLinearAlfChroma = false;
+
+  // adapt to RA config files
+  rcEncCfg.m_qpInValsCb.clear();
+  rcEncCfg.m_qpInValsCb.push_back(17);
+  rcEncCfg.m_qpInValsCb.push_back(22);
+  rcEncCfg.m_qpInValsCb.push_back(34);
+  rcEncCfg.m_qpInValsCb.push_back(42);
+
+  rcEncCfg.m_qpOutValsCb.clear();
+  rcEncCfg.m_qpOutValsCb.push_back(17);
+  rcEncCfg.m_qpOutValsCb.push_back(23);
+  rcEncCfg.m_qpOutValsCb.push_back(35);
+  rcEncCfg.m_qpOutValsCb.push_back(39);
 
   switch( iQuality )
   {
@@ -601,23 +668,8 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_AMVRspeed             = 0;
           rcEncCfg.m_lumaReshapeEnable     = false;
           rcEncCfg.m_EDO                   = 0;
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
 
-          rcEncCfg.m_useFastMrg            = 2;
-          rcEncCfg.m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel            = 1;
-          rcEncCfg.m_qtbttSpeedUp          = 1;
-
-          rcEncCfg.m_LMCSOffset      = 6;
-          rcEncCfg.m_MRL             = false;
-
-          rcEncCfg.m_maxMTTDepth        = 1;
-          rcEncCfg.m_maxMTTDepthI       = 2;
-          rcEncCfg.m_maxMTTDepthIChroma = 2;
-          rcEncCfg.m_maxNumMergeCand    = 6;
-
-          rcEncCfg.m_useNonLinearAlfLuma   = false;
-          rcEncCfg.m_useNonLinearAlfChroma = false;
+          rcEncCfg.m_MRL                   = false;
 
           break;
   case 1:
@@ -628,40 +680,21 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_DepQuantEnabled       = false;
           rcEncCfg.m_SignDataHidingEnabled = true;
           rcEncCfg.m_BDOF                  = true;
-          rcEncCfg.m_alf                   = true;
           rcEncCfg.m_ccalf                 = true;
           rcEncCfg.m_DMVR                  = true;
           rcEncCfg.m_JointCbCrMode         = false;
           rcEncCfg.m_AMVRspeed             = 0;
           rcEncCfg.m_lumaReshapeEnable     = false;
-          rcEncCfg.m_EDO = 0;
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
+          rcEncCfg.m_EDO                   = 0;
 
           rcEncCfg.m_MCTF               = 2;
           rcEncCfg.m_MCTFNumLeadFrames  = 0;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
 
-          rcEncCfg.m_useFastMrg            = 2;
-          rcEncCfg.m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel            = 1;
-          rcEncCfg.m_qtbttSpeedUp          = 1;
-
-          rcEncCfg.m_LMCSOffset         = 6;
           rcEncCfg.m_MRL                = false;
-
-          rcEncCfg.m_maxMTTDepth        = 1;
-          rcEncCfg.m_maxMTTDepthI       = 2;
-          rcEncCfg.m_maxMTTDepthIChroma = 2;
-          rcEncCfg.m_maxNumMergeCand    = 6;
-
-          rcEncCfg.m_useNonLinearAlfLuma   = false;
-          rcEncCfg.m_useNonLinearAlfChroma = false;
 
     break;
   case 2:  // medium ( = ftc )
-
-          rcEncCfg.m_useNonLinearAlfLuma   = false;
-          rcEncCfg.m_useNonLinearAlfChroma = false;
 
           rcEncCfg.m_AMVRspeed = 5;
 
@@ -671,44 +704,25 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_MCTFNumLeadFrames = 0;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
 
-          rcEncCfg.m_useFastMrg             = 2;
-          rcEncCfg. m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel             = 1;
-
           rcEncCfg.m_Affine = 2;
           rcEncCfg.m_PROF   = 1;
 
           rcEncCfg.m_MMVD             = 3;
           rcEncCfg.m_allowDisFracMMVD = 1;
 
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
-
-          rcEncCfg.m_maxMTTDepth        = 1;
-          rcEncCfg.m_maxMTTDepthI       = 2;
-          rcEncCfg.m_maxMTTDepthIChroma = 2;
-
-          rcEncCfg.m_MaxCodingDepth     = 5;
-
           rcEncCfg.m_MIP             = 1;
           rcEncCfg.m_useFastMIP      = 4;
 
           rcEncCfg.m_ccalf           = true;
-          rcEncCfg.m_qtbttSpeedUp    = 1;
           rcEncCfg.m_SbTMVP          = 1;
           rcEncCfg.m_Geo             = 3;
           rcEncCfg.m_LFNST           = 1;
-          rcEncCfg.m_maxNumMergeCand = 6;
-
-          rcEncCfg.m_LMCSOffset      = 6;
 
           rcEncCfg.m_RCKeepHierarchicalBit = 2;
 
     break;
 
   case 3: // slower
-
-          rcEncCfg.m_useNonLinearAlfLuma   = true;
-          rcEncCfg.m_useNonLinearAlfChroma = true;
 
           rcEncCfg.m_AMVRspeed = 1;
 
@@ -718,43 +732,33 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_MCTFNumLeadFrames  = 0;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
 
-          rcEncCfg.m_useFastMrg = 2;
-          rcEncCfg. m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel = 1;
-
           rcEncCfg.m_Affine = 2;
           rcEncCfg.m_PROF = 1;
 
           rcEncCfg.m_MMVD = 3;
           rcEncCfg.m_allowDisFracMMVD = 1;
 
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
-
           rcEncCfg.m_maxMTTDepth        = 2;
           rcEncCfg.m_maxMTTDepthI       = 3;
           rcEncCfg.m_maxMTTDepthIChroma = 3;
-
-          rcEncCfg.m_MaxCodingDepth      = 5;
 
           rcEncCfg.m_MIP             = 1;
           rcEncCfg.m_useFastMIP      = 4;
 
           rcEncCfg.m_ccalf           = true;
-          rcEncCfg.m_qtbttSpeedUp    = 1;
           rcEncCfg.m_SbTMVP          = 1;
           rcEncCfg.m_Geo             = 1;
           rcEncCfg.m_LFNST           = 1;
-          rcEncCfg.m_maxNumMergeCand = 6;
-
-          rcEncCfg.m_LMCSOffset      = 6;
 
           rcEncCfg.m_RCKeepHierarchicalBit = 2;
 
-          m_cEncCfg.m_SBT  = 1;
-          m_cEncCfg.m_CIIP = 1;
+          rcEncCfg.m_SBT  = 1;
+          rcEncCfg.m_CIIP = 1;
 
           rcEncCfg.m_contentBasedFastQtbt = false;
 
+          rcEncCfg.m_useNonLinearAlfLuma   = true;
+          rcEncCfg.m_useNonLinearAlfChroma = true;
     break;
 
   default:
