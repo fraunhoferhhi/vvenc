@@ -108,7 +108,7 @@ public:
     {
       m_iReadWidth = m_iWidth*10/16;
       m_iPicSize = 2*m_iReadWidth * iHeight * 3 / 2;
-      int iRet = allocBuffer( m_cReadBuffer, true );
+      int iRet = allocBuffer( m_cReadBuffer );
       m_cReadBuffer.m_iWidth = m_iReadWidth;
       m_cReadBuffer.m_iStride = m_iReadWidth;
       if( iRet ) { return iRet; }
@@ -145,7 +145,7 @@ public:
   }
 
   template< class PicBufferLocal >
-  int allocBuffer( PicBufferLocal& rcPicBuffer, bool bFrameBuffer )
+  int allocBuffer( PicBufferLocal& rcPicBuffer )
   {
     if( !m_bInitialized ){ assert( m_bInitialized ); return -1; }
 

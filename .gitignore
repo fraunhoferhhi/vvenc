@@ -13,3 +13,5 @@ deploy
 .vscode/
 /CMakeSettings.json
 /out/
+.project
+.cproject
