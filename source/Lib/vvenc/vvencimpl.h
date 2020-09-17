@@ -98,7 +98,7 @@ private:
   int xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality );
   void xPrintCfg();
 
-  int xCopyInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
+  int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
   int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
 

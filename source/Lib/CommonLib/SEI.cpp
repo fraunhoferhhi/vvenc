@@ -66,11 +66,11 @@ void xTraceSEIMessageType( SEI::PayloadType payloadType )
 }
 #endif
 
-SEIMessages getSeisByType(SEIMessages &seiList, SEI::PayloadType seiType)
+SEIMessages getSeisByType(const SEIMessages &seiList, SEI::PayloadType seiType)
 {
   SEIMessages result;
 
-  for (SEIMessages::iterator it=seiList.begin(); it!=seiList.end(); it++)
+  for (SEIMessages::const_iterator it=seiList.begin(); it!=seiList.end(); it++)
   {
     if ((*it)->payloadType() == seiType)
     {
@@ -110,37 +110,6 @@ void deleteSEIs (SEIMessages &seiList)
   seiList.clear();
 }
 
-void SEIBufferingPeriod::copyTo (SEIBufferingPeriod& target)
-{
-  target.m_bpSeqParameterSetId = m_bpSeqParameterSetId;
-  target.m_rapCpbParamsPresent = m_rapCpbParamsPresent;
-  target.m_cpbDelayOffset = m_cpbDelayOffset;
-  target.m_dpbDelayOffset = m_dpbDelayOffset;
-  target.m_concatenationFlag = m_concatenationFlag;
-  target.m_auCpbRemovalDelayDelta = m_auCpbRemovalDelayDelta;
-  ::memcpy(target.m_initialCpbRemovalDelay, m_initialCpbRemovalDelay, sizeof(m_initialCpbRemovalDelay));
-  ::memcpy(target.m_initialCpbRemovalDelayOffset, m_initialCpbRemovalDelayOffset, sizeof(m_initialCpbRemovalDelayOffset));
-  ::memcpy(target.m_initialAltCpbRemovalDelay, m_initialAltCpbRemovalDelay, sizeof(m_initialAltCpbRemovalDelay));
-  ::memcpy(target.m_initialAltCpbRemovalDelayOffset, m_initialAltCpbRemovalDelayOffset, sizeof(m_initialAltCpbRemovalDelayOffset));
-}
-
-void SEIPictureTiming::copyTo (SEIPictureTiming& target)
-{
-  target.m_picStruct = m_picStruct;
-  target.m_sourceScanType = m_sourceScanType;
-  target.m_duplicateFlag = m_duplicateFlag;
-
-  target.m_auCpbRemovalDelay = m_auCpbRemovalDelay;
-  target.m_picDpbOutputDelay = m_picDpbOutputDelay;
-  target.m_picDpbOutputDuDelay = m_picDpbOutputDuDelay;
-  target.m_numDecodingUnitsMinus1 = m_numDecodingUnitsMinus1;
-  target.m_duCommonCpbRemovalDelayFlag = m_duCommonCpbRemovalDelayFlag;
-  target.m_duCommonCpbRemovalDelayMinus1 = m_duCommonCpbRemovalDelayMinus1;
-
-  target.m_numNalusInDuMinus1 = m_numNalusInDuMinus1;
-  target.m_duCpbRemovalDelayMinus1 = m_duCpbRemovalDelayMinus1;
-}
-
 // Static member
 const char *SEI::getSEIMessageString(SEI::PayloadType payloadType)
 {
@@ -148,37 +117,28 @@ const char *SEI::getSEIMessageString(SEI::PayloadType payloadType)
   {
     case SEI::BUFFERING_PERIOD:                     return "Buffering period";
     case SEI::PICTURE_TIMING:                       return "Picture timing";
-    case SEI::PAN_SCAN_RECT:                        return "Pan-scan rectangle";                   // not currently decoded
     case SEI::FILLER_PAYLOAD:                       return "Filler payload";                       // not currently decoded
     case SEI::USER_DATA_REGISTERED_ITU_T_T35:       return "User data registered";                 // not currently decoded
     case SEI::USER_DATA_UNREGISTERED:               return "User data unregistered";
-    case SEI::RECOVERY_POINT:                       return "Recovery point";
-    case SEI::SCENE_INFO:                           return "Scene information";                    // not currently decoded
-    case SEI::FULL_FRAME_SNAPSHOT:                  return "Picture snapshot";                     // not currently decoded
-    case SEI::PROGRESSIVE_REFINEMENT_SEGMENT_START: return "Progressive refinement segment start"; // not currently decoded
-    case SEI::PROGRESSIVE_REFINEMENT_SEGMENT_END:   return "Progressive refinement segment end";   // not currently decoded
     case SEI::FILM_GRAIN_CHARACTERISTICS:           return "Film grain characteristics";           // not currently decoded
-    case SEI::POST_FILTER_HINT:                     return "Post filter hint";                     // not currently decoded
-    case SEI::TONE_MAPPING_INFO:                    return "Tone mapping information";
-    case SEI::KNEE_FUNCTION_INFO:                   return "Knee function information";
     case SEI::FRAME_PACKING:                        return "Frame packing arrangement";
-    case SEI::DISPLAY_ORIENTATION:                  return "Display orientation";
-    case SEI::GREEN_METADATA:                       return "Green metadata information";
-    case SEI::SOP_DESCRIPTION:                      return "Structure of pictures information";
-    case SEI::ACTIVE_PARAMETER_SETS:                return "Active parameter sets";
+    case SEI::PARAMETER_SETS_INCLUSION_INDICATION:  return "Parameter sets inclusion indication";
     case SEI::DECODING_UNIT_INFO:                   return "Decoding unit information";
-    case SEI::TEMPORAL_LEVEL0_INDEX:                return "Temporal sub-layer zero index";
-    case SEI::DECODED_PICTURE_HASH:                 return "Decoded picture hash";
     case SEI::SCALABLE_NESTING:                     return "Scalable nesting";
-    case SEI::REGION_REFRESH_INFO:                  return "Region refresh information";
-    case SEI::NO_DISPLAY:                           return "No display";
-    case SEI::TIME_CODE:                            return "Time code";
+    case SEI::DECODED_PICTURE_HASH:                 return "Decoded picture hash";
+    case SEI::DEPENDENT_RAP_INDICATION:             return "Dependent RAP indication";
     case SEI::MASTERING_DISPLAY_COLOUR_VOLUME:      return "Mastering display colour volume";
-    case SEI::SEGM_RECT_FRAME_PACKING:              return "Segmented rectangular frame packing arrangement";
-    case SEI::TEMP_MOTION_CONSTRAINED_TILE_SETS:    return "Temporal motion constrained tile sets";
-    case SEI::CHROMA_RESAMPLING_FILTER_HINT:        return "Chroma sampling filter hint";
-    case SEI::COLOUR_REMAPPING_INFO:                return "Colour remapping info";
     case SEI::ALTERNATIVE_TRANSFER_CHARACTERISTICS: return "Alternative transfer characteristics";
+    case SEI::CONTENT_LIGHT_LEVEL_INFO:             return "Content light level information";
+    case SEI::AMBIENT_VIEWING_ENVIRONMENT:          return "Ambient viewing environment";
+    case SEI::CONTENT_COLOUR_VOLUME:                return "Content colour volume";
+    case SEI::EQUIRECTANGULAR_PROJECTION:           return "Equirectangular projection";
+    case SEI::SPHERE_ROTATION:                      return "Sphere rotation";
+    case SEI::REGION_WISE_PACKING:                  return "Region wise packing information";
+    case SEI::OMNI_VIEWPORT:                        return "Omni viewport";
+    case SEI::GENERALIZED_CUBEMAP_PROJECTION:       return "Generalized cubemap projection";
+    case SEI::SAMPLE_ASPECT_RATIO_INFO:             return "Sample aspect ratio information";
+    case SEI::SUBPICTURE_LEVEL_INFO:                return "Subpicture level information";
     default:                                        return "Unknown";
   }
 }

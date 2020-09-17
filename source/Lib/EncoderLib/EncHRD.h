@@ -40,8 +40,7 @@ www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
 
-#ifndef __ENCHRD__
-#define __ENCHRD__
+#pragma once
 
 #include "../../../include/vvenc/EncCfg.h"
 #include "CommonLib/Common.h"
@@ -49,10 +48,11 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/Slice.h"
 
 namespace vvenc {
+
   class EncHRD :public HRD
   {
   public:
-    void initHRDParameters( EncCfg* encCfg );
+    void initHRDParameters( const EncCfg& encCfg, const SPS& sps );
 
   protected:
     // calculate scale value of bitrate and initial delay
@@ -61,4 +61,3 @@ namespace vvenc {
   };
 
 }
-#endif // __ENCHRD__

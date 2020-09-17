@@ -539,12 +539,13 @@ int AlfCovariance::gnsSolveByChol( TE LHS, double* rhs, double *x, int numEq ) c
 //////////////////////////////////////////////////////////////////////////////////////////
 
 EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
-  : m_encCfg        ( nullptr )
-  , m_apsMap        ( nullptr )
-  , m_CABACEstimator( nullptr )
-  , m_CtxCache      ( nullptr )
-  , m_apsIdStart    ( ALF_CTB_MAX_NUM_APS )
-  , m_threadpool    ( nullptr )
+  : m_encCfg         ( nullptr )
+  , m_apsMap         ( nullptr )
+  , m_CABACEstimator ( nullptr )
+  , m_CtxCache       ( nullptr )
+  , m_apsIdStart     ( ALF_CTB_MAX_NUM_APS )
+  , m_bestFilterCount( 0 )
+  , m_threadpool     ( nullptr )
  {
   for( int i = 0; i < MAX_NUM_COMP; i++ )
   {
@@ -1294,83 +1295,36 @@ void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs
 
   const int nCtuX = ctuRsAddr % cs.pcv->widthInCtus;
   const int nCtuY = ctuRsAddr / cs.pcv->widthInCtus;
-  CHECK( nCtuY >= cs.pcv->heightInCtus, "Wrong CTU index" );
 
-  UnitArea curCtuArea = UnitArea( cs.area.chromaFormat, cs.pcv->getCtuArea( nCtuX, nCtuY ) );
-
-  PelUnitBuf curCtuBuf = m_tempBuf.getBuf( curCtuArea );
-  const int extMargin = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1; //MAX_ALF_FILTER_LENGTH >> 1;
-
-  if( nCtuY == 0 )
+  // copy unfiltered reco (including padded / extented area)
+  const ChromaFormat chromaFormat = cs.area.chromaFormat;
+  UnitArea ctuArea                = UnitArea( chromaFormat, cs.pcv->getCtuArea( nCtuX, nCtuY ) );
+  const int extMargin             = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
+  for( int i = 0; i < getNumberValidComponents( chromaFormat ); i++ )
   {
-    if( nCtuX == 0 ) {
-      // First CTU in line
-      curCtuBuf.copyFrom( pic.getRecoBuf( curCtuArea ) );
-      curCtuBuf.extendBorderPelLft( 0, curCtuArea.lheight(), extMargin );
-      if( nCtuY == 0 )
-      {
-        // First CTU line, extend top border
-        curCtuBuf.extendBorderPelTop( -extMargin, curCtuArea.lwidth() + extMargin, extMargin );
-      }
-    }
-
-    if( nCtuX + 1 < cs.pcv->widthInCtus ){
-      UnitArea nextCtuArea = UnitArea( cs.area.chromaFormat, cs.pcv->getCtuArea( nCtuX + 1, nCtuY ) );
-      PelUnitBuf nextCtuBuf = m_tempBuf.getBuf( nextCtuArea );
-      nextCtuBuf.copyFrom( pic.getRecoBuf( nextCtuArea ) );
-      if( nCtuY == 0 )
-      {
-        // First CTU line, extend top border
-        nextCtuBuf.extendBorderPelTop( 0, nextCtuArea.lwidth(), extMargin );
-      }
-    }
-    else{
-      // Last CTU in line
-      curCtuBuf.extendBorderPelRgt( 0, curCtuArea.lheight(), MAX_ALF_FILTER_LENGTH >> 1 );
-      if( nCtuY == 0 && nCtuX > 0 )
-      {
-        // First CTU line, extend top border
-        curCtuBuf.extendBorderPelTop( curCtuArea.lwidth(), extMargin, extMargin );
-      }
-    }
-  }
-
-  if( nCtuY + 1 < cs.pcv->heightInCtus )
-  {
-    if( nCtuX == 0 )
+    const int extX   = extMargin >> getComponentScaleX( ComponentID( i ), chromaFormat );
+    const int extY   = extMargin >> getComponentScaleY( ComponentID( i ), chromaFormat );
+    CompArea cpyArea = ctuArea.blocks[ i ];
+    cpyArea.x += extX;
+    cpyArea.y += extY;
+    if ( nCtuX == 0 )
     {
-      // Copy below CTU
-      UnitArea   nextCtuArea = UnitArea(cs.area.chromaFormat, cs.pcv->getCtuArea(nCtuX, nCtuY + 1));
-      PelUnitBuf nextCtuBuf  = m_tempBuf.getBuf( nextCtuArea);
-      nextCtuBuf.copyFrom( pic.getRecoBuf( nextCtuArea ) );
-      nextCtuBuf.extendBorderPelLft( 0, nextCtuArea.lheight(), extMargin );
+      cpyArea.x     -= 2 * extX;
+      cpyArea.width += 2 * extX;
     }
-
-    // Copy CTU below-right
-    if( nCtuX + 1 < cs.pcv->widthInCtus ){
-      UnitArea nextCtuArea = UnitArea( cs.area.chromaFormat, cs.pcv->getCtuArea( nCtuX + 1, nCtuY + 1 ) );
-      PelUnitBuf nextCtuBuf = m_tempBuf.getBuf( nextCtuArea );
-      nextCtuBuf.copyFrom( pic.getRecoBuf( nextCtuArea ) );
+    if ( nCtuY == 0 )
+    {
+      cpyArea.y      -= 2 * extY;
+      cpyArea.height += 2 * extY;
     }
-    else{
-      // Last CTU in line
-      UnitArea   nextCtuArea = UnitArea(cs.area.chromaFormat, cs.pcv->getCtuArea(nCtuX, nCtuY + 1));
-      PelUnitBuf nextCtuBuf = m_tempBuf.getBuf( nextCtuArea );
-      nextCtuBuf.extendBorderPelRgt( 0, nextCtuArea.lheight(), MAX_ALF_FILTER_LENGTH >> 1 );
-    }
-  }
-  else
-  {
-    // Last CTU line, extend bottom border only
-    int botBoundaryStart = nCtuX == 0 ? -extMargin: curCtuArea.lwidth();
-    int botBoundarySize  = curCtuArea.lwidth() + ( ( nCtuX + 1 < cs.pcv->widthInCtus ) ? curCtuArea.lwidth(): extMargin );
-    if( nCtuX == 0 )
-      botBoundarySize += extMargin;
-    curCtuBuf.extendBorderPelBot( botBoundaryStart, botBoundarySize, extMargin );
+    PelBuf dstBuf = m_tempBuf.getBuf( cpyArea );
+    PelBuf srcBuf = pic.getRecoBuf( cpyArea );
+    dstBuf.copyFrom( srcBuf );
   }
 
   // Perform filtering
-  reconstructCTU( pic, cs, curCtuBuf, ctuRsAddr );
+  PelUnitBuf ctuBuf = m_tempBuf.getBuf( ctuArea );
+  reconstructCTU( pic, cs, ctuBuf, ctuRsAddr );
 }
 
 #if ENABLE_TRACING

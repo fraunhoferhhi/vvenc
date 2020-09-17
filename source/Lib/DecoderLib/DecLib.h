@@ -106,6 +106,7 @@ private:
   LoopFilter              m_cLoopFilter;
   SampleAdaptiveOffset    m_cSAO;
   Reshape                 m_cReshaper;
+  HRD                     m_HRD;
   AdaptiveLoopFilter      m_cALF;
   RdCost                  m_cRdCost;                      ///< RD cost computation class
   XUCache                 m_unitCache;

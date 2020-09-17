@@ -50,6 +50,7 @@ vvc@hhi.fraunhofer.de
 #include "AlfParameters.h"
 #include "Common.h"
 #include "MotionInfo.h"
+#include "HRD.h"
 
 #include <cstring>
 #include <list>
@@ -112,7 +113,7 @@ typedef std::vector<ReferencePictureList> RPLList;
 
 struct ConstraintInfo
 {
-  bool      gciPresentFlag;
+  bool      gciPresent;
   bool      noRprConstraintFlag;
   bool      noResChangeInClvsConstraintFlag;
   bool      oneTilePerPicConstraintFlag;
@@ -183,7 +184,7 @@ struct ConstraintInfo
 
 
   ConstraintInfo()
-    : gciPresentFlag                                  ( false )
+    : gciPresent                                  ( false )
     , noRprConstraintFlag                             ( false )
     , noResChangeInClvsConstraintFlag                 ( false )
     , oneTilePerPicConstraintFlag                     ( false )
@@ -475,11 +476,17 @@ struct VPS
   uint32_t              interLayerRefIdx[MAX_VPS_LAYERS][MAX_VPS_LAYERS];
   bool                  extension;
 
-  bool                  generalHrdParamsPresentFlag;
-
+  bool                  generalHrdParamsPresent;
+  bool                  sublayerCpbParamsPresent;
+  uint32_t              numOlsHrdParamsMinus1;
+  uint32_t              hrdMaxTid[MAX_NUM_OLSS];
+  uint32_t              olsHrdIdx[MAX_NUM_OLSS];
+  GeneralHrdParams      generalHrdParams;
+  OlsHrdParams          olsHrdParams[MAX_TLAYER];
   std::vector<Size>             olsDpbPicSize;
   std::vector<int>              olsDpbParamsIdx;
   std::vector<std::vector<int>> outputLayerIdInOls;
+  std::vector<std::vector<int>> numSubLayersInLayerInOLS;
 
   std::vector<int>              olsDpbChromaFormatIdc;
   std::vector<int>              olsDpbBitDepthMinus8;
@@ -751,8 +758,9 @@ struct SPS
 
 
   bool              hrdParametersPresent;
-//  GeneralHrdParams m_generalHrdParams;
-//  OlsHrdParams     m_olsHrdParams[MAX_TLAYER];
+  bool              subLayerParametersPresent;
+  GeneralHrdParams  generalHrdParams;
+  OlsHrdParams      olsHrdParams[MAX_TLAYER];
   bool              fieldSeqFlag;
   bool              vuiParametersPresent;
   VUI               vuiParameters;
@@ -968,8 +976,8 @@ struct APS
   LmcsParam              lmcsParam;
   CcAlfFilterParam       ccAlfParam;
   bool                   hasPrefixNalUnitType;
-  bool                   chromaPresentFlag;
-  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresentFlag( false )
+  bool                   chromaPresent;
+  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresent( false )
   { }
 };
 
@@ -1494,6 +1502,7 @@ public:
   bool           getAPSChangedFlag(int apsId, int apsType) const             { return m_apsMap.getChangedFlag((apsId << NUM_APS_TYPE_LEN) + apsType); }
   void           clearAPSChangedFlag(int apsId, int apsType)                 { m_apsMap.clearChangedFlag((apsId << NUM_APS_TYPE_LEN) + apsType); }
   bool           activateAPS(int apsId, int apsType);
+  const VPS*     getActiveVPS()const                                         { return m_vpsMap.getPS(m_activeVPSId); };
   const SPS*     getActiveSPS()const                                         { return m_spsMap.getPS(m_activeSPSId); };
   const DCI*     getActiveDCI()const                                         { return m_dciMap.getPS(m_activeDCIId); };
 
