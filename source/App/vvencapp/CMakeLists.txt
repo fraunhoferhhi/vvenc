@@ -23,7 +23,9 @@ set_target_properties( ${EXE_NAME} PROPERTIES DEBUG_POSTFIX          "${CMAKE_DE
 set_target_properties( ${EXE_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "${CMAKE_RELWITHDEBINFO_POSTFIX}${POSTFIX_APPEND}" )
 set_target_properties( ${EXE_NAME} PROPERTIES MINSIZEREL_POSTFIX     "${CMAKE_MINSIZEREL_POSTFIX}${POSTFIX_APPEND}" )
 
-target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall -Wno-unused-value>)
+target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall>
+                                            $<$<CXX_COMPILER_ID:GNU>:-Wall -fdiagnostics-show-option>
+                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4244 /wd4251 /wd4996>)
 
 target_link_libraries( ${EXE_NAME} Threads::Threads vvenc )
 
