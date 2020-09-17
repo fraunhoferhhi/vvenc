@@ -10,11 +10,42 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
 endif()
 
 # project name
-project( vvenc )
-
+project( vvenc VERSION 0.1.0.0 )
 
 # enable install target
 set( VVENC_ENABLE_INSTALL ON CACHE BOOL "Enable or disable install target" )
+
+# enable postfix for shared apps
+set( VVENC_ENABLE_APP_SHARED_POSTFIX OFF CACHE BOOL "Enable or disable postfix for shared apps" )
+
+# set VVENC_OUTPUT_DIR_POSTFIX
+if( BUILD_SHARED_LIBS )
+  set( VVENC_OUTPUT_DIR_POSTFIX shared )
+else()
+  set( VVENC_OUTPUT_DIR_POSTFIX static )
+endif()
+
+# set postfixes for libraries
+set( CMAKE_RELEASE_POSTFIX        ""    CACHE STRING "Set release library postfix" )
+set( CMAKE_DEBUG_POSTFIX          "-d"  CACHE STRING "Set debug library postfix" )
+set( CMAKE_RELWITHDEBINFO_POSTFIX "-rd" CACHE STRING "Set relwithdebinfo library postfix" )
+set( CMAKE_MINSIZEREL_POSTFIX     "-mr" CACHE STRING "Set minsizerel library postfix" )
+
+# Using CMake's default library name convention which is the same for all configurations.
+set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/lib/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/lib/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/lib/relwithdebinfo-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/lib/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
+
+set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG}" )
+set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE}" )
+set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELWITHDEBINFO}" )
+set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY_MINSIZEREL}" )    
+
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/bin/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/bin/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/relwithdebinfo-${VVENC_OUTPUT_DIR_POSTFIX}" )
+set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/bin/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
 
 
 # set default CMAKE_BUILD_TYPE to Release if not set
@@ -34,7 +65,7 @@ endif()
 #set( ENABLE_TRACING OFF CACHE BOOL "If SET_ENABLE_TRACING is on, it will be set to this value" )
 
 # set c++11
-set( CMAKE_CXX_STANDARD 11 )
+set( CMAKE_CXX_STANDARD 14 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
 # compile everything position independent (even static libraries)
@@ -66,8 +97,6 @@ endif()
 # enable parallel build for Visual Studio
 if( MSVC )
   # add compile options
-  add_compile_options( /wd4310)
-  add_compile_options( /wd4996)
   add_compile_options( "/MP" )
   add_compile_options( "/EHsc" )
 endif()
@@ -91,6 +120,30 @@ if( CCACHE_FOUND )
   set_property( GLOBAL PROPERTY RULE_LAUNCH_LINK ccache )
 endif()
 
+# handle rpath correctly
+if( VVENC_ENABLE_INSTALL )
+  if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
+    set( CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Standard install prefix" FORCE )
+  endif()
+
+  # use GNU install dirs
+  include( GNUInstallDirs )
+  
+  if( BUILD_SHARED_LIBS AND NOT WIN32 )
+    set( CMAKE_SKIP_INSTALL_RPATH OFF CACHE BOOL "skip rpath" )
+    if( APPLE )
+      set( RPATH_BASE @loader_path )
+    elseif( UNIX )
+      set( RPATH_BASE $ORIGIN )
+    endif()
+    
+    file( RELATIVE_PATH RPATH_REL_DIR ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR} ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR} )
+    
+    set( CMAKE_INSTALL_RPATH ${RPATH_BASE} ${RPATH_BASE}/${RPATH_REL_DIR} )
+    message( STATUS "CMAKE_INSTALL_RPATH=${CMAKE_INSTALL_RPATH}" )
+  endif()  
+endif()
+
 
 add_subdirectory( "source/Lib/vvenc" )
 add_subdirectory( "source/App/vvencapp" )
@@ -98,8 +151,7 @@ add_subdirectory( "source/App/vvencFFapp" )
 
 
 if( VVENC_ENABLE_INSTALL )
-  set( CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/install" CACHE PATH "Standard install prefix" FORCE )
-  include( cmake/modules/VVEncLibInstall.cmake )
+  # include installer
+  include( cmake/modules/vvencInstall.cmake )
 endif()
-
 
