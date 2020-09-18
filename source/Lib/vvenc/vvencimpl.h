@@ -113,6 +113,7 @@ private:
 
 public:
   bool                                                        m_bInitialized         = false;
+  bool                                                        m_bFlushed             = false;
 
   vvenc::EncoderIf                                            m_cEncoderIf;                      ///< encoder library class
 

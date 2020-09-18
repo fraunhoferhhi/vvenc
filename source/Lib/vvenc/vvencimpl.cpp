@@ -126,6 +126,7 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
   // create the encoder
   m_cEncoderIf.createEncoderLib( m_cEncCfg );
 
+  m_bFlushed     = false;
   m_bInitialized = true;
   return VVENC_OK;
 }
@@ -147,6 +148,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 {
   if( !m_bInitialized )             { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if ( m_bFlushed )                 { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
@@ -232,6 +234,7 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if ( m_bFlushed ){ m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
@@ -249,6 +252,11 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
     {
       iRet = xCopyAu( rcVvcAccessUnit, cAu  );
     }
+  }
+  
+  if( encDone )
+  {
+    m_bFlushed = true;
   }
 
   return iRet;
