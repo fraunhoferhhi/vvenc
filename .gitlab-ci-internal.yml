@@ -1,0 +1,35 @@
+stages:
+   - build
+
+.build_template:
+   stage: build
+   script:
+      - make all
+   only:
+      - web
+      - schedules
+
+build_ubuntu1804:
+   extends: .build_template
+   tags:
+      - ubuntu1804
+
+build_ubuntu2004:
+   extends: .build_template
+   tags:
+      - ubuntu2004
+
+build_vc191x:
+   extends: .build_template
+   tags:
+      - vc191x
+
+build_vc192x:
+   extends: .build_template
+   tags:
+      - vc192x
+
+build_macos:
+   extends: .build_template
+   tags:
+      - macos
