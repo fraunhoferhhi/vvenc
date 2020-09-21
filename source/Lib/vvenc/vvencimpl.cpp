@@ -234,7 +234,7 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
-  if ( m_bFlushed ){ m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
+  if ( m_bFlushed ){ return 0; }
 
   int iRet= VVENC_OK;
 
