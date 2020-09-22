@@ -111,6 +111,12 @@ private:
 protected:
   ChromaFormat          m_currChromaFormat;
 
+#if ISP_VVC
+  int                   m_topRefLength;
+  int                   m_leftRefLength;
+  void setReferenceArrayLengths(const CompArea& area);
+#endif
+
 private:
   static bool isIntegerSlope      ( const int absAng) { return (0 == (absAng & 0x1F)); }
   static int getWideAngle         ( int width, int height, int predMode );
@@ -156,6 +162,9 @@ public:
   void loadLMLumaRecPels      ( const PredictionUnit &pu, const CompArea& chromaArea );
   /// set parameters from CU data for accessing intra data
   void initIntraPatternChType ( const CodingUnit &cu, const CompArea& area, const bool forceRefFilterFlag = false); // use forceRefFilterFlag to get both filtered and unfiltered buffers
+#if ISP_VVC
+  void initIntraPatternChTypeISP( const CodingUnit& cu, const CompArea& area, PelBuf& piReco, const bool forceRefFilterFlag = false );
+#endif
 
   // Matrix-based intra prediction
   void initIntraMip           ( const PredictionUnit &pu);
