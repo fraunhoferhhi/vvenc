@@ -30,8 +30,8 @@ ifneq ($(verbose),)
 CONFIG_OPTIONS += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
 
-ifneq ($(enable-app-shared-postfix),)
-CONFIG_OPTIONS += -DVVENC_ENABLE_APP_SHARED_POSTFIX=ON
+ifneq ($(enable-build-type-postfix),)
+CONFIG_OPTIONS += -DVVENC_ENABLE_BUILD_TYPE_POSTFIX=ON
 endif
 
 ifneq ($(install-prefix),)
