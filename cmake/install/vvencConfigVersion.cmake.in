@@ -1,4 +1,4 @@
-# VVEncConfigVersion.cmake - checks version: major must match, minor must be less than or equal
+# vvencConfigVersion.cmake - checks version: major must match, minor must be less than or equal
 
 set( PACKAGE_VERSION @PROJECT_VERSION@ )
 
