@@ -88,6 +88,47 @@ private:
     ModeInfo(const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode) : mipFlg(mipf), mipTrFlg(miptf), mRefId(mrid), ispMod(ispm), modeId(mode) {}
     bool operator==(const ModeInfo cmp) const { return (0 == ::memcmp(this,&cmp,sizeof(ModeInfo))); }
   };
+#if ISP_VVC 
+
+  struct ISPTestedModesInfo
+  {
+    int                                         numTotalParts[2];
+    int                                         bestModeSoFar;
+    ISPType                                     bestSplitSoFar;
+    double                                      bestCost[2];
+    bool                                        splitIsFinished[2];
+    int                                         subTuCounter;
+    PartSplit                                   IspType;
+
+    // set everything to default values
+    void clear()
+    {
+      for (int splitIdx = 0; splitIdx < NUM_INTRA_SUBPARTITIONS_MODES - 1; splitIdx++)
+      {
+        numTotalParts[splitIdx]   = 0;
+        splitIsFinished[splitIdx] = false;
+        bestCost[splitIdx] = MAX_DOUBLE;
+      }
+      bestModeSoFar      = -1;
+      bestSplitSoFar     = NOT_INTRA_SUBPARTITIONS;
+      subTuCounter = -1;
+      IspType      = TU_NO_ISP;
+    }
+    void init(const int numTotalPartsHor, const int numTotalPartsVer)
+    {
+      clear();
+      const int horSplit = HOR_INTRA_SUBPARTITIONS - 1, verSplit = VER_INTRA_SUBPARTITIONS - 1;
+      numTotalParts[horSplit]   = numTotalPartsHor;
+      numTotalParts[verSplit]   = numTotalPartsVer;
+      splitIsFinished[horSplit] = (numTotalParts[horSplit] == 0);
+      splitIsFinished[verSplit] = (numTotalParts[verSplit] == 0);
+      subTuCounter = -1;
+      IspType      = TU_NO_ISP;
+    }
+  };
+
+  ISPTestedModesInfo                                       m_ispTestedModes[NUM_LFNST_NUM_PER_SET];
+#endif
 
 protected:
   // interface to option
@@ -117,7 +158,11 @@ public:
   void initCuAreaCostInSCIPU      ();
 
   bool estIntraPredLumaQT         ( CodingUnit &cu, Partitioner &pm, double bestCost = MAX_DOUBLE);
+#if ISP_VVC
+  void estIntraPredChromaQT       ( CodingUnit& cu, Partitioner& partitioner, const double maxCostAllowed );
+#else
   void estIntraPredChromaQT       ( CodingUnit &cu, Partitioner& pm );
+#endif
 
 private:
   double    xFindInterCUCost          ( CodingUnit &cu );
@@ -139,11 +184,21 @@ private:
 
   uint64_t  xGetIntraFracBitsQTChroma ( const TransformUnit& tu, const ComponentID compID, CUCtx *cuCtx );
 
+#if ISP_VVC
+  void     xEncCoeffQT                ( CodingStructure& cs, Partitioner& pm, const ComponentID compID, CUCtx* cuCtx = nullptr, const int subTuIdx = -1, const PartSplit ispType = TU_NO_ISP );
+#else
   void      xEncCoeffQT               ( CodingStructure &cs, Partitioner &pm, const ComponentID compID, CUCtx *cuCtx = nullptr );
+#endif
 
   void      xIntraCodingTUBlock       ( TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig = nullptr, PelUnitBuf *pPred = nullptr, const bool loadTr = false);
+#if ISP_VVC
+  ChromaCbfs xIntraChromaCodingQT     ( CodingStructure& cs, Partitioner& pm );
+  void xIntraCodingLumaQT             ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode );
+ // void      xIntraCodingLumaQT(CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar);
+#else 
   void      xIntraChromaCodingQT      ( CodingStructure &cs, Partitioner& pm );
   void      xIntraCodingLumaQT        ( CodingStructure &cs, Partitioner &pm, PelUnitBuf *pPred, const double bestCostSoFar );
+#endif
 
   template<typename T, size_t N, int M>
   void      xReduceHadCandList        ( static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const PredictionUnit &pu, const bool fastMip);

@@ -395,6 +395,9 @@ public:
   int                 m_LFNST;
   int                 m_MTS;
   int                 m_MTSIntraMaxCand;
+#if 1   // ISP_VVC
+  int                 m_ISP;
+#endif
 
   bool                m_bLoopFilterDisable;                             ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                          ///< offset for deblocking filter in 0 = slice header, 1 = PPS
@@ -680,6 +683,9 @@ public:
       , m_LFNST                                       ( 0 )
       , m_MTS                                         ( 0 )
       , m_MTSIntraMaxCand                             ( 3 ) 
+#if 1   // ISP_VVC
+      , m_ISP(0)
+#endif
 
       , m_bLoopFilterDisable                          ( false )
       , m_loopFilterOffsetInPPS                       ( true )

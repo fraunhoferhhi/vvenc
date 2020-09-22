@@ -6,7 +6,7 @@ str.bin
 /lib/
 core
 deploy
-/install/
+install
 *.sdf
 *.suo
 .vs/

@@ -1447,11 +1447,20 @@ void CABACReader::cu_residual( CodingUnit& cu, Partitioner &partitioner, CUCtx& 
   ChromaCbfs chromaCbfs;
   if( cu.ispMode && isLuma( partitioner.chType ) )
   {
+#if ISP_VVC
+    Partitioner subTuPartitioner = partitioner;
+    transform_tree(*cu.cs, subTuPartitioner, cuCtx, cu, CU::getISPType(cu, getFirstComponentOfChannel(partitioner.chType)), 0);
+#else
     transform_tree( *cu.cs, partitioner, cuCtx, CU::getISPType(cu, getFirstComponentOfChannel(partitioner.chType)), 0 );
+#endif
   }
   else
   {
+#if ISP_VVC
+    transform_tree(*cu.cs, partitioner, cuCtx, cu);
+#else
     transform_tree( *cu.cs, partitioner, cuCtx             );
+#endif
   }
   residual_lfnst_mode( cu, cuCtx );
   mts_idx            ( cu, cuCtx );
@@ -2049,8 +2058,11 @@ void CABACReader::Ciip_flag(PredictionUnit& pu)
 //    bool  split_transform_flag( depth )
 //    bool  cbf_comp            ( area, depth )
 //================================================================================
-
+#if ISP_VVC
+void CABACReader::transform_tree(CodingStructure& cs, Partitioner& partitioner, CUCtx& cuCtx, CodingUnit& cuTop, const PartSplit ispType, const int subTuIdx)
+#else
 void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner, CUCtx& cuCtx, const PartSplit ispType, const int subTuIdx )
+#endif
 {
   const UnitArea&   area = partitioner.currArea();
   CodingUnit&         cu = *cs.getCU(area.blocks[partitioner.chType], partitioner.chType, partitioner.treeType );
@@ -2067,7 +2079,11 @@ void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner,
 
   if( !split && cu.ispMode )
   {
+#if ISP_VVC
+    split = partitioner.canSplitISP(ispType, cs, cuTop);
+#else
     split = partitioner.canSplit( ispType, cs );
+#endif
   }
 
   if( split )
@@ -2096,7 +2112,11 @@ void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner,
 
     do
     {
+#if ISP_VVC
+      transform_tree(cs, partitioner, cuCtx, cuTop, ispType, subTuCounter);
+#else
       transform_tree( cs, partitioner, cuCtx, ispType, subTuCounter );
+#endif
       subTuCounter += subTuCounter != -1 ? 1 : 0;
     } while( partitioner.nextPart( cs ) );
 
