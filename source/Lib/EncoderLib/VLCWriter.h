@@ -56,8 +56,8 @@ vvc@hhi.fraunhofer.de
 
 namespace vvenc {
 
-class GeneralHrdParams;
-class OlsHrdParams;
+struct GeneralHrdParams;
+struct OlsHrdParams;
 
 #if ENABLE_TRACING
 
@@ -124,9 +124,10 @@ public:
   void  codePictureHeader       ( const PicHeader* picHeader, bool writeRbspTrailingBits );
   void  codeSliceHeader         ( const Slice* slice );
   void  codeConstraintInfo      ( const ConstraintInfo* cinfo );
-  void  codeProfileTierLevel    ( const ProfileTierLevel* ptl, bool profileTierPresentFlag, int maxNumSubLayersMinus1 );
+  void  codeProfileTierLevel    ( const ProfileTierLevel* ptl, bool profileTierPresent, int maxNumSubLayersMinus1 );
   void  codeOlsHrdParameters    ( const GeneralHrdParams * generalHrd, const OlsHrdParams *olsHrd , const uint32_t firstSubLayer, const uint32_t maxNumSubLayersMinus1);
 
+  void codeGeneralHrdparameters ( const GeneralHrdParams *hrd);
   void  codeAUD                 ( const int audIrapOrGdrAuFlag, const int pictureType );
   void  codeTilesWPPEntryPoint  ( Slice* pSlice );
 

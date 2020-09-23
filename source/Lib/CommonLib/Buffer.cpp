@@ -1,19 +1,19 @@
 /* -----------------------------------------------------------------------------
 Software Copyright License for the Fraunhofer Software Library VVenc
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
+(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 
 1.    INTRODUCTION
 
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
+The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology.
+The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary.
 
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
+The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license.
 It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
 
 2.    COPYRIGHT LICENSE
 
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
+Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research.
 
 No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
 
@@ -21,7 +21,7 @@ For any other use of the Fraunhofer Versatile Video Encoding Library than permit
 
 3.    LIMITED PATENT LICENSE
 
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
+As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.
 
 Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
 
@@ -87,13 +87,13 @@ void mipMatrixMulCore( Pel* res, const Pel* input, const uint8_t* weight, const 
   Pel buffer[ outputSize*outputSize];
 
   int sum = 0;
-  for( int i = 0; i < inputSize; i++ ) 
-  { 
-    sum += input[i]; 
+  for( int i = 0; i < inputSize; i++ )
+  {
+    sum += input[i];
   }
   const int offset = (1 << (MIP_SHIFT_MATRIX - 1)) - MIP_OFFSET_MATRIX * sum + (inputOffset << MIP_SHIFT_MATRIX);
   CHECK( inputSize != 4 * (inputSize >> 2), "Error, input size not divisible by four" );
- 
+
   Pel* mat = transpose ? buffer : res;
   unsigned posRes = 0;
   for( unsigned n = 0; n < outputSize*outputSize; n++ )
@@ -244,7 +244,7 @@ void reconstructCore( const T* src1, int src1Stride, const T* src2, int src2Stri
 template<typename T>
 void recoCore( const T* src1, const T* src2, T* dest, int numSamples, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2) 
+  for( int n = 0; n < numSamples; n+=2)
   {
     dest[n]   = ClipPel( src1[n]   + src2[n], clpRng );
     dest[n+1] = ClipPel( src1[n+1] + src2[n+1], clpRng );
@@ -254,7 +254,7 @@ void recoCore( const T* src1, const T* src2, T* dest, int numSamples, const ClpR
 template<typename T>
 void copyClipCore( const T* src, Pel* dst, int numSamples, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2) 
+  for( int n = 0; n < numSamples; n+=2)
   {
     dst[n]   = ClipPel( src[n]   , clpRng );
     dst[n+1] = ClipPel( src[n+1] , clpRng );
@@ -264,7 +264,7 @@ void copyClipCore( const T* src, Pel* dst, int numSamples, const ClpRng& clpRng 
 template< typename T >
 void addAvgCore( const T* src1, const T* src2, T* dest, int numSamples, unsigned rshift, int offset, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2) 
+  for( int n = 0; n < numSamples; n+=2)
   {
     dest[n]   = ClipPel( rightShiftU( ( src1[n]   + src2[n]   + offset ), rshift ), clpRng );
     dest[n+1] = ClipPel( rightShiftU( ( src1[n+1] + src2[n+1] + offset ), rshift ), clpRng );
@@ -559,7 +559,7 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   {
     g_pelBufOP.addAvg16(src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, clpRng);
   }
-  else if( width > 2 && height > 2 && width == destStride ) 
+  else if( width > 2 && height > 2 && width == destStride )
   {
     g_pelBufOP.addAvg16(src0, src1Stride<<2, src2, src2Stride<<2, dest, destStride<<2, width<<2, height>>2, shiftNum, offset, clpRng);
   }
@@ -691,7 +691,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
         dst[1] = ( Pel ) ClipPel( rightShiftU( scale * src[1], shift ) + offset, clpRng );
         src += stride;
         dst += stride;
-      } 
+      }
     }
     else
     {
@@ -701,7 +701,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
         dst[1] = ( Pel ) ( rightShiftU( scale * src[1], shift ) + offset );
         src += stride;
         dst += stride;
-      } 
+      }
     }
   }
 }
@@ -969,9 +969,6 @@ const CPelBuf PelStorage::getBuf( const ComponentID CompID ) const
 PelBuf PelStorage::getBuf( const CompArea& blk )
 {
   const PelBuf& r = bufs[blk.compID];
-
-  CHECKD( rsAddr( blk.bottomRight(), r.stride ) >= ( ( r.height - 1 ) * r.stride + r.width ), "Trying to access a buf outside of bound!" );
-
   return PelBuf( r.buf + rsAddr( blk, r.stride ), r.stride, blk );
 }
 
@@ -1061,8 +1058,6 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
 {
   const ChromaFormat chFmt = pelUnitBuf.chromaFormat;
   const int numComp        = getNumberValidComponents( chFmt );
-  const Window  zeroWindow;
-  const Window* cw = confWindow && confWindow->enabledFlag ? confWindow : &zeroWindow;
   for ( int i = 0; i < numComp; i++ )
   {
     const ComponentID compId = ComponentID( i );
@@ -1071,9 +1066,9 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
     const int sy             = getComponentScaleY( compId, chFmt );
     YUVPlane& yuvPlane       = yuvBuffer.yuvPlanes[ i ];
     CHECK( yuvPlane.planeBuf != nullptr, "yuvBuffer already in use" );
-    yuvPlane.planeBuf        = area.bufAt( cw->winLeftOffset >> sx, cw->winTopOffset >> sy );
-    yuvPlane.width           = ( ( area.width  << sx ) - ( cw->winLeftOffset + cw->winRightOffset  ) ) >> sx;
-    yuvPlane.height          = ( ( area.height << sy ) - ( cw->winTopOffset  + cw->winBottomOffset ) ) >> sy;
+    yuvPlane.planeBuf        = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
+    yuvPlane.width           = ( ( area.width  << sx ) - ( confWindow->winLeftOffset + confWindow->winRightOffset  ) ) >> sx;
+    yuvPlane.height          = ( ( area.height << sy ) - ( confWindow->winTopOffset  + confWindow->winBottomOffset ) ) >> sy;
     yuvPlane.stride          = area.stride;
   }
 }

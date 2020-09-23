@@ -955,24 +955,14 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
           // we have to do some kind of position aware boundary padding
           // it's done here because the conditions are readable
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-          const int fltSize = MAX_ALF_FILTER_LENGTH >> 1;
+          const int fltSize  = ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1;
+          const int xL       = ( ctuPosX == 0 )                 ? ( x-fltSize       ) : ( x );
+          const int xR       = ( ctuPosX+1 == pcv.widthInCtus ) ? ( x+width+fltSize ) : ( x+width );
 
           if( ctuPosX == 0 )                  recoBuf.extendBorderPelLft( y, height, fltSize );
           if( ctuPosX+1 == pcv.widthInCtus )  recoBuf.extendBorderPelRgt( y, height, fltSize );
-
-          if( ctuPosY == 0 )
-          {
-            recoBuf.extendBorderPelTop( x, width, fltSize );
-            if( ctuPosX == 0 )                 recoBuf.extendBorderPelTop( x-(2*fltSize), (2*fltSize), fltSize );
-            if( ctuPosX+1 == pcv.widthInCtus ) recoBuf.extendBorderPelTop( x+width, (2*fltSize), (2*fltSize) );
-          }
-
-          if( ctuPosY+1 == pcv.heightInCtus )
-          {
-            recoBuf.extendBorderPelBot( x, width, fltSize );
-            if( ctuPosX == 0 )                 recoBuf.extendBorderPelBot( x-(2*fltSize), (2*fltSize), (2*fltSize) );
-            if( ctuPosX+1 == pcv.widthInCtus ) recoBuf.extendBorderPelBot( x+width, (2*fltSize), (2*fltSize) );
-          }
+          if( ctuPosY == 0 )                  recoBuf.extendBorderPelTop( xL, xR-xL, fltSize );
+          if( ctuPosY+1 == pcv.heightInCtus ) recoBuf.extendBorderPelBot( xL, xR-xL, fltSize );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_sao );

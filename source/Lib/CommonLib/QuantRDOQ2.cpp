@@ -1242,7 +1242,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   }
 
 #if ENABLE_TRACING
-  for ( int scanPos = iCGNum * iCGSize; scanPos >= 0; scanPos-- )
+  for ( int scanPos = iCGNum * iCGSize-1; scanPos >= 0; scanPos-- )
   {
     if(( scanPos & iCGSizeM1) == iCGSizeM1 )
     {
