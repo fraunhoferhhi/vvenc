@@ -546,50 +546,28 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   }
   else // use m_iIDRPeriodSec
   {
-    unsigned int iIDRPeriod  = rcVVEncParameter.m_iGopSize;
-
     if ( rcEncCfg.m_FrameRate % rcVVEncParameter.m_iGopSize == 0 )
     {
-      iIDRPeriod = rcEncCfg.m_FrameRate;
+      rcEncCfg.m_IntraPeriod = rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec;
     }
     else
     {
-      int iMin = rcEncCfg.m_FrameRate-rcVVEncParameter.m_iGopSize > rcVVEncParameter.m_iGopSize ?
-                 rcEncCfg.m_FrameRate - rcVVEncParameter.m_iGopSize : rcVVEncParameter.m_iGopSize;
-      int iMax = rcEncCfg.m_FrameRate + rcVVEncParameter.m_iGopSize;
-
-      unsigned int iIdrPeriodS = iMin;
-      unsigned int iIdrPeriodG = iMax;
-
-      for( int i = rcEncCfg.m_FrameRate-1; i >= iMin; i-- )
+      unsigned int iIDRPeriod  = (rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec);
+      if( iIDRPeriod < rcVVEncParameter.m_iGopSize )
       {
-        if( i % rcVVEncParameter.m_iGopSize == 0 )
-        {
-          iIdrPeriodS = i;
-          break;
-        }
+        iIDRPeriod = rcVVEncParameter.m_iGopSize;
       }
 
-      for( int i = rcEncCfg.m_FrameRate+1; i <= iMax; i++ )
+      int iDiff = iIDRPeriod % rcVVEncParameter.m_iGopSize;
+      if( iDiff < rcVVEncParameter.m_iGopSize >> 1 )
       {
-        if( i % rcVVEncParameter.m_iGopSize == 0 )
-        {
-          iIdrPeriodG = i;
-          break;
-        }
-      }
-
-      if( rcEncCfg.m_FrameRate - iIdrPeriodS < iIdrPeriodG - rcEncCfg.m_FrameRate)
-      {
-        iIDRPeriod = iIdrPeriodS;
+        rcEncCfg.m_IntraPeriod = iIDRPeriod - iDiff;
       }
       else
       {
-        iIDRPeriod = iIdrPeriodG;
+        rcEncCfg.m_IntraPeriod = iIDRPeriod + rcVVEncParameter.m_iGopSize - iDiff;
       }
     }
-
-    rcEncCfg.m_IntraPeriod = iIDRPeriod * rcVVEncParameter.m_iIDRPeriodSec;
   }
 
   if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_IDR )
