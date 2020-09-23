@@ -124,9 +124,9 @@ private:
   EncReshape                m_Reshaper;
   BlkStat                   m_BlkStat;
   FFwdDecoder               m_ffwdDecoder;
-  ParameterSetMap<APS>      m_gopApsMap;
   RateCtrl*                 m_pcRateCtrl;
   EncHRD*                   m_pcEncHRD;
+  ParameterSetMap<APS>      m_gopApsMap;
 
   std::vector<EncPicture*>  m_picEncoderList;
   std::list<Picture*>       m_encodePics;
