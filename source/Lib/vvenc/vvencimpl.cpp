@@ -539,12 +539,48 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   }
   else // use m_iIDRPeriodSec
   {
-    unsigned int iIDRPeriod  = 16;
-    if     ( rcEncCfg.m_FrameRate >= 100 ){ iIDRPeriod  = 96; }
-    else if( rcEncCfg.m_FrameRate >= 80 ) { iIDRPeriod  = 80; }
-    else if( rcEncCfg.m_FrameRate >= 59 ) { iIDRPeriod  = 64; }
-    else if( rcEncCfg.m_FrameRate > 40  ) { iIDRPeriod  = 48; }
-    else if( rcEncCfg.m_FrameRate >= 23 ) { iIDRPeriod  = 32; }
+    unsigned int iIDRPeriod  = rcVVEncParameter.m_iGopSize;
+
+    if ( rcEncCfg.m_FrameRate % rcVVEncParameter.m_iGopSize == 0 )
+    {
+      iIDRPeriod = rcEncCfg.m_FrameRate;
+    }
+    else
+    {
+      int iMin = rcEncCfg.m_FrameRate-rcVVEncParameter.m_iGopSize > rcVVEncParameter.m_iGopSize ?
+                 rcEncCfg.m_FrameRate - rcVVEncParameter.m_iGopSize : rcVVEncParameter.m_iGopSize;
+      int iMax = rcEncCfg.m_FrameRate + rcVVEncParameter.m_iGopSize;
+
+      unsigned int iIdrPeriodS = iMin;
+      unsigned int iIdrPeriodG = iMax;
+
+      for( int i = rcEncCfg.m_FrameRate-1; i >= iMin; i-- )
+      {
+        if( i % rcVVEncParameter.m_iGopSize == 0 )
+        {
+          iIdrPeriodS = i;
+          break;
+        }
+      }
+
+      for( int i = rcEncCfg.m_FrameRate+1; i <= iMax; i++ )
+      {
+        if( i % rcVVEncParameter.m_iGopSize == 0 )
+        {
+          iIdrPeriodG = i;
+          break;
+        }
+      }
+
+      if( rcEncCfg.m_FrameRate - iIdrPeriodS < iIdrPeriodG - rcEncCfg.m_FrameRate)
+      {
+        iIDRPeriod = iIdrPeriodS;
+      }
+      else
+      {
+        iIDRPeriod = iIdrPeriodG;
+      }
+    }
 
     rcEncCfg.m_IntraPeriod = iIDRPeriod * rcVVEncParameter.m_iIDRPeriodSec;
   }
