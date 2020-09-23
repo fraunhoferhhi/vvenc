@@ -397,6 +397,12 @@ void HLSyntaxReader::parsePPS( PPS* pcPPS, ParameterSetManager *parameterSetMana
     conf.enabledFlag = true;
   }
 
+  if( pcPPS->picWidthInLumaSamples == pcSPS->maxPicWidthInLumaSamples && pcPPS->picHeightInLumaSamples == pcSPS->maxPicHeightInLumaSamples )
+  {
+    CHECK( pcPPS->conformanceWindow.enabledFlag, "When pic_width_in_luma_samples is equal to pic_width_max_in_luma_samples and pic_height_in_luma_samples is equal to pic_height_max_in_luma_samples, the value of pps_conformance_window_flag shall be equal to 0");
+    pcPPS->conformanceWindow = pcSPS->conformanceWindow;
+  }
+
   READ_FLAG( uiCode, "scaling_window_flag" );
   if( uiCode != 0 )
   {
@@ -615,9 +621,9 @@ void HLSyntaxReader::parseAPS( APS* aps )
 
   READ_CODE(5, aps->apsId, "adaptation_parameter_set_id");
 
-  uint32_t codeApsChromaPresentFlag;
-  READ_FLAG(codeApsChromaPresentFlag, "aps_chroma_present_flag");
-  aps->chromaPresentFlag = codeApsChromaPresentFlag;
+  uint32_t codeApsChromaPresent;
+  READ_FLAG(codeApsChromaPresent, "aps_chroma_present_flag");
+  aps->chromaPresent = codeApsChromaPresent;
 
 
   if (aps->apsType == ALF_APS)
@@ -648,7 +654,7 @@ void HLSyntaxReader::parseAlfAps( APS* aps )
   READ_FLAG(code, "alf_luma_new_filter");
   alfp.newFilterFlag[CH_L] = code;
   CcAlfFilterParam& ccAlfParam = aps->ccAlfParam;
-  if (aps->chromaPresentFlag)
+  if (aps->chromaPresent)
   {
     READ_FLAG(code, "alf_chroma_new_filter");
     alfp.newFilterFlag[CH_C] = code;
@@ -775,11 +781,11 @@ void HLSyntaxReader::parseLmcsAps( APS* aps )
     info.reshaperModelBinCWDelta[i] = (1 - 2 * signCW) * absCW;
   }
 
-  if (aps->chromaPresentFlag)
+  if (aps->chromaPresent)
   {
     READ_CODE(3, code, "lmcs_delta_abs_crs");
   }
-  int absCW = aps->chromaPresentFlag ? code : 0;
+  int absCW = aps->chromaPresent ? code : 0;
   if (absCW > 0)
   {
     READ_CODE(1, code, "lmcs_delta_sign_crs_flag");
@@ -838,6 +844,102 @@ void  HLSyntaxReader::parseVUI(VUI* pcVUI, SPS *pcSPS)
   }
 }
 
+void HLSyntaxReader::parseGeneralHrdParameters(GeneralHrdParams *hrd)
+{
+  uint32_t  symbol;
+  READ_CODE( 32, symbol, "num_units_in_tick");                          hrd->numUnitsInTick = symbol;
+  READ_CODE( 32, symbol, "time_scale");                                 hrd->timeScale = symbol;
+  READ_FLAG( symbol, "general_nal_hrd_parameters_present_flag");        hrd->generalNalHrdParamsPresent = (symbol == 1);
+  READ_FLAG( symbol, "general_vcl_hrd_parameters_present_flag");        hrd->generalVclHrdParamsPresent = (symbol == 1);
+  CHECK((hrd->generalNalHrdParamsPresent == 0) && (hrd->generalVclHrdParamsPresent == 0), "general_nal_hrd_params_present_flag and general_vcl_hrd_params_present_flag in each general_hrd_parameters( ) syntax structure shall not be both equal to 0.");
+  READ_FLAG( symbol, "general_same_pic_timing_in_all_ols_flag");        hrd->generalSamePicTimingInAllOlsFlag = (symbol == 1);
+  READ_FLAG( symbol, "general_decoding_unit_hrd_params_present_flag");  hrd->generalDecodingUnitHrdParamsPresent = (symbol == 1);
+  if (hrd->generalDecodingUnitHrdParamsPresent)
+  {
+    READ_CODE( 8, symbol, "tick_divisor_minus2");                       hrd->tickDivisorMinus2 = symbol;
+  }
+  READ_CODE( 4, symbol, "bit_rate_scale");                              hrd->bitRateScale = symbol;
+  READ_CODE( 4, symbol, "cpb_size_scale");                              hrd->cpbSizeScale = symbol;
+  if (hrd->generalDecodingUnitHrdParamsPresent)
+  {
+    READ_CODE( 4, symbol, "cpb_size_du_scale");                         hrd->cpbSizeDuScale = symbol;
+  }
+  READ_UVLC( symbol, "hrd_cpb_cnt_minus1");                             hrd->hrdCpbCntMinus1 = symbol;
+  CHECK(symbol > 31,"The value of hrd_cpb_cnt_minus1 shall be in the range of 0 to 31, inclusive");
+}
+
+void HLSyntaxReader::parseOlsHrdParameters(GeneralHrdParams * generalHrd, OlsHrdParams *olsHrd, uint32_t firstSubLayer, uint32_t maxNumSubLayersMinus1)
+{
+  uint32_t  symbol;
+
+  for( int i = firstSubLayer; i <= maxNumSubLayersMinus1; i ++ )
+  {
+    OlsHrdParams *hrd = &(olsHrd[i]);
+    READ_FLAG( symbol, "fixed_pic_rate_general_flag");         hrd->fixedPicRateGeneralFlag = (symbol == 1);
+    if (!hrd->fixedPicRateGeneralFlag)
+    {
+      READ_FLAG( symbol, "fixed_pic_rate_within_cvs_flag");    hrd->fixedPicRateWithinCvsFlag = (symbol == 1);
+    }
+    else
+    {
+      hrd->fixedPicRateWithinCvsFlag = (true);
+    }
+
+    hrd->lowDelayHrdFlag = (false); // Inferred to be 0 when not present
+
+    if (hrd->fixedPicRateWithinCvsFlag)
+    {
+      READ_UVLC( symbol, "elemental_duration_in_tc_minus1");   hrd->elementDurationInTcMinus1 = symbol;
+    }
+    else if(generalHrd->hrdCpbCntMinus1 == 0)
+    {
+      READ_FLAG( symbol, "low_delay_hrd_flag");                hrd->lowDelayHrdFlag = (symbol == 1);
+    }
+
+    for( int nalOrVcl = 0; nalOrVcl < 2; nalOrVcl ++ )
+    {
+      if (((nalOrVcl == 0) && (generalHrd->generalNalHrdParamsPresent)) || ((nalOrVcl == 1) && (generalHrd->generalVclHrdParamsPresent)))
+      {
+        for (int j = 0; j <= (generalHrd->hrdCpbCntMinus1); j++)
+        {
+          READ_UVLC( symbol, "bit_rate_value_minus1");         hrd->bitRateValueMinus1[j][nalOrVcl] = symbol;
+          READ_UVLC( symbol, "cpb_size_value_minus1");         hrd->cpbSizeValueMinus1[j][nalOrVcl] = symbol;
+          if (generalHrd->generalDecodingUnitHrdParamsPresent)
+          {
+            READ_UVLC( symbol, "bit_rate_du_value_minus1");    hrd->duBitRateValueMinus1[j][nalOrVcl] = symbol;
+            READ_UVLC( symbol, "cpb_size_du_value_minus1");    hrd->duCpbSizeValueMinus1[j][nalOrVcl] = symbol;
+          }
+          READ_FLAG( symbol, "cbr_flag");                      hrd->cbrFlag[j][nalOrVcl] = (symbol == 1);
+        }
+      }
+    }
+  }
+  for (int i = 0; i < firstSubLayer; i++)
+  {
+    OlsHrdParams* hrdHighestTLayer = &(olsHrd[maxNumSubLayersMinus1]);
+    OlsHrdParams* hrdTemp = &(olsHrd[i]);
+    hrdTemp->fixedPicRateGeneralFlag   = hrdHighestTLayer->fixedPicRateGeneralFlag;
+    hrdTemp->fixedPicRateWithinCvsFlag = hrdHighestTLayer->fixedPicRateWithinCvsFlag;
+    hrdTemp->elementDurationInTcMinus1 = hrdHighestTLayer->elementDurationInTcMinus1;
+    for (int nalOrVcl = 0; nalOrVcl < 2; nalOrVcl++)
+    {
+      if (((nalOrVcl == 0) && (generalHrd->generalNalHrdParamsPresent)) || ((nalOrVcl == 1) && (generalHrd->generalVclHrdParamsPresent)))
+      {
+        for (int j = 0; j <= (generalHrd->hrdCpbCntMinus1); j++)
+        {
+          hrdTemp->bitRateValueMinus1[j][nalOrVcl] = hrdHighestTLayer->bitRateValueMinus1[j][nalOrVcl];
+          hrdTemp->cpbSizeValueMinus1[j][nalOrVcl] = hrdHighestTLayer->cpbSizeValueMinus1[j][nalOrVcl];
+          if (generalHrd->generalDecodingUnitHrdParamsPresent)
+          {
+            hrdTemp->duBitRateValueMinus1[j][nalOrVcl] = hrdHighestTLayer->duBitRateValueMinus1[j][nalOrVcl]; 
+            hrdTemp->duCpbSizeValueMinus1[j][nalOrVcl] = hrdHighestTLayer->duCpbSizeValueMinus1[j][nalOrVcl]; 
+          }
+          hrdTemp->cbrFlag[j][nalOrVcl] = hrdHighestTLayer->cbrFlag[j][nalOrVcl]; 
+        }
+      }
+    }
+  }
+}
 
 void HLSyntaxReader::dpb_parameters(int maxSubLayersMinus1, bool subLayerInfoFlag, SPS *pcSPS)
 {
@@ -1277,7 +1379,18 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
     READ_FLAG( pcSPS->hrdParametersPresent, "sps_general_hrd_params_present_flag");
     if( pcSPS->hrdParametersPresent )
     {
-      THROW("no support");
+      parseGeneralHrdParameters(&pcSPS->generalHrdParams);
+      if ((pcSPS->maxTLayers-1) > 0)
+      {
+        READ_FLAG(uiCode, "sps_sublayer_cpb_params_present_flag");  pcSPS->subLayerParametersPresent = uiCode;
+      }
+      else if((pcSPS->maxTLayers-1) == 0)
+      {
+        pcSPS->subLayerParametersPresent = 0;
+      }
+
+      uint32_t firstSubLayer = pcSPS->subLayerParametersPresent ? 0 : (pcSPS->maxTLayers - 1);
+      parseOlsHrdParameters(&pcSPS->generalHrdParams, pcSPS->olsHrdParams, firstSubLayer, pcSPS->maxTLayers - 1);
     }
   }
 
@@ -3069,8 +3182,8 @@ void HLSyntaxReader::getSlicePoc(Slice* pcSlice, PicHeader* picHeader, Parameter
 void HLSyntaxReader::parseConstraintInfo(ConstraintInfo *cinfo)
 {
   uint32_t symbol;
-  READ_FLAG(cinfo->gciPresentFlag, "gci_present_flag");
-  if (cinfo->gciPresentFlag)
+  READ_FLAG(cinfo->gciPresent, "gci_present_flag");
+  if (cinfo->gciPresent)
   {
     READ_FLAG(cinfo->intraOnlyConstraintFlag, "gci_intra_only_constraint_flag");
     READ_FLAG(cinfo->allLayersIndependentConstraintFlag, "gci_all_layers_independent_constraint_flag");
@@ -3171,11 +3284,11 @@ void HLSyntaxReader::parseConstraintInfo(ConstraintInfo *cinfo)
 }
 
 
-void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTierPresentFlag, int maxNumSubLayersMinus1)
+void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTierPresent, int maxNumSubLayersMinus1)
 {
   bool flag;
   uint32_t symbol;
-  if(profileTierPresentFlag)
+  if(profileTierPresent)
   {
     READ_CODE(7 , symbol,   "general_profile_idc"              );
     ptl->profileIdc  = Profile::Name(symbol);
@@ -3189,7 +3302,7 @@ void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTi
   READ_FLAG( ptl->frameOnlyConstraintFlag,   "ptl_frame_only_constraint_flag"   );
   READ_FLAG( ptl->multiLayerEnabledFlag,     "ptl_multilayer_enabled_flag" );
 
-  if(profileTierPresentFlag)
+  if(profileTierPresent)
   {
     parseConstraintInfo( &ptl->constraintInfo );
   }
@@ -3213,7 +3326,7 @@ void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTi
     }
   }
 
-  if (profileTierPresentFlag)
+  if (profileTierPresent)
   {
     READ_CODE(8, symbol, "ptl_num_sub_profiles");
     ptl->numSubProfile = symbol;

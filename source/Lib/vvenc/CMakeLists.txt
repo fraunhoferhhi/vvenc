@@ -72,11 +72,11 @@ elseif( UNIX OR MINGW )
   set_property( SOURCE ${AVX2_SRC_FILES}  APPEND PROPERTY COMPILE_FLAGS "-mavx2" )
 endif()
 
-
 add_library( ${LIB_NAME} ${SRC_FILES} ${INC_FILES} ${NATVIS_FILES} )
 
 target_compile_definitions( ${LIB_NAME} PRIVATE ${LIB_NAME_UC}_SOURCE )
 target_compile_definitions( ${LIB_NAME} PUBLIC $<$<AND:$<PLATFORM_ID:Windows>,$<STREQUAL:$<TARGET_PROPERTY:${LIB_NAME},TYPE>,SHARED_LIBRARY>>:${LIB_NAME_UC}_DYN_LINK> )
+
 
 target_compile_options( ${LIB_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall -Werror -Wno-deprecated-register -Wno-unused-const-variable -Wno-unknown-attributes>
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -Wno-unused-function  -Wno-unused-variable  -Wno-sign-compare  -fdiagnostics-show-option>

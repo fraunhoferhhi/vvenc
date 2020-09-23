@@ -74,9 +74,9 @@ namespace vvenc {
 #endif
 
 #if ENABLE_VALGRIND_CODE
-#define VALGRIND_MEMCLEAR( ref )                           memset(ref,0,sizeof(ref))
+#define VALGRIND_MEMCLEAR(_ref,_size)                     memset(_ref,0,(_size))
 #else
-#define VALGRIND_MEMCLEAR( ref )
+#define VALGRIND_MEMCLEAR(_ref,_size)
 #endif
 
 #ifndef ENABLE_TRACING

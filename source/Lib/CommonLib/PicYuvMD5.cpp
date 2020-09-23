@@ -286,7 +286,7 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
   if (pictureHashSEI)
   {
     ok = "(OK)";
-    if (recon_digest != pictureHashSEI->m_pictureHash)
+    if (recon_digest != pictureHashSEI->pictureHash)
     {
       ok = "(***ERROR***)";
       mismatch = true;
@@ -297,7 +297,7 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
 
   if (mismatch)
   {
-    msg( msgl, "[rx%s:%s] ", hashType, hashToString(pictureHashSEI->m_pictureHash, numChar).c_str());
+    msg( msgl, "[rx%s:%s] ", hashType, hashToString(pictureHashSEI->pictureHash, numChar).c_str());
   }
   return mismatch;
 }

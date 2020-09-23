@@ -1123,7 +1123,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
   {
 #ifdef USE_AVX2
     ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE,short ref[16]);
-    VALGRIND_MEMCLEAR( ref );
+    VALGRIND_MEMCLEAR( ref, sizeof( ref ) );
 
     //  Pel dummy[16];
     //  Pel* pdum=&dummy[0];
@@ -1192,7 +1192,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
   else
   {
     ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE,short ref[8]);
-    VALGRIND_MEMCLEAR( ref );
+    VALGRIND_MEMCLEAR( ref, sizeof( ref ) );
 
     __m128i wl16; 
     if (scale==0)

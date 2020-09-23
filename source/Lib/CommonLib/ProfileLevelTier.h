@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
 Software Copyright License for the Fraunhofer Software Library VVenc
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur F√∂rderung der angewandten Forschung e.V. 
+(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Fˆrderung der angewandten Forschung e.V. 
 
 1.    INTRODUCTION
 
-The Fraunhofer Software Library VVenc (‚ÄúFraunhofer Versatile Video Encoding Library‚Äù) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
+The Fraunhofer Software Library VVenc (ìFraunhofer Versatile Video Encoding Libraryî) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
 The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
 
 The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
@@ -40,24 +40,69 @@ www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
 
+
 #pragma once
 
-#include "../../../include/vvenc/EncCfg.h"
-#include "CommonLib/Common.h"
-#include "CommonLib/HRD.h"
-#include "CommonLib/Slice.h"
+#include "CommonLib/CommonDef.h"
+#include <stdint.h>
 
 namespace vvenc {
 
-  class EncHRD :public HRD
-  {
+struct SPS; // Forward declaration.
+
+struct LevelTierFeatures
+{
+  Level::Name   level;
+  uint32_t      maxLumaPs;
+  uint32_t      maxCpb[Level::NUMBER_OF_TIERS];    // in units of CpbVclFactor or CpbNalFactor bits
+  uint32_t      maxSlicesPerAu;
+  uint32_t      maxTilesPerAu;
+  uint32_t      maxTileCols;
+  uint64_t      maxLumaSr;
+  uint32_t      maxBr[Level::NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
+  uint32_t      minCrBase[Level::NUMBER_OF_TIERS];
+  uint32_t      getMaxPicWidthInLumaSamples()  const;
+  uint32_t      getMaxPicHeightInLumaSamples() const;
+};
+
+
+struct ProfileFeatures
+{
+  Profile::Name            profile;
+  const char              *pNameString;
+  uint32_t                 maxBitDepth;
+  ChromaFormat             maxChromaFormat;
+
+  bool                     canUseLevel15p5;
+  uint32_t                 cpbVclFactor;
+  uint32_t                 cpbNalFactor;
+  uint32_t                 formatCapabilityFactorx1000;
+  uint32_t                 minCrScaleFactorx100;
+  const LevelTierFeatures *pLevelTiersListInfo;
+  bool                     onePictureOnlyFlagMustBe1;
+
+  static const ProfileFeatures *getProfileFeatures(const Profile::Name p);
+};
+
+
+class ProfileLevelTierFeatures
+{
+  private:
+    const ProfileFeatures   *m_pProfile;
+    const LevelTierFeatures *m_pLevelTier;
+    Level::Tier              m_tier;
   public:
-    void initHRDParameters( const EncCfg& encCfg, const SPS& sps );
+    ProfileLevelTierFeatures() : m_pProfile(nullptr), m_pLevelTier(nullptr), m_tier(Level::MAIN) {}
 
-  protected:
-    // calculate scale value of bitrate and initial delay
-    int xCalcScale( int x );
+    void extractPTLInformation(const SPS &sps);
 
-  };
+    const ProfileFeatures     *getProfileFeatures()   const { return m_pProfile; }
+    const LevelTierFeatures   *getLevelTierFeatures() const { return m_pLevelTier; }
+    Level::Tier                getTier()              const { return m_tier; }
+    uint64_t getCpbSizeInBits()                       const;
+    double getMinCr()                                 const;
+    uint32_t getMaxDpbSize( uint32_t picSizeMaxInSamplesY ) const;
+};
 
-}
+
+} // namespace

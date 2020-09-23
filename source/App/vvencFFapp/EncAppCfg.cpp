@@ -456,6 +456,9 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("MSBExtendedBitDepthC",                            m_MSBExtendedBitDepth[ CH_C ],                                 "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
   ("CostMode",                                        toCostMode,                                                    "Use alternative cost functions: choose between 'lossy', 'sequence_level_lossless', 'lossless' (which forces QP to " MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP) ") and 'mixed_lossless_lossy' (which used QP'=" MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME) " for pre-estimates of transquant-bypass blocks).")
   ("SEIDecodedPictureHash,-dph",                      toHashType,                                                    "Control generation of decode picture hash SEI messages, options are: 1:md5, 2:crc, 3:checksum, 0:off (default)" )
+  ("SEIBufferingPeriod",                              m_bufferingPeriodSEIEnabled,                                   "Control generation of buffering period SEI messages")
+  ("SEIPictureTiming",                                m_pictureTimingSEIEnabled,                                     "Control generation of picture timing SEI messages")
+  ("SEIDecodingUnitInfo",                             m_decodingUnitInfoSEIEnabled,                                  "Control generation of decoding unit information SEI message.")
   ("TileUniformSpacing",                              m_tileUniformSpacingFlag,                                      "Indicates that tile columns and rows are distributed uniformly")
   ("NumTileColumnsMinus1",                            m_numTileColumnsMinus1,                                        "Number of tile columns in a picture minus 1")
   ("NumTileRowsMinus1",                               m_numTileRowsMinus1,                                           "Number of rows in a picture minus 1")
@@ -572,6 +575,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   ("EnableDecodingParameterSet",                      m_decodingParameterSetEnabled,                                 "Enables writing of Decoding Parameter Set")
   ("VuiParametersPresent,-vui",                       m_vuiParametersPresent,                                        "Enable generation of vui_parameters()")
+  ("HrdParametersPresent,-hrd",                       m_hrdParametersPresent,                                        "Enable generation of hrd_parameters()")
   ("AspectRatioInfoPresent",                          m_aspectRatioInfoPresent,                                      "Signals whether aspect_ratio_idc is present")
   ("AspectRatioIdc",                                  m_aspectRatioIdc,                                              "aspect_ratio_idc")
   ("SarWidth",                                        m_sarWidth,                                                    "horizontal size of the sample aspect ratio")
@@ -702,19 +706,12 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // check own parameters
   //
-  if( m_alf )
-  {
-    confirmParameter( m_maxNumAlfAlternativesChroma < 1 || m_maxNumAlfAlternativesChroma > MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
-  }
 
   m_confirmFailed = false;
   confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (BitstreamFile)" );
   confirmParameter( m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
   confirmParameter( m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
   confirmParameter( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT,   "Intern chroma format must be either 400, 420, 422 or 444" );
-  confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode");
-  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode > 1 && m_GOPSize == 32, "Rate control is currently not supported for GOP size 32" );
   if ( m_confirmFailed )
   {
     return false;

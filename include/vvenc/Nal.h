@@ -44,6 +44,7 @@ vvc@hhi.fraunhofer.de
 #include <sstream>
 #include <list>
 #include "../vvenc/Basics.h"
+#include "../vvenc/vvencDecl.h"
 
 //! \ingroup Interface
 //! \{
@@ -53,7 +54,7 @@ namespace vvenc {
 /**
  * Represents a single NALunit header and the associated RBSPayload
  */
-struct NALUnit
+struct VVENC_DECL NALUnit
 {
   NalUnitType m_nalUnitType; ///< nal_unit_type
   uint32_t    m_temporalId;  ///< temporal_id
@@ -125,7 +126,7 @@ struct OutputNALUnit;
 /**
  * A single NALunit, with complete payload in EBSP format.
  */
-struct NALUnitEBSP : public NALUnit
+struct VVENC_DECL NALUnitEBSP : public NALUnit
 {
   std::ostringstream m_nalUnitData;
 
@@ -152,7 +153,7 @@ struct NALUnitEBSP : public NALUnit
  * The AccessUnit owns all pointers stored within.  Destroying the
  * AccessUnit will delete all contained objects.
  */
-class AccessUnit : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
+class VVENC_DECL AccessUnit : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
 {
 public:
   ~AccessUnit()

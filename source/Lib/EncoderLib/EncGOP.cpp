@@ -54,6 +54,7 @@ vvc@hhi.fraunhofer.de
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
 #include "libmd5/MD5.h"
+#include "EncHRD.h"
 
 #include <list>
 
@@ -239,6 +240,8 @@ EncGOP::EncGOP()
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( NAL_UNIT_CODED_SLICE_IDR_N_LP )
   , m_pcEncCfg           ( nullptr )
+  , m_pcRateCtrl         ( nullptr )
+  , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
   , m_numPicEncoder      ( 0 )
   , m_gopThreadPool      ( nullptr )
@@ -275,12 +278,14 @@ EncGOP::~EncGOP()
 }
 
 
-void EncGOP::init( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool )
+void EncGOP::init( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;
+  m_pcEncHRD = &encHrd;
 
-  m_seiEncoder.init( encCfg );
+
+  m_seiEncoder.init( encCfg, encHrd );
   m_Reshaper.init  ( encCfg );
 
   const int maxEncoder = ( encCfg.m_frameParallel && encCfg.m_numFppThreads > 1 ) ? encCfg.m_numFppThreads : 1;
@@ -1200,6 +1205,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
   }
 
   m_actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
+  xWriteLeadingSEIs( pic, au );
   m_actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
 
   pic.encTime.stopTimer();
@@ -1248,7 +1254,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
     const bool doAPS             = aps && apsMap.getChangedFlag( apsMapIdx );
     if ( doAPS )
     {
-      aps->chromaPresentFlag = slice->sps->chromaFormatIdc != CHROMA_400;
+      aps->chromaPresent = slice->sps->chromaFormatIdc != CHROMA_400;
       aps->temporalId = slice->TLayer;
       actualTotalBits += xWriteAPS( accessUnit, aps, hlsWriter, NAL_UNIT_PREFIX_APS );
       apsMap.clearChangedFlag( apsMapIdx );
@@ -1284,7 +1290,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
 
       if ( writeAps )
       {
-        aps->chromaPresentFlag = slice->sps->chromaFormatIdc != CHROMA_400;
+        aps->chromaPresent = slice->sps->chromaFormatIdc != CHROMA_400;
         aps->temporalId = slice->TLayer;
         actualTotalBits += xWriteAPS( accessUnit, aps, hlsWriter, NAL_UNIT_PREFIX_APS );
         apsMap.clearChangedFlag( apsMapIdx );
@@ -1331,6 +1337,47 @@ int EncGOP::xWritePictureSlices( Picture& pic, AccessUnit& accessUnit, HLSWriter
   return numBytes * 8;
 }
 
+void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnit& accessUnit )
+{
+  const Slice* slice = pic.slices[ 0 ];
+  SEIMessages leadingSeiMessages;
+
+  bool bpPresentInAU = false;
+
+  if((m_pcEncCfg->m_bufferingPeriodSEIEnabled) && (slice->isIRAP() || slice->nalUnitType == NAL_UNIT_CODED_SLICE_GDR) &&
+    slice->nuhLayerId==slice->vps->layerId[0] && (slice->sps->hrdParametersPresent))
+  {
+    SEIBufferingPeriod *bufferingPeriodSEI = new SEIBufferingPeriod();
+    bool noLeadingPictures = ( (slice->nalUnitType!= NAL_UNIT_CODED_SLICE_IDR_W_RADL) && (slice->nalUnitType!= NAL_UNIT_CODED_SLICE_CRA) );
+    m_seiEncoder.initBufferingPeriodSEI(*bufferingPeriodSEI, noLeadingPictures);
+    m_pcEncHRD->bufferingPeriodSEI = *bufferingPeriodSEI; 
+    m_pcEncHRD->bufferingPeriodInitialized = true;
+    
+    leadingSeiMessages.push_back(bufferingPeriodSEI);
+    bpPresentInAU = true;
+  }
+
+//  if (m_pcEncCfg->m_dependentRAPIndicationSEIEnabled && slice->isDRAP )
+//  {
+//    SEIDependentRAPIndication *dependentRAPIndicationSEI = new SEIDependentRAPIndication();
+//    m_seiEncoder.initDrapSEI( dependentRAPIndicationSEI );
+//    leadingSeiMessages.push_back(dependentRAPIndicationSEI);
+//  }
+
+  if( m_pcEncCfg->m_pictureTimingSEIEnabled && m_pcEncCfg->m_bufferingPeriodSEIEnabled )
+  {
+    SEIMessages nestedSeiMessages;
+    SEIMessages duInfoSeiMessages;
+    uint32_t numDU = 1;
+    m_seiEncoder.initPictureTimingSEI( leadingSeiMessages, nestedSeiMessages, duInfoSeiMessages, slice, numDU, bpPresentInAU );
+  }
+
+  // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
+  AccessUnit::iterator pos = accessUnit.end();
+  xWriteSEISeparately( NAL_UNIT_PREFIX_SEI, leadingSeiMessages, accessUnit, pos, slice->TLayer, slice->sps );
+
+  deleteSEIs( leadingSeiMessages );
+}
 
 void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnit& accessUnit, std::string& digestStr )
 {
@@ -1341,7 +1388,7 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnit& accessUnit, std
   {
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
-    m_seiEncoder.initDecodedPictureHashSEI( decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
+    m_seiEncoder.initDecodedPictureHashSEI( *decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
     trailingSeiMessages.push_back( decodedPictureHashSei );
   }
 
@@ -1424,7 +1471,7 @@ void EncGOP::xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUn
     return;
   }
   OutputNALUnit nalu(naluType, temporalId);
-  m_seiWriter.writeSEImessages(nalu.m_Bitstream, seiMessages, sps, false);
+  m_seiWriter.writeSEImessages(nalu.m_Bitstream, seiMessages, *m_pcEncHRD, false, temporalId);
   auPos = accessUnit.insert(auPos, new NALUnitEBSP(nalu));
   auPos++;
 }
@@ -1441,7 +1488,7 @@ void EncGOP::xWriteSEISeparately (NalUnitType naluType, SEIMessages& seiMessages
     SEIMessages tmpMessages;
     tmpMessages.push_back(*sei);
     OutputNALUnit nalu(naluType, temporalId);
-    m_seiWriter.writeSEImessages(nalu.m_Bitstream, tmpMessages, sps, false);
+    m_seiWriter.writeSEImessages(nalu.m_Bitstream, tmpMessages, *m_pcEncHRD, false, temporalId);
     auPos = accessUnit.insert(auPos, new NALUnitEBSP(nalu));
     auPos++;
   }

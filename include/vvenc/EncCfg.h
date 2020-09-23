@@ -59,7 +59,7 @@ namespace vvenc {
 
 // ====================================================================================================================
 
-struct GOPEntry
+struct VVENC_DECL GOPEntry
 {
   int    m_POC;
   int    m_QPOffset;
@@ -141,7 +141,7 @@ inline std::istringstream& operator>> ( std::istringstream& in, GOPEntry& entry 
 
 // ====================================================================================================================
 
-struct RPLEntry
+struct VVENC_DECL RPLEntry
 {
   int    m_POC;
   int    m_temporalId;
@@ -165,7 +165,7 @@ struct RPLEntry
   }
 };
 
-struct WCGChromaQPControl
+struct VVENC_DECL WCGChromaQPControl
 {
   WCGChromaQPControl()
   : enabled         (false)
@@ -285,7 +285,9 @@ public:
   int                 m_MSBExtendedBitDepth[ MAX_NUM_CH ];              ///< bit-depth of input samples after MSB extension
   CostMode            m_costMode;                                       ///< Cost mode to use
   HashType            m_decodedPictureHashSEIType;                      ///< Checksum mode for decoded picture hash SEI message
-
+  bool                m_bufferingPeriodSEIEnabled;
+  bool                m_pictureTimingSEIEnabled;
+  bool                m_decodingUnitInfoSEIEnabled;
   bool                m_tileUniformSpacingFlag;
   int                 m_numTileColumnsMinus1;
   int                 m_numTileRowsMinus1;
@@ -412,6 +414,7 @@ public:
 
   bool                m_decodingParameterSetEnabled;                    ///< enable decoding parameter set
   bool                m_vuiParametersPresent;                           ///< enable generation of VUI parameters
+  bool                m_hrdParametersPresent;                           ///< enable generation or HRD parameters 
   bool                m_aspectRatioInfoPresent;                         ///< Signals whether aspect_ratio_idc is present
   int                 m_aspectRatioIdc;                                 ///< aspect_ratio_idc
   int                 m_sarWidth;                                       ///< horizontal size of the sample aspect ratio
@@ -479,7 +482,7 @@ public:
       , m_traceRule                                   ( "" )
       , m_traceFile                                   ( "" )
 
-      , m_conformanceWindowMode                       ( 0 )
+      , m_conformanceWindowMode                       ( 1 )
       , m_confWinLeft                                 ( 0 )
       , m_confWinRight                                ( 0 )
       , m_confWinTop                                  ( 0 )
@@ -567,7 +570,9 @@ public:
       , m_MSBExtendedBitDepth                         { 0, 0 }
       , m_costMode                                    ( COST_STANDARD_LOSSY )
       , m_decodedPictureHashSEIType                   ( HASHTYPE_NONE )
-
+      , m_bufferingPeriodSEIEnabled                   ( false )
+      , m_pictureTimingSEIEnabled                     ( false )
+      , m_decodingUnitInfoSEIEnabled                  ( false )
       , m_tileUniformSpacingFlag                      ( false )
       , m_numTileColumnsMinus1                        ( 0 )
       , m_numTileRowsMinus1                           ( 0 )
@@ -694,6 +699,7 @@ public:
 
       , m_decodingParameterSetEnabled                 ( false )
       , m_vuiParametersPresent                        ( false )
+      , m_hrdParametersPresent                        ( false )
       , m_aspectRatioInfoPresent                      ( false )
       , m_aspectRatioIdc                              ( 0 )
       , m_sarWidth                                    ( 0 )

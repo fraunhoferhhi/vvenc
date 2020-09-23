@@ -49,6 +49,7 @@ vvc@hhi.fraunhofer.de
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Unit.h"
+#include "CommonLib/Slice.h"
 #include "EncoderLib/NALwrite.h"
 
 #include <iostream>
@@ -655,7 +656,8 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internC
   if ( nonZeroBitDepthShift )
   {
     picScaled.create( internChFmt, Area( Position( 0, 0 ), Size( yuvOutBuf.yuvPlanes[ COMP_Y ].width, yuvOutBuf.yuvPlanes[ COMP_Y ].height ) ) );
-    setupYuvBuffer( picScaled, yuvScaled, nullptr );
+    Window zeroWindow;
+    setupYuvBuffer( picScaled, yuvScaled, &zeroWindow );
     PelUnitBuf pic;
     setupPelUnitBuf( yuvOutBuf, pic, internChFmt );
     picScaled.copyFrom( pic );

@@ -75,6 +75,7 @@ namespace vvenc {
 
 class InputByteStream;
 class DecLib;
+class EncHRD;
 
 struct FFwdDecoder
 {
@@ -125,6 +126,7 @@ private:
   FFwdDecoder               m_ffwdDecoder;
   ParameterSetMap<APS>      m_gopApsMap;
   RateCtrl*                 m_pcRateCtrl;
+  EncHRD*                   m_pcEncHRD;
 
   std::vector<EncPicture*>  m_picEncoderList;
   std::list<Picture*>       m_encodePics;
@@ -143,7 +145,7 @@ public:
   EncGOP();
   virtual ~EncGOP();
 
-  void init               ( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool );
+  void init               ( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
   void encodePicture      ( std::vector<Picture*> encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef );
   void finishEncPicture   ( EncPicture* picEncoder, Picture& pic );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
@@ -173,6 +175,7 @@ private:
   void xWritePicture                  ( Picture& pic, AccessUnit& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnit& accessUnit, HLSWriter& hlsWriter );
   int  xWritePictureSlices            ( Picture& pic, AccessUnit& accessUnit, HLSWriter& hlsWriter );
+  void xWriteLeadingSEIs              ( const Picture& pic, AccessUnit& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnit& accessUnit, std::string& digestStr );
   int  xWriteVPS                      ( AccessUnit &accessUnit, const VPS *vps, HLSWriter& hlsWriter );
   int  xWriteDCI                      ( AccessUnit &accessUnit, const DCI *dci, HLSWriter& hlsWriter );

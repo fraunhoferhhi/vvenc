@@ -147,7 +147,9 @@ public:
 
   void  parseVUI              ( VUI* pcVUI, SPS* pcSPS );
   void  parseConstraintInfo   ( ConstraintInfo *cinfo);
-  void  parseProfileTierLevel ( ProfileTierLevel *ptl, bool profileTierPresentFlag, int maxNumSubLayersMinus1);
+  void  parseProfileTierLevel ( ProfileTierLevel *ptl, bool profileTierPresent, int maxNumSubLayersMinus1);
+  void  parseOlsHrdParameters ( GeneralHrdParams* generalHrd, OlsHrdParams *olsHrd, uint32_t firstSubLayer, uint32_t tempLevelHigh);
+  void parseGeneralHrdParameters ( GeneralHrdParams *generalHrd);
   void  parsePictureHeader    ( PicHeader* picHeader, ParameterSetManager *parameterSetManager, bool readRbspTrailingBits );
   void  parseSliceHeader      ( Slice* slice, PicHeader* picHeader, ParameterSetManager *parameterSetManager, const int prevTid0POC );
   void  parseTerminatingBit   ( uint32_t& ruiBit );

@@ -51,7 +51,6 @@ vvc@hhi.fraunhofer.de
 #include "Picture.h"
 #include "UnitTools.h"
 #include "dtrace_next.h"
-//#include "VVEnc/EncCfg.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -1499,7 +1498,8 @@ SPS::SPS()
 , numHorVirtualBoundaries         ( 0 )
 , virtualBoundariesPosX           { 0,  0,  0 }
 , virtualBoundariesPosY           { 0,  0,  0 }
-, hrdParametersPresent            ( 0 )
+, hrdParametersPresent            ( false )
+, subLayerParametersPresent       ( false )
 , fieldSeqFlag                    ( false )
 , vuiParametersPresent            ( false )
 , vuiParameters                   ()

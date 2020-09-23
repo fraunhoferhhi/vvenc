@@ -812,7 +812,8 @@ void UnitBuf<T>::extendBorderPelTop   ( int x, int size, int margin )
   for( size_t i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
-    bufs[i].extendBorderPelTop( x>>csx, size>>csx, margin );
+    int csy = getComponentScaleY(ComponentID(i), chromaFormat);
+    bufs[i].extendBorderPelTop( x>>csx, size>>csx, margin>>csy );
   }
 }
 
@@ -822,7 +823,8 @@ void UnitBuf<T>::extendBorderPelBot   ( int x, int size, int margin )
   for( size_t i = 0; i < bufs.size(); i++ )
   {
     int csx = getComponentScaleX(ComponentID(i), chromaFormat);
-    bufs[i].extendBorderPelBot( x>>csx, size>>csx, margin );
+    int csy = getComponentScaleY(ComponentID(i), chromaFormat);
+    bufs[i].extendBorderPelBot( x>>csx, size>>csx, margin>>csy );
   }
 }
 
@@ -831,8 +833,9 @@ void UnitBuf<T>::extendBorderPelLft   ( int y, int size, int margin )
 {
   for( size_t i = 0; i < bufs.size(); i++ )
   {
+    int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
-    bufs[i].extendBorderPelLft( y>>csy, size>>csy, margin );
+    bufs[i].extendBorderPelLft( y>>csy, size>>csy, margin>>csx );
   }
 }
 
@@ -841,8 +844,9 @@ void UnitBuf<T>::extendBorderPelRgt   ( int y, int size, int margin )
 {
   for( size_t i = 0; i < bufs.size(); i++ )
   {
+    int csx = getComponentScaleX(ComponentID(i), chromaFormat);
     int csy = getComponentScaleY(ComponentID(i), chromaFormat);
-    bufs[i].extendBorderPelRgt( y>>csy, size>>csy, margin );
+    bufs[i].extendBorderPelRgt( y>>csy, size>>csy, margin>>csx );
   }
 }
 
