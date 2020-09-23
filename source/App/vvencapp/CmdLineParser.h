@@ -113,7 +113,7 @@ public:
           "\t [--bitrate,-b  <int>     ] : Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second) [" << rcParams.m_iTargetBitRate << "]\n"
           "\t [--qp  <int>             ] : QP (0-51) [" << rcParams.m_iQp << "]\n"
           "\t [--qpa <int>             ] : Perceptual QP adaption (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR), 5: HDR(MeanLuma)) [" <<  rcParams.m_iPerceptualQPA << "]\n"
-          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: size <= HD:" << rcParams.m_iThreadCount << "; UHD:6\n"
+          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: size <= HD:4; UHD:6\n"
           "\n"
           "\t [--gopsize,-g  <int>     ] : GOP size of temporal structure (16) [" <<  rcParams.m_iGopSize << "]\n"
           "\t [--refreshtype,-rt <str> ] : intra refresh type (idr,cra)\n"
@@ -135,7 +135,7 @@ public:
   }
 
   static int parse_command_line( int argc, char* argv[] , vvenc::VVEncParameter& rcParams, std::string& rcInputFile, std::string& rcBitstreamFile,
-                                 int& riFrames, int& riInputBitdepth, bool& rbThreadCountSet )
+                                 int& riFrames, int& riInputBitdepth )
   {
     int iRet = 0;
     /* Check command line parameters */
@@ -297,7 +297,6 @@ public:
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
           fprintf( stdout, "[threads]              : %d\n", iThreads );
         rcParams.m_iThreadCount = iThreads;
-        rbThreadCountSet = true;
       }
       else if( !strcmp( (const char*)argv[i_arg], "--preset") )
       {
