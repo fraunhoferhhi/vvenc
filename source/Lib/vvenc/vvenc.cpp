@@ -185,6 +185,11 @@ const char* VVEnc::getErrorMsg( int nRet )
   return VVEncImpl::getErrorMsg(nRet);
 }
 
+const char* VVEnc::getPresetParamsAsStr( int iQuality )
+{
+  return VVEncImpl::getPresetParamsAsStr(iQuality);
+}
+
 
 
 } // namespace

@@ -90,12 +90,14 @@ public:
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
 
+  static const char* getPresetParamsAsStr( int iQuality );
+
 private:
 
   int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString );
 
   int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
-  int xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality );
+  static int xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality );
   void xPrintCfg();
 
   int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
@@ -111,6 +113,7 @@ private:
 
 public:
   bool                                                        m_bInitialized         = false;
+  bool                                                        m_bFlushed             = false;
 
   vvenc::EncoderIf                                            m_cEncoderIf;                      ///< encoder library class
 
@@ -120,7 +123,7 @@ public:
   std::string                                                 m_sEncoderInfo;
   std::string                                                 m_cErrorString;
   std::string                                                 m_sEncoderCapabilities;
-
+  static std::string                                          m_sPresetAsStr;
   static std::string                                          m_cTmpErrorString;
 
   std::chrono::steady_clock::time_point                       m_cTPStart;
