@@ -153,6 +153,7 @@ endif()
 add_subdirectory( "source/Lib/vvenc" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
+add_subdirectory( "source/Test/vvenclibtest" )
 
 
 if( VVENC_ENABLE_INSTALL )

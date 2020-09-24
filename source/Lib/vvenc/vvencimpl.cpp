@@ -52,6 +52,7 @@ vvc@hhi.fraunhofer.de
 
 #include <iostream>
 #include <stdio.h>
+#include <algorithm>
 
 #include "../../../include/vvenc/Nal.h"
 #include "../../../include/vvenc/version.h"
@@ -74,6 +75,32 @@ VVEncImpl::VVEncImpl()
 VVEncImpl::~VVEncImpl()
 {
 
+}
+
+int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
+{
+  int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
+  if( 0 != iRet ) { return iRet; }
+
+  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
+  setMsgFnc( &msgFnc );
+
+  std::stringstream cssCap;
+
+  rcVVEncParameter;
+
+  vvenc::EncCfg cEncCfg;
+  if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
+  {
+    setMsgFnc( &msgFncDummy );
+  }
+
+  return VVENC_OK;
 }
 
 int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
@@ -421,12 +448,14 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3,                                  "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
+  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+
   return 0;
 }
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = (int)rcVVEncParameter.m_eLogLevel;
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
 
   rcEncCfg.m_SourceWidth                                       = rcVVEncParameter.m_iWidth;
   rcEncCfg.m_SourceHeight                                      = rcVVEncParameter.m_iHeight;

@@ -473,6 +473,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
   confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+  confirmParameter( m_DecodingRefreshType !=1,                                                  "Decoding Refresh Type CRA currently supported only" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
   {
@@ -533,8 +534,14 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode");
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
   confirmParameter( m_RCRateControlMode > 1 && m_GOPSize == 32, "Rate control is currently not supported for GOP size 32" );
- 
-  
+  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
+  confirmParameter(!((m_level==Level::LEVEL1) 
+    || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
+    || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
+    || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
+    || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
+    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2)
+    || (m_level==Level::LEVEL15_5)), "invalid level selected");
 
   confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
   confirmParameter( m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );

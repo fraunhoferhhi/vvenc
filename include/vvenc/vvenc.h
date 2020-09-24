@@ -450,6 +450,14 @@ public:
    */
    int reconfig( const VVEncParameter& rcVVEncParameter );
 
+   /**
+     This method checks the passed configuration.
+     The method fails if the encoder is not initialized.
+     \param[in]  rcVVCEncParameter reference to an VVCEncParameter struct that returns the current encoder setup.
+     \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
+   */
+   int checkConfig( const VVEncParameter& rcVVEncParameter );
+
     /**
      This method returns the last occurred error as a string.
      \param      None
