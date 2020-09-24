@@ -552,7 +552,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     }
     else
     {
-      unsigned int iIDRPeriod  = (rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec);
+      int iIDRPeriod  = (rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec);
       if( iIDRPeriod < rcVVEncParameter.m_iGopSize )
       {
         iIDRPeriod = rcVVEncParameter.m_iGopSize;
