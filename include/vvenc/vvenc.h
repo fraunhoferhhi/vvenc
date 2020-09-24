@@ -216,6 +216,14 @@ enum VvcNalType
   VVC_NAL_UNIT_INVALID
 };
 
+enum VvcSegmentMode
+{
+  VVC_SEG_OFF,
+  VVC_SEG_FIRST,
+  VVC_SEG_MID,
+  VVC_SEG_LAST
+};
+
 /**
   \ingroup VVEncExternalInterfaces
   The struct AccessUnit contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
@@ -307,7 +315,7 @@ typedef struct VVENC_DECL VVEncParameter
 {
   VVEncParameter()           ///< default constructor, sets member attributes to default values
   {}
-  int m_iQp                   = 30;     ///< quantization parameter                                 (no default || 0-51)
+  int m_iQp                   = 32;     ///< quantization parameter                                 (no default || 0-51)
   int m_iWidth                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
   int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
   int m_iGopSize              = 16;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
@@ -318,13 +326,15 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iTemporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
   int m_iTemporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
   int m_iTicksPerSecond       = 90000;  ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
+  int m_iMaxFrames            = 0;      ///< max number of frames to be encoded                     (default 0: encode all frames)
   int m_iThreadCount          = 1;      ///< number of worker threads (no default || should not exceed the number of physical cpu's)
   int m_iQuality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow
   int m_iPerceptualQPA        = 0;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
   int m_iTargetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
   VvcProfile m_eProfile       = VVC_PROFILE_MAIN_10; ///< vvc profile                               (default: main_10)
-  VvcLevel m_eLevel           = VVC_LEVEL_5_1;       ///< vvc level_idc                             (default: 5.1 )
-  VvcTier  m_eTier            = VVC_TIER_MAIN;       ///< vvc tier                                  (default: main )
+  VvcLevel m_eLevel           = VVC_LEVEL_5_1;       ///< vvc level_idc                             (default: 5.1)
+  VvcTier  m_eTier            = VVC_TIER_MAIN;       ///< vvc tier                                  (default: main)
+  VvcSegmentMode m_eSegMode   = VVC_SEG_OFF;         ///< segment mode                              (default: off)
 } VVEncParameter_t;
 
 

@@ -543,6 +543,8 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
 
+  ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
+
   return 0;
 }
 
@@ -583,7 +585,8 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   }
 
   rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
-  rcEncCfg.m_framesToBeEncoded = 0;
+
+  rcEncCfg.m_framesToBeEncoded                   = rcVVEncParameter.m_iMaxFrames;
 
   //======== Coding Structure =============
   rcEncCfg.m_GOPSize                             = rcVVEncParameter.m_iGopSize;
@@ -651,6 +654,34 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 3.";
     m_cErrorString  = css.str();
     return VVENC_ERR_PARAMETER;
+  }
+
+  if( rcVVEncParameter.m_eSegMode != VVC_SEG_OFF )
+  {
+    if( rcEncCfg.m_MCTF )
+    {
+      // TODO (jb): check value 2
+      //            check number of frames to be encoded >= 2
+      switch( rcVVEncParameter.m_eSegMode )
+      {
+        case VVC_SEG_FIRST:
+          rcEncCfg.m_MCTFNumLeadFrames  = 0;
+          rcEncCfg.m_MCTFNumTrailFrames = MCTF_RANGE;
+          break;
+        case VVC_SEG_MID:
+          rcEncCfg.m_MCTFNumLeadFrames  = MCTF_RANGE;
+          rcEncCfg.m_MCTFNumTrailFrames = MCTF_RANGE;
+          break;
+        case VVC_SEG_LAST:
+          rcEncCfg.m_MCTFNumLeadFrames  = MCTF_RANGE;
+          rcEncCfg.m_MCTFNumTrailFrames = 0;
+          break;
+        default:
+          rcEncCfg.m_MCTFNumLeadFrames  = 0;
+          rcEncCfg.m_MCTFNumTrailFrames = 0;
+          break;
+      }
+    }
   }
 
   if ( rcEncCfg.initCfgParameter() )
