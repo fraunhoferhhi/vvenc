@@ -373,7 +373,7 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
   rcPicBuffer.m_pvV = (pV + 3*bd.iAlignmentGuard) - (((size_t)pV) & (bd.iAlignmentGuard-1));
 
   rcPicBuffer.m_eColorFormat     = VVC_CF_YUV420_PLANAR;
-  rcPicBuffer.m_uiSequenceNumber = -1;
+  rcPicBuffer.m_uiSequenceNumber = 0;
 
   return iRet;
 }
@@ -426,6 +426,16 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
   }
 
   return iRet;
+}
+
+int VVEncImpl::getNumLeadFrames()
+{
+  return m_cEncCfg.m_MCTFNumLeadFrames;
+}
+
+int VVEncImpl::getNumTrailFrames()
+{
+  return m_cEncCfg.m_MCTFNumTrailFrames;
 }
 
 void VVEncImpl::clockStartTime()
@@ -660,8 +670,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   {
     if( rcEncCfg.m_MCTF )
     {
-      // TODO (jb): check value 2
-      //            check number of frames to be encoded >= 2
       switch( rcVVEncParameter.m_eSegMode )
       {
         case VVC_SEG_FIRST:
@@ -889,18 +897,18 @@ void VVEncImpl::xPrintCfg()
   msgApp( (int)LL_DETAILS, "Cabac-zero-word-padding                : %s\n", ( m_cEncCfg.m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" ) );
   msgApp( (int)LL_DETAILS, "Frame/Field                            : Frame based coding\n" );
   if ( m_cEncCfg.m_framesToBeEncoded > 0 )
-    msgApp( (int)LL_DETAILS, "Frame index                          : %u - %d (%d frames)\n", m_cEncCfg.m_FrameSkip, m_cEncCfg.m_FrameSkip + m_cEncCfg.m_framesToBeEncoded - 1, m_cEncCfg.m_framesToBeEncoded );
+    msgApp( (int)LL_DETAILS, "Frame index                            : %d frames\n", m_cEncCfg.m_framesToBeEncoded );
   else
-    msgApp( (int)LL_DETAILS, "Frame index                            : %u - .. (all frames)\n", m_cEncCfg.m_FrameSkip );
+    msgApp( (int)LL_DETAILS, "Frame index                            : all frames\n" );
   msgApp( (int)LL_DETAILS, "Profile                                : %s\n", getProfileStr( m_cEncCfg.m_profile).c_str() );
   msgApp( (int)LL_DETAILS, "Level                                  : %s\n", getLevelStr( m_cEncCfg.m_level).c_str() );
   msgApp( (int)LL_DETAILS, "CU size / total-depth                  : %d / %d\n", m_cEncCfg.m_CTUSize, m_cEncCfg.m_MaxCodingDepth );
-  msgApp( (int)LL_DETAILS, "Max TB size                            : %d \n", 1 << m_cEncCfg.m_log2MaxTbSize );
+  msgApp( (int)LL_DETAILS, "Max TB size                            : %d\n", 1 << m_cEncCfg.m_log2MaxTbSize );
   msgApp( (int)LL_DETAILS, "Motion search range                    : %d\n", m_cEncCfg.m_SearchRange );
   msgApp( (int)LL_DETAILS, "Intra period                           : %d\n", m_cEncCfg.m_IntraPeriod );
   msgApp( (int)LL_DETAILS, "Decoding refresh type                  : %d\n", m_cEncCfg.m_DecodingRefreshType );
   msgApp( (int)LL_DETAILS, "QP                                     : %d\n", m_cEncCfg.m_QP);
-  msgApp( (int)LL_DETAILS, "Percept QPA                            : %d \n", m_cEncCfg.m_usePerceptQPA );
+  msgApp( (int)LL_DETAILS, "Percept QPA                            : %d\n", m_cEncCfg.m_usePerceptQPA );
   msgApp( (int)LL_DETAILS, "Max dQP signaling subdiv               : %d\n", m_cEncCfg.m_cuQpDeltaSubdiv);
 
   msgApp( (int)LL_DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n", m_cEncCfg.m_chromaCbQpOffset, m_cEncCfg.m_chromaCbQpOffsetDualTree);
@@ -1029,9 +1037,8 @@ void VVEncImpl::xPrintCfg()
   msgApp( LL_VERBOSE, "FppBitEqual:%d ",          m_cEncCfg.m_ensureFppBitEqual );
   msgApp( LL_VERBOSE, "WPP:%d ",                  m_cEncCfg.m_numWppThreads );
   msgApp( LL_VERBOSE, "WppBitEqual:%d ",          m_cEncCfg.m_ensureWppBitEqual );
-  msgApp( LL_VERBOSE, "WF:%d ",                   m_cEncCfg.m_entropyCodingSyncEnabled );
-
-  msgApp( LL_VERBOSE, "\n\n");
+  msgApp( LL_VERBOSE, "WF:%d",                    m_cEncCfg.m_entropyCodingSyncEnabled );
+  msgApp( LL_VERBOSE, "\n");
 
   msgApp( LL_NOTICE, "\n");
 

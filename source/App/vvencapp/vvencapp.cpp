@@ -91,7 +91,7 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
   cVVEncParameter.m_iMaxFrames      = 0;                          // max number of frames to be encoded
-  cVVEncParameter.m_iThreadCount    = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.m_iFrameSkip      = 0;                          // number of frames to skip before start encoding
   cVVEncParameter.m_iQuality        = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
   cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
@@ -242,8 +242,10 @@ int main( int argc, char* argv[] )
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
-  bool bEof = false;
-  int64_t iSeqNumber = 0;
+  const int64_t iFrameSkip = std::max<int64_t>( cVVEncParameter.m_iFrameSkip - cVVEnc.getNumLeadFrames(), 0 );
+  const int64_t iMaxFrames = cVVEncParameter.m_iMaxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
+  int64_t       iSeqNumber = 0;
+  bool          bEof       = false;
   while( !bEof )
   {
     iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
@@ -256,7 +258,7 @@ int main( int argc, char* argv[] )
       bEof = true;
     }
 
-    if( !bEof )
+    if( !bEof && iSeqNumber >= iFrameSkip )
     {
       // set sequence number and cts
       cInputPicture.m_cPicBuffer.m_uiSequenceNumber = iSeqNumber;
@@ -285,7 +287,7 @@ int main( int argc, char* argv[] )
 
         if( ! cAccessUnit.m_cInfo.empty() ) // print debug info
         {
-          printf( "\n %s ", cAccessUnit.m_cInfo.c_str() );
+          printf( "%s\n", cAccessUnit.m_cInfo.c_str() );
         }
         uiFrames++;
         uiFramesTmp++;
@@ -306,7 +308,7 @@ int main( int argc, char* argv[] )
     }
     iSeqNumber++;
 
-    if( cVVEncParameter.m_iMaxFrames > 0 && iSeqNumber >= cVVEncParameter.m_iMaxFrames ){ break; }
+    if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) ){ break; }
   }
 
   // flush the encoder
@@ -327,7 +329,7 @@ int main( int argc, char* argv[] )
 
     if( ! cAccessUnit.m_cInfo.empty() ) // print debug info
     {
-      printf( "\n %s ", cAccessUnit.m_cInfo.c_str() );
+      printf( "%s\n", cAccessUnit.m_cInfo.c_str() );
     }
 
     uiFrames++;

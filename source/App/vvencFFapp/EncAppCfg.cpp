@@ -756,17 +756,20 @@ void EncAppCfg::printCfg()
   msgApp( DETAILS, "Cabac-zero-word-padding                : %s\n", ( m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" ) );
   msgApp( DETAILS, "Frame/Field                            : Frame based coding\n" );
   if ( m_framesToBeEncoded > 0 )
-    msgApp( DETAILS, "Frame index                            : %u - %d (%d frames)\n", m_FrameSkip, m_FrameSkip + m_framesToBeEncoded - 1, m_framesToBeEncoded );
+    msgApp( DETAILS, "Frame index                            : %d frames\n", m_framesToBeEncoded );
   else
-    msgApp( DETAILS, "Frame index                            : %u - .. (all frames)\n", m_FrameSkip );
+    msgApp( DETAILS, "Frame index                            : all frames\n" );
   const IStreamToEnum<Profile::Name> toProfile( &m_profile, &ProfileToEnumMap );
+  const IStreamToEnum<Level::Name>   toLevel( &m_level, &LevelToEnumMap );
   msgApp( DETAILS, "Profile                                : %s\n", toProfile.to_string() );
+  msgApp( DETAILS, "Level                                  : %s\n", toLevel.to_string() );
   msgApp( DETAILS, "CU size / total-depth                  : %d / %d\n", m_CTUSize, m_MaxCodingDepth );
-  msgApp( DETAILS, "Max TB size                            : %d \n", 1 << m_log2MaxTbSize );
+  msgApp( DETAILS, "Max TB size                            : %d\n", 1 << m_log2MaxTbSize );
   msgApp( DETAILS, "Motion search range                    : %d\n", m_SearchRange );
   msgApp( DETAILS, "Intra period                           : %d\n", m_IntraPeriod );
   msgApp( DETAILS, "Decoding refresh type                  : %d\n", m_DecodingRefreshType );
   msgApp( DETAILS, "QP                                     : %d\n", m_QP);
+  msgApp( DETAILS, "Percept QPA                            : %d\n", m_usePerceptQPA );
   msgApp( DETAILS, "Max dQP signaling subdiv               : %d\n", m_cuQpDeltaSubdiv);
 
   msgApp( DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n", m_chromaCbQpOffset, m_chromaCbQpOffsetDualTree);
@@ -898,7 +901,7 @@ void EncAppCfg::printCfg()
   msgApp( VERBOSE, "FppBitEqual:%d ",          m_ensureFppBitEqual );
   msgApp( VERBOSE, "WPP:%d ",                  m_numWppThreads );
   msgApp( VERBOSE, "WppBitEqual:%d ",          m_ensureWppBitEqual );
-  msgApp( VERBOSE, "WF:%d ",                   m_entropyCodingSyncEnabled );
+  msgApp( VERBOSE, "WF:%d",                    m_entropyCodingSyncEnabled );
   msgApp( VERBOSE, "\n");
 
   msgApp( NOTICE, "\n");

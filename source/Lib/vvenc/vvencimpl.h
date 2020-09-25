@@ -86,6 +86,9 @@ public:
 
   int setAndRetErrorMsg( int Ret );
 
+  int getNumLeadFrames();
+  int getNumTrailFrames();
+
   const char* getEncoderInfo();
 
   static const char* getErrorMsg( int nRet );

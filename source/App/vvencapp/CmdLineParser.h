@@ -88,7 +88,8 @@ public:
           "\t                              59.94 fps = 60000/1001 Hz = 59\n";
       }
       std::cout <<
-          "\t [--frames,-f  <int>      ] : max. frames to encode (default: -1 all frames)\n";
+          "\t [--frames,-f <int>       ] : max. frames to encode (default: -1 all frames)\n"
+          "\t [--frameskip <int>       ] : number of frames to encode skip (default: 0 off)\n";
       if ( bFullHelp )
       {
         std::cout <<
@@ -272,6 +273,13 @@ public:
         rcParams.m_iMaxFrames = atoi( argv[i_arg++] );
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
           fprintf( stdout, "[frames]               : %d\n", rcParams.m_iMaxFrames );
+      }
+      else if( !strcmp( (const char*)argv[i_arg], "--frameskip" ) )
+      {
+        i_arg++;
+        rcParams.m_iFrameSkip= atoi( argv[i_arg++] );
+        if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
+          fprintf( stdout, "[frameskip]           : %d\n", rcParams.m_iFrameSkip );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--segment" ) )
       {
