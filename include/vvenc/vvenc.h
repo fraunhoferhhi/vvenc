@@ -311,11 +311,12 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iWidth                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
   int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
   int m_iGopSize              = 16;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
-  VvcDecodingRefreshType m_eDecodingRefreshType = VVC_DRT_IDR; ///< intra period refresh type          (default: VVC_DRT_IDR )
-  int m_iIDRPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag       (default: 0 || 0: only the first pic, otherwise factor of m_iGopSize
+  VvcDecodingRefreshType m_eDecodingRefreshType = VVC_DRT_IDR; ///< intra period refresh type            (default: VVC_DRT_IDR )
+  int m_iIDRPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
+  int m_iIDRPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
   LogLevel m_eLogLevel        = LL_INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
-  int m_iTemporalRate         = 0;      ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
-  int m_iTemporalScale        = 0;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
+  int m_iTemporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
+  int m_iTemporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
   int m_iTicksPerSecond       = 90000;  ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
   int m_iThreadCount          = 1;      ///< number of worker threads (no default || should not exceed the number of physical cpu's)
   int m_iQuality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow
@@ -481,6 +482,13 @@ public:
      \retval[ ]  std::string empty string for no error
    */
    static const char* getErrorMsg( int nRet );
+
+   /**
+     This static function returns a string according to the passed parameter iQuality.
+     \param[in]  iQuality Quality (preset) as integer
+     \retval[ ]  std::string enabled encoding parameter as string
+   */
+   static const char* getPresetParamsAsStr( int iQuality );
 
 private:
    VVEncImpl*  m_pcVVEncImpl;

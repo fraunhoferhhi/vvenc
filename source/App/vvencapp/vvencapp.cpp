@@ -67,7 +67,6 @@ vvc@hhi.fraunhofer.de
 
 int main( int argc, char* argv[] )
 {
-
   std::string cAppname = argv[0];
   std::size_t iPos = (int)cAppname.find_last_of("/");
   if( std::string::npos != iPos )
@@ -85,12 +84,13 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iHeight         = 1080;                       // luminance height of input picture
   cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
-  cVVEncParameter.m_iIDRPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  cVVEncParameter.m_iIDRPeriodSec   = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  cVVEncParameter.m_iIDRPeriod      = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
   cVVEncParameter.m_eLogLevel       = vvenc::LL_VERBOSE;          // log level > 4 (VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.m_iThreadCount    = 4;                          // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.m_iThreadCount    = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
   cVVEncParameter.m_iQuality        = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
   cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
@@ -101,7 +101,6 @@ int main( int argc, char* argv[] )
   std::string cProfile = "main10";
   std::string cLevel   = "4.1";
   std::string cTier    = "main";
-
 
   int iMaxFrames = 0;
   int iInputBitdepth = 8;
@@ -119,8 +118,7 @@ int main( int argc, char* argv[] )
     return 0;
   }
 
-  bool bThreadCountSet = false;
-  int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile, iMaxFrames, iInputBitdepth, bThreadCountSet );
+  int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile, iMaxFrames, iInputBitdepth );
 
   if( iRet != 0 ) 
   {
@@ -154,10 +152,18 @@ int main( int argc, char* argv[] )
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( !bThreadCountSet && ( cVVEncParameter.m_iWidth > 1920 || cVVEncParameter.m_iHeight > 1080) )
+  if( cVVEncParameter.m_iThreadCount <= 0 )
   {
-    cVVEncParameter.m_iThreadCount = 6;
+    if( cVVEncParameter.m_iWidth > 1920 || cVVEncParameter.m_iHeight > 1080)
+    {
+      cVVEncParameter.m_iThreadCount = 6;
+    }
+    else
+    {
+      cVVEncParameter.m_iThreadCount = 4;
+    }
   }
+
 
   vvenc::VVEnc cVVEnc;
 

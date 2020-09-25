@@ -40,16 +40,17 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 | OPTION            | DEFAULT                          | DESCRIPTION                                                                                        |
 |-------------------|----------------------------------|----------------------------------------------------------------------------------------------------|
 | --help,-h         | -                                | Show basic help                                                                                    |
-| --input <str>     | -                                | Raw yuv input file                                                                                 |
-| --size <wxh>      | 1920x1080                        | Input file resolution (width x height)                                                             |
-| --framerate <int> | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate          |
-| --format <str>    | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                         |
-| --output <str>    | not set                          | Bit-stream output file                                                                             |
-| --preset <str>    | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow)                           |
-| --qp <int>        | 32                               | Quantization parameter (0..51)                                                                     |
-| --bitrate <int>   | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
-| --qpa <int>       | 2                                | Perceptual QP adaption (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
-| --threads <int>   | size<=HD: 4 <br> else : 6 | Number of threads (1-N)                                                                            |
+| --input,-i <str>       | -                                | Raw yuv input file                                                                                 |
+| --size,-s <wxh>        | 1920x1080                        | Input file resolution (width x height)                                                             |
+| --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate          |
+| --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                         |
+| --output,-o <str>      | not set                          | Bit-stream output file                                                                             |
+| --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow)                           |
+| --qp <int>             | 32                               | Quantization parameter (0..51)                                                                     |
+| --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
+| --qpa <int>            | 2                                | Perceptual QP adaption (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
+| --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                             |
+| --threads ,-t <int>    | size<=HD: 4 <br> else : 6 | Number of threads (1-N)                                                                            |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels, the following call will encode the input file with the medium speedup preset:
 
