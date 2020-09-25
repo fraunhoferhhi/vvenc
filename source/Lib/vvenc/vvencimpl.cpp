@@ -595,7 +595,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   }
 
   rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
-
   rcEncCfg.m_framesToBeEncoded                   = rcVVEncParameter.m_iMaxFrames;
 
   //======== Coding Structure =============
