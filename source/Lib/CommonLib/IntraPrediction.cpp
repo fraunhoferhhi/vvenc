@@ -360,18 +360,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
 
   switch (uiDirMode)
   {
-    case(PLANAR_IDX): 
-#if ISP_VVC_SIMD
-        if ((piPred.width == 1) || (piPred.height == 1))
-        {
-            xPredIntraPlanar_Core(piPred, srcBuf);
-        }
-        else
-#endif
-        {
-            xPredIntraPlanar(piPred, srcBuf);
-        }
-        break;
+    case(PLANAR_IDX): xPredIntraPlanar(piPred, srcBuf); break;
     case(DC_IDX):     xPredIntraDc    ( piPred, srcBuf ); break;
 //    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, pu.cu->bdpcmMode, clpRng); break;
     default:          xPredIntraAng   ( piPred, srcBuf, channelType, clpRng); break;
@@ -624,7 +613,6 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
       {
 #if ISP_VVC_SIMD
           if (width <= 2)
-              //   if ((width < 8)&&(width!=4))
           {
               for (int y = 0, deltaPos = intraPredAngle * (1 + multiRefIdx); y < height;
                   y++, deltaPos += intraPredAngle, pDsty += dstStride)
@@ -689,20 +677,6 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
   // Flip the block if this is the horizontal mode
   if( !bIsModeVer )
   {
-#if ISP_VVC_SIMD
-    if (width <= 2)
-    {
-      for (int y = 0; y < height; y++)
-      {
-        for (int x = 0; x < width; x++)
-        {
-          pDst.at(y, x) = pDstBuf[x];
-        }
-        pDstBuf += dstStride;
-      }
-    }
-    else
-#endif
     pDst.transposedFrom( CPelBuf( pDstBuf, dstStride, width, height) );
   }
 }

@@ -209,9 +209,6 @@ private:
   PredictionUnit  **m_puPtr   [MAX_NUM_CH];
   TransformUnit   **m_tuPtr   [MAX_NUM_CH];
   bool             *m_isDecomp[MAX_NUM_CH];
-#if ISP_VVC_IDX
-  unsigned         *m_tuIdx   [MAX_NUM_CH];
-#endif
 
   unsigned m_numCUs;
   unsigned m_numPUs;
