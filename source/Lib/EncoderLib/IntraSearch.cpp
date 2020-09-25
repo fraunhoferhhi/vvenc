@@ -2692,16 +2692,16 @@ int IntraSearch::xSpeedISP(int speed, bool& testISP, int mode, int& noISP, int& 
                   {
                     m_ispTestedModes[0].splitIsFinished[d] = true;
                   }
-                  else if ((m_ispTestedModes[0].bestCost[d2] < 1.3 * m_ispTestedModes[0].bestCost[d])
-                      && (int(m_ispTestedModes[0].bestSplitSoFar) != 2))
+                  if ((m_ispTestedModes[0].bestCost[d2] < 1.3 * m_ispTestedModes[0].bestCost[d])
+                      && (int(m_ispTestedModes[0].bestSplitSoFar) != (d+1)))
                   {
                     if(d)
                     {
-                      noISP = 1;
+                      endISP = 1;
                     }
                     else
                     {
-                      endISP = 1;
+                      noISP = 1;
                     }
                     m_ispTestedModes[0].splitIsFinished[d] = true;
                   }
