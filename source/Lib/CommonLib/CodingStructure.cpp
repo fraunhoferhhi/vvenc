@@ -97,9 +97,6 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
     m_puPtr   [ i ] = nullptr;
     m_tuPtr   [ i ] = nullptr;
     m_isDecomp[ i ] = nullptr;
-#if ISP_VVC_IDX
-    m_tuIdx   [ i ] = nullptr;
-#endif
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -140,10 +137,6 @@ void CodingStructure::destroy()
     delete[] m_tuPtr[ i ];
     m_tuPtr[ i ] = nullptr;
 
-#if ISP_VVC_IDX
-    delete[] m_tuIdx[ i ];
-    m_tuIdx[ i ] = nullptr;
-#endif
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -338,26 +331,19 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
     else                    return ptu;
 #else
 #if ISP_VVC
-#if ISP_VVC_IDX
-      const unsigned idx = m_tuIdx[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
-#endif
       TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
+      unsigned idx = ptu->idx;
       if (!ptu && m_isTuEnc)
           return parent->getTU(pos, effChType);
       else
       {
           if (isLuma(effChType))
           {
-#if ISP_VVC_IDX
               const TransformUnit& tu = *tus[idx - 1];
               if (tu.cu->ispMode)
-#else
-              if (ptu->cu->ispMode)
-#endif
               {
                   if (subTuIdx == -1)
                   {
-#if ISP_VVC_IDX
                       unsigned extraIdx = 0;
                       while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
                       {
@@ -367,13 +353,8 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
                           CHECK(extraIdx > 3, "extraIdx > 3");
                       }
                       return tus[idx - 1 + extraIdx];
-#endif
                   }
-#if ISP_VVC_IDX
                   return tus[idx - 1 + subTuIdx];
-#else
-                  return tus[subTuIdx];
-#endif
               }
           }
           return ptu;
@@ -434,26 +415,19 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
     else                    return ptu;
 #else
 #if ISP_VVC
-#if ISP_VVC_IDX
-      const unsigned idx = m_tuIdx[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
-#endif
       TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
+      unsigned idx = ptu->idx;
       if (!ptu && m_isTuEnc)
           return parent->getTU(pos, effChType);
       else
       {
           if (isLuma(effChType))
           {
-#if ISP_VVC_IDX
               const TransformUnit& tu = *tus[idx - 1];
               if (tu.cu->ispMode)
-#else
-              if (ptu->cu->ispMode)
-#endif
               {
                   if (subTuIdx == -1)
                   {
-#if ISP_VVC_IDX
                       unsigned extraIdx = 0;
                       while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
                       {
@@ -463,13 +437,8 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
                           CHECK(extraIdx > 3, "extraIdx > 3");
                       }
                       return tus[idx - 1 + extraIdx];
-#endif
                   }
-#if ISP_VVC_IDX
                   return tus[idx - 1 + subTuIdx];
-#else
-                  return tus[subTuIdx];
-#endif
               }
           }
           return ptu;
@@ -681,10 +650,6 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
         CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
-#if ISP_VVC_IDX
-        unsigned* idxPtr = m_tuIdx[i] + rsAddr(scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width);
-        AreaBuf<uint32_t>(idxPtr, scaledSelf.width, scaledBlk.size()).fill(idx); 
-#endif
       }
     }
 
@@ -919,9 +884,6 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
     m_puPtr[i]    = _area > 0 ? new PredictionUnit*[_area] : nullptr;
     m_tuPtr[i]    = _area > 0 ? new TransformUnit* [_area] : nullptr;
     m_isDecomp[i] = _area > 0 ? new bool           [_area] : nullptr;
-#if ISP_VVC_IDX
-    m_tuIdx[i]    = _area > 0 ? new unsigned[_area] : nullptr;
-#endif
   }
 
     for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
@@ -1317,9 +1279,6 @@ void CodingStructure::clearTUs()
 
     memset( m_isDecomp[i], false, sizeof( *m_isDecomp[0] ) * _area );
     memset( m_tuPtr   [i],     0, sizeof( *m_tuPtr   [0] ) * _area );
-#if ISP_VVC_IDX
-    memset( m_tuIdx[i], 0, sizeof(*m_tuIdx[0]) * _area );
-#endif
   }
 
   numCh = getNumberValidComponents( area.chromaFormat );

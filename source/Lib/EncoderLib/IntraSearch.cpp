@@ -568,96 +568,15 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 #if ISP_VVC
     int noISP = 0;
     int endISP = testISP ? 2 : 0;
-    if (testISP && (mode >= 1))
-    {
-        if (m_ispTestedModes[0].splitIsFinished[1] && m_ispTestedModes[0].splitIsFinished[0])
-        {
-            testISP = false;
-            endISP = 0;
-        }
-        else
-        {
-            if (m_pcEncCfg->m_ISP >= 2)
-            {
-                if (mode == 1)
-                {
-                    int n = 0;
-                    if ((m_ispTestedModes[0].bestCost[0] <= m_ispTestedModes[0].bestCost[1])
-                        && (m_ispTestedModes[0].bestCost[0] != MAX_DOUBLE))
-                    {
-                        n = 1;
-                        m_ispTestedModes[0].splitIsFinished[1] = true;
-                    }
-                    if ((m_ispTestedModes[0].bestCost[1] < m_ispTestedModes[0].bestCost[0])
-                        && (m_ispTestedModes[0].bestCost[1] != MAX_DOUBLE))
-                    {
-                        n = 2;
-                        m_ispTestedModes[0].splitIsFinished[0] = true;
-                    }
-                    m_ispTestedModes[0].bestModeSoFar = n;
-                }
-
-                if (m_ispTestedModes[0].bestModeSoFar <= 0)
-                {
-                    m_ispTestedModes[0].splitIsFinished[1] = true;
-                    m_ispTestedModes[0].splitIsFinished[0] = true;
-                    testISP = false;
-                    endISP = 0;
-                }
-                else if (m_ispTestedModes[0].bestModeSoFar == 2)
-                {
-                    noISP = 1;
-                }
-                else
-                    endISP = 1;
-            }
-        }
-    }
     if (testISP)
     {
-        if (mode == 2)
-        {
-            if (m_ispTestedModes[0].bestCost[1] == MAX_DOUBLE)
-            {
-                m_ispTestedModes[0].splitIsFinished[1] = true;
-            }
-            if (m_ispTestedModes[0].bestCost[0] == MAX_DOUBLE)
-            {
-                m_ispTestedModes[0].splitIsFinished[0] = true;
-            }
-            if ((m_ispTestedModes[0].bestCost[0] < 1.3 * m_ispTestedModes[0].bestCost[1])
-                && (int(m_ispTestedModes[0].bestSplitSoFar) != 2))
-            {
-                endISP = 1;
-                m_ispTestedModes[0].splitIsFinished[1] = true;
-            }
-            if ((m_ispTestedModes[0].bestCost[1] < 1.3 * m_ispTestedModes[0].bestCost[0])
-                && (int(m_ispTestedModes[0].bestSplitSoFar) != 1))
-            {
-                noISP = 1;
-                m_ispTestedModes[0].splitIsFinished[0] = true;
-            }
-        }
-        else
-        {
-            if (m_ispTestedModes[0].splitIsFinished[0])
-            {
-                noISP = 1;
-            }
-            if (m_ispTestedModes[0].splitIsFinished[1])
-            {
-                endISP = 1;
-            }
-        }
+      xSpeedISP(1, testISP, mode, noISP, endISP, cu, RdModeList, uiBestPUMode, bestISP, bestLfnstIdx);
     }
     for (int ispM = 0; ispM <= endISP; ispM++)
     {
-        if (ispM)
+        if (ispM &&(ispM == noISP))
         {
-            if (ispM == noISP)
-            {
-                continue;
-            }
+          continue;
         }
 #endif
         {
@@ -675,53 +594,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 #if ISP_VVC 
             if (cu.ispMode)
             {
-                bool stopFound = false;
-                if (cu.mipFlag || pu.multiRefIdx)
-                {
-                    cu.mipFlag = false;
-                    pu.multiRefIdx = 0;
-                    for (int k = 0; k < mode; k++)
-                    {
-                        if (testMode.modeId == RdModeList[k].modeId)
-                        {
-                            stopFound = true;
-                            testISP = false;
-                            endISP = 0;
-                            break;
-                        }
-                    }
-                }
-                if ((m_pcEncCfg->m_ISP >= 2)&& (testMode.modeId == DC_IDX))
-                {
-                    stopFound = true;
-                    endISP = 0;
-                }
-                if (m_pcEncCfg->m_ISP >= 3)
-                {
-                    if (!stopFound && mode)
-                    {
-                        if (bestISP == 0)
-                        {
-                            stopFound = true;
-                            endISP = 0;
-                            testISP = false;
-                        }
-                        else if ((uiBestPUMode.modeId != RdModeList[mode - 1].modeId)
-                            && (uiBestPUMode.modeId != RdModeList[mode].modeId))
-                        {
-                            stopFound = true;
-                            endISP = 0;
-                            testISP = false;
-                        }
-                    }
-                }
-                if (stopFound)
-                {
-                    continue;
-                }
+              int stopFound = xSpeedISP(0, testISP, mode, noISP, endISP, cu, RdModeList, uiBestPUMode, bestISP, 0);
+              if (stopFound)
+              {
+                continue;
+              }
             }
 #endif
-
             CHECK(cu.mipFlag && pu.multiRefIdx, "Error: combination of MIP and MRL not supported");
             CHECK(pu.multiRefIdx && (pu.intraDir[0] == PLANAR_IDX), "Error: combination of MRL and Planar mode not supported");
             CHECK(cu.ispMode && cu.mipFlag, "Error: combination of ISP and MIP not supported");
@@ -1716,6 +1595,7 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
   const SPS &sps            = *cs.sps;
   CodingUnit &cu            = *cs.cus[0];
 #if ISP_VVC
+  bool   splitCbfLumaSum    = false;
   double bestCostForISP     = bestCostSoFar;
   double dSingleCost        = MAX_DOUBLE;
 #endif
@@ -1974,110 +1854,21 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
 #if ISP_VVC
   if (cu.ispMode)
   {
-      int  subTuCounter = 0;
-      bool earlySkipISP = false;
-      bool splitCbfLuma = false;
       const PartSplit ispType = CU::getISPType(cu, COMP_Y);
       Partitioner subTuPartitioner = partitioner;
       subTuPartitioner.splitCurrArea(ispType, cs);
-      Distortion singleDistTmpLumaSUM = 0;
-      uint64_t   singleTmpFracBitsSUM = 0;
-      double     singleCostTmpSUM = 0;
+
       CUCtx      cuCtx;
-      cuCtx.isDQPCoded = true;
-      cuCtx.isChromaQpAdjCoded = true;
-
-      do
-      {
-          // uint32_t   numSig            = 0;
-          Distortion singleDistTmpLuma = 0;
-          uint64_t   singleTmpFracBits = 0;
-          double     singleCostTmp = 0;
-          TransformUnit& tmpTUcur = ((cs.tus.size() < (subTuCounter + 1)))
-              ? cs.addTU(CS::getArea(cs, subTuPartitioner.currArea(), subTuPartitioner.chType,
-                  subTuPartitioner.treeType),
-                  subTuPartitioner.chType, cs.cus[0])
-              : *cs.tus[subTuCounter];
-          tmpTUcur.depth = subTuPartitioner.currTrDepth;
-
-          // Encode TU
-          xIntraCodingTUBlock(tmpTUcur, COMP_Y, false, singleDistTmpLuma, 0 /*, &numSig*/);
-          cuCtx.mtsLastScanPos = false;
-
-          if (singleDistTmpLuma == MAX_INT)   // all zero CBF skip
-          {
-              earlySkipISP = true;
-              singleCostTmpSUM = MAX_DOUBLE;
-              break;   // return false;
-          }
-
-          {
-              if (m_pcRdCost->calcRdCost(singleTmpFracBitsSUM, singleDistTmpLumaSUM + singleDistTmpLuma) > bestCostForISP)
-              {
-                  // The accumulated cost + distortion is already larger than the best cost so far, so it is not
-                  // necessary to calculate the rate
-                  earlySkipISP = true;
-              }
-              else
-              {
-#if ISP_VVC
-                  m_ispTestedModes[0].IspType = ispType;
-                  m_ispTestedModes[0].subTuCounter = subTuCounter;
-#endif
-                  singleTmpFracBits = xGetIntraFracBitsQT(cs, subTuPartitioner, true, &cuCtx);
-              }
-              singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
-          }
-
-          singleCostTmpSUM += singleCostTmp;
-          singleDistTmpLumaSUM += singleDistTmpLuma;
-          singleTmpFracBitsSUM += singleTmpFracBits;
-
-          subTuCounter++;
-
-          splitCbfLuma |= TU::getCbfAtDepth(
-              *cs.getTU(subTuPartitioner.currArea().lumaPos(), subTuPartitioner.chType, subTuCounter - 1), COMP_Y,
-              subTuPartitioner.currTrDepth);
-          int nSubPartitions = m_ispTestedModes[cu.lfnstIdx].numTotalParts[cu.ispMode - 1];
-          int doStop = (m_pcEncCfg->m_ISP == 1) ? (subTuCounter < nSubPartitions)?true:false : true;
-          if(doStop)
-          {
-              if (singleCostTmpSUM > bestCostForISP)
-              {
-                  earlySkipISP = true;
-                  break;
-              }
-              if (subTuCounter < nSubPartitions)
-              {
-                  double threshold = nSubPartitions == 2 ? 0.95 : subTuCounter == 1 ? 0.83 : 0.91;
-                  if ( singleCostTmpSUM > bestCostForISP * threshold)
-                  {
-                      earlySkipISP = true;
-                      break;
-                  }
-              }
-          }
-      } while (subTuPartitioner.nextPart(cs));  
+      dSingleCost = xTestISP(cs, subTuPartitioner, bestCostForISP, ispType, splitCbfLumaSum, singleFracBits, singleDistLuma, cuCtx);
       subTuPartitioner.exitCurrSplit();
-      dSingleCost = earlySkipISP ? MAX_DOUBLE : singleCostTmpSUM;
-      singleDistLuma = singleDistTmpLumaSUM;
-      singleFracBits = singleTmpFracBitsSUM;
       bool storeCost = (numMode == 1) ? true : false;
-      if ((m_pcEncCfg->m_ISP >= 2)&& (numMode <= 1))
+      if ((m_pcEncCfg->m_ISP >= 2) && (numMode <= 1))
       {
           storeCost = true;
       }
       if (storeCost)
       {
           m_ispTestedModes[0].bestCost[cu.ispMode - 1] = dSingleCost;
-      }
-      cs.setDecomp(cu.Y());
-      for (auto& ptu : cs.tus)
-      {
-          if (currArea.Y().contains(ptu->Y()))
-          {
-              TU::setCbfAtDepth(*ptu, COMP_Y, currDepth, splitCbfLuma ? 1 : 0);
-          }
       }
   }
   else
@@ -2106,7 +1897,19 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     singleFracBits = xGetIntraFracBitsQT(cs, partitioner, true);
 #endif
   }
-
+#if ISP_VVC
+  if(cu.ispMode)
+  { 
+    cs.setDecomp(cu.Y());
+    for (auto& ptu : cs.tus)
+    {
+      if (currArea.Y().contains(ptu->Y()))
+      {
+        TU::setCbfAtDepth(*ptu, COMP_Y, currDepth, splitCbfLumaSum ? 1 : 0);
+      }
+    }
+  }
+#endif
   cs.dist     += singleDistLuma;
   cs.fracBits += singleFracBits;
 #if ISP_VVC
@@ -2744,6 +2547,229 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
 
   m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand);
 }
+
+#if ISP_VVC
+double IntraSearch::xTestISP(CodingStructure& cs, Partitioner& subTuPartitioner, double bestCostForISP, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx)
+{
+    int  subTuCounter = 0;
+    bool earlySkipISP = false;
+    bool splitCbfLuma = false;
+    CodingUnit& cu = *cs.cus[0];
+
+    Distortion singleDistTmpLumaSUM = 0;
+    uint64_t   singleTmpFracBitsSUM = 0;
+    double     singleCostTmpSUM = 0;
+    cuCtx.isDQPCoded = true;
+    cuCtx.isChromaQpAdjCoded = true;
+
+    do
+    {
+        Distortion singleDistTmpLuma = 0;
+        uint64_t   singleTmpFracBits = 0;
+        double     singleCostTmp = 0;
+        TransformUnit& tmpTUcur = ((cs.tus.size() < (subTuCounter + 1)))
+            ? cs.addTU(CS::getArea(cs, subTuPartitioner.currArea(), subTuPartitioner.chType,
+                subTuPartitioner.treeType),
+                subTuPartitioner.chType, cs.cus[0])
+            : *cs.tus[subTuCounter];
+        tmpTUcur.depth = subTuPartitioner.currTrDepth;
+
+        // Encode TU
+        xIntraCodingTUBlock(tmpTUcur, COMP_Y, false, singleDistTmpLuma, 0);
+        cuCtx.mtsLastScanPos = false;
+
+        if (singleDistTmpLuma == MAX_INT)   // all zero CBF skip
+        {
+            earlySkipISP = true;
+            singleCostTmpSUM = MAX_DOUBLE;
+            break; 
+        }
+
+        {
+            if (m_pcRdCost->calcRdCost(singleTmpFracBitsSUM, singleDistTmpLumaSUM + singleDistTmpLuma) > bestCostForISP)
+            {
+                earlySkipISP = true;
+            }
+            else
+            {
+                m_ispTestedModes[0].IspType = ispType;
+                m_ispTestedModes[0].subTuCounter = subTuCounter;
+                singleTmpFracBits = xGetIntraFracBitsQT(cs, subTuPartitioner, true, &cuCtx);
+            }
+            singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
+        }
+
+        singleCostTmpSUM += singleCostTmp;
+        singleDistTmpLumaSUM += singleDistTmpLuma;
+        singleTmpFracBitsSUM += singleTmpFracBits;
+
+        subTuCounter++;
+
+        splitCbfLuma |= TU::getCbfAtDepth(
+            *cs.getTU(subTuPartitioner.currArea().lumaPos(), subTuPartitioner.chType, subTuCounter - 1), COMP_Y,
+            subTuPartitioner.currTrDepth);
+        int nSubPartitions = m_ispTestedModes[cu.lfnstIdx].numTotalParts[cu.ispMode - 1];
+        int doStop = (m_pcEncCfg->m_ISP == 1) ? (subTuCounter < nSubPartitions) ? true : false : true;
+        if (doStop)
+        {
+            if (singleCostTmpSUM > bestCostForISP)
+            {
+                earlySkipISP = true;
+                break;
+            }
+            if (subTuCounter < nSubPartitions)
+            {
+                double threshold = nSubPartitions == 2 ? 0.95 : subTuCounter == 1 ? 0.83 : 0.91;
+                if (singleCostTmpSUM > bestCostForISP * threshold)
+                {
+                    earlySkipISP = true;
+                    break;
+                }
+            }
+        }
+    } while (subTuPartitioner.nextPart(cs));
+    singleDistLuma = singleDistTmpLumaSUM;
+    singleFracBits = singleTmpFracBitsSUM;
+
+    splitcbf = splitCbfLuma;
+    return earlySkipISP ? MAX_DOUBLE : singleCostTmpSUM;
+}
+
+int IntraSearch::xSpeedISP(int speed, bool& testISP, int mode, int& noISP, int& endISP, CodingUnit& cu, static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList, ModeInfo       uiBestPUMode, int bestISP, int bestLfnstIdx)
+{
+    if (speed)
+    {
+        if (mode >= 1)
+        {
+            if (m_ispTestedModes[0].splitIsFinished[1] && m_ispTestedModes[0].splitIsFinished[0])
+            {
+                testISP = false;
+                endISP = 0;
+            }
+            else
+            {
+                if (m_pcEncCfg->m_ISP >= 2)
+                {
+                    if (mode == 1) //best Hor||Ver
+                    {
+                        int bestDir = 0;
+                        for (int d = 0; d < 2; d++)
+                        {
+                          int d2 = d ? 0 : 1;
+                          if ((m_ispTestedModes[0].bestCost[d] <= m_ispTestedModes[0].bestCost[d2])
+                              && (m_ispTestedModes[0].bestCost[d] != MAX_DOUBLE))
+                          {
+                            bestDir = d+1;
+                            m_ispTestedModes[0].splitIsFinished[d2] = true;
+                          }
+                        }
+                        m_ispTestedModes[0].bestModeSoFar = bestDir;
+                        if (m_ispTestedModes[0].bestModeSoFar <= 0)
+                        {
+                          m_ispTestedModes[0].splitIsFinished[1] = true;
+                          m_ispTestedModes[0].splitIsFinished[0] = true;
+                          testISP = false;
+                          endISP = 0;
+                        }
+                    }
+                    if (m_ispTestedModes[0].bestModeSoFar == 2)
+                    {
+                      noISP = 1;
+                    }
+                    else
+                      endISP = 1;
+                }
+            }
+        }
+        if (testISP)
+        {
+            if (mode == 2)
+            {
+                for (int d = 0; d < 2; d++)
+                {
+                  int d2 = d ? 0 : 1;
+                  if (m_ispTestedModes[0].bestCost[d] == MAX_DOUBLE)
+                  {
+                    m_ispTestedModes[0].splitIsFinished[d] = true;
+                  }
+                  else if ((m_ispTestedModes[0].bestCost[d2] < 1.3 * m_ispTestedModes[0].bestCost[d])
+                      && (int(m_ispTestedModes[0].bestSplitSoFar) != 2))
+                  {
+                    if(d)
+                    {
+                      noISP = 1;
+                    }
+                    else
+                    {
+                      endISP = 1;
+                    }
+                    m_ispTestedModes[0].splitIsFinished[d] = true;
+                  }
+                }
+            }
+            else
+            {
+                if (m_ispTestedModes[0].splitIsFinished[0])
+                {
+                    noISP = 1;
+                }
+                if (m_ispTestedModes[0].splitIsFinished[1])
+                {
+                    endISP = 1;
+                }
+            }
+        }
+        if ((noISP == 1) && (endISP == 1))
+        {
+            endISP = 0;
+        }
+    }
+    else
+    {
+        bool stopFound = false;
+        if (m_pcEncCfg->m_ISP >= 3)
+        {
+            if (mode)
+            {
+                if ((bestISP == 0) || ((uiBestPUMode.modeId != RdModeList[mode - 1].modeId)
+                    && (uiBestPUMode.modeId != RdModeList[mode].modeId)))
+                {
+                    stopFound = true;
+                }
+            }
+        }
+        if (cu.mipFlag || cu.pu->multiRefIdx)
+        {
+            cu.mipFlag = false;
+            cu.pu->multiRefIdx = 0;
+            if (!stopFound)
+            {
+                for (int k = 0; k < mode; k++)
+                {
+                    if (cu.pu->intraDir[CH_L] == RdModeList[k].modeId)
+                    {
+                        stopFound = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (stopFound)
+        {
+            testISP = false;
+            endISP = 0;
+            return 1;
+        }
+        if (!stopFound && (m_pcEncCfg->m_ISP >= 2) && (cu.pu->intraDir[CH_L] == DC_IDX))
+        {
+            stopFound = true;
+            endISP = 0;
+            return 1;
+        }  
+    }
+    return 0;
+}
+#endif
 
 } // namespace vvenc
 

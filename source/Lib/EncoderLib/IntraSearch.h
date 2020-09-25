@@ -194,7 +194,8 @@ private:
 #if ISP_VVC
   ChromaCbfs xIntraChromaCodingQT     ( CodingStructure& cs, Partitioner& pm );
   void xIntraCodingLumaQT             ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode );
- // void      xIntraCodingLumaQT(CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar);
+  double xTestISP                     ( CodingStructure& cs, Partitioner& pm, double bestCostSoFar, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx);
+  int  xSpeedISP                      ( int speed, bool& testISP, int mode, int& noISP, int& endISP, CodingUnit& cu, static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList, ModeInfo uiBestPUMode, int bestISP, int bestLfnstIdx);
 #else 
   void      xIntraChromaCodingQT      ( CodingStructure &cs, Partitioner& pm );
   void      xIntraCodingLumaQT        ( CodingStructure &cs, Partitioner &pm, PelUnitBuf *pPred, const double bestCostSoFar );

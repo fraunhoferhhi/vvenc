@@ -472,11 +472,7 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   const int  resiStride = resi.stride;
 
 #if ENABLE_SIMD_TRAFO
-#if ISP_VVC_SIMD
-  if ((width & 3) || (width <= 2) || (height <= 2))
-#else
   if( width & 3 )
-#endif
 #endif
   {
     for( int y = 0; y < height; y++ )
@@ -597,11 +593,7 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
 #endif
 
 #if ENABLE_SIMD_TRAFO
-#if ISP_VVC_SIMD
-  if ((width & 3) || (width <= 2) || (height <= 2))
-#else
   if( width & 3 )
-#endif
 #endif //ENABLE_SIMD_TRAFO
   {
     Pel       *dst    = pResidual.buf;
