@@ -121,7 +121,7 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
 
 void fillInputPic( vvenc::InputPicture& cInputPic )
 {
-  cInputPic.m_pcPicAttributes;
+  cInputPic.m_pcPicAttributes = nullptr;
   const short val = 512;
   int lumaSize   = cInputPic.m_cPicBuffer.m_iHeight   * cInputPic.m_cPicBuffer.m_iStride;
   int chromaSize = ( cInputPic.m_cPicBuffer.m_iCStride ) ? (cInputPic.m_cPicBuffer.m_iHeight/2 * cInputPic.m_cPicBuffer.m_iCStride) : (lumaSize / 4);
@@ -162,7 +162,7 @@ int testLibParameterRanges()
   fillEncoderParameters( vvencParams );
 
   testParamList( "DecodingRefreshType", vvencParams.m_eDecodingRefreshType,       vvencParams, { 0 } );
-  testParamList( "DecodingRefreshType", vencParams.m_eDecodingRefreshType,        vvencParams, { -1,1,2,3,4}, true );
+  testParamList( "DecodingRefreshType", vvencParams.m_eDecodingRefreshType,       vvencParams, { -1,1,2,3,4}, true );
 
   testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255} );
   testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, {-1,0,15,31,256,}, true );
