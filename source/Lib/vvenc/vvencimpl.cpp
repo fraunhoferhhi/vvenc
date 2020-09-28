@@ -185,15 +185,43 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 )
+  if( pcInputPicture->m_cPicBuffer.m_pvY == nullptr || pcInputPicture->m_cPicBuffer.m_pvU == nullptr || pcInputPicture->m_cPicBuffer.m_pvV == nullptr )
+  {
+    m_cErrorString = "InputPicture: invalid input buffers";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cVVEncParameter.m_iWidth )
+  {
+    m_cErrorString = "InputPicture: unsuported width";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cVVEncParameter.m_iHeight )
+  {
+    m_cErrorString = "InputPicture: unsuported width";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth > pcInputPicture->m_cPicBuffer.m_iStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width stride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iWidth/2 > pcInputPicture->m_cPicBuffer.m_iCStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width cstride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 || pcInputPicture->m_cPicBuffer.m_iBitDepth > 16 )
   {
     std::stringstream css;
     css << "InputPicture: unsupported input BitDepth " <<  pcInputPicture->m_cPicBuffer.m_iBitDepth  << ". must be 10 <= BitDepth <= 16";
     m_cErrorString = css.str();
     return VVENC_ERR_UNSPECIFIED;
   }
-
-
 
   // we know that the internal buffer requires to be a multiple of 8 in each direction 
   int internalLumaWidth = ((pcInputPicture->m_cPicBuffer.m_iWidth + 7)/8)*8;

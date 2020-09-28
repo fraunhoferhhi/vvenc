@@ -382,10 +382,6 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
       au.m_bDtsValid = true;
       //assert(  (int64_t)au.m_uiDts < 0 || au.m_uiCts >= au.m_uiDts );
     }
-    else
-    {
-      assert(0);
-    }
 
     // encode picture with current poc
     m_cGOPEncoder.encodePicture( encList, m_cListPic, au, false );
