@@ -5,6 +5,7 @@ stages:
    stage: build
    script:
       - make all
+      - make test
    only:
       - web
       - schedules

@@ -155,6 +155,13 @@ add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "source/Test/vvenclibtest" )
 
+# enable testing with ctest
+enable_testing()
+
+# add test
+add_test( NAME Test_vvenclibtest COMMAND vvenclibtest )
+set_tests_properties( Test_vvenclibtest PROPERTIES TIMEOUT 60 )
+
 
 if( VVENC_ENABLE_INSTALL )
   # include installer
