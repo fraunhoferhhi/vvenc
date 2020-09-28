@@ -131,7 +131,7 @@ void fillInputPic( vvenc::InputPicture& cInputPic )
 }
 
 template< typename T >
-int testParamList( const std::string& w, T& testParam, vvenc::VVEncParameter& vvencParams, const std::vector<T>& testValues, const bool expectedFail = false )
+int testParamList( const std::string& w, T& testParam, vvenc::VVEncParameter& vvencParams, const std::vector<int>& testValues, const bool expectedFail = false )
 {
   vvenc::VVEnc cVVEnc;
   const int numFails = g_numFails;
@@ -139,7 +139,7 @@ int testParamList( const std::string& w, T& testParam, vvenc::VVEncParameter& vv
 
   for( auto &testVal : testValues )
   {
-    testParam = testVal;
+    testParam = (T)testVal;
     try
     {
       // initialize the encoder
@@ -161,20 +161,20 @@ int testLibParameterRanges()
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
 
-  testParamList( "DecodingRefreshType", (int&)vvencParams.m_eDecodingRefreshType, vvencParams, { 0 } );
-  testParamList( "DecodingRefreshType", (int&)vvencParams.m_eDecodingRefreshType, vvencParams, { -1,1,2,3,4}, true );
+  testParamList( "DecodingRefreshType", vvencParams.m_eDecodingRefreshType,       vvencParams, { 0 } );
+  testParamList( "DecodingRefreshType", vencParams.m_eDecodingRefreshType,        vvencParams, { -1,1,2,3,4}, true );
 
-  testParamList( "Level",               (int&)vvencParams.m_eLevel,               vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255} );
-  testParamList( "Level",               (int&)vvencParams.m_eLevel,               vvencParams, {-1,0,15,31,256,}, true );
+  testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255} );
+  testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, {-1,0,15,31,256,}, true );
 
-//  testParamList( "LogLevel",            (int&)vvencParams.m_eLogLevel,            vvencParams, { 0,1,2,3,4,5,6,7} );
-//  testParamList( "LogLevel",            (int&)vvencParams.m_eLogLevel,            vvencParams, {-1,8,9}, true );
+//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, { 0,1,2,3,4,5,6,7} );
+//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, {-1,8,9}, true );
 
-  testParamList( "Profile",             (int&)vvencParams.m_eProfile,             vvencParams, { 1,3,9} );
-  testParamList( "Profile",             (int&)vvencParams.m_eProfile,             vvencParams, {-1,0,2,4,5,6,7,8,10}, true );
+  testParamList( "Profile",             vvencParams.m_eProfile,                   vvencParams, { 1,3,9} );
+  testParamList( "Profile",             vvencParams.m_eProfile,                   vvencParams, {-1,0,2,4,5,6,7,8,10}, true );
 
-  testParamList( "Tier",                (int&)vvencParams.m_eTier,                vvencParams, { 0,1} );
-  testParamList( "Tier",                (int&)vvencParams.m_eTier,                vvencParams, { -1,2}, true );
+  testParamList( "Tier",                vvencParams.m_eTier,                      vvencParams, { 0,1} );
+  testParamList( "Tier",                vvencParams.m_eTier,                      vvencParams, { -1,2}, true );
 
   testParamList( "GOPSize",             vvencParams.m_iGopSize,                   vvencParams, { 16,32} );
   testParamList( "GOPSize",             vvencParams.m_iGopSize,                   vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128}, true ); //th is this intended
