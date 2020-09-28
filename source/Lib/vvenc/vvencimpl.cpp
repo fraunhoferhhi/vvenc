@@ -88,8 +88,6 @@ int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
 
   std::stringstream cssCap;
 
-  rcVVEncParameter;
-
   vvenc::EncCfg cEncCfg;
   if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
   {
