@@ -1,29 +1,29 @@
 # Fraunhofer Versatile Video Encoder (VVenC)
 
-Versatile Video Coding (VVC) is the most recent international video coding standard, developped by the Joint Video Experts Team (JVET) of the ITU-T Video Coding Experts Group (VCEG) and the ISO/IEC Moving Picture Experts Group (MPEG). VVC is the successor of the High Efficiency Video Coding (HEVC) standard and will be released by ITU-T as H.266 and by ISO/IEC as MPEG-I Part 3 (ISO/IEC 23090-3). The new standard targets a 50% bit-rate reduction over HEVC at the same visual quality. In addition, VVC proves to be truly versatile by including tools for efficient coding of video content in emerging applications, e.g. high dynamic range (HDR), adaptive streaming, computer generated content as well as immersive applications like 360 degree video and augmented reality (AR).
+Versatile Video Coding (VVC) is the most recent international video coding standard, developed by the Joint Video Experts Team (JVET) of the ITU-T Video Coding Experts Group (VCEG) and the ISO/IEC Moving Picture Experts Group (MPEG). VVC is the successor of the High Efficiency Video Coding (HEVC) standard and will be released by ITU-T as H.266 and by ISO/IEC as MPEG-I Part 3 (ISO/IEC 23090-3). The new standard targets a 50% bit-rate reduction over HEVC at the same visual quality. In addition, VVC proves to be truly versatile by including tools for efficient coding of video content in emerging applications, e.g. high dynamic range (HDR), adaptive streaming, computer generated content as well as immersive applications like 360-degree video and augmented reality (AR).
 
 The Fraunhofer Versatile Video Encoder (VVenC) is a fast and efficient "real-world" VVC encoder implementation with the following main features:
 - Easy to use encoder implementation with four predefined quality/speed presets;
 - Perceptual optimization to improve subjective video quality;
-- Frame-level rate control supporting VBR encoding;
+- Frame-level rate control supporting variable bit-rate (VBR) encoding;
 - Expert mode encoder interface available, allowing fine-grained control of the encoding process.
 
 
 #  How to build VVenC?
 
-The software uses CMake to create platform-specific build files. 
+The software uses CMake to create platform-specific build files.
 A working CMake installation is required for building the software.
 Download CMake from http://www.cmake.org/ and install it. The following targets are supported: Windows (Visual Studio), Linux (gcc) and MacOS (clang).
 
 ## How to build for Windows?
-In order to compile the software for Windows, Visual Studio 15 2017 or higher and cmake Version 3.12 or higher are required. Install gnuwin32 that provides make for Windows. To build the software open a command prompt window, change into the project directory and use:
+In order to compile the software for Windows, Visual Studio 15 2017 or higher and cmake version 3.12 or higher are required. Install gnuwin32 that provides make for Windows. To build the software open a command prompt window, change into the project directory and use:
 
     make install-release
 
 This will create the statically linked release version of the encoder applications in the install/bin/release-static/ subdirectory.
 
 ## How to build for Linux/MacOS?
-In order to compile the software for Linux, gcc-7.0 or higher and cmake Version 3.12 or higher are required. For MacOS Xcode and cmake Version 3.12 or higher are required. To simplify the build process a Makefile with predefined targets is available. To build the VVenC encoder applications open a terminal, change into the project directory and use:
+In order to compile the software for Linux, gcc version 7.0 or higher and cmake version 3.12 or higher are required. For MacOS, Xcode and cmake version 3.12 or higher are required. To simplify the build process a Makefile with predefined targets is available. To build the VVenC encoder applications open a terminal, change into the project directory and use:
 
     make install-release
 
@@ -42,13 +42,13 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 | --help,-h         | -                                | Show basic help                                                                                    |
 | --input,-i <str>       | -                                | Raw yuv input file                                                                                 |
 | --size,-s <wxh>        | 1920x1080                        | Input file resolution (width x height)                                                             |
-| --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate          |
+| --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. Also recommended for perceptual QP adaptation modes 2 and 4 (see `--qpa` option below). |
 | --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                         |
 | --output,-o <str>      | not set                          | Bit-stream output file                                                                             |
 | --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow)                           |
-| --qp <int>             | 32                               | Quantization parameter (0..51)                                                                     |
+| --qp <int>             | 32                               | Quantization parameter (0..63)                                                                     |
 | --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
-| --qpa <int>            | 2                                | Perceptual QP adaption (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
+| --qpa <int>            | 2                                | Perceptual QP adaptation (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                             |
 | --threads ,-t <int>    | size<=HD: 4 <br> else : 6 | Number of threads (1-N)                                                                            |
 
@@ -57,7 +57,7 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
     vvencapp --preset medium -i BUS_176x144_75@15.yuv -s 176x144 -o str.266
 
 ## How to use the full featured expert mode encoder?
-The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM) reference software configuration scheme. Most of the parameters have been kept similar to VTM, but for some parameters, additional modes are available. Furthermore, not supported options have been removed. The following wxample configuration files for the expert mode encoder can be found in the cfg sub-directory:
+The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM) reference software configuration scheme. Most of the parameters have been kept similar to VTM, but for some parameters, additional modes are available. Furthermore, not supported options have been removed. The following example configuration files for the expert mode encoder can be found in the cfg sub-directory:
 
 | CONFIGURATION FILE                                                                                   | DESCRIPTION                                                                                                                                                                        |
 |------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
