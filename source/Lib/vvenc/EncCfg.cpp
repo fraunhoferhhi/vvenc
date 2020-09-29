@@ -520,6 +520,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
   confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
   confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
+#if ISP_VVC
+  confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
+#endif
 
   if( m_alf )
   {
