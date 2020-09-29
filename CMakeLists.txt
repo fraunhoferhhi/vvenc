@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
 endif()
 
 # project name
-project( vvenc VERSION 0.1.0.0 )
+project( vvenc VERSION 0.1.1.0 )
 
 # enable install target
 set( VVENC_ENABLE_INSTALL ON CACHE BOOL "Enable or disable install target" )
