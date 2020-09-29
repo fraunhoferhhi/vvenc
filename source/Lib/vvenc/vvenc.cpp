@@ -74,6 +74,22 @@ VVEnc::~VVEnc()
   }
 }
 
+int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
+{
+  if( rcVVEncParameter.m_iThreadCount > 64 )
+  {
+    return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED );
+  }
+
+  int iRet = m_pcVVEncImpl->checkConfig( rcVVEncParameter );
+  if( iRet != VVENC_OK )
+  {
+    return iRet;
+  }
+
+  return VVENC_OK;
+}
+
 int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
 {
   if( m_pcVVEncImpl->m_bInitialized )

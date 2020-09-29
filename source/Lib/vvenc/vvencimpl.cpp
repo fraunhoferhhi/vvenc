@@ -52,6 +52,7 @@ vvc@hhi.fraunhofer.de
 
 #include <iostream>
 #include <stdio.h>
+#include <algorithm>
 
 #include "../../../include/vvenc/Nal.h"
 #include "../../../include/vvenc/version.h"
@@ -75,6 +76,30 @@ VVEncImpl::VVEncImpl()
 VVEncImpl::~VVEncImpl()
 {
 
+}
+
+int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
+{
+  int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
+  if( 0 != iRet ) { return iRet; }
+
+  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
+  setMsgFnc( &msgFnc );
+
+  std::stringstream cssCap;
+
+  vvenc::EncCfg cEncCfg;
+  if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
+  {
+    setMsgFnc( &msgFncDummy );
+  }
+
+  return VVENC_OK;
 }
 
 int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
@@ -158,15 +183,43 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 )
+  if( pcInputPicture->m_cPicBuffer.m_pvY == nullptr || pcInputPicture->m_cPicBuffer.m_pvU == nullptr || pcInputPicture->m_cPicBuffer.m_pvV == nullptr )
+  {
+    m_cErrorString = "InputPicture: invalid input buffers";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cVVEncParameter.m_iWidth )
+  {
+    m_cErrorString = "InputPicture: unsuported width";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cVVEncParameter.m_iHeight )
+  {
+    m_cErrorString = "InputPicture: unsuported height";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth > pcInputPicture->m_cPicBuffer.m_iStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width stride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iWidth/2 > pcInputPicture->m_cPicBuffer.m_iCStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width cstride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 || pcInputPicture->m_cPicBuffer.m_iBitDepth > 16 )
   {
     std::stringstream css;
     css << "InputPicture: unsupported input BitDepth " <<  pcInputPicture->m_cPicBuffer.m_iBitDepth  << ". must be 10 <= BitDepth <= 16";
     m_cErrorString = css.str();
     return VVENC_ERR_UNSPECIFIED;
   }
-
-
 
   // we know that the internal buffer requires to be a multiple of 8 in each direction 
   int internalLumaWidth = ((pcInputPicture->m_cPicBuffer.m_iWidth + 7)/8)*8;
@@ -471,6 +524,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( dFPS < 1.0 || dFPS > 120,                                                      "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
 
   ROTPARAMS( rcSrc.m_iTicksPerSecond <= 0 || rcSrc.m_iTicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
+  ROTPARAMS( (rcSrc.m_iTicksPerSecond < 90000) && (rcSrc.m_iTicksPerSecond*rcSrc.m_iTemporalScale)%rcSrc.m_iTemporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   ROTPARAMS( rcSrc.m_iThreadCount <= 0,                                                     "ThreadCount must be > 0" );
 
@@ -494,12 +548,14 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3,                                  "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
+  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+
   return 0;
 }
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = (int)rcVVEncParameter.m_eLogLevel;
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
 
   rcEncCfg.m_SourceWidth                                       = rcVVEncParameter.m_iWidth;
   rcEncCfg.m_SourceHeight                                      = rcVVEncParameter.m_iHeight;
