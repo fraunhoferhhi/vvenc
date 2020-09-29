@@ -230,18 +230,13 @@ int main( int argc, char* argv[] )
   const unsigned char* pucDeletePicBuffer = cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer;
   cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer = NULL;
 
-#define LOG_CUR_FPS 0
-#if LOG_CUR_FPS
   std::chrono::steady_clock::time_point cTPStart;
   std::chrono::steady_clock::time_point cTPEnd;
-  unsigned int uiFramesTmp = 0;
-#endif
   unsigned int uiFrames = 0;
+  unsigned int uiFramesTmp = 0;
 
   cVVEnc.clockStartTime();
-#if LOG_CUR_FPS
   cTPStart = std::chrono::steady_clock::now();
-#endif
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
   if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
   {
@@ -296,7 +291,6 @@ int main( int argc, char* argv[] )
           printf( "%s\n", cAccessUnit.m_cInfo.c_str() );
         }
         uiFrames++;
-#if LOG_CUR_FPS
         uiFramesTmp++;
 
         if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE)
@@ -311,7 +305,6 @@ int main( int argc, char* argv[] )
             uiFramesTmp = 0;
           }
         }
-#endif
       }
     }
     iSeqNumber++;
@@ -342,7 +335,6 @@ int main( int argc, char* argv[] )
 
     uiFrames++;
 
-#if LOG_CUR_FPS
     if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
     {
       cTPEnd = std::chrono::steady_clock::now();
@@ -355,7 +347,6 @@ int main( int argc, char* argv[] )
         uiFramesTmp = 0;
       }
     }
-#endif
 
     if( cBinFileWriter.isOpen() )
     {
