@@ -672,7 +672,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("MTS",                                             m_MTS,                                                         "Multiple Transform Set (MTS)\n" )
   ("MTSIntraMaxCand",                                 m_MTSIntraMaxCand,                                             "Number of additional candidates to test in encoder search for MTS in intra slices\n")
 #if 1//ISP_VVC
-  ("ISP",                                             m_ISP,                                                         "Enable Intra Sub-Partitions\n")
+  ("ISP",                                             m_ISP,                                                         "Enable Intra Sub-Partitions, 0: off, 1: on, 2: fast, 3: faster \n")
 #endif
       ;
 
