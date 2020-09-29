@@ -197,7 +197,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 
   if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cVVEncParameter.m_iHeight )
   {
-    m_cErrorString = "InputPicture: unsuported width";
+    m_cErrorString = "InputPicture: unsuported height";
     return VVENC_ERR_UNSPECIFIED;
   }
 
