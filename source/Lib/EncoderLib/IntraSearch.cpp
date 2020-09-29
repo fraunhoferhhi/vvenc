@@ -1950,452 +1950,452 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     }
 #endif
 
-  CodingStructure &saveCS = *m_pSaveCS[1];
-  saveCS.pcv      = cs.pcv;
-  saveCS.picture  = cs.picture;
-  saveCS.area.repositionTo( cs.area );
+    CodingStructure& saveCS = *m_pSaveCS[1];
+    saveCS.pcv = cs.pcv;
+    saveCS.picture = cs.picture;
+    saveCS.area.repositionTo(cs.area);
 
-  TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
-  tmpTU.initData();
-  tmpTU.UnitArea::operator=( currArea );
-  cs.setDecomp(currArea.Cb(), true); // set in advance (required for Cb2/Cr2 in 4:2:2 video)
+    TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
+    tmpTU.initData();
+    tmpTU.UnitArea::operator=(currArea);
+    cs.setDecomp(currArea.Cb(), true); // set in advance (required for Cb2/Cr2 in 4:2:2 video)
 
-  const unsigned      numTBlocks  = getNumberValidTBlocks( *cs.pcv );
+    const unsigned      numTBlocks = getNumberValidTBlocks(*cs.pcv);
 
-  CompArea&  cbArea         = currTU.blocks[COMP_Cb];
-  CompArea&  crArea         = currTU.blocks[COMP_Cr];
-  double     bestCostCb     = MAX_DOUBLE;
-  double     bestCostCr     = MAX_DOUBLE;
-  Distortion bestDistCb     = 0;
-  Distortion bestDistCr     = 0;
+    CompArea& cbArea = currTU.blocks[COMP_Cb];
+    CompArea& crArea = currTU.blocks[COMP_Cr];
+    double     bestCostCb = MAX_DOUBLE;
+    double     bestCostCr = MAX_DOUBLE;
+    Distortion bestDistCb = 0;
+    Distortion bestDistCr = 0;
 
-  TempCtx ctxStartTU( m_CtxCache );
-  TempCtx ctxStart  ( m_CtxCache );
-  TempCtx ctxBest   ( m_CtxCache );
+    TempCtx ctxStartTU(m_CtxCache);
+    TempCtx ctxStart(m_CtxCache);
+    TempCtx ctxBest(m_CtxCache);
 
-  ctxStartTU       = m_CABACEstimator->getCtx();
-  currTU.jointCbCr = 0;
+    ctxStartTU = m_CABACEstimator->getCtx();
+    currTU.jointCbCr = 0;
 
-  // Do predictions here to avoid repeating the "default0Save1Load2" stuff
-  uint32_t  predMode   = PU::getFinalIntraMode( pu, CH_C );
+    // Do predictions here to avoid repeating the "default0Save1Load2" stuff
+    uint32_t  predMode = PU::getFinalIntraMode(pu, CH_C);
 
-  PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
-  PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
+    PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
+    PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
 
-  initIntraPatternChType( *currTU.cu, cbArea);
-  initIntraPatternChType( *currTU.cu, crArea);
+    initIntraPatternChType(*currTU.cu, cbArea);
+    initIntraPatternChType(*currTU.cu, crArea);
 
-  if( PU::isLMCMode( predMode ) )
-  {
-    loadLMLumaRecPels( pu, cbArea );
-    predIntraChromaLM( COMP_Cb, piPredCb, pu, cbArea, predMode );
-    predIntraChromaLM( COMP_Cr, piPredCr, pu, crArea, predMode );
-  }
-  else
-  {
-    predIntraAng( COMP_Cb, piPredCb, pu);
-    predIntraAng( COMP_Cr, piPredCr, pu);
-  }
-
-  // determination of chroma residuals including reshaping and cross-component prediction
-  //----- get chroma residuals -----
-  PelBuf resiCb  = cs.getResiBuf(COMP_Cb);
-  PelBuf resiCr  = cs.getResiBuf(COMP_Cr);
-  resiCb.subtract( cs.getOrgBuf (COMP_Cb), piPredCb );
-  resiCr.subtract( cs.getOrgBuf (COMP_Cr), piPredCr );
-
-  //----- get reshape parameter ----
-  ReshapeData& reshapeData = cs.picture->reshapeData;
-  bool doReshaping = ( cs.picHeader->lmcsEnabled && cs.picHeader->lmcsChromaResidualScale && (cs.slice->isIntra() || reshapeData.getCTUFlag()) && (cbArea.width * cbArea.height > 4) );
-  if( doReshaping )
-  {
-    const Area area = currTU.Y().valid() ? currTU.Y() : Area(recalcPosition(currTU.chromaFormat, currTU.chType, CH_L, currTU.blocks[currTU.chType].pos()), recalcSize(currTU.chromaFormat, currTU.chType, CH_L, currTU.blocks[currTU.chType].size()));
-    const CompArea& areaY = CompArea(COMP_Y, currTU.chromaFormat, area);
-    currTU.chromaAdj = reshapeData.calculateChromaAdjVpduNei(currTU, areaY, currTU.cu->treeType);
-  }
-
-  //===== store original residual signals (std and crossCompPred) =====
-  CompStorage  orgResiCb[5], orgResiCr[5]; // 0:std, 1-3:jointCbCr (placeholder at this stage), 4:crossComp
-  for( int k = 0; k < 1; k+=4 )
-  {
-    orgResiCb[k].create( cbArea );
-    orgResiCr[k].create( crArea );
-    orgResiCb[k].copyFrom( resiCb );
-    orgResiCr[k].copyFrom( resiCr );
-
-    if( doReshaping )
+    if (PU::isLMCMode(predMode))
     {
-      int cResScaleInv = currTU.chromaAdj;
-      orgResiCb[k].scaleSignal( cResScaleInv, 1, cs.slice->clpRngs[COMP_Cb] );
-      orgResiCr[k].scaleSignal( cResScaleInv, 1, cs.slice->clpRngs[COMP_Cr] );
+      loadLMLumaRecPels(pu, cbArea);
+      predIntraChromaLM(COMP_Cb, piPredCb, pu, cbArea, predMode);
+      predIntraChromaLM(COMP_Cr, piPredCr, pu, crArea, predMode);
     }
-  }
-
-  CUCtx cuCtx;
-  cuCtx.isDQPCoded         = true;
-  cuCtx.isChromaQpAdjCoded = true;
-  cuCtx.lfnstLastScanPos   = false;
-
-  CodingStructure &saveCScur = *m_pSaveCS[2];
-
-  saveCScur.pcv              = cs.pcv;
-  saveCScur.picture          = cs.picture;
-  saveCScur.area.repositionTo( cs.area );
-
-  TransformUnit& tmpTUcur = saveCScur.tus.empty() ? saveCScur.addTU( currArea, partitioner.chType, nullptr ) : *saveCScur.tus.front();
-  tmpTUcur.initData();
-  tmpTUcur.UnitArea::operator=( currArea );
-
-  TempCtx ctxBestTUL         ( m_CtxCache );
-
-  const SPS &sps             = *cs.sps;
-  double     bestCostCbcur   = MAX_DOUBLE;
-  double     bestCostCrcur   = MAX_DOUBLE;
-  Distortion bestDistCbcur   = 0;
-  Distortion bestDistCrcur   = 0;
-
-  int  endLfnstIdx = ( partitioner.isSepTree( cs ) && partitioner.chType == CH_C && ( partitioner.currArea().lwidth() < 8 || partitioner.currArea().lheight() < 8 ) )
-                  || ( partitioner.currArea().lwidth() > sps.getMaxTbSize() || partitioner.currArea().lheight() > sps.getMaxTbSize() ) || !sps.LFNST ? 0 : 2;
-  int  startLfnstIdx = 0;
-  int  bestLfnstIdx  = 0;
-  bool NOTONE_LFNST  = sps.LFNST ? true : false;
-
-  // speedUps LFNST
-  bool rapidLFNST = false;
-  if (m_pcEncCfg->m_LFNST > 1)
-  {
-    rapidLFNST = true;
-    if (m_pcEncCfg->m_LFNST > 2)
+    else
     {
-      endLfnstIdx = endLfnstIdx ? 1 : 0;
+      predIntraAng(COMP_Cb, piPredCb, pu);
+      predIntraAng(COMP_Cr, piPredCr, pu);
     }
-  }
 
-  if (partitioner.chType != CH_C)
-  {
-    startLfnstIdx = currTU.cu->lfnstIdx;
-    endLfnstIdx   = currTU.cu->lfnstIdx;
-    bestLfnstIdx  = currTU.cu->lfnstIdx;
-    NOTONE_LFNST  = false;
-    rapidLFNST    = false;
-  }
+    // determination of chroma residuals including reshaping and cross-component prediction
+    //----- get chroma residuals -----
+    PelBuf resiCb = cs.getResiBuf(COMP_Cb);
+    PelBuf resiCr = cs.getResiBuf(COMP_Cr);
+    resiCb.subtract(cs.getOrgBuf(COMP_Cb), piPredCb);
+    resiCr.subtract(cs.getOrgBuf(COMP_Cr), piPredCr);
 
-  double dSingleCostAll   = MAX_DOUBLE;
-  double singleCostTmpAll = 0;
-
-  for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
-  {
-    if (rapidLFNST && lfnstIdx)
+    //----- get reshape parameter ----
+    ReshapeData& reshapeData = cs.picture->reshapeData;
+    bool doReshaping = (cs.picHeader->lmcsEnabled && cs.picHeader->lmcsChromaResidualScale && (cs.slice->isIntra() || reshapeData.getCTUFlag()) && (cbArea.width * cbArea.height > 4));
+    if (doReshaping)
     {
-      if ((lfnstIdx == 2) && (bestLfnstIdx == 0))
+      const Area area = currTU.Y().valid() ? currTU.Y() : Area(recalcPosition(currTU.chromaFormat, currTU.chType, CH_L, currTU.blocks[currTU.chType].pos()), recalcSize(currTU.chromaFormat, currTU.chType, CH_L, currTU.blocks[currTU.chType].size()));
+      const CompArea& areaY = CompArea(COMP_Y, currTU.chromaFormat, area);
+      currTU.chromaAdj = reshapeData.calculateChromaAdjVpduNei(currTU, areaY, currTU.cu->treeType);
+    }
+
+    //===== store original residual signals (std and crossCompPred) =====
+    CompStorage  orgResiCb[5], orgResiCr[5]; // 0:std, 1-3:jointCbCr (placeholder at this stage), 4:crossComp
+    for (int k = 0; k < 1; k += 4)
+    {
+      orgResiCb[k].create(cbArea);
+      orgResiCr[k].create(crArea);
+      orgResiCb[k].copyFrom(resiCb);
+      orgResiCr[k].copyFrom(resiCr);
+
+      if (doReshaping)
       {
-        continue;
+        int cResScaleInv = currTU.chromaAdj;
+        orgResiCb[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cb]);
+        orgResiCr[k].scaleSignal(cResScaleInv, 1, cs.slice->clpRngs[COMP_Cr]);
       }
     }
 
-    currTU.cu->lfnstIdx = lfnstIdx;
-    if (lfnstIdx)
-    {
-      m_CABACEstimator->getCtx() = ctxStartTU;
-    }
-
+    CUCtx cuCtx;
+    cuCtx.isDQPCoded = true;
+    cuCtx.isChromaQpAdjCoded = true;
     cuCtx.lfnstLastScanPos = false;
-    cuCtx.violatesLfnstConstrained[CH_L]   = false;
-    cuCtx.violatesLfnstConstrained[CH_C] = false;
 
-    for( uint32_t c = COMP_Cb; c < numTBlocks; c++)
+    CodingStructure& saveCScur = *m_pSaveCS[2];
+
+    saveCScur.pcv = cs.pcv;
+    saveCScur.picture = cs.picture;
+    saveCScur.area.repositionTo(cs.area);
+
+    TransformUnit& tmpTUcur = saveCScur.tus.empty() ? saveCScur.addTU(currArea, partitioner.chType, nullptr) : *saveCScur.tus.front();
+    tmpTUcur.initData();
+    tmpTUcur.UnitArea::operator=(currArea);
+
+    TempCtx ctxBestTUL(m_CtxCache);
+
+    const SPS& sps = *cs.sps;
+    double     bestCostCbcur = MAX_DOUBLE;
+    double     bestCostCrcur = MAX_DOUBLE;
+    Distortion bestDistCbcur = 0;
+    Distortion bestDistCrcur = 0;
+
+    int  endLfnstIdx = (partitioner.isSepTree(cs) && partitioner.chType == CH_C && (partitioner.currArea().lwidth() < 8 || partitioner.currArea().lheight() < 8))
+      || (partitioner.currArea().lwidth() > sps.getMaxTbSize() || partitioner.currArea().lheight() > sps.getMaxTbSize()) || !sps.LFNST ? 0 : 2;
+    int  startLfnstIdx = 0;
+    int  bestLfnstIdx = 0;
+    bool NOTONE_LFNST = sps.LFNST ? true : false;
+
+    // speedUps LFNST
+    bool rapidLFNST = false;
+    if (m_pcEncCfg->m_LFNST > 1)
     {
-      const ComponentID compID  = ComponentID(c);
-      const CompArea&   area    = currTU.blocks[compID];
-      double     dSingleCost    = MAX_DOUBLE;
-      Distortion singleDistCTmp = 0;
-      double     singleCostTmp  = 0;
-      const bool isLastMode     = NOTONE_LFNST || cs.sps->jointCbCr ? false : true;
-
-      if (doReshaping || lfnstIdx)
+      rapidLFNST = true;
+      if (m_pcEncCfg->m_LFNST > 2)
       {
-        resiCb.copyFrom( orgResiCb[0] );
-        resiCr.copyFrom( orgResiCr[0] );
+        endLfnstIdx = endLfnstIdx ? 1 : 0;
       }
+    }
 
-      xIntraCodingTUBlock( currTU, compID, false, singleDistCTmp );
-      uint64_t fracBitsTmp = xGetIntraFracBitsQTChroma( currTU, compID, &cuCtx );
-      singleCostTmp = m_pcRdCost->calcRdCost( fracBitsTmp, singleDistCTmp );
+    if (partitioner.chType != CH_C)
+    {
+      startLfnstIdx = currTU.cu->lfnstIdx;
+      endLfnstIdx = currTU.cu->lfnstIdx;
+      bestLfnstIdx = currTU.cu->lfnstIdx;
+      NOTONE_LFNST = false;
+      rapidLFNST = false;
+    }
 
-      if( singleCostTmp < dSingleCost )
+    double dSingleCostAll = MAX_DOUBLE;
+    double singleCostTmpAll = 0;
+
+    for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
+    {
+      if (rapidLFNST && lfnstIdx)
       {
-        dSingleCost = singleCostTmp;
-
-        if ( compID == COMP_Cb )
+        if ((lfnstIdx == 2) && (bestLfnstIdx == 0))
         {
-          bestCostCb = singleCostTmp;
-          bestDistCb = singleDistCTmp;
-        }
-        else
-        {
-          bestCostCr = singleCostTmp;
-          bestDistCr = singleDistCTmp;
-        }
-
-        if( !isLastMode )
-        {
-          saveCS.getRecoBuf(area).copyFrom(cs.getRecoBuf   (area));
-          tmpTU.copyComponentFrom(currTU, compID);
-          ctxBest = m_CABACEstimator->getCtx();
+          continue;
         }
       }
-    }
 
-    singleCostTmpAll = bestCostCb + bestCostCr;
-
-    bool rootCbfL = false;
-    if (NOTONE_LFNST)
-    {
-      for (uint32_t t = 0; t < getNumberValidTBlocks(*cs.pcv); t++)
+      currTU.cu->lfnstIdx = lfnstIdx;
+      if (lfnstIdx)
       {
-        rootCbfL |= bool(tmpTU.cbf[t]);
-      }
-      if (rapidLFNST && !rootCbfL)
-      {
-        endLfnstIdx = lfnstIdx; // end this
-      }
-    }
-
-    if (NOTONE_LFNST && lfnstIdx && !cuCtx.lfnstLastScanPos)
-    {
-      bool cbfAtZeroDepth = currTU.cu->isSepTree()
-                              ? rootCbfL : (cs.area.chromaFormat != CHROMA_400
-                                 && std::min(tmpTU.blocks[1].width, tmpTU.blocks[1].height) < 4)
-                                  ? TU::getCbfAtDepth(currTU, COMP_Y, currTU.depth) : rootCbfL;
-      if (cbfAtZeroDepth)
-      {
-        singleCostTmpAll = MAX_DOUBLE;
-      }
-    }
-
-    if (NOTONE_LFNST  && (singleCostTmpAll < dSingleCostAll))
-    {
-      bestLfnstIdx = lfnstIdx;
-      if (lfnstIdx != endLfnstIdx)
-      {
-        dSingleCostAll = singleCostTmpAll;
-
-        bestCostCbcur = bestCostCb;
-        bestCostCrcur = bestCostCr;
-        bestDistCbcur = bestDistCb;
-        bestDistCrcur = bestDistCr;
-
-        saveCScur.getRecoBuf(cbArea).copyFrom(saveCS.getRecoBuf(cbArea));
-        saveCScur.getRecoBuf(crArea).copyFrom(saveCS.getRecoBuf(crArea));
-
-        tmpTUcur.copyComponentFrom(tmpTU, COMP_Cb);
-        tmpTUcur.copyComponentFrom(tmpTU, COMP_Cr);
-      }
-      ctxBestTUL = m_CABACEstimator->getCtx();
-    }
-  }
-  if (NOTONE_LFNST && (bestLfnstIdx != endLfnstIdx))
-  {
-    bestCostCb          = bestCostCbcur;
-    bestCostCr          = bestCostCrcur;
-    bestDistCb          = bestDistCbcur;
-    bestDistCr          = bestDistCrcur;
-    currTU.cu->lfnstIdx = bestLfnstIdx;
-    if (!cs.sps->jointCbCr)
-    {
-      cs.getRecoBuf(cbArea).copyFrom(saveCScur.getRecoBuf(cbArea));
-      cs.getRecoBuf(crArea).copyFrom(saveCScur.getRecoBuf(crArea));
-
-      currTU.copyComponentFrom(tmpTUcur, COMP_Cb);
-      currTU.copyComponentFrom(tmpTUcur, COMP_Cr);
-
-      m_CABACEstimator->getCtx() = ctxBestTUL;
-    }
-  }
-
-  Distortion bestDistCbCr = bestDistCb + bestDistCr;
-
-  if ( cs.sps->jointCbCr )
-  {
-    if (NOTONE_LFNST && (bestLfnstIdx != endLfnstIdx))
-    {
-      saveCS.getRecoBuf(cbArea).copyFrom(saveCScur.getRecoBuf(cbArea));
-      saveCS.getRecoBuf(crArea).copyFrom(saveCScur.getRecoBuf(crArea));
-
-      tmpTU.copyComponentFrom(tmpTUcur, COMP_Cb);
-      tmpTU.copyComponentFrom(tmpTUcur, COMP_Cr);
-      m_CABACEstimator->getCtx() = ctxBestTUL;
-      ctxBest                    = m_CABACEstimator->getCtx();
-    }
-    // Test using joint chroma residual coding
-    double     bestCostCbCr   = bestCostCb + bestCostCr;
-    int        bestJointCbCr  = 0;
-    bool       lastIsBest     = false;
-    bool NOLFNST1 = false;
-    if (rapidLFNST && (startLfnstIdx != endLfnstIdx))
-    {
-      if (bestLfnstIdx == 2)
-      {
-        NOLFNST1 = true;
-      }
-      else
-      {
-        endLfnstIdx = 1;
-      }
-    }
-
-    for (int lfnstIdxj = startLfnstIdx; lfnstIdxj <= endLfnstIdx; lfnstIdxj++)
-    {
-      if (rapidLFNST && NOLFNST1 && (lfnstIdxj == 1))
-      {
-        continue;
-      }
-      currTU.cu->lfnstIdx = lfnstIdxj;
-      std::vector<int> jointCbfMasksToTest;
-      if (TU::getCbf(tmpTU, COMP_Cb) || TU::getCbf(tmpTU, COMP_Cr))
-      {
-        jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, orgResiCb, orgResiCr);
-      }
-      for (int cbfMask: jointCbfMasksToTest)
-      {
-        Distortion distTmp = 0;
-        currTU.jointCbCr   = (uint8_t) cbfMask;
-
         m_CABACEstimator->getCtx() = ctxStartTU;
+      }
 
-        resiCb.copyFrom(orgResiCb[cbfMask]);
-        resiCr.copyFrom(orgResiCr[cbfMask]);
-        cuCtx.lfnstLastScanPos               = false;
-        cuCtx.violatesLfnstConstrained[CH_L] = false;
-        cuCtx.violatesLfnstConstrained[CH_C] = false;
+      cuCtx.lfnstLastScanPos = false;
+      cuCtx.violatesLfnstConstrained[CH_L] = false;
+      cuCtx.violatesLfnstConstrained[CH_C] = false;
 
-        xIntraCodingTUBlock(currTU, COMP_Cb, false, distTmp, 0);
+      for (uint32_t c = COMP_Cb; c < numTBlocks; c++)
+      {
+        const ComponentID compID = ComponentID(c);
+        const CompArea& area = currTU.blocks[compID];
+        double     dSingleCost = MAX_DOUBLE;
+        Distortion singleDistCTmp = 0;
+        double     singleCostTmp = 0;
+        const bool isLastMode = NOTONE_LFNST || cs.sps->jointCbCr ? false : true;
 
-        double costTmp = std::numeric_limits<double>::max();
-        if (distTmp < MAX_DISTORTION)
+        if (doReshaping || lfnstIdx)
         {
-          uint64_t bits = xGetIntraFracBitsQTChroma(currTU, COMP_Cb, &cuCtx);
-          costTmp       = m_pcRdCost->calcRdCost(bits, distTmp);
+          resiCb.copyFrom(orgResiCb[0]);
+          resiCr.copyFrom(orgResiCr[0]);
         }
-        bool rootCbfL = false;
+
+        xIntraCodingTUBlock(currTU, compID, false, singleDistCTmp);
+        uint64_t fracBitsTmp = xGetIntraFracBitsQTChroma(currTU, compID, &cuCtx);
+        singleCostTmp = m_pcRdCost->calcRdCost(fracBitsTmp, singleDistCTmp);
+
+        if (singleCostTmp < dSingleCost)
+        {
+          dSingleCost = singleCostTmp;
+
+          if (compID == COMP_Cb)
+          {
+            bestCostCb = singleCostTmp;
+            bestDistCb = singleDistCTmp;
+          }
+          else
+          {
+            bestCostCr = singleCostTmp;
+            bestDistCr = singleDistCTmp;
+          }
+
+          if (!isLastMode)
+          {
+            saveCS.getRecoBuf(area).copyFrom(cs.getRecoBuf(area));
+            tmpTU.copyComponentFrom(currTU, compID);
+            ctxBest = m_CABACEstimator->getCtx();
+          }
+        }
+      }
+
+      singleCostTmpAll = bestCostCb + bestCostCr;
+
+      bool rootCbfL = false;
+      if (NOTONE_LFNST)
+      {
         for (uint32_t t = 0; t < getNumberValidTBlocks(*cs.pcv); t++)
         {
           rootCbfL |= bool(tmpTU.cbf[t]);
         }
         if (rapidLFNST && !rootCbfL)
         {
-          endLfnstIdx = lfnstIdxj;
-        }
-        if (NOTONE_LFNST && currTU.cu->lfnstIdx && !cuCtx.lfnstLastScanPos)
-        {
-          bool cbfAtZeroDepth = currTU.cu->isSepTree() ? rootCbfL
-              : (cs.area.chromaFormat != CHROMA_400 && std::min(tmpTU.blocks[1].width, tmpTU.blocks[1].height) < 4)
-              ? TU::getCbfAtDepth(currTU, COMP_Y, currTU.depth) : rootCbfL;
-          if (cbfAtZeroDepth)
-          {
-            costTmp = MAX_DOUBLE;
-          }
-        }
-        if (costTmp < bestCostCbCr)
-        {
-          bestCostCbCr  = costTmp;
-          bestDistCbCr  = distTmp;
-          bestJointCbCr = currTU.jointCbCr;
-
-          // store data
-          bestLfnstIdx = lfnstIdxj;
-          if (cbfMask != jointCbfMasksToTest.back() || (lfnstIdxj != endLfnstIdx))
-          {
-            saveCS.getRecoBuf(cbArea).copyFrom(cs.getRecoBuf(cbArea));
-            saveCS.getRecoBuf(crArea).copyFrom(cs.getRecoBuf(crArea));
-
-            tmpTU.copyComponentFrom(currTU, COMP_Cb);
-            tmpTU.copyComponentFrom(currTU, COMP_Cr);
-
-            ctxBest = m_CABACEstimator->getCtx();
-          }
-          else
-          {
-            lastIsBest          = true;
-            cs.cus[0]->lfnstIdx = bestLfnstIdx;
-          }
+          endLfnstIdx = lfnstIdx; // end this
         }
       }
 
-      // Retrieve the best CU data (unless it was the very last one tested)
+      if (NOTONE_LFNST && lfnstIdx && !cuCtx.lfnstLastScanPos)
+      {
+        bool cbfAtZeroDepth = currTU.cu->isSepTree()
+          ? rootCbfL : (cs.area.chromaFormat != CHROMA_400
+            && std::min(tmpTU.blocks[1].width, tmpTU.blocks[1].height) < 4)
+          ? TU::getCbfAtDepth(currTU, COMP_Y, currTU.depth) : rootCbfL;
+        if (cbfAtZeroDepth)
+        {
+          singleCostTmpAll = MAX_DOUBLE;
+        }
+      }
+
+      if (NOTONE_LFNST && (singleCostTmpAll < dSingleCostAll))
+      {
+        bestLfnstIdx = lfnstIdx;
+        if (lfnstIdx != endLfnstIdx)
+        {
+          dSingleCostAll = singleCostTmpAll;
+
+          bestCostCbcur = bestCostCb;
+          bestCostCrcur = bestCostCr;
+          bestDistCbcur = bestDistCb;
+          bestDistCrcur = bestDistCr;
+
+          saveCScur.getRecoBuf(cbArea).copyFrom(saveCS.getRecoBuf(cbArea));
+          saveCScur.getRecoBuf(crArea).copyFrom(saveCS.getRecoBuf(crArea));
+
+          tmpTUcur.copyComponentFrom(tmpTU, COMP_Cb);
+          tmpTUcur.copyComponentFrom(tmpTU, COMP_Cr);
+        }
+        ctxBestTUL = m_CABACEstimator->getCtx();
+      }
     }
-    if (!lastIsBest)
+    if (NOTONE_LFNST && (bestLfnstIdx != endLfnstIdx))
     {
-      cs.getRecoBuf   (cbArea).copyFrom(saveCS.getRecoBuf   (cbArea));
-      cs.getRecoBuf   (crArea).copyFrom(saveCS.getRecoBuf   (crArea));
+      bestCostCb = bestCostCbcur;
+      bestCostCr = bestCostCrcur;
+      bestDistCb = bestDistCbcur;
+      bestDistCr = bestDistCrcur;
+      currTU.cu->lfnstIdx = bestLfnstIdx;
+      if (!cs.sps->jointCbCr)
+      {
+        cs.getRecoBuf(cbArea).copyFrom(saveCScur.getRecoBuf(cbArea));
+        cs.getRecoBuf(crArea).copyFrom(saveCScur.getRecoBuf(crArea));
 
-      cs.cus[0]->lfnstIdx = bestLfnstIdx;
-      currTU.copyComponentFrom(tmpTU, COMP_Cb);
-      currTU.copyComponentFrom(tmpTU, COMP_Cr);
-      m_CABACEstimator->getCtx() = ctxBest;
+        currTU.copyComponentFrom(tmpTUcur, COMP_Cb);
+        currTU.copyComponentFrom(tmpTUcur, COMP_Cr);
+
+        m_CABACEstimator->getCtx() = ctxBestTUL;
+      }
     }
-    currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) | TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
-  } // jointCbCr
 
-  cs.dist += bestDistCbCr;
-  cuCtx.violatesLfnstConstrained[CH_L] = false;
-  cuCtx.violatesLfnstConstrained[CH_C] = false;
-  cuCtx.lfnstLastScanPos               = false;
-  cuCtx.violatesMtsCoeffConstraint     = false;
-  cuCtx.mtsLastScanPos                 = false;
+    Distortion bestDistCbCr = bestDistCb + bestDistCr;
+
+    if (cs.sps->jointCbCr)
+    {
+      if (NOTONE_LFNST && (bestLfnstIdx != endLfnstIdx))
+      {
+        saveCS.getRecoBuf(cbArea).copyFrom(saveCScur.getRecoBuf(cbArea));
+        saveCS.getRecoBuf(crArea).copyFrom(saveCScur.getRecoBuf(crArea));
+
+        tmpTU.copyComponentFrom(tmpTUcur, COMP_Cb);
+        tmpTU.copyComponentFrom(tmpTUcur, COMP_Cr);
+        m_CABACEstimator->getCtx() = ctxBestTUL;
+        ctxBest = m_CABACEstimator->getCtx();
+      }
+      // Test using joint chroma residual coding
+      double     bestCostCbCr = bestCostCb + bestCostCr;
+      int        bestJointCbCr = 0;
+      bool       lastIsBest = false;
+      bool NOLFNST1 = false;
+      if (rapidLFNST && (startLfnstIdx != endLfnstIdx))
+      {
+        if (bestLfnstIdx == 2)
+        {
+          NOLFNST1 = true;
+        }
+        else
+        {
+          endLfnstIdx = 1;
+        }
+      }
+
+      for (int lfnstIdxj = startLfnstIdx; lfnstIdxj <= endLfnstIdx; lfnstIdxj++)
+      {
+        if (rapidLFNST && NOLFNST1 && (lfnstIdxj == 1))
+        {
+          continue;
+        }
+        currTU.cu->lfnstIdx = lfnstIdxj;
+        std::vector<int> jointCbfMasksToTest;
+        if (TU::getCbf(tmpTU, COMP_Cb) || TU::getCbf(tmpTU, COMP_Cr))
+        {
+          jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, orgResiCb, orgResiCr);
+        }
+        for (int cbfMask : jointCbfMasksToTest)
+        {
+          Distortion distTmp = 0;
+          currTU.jointCbCr = (uint8_t)cbfMask;
+
+          m_CABACEstimator->getCtx() = ctxStartTU;
+
+          resiCb.copyFrom(orgResiCb[cbfMask]);
+          resiCr.copyFrom(orgResiCr[cbfMask]);
+          cuCtx.lfnstLastScanPos = false;
+          cuCtx.violatesLfnstConstrained[CH_L] = false;
+          cuCtx.violatesLfnstConstrained[CH_C] = false;
+
+          xIntraCodingTUBlock(currTU, COMP_Cb, false, distTmp, 0);
+
+          double costTmp = std::numeric_limits<double>::max();
+          if (distTmp < MAX_DISTORTION)
+          {
+            uint64_t bits = xGetIntraFracBitsQTChroma(currTU, COMP_Cb, &cuCtx);
+            costTmp = m_pcRdCost->calcRdCost(bits, distTmp);
+          }
+          bool rootCbfL = false;
+          for (uint32_t t = 0; t < getNumberValidTBlocks(*cs.pcv); t++)
+          {
+            rootCbfL |= bool(tmpTU.cbf[t]);
+          }
+          if (rapidLFNST && !rootCbfL)
+          {
+            endLfnstIdx = lfnstIdxj;
+          }
+          if (NOTONE_LFNST && currTU.cu->lfnstIdx && !cuCtx.lfnstLastScanPos)
+          {
+            bool cbfAtZeroDepth = currTU.cu->isSepTree() ? rootCbfL
+              : (cs.area.chromaFormat != CHROMA_400 && std::min(tmpTU.blocks[1].width, tmpTU.blocks[1].height) < 4)
+              ? TU::getCbfAtDepth(currTU, COMP_Y, currTU.depth) : rootCbfL;
+            if (cbfAtZeroDepth)
+            {
+              costTmp = MAX_DOUBLE;
+            }
+          }
+          if (costTmp < bestCostCbCr)
+          {
+            bestCostCbCr = costTmp;
+            bestDistCbCr = distTmp;
+            bestJointCbCr = currTU.jointCbCr;
+
+            // store data
+            bestLfnstIdx = lfnstIdxj;
+            if (cbfMask != jointCbfMasksToTest.back() || (lfnstIdxj != endLfnstIdx))
+            {
+              saveCS.getRecoBuf(cbArea).copyFrom(cs.getRecoBuf(cbArea));
+              saveCS.getRecoBuf(crArea).copyFrom(cs.getRecoBuf(crArea));
+
+              tmpTU.copyComponentFrom(currTU, COMP_Cb);
+              tmpTU.copyComponentFrom(currTU, COMP_Cr);
+
+              ctxBest = m_CABACEstimator->getCtx();
+            }
+            else
+            {
+              lastIsBest = true;
+              cs.cus[0]->lfnstIdx = bestLfnstIdx;
+            }
+          }
+        }
+
+        // Retrieve the best CU data (unless it was the very last one tested)
+      }
+      if (!lastIsBest)
+      {
+        cs.getRecoBuf(cbArea).copyFrom(saveCS.getRecoBuf(cbArea));
+        cs.getRecoBuf(crArea).copyFrom(saveCS.getRecoBuf(crArea));
+
+        cs.cus[0]->lfnstIdx = bestLfnstIdx;
+        currTU.copyComponentFrom(tmpTU, COMP_Cb);
+        currTU.copyComponentFrom(tmpTU, COMP_Cr);
+        m_CABACEstimator->getCtx() = ctxBest;
+      }
+      currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) | TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
+    } // jointCbCr
+
+    cs.dist += bestDistCbCr;
+    cuCtx.violatesLfnstConstrained[CH_L] = false;
+    cuCtx.violatesLfnstConstrained[CH_C] = false;
+    cuCtx.lfnstLastScanPos = false;
+    cuCtx.violatesMtsCoeffConstraint = false;
+    cuCtx.mtsLastScanPos = false;
 #if ISP_VVC
-  cbfs.cbf(COMP_Cb) = TU::getCbf(currTU, COMP_Cb);
-  cbfs.cbf(COMP_Cr) = TU::getCbf(currTU, COMP_Cr);
+    cbfs.cbf(COMP_Cb) = TU::getCbf(currTU, COMP_Cb);
+    cbfs.cbf(COMP_Cr) = TU::getCbf(currTU, COMP_Cr);
   }
   else
   {
-  unsigned   numValidTBlocks = getNumberValidTBlocks(*cs.pcv);
-  ChromaCbfs SplitCbfs(false);
+    unsigned   numValidTBlocks = getNumberValidTBlocks(*cs.pcv);
+    ChromaCbfs SplitCbfs(false);
 
-  if (partitioner.canSplit(TU_MAX_TR_SPLIT, cs))
-  {
+    if (partitioner.canSplit(TU_MAX_TR_SPLIT, cs))
+    {
       partitioner.splitCurrArea(TU_MAX_TR_SPLIT, cs);
-  }
-  else if (currTU.cu->ispMode)
-  {
+    }
+    else if (currTU.cu->ispMode)
+    {
       partitioner.splitCurrArea(m_ispTestedModes[0].IspType, cs);
-  }
-  else
+    }
+    else
       THROW("Implicit TU split not available");
 
-  do
-  {
+    do
+    {
       ChromaCbfs subCbfs = xIntraChromaCodingQT(cs, partitioner);
 
       for (uint32_t ch = COMP_Cb; ch < numValidTBlocks; ch++)
       {
-          const ComponentID compID = ComponentID(ch);
-          SplitCbfs.cbf(compID) |= subCbfs.cbf(compID);
+        const ComponentID compID = ComponentID(ch);
+        SplitCbfs.cbf(compID) |= subCbfs.cbf(compID);
       }
-  } while (partitioner.nextPart(cs));
+    } while (partitioner.nextPart(cs));
 
-  partitioner.exitCurrSplit();
+    partitioner.exitCurrSplit();
 
-  /*if (lumaUsesISP && cs.dist == MAX_UINT) //ahenkel
-  {
-    return cbfs;
-  }*/
-  {
+    /*if (lumaUsesISP && cs.dist == MAX_UINT) //ahenkel
+    {
+      return cbfs;
+    }*/
+    {
       cbfs.Cb |= SplitCbfs.Cb;
       cbfs.Cr |= SplitCbfs.Cr;
 
       if (1)   //(!lumaUsesISP)
       {
-          for (auto& ptu : cs.tus)
+        for (auto& ptu : cs.tus)
+        {
+          if (currArea.Cb().contains(ptu->Cb()) || (!ptu->Cb().valid() && currArea.Y().contains(ptu->Y())))
           {
-              if (currArea.Cb().contains(ptu->Cb()) || (!ptu->Cb().valid() && currArea.Y().contains(ptu->Y())))
-              {
-                  TU::setCbfAtDepth(*ptu, COMP_Cb, currDepth, SplitCbfs.Cb);
-                  TU::setCbfAtDepth(*ptu, COMP_Cr, currDepth, SplitCbfs.Cr);
-              }
+            TU::setCbfAtDepth(*ptu, COMP_Cb, currDepth, SplitCbfs.Cb);
+            TU::setCbfAtDepth(*ptu, COMP_Cr, currDepth, SplitCbfs.Cr);
           }
+        }
       }
-  }
+    }
   }
   return cbfs;
 #endif
