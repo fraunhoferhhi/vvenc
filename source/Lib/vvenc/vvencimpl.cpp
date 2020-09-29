@@ -1,19 +1,19 @@
 /* -----------------------------------------------------------------------------
 Software Copyright License for the Fraunhofer Software Library VVenc
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
+(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 
 1.    INTRODUCTION
 
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
+The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology.
+The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary.
 
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
+The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license.
 It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
 
 2.    COPYRIGHT LICENSE
 
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
+Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research.
 
 No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
 
@@ -21,7 +21,7 @@ For any other use of the Fraunhofer Versatile Video Encoding Library than permit
 
 3.    LIMITED PATENT LICENSE
 
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
+As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.
 
 Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
 
@@ -52,13 +52,14 @@ vvc@hhi.fraunhofer.de
 
 #include <iostream>
 #include <stdio.h>
+#include <algorithm>
 
 #include "../../../include/vvenc/Nal.h"
 #include "../../../include/vvenc/version.h"
 
 
 namespace vvenc {
-	
+
 std::string VVEncImpl::m_cTmpErrorString;
 std::string VVEncImpl::m_sPresetAsStr;
 int g_LogLevel = LL_ERROR;
@@ -75,6 +76,30 @@ VVEncImpl::VVEncImpl()
 VVEncImpl::~VVEncImpl()
 {
 
+}
+
+int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
+{
+  int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
+  if( 0 != iRet ) { return iRet; }
+
+  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
+  setMsgFnc( &msgFnc );
+
+  std::stringstream cssCap;
+
+  vvenc::EncCfg cEncCfg;
+  if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
+  {
+    setMsgFnc( &msgFncDummy );
+  }
+
+  return VVENC_OK;
 }
 
 int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
@@ -158,7 +183,37 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 )
+  if( pcInputPicture->m_cPicBuffer.m_pvY == nullptr || pcInputPicture->m_cPicBuffer.m_pvU == nullptr || pcInputPicture->m_cPicBuffer.m_pvV == nullptr )
+  {
+    m_cErrorString = "InputPicture: invalid input buffers";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cVVEncParameter.m_iWidth )
+  {
+    m_cErrorString = "InputPicture: unsuported width";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cVVEncParameter.m_iHeight )
+  {
+    m_cErrorString = "InputPicture: unsuported height";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth > pcInputPicture->m_cPicBuffer.m_iStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width stride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iWidth/2 > pcInputPicture->m_cPicBuffer.m_iCStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width cstride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 || pcInputPicture->m_cPicBuffer.m_iBitDepth > 16 )
   {
     std::stringstream css;
     css << "InputPicture: unsupported input BitDepth " <<  pcInputPicture->m_cPicBuffer.m_iBitDepth  << ". must be 10 <= BitDepth <= 16";
@@ -166,9 +221,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-
-
-  // we know that the internal buffer requires to be a multiple of 8 in each direction 
+  // we know that the internal buffer requires to be a multiple of 8 in each direction
   int internalLumaWidth = ((pcInputPicture->m_cPicBuffer.m_iWidth + 7)/8)*8;
   int internalLumaHeight = ((pcInputPicture->m_cPicBuffer.m_iHeight + 7)/8)*8;
   int internalLumaStride = (internalLumaWidth > pcInputPicture->m_cPicBuffer.m_iStride) ? internalLumaWidth : pcInputPicture->m_cPicBuffer.m_iStride;
@@ -183,7 +236,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
   for ( int i = 0; i < 3; i++ )
   {
     YUVPlane& yuvPlane = cYUVBuffer.yuvPlanes[ i ];
-    if ( i > 0 ) 
+    if ( i > 0 )
     {
       yuvPlane.width     = internalLumaWidth >> 1;
       yuvPlane.height    = internalLumaHeight >> 1;
@@ -241,29 +294,22 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
-  if ( m_bFlushed ){ return 0; }
-
-  int iRet= VVENC_OK;
 
   YUVBuffer cYUVBuffer;
   AccessUnit cAu;
-  bool encDone    = false;
 
-  while( !encDone &&  cAu.empty() )
+  /* encode till next output AU done */
+  while( !m_bFlushed && cAu.empty() )
   {
-    m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, encDone );
-
-    /* copy output AU */
-    rcVvcAccessUnit.m_iUsedSize = 0;
-    if ( !cAu.empty() )
-    {
-      iRet = xCopyAu( rcVvcAccessUnit, cAu  );
-    }
+    m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, m_bFlushed );
   }
-  
-  if( encDone )
+
+  /* copy next output AU */
+  rcVvcAccessUnit.m_iUsedSize = 0;
+  int iRet                    = VVENC_OK;
+  if( !cAu.empty() )
   {
-    m_bFlushed = true;
+    iRet = xCopyAu( rcVvcAccessUnit, cAu  );
   }
 
   return iRet;
@@ -471,6 +517,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( dFPS < 1.0 || dFPS > 120,                                                      "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
 
   ROTPARAMS( rcSrc.m_iTicksPerSecond <= 0 || rcSrc.m_iTicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
+  ROTPARAMS( (rcSrc.m_iTicksPerSecond < 90000) && (rcSrc.m_iTicksPerSecond*rcSrc.m_iTemporalScale)%rcSrc.m_iTemporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   ROTPARAMS( rcSrc.m_iThreadCount <= 0,                                                     "ThreadCount must be > 0" );
 
@@ -494,12 +541,14 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3,                                  "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
+  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+
   return 0;
 }
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = (int)rcVVEncParameter.m_eLogLevel;
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
 
   rcEncCfg.m_SourceWidth                                       = rcVVEncParameter.m_iWidth;
   rcEncCfg.m_SourceHeight                                      = rcVVEncParameter.m_iHeight;

@@ -255,7 +255,7 @@ EncGOP::EncGOP()
 
 EncGOP::~EncGOP()
 {
-  if( ! m_pcEncCfg->m_decodeBitstreams[ 0 ].empty() || ! m_pcEncCfg->m_decodeBitstreams[ 1 ].empty() )
+  if( m_pcEncCfg && (! m_pcEncCfg->m_decodeBitstreams[ 0 ].empty() || ! m_pcEncCfg->m_decodeBitstreams[ 1 ].empty()) )
   {
     // reset potential decoder resources
     tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, m_gopApsMap );
