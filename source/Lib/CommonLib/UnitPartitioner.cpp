@@ -292,11 +292,11 @@ void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, c
 
 void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& cs )
 {
-#if ISP_VVC //??
+#if ISP_VVC
   if ((split != TU_1D_HORZ_SPLIT) && (split != TU_1D_VERT_SPLIT))
 #endif
   {
-      CHECKD(!canSplit(split, cs), "Trying to apply a prohibited split!");
+    CHECKD(!canSplit(split, cs), "Trying to apply a prohibited split!");
   }
 
   bool isImplicit = isSplitImplicit( split, cs );
@@ -343,8 +343,8 @@ void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& c
   case TU_1D_HORZ_SPLIT:
   case TU_1D_VERT_SPLIT:
   {
-      PartitionerImpl::getTUIntraSubPartitions(back.parts, area, cs, split, TREE_D);
-      break;
+    PartitionerImpl::getTUIntraSubPartitions(back.parts, area, cs, split, TREE_D);
+    break;
   }
 #endif
   default:
@@ -549,26 +549,26 @@ bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
 #if ISP_VVC
 bool Partitioner::canSplitISP(const PartSplit split, const CodingStructure& cs, CodingUnit& cu)
 {
-    // const PartSplit implicitSplit = getImplicitSplit(cs);
-    const UnitArea& area = currArea();
+  // const PartSplit implicitSplit = getImplicitSplit(cs);
+  const UnitArea& area = currArea();
 
-    switch (split)
-    {
-    case TU_1D_HORZ_SPLIT:
-    {
-        return area.lheight() == cu.lheight();
-    }
-    case TU_1D_VERT_SPLIT:
-    {
-        return area.lwidth() == cu.lwidth();
-    }
-    case TU_MAX_TR_SPLIT:
-    {
-        // this split is performed implicitly with the other splits
-        return false;
-    }
-    default: THROW("Unknown 1-D split mode"); break;
-    }
+  switch (split)
+  {
+  case TU_1D_HORZ_SPLIT:
+  {
+    return area.lheight() == cu.lheight();
+  }
+  case TU_1D_VERT_SPLIT:
+  {
+    return area.lwidth() == cu.lwidth();
+  }
+  case TU_MAX_TR_SPLIT:
+  {
+    // this split is performed implicitly with the other splits
+    return false;
+  }
+  default: THROW("Unknown 1-D split mode"); break;
+  }
 }
 #endif
 
@@ -676,8 +676,8 @@ void Partitioner::exitCurrSplit()
 #if ISP_VVC
   else if ((currSplit == TU_1D_HORZ_SPLIT) || (currSplit == TU_1D_VERT_SPLIT))
   {
-      CHECK(currTrDepth == 0, "TR depth is '0', although a TU split was performed");
-      currTrDepth--;
+    CHECK(currTrDepth == 0, "TR depth is '0', although a TU split was performed");
+    currTrDepth--;
   }
 #endif
   else

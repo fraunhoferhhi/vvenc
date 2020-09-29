@@ -415,34 +415,34 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
     else                    return ptu;
 #else
 #if ISP_VVC
-      TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
-      unsigned idx = ptu->idx;
-      if (!ptu && m_isTuEnc)
-          return parent->getTU(pos, effChType);
-      else
+    TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
+    unsigned idx = ptu->idx;
+    if (!ptu && m_isTuEnc)
+      return parent->getTU(pos, effChType);
+    else
+    {
+      if (isLuma(effChType))
       {
-          if (isLuma(effChType))
+        const TransformUnit& tu = *tus[idx - 1];
+        if (tu.cu->ispMode)
+        {
+          if (subTuIdx == -1)
           {
-              const TransformUnit& tu = *tus[idx - 1];
-              if (tu.cu->ispMode)
-              {
-                  if (subTuIdx == -1)
-                  {
-                      unsigned extraIdx = 0;
-                      while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
-                      {
-                          extraIdx++;
-                          CHECK(tus[idx - 1 + extraIdx]->cu->treeType == TREE_C,
-                              "tu searched by position points to a chroma tree CU");
-                          CHECK(extraIdx > 3, "extraIdx > 3");
-                      }
-                      return tus[idx - 1 + extraIdx];
-                  }
-                  return tus[idx - 1 + subTuIdx];
-              }
+            unsigned extraIdx = 0;
+            while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
+            {
+              extraIdx++;
+              CHECK(tus[idx - 1 + extraIdx]->cu->treeType == TREE_C,
+                "tu searched by position points to a chroma tree CU");
+              CHECK(extraIdx > 3, "extraIdx > 3");
+            }
+            return tus[idx - 1 + extraIdx];
           }
-          return ptu;
+          return tus[idx - 1 + subTuIdx];
+        }
       }
+      return ptu;
+    }
 #else
     // TODO: fix when implementing ISP, see in the decoder impl
     const unsigned idx = m_tuIdx[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];

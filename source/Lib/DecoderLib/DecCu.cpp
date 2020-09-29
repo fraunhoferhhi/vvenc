@@ -161,18 +161,18 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
 #if ISP_VVC
   if (tu.cu->ispMode && isLuma(compID))
   {
-      if (predRegDiffFromTB)
+    if (predRegDiffFromTB)
+    {
+      if (firstTBInPredReg)
       {
-          if (firstTBInPredReg)
-          {
-              CU::adjustPredArea(areaPredReg);
-              m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, areaPredReg, pReco);
-          }
+        CU::adjustPredArea(areaPredReg);
+        m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, areaPredReg, pReco);
       }
-      else
-      {
-          m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, area, pReco);
-      }
+    }
+    else
+    {
+      m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, area, pReco);
+    }
   }
   else
 #endif

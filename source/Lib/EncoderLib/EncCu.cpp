@@ -1353,20 +1353,20 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   if( tempCS->area.chromaFormat != CHROMA_400 && ( partitioner.chType == CH_C || !cu.isSepTree() ) )
   {
 #if ISP_VVC
-      bool useIntraSubPartitions = false;
-      useIntraSubPartitions = cu.ispMode != NOT_INTRA_SUBPARTITIONS;
-      Partitioner subTuPartitioner = partitioner;
-      if ((m_pcEncCfg->m_ISP >= 3)&& (!partitioner.isSepTree(*tempCS) && useIntraSubPartitions))
-      {
-        maxCostAllowedForChroma = bestCS->cost < MAX_DOUBLE ? bestCS->cost - tempCS->lumaCost : MAX_DOUBLE;
-      }
-      m_cIntraSearch.estIntraPredChromaQT(
-          cu, (!useIntraSubPartitions || (cu.isSepTree() && !isLuma(CH_C))) ? partitioner : subTuPartitioner,
-          maxCostAllowedForChroma);
-      if ((m_pcEncCfg->m_ISP >= 3)&& useIntraSubPartitions && !cu.ispMode)
-      {
-        NSTOP_CHECK = false;
-      }
+    bool useIntraSubPartitions = false;
+    useIntraSubPartitions = cu.ispMode != NOT_INTRA_SUBPARTITIONS;
+    Partitioner subTuPartitioner = partitioner;
+    if ((m_pcEncCfg->m_ISP >= 3) && (!partitioner.isSepTree(*tempCS) && useIntraSubPartitions))
+    {
+      maxCostAllowedForChroma = bestCS->cost < MAX_DOUBLE ? bestCS->cost - tempCS->lumaCost : MAX_DOUBLE;
+    }
+    m_cIntraSearch.estIntraPredChromaQT(
+      cu, (!useIntraSubPartitions || (cu.isSepTree() && !isLuma(CH_C))) ? partitioner : subTuPartitioner,
+      maxCostAllowedForChroma);
+    if ((m_pcEncCfg->m_ISP >= 3) && useIntraSubPartitions && !cu.ispMode)
+    {
+      NSTOP_CHECK = false;
+    }
 #else
     m_cIntraSearch.estIntraPredChromaQT( cu, partitioner );
 #endif
@@ -1375,44 +1375,44 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   if (NSTOP_CHECK)
   {
 #endif
-      cu.rootCbf = false;
+    cu.rootCbf = false;
 
-      for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
-      {
-          cu.rootCbf |= cu.firstTU->cbf[t] != 0;
-      }
+    for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
+    {
+      cu.rootCbf |= cu.firstTU->cbf[t] != 0;
+    }
 
-      // Get total bits for current mode: encode CU
-      m_CABACEstimator->resetBits();
+    // Get total bits for current mode: encode CU
+    m_CABACEstimator->resetBits();
 
-      if ((!cu.cs->slice->isIntra() || cu.cs->slice->sps->IBC) && cu.Y().valid())
-      {
-          m_CABACEstimator->cu_skip_flag(cu);
-      }
-      m_CABACEstimator->pred_mode(cu);
-      m_CABACEstimator->cu_pred_data(cu);
-      m_CABACEstimator->bdpcm_mode(cu, ComponentID(partitioner.chType));
+    if ((!cu.cs->slice->isIntra() || cu.cs->slice->sps->IBC) && cu.Y().valid())
+    {
+      m_CABACEstimator->cu_skip_flag(cu);
+    }
+    m_CABACEstimator->pred_mode(cu);
+    m_CABACEstimator->cu_pred_data(cu);
+    m_CABACEstimator->bdpcm_mode(cu, ComponentID(partitioner.chType));
 
-      // Encode Coefficients
-      CUCtx cuCtx;
-      cuCtx.isDQPCoded = true;
-      cuCtx.isChromaQpAdjCoded = true;
-      m_CABACEstimator->cu_residual(cu, partitioner, cuCtx);
+    // Encode Coefficients
+    CUCtx cuCtx;
+    cuCtx.isDQPCoded = true;
+    cuCtx.isChromaQpAdjCoded = true;
+    m_CABACEstimator->cu_residual(cu, partitioner, cuCtx);
 
-      tempCS->fracBits = m_CABACEstimator->getEstFracBits();
-      tempCS->cost = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
+    tempCS->fracBits = m_CABACEstimator->getEstFracBits();
+    tempCS->cost = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
 
-      xEncodeDontSplit(*tempCS, partitioner);
+    xEncodeDontSplit(*tempCS, partitioner);
 
-      xCheckDQP(*tempCS, partitioner);
+    xCheckDQP(*tempCS, partitioner);
 
-      if (m_pcEncCfg->m_EDO)
-      {
-          xCalDebCost(*tempCS, partitioner);
-      }
+    if (m_pcEncCfg->m_EDO)
+    {
+      xCalDebCost(*tempCS, partitioner);
+    }
 
-      DTRACE_MODE_COST(*tempCS, m_cRdCost.getLambda(true));
-      xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO);
+    DTRACE_MODE_COST(*tempCS, m_cRdCost.getLambda(true));
+    xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO);
 #if ISP_VVC
   }
 #endif

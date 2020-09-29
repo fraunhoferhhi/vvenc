@@ -41,7 +41,11 @@ vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
 /** \file     MotionInfo.h
     \brief    motion information handling classes (header)
-    \todo     MvField seems to be better to be inherited from Mv
+    
+    
+    
+    
+    odo     MvField seems to be better to be inherited from Mv
 */
 
 #pragma once
