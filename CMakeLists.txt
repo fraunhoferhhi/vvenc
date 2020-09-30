@@ -160,8 +160,18 @@ enable_testing()
 
 # add test
 add_test( NAME Test_vvenclibtest COMMAND vvenclibtest )
-set_tests_properties( Test_vvenclibtest PROPERTIES TIMEOUT 60 )
+set_tests_properties( Test_vvenclibtest PROPERTIES TIMEOUT 20 )
 
+add_test( NAME Test_vvencapp-fast COMMAND vvencapp --preset=faster -s 64x64 -f 11 -i ../../source/Test/bus_64x64.yuv -o ../../source/Test/out.vvc )
+set_tests_properties( Test_vvencapp-fast PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_vvencapp-medium COMMAND vvencapp -s 64x64 -f 8 -i ../../source/Test/bus_64x64.yuv -o out.vvc )
+set_tests_properties( Test_vvencapp-medium PROPERTIES TIMEOUT 30 )
+
+add_test( NAME Test_vvencFFapp-fast COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/testSeq.cfg )
+set_tests_properties( Test_vvencFFapp-fast PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess_slow.cfg -c ../../source/Test/testSeq.cfg )
+set_tests_properties( Test_vvencFFapp-slow PROPERTIES TIMEOUT 60 )
+ 
 
 if( VVENC_ENABLE_INSTALL )
   # include installer
