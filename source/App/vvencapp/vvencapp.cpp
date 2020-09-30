@@ -154,7 +154,7 @@ int main( int argc, char* argv[] )
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( cVVEncParameter.m_iThreadCount <= 0 )
+  if( cVVEncParameter.m_iThreadCount < 0 )
   {
     if( cVVEncParameter.m_iWidth > 1920 || cVVEncParameter.m_iHeight > 1080)
     {
@@ -165,7 +165,6 @@ int main( int argc, char* argv[] )
       cVVEncParameter.m_iThreadCount = 4;
     }
   }
-
 
   vvenc::VVEnc cVVEnc;
 

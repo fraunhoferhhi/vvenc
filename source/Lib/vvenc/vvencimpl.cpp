@@ -529,7 +529,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iTicksPerSecond <= 0 || rcSrc.m_iTicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
   ROTPARAMS( (rcSrc.m_iTicksPerSecond < 90000) && (rcSrc.m_iTicksPerSecond*rcSrc.m_iTemporalScale)%rcSrc.m_iTemporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  ROTPARAMS( rcSrc.m_iThreadCount <= 0,                                                     "ThreadCount must be > 0" );
+  ROTPARAMS( rcSrc.m_iThreadCount < 0,                                                      "ThreadCount must be >= 0" );
 
   ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
   ROTPARAMS( rcSrc.m_iIDRPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
@@ -588,9 +588,9 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 
   rcEncCfg.m_internalBitDepth[0] = 10;
 
-  if( rcVVEncParameter.m_iThreadCount > 1 )
+  rcEncCfg.m_numWppThreads = rcVVEncParameter.m_iThreadCount;
+  if( rcVVEncParameter.m_iThreadCount > 0 )
   {
-      rcEncCfg.m_numWppThreads     = rcVVEncParameter.m_iThreadCount;
       rcEncCfg.m_ensureWppBitEqual = 1;
   }
 
