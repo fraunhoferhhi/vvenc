@@ -9,6 +9,7 @@ stages:
    only:
       - web
       - schedules
+      - merge_requests
 
 build_ubuntu1804:
    extends: .build_template
