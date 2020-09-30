@@ -804,6 +804,9 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.depQuantEnabled               = m_cEncCfg.m_DepQuantEnabled;
   sps.signDataHidingEnabled         = m_cEncCfg.m_SignDataHidingEnabled;
   sps.MTSIntra                      = m_cEncCfg.m_MTS ;
+#if 1//ISP_VVC
+  sps.ISP                           = m_cEncCfg.m_ISP;
+#endif
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {

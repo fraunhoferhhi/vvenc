@@ -168,6 +168,9 @@ public:
 public:
   void canSplit                           ( const CodingStructure &cs, bool& canNo, bool& canQt, bool& canBh, bool& canBv, bool& canTh, bool& canTv );
   bool canSplit                           ( const PartSplit split, const CodingStructure &cs );
+#if ISP_VVC
+  bool canSplitISP                        ( const PartSplit split, const CodingStructure& cs, CodingUnit& cu );
+#endif 
   bool isSplitImplicit                    ( const PartSplit split, const CodingStructure &cs );
   PartSplit getImplicitSplit              (                        const CodingStructure &cs );
   bool isSepTree                          (                        const CodingStructure &cs );

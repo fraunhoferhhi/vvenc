@@ -1322,7 +1322,9 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   CU::addPUs( cu );
 
   tempCS->interHad    = m_modeCtrl.comprCUCtx->interHad;
-
+#if ISP_VVC
+  double maxCostAllowedForChroma = MAX_DOUBLE;
+#endif
   if( isLuma( partitioner.chType ) )
   {
     if (!tempCS->slice->isIntra() && bestCS)
@@ -1345,51 +1347,75 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
       return;// th new continue;
     }
   }
-
+#if ISP_VVC
+  bool NSTOP_CHECK = true;
+#endif
   if( tempCS->area.chromaFormat != CHROMA_400 && ( partitioner.chType == CH_C || !cu.isSepTree() ) )
   {
+#if ISP_VVC
+    bool useIntraSubPartitions = false;
+    useIntraSubPartitions = cu.ispMode != NOT_INTRA_SUBPARTITIONS;
+    Partitioner subTuPartitioner = partitioner;
+    if ((m_pcEncCfg->m_ISP >= 3) && (!partitioner.isSepTree(*tempCS) && useIntraSubPartitions))
+    {
+      maxCostAllowedForChroma = bestCS->cost < MAX_DOUBLE ? bestCS->cost - tempCS->lumaCost : MAX_DOUBLE;
+    }
+    m_cIntraSearch.estIntraPredChromaQT(
+      cu, (!useIntraSubPartitions || (cu.isSepTree() && !isLuma(CH_C))) ? partitioner : subTuPartitioner,
+      maxCostAllowedForChroma);
+    if ((m_pcEncCfg->m_ISP >= 3) && useIntraSubPartitions && !cu.ispMode)
+    {
+      NSTOP_CHECK = false;
+    }
+#else
     m_cIntraSearch.estIntraPredChromaQT( cu, partitioner );
+#endif
   }
-
-  cu.rootCbf = false;
-
-  for( uint32_t t = 0; t < getNumberValidTBlocks( *cu.cs->pcv ); t++ )
+#if ISP_VVC
+  if (NSTOP_CHECK)
   {
-    cu.rootCbf |= cu.firstTU->cbf[t] != 0;
+#endif
+    cu.rootCbf = false;
+
+    for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
+    {
+      cu.rootCbf |= cu.firstTU->cbf[t] != 0;
+    }
+
+    // Get total bits for current mode: encode CU
+    m_CABACEstimator->resetBits();
+
+    if ((!cu.cs->slice->isIntra() || cu.cs->slice->sps->IBC) && cu.Y().valid())
+    {
+      m_CABACEstimator->cu_skip_flag(cu);
+    }
+    m_CABACEstimator->pred_mode(cu);
+    m_CABACEstimator->cu_pred_data(cu);
+    m_CABACEstimator->bdpcm_mode(cu, ComponentID(partitioner.chType));
+
+    // Encode Coefficients
+    CUCtx cuCtx;
+    cuCtx.isDQPCoded = true;
+    cuCtx.isChromaQpAdjCoded = true;
+    m_CABACEstimator->cu_residual(cu, partitioner, cuCtx);
+
+    tempCS->fracBits = m_CABACEstimator->getEstFracBits();
+    tempCS->cost = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
+
+    xEncodeDontSplit(*tempCS, partitioner);
+
+    xCheckDQP(*tempCS, partitioner);
+
+    if (m_pcEncCfg->m_EDO)
+    {
+      xCalDebCost(*tempCS, partitioner);
+    }
+
+    DTRACE_MODE_COST(*tempCS, m_cRdCost.getLambda(true));
+    xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO);
+#if ISP_VVC
   }
-
-  // Get total bits for current mode: encode CU
-  m_CABACEstimator->resetBits();
-
-  if( (!cu.cs->slice->isIntra() || cu.cs->slice->sps->IBC) && cu.Y().valid())
-  {
-    m_CABACEstimator->cu_skip_flag ( cu );
-  }
-  m_CABACEstimator->pred_mode      ( cu );
-  m_CABACEstimator->cu_pred_data   ( cu );
-  m_CABACEstimator->bdpcm_mode     ( cu, ComponentID(partitioner.chType) );
-
-  // Encode Coefficients
-  CUCtx cuCtx;
-  cuCtx.isDQPCoded = true;
-  cuCtx.isChromaQpAdjCoded = true;
-  m_CABACEstimator->cu_residual( cu, partitioner, cuCtx );
-
-  tempCS->fracBits = m_CABACEstimator->getEstFracBits();
-  tempCS->cost     = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
-
-  xEncodeDontSplit( *tempCS, partitioner );
-
-  xCheckDQP( *tempCS, partitioner );
-
-  if( m_pcEncCfg->m_EDO )
-  {
-    xCalDebCost( *tempCS, partitioner );
-  }
-
-  DTRACE_MODE_COST( *tempCS, m_cRdCost.getLambda(true) );
-  xCheckBestMode( tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO );
-
+#endif
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
 }
@@ -2870,7 +2896,11 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     PelBuf dbReco = picDbBuf.getBuf( compArea );
     if (cs.slice->lmcsEnabled && isLuma(compId) )
     {
+#if ISP_VVC
+      if ((!cs.sps->LFNST) && (!cs.sps->MTS) && (!cs.sps->ISP)&& reshapeData.getCTUFlag())
+#else
       if ((!cs.sps->LFNST)&& (!cs.sps->MTS) && reshapeData.getCTUFlag())
+#endif
       {
         PelBuf rspReco = cs.getRspRecoBuf();
         dbReco.copyFrom( rspReco );

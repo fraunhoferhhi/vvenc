@@ -144,7 +144,11 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
 
   const ChannelType chType  = toChannelType( compID );
 
+#if ISP_VVC
+        PelBuf piPred       = tu.cu->ispMode ? cs.getPredBuf(area) : m_PredBuffer.getCompactBuf(area);
+#else
         PelBuf piPred       = m_PredBuffer.getCompactBuf( area );
+#endif
 
   const PredictionUnit &pu  = *tu.cs->getPU( area.pos(), chType );
   const uint32_t uiChFinalMode  = PU::getFinalIntraMode( pu, chType );
@@ -154,6 +158,24 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu, compID);
   bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, compID, area);
   CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
+#if ISP_VVC
+  if (tu.cu->ispMode && isLuma(compID))
+  {
+    if (predRegDiffFromTB)
+    {
+      if (firstTBInPredReg)
+      {
+        CU::adjustPredArea(areaPredReg);
+        m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, areaPredReg, pReco);
+      }
+    }
+    else
+    {
+      m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, area, pReco);
+    }
+  }
+  else
+#endif
   {
     m_pcIntraPred->initIntraPatternChType(*tu.cu, area);
   }

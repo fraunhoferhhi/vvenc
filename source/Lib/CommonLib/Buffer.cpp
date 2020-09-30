@@ -643,6 +643,18 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   {
     g_pelBufOP.reco4( src1, src1Stride, src2, src2Stride, dest, destStride, width, height, clpRng );
   }
+#if ISP_VVC && ISP_VVC_SIMD
+  else if (width == 1)
+  {
+    for (int y = 0; y < height; y++)
+    {
+      dest[0] = ClipPel(src1[0] + src2[0], clpRng);
+      src1 += src1Stride;
+      src2 += src2Stride;
+      dest += destStride;
+    }
+  }
+#endif
   else
   {
     for( int y = 0; y < height; y++ )

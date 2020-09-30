@@ -360,7 +360,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
 
   switch (uiDirMode)
   {
-    case(PLANAR_IDX): xPredIntraPlanar( piPred, srcBuf); break;
+    case(PLANAR_IDX): xPredIntraPlanar(piPred, srcBuf); break;
     case(DC_IDX):     xPredIntraDc    ( piPred, srcBuf ); break;
 //    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, pu.cu->bdpcmMode, clpRng); break;
     default:          xPredIntraAng   ( piPred, srcBuf, channelType, clpRng); break;
@@ -540,11 +540,19 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
   }
   else
   {
+#if ISP_VVC   
+    memcpy(&refAbove[0], pSrc.buf, ((m_topRefLength)+multiRefIdx + 1) * sizeof(Pel));
+    for (int y = 0; y <= m_leftRefLength + multiRefIdx; y++)
+    {
+      refLeft[y] = pSrc.at(y, 1);
+    }
+#else
     memcpy(&refAbove[0],pSrc.buf,((width<<1) + multiRefIdx+1)*sizeof(Pel));
     for (int y = 0; y <= 2 * height + multiRefIdx; y++)
     {
       refLeft[y] = pSrc.at(y,1);
     }
+#endif
 
     refMain = bIsModeVer ? refAbove : refLeft;
     refSide = bIsModeVer ? refLeft : refAbove;
@@ -553,7 +561,11 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
     const int log2Ratio = Log2(width) - Log2(height);
     const int s         = std::max<int>(0, bIsModeVer ? log2Ratio : -log2Ratio);
     const int maxIndex  = (multiRefIdx << s) + 2;
+#if ISP_VVC
+    const int refLength = bIsModeVer ? m_topRefLength : m_leftRefLength;
+#else
     const int refLength = 2* (bIsModeVer ? width : height);
+#endif
     const Pel val       = refMain[refLength + multiRefIdx];
     for (int z = 1; z <= maxIndex; z++)
     {
@@ -599,7 +611,46 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
       int deltaPos = intraPredAngle * (1 + multiRefIdx);
       if( isLuma(channelType) )
       {
-        IntraPredAngleLuma( pDstBuf,dstStride,refMain,width,height,deltaPos,intraPredAngle,nullptr,!m_ipaParam.interpolationFlag,clpRng );
+#if ISP_VVC_SIMD
+        if (width <= 2)
+        {
+          for (int y = 0, deltaPos = intraPredAngle * (1 + multiRefIdx); y < height;
+            y++, deltaPos += intraPredAngle, pDsty += dstStride)
+          {
+            const int deltaInt = deltaPos >> 5;
+            const int deltaFract = deltaPos & 31;
+            if (!isIntegerSlope(abs(intraPredAngle)))
+            {
+              const bool useCubicFilter = !m_ipaParam.interpolationFlag;
+
+              const TFilterCoeff        intraSmoothingFilter[4] = { TFilterCoeff(16 - (deltaFract >> 1)),
+                                                             TFilterCoeff(32 - (deltaFract >> 1)),
+                                                             TFilterCoeff(16 + (deltaFract >> 1)),
+                                                             TFilterCoeff(deltaFract >> 1) };
+              const TFilterCoeff* const f =
+                (useCubicFilter) ? InterpolationFilter::getChromaFilterTable(deltaFract) : intraSmoothingFilter;
+
+              for (int x = 0; x < width; x++)
+              {
+                Pel p[4];
+
+                p[0] = refMain[deltaInt + x];
+                p[1] = refMain[deltaInt + x + 1];
+                p[2] = refMain[deltaInt + x + 2];
+                p[3] = refMain[deltaInt + x + 3];
+
+                Pel val = (f[0] * p[0] + f[1] * p[1] + f[2] * p[2] + f[3] * p[3] + 32) >> 6;
+
+                pDsty[x] = ClipPel(val, clpRng);   // always clip even though not always needed
+              }
+            }
+          }
+        }
+        else
+#endif
+        {
+          IntraPredAngleLuma(pDstBuf, dstStride, refMain, width, height, deltaPos, intraPredAngle, nullptr, !m_ipaParam.interpolationFlag, clpRng);
+        }
       }
       else
       {
@@ -649,6 +700,10 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   Pel *refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
   Pel *refBufFiltered   = m_refBuffer[area.compID][PRED_BUF_FILTERED];
 
+#if ISP_VVC
+  setReferenceArrayLengths(area);
+#endif
+
   // ----- Step 1: unfiltered reference samples -----
   xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
   // ----- Step 2: filtered reference samples -----
@@ -675,8 +730,13 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
 
   const int  tuWidth            = area.width;
   const int  tuHeight           = area.height;
+#if ISP_VVC
+  const int  predSize           = m_topRefLength;
+  const int  predHSize          = m_leftRefLength;
+#else
   const int  predSize           = 2*area.width;
   const int  predHSize          = 2*area.height;
+#endif
   const int predStride = predSize + 1 + multiRefIdx;
   m_refBufferStride[area.compID] = predStride;
 
@@ -913,8 +973,13 @@ void IntraPrediction::xFilterReferenceSamples( const Pel* refBufUnfiltered, Pel*
   {
     multiRefIdx = 0;
   }
+#if ISP_VVC
+  const int predSize = m_topRefLength + multiRefIdx;
+  const int predHSize = m_leftRefLength + multiRefIdx;
+#else
   const int predSize = 2*area.width + multiRefIdx;
   const int predHSize = 2*area.height + multiRefIdx;
+#endif
   const int predStride = stride == 0 ? predSize + 1 : stride;
 
 
@@ -1565,6 +1630,138 @@ void IntraPrediction::predIntraMip( PelBuf &piPred, const PredictionUnit &pu )
  
   m_matrixIntraPred.predBlock(piPred.buf, pu.intraDir[CH_L], pu.mipTransposedFlag, bitDepth);
 }
+
+#if ISP_VVC
+void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const CompArea& area, PelBuf& recBuf,
+  const bool forceRefFilterFlag)
+{
+  const CodingStructure& cs = *cu.cs;
+
+  if (!forceRefFilterFlag)
+  {
+    initPredIntraParams(*cu.pu, area, *cs.sps);
+  }
+
+  const Position posLT = area;
+  bool           isLeftAvail =
+    (cs.getCURestricted(posLT.offset(-1, 0), cu, CH_L) != NULL) && cs.isDecomp(posLT.offset(-1, 0), CH_L);
+  bool isAboveAvail =
+    (cs.getCURestricted(posLT.offset(0, -1), cu, CH_L) != NULL) && cs.isDecomp(posLT.offset(0, -1), CH_L);
+  // ----- Step 1: unfiltered reference samples -----
+  if (cu.blocks[area.compID].x == area.x && cu.blocks[area.compID].y == area.y)
+  {
+    Pel* refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
+    // With the first subpartition all the CU reference samples are fetched at once in a single call to
+    // xFillReferenceSamples
+    if (cu.ispMode == HOR_INTRA_SUBPARTITIONS)
+    {
+      m_leftRefLength = cu.Y().height << 1;
+      m_topRefLength = cu.Y().width + area.width;
+    }
+    else   // if (cu.ispMode == VER_INTRA_SUBPARTITIONS)
+    {
+      m_leftRefLength = cu.Y().height + area.height;
+      m_topRefLength = cu.Y().width << 1;
+    }
+
+    xFillReferenceSamples(cs.picture->getRecoBuf(cu.Y()), refBufUnfiltered, cu.Y(), cu);
+
+    // After having retrieved all the CU reference samples, the number of reference samples is now adjusted for the
+    // current subpartition
+    m_topRefLength = cu.blocks[area.compID].width + area.width;
+    m_leftRefLength = cu.blocks[area.compID].height + area.height;
+  }
+  else
+  {
+    m_topRefLength = cu.blocks[area.compID].width + area.width;
+    m_leftRefLength = cu.blocks[area.compID].height + area.height;
+
+    const int predSizeHor = m_topRefLength;
+    const int predSizeVer = m_leftRefLength;
+    if (cu.ispMode == HOR_INTRA_SUBPARTITIONS)
+    {
+      Pel* src = recBuf.bufAt(0, -1);
+      Pel* ref = m_refBuffer[area.compID][PRED_BUF_UNFILTERED] + m_refBufferStride[area.compID];
+      if (isLeftAvail)
+      {
+        for (int i = 0; i <= 2 * cu.blocks[area.compID].height - area.height; i++)
+        {
+          ref[i] = ref[i + area.height];
+        }
+      }
+      else
+      {
+        for (int i = 0; i <= predSizeVer; i++)
+        {
+          ref[i] = src[0];
+        }
+      }
+      Pel* dst = m_refBuffer[area.compID][PRED_BUF_UNFILTERED] + 1;
+      dst[-1] = ref[0];
+      for (int i = 0; i < area.width; i++)
+      {
+        dst[i] = src[i];
+      }
+      Pel sample = src[area.width - 1];
+      dst += area.width;
+      for (int i = 0; i < predSizeHor - area.width; i++)
+      {
+        dst[i] = sample;
+      }
+    }
+    else
+    {
+      Pel* src = recBuf.bufAt(-1, 0);
+      Pel* ref = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
+      if (isAboveAvail)
+      {
+        for (int i = 0; i <= 2 * cu.blocks[area.compID].width - area.width; i++)
+        {
+          ref[i] = ref[i + area.width];
+        }
+      }
+      else
+      {
+        for (int i = 0; i <= predSizeHor; i++)
+        {
+          ref[i] = src[0];
+        }
+      }
+      Pel* dst = m_refBuffer[area.compID][PRED_BUF_UNFILTERED] + m_refBufferStride[area.compID] + 1;
+      dst[-1] = ref[0];
+      for (int i = 0; i < area.height; i++)
+      {
+        *dst = *src;
+        src += recBuf.stride;
+        dst++;
+      }
+      Pel sample = src[-recBuf.stride];
+      for (int i = 0; i < predSizeVer - area.height; i++)
+      {
+        *dst = sample;
+        dst++;
+      }
+    }
+  }
+  // ----- Step 2: filtered reference samples -----
+  if (m_ipaParam.refFilterFlag || forceRefFilterFlag)
+  {
+    Pel* refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
+    Pel* refBufFiltered = m_refBuffer[area.compID][PRED_BUF_FILTERED];
+    xFilterReferenceSamples(refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.pu->multiRefIdx);
+  }
+}
+
+void IntraPrediction::setReferenceArrayLengths(const CompArea& area)
+{
+  // set Top and Left reference samples length
+  const int width = area.width;
+  const int height = area.height;
+
+  m_leftRefLength = (height << 1);
+  m_topRefLength = (width << 1);
+}
+#endif
 
 } // namespace vvenc
 
