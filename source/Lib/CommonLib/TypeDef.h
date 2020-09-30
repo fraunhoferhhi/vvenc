@@ -65,7 +65,9 @@ namespace vvenc {
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
-  // ====================================================================================================================
+#define ISP_VVC_SIMD 1
+#define ISP_VVC 1
+    // ====================================================================================================================
 // General settings
 // ====================================================================================================================
 
@@ -74,9 +76,9 @@ namespace vvenc {
 #endif
 
 #if ENABLE_VALGRIND_CODE
-#define VALGRIND_MEMCLEAR( ref )                           memset(ref,0,sizeof(ref))
+#define VALGRIND_MEMCLEAR(_ref,_size)                     memset(_ref,0,(_size))
 #else
-#define VALGRIND_MEMCLEAR( ref )
+#define VALGRIND_MEMCLEAR(_ref,_size)
 #endif
 
 #ifndef ENABLE_TRACING

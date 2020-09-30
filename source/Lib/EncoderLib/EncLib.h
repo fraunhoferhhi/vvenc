@@ -46,6 +46,7 @@ vvc@hhi.fraunhofer.de
 #pragma once
 
 #include "EncGOP.h"
+#include "EncHRD.h"
 #include "CommonLib/MCTF.h"
 #include <mutex>
 #include "../../../include/vvenc/EncCfg.h"
@@ -75,6 +76,7 @@ private:
 
   const EncCfg              m_cEncCfg;
   EncGOP                    m_cGOPEncoder;
+  EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
   PicList                   m_cListPic;
   YUVWriterIf*              m_yuvWriterIf;
@@ -120,6 +122,7 @@ private:
   void     xInitPPS            ( PPS &pps, const SPS &sps )                  const;  ///< initialize PPS from encoder options
   void     xInitPPSforTiles    ( PPS &pps ) const;
   void     xInitRPL            ( SPS &sps ) const;
+  void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
 };
 

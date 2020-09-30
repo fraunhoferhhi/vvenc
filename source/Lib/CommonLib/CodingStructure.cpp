@@ -136,6 +136,7 @@ void CodingStructure::destroy()
 
     delete[] m_tuPtr[ i ];
     m_tuPtr[ i ] = nullptr;
+
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -323,11 +324,41 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
   }
   else
   {
-#if 1
+#if 1 && !ISP_VVC 
     TransformUnit *ptu = m_tuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
 
     if( !ptu && m_isTuEnc ) return parent->getTU( pos, effChType );
     else                    return ptu;
+#else
+#if ISP_VVC
+    TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
+    unsigned idx = ptu->idx;
+    if (!ptu && m_isTuEnc)
+      return parent->getTU(pos, effChType);
+    else
+    {
+      if (isLuma(effChType))
+      {
+        const TransformUnit& tu = *tus[idx - 1];
+        if (tu.cu->ispMode)
+        {
+          if (subTuIdx == -1)
+          {
+            unsigned extraIdx = 0;
+            while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
+            {
+              extraIdx++;
+              CHECK(tus[idx - 1 + extraIdx]->cu->treeType == TREE_C,
+                "tu searched by position points to a chroma tree CU");
+              CHECK(extraIdx > 3, "extraIdx > 3");
+            }
+            return tus[idx - 1 + extraIdx];
+          }
+          return tus[idx - 1 + subTuIdx];
+        }
+      }
+      return ptu;
+    }
 #else
     // TODO: fix when implementing ISP, see in the decoder impl
     const unsigned idx = m_tuIdx[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
@@ -362,6 +393,7 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
     else if( m_isTuEnc ) return parent->getTU( pos, effChType );
     else                 return nullptr;
 #endif
+#endif
   }
 }
 
@@ -376,11 +408,41 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
   }
   else
   {
-#if 1
+#if 1 && !ISP_VVC
     TransformUnit *ptu = m_tuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
 
     if( !ptu && m_isTuEnc ) return parent->getTU( pos, effChType );
     else                    return ptu;
+#else
+#if ISP_VVC
+    TransformUnit* ptu = m_tuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
+    unsigned idx = ptu->idx;
+    if (!ptu && m_isTuEnc)
+      return parent->getTU(pos, effChType);
+    else
+    {
+      if (isLuma(effChType))
+      {
+        const TransformUnit& tu = *tus[idx - 1];
+        if (tu.cu->ispMode)
+        {
+          if (subTuIdx == -1)
+          {
+            unsigned extraIdx = 0;
+            while (!tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel(effChType)].contains(pos))
+            {
+              extraIdx++;
+              CHECK(tus[idx - 1 + extraIdx]->cu->treeType == TREE_C,
+                "tu searched by position points to a chroma tree CU");
+              CHECK(extraIdx > 3, "extraIdx > 3");
+            }
+            return tus[idx - 1 + extraIdx];
+          }
+          return tus[idx - 1 + subTuIdx];
+        }
+      }
+      return ptu;
+    }
 #else
     // TODO: fix when implementing ISP, see in the decoder impl
     const unsigned idx = m_tuIdx[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
@@ -412,6 +474,7 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
     }
     else if( m_isTuEnc ) return parent->getTU( pos, effChType );
     else                 return nullptr;
+#endif
 #endif
   }
 }
@@ -1335,6 +1398,12 @@ PelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType type )
   {
     buf = m_rsporg;
   }
+#if ISP_VVC
+  else if (type == PIC_ORIGINAL_RSP_REC)
+  {
+    buf = &m_rspreco;
+  }
+#endif
 
   CHECK( !buf, "Unknown buffer requested" );
 
@@ -1370,6 +1439,12 @@ const CPelBuf CodingStructure::getBuf( const CompArea& blk, const PictureType ty
   {
     buf = m_rsporg;
   }
+#if ISP_VVC
+  else if (type == PIC_ORIGINAL_RSP_REC)
+  {
+    buf = &m_rspreco;
+  }
+#endif
 
   CHECK( !buf, "Unknown buffer requested" );
 

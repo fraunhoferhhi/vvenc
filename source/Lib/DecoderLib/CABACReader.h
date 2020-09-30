@@ -127,7 +127,11 @@ public:
   void        smvd_mode                 ( PredictionUnit&      pu );
 
   // transform tree (clause 7.3.8.8)
+#if ISP_VVC
+  void        transform_tree            ( CodingStructure& cs, Partitioner& pm, CUCtx& cuCtx, CodingUnit& cu, const PartSplit ispType = TU_NO_ISP, const int subTuIdx = -1 );
+#else
   void        transform_tree            ( CodingStructure&     cs, Partitioner&    pm, CUCtx& cuCtx, const PartSplit ispType = TU_NO_ISP, const int subTuIdx = -1 );
+#endif
   bool        cbf_comp                  ( CodingStructure&     cs,     const CompArea& area,     unsigned depth, const bool prevCbf = false, const bool useISP = false );
 
   // mvd coding (clause 7.3.8.9)

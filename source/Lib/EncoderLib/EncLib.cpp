@@ -1,19 +1,19 @@
 /* -----------------------------------------------------------------------------
 Software Copyright License for the Fraunhofer Software Library VVenc
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
+(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 
 1.    INTRODUCTION
 
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
+The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology.
+The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary.
 
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
+The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license.
 It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
 
 2.    COPYRIGHT LICENSE
 
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
+Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research.
 
 No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
 
@@ -21,7 +21,7 @@ For any other use of the Fraunhofer Versatile Video Encoding Library than permit
 
 3.    LIMITED PATENT LICENSE
 
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
+As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.
 
 Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
 
@@ -111,8 +111,9 @@ void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
   xInitDCI( m_cDCI, sps0, dciId );
   xInitPPS( pps0, sps0 );
   xInitRPL( sps0 );
+  xInitHrdParameters( sps0 );
 
-  if ( encCfg.m_numWppThreads > 0 )
+  if( encCfg.m_numWppThreads > 0 )
   {
     const int maxCntEnc = ( encCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, encCfg.m_numWppThreads) : 1;
     m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
@@ -123,7 +124,7 @@ void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
                m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
                m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
 
-  m_cGOPEncoder.init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_threadPool );
+  m_cGOPEncoder.init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_cEncHRD, m_threadPool );
 
   m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
   m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
@@ -380,10 +381,6 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
       au.m_uiDts = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
       au.m_bDtsValid = true;
       //assert(  (int64_t)au.m_uiDts < 0 || au.m_uiCts >= au.m_uiDts );
-    }
-    else
-    {
-      assert(0);
     }
 
     // encode picture with current poc
@@ -755,6 +752,7 @@ void EncLib::xInitSPS(SPS &sps) const
 
   sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_SourceWidth;
   sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_SourceHeight;
+  sps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
   sps.chromaFormatIdc               = m_cEncCfg.m_internChromaFormat;
   sps.CTUSize                       = m_cEncCfg.m_CTUSize;
   sps.maxMTTDepth[0]                = m_cEncCfg.m_maxMTTDepthI;
@@ -806,6 +804,9 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.depQuantEnabled               = m_cEncCfg.m_DepQuantEnabled;
   sps.signDataHidingEnabled         = m_cEncCfg.m_SignDataHidingEnabled;
   sps.MTSIntra                      = m_cEncCfg.m_MTS ;
+#if 1//ISP_VVC
+  sps.ISP                           = m_cEncCfg.m_ISP;
+#endif
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {
@@ -853,6 +854,8 @@ void EncLib::xInitSPS(SPS &sps) const
     vui.videoFullRangeFlag            = m_cEncCfg.m_videoFullRangeFlag;
   }
 
+  sps.hrdParametersPresent            = m_cEncCfg.m_hrdParametersPresent;
+
   sps.numLongTermRefPicSPS            = NUM_LONG_TERM_REF_PIC_SPS;
   CHECK(!(NUM_LONG_TERM_REF_PIC_SPS <= MAX_NUM_LONG_TERM_REF_PICS), "Unspecified error");
   for (int k = 0; k < NUM_LONG_TERM_REF_PIC_SPS; k++)
@@ -876,13 +879,19 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
     bUseDQP = false;
   }
 
-
   // pps ID already initialised.
   pps.spsId                         = sps.spsId;
   pps.jointCbCrQpOffsetPresent      = m_cEncCfg.m_JointCbCrMode;
   pps.picWidthInLumaSamples         = m_cEncCfg.m_SourceWidth;
   pps.picHeightInLumaSamples        = m_cEncCfg.m_SourceHeight;
-  pps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
+  if( pps.picWidthInLumaSamples == sps.maxPicWidthInLumaSamples && pps.picHeightInLumaSamples == sps.maxPicHeightInLumaSamples )
+  {
+    pps.conformanceWindow           = sps.conformanceWindow;
+  }
+  else
+  {
+    pps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
+  }
 
   pps.picWidthInCtu                 = (pps.picWidthInLumaSamples + (sps.CTUSize-1)) / sps.CTUSize;
   pps.picHeightInCtu                = (pps.picHeightInLumaSamples + (sps.CTUSize-1)) / sps.CTUSize;
@@ -982,9 +991,9 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   if( chromaArrayType != CHROMA_400  )
   {
     bool chromaQPOffsetNotZero = ( pps.chromaQpOffset[COMP_Cb] != 0 || pps.chromaQpOffset[COMP_Cr] != 0 || pps.jointCbCrQpOffsetPresent || pps.sliceChromaQpFlag || pps.chromaQpOffsetListLen );
-    bool chromaDbfOffsetNotAsLuma = ( pps.deblockingFilterBetaOffsetDiv2[COMP_Cb] != pps.deblockingFilterBetaOffsetDiv2[COMP_Y] 
+    bool chromaDbfOffsetNotAsLuma = ( pps.deblockingFilterBetaOffsetDiv2[COMP_Cb] != pps.deblockingFilterBetaOffsetDiv2[COMP_Y]
                                    || pps.deblockingFilterBetaOffsetDiv2[COMP_Cr] != pps.deblockingFilterBetaOffsetDiv2[COMP_Y]
-                                   || pps.deblockingFilterTcOffsetDiv2[COMP_Cb] != pps.deblockingFilterTcOffsetDiv2[COMP_Y]  
+                                   || pps.deblockingFilterTcOffsetDiv2[COMP_Cb] != pps.deblockingFilterTcOffsetDiv2[COMP_Y]
                                    || pps.deblockingFilterTcOffsetDiv2[COMP_Cr] != pps.deblockingFilterTcOffsetDiv2[COMP_Y]);
     pps.usePPSChromaTool = chromaQPOffsetNotZero || chromaDbfOffsetNotAsLuma;
   }
@@ -1079,7 +1088,7 @@ void EncLib::xInitRPL(SPS &sps) const
       }
     }
   }
-    
+
   sps.allRplEntriesHasSameSign = isAllEntriesinRPLHasSameSignFlag;
 
   bool isRpl1CopiedFromRpl0 = true;
@@ -1131,6 +1140,18 @@ void EncLib::xOutputRecYuv()
     }
     m_pocRecOut = picItr->poc + 1;
     picItr->isNeededForOutput = false;
+  }
+}
+
+void EncLib::xInitHrdParameters(SPS &sps)
+{
+  m_cEncHRD.initHRDParameters( m_cEncCfg, sps );
+
+  sps.generalHrdParams = m_cEncHRD.generalHrdParams;
+
+  for(int i = 0; i < MAX_TLAYER; i++)
+  {
+    sps.olsHrdParams[i] = m_cEncHRD.olsHrdParams[i];
   }
 }
 

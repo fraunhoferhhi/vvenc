@@ -2094,7 +2094,7 @@ void simdFilter16xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
 #endif
   {
     Pel* tmp = ( Pel* ) alloca( 16 * extHeight * sizeof( Pel ) );
-    VALGRIND_MEMCLEAR( tmp );
+    VALGRIND_MEMCLEAR( tmp, 16 * extHeight * sizeof( Pel ) );
 
     simdInterpolateHorM8<vext, 8, false >( src, srcStride, tmp, 16, 16, extHeight, shift1st, offset1st, clpRng, coeffH );
     simdInterpolateVerM8<vext, 8, isLast>( tmp, 16, dst, dstStride, 16,    height, shift2nd, offset2nd, clpRng, coeffV );
@@ -2132,7 +2132,7 @@ void simdFilter16xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
   const int extHeight = height + 3;
 
   Pel* tmp = ( Pel* ) alloca( 16 * extHeight * sizeof( Pel ) );
-  VALGRIND_MEMCLEAR( tmp );
+  VALGRIND_MEMCLEAR( tmp, 16 * extHeight * sizeof( Pel ) );
 
 #if USE_AVX2
   if( vext >= AVX2 )
@@ -2278,7 +2278,7 @@ void simdFilter8xX_N8( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 #endif
   {
     Pel* tmp = ( Pel* ) alloca( 8 * extHeight * sizeof( Pel ) );
-    VALGRIND_MEMCLEAR( tmp );
+    VALGRIND_MEMCLEAR( tmp, 8 * extHeight * sizeof( Pel ) );
 
     simdInterpolateHorM8<vext, 8, false >( src, srcStride, tmp, 8, 8, extHeight, shift1st, offset1st, clpRng, coeffH );
     simdInterpolateVerM8<vext, 8, isLast>( tmp, 8, dst, dstStride, 8,    height, shift2nd, offset2nd, clpRng, coeffV );
@@ -2414,7 +2414,7 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 #endif
   {
     Pel* tmp = ( Pel* ) alloca( 8 * extHeight * sizeof( Pel ) );
-    VALGRIND_MEMCLEAR( tmp );
+    VALGRIND_MEMCLEAR( tmp, 8 * extHeight * sizeof( Pel ) );
 
     simdInterpolateHorM8<vext, 4, false >( src, srcStride, tmp, 8, 8, extHeight, shift1st, offset1st, clpRng, coeffH );
     simdInterpolateVerM8<vext, 4, isLast>( tmp, 8, dst, dstStride, 8,    height, shift2nd, offset2nd, clpRng, coeffV );

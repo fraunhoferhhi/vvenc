@@ -100,20 +100,26 @@ public:
       if ( bFullHelp )
       {
         std::cout <<
-          "\t              faster        : best speed      : quality=0 \n"
-          "\t              fast          : fast mode       : quality=1 \n"
-          "\t              medium        : default quality : quality=2 \n"
-          "\t              slow          : best quality    : quality=3 \n";
+          "\t              faster        : best speed      : quality=0 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(0) << "\n\n"
+          "\t              fast          : fast mode       : quality=1 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n"
+          "\t              medium        : default quality : quality=2 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n"
+          "\t              slow          : best quality    : quality=3 :\n"
+          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
       }
       std::cout <<
           "\t [--bitrate,-b  <int>     ] : Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second) [" << rcParams.m_iTargetBitRate << "]\n"
           "\t [--qp  <int>             ] : QP (0-51) [" << rcParams.m_iQp << "]\n"
           "\t [--qpa <int>             ] : Perceptual QP adaption (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR), 5: HDR(MeanLuma)) [" <<  rcParams.m_iPerceptualQPA << "]\n"
-          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: size <= HD:" << rcParams.m_iThreadCount << "; UHD:6\n"
+          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: size <= HD:4; UHD:6\n"
           "\n"
           "\t [--gopsize,-g  <int>     ] : GOP size of temporal structure (16) [" <<  rcParams.m_iGopSize << "]\n"
           "\t [--refreshtype,-rt <str> ] : intra refresh type (idr,cra)\n"
-          "\t [--intraperiod,-ip <int> ] : Intra period in frames (-1, only first frame, else idr: gopsize+1, cra: gopsize ) [" <<  rcParams.m_iIDRPeriod << "]\n"
+          "\t [--refreshsec,-rs <int>  ] : Intra period/refresh in seconds [" <<  rcParams.m_iIDRPeriodSec << "]\n"
+          "\t [--intraperiod,-ip <int> ] : Intra period in frames (0: use intra period in seconds (intraperiods), else: n*gopsize [" <<  rcParams.m_iIDRPeriod << "]\n"
+
           "\n"
           "\t [--profile      <str>    ] : select profile ( main10, main10_stillpic) default: [" << rcProfile << "]\n"
           "\t [--level        <str>    ] : select level ( 1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2, 15.5 ) default: [" << rcLevel << "]\n"
@@ -129,7 +135,7 @@ public:
   }
 
   static int parse_command_line( int argc, char* argv[] , vvenc::VVEncParameter& rcParams, std::string& rcInputFile, std::string& rcBitstreamFile,
-                                 int& riFrames, int& riInputBitdepth, bool& rbThreadCountSet )
+                                 int& riFrames, int& riInputBitdepth )
   {
     int iRet = 0;
     /* Check command line parameters */
@@ -291,7 +297,6 @@ public:
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
           fprintf( stdout, "[threads]              : %d\n", iThreads );
         rcParams.m_iThreadCount = iThreads;
-        rbThreadCountSet = true;
       }
       else if( !strcmp( (const char*)argv[i_arg], "--preset") )
       {
@@ -359,6 +364,13 @@ public:
           std::cerr << "unsupported gopsize " <<  rcParams.m_iGopSize << ". use: --gopsize 16" << std::endl;
           return -1;
         }
+      }
+      else if( (!strcmp( (const char*)argv[i_arg], "-rs" )) || !strcmp( (const char*)argv[i_arg], "--refreshsec" ) )
+      {
+        i_arg++;
+        rcParams.m_iIDRPeriodSec = atoi( argv[i_arg++] );
+        if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
+          fprintf( stdout, "[refreshsec]          : %d\n", rcParams.m_iIDRPeriodSec );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-ip" )) || !strcmp( (const char*)argv[i_arg], "--intraperiod" ) )
       {

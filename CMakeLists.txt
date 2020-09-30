@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
 endif()
 
 # project name
-project( vvenc VERSION 0.1.0.0 )
+project( vvenc VERSION 0.1.1.0 )
 
 # enable install target
 set( VVENC_ENABLE_INSTALL ON CACHE BOOL "Enable or disable install target" )
@@ -153,6 +153,14 @@ endif()
 add_subdirectory( "source/Lib/vvenc" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
+add_subdirectory( "source/Test/vvenclibtest" )
+
+# enable testing with ctest
+enable_testing()
+
+# add test
+add_test( NAME Test_vvenclibtest COMMAND vvenclibtest )
+set_tests_properties( Test_vvenclibtest PROPERTIES TIMEOUT 60 )
 
 
 if( VVENC_ENABLE_INSTALL )

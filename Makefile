@@ -239,6 +239,17 @@ install-ds: install-debug-shared
 install-p: install-relwithdebinfo
 install-ps: install-relwithdebinfo-shared
 
+
+ifeq ($(CMAKE_MCONFIG),)
+TEST_TARGET := test
+else
+TEST_TARGET := RUN_TESTS
+endif
+
+# test target
+test: release
+	cmake $(BUILD_OPTIONS-release) --target $(TEST_TARGET) $(BUILD_TOOL_OPTIONS)
+
 #
 # project specific targets
 #

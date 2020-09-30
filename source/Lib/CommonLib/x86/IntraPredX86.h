@@ -816,8 +816,13 @@ void xPredIntraPlanar_SIMD( PelBuf& pDst, const CPelBuf& pSrc)
 
   const uint32_t width  = pDst.width;
   const uint32_t height = pDst.height;
+#if ISP_VVC && ISP_VVC_SIMD
+  const uint32_t log2W = floorLog2(width);
+  const uint32_t log2H = floorLog2(height);
+#else
   const uint32_t log2W  = floorLog2( width  < 2 ? 2 : width );
   const uint32_t log2H  = floorLog2( height < 2 ? 2 : height );
+#endif
   const uint32_t offset = 1 << (log2W + log2H);
   const ptrdiff_t stride     = pDst.stride;
   Pel*       pred       = pDst.buf;
@@ -1123,7 +1128,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
   {
 #ifdef USE_AVX2
     ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE,short ref[16]);
-    VALGRIND_MEMCLEAR( ref );
+    VALGRIND_MEMCLEAR( ref, sizeof( ref ) );
 
     //  Pel dummy[16];
     //  Pel* pdum=&dummy[0];
@@ -1192,7 +1197,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
   else
   {
     ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE,short ref[8]);
-    VALGRIND_MEMCLEAR( ref );
+    VALGRIND_MEMCLEAR( ref, sizeof( ref ) );
 
     __m128i wl16; 
     if (scale==0)

@@ -1,19 +1,19 @@
 /* -----------------------------------------------------------------------------
 Software Copyright License for the Fraunhofer Software Library VVenc
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
+(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 
 1.    INTRODUCTION
 
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
+The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology.
+The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary.
 
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
+The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license.
 It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
 
 2.    COPYRIGHT LICENSE
 
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
+Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research.
 
 No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
 
@@ -21,7 +21,7 @@ For any other use of the Fraunhofer Versatile Video Encoding Library than permit
 
 3.    LIMITED PATENT LICENSE
 
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
+As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.
 
 Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
 
@@ -52,14 +52,16 @@ vvc@hhi.fraunhofer.de
 
 #include <iostream>
 #include <stdio.h>
+#include <algorithm>
 
 #include "../../../include/vvenc/Nal.h"
 #include "../../../include/vvenc/version.h"
 
 
 namespace vvenc {
-	
+
 std::string VVEncImpl::m_cTmpErrorString;
+std::string VVEncImpl::m_sPresetAsStr;
 int g_LogLevel = LL_ERROR;
 
 
@@ -74,6 +76,30 @@ VVEncImpl::VVEncImpl()
 VVEncImpl::~VVEncImpl()
 {
 
+}
+
+int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
+{
+  int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
+  if( 0 != iRet ) { return iRet; }
+
+  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
+  setMsgFnc( &msgFnc );
+
+  std::stringstream cssCap;
+
+  vvenc::EncCfg cEncCfg;
+  if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
+  {
+    setMsgFnc( &msgFncDummy );
+  }
+
+  return VVENC_OK;
 }
 
 int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
@@ -125,6 +151,7 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
   // create the encoder
   m_cEncoderIf.createEncoderLib( m_cEncCfg );
 
+  m_bFlushed     = false;
   m_bInitialized = true;
   return VVENC_OK;
 }
@@ -146,6 +173,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 {
   if( !m_bInitialized )             { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if ( m_bFlushed )                 { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
@@ -155,7 +183,37 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 )
+  if( pcInputPicture->m_cPicBuffer.m_pvY == nullptr || pcInputPicture->m_cPicBuffer.m_pvU == nullptr || pcInputPicture->m_cPicBuffer.m_pvV == nullptr )
+  {
+    m_cErrorString = "InputPicture: invalid input buffers";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cVVEncParameter.m_iWidth )
+  {
+    m_cErrorString = "InputPicture: unsuported width";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cVVEncParameter.m_iHeight )
+  {
+    m_cErrorString = "InputPicture: unsuported height";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iWidth > pcInputPicture->m_cPicBuffer.m_iStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width stride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iWidth/2 > pcInputPicture->m_cPicBuffer.m_iCStride )
+  {
+    m_cErrorString = "InputPicture: unsuported width cstride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 || pcInputPicture->m_cPicBuffer.m_iBitDepth > 16 )
   {
     std::stringstream css;
     css << "InputPicture: unsupported input BitDepth " <<  pcInputPicture->m_cPicBuffer.m_iBitDepth  << ". must be 10 <= BitDepth <= 16";
@@ -163,9 +221,13 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
+  // we know that the internal buffer requires to be a multiple of 8 in each direction
+  int internalLumaWidth = ((pcInputPicture->m_cPicBuffer.m_iWidth + 7)/8)*8;
+  int internalLumaHeight = ((pcInputPicture->m_cPicBuffer.m_iHeight + 7)/8)*8;
+  int internalLumaStride = (internalLumaWidth > pcInputPicture->m_cPicBuffer.m_iStride) ? internalLumaWidth : pcInputPicture->m_cPicBuffer.m_iStride;
 
-  int iChromaInStride = pcInputPicture->m_cPicBuffer.m_iStride >> 1;
-  if( pcInputPicture->m_cPicBuffer.m_iCStride )
+  int iChromaInStride = internalLumaStride >> 1;
+  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iCStride > (internalLumaWidth >> 1) )
   {
     iChromaInStride =  pcInputPicture->m_cPicBuffer.m_iCStride;
   }
@@ -176,26 +238,27 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     YUVPlane& yuvPlane = cYUVBuffer.yuvPlanes[ i ];
     if ( i > 0 )
     {
-      yuvPlane.width     = pcInputPicture->m_cPicBuffer.m_iWidth >> 1;
-      yuvPlane.height    = pcInputPicture->m_cPicBuffer.m_iHeight >> 1;
+      yuvPlane.width     = internalLumaWidth >> 1;
+      yuvPlane.height    = internalLumaHeight >> 1;
       yuvPlane.stride    = iChromaInStride;
     }
     else
     {
-      yuvPlane.width     = pcInputPicture->m_cPicBuffer.m_iWidth;
-      yuvPlane.height    = pcInputPicture->m_cPicBuffer.m_iHeight;
-      yuvPlane.stride    = pcInputPicture->m_cPicBuffer.m_iStride;
+      yuvPlane.width     = internalLumaWidth;
+      yuvPlane.height    = internalLumaHeight;
+      yuvPlane.stride    = internalLumaStride;
     }
     const int size     = yuvPlane.stride * yuvPlane.height;
     yuvPlane.planeBuf  = ( size > 0 ) ? new int16_t[ size ] : nullptr;
   }
 
-  xCopyInputPlane( cYUVBuffer.yuvPlanes[0].planeBuf, cYUVBuffer.yuvPlanes[0].stride, cYUVBuffer.yuvPlanes[0].width, cYUVBuffer.yuvPlanes[0].height,
-                   (int16_t*)pcInputPicture->m_cPicBuffer.m_pvY, pcInputPicture->m_cPicBuffer.m_iStride, pcInputPicture->m_cPicBuffer.m_iWidth, pcInputPicture->m_cPicBuffer.m_iHeight, 0 );
-  xCopyInputPlane( cYUVBuffer.yuvPlanes[1].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[1].width, cYUVBuffer.yuvPlanes[1].height,
-                   (int16_t*)pcInputPicture->m_cPicBuffer.m_pvU, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1, 0 );
-  xCopyInputPlane( cYUVBuffer.yuvPlanes[2].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[2].width, cYUVBuffer.yuvPlanes[2].height,
-                   (int16_t*)pcInputPicture->m_cPicBuffer.m_pvV, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1, 0 );
+  xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[0].planeBuf, cYUVBuffer.yuvPlanes[0].stride, cYUVBuffer.yuvPlanes[0].width, cYUVBuffer.yuvPlanes[0].height,
+                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvY, pcInputPicture->m_cPicBuffer.m_iStride, pcInputPicture->m_cPicBuffer.m_iWidth, pcInputPicture->m_cPicBuffer.m_iHeight, 0 );
+  xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[1].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[1].width, cYUVBuffer.yuvPlanes[1].height,
+                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvU, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1, 0 );
+  xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[2].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[2].width, cYUVBuffer.yuvPlanes[2].height,
+                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvV, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1, 0 );
+
 
   cYUVBuffer.sequenceNumber = pcInputPicture->m_cPicBuffer.m_uiSequenceNumber;
   if( pcInputPicture->m_cPicBuffer.m_bCtsValid )
@@ -232,22 +295,21 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
 
-  int iRet= VVENC_OK;
-
   YUVBuffer cYUVBuffer;
   AccessUnit cAu;
-  bool encDone    = false;
 
-  while( !encDone &&  cAu.empty() )
+  /* encode till next output AU done */
+  while( !m_bFlushed && cAu.empty() )
   {
-    m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, encDone );
+    m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, m_bFlushed );
+  }
 
-    /* copy output AU */
-    rcVvcAccessUnit.m_iUsedSize = 0;
-    if ( !cAu.empty() )
-    {
-      iRet = xCopyAu( rcVvcAccessUnit, cAu  );
-    }
+  /* copy next output AU */
+  rcVvcAccessUnit.m_iUsedSize = 0;
+  int iRet                    = VVENC_OK;
+  if( !cAu.empty() )
+  {
+    iRet = xCopyAu( rcVvcAccessUnit, cAu  );
   }
 
   return iRet;
@@ -381,6 +443,65 @@ double VVEncImpl::clockGetTimeDiffMs()
   return (double)(std::chrono::duration_cast<std::chrono::milliseconds>((m_cTPEnd)-(m_cTPStart)).count());
 }
 
+const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
+{
+  m_sPresetAsStr.clear();
+
+  std::stringstream css;
+  vvenc::EncCfg cEncCfg;
+  if( 0 != xInitPreset( cEncCfg, iQuality ))
+  {
+    css << "undefined preset " << iQuality;
+  }
+// tools
+  if( cEncCfg.m_RDOQ )           { css << "RDOQ " << cEncCfg.m_RDOQ << " ";}
+  if( cEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
+  if( cEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
+  if( cEncCfg.m_alf )
+  {
+    css << "ALF ";
+    if( cEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
+    if( cEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
+  }
+  if( cEncCfg.m_ccalf ){ css << "CCALF ";}
+
+// vvc tools
+  if( cEncCfg.m_BDOF )             { css << "BIO ";}
+  if( cEncCfg.m_DMVR )             { css << "DMVR ";}
+  if( cEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
+  if( cEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cEncCfg.m_AMVRspeed << " ";}
+  if( cEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
+  if( cEncCfg.m_EDO )              { css << "EncDbOpt ";}
+  if( cEncCfg.m_MRL )              { css << "MRL ";}
+  if( cEncCfg.m_MCTF )             { css << "MCTF "; }
+  if( cEncCfg.m_SMVD )             { css << "SMVD " << cEncCfg.m_SMVD << " ";}
+  if( cEncCfg.m_Affine )
+  {
+    css << "Affine " << cEncCfg.m_Affine << " ";
+    if( cEncCfg.m_PROF )           { css << "(Prof " << cEncCfg.m_PROF << " ";}
+    if( cEncCfg.m_AffineType )     { css << "Type " << cEncCfg.m_AffineType << ") ";}
+  }
+
+  if( cEncCfg.m_MMVD )             { css << "MMVD " << cEncCfg.m_MMVD << " ";}
+  if( cEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
+
+  if( cEncCfg.m_MIP )          { css << "MIP ";}
+  if( cEncCfg.m_useFastMIP )   { css << "FastMIP " << cEncCfg.m_useFastMIP << " ";}
+  if( cEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
+  if( cEncCfg.m_Geo )          { css << "Geo " << cEncCfg.m_Geo << " ";}
+  if( cEncCfg.m_LFNST )        { css << "LFNST ";}
+
+  if( cEncCfg.m_SBT )          { css << "SBT " ;}
+  if( cEncCfg.m_CIIP )         { css << "CIIP ";}
+
+  // fast tools
+  if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
+
+
+  m_sPresetAsStr = css.str();
+  return m_sPresetAsStr.c_str();
+}
+
 
 /* converting sdk params to internal (wrapper) params*/
 int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString )
@@ -396,13 +517,19 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( dFPS < 1.0 || dFPS > 120,                                                      "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
 
   ROTPARAMS( rcSrc.m_iTicksPerSecond <= 0 || rcSrc.m_iTicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
+  ROTPARAMS( (rcSrc.m_iTicksPerSecond < 90000) && (rcSrc.m_iTicksPerSecond*rcSrc.m_iTemporalScale)%rcSrc.m_iTemporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   ROTPARAMS( rcSrc.m_iThreadCount <= 0,                                                     "ThreadCount must be > 0" );
 
-  ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period must be GEZ" );
+  ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
+  ROTPARAMS( rcSrc.m_iIDRPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
+
+  ROTPARAMS( rcSrc.m_iTemporalRate  <= 0,                                                    "TemporalRate must be > 0" );
+  ROTPARAMS( rcSrc.m_iTemporalScale <= 0,                                                    "TemporalScale must be > 0" );
+
   ROTPARAMS( rcSrc.m_iGopSize != 1 && rcSrc.m_iGopSize != 16 && rcSrc.m_iGopSize != 32,     "GOP size 1, 16, 32 supported" );
 
-  if( 1 != rcSrc.m_iGopSize )
+  if( 1 != rcSrc.m_iGopSize && ( rcSrc.m_iIDRPeriod > 0  ))
   {
     ROTPARAMS( (rcSrc.m_eDecodingRefreshType == VVC_DRT_IDR || rcSrc.m_eDecodingRefreshType == VVC_DRT_CRA )&& (0 != rcSrc.m_iIDRPeriod % rcSrc.m_iGopSize),          "IDR period must be multiple of GOPSize" );
   }
@@ -414,12 +541,14 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3,                                  "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
+  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+
   return 0;
 }
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = (int)rcVVEncParameter.m_eLogLevel;
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
 
   rcEncCfg.m_SourceWidth                                       = rcVVEncParameter.m_iWidth;
   rcEncCfg.m_SourceHeight                                      = rcVVEncParameter.m_iHeight;
@@ -445,7 +574,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     rcEncCfg.m_RCTargetBitrate       = 0;
   }
 
-
   rcEncCfg.m_internalBitDepth[0] = 10;
 
   if( rcVVEncParameter.m_iThreadCount > 1 )
@@ -454,18 +582,43 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
       rcEncCfg.m_ensureWppBitEqual = 1;
   }
 
-  rcEncCfg.m_intraQPOffset = -3;
-  rcEncCfg.m_lambdaFromQPEnable = true;
-
   rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
-
   rcEncCfg.m_framesToBeEncoded = 0;
 
   //======== Coding Structure =============
   rcEncCfg.m_GOPSize                             = rcVVEncParameter.m_iGopSize;
   rcEncCfg.m_InputQueueSize                      = rcVVEncParameter.m_iGopSize;
 
-  rcEncCfg.m_IntraPeriod                         = rcVVEncParameter.m_iIDRPeriod;
+  if( rcVVEncParameter.m_iIDRPeriod >= rcVVEncParameter.m_iGopSize  )
+  {
+    rcEncCfg.m_IntraPeriod                       = rcVVEncParameter.m_iIDRPeriod;
+  }
+  else // use m_iIDRPeriodSec
+  {
+    if ( rcEncCfg.m_FrameRate % rcVVEncParameter.m_iGopSize == 0 )
+    {
+      rcEncCfg.m_IntraPeriod = rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec;
+    }
+    else
+    {
+      int iIDRPeriod  = (rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec);
+      if( iIDRPeriod < rcVVEncParameter.m_iGopSize )
+      {
+        iIDRPeriod = rcVVEncParameter.m_iGopSize;
+      }
+
+      int iDiff = iIDRPeriod % rcVVEncParameter.m_iGopSize;
+      if( iDiff < rcVVEncParameter.m_iGopSize >> 1 )
+      {
+        rcEncCfg.m_IntraPeriod = iIDRPeriod - iDiff;
+      }
+      else
+      {
+        rcEncCfg.m_IntraPeriod = iIDRPeriod + rcVVEncParameter.m_iGopSize - iDiff;
+      }
+    }
+  }
+
   if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_IDR )
   {
     rcEncCfg.m_DecodingRefreshType                 = 2;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
@@ -483,68 +636,14 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     rcEncCfg.m_DecodingRefreshType                 = 0;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
 
-  rcEncCfg.m_maxTempLayer = 5;
-  rcEncCfg.m_numRPLList0  = 20;
-  rcEncCfg.m_numRPLList1  = 20;
-
   //======== Profile ================
   rcEncCfg.m_profile   = (vvenc::Profile::Name)rcVVEncParameter.m_eProfile;
   rcEncCfg.m_levelTier = (vvenc::Level::Tier)rcVVEncParameter.m_eTier;
   rcEncCfg.m_level     = (vvenc::Level::Name)rcVVEncParameter.m_eLevel;
 
   rcEncCfg.m_bitDepthConstraintValue = 10;
-
-  rcEncCfg.m_rewriteParamSets = true;
-
-  rcEncCfg.m_internChromaFormat = vvenc::CHROMA_420;
-
-//  rcEncCfg.m_sliceArgument = 1500;
-//  rcEncCfg.m_MaxBTDepth = 2;
-
-  rcEncCfg.m_MaxCodingDepth = 5;
-  rcEncCfg.m_log2DiffMaxMinCodingBlockSize = 5;
-
-  rcEncCfg.m_bUseASR   = true;
-  rcEncCfg.m_bUseHADME = true;
-  rcEncCfg.m_RDOQ      = 1;
-  rcEncCfg.m_useRDOQTS = true;
-  rcEncCfg.m_useSelectiveRDOQ = false;
-  rcEncCfg.m_JointCbCrMode = true;
-  rcEncCfg.m_cabacInitPresent = true;
-  rcEncCfg.m_useFastLCTU = true;
-  rcEncCfg.m_usePbIntraFast = true;
-  rcEncCfg.m_useFastMrg = true;
-  rcEncCfg.m_useAMaxBT = true;
-  rcEncCfg.m_fastQtBtEnc = true;
-  rcEncCfg.m_contentBasedFastQtbt = true;
-  rcEncCfg.m_fastInterSearchMode = 1;
-
-  rcEncCfg.m_MTSImplicit = true;
-  rcEncCfg.m_SearchRange = 384;
-  rcEncCfg.m_minSearchWindow = 96;
-
-  rcEncCfg.m_AMVRspeed = 1;
-  rcEncCfg.m_LMChroma = true;
-
-  rcEncCfg.m_BDOF = true;
-  rcEncCfg.m_DMVR = true;
-  rcEncCfg.m_EDO = 1;
-  rcEncCfg.m_lumaReshapeEnable = true;
-
-  rcEncCfg.m_alf                   = true;
-
-  // adapt to RA config files
-  rcEncCfg.m_qpInValsCb.clear();
-  rcEncCfg.m_qpInValsCb.push_back(17);
-  rcEncCfg.m_qpInValsCb.push_back(22);
-  rcEncCfg.m_qpInValsCb.push_back(34);
-  rcEncCfg.m_qpInValsCb.push_back(42);
-
-  rcEncCfg.m_qpOutValsCb.clear();
-  rcEncCfg.m_qpOutValsCb.push_back(17);
-  rcEncCfg.m_qpOutValsCb.push_back(23);
-  rcEncCfg.m_qpOutValsCb.push_back(35);
-  rcEncCfg.m_qpOutValsCb.push_back(39);
+  rcEncCfg.m_rewriteParamSets        = true;
+  rcEncCfg.m_internChromaFormat      = vvenc::CHROMA_420;
 
   if( 0 != xInitPreset( rcEncCfg, rcVVEncParameter.m_iQuality  ) )
   {
@@ -567,6 +666,72 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 
 int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
 {
+  rcEncCfg.m_maxTempLayer = 5;
+  rcEncCfg.m_numRPLList0  = 20;
+  rcEncCfg.m_numRPLList1  = 20;
+
+  rcEncCfg.m_intraQPOffset = -3;
+  rcEncCfg.m_lambdaFromQPEnable = true;
+
+  rcEncCfg.m_MaxCodingDepth = 5;
+  rcEncCfg.m_log2DiffMaxMinCodingBlockSize = 5;
+
+  rcEncCfg.m_bUseASR   = true;
+  rcEncCfg.m_bUseHADME = true;
+  rcEncCfg.m_RDOQ      = 1;
+  rcEncCfg.m_useRDOQTS = true;
+  rcEncCfg.m_useSelectiveRDOQ = false;
+  rcEncCfg.m_JointCbCrMode = true;
+  rcEncCfg.m_cabacInitPresent = true;
+  rcEncCfg.m_useFastLCTU = true;
+  rcEncCfg.m_usePbIntraFast = true;
+  rcEncCfg.m_useFastMrg = 2;
+  rcEncCfg.m_fastLocalDualTreeMode = 1;
+  rcEncCfg.m_fastSubPel            = 1;
+  rcEncCfg.m_qtbttSpeedUp          = 1;
+
+  rcEncCfg.m_useAMaxBT = true;
+  rcEncCfg.m_fastQtBtEnc = true;
+  rcEncCfg.m_contentBasedFastQtbt = true;
+  rcEncCfg.m_fastInterSearchMode = 1;
+
+  rcEncCfg.m_MTSImplicit = true;
+
+  rcEncCfg.m_motionEstimationSearchMethod = 4;
+  rcEncCfg.m_SearchRange = 384;
+  rcEncCfg.m_minSearchWindow = 96;
+
+  rcEncCfg.m_AMVRspeed = 1;
+  rcEncCfg.m_LMChroma = true;
+
+  rcEncCfg.m_BDOF = true;
+  rcEncCfg.m_DMVR = true;
+  rcEncCfg.m_EDO = 1;
+  rcEncCfg.m_lumaReshapeEnable = true;
+  rcEncCfg.m_alf               = true;
+
+  rcEncCfg.m_LMCSOffset      = 6;
+
+  rcEncCfg.m_maxMTTDepth        = 1;
+  rcEncCfg.m_maxMTTDepthI       = 2;
+  rcEncCfg.m_maxMTTDepthIChroma = 2;
+  rcEncCfg.m_maxNumMergeCand    = 6;
+
+  rcEncCfg.m_useNonLinearAlfLuma   = false;
+  rcEncCfg.m_useNonLinearAlfChroma = false;
+
+  // adapt to RA config files
+  rcEncCfg.m_qpInValsCb.clear();
+  rcEncCfg.m_qpInValsCb.push_back(17);
+  rcEncCfg.m_qpInValsCb.push_back(22);
+  rcEncCfg.m_qpInValsCb.push_back(34);
+  rcEncCfg.m_qpInValsCb.push_back(42);
+
+  rcEncCfg.m_qpOutValsCb.clear();
+  rcEncCfg.m_qpOutValsCb.push_back(17);
+  rcEncCfg.m_qpOutValsCb.push_back(23);
+  rcEncCfg.m_qpOutValsCb.push_back(35);
+  rcEncCfg.m_qpOutValsCb.push_back(39);
 
   switch( iQuality )
   {
@@ -581,23 +746,8 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_AMVRspeed             = 0;
           rcEncCfg.m_lumaReshapeEnable     = false;
           rcEncCfg.m_EDO                   = 0;
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
 
-          rcEncCfg.m_useFastMrg            = 2;
-          rcEncCfg.m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel            = 1;
-          rcEncCfg.m_qtbttSpeedUp          = 1;
-
-          rcEncCfg.m_LMCSOffset      = 6;
-          rcEncCfg.m_MRL             = false;
-
-          rcEncCfg.m_maxMTTDepth        = 1;
-          rcEncCfg.m_maxMTTDepthI       = 2;
-          rcEncCfg.m_maxMTTDepthIChroma = 2;
-          rcEncCfg.m_maxNumMergeCand    = 6;
-
-          rcEncCfg.m_useNonLinearAlfLuma   = false;
-          rcEncCfg.m_useNonLinearAlfChroma = false;
+          rcEncCfg.m_MRL                   = false;
 
           break;
   case 1:
@@ -608,40 +758,21 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_DepQuantEnabled       = false;
           rcEncCfg.m_SignDataHidingEnabled = true;
           rcEncCfg.m_BDOF                  = true;
-          rcEncCfg.m_alf                   = true;
           rcEncCfg.m_ccalf                 = true;
           rcEncCfg.m_DMVR                  = true;
           rcEncCfg.m_JointCbCrMode         = false;
           rcEncCfg.m_AMVRspeed             = 0;
           rcEncCfg.m_lumaReshapeEnable     = false;
-          rcEncCfg.m_EDO = 0;
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
+          rcEncCfg.m_EDO                   = 0;
 
           rcEncCfg.m_MCTF               = 2;
           rcEncCfg.m_MCTFNumLeadFrames  = 0;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
 
-          rcEncCfg.m_useFastMrg            = 2;
-          rcEncCfg.m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel            = 1;
-          rcEncCfg.m_qtbttSpeedUp          = 1;
-
-          rcEncCfg.m_LMCSOffset         = 6;
           rcEncCfg.m_MRL                = false;
-
-          rcEncCfg.m_maxMTTDepth        = 1;
-          rcEncCfg.m_maxMTTDepthI       = 2;
-          rcEncCfg.m_maxMTTDepthIChroma = 2;
-          rcEncCfg.m_maxNumMergeCand    = 6;
-
-          rcEncCfg.m_useNonLinearAlfLuma   = false;
-          rcEncCfg.m_useNonLinearAlfChroma = false;
 
     break;
   case 2:  // medium ( = ftc )
-
-          rcEncCfg.m_useNonLinearAlfLuma   = false;
-          rcEncCfg.m_useNonLinearAlfChroma = false;
 
           rcEncCfg.m_AMVRspeed = 5;
 
@@ -651,44 +782,25 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_MCTFNumLeadFrames = 0;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
 
-          rcEncCfg.m_useFastMrg             = 2;
-          rcEncCfg. m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel             = 1;
-
           rcEncCfg.m_Affine = 2;
           rcEncCfg.m_PROF   = 1;
 
           rcEncCfg.m_MMVD             = 3;
           rcEncCfg.m_allowDisFracMMVD = 1;
 
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
-
-          rcEncCfg.m_maxMTTDepth        = 1;
-          rcEncCfg.m_maxMTTDepthI       = 2;
-          rcEncCfg.m_maxMTTDepthIChroma = 2;
-
-          rcEncCfg.m_MaxCodingDepth     = 5;
-
           rcEncCfg.m_MIP             = 1;
           rcEncCfg.m_useFastMIP      = 4;
 
           rcEncCfg.m_ccalf           = true;
-          rcEncCfg.m_qtbttSpeedUp    = 1;
           rcEncCfg.m_SbTMVP          = 1;
           rcEncCfg.m_Geo             = 3;
           rcEncCfg.m_LFNST           = 1;
-          rcEncCfg.m_maxNumMergeCand = 6;
-
-          rcEncCfg.m_LMCSOffset      = 6;
 
           rcEncCfg.m_RCKeepHierarchicalBit = 2;
 
     break;
 
   case 3: // slower
-
-          rcEncCfg.m_useNonLinearAlfLuma   = true;
-          rcEncCfg.m_useNonLinearAlfChroma = true;
 
           rcEncCfg.m_AMVRspeed = 1;
 
@@ -698,43 +810,33 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_MCTFNumLeadFrames  = 0;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
 
-          rcEncCfg.m_useFastMrg = 2;
-          rcEncCfg. m_fastLocalDualTreeMode = 1;
-          rcEncCfg.m_fastSubPel = 1;
-
           rcEncCfg.m_Affine = 2;
           rcEncCfg.m_PROF = 1;
 
           rcEncCfg.m_MMVD = 3;
           rcEncCfg.m_allowDisFracMMVD = 1;
 
-          rcEncCfg.m_motionEstimationSearchMethod = 4;
-
           rcEncCfg.m_maxMTTDepth        = 2;
           rcEncCfg.m_maxMTTDepthI       = 3;
           rcEncCfg.m_maxMTTDepthIChroma = 3;
-
-          rcEncCfg.m_MaxCodingDepth      = 5;
 
           rcEncCfg.m_MIP             = 1;
           rcEncCfg.m_useFastMIP      = 4;
 
           rcEncCfg.m_ccalf           = true;
-          rcEncCfg.m_qtbttSpeedUp    = 1;
           rcEncCfg.m_SbTMVP          = 1;
           rcEncCfg.m_Geo             = 1;
           rcEncCfg.m_LFNST           = 1;
-          rcEncCfg.m_maxNumMergeCand = 6;
-
-          rcEncCfg.m_LMCSOffset      = 6;
 
           rcEncCfg.m_RCKeepHierarchicalBit = 2;
 
-          m_cEncCfg.m_SBT  = 1;
-          m_cEncCfg.m_CIIP = 1;
+          rcEncCfg.m_SBT  = 1;
+          rcEncCfg.m_CIIP = 1;
 
           rcEncCfg.m_contentBasedFastQtbt = false;
 
+          rcEncCfg.m_useNonLinearAlfLuma   = true;
+          rcEncCfg.m_useNonLinearAlfChroma = true;
     break;
 
   default:
@@ -905,7 +1007,7 @@ void VVEncImpl::xPrintCfg()
   fflush( stdout );
 }
 
-int VVEncImpl::xCopyInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight, const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin )
+int VVEncImpl::xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight, const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin )
 {
   if( iSrcStride == iDesStride )
   {
@@ -915,12 +1017,28 @@ int VVEncImpl::xCopyInputPlane( int16_t* pDes, const int iDesStride, const int i
   {
     for( int y = 0; y < iSrcHeight; y++ )
     {
-      ::memcpy( pDes, pSrc, iSrcStride * sizeof(int16_t) );
-      pSrc += iSrcStride;
-      pDes += iDesStride;
+      ::memcpy( pDes + y*iDesStride, pSrc + y*iSrcStride, iSrcWidth * sizeof(int16_t) );
     }
   }
 
+  if( iSrcWidth < iDesWidth )
+  {
+    for( int y = 0; y < iSrcHeight; y++ )
+    {
+      for( int x = iSrcWidth; x < iDesWidth; x++ )
+      {
+        pDes[ x + y*iDesStride] = pDes[ iSrcWidth - 1 + y*iDesStride];
+      }
+    }
+  }
+
+  if( iSrcHeight < iDesHeight )
+  {
+    for( int y = iSrcHeight; y < iDesHeight; y++ )
+    {
+      ::memcpy( pDes + y*iDesStride, pDes + (iSrcHeight-1)*iDesStride, iDesWidth * sizeof(int16_t) );
+    }
+  }
 
   return 0;
 }

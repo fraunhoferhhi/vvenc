@@ -1,19 +1,19 @@
 /* -----------------------------------------------------------------------------
 Software Copyright License for the Fraunhofer Software Library VVenc
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
+(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 
 1.    INTRODUCTION
 
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
+The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology.
+The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary.
 
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
+The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license.
 It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
 
 2.    COPYRIGHT LICENSE
 
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
+Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research.
 
 No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
 
@@ -21,7 +21,7 @@ For any other use of the Fraunhofer Versatile Video Encoding Library than permit
 
 3.    LIMITED PATENT LICENSE
 
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
+As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.
 
 Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
 
@@ -67,7 +67,6 @@ vvc@hhi.fraunhofer.de
 
 int main( int argc, char* argv[] )
 {
-
   std::string cAppname = argv[0];
   std::size_t iPos = (int)cAppname.find_last_of("/");
   if( std::string::npos != iPos )
@@ -85,12 +84,13 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iHeight         = 1080;                       // luminance height of input picture
   cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
-  cVVEncParameter.m_iIDRPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  cVVEncParameter.m_iIDRPeriodSec   = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  cVVEncParameter.m_iIDRPeriod      = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
   cVVEncParameter.m_eLogLevel       = vvenc::LL_VERBOSE;          // log level > 4 (VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.m_iThreadCount    = 4;                          // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.m_iThreadCount    = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
   cVVEncParameter.m_iQuality        = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
   cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
@@ -101,7 +101,6 @@ int main( int argc, char* argv[] )
   std::string cProfile = "main10";
   std::string cLevel   = "4.1";
   std::string cTier    = "main";
-
 
   int iMaxFrames = 0;
   int iInputBitdepth = 8;
@@ -119,10 +118,9 @@ int main( int argc, char* argv[] )
     return 0;
   }
 
-  bool bThreadCountSet = false;
-  int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile, iMaxFrames, iInputBitdepth, bThreadCountSet );
+  int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile, iMaxFrames, iInputBitdepth );
 
-  if( iRet != 0 ) 
+  if( iRet != 0 )
   {
     if( iRet == 2 || iRet == 3 )
     {
@@ -154,10 +152,18 @@ int main( int argc, char* argv[] )
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( !bThreadCountSet && ( cVVEncParameter.m_iWidth > 1920 || cVVEncParameter.m_iHeight > 1080) )
+  if( cVVEncParameter.m_iThreadCount <= 0 )
   {
-    cVVEncParameter.m_iThreadCount = 6;
+    if( cVVEncParameter.m_iWidth > 1920 || cVVEncParameter.m_iHeight > 1080)
+    {
+      cVVEncParameter.m_iThreadCount = 6;
+    }
+    else
+    {
+      cVVEncParameter.m_iThreadCount = 4;
+    }
   }
+
 
   vvenc::VVEnc cVVEnc;
 
@@ -300,11 +306,10 @@ int main( int argc, char* argv[] )
     iSeqNumber++;
 
     if( iMaxFrames > 0 && iSeqNumber >= iMaxFrames ){ break; }
-  };
+  }
 
   // flush the encoder
-  bool bFlushEncder = true;
-  while( bFlushEncder)
+  while( true )
   {
     iRet = cVVEnc.flush( cAccessUnit );
     if( iRet != 0 )
@@ -316,7 +321,6 @@ int main( int argc, char* argv[] )
 
     if( 0 == cAccessUnit.m_iUsedSize  )
     {
-      bFlushEncder = false;
       break;
     }
 
@@ -340,12 +344,12 @@ int main( int argc, char* argv[] )
       }
     }
 
-    if( cBinFileWriter.isOpen())
+    if( cBinFileWriter.isOpen() )
     {
       // write output
       cBinFileWriter.writeAU( cAccessUnit );
     }
-  };
+  }
 
   cVVEnc.clockEndTime();
   double dTimeSec = cVVEnc.clockGetTimeDiffMs() / 1000;

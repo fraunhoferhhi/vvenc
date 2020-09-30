@@ -48,6 +48,8 @@ vvc@hhi.fraunhofer.de
 #include <cstdint>
 #include <cstdarg>
 #include <vector>
+#include "../vvenc/vvencDecl.h"
+
 
 //! \ingroup Interface
 //! \{
@@ -103,6 +105,7 @@ namespace Level
   {
     MAIN = 0,
     HIGH = 1,
+    NUMBER_OF_TIERS
   };
 
   enum Name
@@ -233,7 +236,7 @@ enum NalUnitType
 
 // ====================================================================================================================
 
-struct YUVPlane
+struct VVENC_DECL YUVPlane
 {
   int16_t* planeBuf;
   int      width;
@@ -249,7 +252,7 @@ struct YUVPlane
   }
 };
 
-struct YUVBuffer
+struct VVENC_DECL YUVBuffer
 {
   YUVPlane yuvPlanes[ MAX_NUM_COMP ];
   uint64_t sequenceNumber;     ///< sequence number of the picture
@@ -266,7 +269,7 @@ struct YUVBuffer
 
 // ====================================================================================================================
 
-struct ChromaQpMappingTableParams
+struct VVENC_DECL ChromaQpMappingTableParams
 {
   int               m_numQpTables;
   int               m_qpBdOffset;
@@ -286,7 +289,7 @@ struct ChromaQpMappingTableParams
   }
 };
 
-struct ReshapeCW
+struct VVENC_DECL ReshapeCW
 {
   std::vector<uint32_t> binCW;
   int       updateCtrl;

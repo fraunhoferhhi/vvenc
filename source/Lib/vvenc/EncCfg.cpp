@@ -61,7 +61,7 @@ bool EncCfg::confirmParameter( bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
-  msg( ERROR, "Error: %s\n", message );
+  msg( ERROR, "Parameter Check Error: %s\n", message );
   m_confirmFailed = true;
   return true;
 }
@@ -473,6 +473,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
   confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+  confirmParameter( m_DecodingRefreshType !=1,                                                  "Decoding Refresh Type CRA currently supported only" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
   {
@@ -494,39 +495,63 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_ensureWppBitEqual<0 || m_ensureWppBitEqual>1, "WppBitEqual out of range");
   confirmParameter( m_numWppThreads && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
 
-  if (!m_lumaReshapeEnable)
-  {
-    m_reshapeSignalType = RESHAPE_SIGNAL_NULL;
-//    m_intraCMD = 0;
-  }
-  if (m_lumaReshapeEnable && m_reshapeSignalType == RESHAPE_SIGNAL_PQ)
-  {
-//    m_intraCMD = 1;
-  }
-  else if (m_lumaReshapeEnable && (m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_reshapeSignalType == RESHAPE_SIGNAL_HLG))
-  {
-//    m_intraCMD = 0;
-  }
-  else
-  {
-    m_lumaReshapeEnable = false;
-  }
   if (m_lumaReshapeEnable)
   {
-    confirmParameter(m_updateCtrl < 0, "Min. LMCS Update Control is 0");
-    confirmParameter(m_updateCtrl > 2, "Max. LMCS Update Control is 2");
-    confirmParameter(m_adpOption < 0, "Min. LMCS Adaptation Option is 0");
-    confirmParameter(m_adpOption > 4, "Max. LMCS Adaptation Option is 4");
-    confirmParameter(m_initialCW < 0, "Min. Initial Total Codeword is 0");
-    confirmParameter(m_initialCW > 1023, "Max. Initial Total Codeword is 1023");
+    confirmParameter( m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
+    confirmParameter(m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
+    confirmParameter(m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
+    confirmParameter(m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
+    confirmParameter(m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
+    confirmParameter(m_initialCW < 0,     "Min. Initial Total Codeword is 0");
+    confirmParameter(m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
+    confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
+    confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
     if (m_updateCtrl > 0 && m_adpOption > 2) { m_adpOption -= 2; }
   }
-  confirmParameter( m_EDO && m_bLoopFilterDisable, "no EDO support with LoopFilter disabled" );
+  confirmParameter( m_EDO && m_bLoopFilterDisable,          "no EDO support with LoopFilter disabled" );
+  confirmParameter( m_EDO < 0 || m_EDO > 2,                 "EDO out of range [0..2]" );
+  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,   "TMVPMode out of range [0..2]" );
+  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,     "AMVR/IMV out of range [0..7]" );
+  confirmParameter( m_Affine < 0 || m_Affine > 2,           "Affine out of range [0..2]" );
+  confirmParameter( m_MMVD < 0 || m_MMVD > 4,               "MMVD out of range [0..4]" );
+  confirmParameter( m_SMVD < 0 || m_SMVD > 3,               "SMVD out of range [0..3]" );
+  confirmParameter( m_Geo  < 0 || m_Geo  > 3,               "Geo out of range [0..3]" );
+  confirmParameter( m_CIIP < 0 || m_CIIP > 3,               "CIIP out of range [0..3]" );
+  confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
+  confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
+  confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
+#if ISP_VVC
+  confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
+#endif
 
-  confirmParameter( m_chromaCbQpOffset < -12,   "Min. Chroma Cb QP Offset is -12" );
-  confirmParameter( m_chromaCbQpOffset >  12,   "Max. Chroma Cb QP Offset is  12" );
-  confirmParameter( m_chromaCrQpOffset < -12,   "Min. Chroma Cr QP Offset is -12" );
-  confirmParameter( m_chromaCrQpOffset >  12,   "Max. Chroma Cr QP Offset is  12" );
+  if( m_alf )
+  {
+    confirmParameter( m_maxNumAlfAlternativesChroma < 1 || m_maxNumAlfAlternativesChroma > MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
+  }
+
+  confirmParameter( m_useFastMrg < 0 || m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
+  confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
+  confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
+
+
+  confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode");
+  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode > 1 && m_GOPSize == 32, "Rate control is currently not supported for GOP size 32" );
+  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
+  confirmParameter(!((m_level==Level::LEVEL1) 
+    || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
+    || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
+    || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
+    || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
+    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2)
+    || (m_level==Level::LEVEL15_5)), "invalid level selected");
+  confirmParameter(!((m_levelTier==Level::Tier::MAIN) || (m_levelTier==Level::Tier::HIGH)), "invalid tier selected");
+
+
+  confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
+  confirmParameter( m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );
+  confirmParameter( m_chromaCrQpOffset < -12,           "Min. Chroma Cr QP Offset is -12" );
+  confirmParameter( m_chromaCrQpOffset >  12,           "Max. Chroma Cr QP Offset is  12" );
   confirmParameter( m_chromaCbQpOffsetDualTree < -12,   "Min. Chroma Cb QP Offset for dual tree is -12" );
   confirmParameter( m_chromaCbQpOffsetDualTree >  12,   "Max. Chroma Cb QP Offset for dual tree is  12" );
   confirmParameter( m_chromaCrQpOffsetDualTree < -12,   "Min. Chroma Cr QP Offset for dual tree is -12" );
@@ -614,6 +639,22 @@ bool EncCfg::initCfgParameter()
 #if ENABLE_TRACING
   confirmParameter( m_frameParallel && ( m_numFppThreads != 0 && m_numFppThreads != 1 ) && ! m_traceFile.empty(), "Tracing and frame parallel encoding not supported" );
 #endif
+  confirmParameter(((m_SourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_SourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
+
+
+  confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
+  confirmParameter( m_maxNumMergeCand > MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
+  confirmParameter( m_maxNumGeoCand > GEO_MAX_NUM_UNI_CANDS,            "MaxNumGeoCand must be no more than GEO_MAX_NUM_UNI_CANDS." );
+  confirmParameter( m_maxNumGeoCand > m_maxNumMergeCand,                "MaxNumGeoCand must be no more than MaxNumMergeCand." );
+  confirmParameter( 0 < m_maxNumGeoCand && m_maxNumGeoCand < 2,         "MaxNumGeoCand must be no less than 2 unless MaxNumGeoCand is 0." );
+  confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
+  confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
+
+  
+  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = m_CTUSize;
