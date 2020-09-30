@@ -1,7 +1,7 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
-#include "resource_version.h"
+#include "vvenc/version.h"
 
 #define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
@@ -53,8 +53,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION VS_FILE_VERSION
- PRODUCTVERSION VS_FILE_VERSION
+ FILEVERSION VVENC_VS_VERSION
+ PRODUCTVERSION VVENC_VS_VERSION
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -70,13 +70,13 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "Fraunhofer Heinrich Hertz Institute"
-            VALUE "FileDescription", "VVEncoderFFApp Application"
-            VALUE "FileVersion", VS_FILE_VERSION_STR
-            VALUE "InternalName", "VVEncoderFFApp.exe"
-            VALUE "LegalCopyright", "Copyright (C) 2019 Fraunhofer Heinrich Hertz Institute"
-            VALUE "OriginalFilename", "VVEncoderFFApp.exe"
-            VALUE "ProductName", "VVEncoderFFApp"
-            VALUE "ProductVersion", VS_FILE_VERSION_STR
+            VALUE "FileDescription", "vvencFFapp Application"
+            VALUE "FileVersion", VVENC_VS_VERSION_STR
+            VALUE "InternalName", "vvencFFapp.exe"
+            VALUE "LegalCopyright", "(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
+            VALUE "OriginalFilename", "vvencFFapp.exe"
+            VALUE "ProductName", "vvencFFapp"
+            VALUE "ProductVersion", VVENC_VS_VERSION_STR
         END
     END
     BLOCK "VarFileInfo"
