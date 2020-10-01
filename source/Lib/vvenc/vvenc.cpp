@@ -191,6 +191,16 @@ const char* VVEnc::getLastError() const
   return m_pcVVEncImpl->m_cErrorString.c_str();
 }
 
+int VVEnc::getNumLeadFrames() const
+{
+  return m_pcVVEncImpl->getNumLeadFrames();
+}
+
+int VVEnc::getNumTrailFrames() const
+{
+  return m_pcVVEncImpl->getNumTrailFrames();
+}
+
 const char* VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();

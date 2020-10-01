@@ -63,6 +63,7 @@ static const int MAX_NUM_REF_PICS                = 29; ///< max. number of pictu
 static const int MAX_TLAYER                      =  7; ///< Explicit temporal layer QP offset - max number of temporal layer
 static const int MAX_NUM_CQP_MAPPING_TABLES      =  3; ///< Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
 static const int MAX_NUM_ALF_ALTERNATIVES_CHROMA =  8;
+static const int MCTF_RANGE                      =  2; ///< max number of frames used for MCTF filtering in forward / backward direction
 
 
 // ====================================================================================================================
