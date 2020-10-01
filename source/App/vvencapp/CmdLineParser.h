@@ -88,7 +88,17 @@ public:
           "\t                              59.94 fps = 60000/1001 Hz = 59\n";
       }
       std::cout <<
-          "\t [--frames,-f  <int>      ] : max. frames to encode (default: -1 all frames) \n"
+          "\t [--frames,-f <int>       ] : max. frames to encode (default: -1 all frames)\n"
+          "\t [--frameskip <int>       ] : number of frames to encode skip (default: 0 off)\n";
+      if ( bFullHelp )
+      {
+        std::cout <<
+          "\t [--segment <str>         ] : when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
+          "\t              first         : first segment\n"
+          "\t              mid           : all segments between first and last segment\n"
+          "\t              last          : last segment\n";
+      }
+      std::cout <<
           "\n"
           " Bitstream output options\n"
           "\n"
@@ -134,8 +144,7 @@ public:
       std::cout << std::endl;
   }
 
-  static int parse_command_line( int argc, char* argv[] , vvenc::VVEncParameter& rcParams, std::string& rcInputFile, std::string& rcBitstreamFile,
-                                 int& riFrames, int& riInputBitdepth )
+  static int parse_command_line( int argc, char* argv[] , vvenc::VVEncParameter& rcParams, std::string& rcInputFile, std::string& rcBitstreamFile, int& riInputBitdepth )
   {
     int iRet = 0;
     /* Check command line parameters */
@@ -261,9 +270,49 @@ public:
       else if( (!strcmp( (const char*)argv[i_arg], "-f" )) || !strcmp( (const char*)argv[i_arg], "--frames" ) )
       {
         i_arg++;
-        riFrames = atoi( argv[i_arg++] );
+        rcParams.m_iMaxFrames = atoi( argv[i_arg++] );
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
-          fprintf( stdout, "[frames]               : %d\n", riFrames );
+          fprintf( stdout, "[frames]               : %d\n", rcParams.m_iMaxFrames );
+      }
+      else if( !strcmp( (const char*)argv[i_arg], "--frameskip" ) )
+      {
+        i_arg++;
+        rcParams.m_iFrameSkip= atoi( argv[i_arg++] );
+        if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
+          fprintf( stdout, "[frameskip]           : %d\n", rcParams.m_iFrameSkip );
+      }
+      else if( !strcmp( (const char*)argv[i_arg], "--segment" ) )
+      {
+        i_arg++;
+        if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
+        {
+          if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
+            fprintf( stdout, "[segment]            : %s\n", argv[i_arg] );
+          std::string cSegMode = argv[i_arg++];
+          std::transform( cSegMode.begin(), cSegMode.end(), cSegMode.begin(), ::tolower );
+
+          if( "off" == cSegMode)
+          {
+            rcParams.m_eSegMode = vvenc::VVC_SEG_OFF;
+          }
+          else if( "first" == cSegMode )
+          {
+            rcParams.m_eSegMode = vvenc::VVC_SEG_FIRST;
+          }
+          else if( "mid" == cSegMode )
+          {
+            rcParams.m_eSegMode = vvenc::VVC_SEG_MID;
+          }
+          else if( "last" == cSegMode )
+          {
+            rcParams.m_eSegMode = vvenc::VVC_SEG_LAST;
+          }
+          else
+          {
+            std::cerr << "wrong segment mode!   use: --segment off, first, mid, last" << std::endl;
+            return -1;
+          }
+        }
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-c" )) || !strcmp( (const char*)argv[i_arg], "--format" ) )
       {

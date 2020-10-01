@@ -534,7 +534,6 @@ static const double PLT_CHROMA_WEIGHTING =                      0.8;
 static const int PLT_ENCBITDEPTH = 8;
 static const int PLT_FAST_RATIO = 100;
 
-static const int MCTF_RANGE           = 2;
 static const int MCTF_PADDING         = 128;
 static const int MCTF_ADD_QUEUE_DELAY = 2 * MCTF_RANGE + 1;
 
