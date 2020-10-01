@@ -164,13 +164,15 @@ set_tests_properties( Test_vvenclibtest PROPERTIES TIMEOUT 20 )
 
 add_test( NAME Test_vvencapp-faster COMMAND vvencapp --preset=faster -s 80x44 -f 11 -i ../../source/Test/RTn23_80x44p15_f15.yuv -o ../../source/Test/out.vvc )
 set_tests_properties( Test_vvencapp-faster PROPERTIES TIMEOUT 20 )
-add_test( NAME Test_vvencapp-medium COMMAND vvencapp -s 80x44 -f 8 -i ../../source/Test/RTn23_80x44p15_f15.yuv -o out.vvc )
+add_test( NAME Test_vvencapp-medium COMMAND vvencapp --preset=medium -s 80x44 -f 8 -i ../../source/Test/RTn23_80x44p15_f15.yuv -o out.vvc )
 set_tests_properties( Test_vvencapp-medium PROPERTIES TIMEOUT 30 )
 
-add_test( NAME Test_vvencFFapp-fast COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/testSeq.cfg )
-set_tests_properties( Test_vvencFFapp-fast PROPERTIES TIMEOUT 20 )
-add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess_slow.cfg -c ../../source/Test/testSeq.cfg )
+add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess_slow.cfg -c ../../source/Test/testSeq.cfg -f 3 )
 set_tests_properties( Test_vvencFFapp-slow PROPERTIES TIMEOUT 60 )
+add_test( NAME Test_vvencFFapp-fast COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/testSeq.cfg -b out.vcc )
+set_tests_properties( Test_vvencFFapp-fast PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_vvencFFapp-transcoding COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/testSeq.cfg --DebugBitstream=out.vcc --DebugPOC=3 )
+set_tests_properties( Test_vvencFFapp-transcoding PROPERTIES TIMEOUT 10 )
  
 
 if( VVENC_ENABLE_INSTALL )
