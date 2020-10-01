@@ -213,7 +213,7 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams );
 
-  testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { 1,2,64} );
+  testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { 0,1,2,64} );
   testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { -1,65 }, true );
 
   testParamList( "TicksPerSecond",      vvencParams.m_iTicksPerSecond,            vvencParams, { 90000,27000000,60,120 } );
