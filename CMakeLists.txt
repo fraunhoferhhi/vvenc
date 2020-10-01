@@ -159,22 +159,46 @@ add_subdirectory( "source/Test/vvenclibtest" )
 enable_testing()
 
 # add test
-add_test( NAME Test_vvenclibtest COMMAND vvenclibtest )
-set_tests_properties( Test_vvenclibtest PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_vvenclibtest-paramerter_range COMMAND vvenclibtest 1 )
+add_test( NAME Test_vvenclibtest-calling_order COMMAND vvenclibtest 2 )
+add_test( NAME Test_vvenclibtest-input_params COMMAND vvenclibtest 3 )
+add_test( NAME Test_vvenclibtest-output_params COMMAND vvenclibtest 4 )
 
-add_test( NAME Test_vvencapp-faster COMMAND vvencapp --preset=faster -s 80x44 -f 11 -i ../../source/Test/RTn23_80x44p15_f15.yuv -o out.vvc )
+add_test( NAME Test_vvencapp-faster COMMAND vvencapp --preset faster -s 80x44 -r 15 -i ../../source/Test/RTn23_80x44p15_f15.yuv -f 11 -o out.vvc )
 set_tests_properties( Test_vvencapp-faster PROPERTIES TIMEOUT 20 )
-add_test( NAME Test_vvencapp-medium COMMAND vvencapp --preset=medium -s 80x44 -f 8 -i ../../source/Test/RTn23_80x44p15_f15.yuv -o out.vvc )
-set_tests_properties( Test_vvencapp-medium PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_vvencFFapp-faster COMMAND vvencFFapp -c ../../cfg/randomaccess_faster.cfg -c ../../source/Test/RTn23.cfg -f 11 -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-faster PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_compare_output-faster COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 
-add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess_slow.cfg -c ../../source/Test/testSeq.cfg -f 3 -b out.vvc )
-set_tests_properties( Test_vvencFFapp-slow PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_vvencFFapp-fast COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/testSeq.cfg -b out.vvc )
+add_test( NAME Test_vvencapp-fast COMMAND vvencapp --preset fast -s 80x44 -r 15 -i ../../source/Test/RTn23_80x44p15_f15.yuv -f 8 -o out.vvc )
+set_tests_properties( Test_vvencapp-fast PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_vvencFFapp-fast COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/RTn23.cfg -f 8 -b outf.vvc )
 set_tests_properties( Test_vvencFFapp-fast PROPERTIES TIMEOUT 20 )
-add_test( NAME Test_vvencFFapp-transcoding COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/testSeq.cfg --DebugBitstream=out.vvc --DebugPOC=3 -b tout.vvc )
+add_test( NAME Test_compare_output-fast COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_vvencFFapp-transcoding COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../source/Test/RTn23.cfg -f 8 --DebugBitstream=outf.vvc --DebugPOC=3 -b out.vvc )
 set_tests_properties( Test_vvencFFapp-transcoding PROPERTIES TIMEOUT 10 )
-add_test( NAME Test_output-transcoding COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc tout.vvc )
-add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv  )
+add_test( NAME Test_output-transcoding COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_vvencapp-medium COMMAND vvencapp --preset medium -s 80x44 -r 15 -i ../../source/Test/RTn23_80x44p15_f15.yuv -f 5 -o out.vvc )
+set_tests_properties( Test_vvencapp-medium PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_vvencFFapp-medium COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../source/Test/RTn23.cfg -f 5 -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-medium PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_compare_output-medium COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_vvencapp-slow COMMAND vvencapp --preset slow -s 80x44 -r 15 -i ../../source/Test/RTn23_80x44p15_f15.yuv -f 3 -o out.vvc )
+set_tests_properties( Test_vvencapp-slow PROPERTIES TIMEOUT 60 )
+add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess_slow.cfg -c ../../source/Test/RTn23.cfg -f 3 -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-slow PROPERTIES TIMEOUT 60 )
+add_test( NAME Test_compare_output-slow COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_vvencapp-medium_noqpa_0thr COMMAND vvencapp --preset medium --qpa 0 -threads 0 -s 80x44 -r 15 -i ../../source/Test/RTn23_80x44p15_f15.yuv -f 5 -o out.vvc )
+set_tests_properties( Test_vvencapp-medium_noqpa_0thr PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_vvencFFapp-medium_noqpa_0thr COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../source/Test/RTn23.cfg -qpa 0 --WppBitEqual=0 --NumWppThreads=0 -f 5 -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-medium_noqpa_0thr PROPERTIES TIMEOUT 20 )
+add_test( NAME Test_compare_output-medium_noqpa_0thr COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+#add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv  )
  
 
 if( VVENC_ENABLE_INSTALL )

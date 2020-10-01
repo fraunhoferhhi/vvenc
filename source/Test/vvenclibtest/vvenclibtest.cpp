@@ -70,16 +70,62 @@ int testInvalidInputParams();  // input Buffer does not match
 int testInvalidOutputParams(); // AUBuffer to small
 
 
-int main( /*int argc, char* argv[]*/ )
+int main( int argc, char* argv[] )
 {
+  int testId = -1;
+  if( argc > 1 )
+  {
+    bool printHelp = false;
+    if( 0 == strcmp( argv[1] ,"-h") || 0  == strcmp( argv[1], "--help"))
+    {
+      printHelp = true;
+    }
+    else
+    {
+      testId = atoi(argv[1]);
+      printHelp = ( testId < 1 || testId > 4 );
+    }
+
+    if( printHelp )
+    {
+      printf( "venclibtest <test> [1..4]\n");
+      return -1;
+    }
+  }
+
   g_numTests = 0; 
   g_numFails = 0;
   g_verbose = 1;
 
-  testLibParameterRanges();
-  testLibCallingOrder();
-  testInvalidInputParams();
-  testInvalidOutputParams();
+  switch( testId )
+  {
+  case 1:
+  {
+    testLibParameterRanges(); 
+    break;
+  }
+  case 2: 
+  {
+    testLibCallingOrder(); 
+    break;
+  }
+  case 3: 
+  {
+    testInvalidInputParams(); 
+    break;
+  }
+  case 4: 
+  {
+    testInvalidOutputParams(); 
+    break;
+  }
+  default:
+    testLibParameterRanges();
+    testLibCallingOrder();
+    testInvalidInputParams();
+    testInvalidOutputParams();
+    break;
+  }
 
   if( g_numTests == 0 )
   {
