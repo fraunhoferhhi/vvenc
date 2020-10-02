@@ -46,7 +46,7 @@ vvc@hhi.fraunhofer.de
 #include <stdint.h>
 #include <cstring>
 
-//! \ingroup VVEncoderLib
+//! \ingroup CommonLib
 //! \{
 
 namespace vvenc {

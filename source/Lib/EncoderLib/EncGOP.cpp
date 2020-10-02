@@ -51,9 +51,9 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "CommonLib/MD5.h"
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
-#include "libmd5/MD5.h"
 #include "EncHRD.h"
 
 #include <list>

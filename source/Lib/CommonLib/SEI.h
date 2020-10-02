@@ -42,7 +42,6 @@ vvc@hhi.fraunhofer.de
 #pragma once
 
 #include "CommonDef.h"
-#include "libmd5/MD5.h"
 
 #include <list>
 #include <vector>
