@@ -70,16 +70,62 @@ int testInvalidInputParams();  // input Buffer does not match
 int testInvalidOutputParams(); // AUBuffer to small
 
 
-int main( /*int argc, char* argv[]*/ )
+int main( int argc, char* argv[] )
 {
+  int testId = -1;
+  if( argc > 1 )
+  {
+    bool printHelp = false;
+    if( 0 == strcmp( argv[1] ,"-h") || 0  == strcmp( argv[1], "--help"))
+    {
+      printHelp = true;
+    }
+    else
+    {
+      testId = atoi(argv[1]);
+      printHelp = ( testId < 1 || testId > 4 );
+    }
+
+    if( printHelp )
+    {
+      printf( "venclibtest <test> [1..4]\n");
+      return -1;
+    }
+  }
+
   g_numTests = 0; 
   g_numFails = 0;
   g_verbose = 1;
 
-  testLibParameterRanges();
-  testLibCallingOrder();
-  testInvalidInputParams();
-  testInvalidOutputParams();
+  switch( testId )
+  {
+  case 1:
+  {
+    testLibParameterRanges(); 
+    break;
+  }
+  case 2: 
+  {
+    testLibCallingOrder(); 
+    break;
+  }
+  case 3: 
+  {
+    testInvalidInputParams(); 
+    break;
+  }
+  case 4: 
+  {
+    testInvalidOutputParams(); 
+    break;
+  }
+  default:
+    testLibParameterRanges();
+    testLibCallingOrder();
+    testInvalidInputParams();
+    testInvalidOutputParams();
+    break;
+  }
 
   if( g_numTests == 0 )
   {
@@ -111,7 +157,7 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.m_iThreadCount    = 1;                          // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.m_iThreadCount    = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
   cVVEncParameter.m_iQuality        = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
   cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
@@ -213,8 +259,8 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams );
 
-  testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { 1,2,64} );
-  testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { -1,0,65 }, true );
+  testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { 0,1,2,64} );
+  testParamList( "ThreadCount",         vvencParams.m_iThreadCount,               vvencParams, { -1,65 }, true );
 
   testParamList( "TicksPerSecond",      vvencParams.m_iTicksPerSecond,            vvencParams, { 90000,27000000,60,120 } );
   testParamList( "TicksPerSecond",      vvencParams.m_iTicksPerSecond,            vvencParams, { -1,0, 50, 27000001 }, true );

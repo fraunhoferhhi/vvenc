@@ -373,7 +373,7 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
   rcPicBuffer.m_pvV = (pV + 3*bd.iAlignmentGuard) - (((size_t)pV) & (bd.iAlignmentGuard-1));
 
   rcPicBuffer.m_eColorFormat     = VVC_CF_YUV420_PLANAR;
-  rcPicBuffer.m_uiSequenceNumber = -1;
+  rcPicBuffer.m_uiSequenceNumber = 0;
 
   return iRet;
 }
@@ -426,6 +426,16 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
   }
 
   return iRet;
+}
+
+int VVEncImpl::getNumLeadFrames()
+{
+  return m_cEncCfg.m_MCTFNumLeadFrames;
+}
+
+int VVEncImpl::getNumTrailFrames()
+{
+  return m_cEncCfg.m_MCTFNumTrailFrames;
 }
 
 void VVEncImpl::clockStartTime()
@@ -519,7 +529,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iTicksPerSecond <= 0 || rcSrc.m_iTicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
   ROTPARAMS( (rcSrc.m_iTicksPerSecond < 90000) && (rcSrc.m_iTicksPerSecond*rcSrc.m_iTemporalScale)%rcSrc.m_iTemporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  ROTPARAMS( rcSrc.m_iThreadCount <= 0,                                                     "ThreadCount must be > 0" );
+  ROTPARAMS( rcSrc.m_iThreadCount < 0,                                                      "ThreadCount must be >= 0" );
 
   ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
   ROTPARAMS( rcSrc.m_iIDRPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
@@ -542,6 +552,8 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
   ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+
+  ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
   return 0;
 }
@@ -576,14 +588,14 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 
   rcEncCfg.m_internalBitDepth[0] = 10;
 
-  if( rcVVEncParameter.m_iThreadCount > 1 )
+  rcEncCfg.m_numWppThreads = rcVVEncParameter.m_iThreadCount;
+  if( rcVVEncParameter.m_iThreadCount > 0 )
   {
-      rcEncCfg.m_numWppThreads     = rcVVEncParameter.m_iThreadCount;
       rcEncCfg.m_ensureWppBitEqual = 1;
   }
 
   rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
-  rcEncCfg.m_framesToBeEncoded = 0;
+  rcEncCfg.m_framesToBeEncoded                   = rcVVEncParameter.m_iMaxFrames;
 
   //======== Coding Structure =============
   rcEncCfg.m_GOPSize                             = rcVVEncParameter.m_iGopSize;
@@ -651,6 +663,32 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 3.";
     m_cErrorString  = css.str();
     return VVENC_ERR_PARAMETER;
+  }
+
+  if( rcVVEncParameter.m_eSegMode != VVC_SEG_OFF )
+  {
+    if( rcEncCfg.m_MCTF )
+    {
+      switch( rcVVEncParameter.m_eSegMode )
+      {
+        case VVC_SEG_FIRST:
+          rcEncCfg.m_MCTFNumLeadFrames  = 0;
+          rcEncCfg.m_MCTFNumTrailFrames = MCTF_RANGE;
+          break;
+        case VVC_SEG_MID:
+          rcEncCfg.m_MCTFNumLeadFrames  = MCTF_RANGE;
+          rcEncCfg.m_MCTFNumTrailFrames = MCTF_RANGE;
+          break;
+        case VVC_SEG_LAST:
+          rcEncCfg.m_MCTFNumLeadFrames  = MCTF_RANGE;
+          rcEncCfg.m_MCTFNumTrailFrames = 0;
+          break;
+        default:
+          rcEncCfg.m_MCTFNumLeadFrames  = 0;
+          rcEncCfg.m_MCTFNumTrailFrames = 0;
+          break;
+      }
+    }
   }
 
   if ( rcEncCfg.initCfgParameter() )
@@ -858,18 +896,18 @@ void VVEncImpl::xPrintCfg()
   msgApp( (int)LL_DETAILS, "Cabac-zero-word-padding                : %s\n", ( m_cEncCfg.m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" ) );
   msgApp( (int)LL_DETAILS, "Frame/Field                            : Frame based coding\n" );
   if ( m_cEncCfg.m_framesToBeEncoded > 0 )
-    msgApp( (int)LL_DETAILS, "Frame index                          : %u - %d (%d frames)\n", m_cEncCfg.m_FrameSkip, m_cEncCfg.m_FrameSkip + m_cEncCfg.m_framesToBeEncoded - 1, m_cEncCfg.m_framesToBeEncoded );
+    msgApp( (int)LL_DETAILS, "Frame index                            : %d frames\n", m_cEncCfg.m_framesToBeEncoded );
   else
-    msgApp( (int)LL_DETAILS, "Frame index                            : %u - .. (all frames)\n", m_cEncCfg.m_FrameSkip );
+    msgApp( (int)LL_DETAILS, "Frame index                            : all frames\n" );
   msgApp( (int)LL_DETAILS, "Profile                                : %s\n", getProfileStr( m_cEncCfg.m_profile).c_str() );
   msgApp( (int)LL_DETAILS, "Level                                  : %s\n", getLevelStr( m_cEncCfg.m_level).c_str() );
   msgApp( (int)LL_DETAILS, "CU size / total-depth                  : %d / %d\n", m_cEncCfg.m_CTUSize, m_cEncCfg.m_MaxCodingDepth );
-  msgApp( (int)LL_DETAILS, "Max TB size                            : %d \n", 1 << m_cEncCfg.m_log2MaxTbSize );
+  msgApp( (int)LL_DETAILS, "Max TB size                            : %d\n", 1 << m_cEncCfg.m_log2MaxTbSize );
   msgApp( (int)LL_DETAILS, "Motion search range                    : %d\n", m_cEncCfg.m_SearchRange );
   msgApp( (int)LL_DETAILS, "Intra period                           : %d\n", m_cEncCfg.m_IntraPeriod );
   msgApp( (int)LL_DETAILS, "Decoding refresh type                  : %d\n", m_cEncCfg.m_DecodingRefreshType );
   msgApp( (int)LL_DETAILS, "QP                                     : %d\n", m_cEncCfg.m_QP);
-  msgApp( (int)LL_DETAILS, "Percept QPA                            : %d \n", m_cEncCfg.m_usePerceptQPA );
+  msgApp( (int)LL_DETAILS, "Percept QPA                            : %d\n", m_cEncCfg.m_usePerceptQPA );
   msgApp( (int)LL_DETAILS, "Max dQP signaling subdiv               : %d\n", m_cEncCfg.m_cuQpDeltaSubdiv);
 
   msgApp( (int)LL_DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n", m_cEncCfg.m_chromaCbQpOffset, m_cEncCfg.m_chromaCbQpOffsetDualTree);
@@ -998,9 +1036,8 @@ void VVEncImpl::xPrintCfg()
   msgApp( LL_VERBOSE, "FppBitEqual:%d ",          m_cEncCfg.m_ensureFppBitEqual );
   msgApp( LL_VERBOSE, "WPP:%d ",                  m_cEncCfg.m_numWppThreads );
   msgApp( LL_VERBOSE, "WppBitEqual:%d ",          m_cEncCfg.m_ensureWppBitEqual );
-  msgApp( LL_VERBOSE, "WF:%d ",                   m_cEncCfg.m_entropyCodingSyncEnabled );
-
-  msgApp( LL_VERBOSE, "\n\n");
+  msgApp( LL_VERBOSE, "WF:%d",                    m_cEncCfg.m_entropyCodingSyncEnabled );
+  msgApp( LL_VERBOSE, "\n");
 
   msgApp( LL_NOTICE, "\n");
 
