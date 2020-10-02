@@ -43,8 +43,7 @@ vvc@hhi.fraunhofer.de
 
 #include "PicYuvMD5.h"
 #include "Picture.h"
-#include "SEI.h"
-#include "libmd5/MD5.h"
+#include "MD5.h"
 
 //! \ingroup CommonLib
 //! \{
