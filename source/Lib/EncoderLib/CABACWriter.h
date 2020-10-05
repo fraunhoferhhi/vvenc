@@ -100,7 +100,6 @@ public:
 
   void        cu_pred_data              ( const CodingUnit&             cu );
   void        cu_bcw_flag               ( const CodingUnit&             cu );
-  void        extend_ref_line           ( const PredictionUnit&         pu );
   void        extend_ref_line           ( const CodingUnit&             cu );
   void        intra_luma_pred_modes     ( const CodingUnit&             cu );
   void        intra_luma_pred_mode      ( const PredictionUnit&         pu );

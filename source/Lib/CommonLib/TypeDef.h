@@ -877,13 +877,13 @@ public:
 };
 
 typedef dynamic_cache<struct CodingUnit    > CUCache;
-typedef dynamic_cache<struct PredictionUnit> PUCache;
+//typedef dynamic_cache<struct PredictionUnit> PUCache;
 typedef dynamic_cache<struct TransformUnit > TUCache;
 
 struct XUCache
 {
   CUCache cuCache;
-  PUCache puCache;
+//  PUCache puCache;
   TUCache tuCache;
 };
 

@@ -1318,8 +1318,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   cu.chromaQpAdj      = m_cuChromaQpOffsetIdxPlus1;
   cu.qp               = encTestMode.qp;
   cu.ispMode          = NOT_INTRA_SUBPARTITIONS;
-
-  CU::addPUs( cu );
+  cu.initPuData();
 
   tempCS->interHad    = m_modeCtrl.comprCUCtx->interHad;
 #if ISP_VVC
@@ -1634,9 +1633,10 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     cu.slice    = tempCS->slice;
     cu.tileIdx  = 0;
 
-    PredictionUnit pu( tempCS->area );
-    pu.cu = &cu;
-    pu.cs = tempCS;
+//    PredictionUnit pu( tempCS->area );
+//    pu.cu = &cu;
+//    pu.cs = tempCS;
+    PredictionUnit& pu = cu;
     PU::getInterMergeCandidates(pu, mergeCtx, 0 );
     PU::getInterMMVDMergeCandidates(pu, mergeCtx);
 
@@ -1719,7 +1719,9 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       cu.qp           = encTestMode.qp;
     //cu.emtFlag  is set below
 
-      PredictionUnit &pu  = tempCS->addPU( cu, partitioner.chType, &cu );
+//      PredictionUnit &pu  = tempCS->addPU( cu, partitioner.chType, &cu );
+      PredictionUnit &pu  = cu;
+      pu.initPuData();
 
       const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[ CH_L ],  dfunc);
@@ -2082,8 +2084,9 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       cu.predMode     = MODE_INTER;
       cu.chromaQpAdj  = m_cuChromaQpOffsetIdxPlus1;
       cu.qp           = encTestMode.qp;
-      PredictionUnit &pu  = tempCS->addPU( cu, partitioner.chType, &cu );
-
+//      PredictionUnit &pu  = tempCS->addPU( cu, partitioner.chType, &cu );
+      PredictionUnit &pu  = cu;
+      pu.initPuData();
       if (uiNoResidualPass == 0 && RdModeList[uiMrgHADIdx].isCIIP)
       {
         cu.mmvdSkip = false;
@@ -2283,7 +2286,9 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   cu.mipFlag   = false;
   cu.bdpcmMode = 0;
 
-  PredictionUnit &pu  = tempCS->addPU(cu, pm.chType, &cu);
+//  PredictionUnit &pu  = tempCS->addPU(cu, pm.chType, &cu);
+  PredictionUnit &pu  = cu;
+  pu.initPuData();
   pu.mergeFlag        = true;
   pu.regularMergeFlag = false;
   PU::getGeoMergeCandidates(pu, mergeCtx);
@@ -2616,7 +2621,9 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       cu.skip             = false;
       cu.mipFlag          = false;
       cu.bdpcmMode        = 0;
-      PredictionUnit &pu  = tempCS->addPU(cu, pm.chType, &cu);
+//      PredictionUnit &pu  = tempCS->addPU(cu, pm.chType, &cu);
+      PredictionUnit &pu  = cu;
+      pu.initPuData();
       pu.mergeFlag        = true;
       pu.regularMergeFlag = false;
       pu.geoSplitDir      = comboList.list[candidateIdx].splitDir;
@@ -2655,7 +2662,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
   cu.predMode         = MODE_INTER;
   cu.chromaQpAdj      = m_cuChromaQpOffsetIdxPlus1;
   cu.qp               = encTestMode.qp;
-  CU::addPUs( cu );
+  cu.initPuData();
 
   m_cInterSearch.predInterSearch( cu, partitioner );
 
@@ -2759,7 +2766,8 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
         cu.predMode = MODE_INTER;
         cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
         cu.qp = encTestMode.qp;
-        CU::addPUs(cu);
+
+        cu.initPuData();
 
         cu.imv = i;
 
@@ -2792,7 +2800,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
           bestCostIMV = costCur;
           tempCSbest->getPredBuf().copyFrom(tempCS->getPredBuf());
           tempCSbest->clearCUs();
-          tempCSbest->clearPUs();
+//          tempCSbest->clearPUs();
           tempCSbest->clearTUs();
           tempCSbest->copyStructure(*tempCS, partitioner.chType, TREE_D);
         }
@@ -3458,11 +3466,13 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
     cu.tileIdx  = 0;
     cu.mmvdSkip = false;
 
-    PredictionUnit pu(tempCS->area);
-    pu.cu = &cu;
-    pu.cs = tempCS;
+//    PredictionUnit pu(tempCS->area);
+//    pu.cu = &cu;
+//    pu.cs = tempCS;
+    PredictionUnit& pu = cu;
     pu.regularMergeFlag = false;
     PU::getAffineMergeCand(pu, affineMergeCtx);
+    pu.regularMergeFlag = true;
 
     if (affineMergeCtx.numValidMergeCand <= 0)
     {
@@ -3511,7 +3521,9 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
       cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
       cu.qp = encTestMode.qp;
 
-      PredictionUnit &pu = tempCS->addPU(cu, partitioner.chType, &cu);
+//      PredictionUnit &pu = tempCS->addPU(cu, partitioner.chType, &cu);
+      PredictionUnit &pu = cu;
+      pu.initPuData();
 
       const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[CH_L], dfunc);
@@ -3648,7 +3660,9 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
       cu.predMode = MODE_INTER;
       cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
       cu.qp = encTestMode.qp;
-      PredictionUnit &pu = tempCS->addPU(cu, partitioner.chType, &cu);
+//      PredictionUnit &pu = tempCS->addPU(cu, partitioner.chType, &cu);
+      PredictionUnit &pu = cu;
+      pu.initPuData();
 
       // set merge information
       pu.mergeFlag = true;

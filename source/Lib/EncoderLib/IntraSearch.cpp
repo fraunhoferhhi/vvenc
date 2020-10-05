@@ -762,7 +762,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       if( !cu.isSepTree() && cu.ispMode )
       {
         saveCS.clearCUs();
-        saveCS.clearPUs();
+//        saveCS.clearPUs();
       }
 
     if( cu.isSepTree() )
@@ -789,7 +789,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       CodingUnit& auxCU = saveCS.addCU(cu, partitioner.chType);
       auxCU.ispMode = cu.ispMode;
       saveCS.sps = cu.cs->sps;
-      saveCS.addPU(cu, partitioner.chType, &cu);
+//      saveCS.addPU(cu, partitioner.chType, &cu);
     }
 #endif
 

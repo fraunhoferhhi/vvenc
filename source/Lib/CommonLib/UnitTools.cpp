@@ -203,11 +203,6 @@ int CU::predictQP( const CodingUnit& cu, const int prevQP )
 }
 
 
-void CU::addPUs( CodingUnit& cu )
-{
-  cu.cs->addPU( CS::getArea( *cu.cs, cu, cu.chType, cu.treeType ), cu.chType, &cu );
-}
-
 void CU::saveMotionInHMVP( const CodingUnit& cu, const bool isToBeDone )
 {
   const PredictionUnit& pu = *cu.pu;

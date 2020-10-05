@@ -771,7 +771,9 @@ void CABACReader::coding_unit( CodingUnit &cu, Partitioner &partitioner, CUCtx& 
   CodingStructure& cs = *cu.cs;
   CHECK( cu.treeType != partitioner.treeType || cu.modeType != partitioner.modeType, "treeType or modeType mismatch" );
   DTRACE( g_trace_ctx, D_SYNTAX, "coding_unit() treeType=%d modeType=%d\n", cu.treeType, cu.modeType );
-  PredictionUnit&    pu = cs.addPU(cu, partitioner.chType, &cu);
+  PredictionUnit&    pu = cu;
+  cu.initPuData();
+
   // skip flag
   if ((!cs.slice->isIntra() || cs.slice->sps->IBC) && cu.Y().valid())
   {

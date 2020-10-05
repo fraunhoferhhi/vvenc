@@ -441,10 +441,10 @@ void InterPrediction::xSubPuMC(PredictionUnit& pu, PelUnitBuf& predBuf, const Re
     puWidth = numPartLine == 1 ? puSize.width : 1 << ATMVP_SUB_BLOCK_SIZE;
   }
 
-  PredictionUnit subPu;
+  PredictionUnit subPu = pu;
 
   subPu.cs = pu.cs;
-  subPu.cu = pu.cu;
+//  subPu.cu = pu.cu;
   subPu.mergeType = MRG_TYPE_DEFAULT_N;
 
   bool isAffine = pu.cu->affine;

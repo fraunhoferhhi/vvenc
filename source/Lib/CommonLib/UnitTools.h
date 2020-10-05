@@ -81,7 +81,6 @@ namespace CU
   bool      isLastSubCUOfCtu            (const CodingUnit &cu);
   uint32_t  getCtuAddr                  (const CodingUnit &cu);
   int       predictQP                   (const CodingUnit& cu, const int prevQP);
-  void      addPUs                      (      CodingUnit& cu);
 
   void saveMotionInHMVP               (const CodingUnit& cu, const bool isToBeDone );
 

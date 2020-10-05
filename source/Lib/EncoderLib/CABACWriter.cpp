@@ -932,34 +932,6 @@ void CABACWriter::xWriteTruncBinCode(uint32_t symbol, uint32_t maxSymbol)
 }
 
 
-void CABACWriter::extend_ref_line(const PredictionUnit& pu)
-{
-  const CodingUnit& cu = *pu.cu;
-  if( !cu.Y().valid() || cu.predMode != MODE_INTRA || !isLuma( cu.chType ) || cu.bdpcmMode )
-  {
-    return;
-  }  if( !cu.cs->sps->MRL )
-  {
-    return;
-  }
-  
-  bool isFirstLineOfCtu = (((cu.block(COMP_Y).y)&((cu.cs->sps)->CTUSize - 1)) == 0);
-  if (isFirstLineOfCtu)
-  {
-    return;
-  }
-  int multiRefIdx = pu.multiRefIdx;
-  if (MRL_NUM_REF_LINES > 1)
-  {
-    m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[0], Ctx::MultiRefLineIdx(0));
-    if (MRL_NUM_REF_LINES > 2 && multiRefIdx != MULTI_REF_LINE_IDX[0])
-    {
-      m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[1], Ctx::MultiRefLineIdx(1));
-    }
-  }
-}
-
-
 void CABACWriter::extend_ref_line(const CodingUnit& cu)
 {
   if ( !cu.Y().valid() || cu.predMode != MODE_INTRA || !isLuma(cu.chType) || cu.bdpcmMode )
@@ -984,7 +956,6 @@ void CABACWriter::extend_ref_line(const CodingUnit& cu)
     {
       m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[1], Ctx::MultiRefLineIdx(1));
     }
-
   }
 }
 
@@ -1102,7 +1073,7 @@ void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
     mip_pred_mode(pu);
     return;
   }
-  extend_ref_line( pu );
+  extend_ref_line( *pu.cu );
 
   isp_mode( *pu.cu );
 

@@ -495,7 +495,9 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
   CodingUnit     &cu = cs.addCU( ua, partitioner.chType );
   cu.treeType = partitioner.treeType;
   cu.modeType = partitioner.modeType;
-  PredictionUnit &pu = cs.addPU( ua, partitioner.chType, &cu );
+//  PredictionUnit &pu = cs.addPU( ua, partitioner.chType, &cu );
+  PredictionUnit &pu = cu;
+//  pu.initPUData();
   TransformUnit  &tu = cs.addTU( ua, partitioner.chType, &cu );
 
   cu          .repositionTo( encInfo.cu );
