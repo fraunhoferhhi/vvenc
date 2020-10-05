@@ -507,7 +507,7 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
 int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString )
 {
   // check src params
-  ROTPARAMS( rcSrc.m_iQp < 0 || rcSrc.m_iQp > 51,                                           "qp must be between 0 - 51."  );
+  ROTPARAMS( rcSrc.m_iQp < 0 || rcSrc.m_iQp > 63,                                           "QP must be between 0 and 63." );
 
   ROTPARAMS( ( rcSrc.m_iWidth == 0 )   || ( rcSrc.m_iHeight == 0 ),                         "specify input picture dimension"  );
 

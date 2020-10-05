@@ -110,10 +110,10 @@ public:
           "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
       }
       std::cout <<
-          "\t [--bitrate,-b  <int>     ] : Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second) [" << rcParams.m_iTargetBitRate << "]\n"
-          "\t [--qp  <int>             ] : QP (0-51) [" << rcParams.m_iQp << "]\n"
-          "\t [--qpa <int>             ] : Perceptual QP adaption (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR), 5: HDR(MeanLuma)) [" <<  rcParams.m_iPerceptualQPA << "]\n"
-          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: size <= HD:4; UHD:6\n"
+          "\t [--bitrate,-b  <int>     ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
+          "\t [--qp,-q <int>           ] : quantization parameter, QP (0-63) default: [" << rcParams.m_iQp << "]\n"
+          "\t [--qpa   <int>           ] : perceptual QP adaptation to improve visual coding quality (0: off, on for 1: SDR (WPSNR), 2: SDR (XPSNR),\n\t\t\t\t      3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.m_iPerceptualQPA << "]\n"
+          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: [size <= HD: " << rcParams.m_iThreadCount << ", UHD: 6]\n"
           "\n"
           "\t [--gopsize,-g  <int>     ] : GOP size of temporal structure (16) [" <<  rcParams.m_iGopSize << "]\n"
           "\t [--refreshtype,-rt <str> ] : intra refresh type (idr,cra)\n"
@@ -127,7 +127,7 @@ public:
           "\n"
           " General Options\n"
           "\n"
-          "\t [--verbosity,-v  <int>   ] : verbosity level (0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: debug) (default: " << (int)rcParams.m_eLogLevel << ")\n"
+          "\t [--verbosity,-v  <int>   ] : verbosity level (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) default: [" << (int)rcParams.m_eLogLevel << "]\n"
           "\t [--help,-h               ] : show basic help\n"
           "\t [--fullhelp              ] : show full help\n"
           "\n" ;
@@ -338,7 +338,7 @@ public:
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
           fprintf( stdout, "[bitrate]              : %d bits per second\n", rcParams.m_iTargetBitRate );
       }
-      else if( !strcmp( (const char*)argv[i_arg], "--qp" ) )
+      else if( (!strcmp( (const char*)argv[i_arg], "-q" )) || !strcmp( (const char*)argv[i_arg], "--qp" ) )
       {
         i_arg++;
         rcParams.m_iQp = atoi( argv[i_arg++] );

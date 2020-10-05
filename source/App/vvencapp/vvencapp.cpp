@@ -79,7 +79,7 @@ int main( int argc, char* argv[] )
 
   vvenc::VVEncParameter cVVEncParameter;
   // set desired encoding options
-  cVVEncParameter.m_iQp             = 32;                         // quantization parameter 0-51
+  cVVEncParameter.m_iQp             = 32;                         // quantization parameter 0-63
   cVVEncParameter.m_iWidth          = 1920;                       // luminance width of input picture
   cVVEncParameter.m_iHeight         = 1080;                       // luminance height of input picture
   cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
@@ -92,7 +92,7 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
   cVVEncParameter.m_iThreadCount    = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
   cVVEncParameter.m_iQuality        = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
-  cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
   cVVEncParameter.m_eLevel          = vvenc::VVC_LEVEL_4_1;       // level
   cVVEncParameter.m_eTier           = vvenc::VVC_TIER_MAIN;       // tier
