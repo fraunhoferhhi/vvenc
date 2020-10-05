@@ -129,27 +129,26 @@ public:
   void setDecomp(const CompArea& area, const bool _isCoded = true);
   void setDecomp(const UnitArea& area, const bool _isCoded = true);
 
-  const CodingUnit     *getCU(const Position& pos, const ChannelType _chType, const TreeType _treeType) const;
-  const PredictionUnit *getPU(const Position& pos, const ChannelType _chType) const { return getCU( pos, _chType, TREE_D); } 
-  const TransformUnit  *getTU(const Position& pos, const ChannelType _chType, const int subTuIdx = -1) const;
+  const CodingUnit*    getCU(const Position& pos, const ChannelType _chType, const TreeType _treeType) const;
+  const CodingUnit*    getPU(const Position& pos, const ChannelType _chType) const { return getCU( pos, _chType, TREE_D); } 
+  const TransformUnit* getTU(const Position& pos, const ChannelType _chType, const int subTuIdx = -1) const;
 
-  CodingUnit     *getCU(const Position& pos, const ChannelType _chType, const TreeType _treeType);
-  CodingUnit     *getLumaCU( const Position& pos );
-  PredictionUnit *getPU(const Position& pos, const ChannelType _chType) { return getCU( pos, _chType, TREE_D); }
-  TransformUnit  *getTU(const Position& pos, const ChannelType _chType, const int subTuIdx = -1);
+  CodingUnit*          getCU(const Position& pos, const ChannelType _chType, const TreeType _treeType);
+  CodingUnit*          getLumaCU( const Position& pos );
+  CodingUnit*          getPU(const Position& pos, const ChannelType _chType) { return getCU( pos, _chType, TREE_D); }
+  TransformUnit*       getTU(const Position& pos, const ChannelType _chType, const int subTuIdx = -1);
 
-  const CodingUnit     *getCU(const ChannelType& _chType, const TreeType _treeType) const { return getCU(area.blocks[_chType].pos(), _chType, _treeType); }
-  const PredictionUnit *getPU(const ChannelType& _chType) const { return getPU(area.blocks[_chType].pos(), _chType); }
-  const TransformUnit  *getTU(const ChannelType& _chType) const { return getTU(area.blocks[_chType].pos(), _chType); }
+  const CodingUnit*    getCU(const ChannelType& _chType, const TreeType _treeType) const { return getCU(area.blocks[_chType].pos(), _chType, _treeType); }
+  const CodingUnit*    getPU(const ChannelType& _chType) const { return getPU(area.blocks[_chType].pos(), _chType); }
+  const TransformUnit* getTU(const ChannelType& _chType) const { return getTU(area.blocks[_chType].pos(), _chType); }
 
-  CodingUnit     *getCU(const ChannelType& _chType, const TreeType _treeType ) { return getCU(area.blocks[_chType].pos(), _chType, _treeType); }
-  PredictionUnit *getPU(const ChannelType& _chType ) { return getPU(area.blocks[_chType].pos(), _chType); }
-  TransformUnit  *getTU(const ChannelType& _chType ) { return getTU(area.blocks[_chType].pos(), _chType); }
+  CodingUnit*          getCU(const ChannelType& _chType, const TreeType _treeType ) { return getCU(area.blocks[_chType].pos(), _chType, _treeType); }
+  CodingUnit*          getPU(const ChannelType& _chType ) { return getPU(area.blocks[_chType].pos(), _chType); }
+  TransformUnit*       getTU(const ChannelType& _chType ) { return getTU(area.blocks[_chType].pos(), _chType); }
 
-  const CodingUnit     *getCURestricted(const Position& pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType treeType) const;
-  const CodingUnit     *getCURestricted(const Position& pos, const CodingUnit& curCu,                               const ChannelType _chType) const;
-  const PredictionUnit *getPURestricted(const Position& pos, const PredictionUnit& curPu,                           const ChannelType _chType) const { return getCURestricted( pos, curPu, _chType); }
-  const TransformUnit  *getTURestricted(const Position& pos, const TransformUnit& curTu,                            const ChannelType _chType) const;
+  const CodingUnit*    getCURestricted(const Position& pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType treeType) const;
+  const CodingUnit*    getCURestricted(const Position& pos, const CodingUnit& curCu,    const ChannelType _chType) const;
+  const TransformUnit* getTURestricted(const Position& pos, const TransformUnit& curTu, const ChannelType _chType) const;
 
   CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType);
   TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu);
@@ -192,7 +191,6 @@ public:
 
 
   std::vector<    CodingUnit*> cus;
-  std::vector<PredictionUnit*> pus;
   std::vector< TransformUnit*> tus;
 
   LutMotionCand motionLut;
@@ -205,16 +203,13 @@ private:
   bool m_isTuEnc;
 
   CodingUnit      **m_cuPtr   [MAX_NUM_CH];
-//  PredictionUnit  **m_puPtr   [MAX_NUM_CH];
   TransformUnit   **m_tuPtr   [MAX_NUM_CH];
   bool             *m_isDecomp[MAX_NUM_CH];
 
   unsigned m_numCUs;
-//  unsigned m_numPUs;
   unsigned m_numTUs;
 
   CUCache& m_cuCache;
-//  PUCache& m_puCache;
   TUCache& m_tuCache;
   std::mutex* m_unitCacheMutex;
 

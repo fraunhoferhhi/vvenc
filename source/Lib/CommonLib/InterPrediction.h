@@ -95,9 +95,9 @@ private:
 #endif
 
 protected:
-  void xWeightedAverage       ( const PredictionUnit& pu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied );
-  void xPredAffineBlk         ( const ComponentID compID, const PredictionUnit& pu, const Picture* refPic, const Mv* _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng, const RefPicList refPicList = REF_PIC_LIST_X);
-  void xPredInterBlk          ( const ComponentID compID, const PredictionUnit& pu, const Picture* refPic, const Mv& _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng
+  void xWeightedAverage       ( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied );
+  void xPredAffineBlk         ( const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv* _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng, const RefPicList refPicList = REF_PIC_LIST_X);
+  void xPredInterBlk          ( const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv& _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng
                               , const bool bdofApplied
                               , const bool isIBC
                               , const RefPicList refPicList = REF_PIC_LIST_X
@@ -114,7 +114,7 @@ public:
   void    destroy         ();
   void    init            ();
 
-  void    weightedGeoBlk  ( const ClpRngs &clpRngs, PredictionUnit &pu, const uint8_t splitDir, int32_t channel,
+  void    weightedGeoBlk  ( const ClpRngs &clpRngs, CodingUnit& cu, const uint8_t splitDir, int32_t channel,
                             PelUnitBuf &predDst, PelUnitBuf &predSrc0, PelUnitBuf &predSrc1);
 
   static bool isSubblockVectorSpreadOverLimit(int a, int b, int c, int d, int predType);
@@ -134,16 +134,16 @@ class DMVR : public InterPredInterpolation
                                    Mv(-2, 1), Mv(-1, 1), Mv(0, 1), Mv(1, 1), Mv(2, 1),
                                    Mv(-2, 2), Mv(-1, 2), Mv(0, 2), Mv(1, 2), Mv(2, 2) };
 private:
-  void     xPrefetch            ( const PredictionUnit& pu, PelUnitBuf& pcPad, RefPicList refId, bool isPadding = false, bool forLuma = true, bool forChroma = true );
-  void     xCopyAndPad          ( const PredictionUnit& pu, const PelUnitBuf& srcBuf, const PelUnitBuf& pcPad );
-  void     xFinalPaddedMCForDMVR( const PredictionUnit& pu, PelUnitBuf* dstBuf, const PelUnitBuf *refBuf, const bool bioApplied, const Mv startMV[NUM_REF_PIC_LIST_01], const Mv& refMV );
+  void     xPrefetch            ( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool isPadding = false, bool forLuma = true, bool forChroma = true );
+  void     xCopyAndPad          ( const CodingUnit& cu, const PelUnitBuf& srcBuf, const PelUnitBuf& pcPad );
+  void     xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, const PelUnitBuf *refBuf, const bool bioApplied, const Mv startMV[NUM_REF_PIC_LIST_01], const Mv& refMV );
 
 protected:
   DMVR();
   virtual ~DMVR();
   void destroy();
   void init                    ( RdCost* pcRdCost, const ChromaFormat chFormat );
-  void xProcessDMVR            ( const PredictionUnit& pu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied );
+  void xProcessDMVR            ( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied );
 };
 
 class InterPrediction : public DMVR
@@ -156,10 +156,10 @@ private:
   bool         m_subPuMC;
   PelStorage   m_geoPartBuf[2]; 
 
-  void xPredInterUni            ( const PredictionUnit& pu, const RefPicList& refPicList, PelUnitBuf& pcYuvPred, const bool bi, const bool bdofApplied );
-  void xPredInterBi             ( const PredictionUnit& pu, PelUnitBuf& yuvPred, const bool bdofApplied = false );
-  void xSubPuBDOF               ( const PredictionUnit& pu, PelUnitBuf& predBuf, const RefPicList& refPicList = REF_PIC_LIST_X );
-  bool xCheckIdenticalMotion    ( const PredictionUnit& pu ) const;
+  void xPredInterUni            ( const CodingUnit& cu, const RefPicList& refPicList, PelUnitBuf& pcYuvPred, const bool bi, const bool bdofApplied );
+  void xPredInterBi             ( const CodingUnit& cu, PelUnitBuf& yuvPred, const bool bdofApplied = false );
+  void xSubPuBDOF               ( const CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& refPicList = REF_PIC_LIST_X );
+  bool xCheckIdenticalMotion    ( const CodingUnit& cu ) const;
 
 public:
   InterPrediction();
@@ -169,10 +169,10 @@ public:
   void    destroy               ();
 
   // inter
-  bool    motionCompensation    ( PredictionUnit& pu, PelUnitBuf& predBuf, const RefPicList refPicList = REF_PIC_LIST_X );
-  void    motionCompensationIBC ( PredictionUnit& pu, PelUnitBuf& predBuf );
-  void    xSubPuMC              ( PredictionUnit& pu, PelUnitBuf& predBuf, const RefPicList& eRefPicList = REF_PIC_LIST_X );
-  void    motionCompensationGeo ( PredictionUnit& pu, PelUnitBuf& predBuf, const MergeCtx& geoMrgCtx );
+  bool    motionCompensation    ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList refPicList = REF_PIC_LIST_X );
+  void    motionCompensationIBC ( CodingUnit& cu, PelUnitBuf& predBuf );
+  void    xSubPuMC              ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& eRefPicList = REF_PIC_LIST_X );
+  void    motionCompensationGeo ( CodingUnit& cu, PelUnitBuf& predBuf, const MergeCtx& geoMrgCtx );
 };
 
 } // namespace vvenc

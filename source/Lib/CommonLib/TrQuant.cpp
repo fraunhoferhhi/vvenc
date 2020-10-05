@@ -826,19 +826,19 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
   {
-    const PredictionUnit* pu = tu.cs->getPU(area.pos(), toChannelType(compID));
+    const CodingUnit& cu = *tu.cs->getPU(area.pos(), toChannelType(compID)); //th just cu
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
         : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width), Log2(area.height));
-    uint32_t intraMode = PU::getFinalIntraMode(*pu, toChannelType(compID));
+    uint32_t intraMode = PU::getFinalIntraMode(cu, toChannelType(compID));
 
-    if (PU::isLMCMode( pu->intraDir[toChannelType(compID)]))
+    if (PU::isLMCMode( cu.intraDir[toChannelType(compID)]))
     {
-      intraMode = PU::getCoLocatedIntraLumaMode(*pu);
+      intraMode = PU::getCoLocatedIntraLumaMode(cu);
     }
-    if (PU::isMIP(*pu, toChannelType(compID)))
+    if (PU::isMIP(cu, toChannelType(compID)))
     {
       intraMode = PLANAR_IDX;
     }
@@ -926,7 +926,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
   {
-    const PredictionUnit* pu = tu.cs->getPU(area.pos(), toChannelType(compID));
+    const CodingUnit& cu = *tu.cs->getPU(area.pos(), toChannelType(compID));
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -934,13 +934,13 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         : g_scanOrderRom.getScanOrder(
           SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width),
           Log2(area.height));   
-    uint32_t intraMode = PU::getFinalIntraMode(*pu, toChannelType(compID));
+    uint32_t intraMode = PU::getFinalIntraMode(cu, toChannelType(compID));
 
-    if (PU::isLMCMode(pu->intraDir[toChannelType(compID)]))
+    if (PU::isLMCMode(cu.intraDir[toChannelType(compID)]))
     {
-      intraMode = PU::getCoLocatedIntraLumaMode(*pu);
+      intraMode = PU::getCoLocatedIntraLumaMode(cu);
     }
-    if (PU::isMIP(*pu, toChannelType(compID)))
+    if (PU::isMIP(cu, toChannelType(compID)))
     {
       intraMode = PLANAR_IDX;
     }

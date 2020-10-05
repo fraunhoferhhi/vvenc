@@ -97,8 +97,8 @@ public:
   void        extend_ref_line           ( CodingUnit&          cu);
   void        intra_luma_pred_modes     ( CodingUnit&          cu );
   void        intra_chroma_pred_modes   ( CodingUnit&          cu );
-  bool        intra_chroma_lmc_mode     ( PredictionUnit&      pu );
-  void        intra_chroma_pred_mode    ( PredictionUnit&      pu );
+  bool        intra_chroma_lmc_mode     ( CodingUnit&          cu );
+  void        intra_chroma_pred_mode    ( CodingUnit&          cu );
   void        cu_residual               ( CodingUnit&          cu,     Partitioner&    pm,       CUCtx& cuCtx );
   void        rqt_root_cbf              ( CodingUnit&          cu );
   void        adaptive_color_transform  ( CodingUnit&          cu);
@@ -106,25 +106,25 @@ public:
   void        end_of_ctu                ( CodingUnit&          cu,     CUCtx&          cuCtx );
   void        mip_flag                  ( CodingUnit&          cu );
   void        mip_pred_modes            ( CodingUnit&          cu );
-  void        mip_pred_mode             ( PredictionUnit&      pu );
+  void        mip_pred_mode             ( CodingUnit&          cu );
   void        cu_palette_info           ( CodingUnit&          cu,     ComponentID     compBegin, uint32_t numComp, CUCtx& cuCtx );
   void        cuPaletteSubblockInfo     ( CodingUnit&          cu,     ComponentID     compBegin, uint32_t numComp, int subSetId, uint32_t& prevRunPos, unsigned& prevRunType );
 
   // prediction unit (clause 7.3.8.6)
-  void        prediction_unit           ( PredictionUnit&      pu,     MergeCtx&       mrgCtx );
-  void        merge_flag                ( PredictionUnit&      pu );
-  void        merge_data                ( PredictionUnit&      pu );
+  void        prediction_unit           ( CodingUnit&          cu,     MergeCtx&       mrgCtx );
+  void        merge_flag                ( CodingUnit&          cu );
+  void        merge_data                ( CodingUnit&          cu );
   void        affine_flag               ( CodingUnit&          cu );
   void        subblock_merge_flag       ( CodingUnit&          cu );
-  void        merge_idx                 ( PredictionUnit&      pu );
-  void        mmvd_merge_idx            ( PredictionUnit&      pu);
+  void        merge_idx                 ( CodingUnit&          cu );
+  void        mmvd_merge_idx            ( CodingUnit&          cu);
   void        imv_mode                  ( CodingUnit&          cu,     MergeCtx&       mrgCtx );
   void        affine_amvr_mode          ( CodingUnit&          cu,     MergeCtx&       mrgCtx );
-  void        inter_pred_idc            ( PredictionUnit&      pu );
-  void        ref_idx                   ( PredictionUnit&      pu,     RefPicList      eRefList );
-  void        mvp_flag                  ( PredictionUnit&      pu,     RefPicList      eRefList );
-  void        Ciip_flag                 ( PredictionUnit&      pu );
-  void        smvd_mode                 ( PredictionUnit&      pu );
+  void        inter_pred_idc            ( CodingUnit&          cu );
+  void        ref_idx                   ( CodingUnit&          cu,     RefPicList      eRefList );
+  void        mvp_flag                  ( CodingUnit&          cu,     RefPicList      eRefList );
+  void        Ciip_flag                 ( CodingUnit&          cu );
+  void        smvd_mode                 ( CodingUnit&          cu );
 
   // transform tree (clause 7.3.8.8)
 #if ISP_VVC

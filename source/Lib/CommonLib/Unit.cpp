@@ -248,8 +248,8 @@ const UnitArea UnitArea::singleChan(const ChannelType chType) const
 // coding unit method definitions
 // ---------------------------------------------------------------------------
 
-CodingUnit::CodingUnit(const UnitArea& unit)                                : UnitArea(unit),                 cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), pu(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); pu = cu = this; }
-CodingUnit::CodingUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), pu(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); pu = cu = this; }
+CodingUnit::CodingUnit(const UnitArea& unit)                                : UnitArea(unit),                 cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); }
+CodingUnit::CodingUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); }
 
 CodingUnit& CodingUnit::operator=( const CodingUnit& other )
 {
@@ -420,7 +420,7 @@ bool CodingUnit::checkCCLMAllowed() const
 
 uint8_t CodingUnit::checkAllowedSbt() const
 {
-  if( !slice->sps->SBT || predMode != MODE_INTER || pu->ciip)
+  if( !slice->sps->SBT || predMode != MODE_INTER || ciip)
   {
     return 0;
   }
@@ -453,9 +453,6 @@ uint8_t CodingUnit::checkAllowedSbt() const
 // ---------------------------------------------------------------------------
 // prediction unit method definitions
 // ---------------------------------------------------------------------------
-
-//PredictionUnit::PredictionUnit(const UnitArea& unit)                                : UnitArea(unit)                , cu(nullptr), cs(nullptr), chType( CH_L ) { initData(); }
-//PredictionUnit::PredictionUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cu(nullptr), cs(nullptr), chType( CH_L ) { initData(); }
 
 void CodingUnit::initPuData()
 {

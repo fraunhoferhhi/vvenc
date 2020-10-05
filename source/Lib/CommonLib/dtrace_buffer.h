@@ -175,16 +175,16 @@ inline void dtraceCCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const Coding
       calcCheckSum( pelBuf, cs.sps->bitDepths[ toChannelType(compId) ]));
 }
 
-inline void dtraceMotField( CDTrace *trace_ctx, const PredictionUnit& pu )
+inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
 {
-  DTRACE( trace_ctx, D_MOT_FIELD, "PU %d,%d @ %d,%d\n", pu.lwidth(), pu.lheight(), pu.lx(), pu.ly() );
-  const CMotionBuf mb = pu.getMotionBuf();
+  DTRACE( trace_ctx, D_MOT_FIELD, "PU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
+  const CMotionBuf mb = cu.getMotionBuf();
   for( uint32_t listIdx = 0; listIdx < 2; listIdx++ )
   {
     RefPicList eListIdx = RefPicList( listIdx );
-    for( int y = 0, i = 0; y < pu.lheight(); y += 4 )
+    for( int y = 0, i = 0; y < cu.lheight(); y += 4 )
     {
-      for( int x = 0; x < pu.lwidth(); x += 4, i++ )
+      for( int x = 0; x < cu.lwidth(); x += 4, i++ )
       {
         const MotionInfo &mi = mb.at( x >> 2, y >> 2 );
         DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.refIdx[eListIdx] );

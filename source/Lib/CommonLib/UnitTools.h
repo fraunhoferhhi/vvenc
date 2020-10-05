@@ -136,43 +136,43 @@ namespace CU
 // PU tools
 namespace PU
 {
-  int      getLMSymbolList                (const PredictionUnit &pu, int *modeList);
-  bool     isMIP                          (const PredictionUnit &pu, const ChannelType channelType = CH_L);
-  int      getIntraMPMs                   (const PredictionUnit &pu, unsigned *mpm );
-  bool     isDMChromaMIP                  (const PredictionUnit &pu);
-  uint32_t getIntraDirLuma                (const PredictionUnit &pu);
-  void     getIntraChromaCandModes        (const PredictionUnit &pu, unsigned modeList[NUM_CHROMA_MODE]);
-  const PredictionUnit &getCoLocatedLumaPU(const PredictionUnit &pu);
-  uint32_t getFinalIntraMode              (const PredictionUnit &pu, const ChannelType chType);
-  uint32_t getCoLocatedIntraLumaMode      (const PredictionUnit &pu);
-  void     getInterMergeCandidates        (const PredictionUnit &pu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx = -1 );
-  void     getInterMMVDMergeCandidates    (const PredictionUnit &pu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
+  int      getLMSymbolList                (const CodingUnit& cu, int *modeList);
+  bool     isMIP                          (const CodingUnit& cu, const ChannelType channelType = CH_L);
+  int      getIntraMPMs                   (const CodingUnit& cu, unsigned *mpm );
+  bool     isDMChromaMIP                  (const CodingUnit& cu);
+  uint32_t getIntraDirLuma                (const CodingUnit& cu);
+  void     getIntraChromaCandModes        (const CodingUnit& cu, unsigned modeList[NUM_CHROMA_MODE]);
+  const CodingUnit &getCoLocatedLumaPU    (const CodingUnit& cu);
+  uint32_t getFinalIntraMode              (const CodingUnit& cu, const ChannelType chType);
+  uint32_t getCoLocatedIntraLumaMode      (const CodingUnit& cu);
+  void     getInterMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx = -1 );
+  void     getInterMMVDMergeCandidates    (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
   int      getDistScaleFactor             (const int currPOC, const int currRefPOC, const int colPOC, const int colRefPOC);
   bool     isDiffMER                      (const Position &pos1, const Position &pos2, const unsigned plevel);
-  bool     getColocatedMVP                (const PredictionUnit &pu, const RefPicList refPicList, const Position& pos, Mv& rcMv, const int refIdx, bool sbFlag = false);
-  void     fillMvpCand                    (      PredictionUnit &pu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo );
-  bool     addMVPCandUnscaled             (const PredictionUnit &pu, const RefPicList refPicList, const int iRefIdx, const Position& pos, const MvpDir dir, AMVPInfo &amvpInfo);
+  bool     getColocatedMVP                (const CodingUnit& cu, const RefPicList refPicList, const Position& pos, Mv& rcMv, const int refIdx, bool sbFlag = false);
+  void     fillMvpCand                    (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo );
+  bool     addMVPCandUnscaled             (const CodingUnit& cu, const RefPicList refPicList, const int iRefIdx, const Position& pos, const MvpDir dir, AMVPInfo &amvpInfo);
   bool     addMergeHMVPCand               (const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo &miLeft, const bool isAvailableB1, const MotionInfo &miAbove, const bool ibcFlag, const bool isGt4x4);
-  void     addAMVPHMVPCand                (const PredictionUnit &pu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info);
-  bool     isBipredRestriction            (const PredictionUnit &pu);
-  void     spanMotionInfo                 (      PredictionUnit &pu, const MergeCtx &mrgCtx = MergeCtx() );
-  void     restrictBiPredMergeCandsOne    (      PredictionUnit &pu);
+  void     addAMVPHMVPCand                (const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info);
+  bool     isBipredRestriction            (const CodingUnit& cu);
+  void     spanMotionInfo                 (      CodingUnit& cu, const MergeCtx &mrgCtx = MergeCtx() );
+  void     restrictBiPredMergeCandsOne    (      CodingUnit& cu);
 
   bool     isLMCMode                      (                          unsigned mode);
-  bool     isLMCModeEnabled               (const PredictionUnit &pu, unsigned mode);
-  bool     isChromaIntraModeCrossCheckMode(const PredictionUnit &pu);
-  void     getGeoMergeCandidates          (const PredictionUnit &pu, MergeCtx &GeoMrgCtx);
-  void     spanGeoMotionInfo              (PredictionUnit &pu, MergeCtx &GeoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0, const uint8_t candIdx1);
-  bool     isBiPredFromDifferentDirEqDistPoc(const PredictionUnit &pu);
-  bool     checkDMVRCondition             (const PredictionUnit &pu);
-  void     getAffineControlPointCand      (const PredictionUnit &pu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgCtx);
-  void     getAffineMergeCand             (const PredictionUnit &pu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx = -1);
-  void     setAllAffineMvField            (      PredictionUnit &pu, MvField *mvField, RefPicList eRefList);
-  void     setAllAffineMv                 (      PredictionUnit &pu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs = false);
-  void     xInheritedAffineMv             (const PredictionUnit &pu, const PredictionUnit* puNeighbour, RefPicList refPicList, Mv rcMv[3]);
-  void     fillAffineMvpCand              (      PredictionUnit &pu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
-  bool     addAffineMVPCandUnscaled       (const PredictionUnit &pu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);
-  bool     getInterMergeSbTMVPCand        (const PredictionUnit &pu, MergeCtx &mrgCtx, bool& LICFlag, const int count, int mmvdList);
+  bool     isLMCModeEnabled               (const CodingUnit& cu, unsigned mode);
+  bool     isChromaIntraModeCrossCheckMode(const CodingUnit& cu);
+  void     getGeoMergeCandidates          (const CodingUnit& cu, MergeCtx &GeoMrgCtx);
+  void     spanGeoMotionInfo              (CodingUnit& cu, MergeCtx &GeoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0, const uint8_t candIdx1);
+  bool     isBiPredFromDifferentDirEqDistPoc(const CodingUnit& cu);
+  bool     checkDMVRCondition             (const CodingUnit& cu);
+  void     getAffineControlPointCand      (const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgCtx);
+  void     getAffineMergeCand             (      CodingUnit& cu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx = -1);
+  void     setAllAffineMvField            (      CodingUnit& cu, MvField *mvField, RefPicList eRefList);
+  void     setAllAffineMv                 (      CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs = false);
+  void     xInheritedAffineMv             (const CodingUnit& cu, const CodingUnit* puNeighbour, RefPicList refPicList, Mv rcMv[3]);
+  void     fillAffineMvpCand              (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
+  bool     addAffineMVPCandUnscaled       (const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);
+  bool     getInterMergeSbTMVPCand        (const CodingUnit& cu, MergeCtx &mrgCtx, bool& LICFlag, const int count, int mmvdList);
 }
 
 // TU tools

@@ -284,7 +284,6 @@ struct UnitAreaRelative : public UnitArea
 namespace vvenc {
 
 struct TransformUnit;
-//struct PredictionUnit;
 class  CodingStructure;
 
 
@@ -371,7 +370,7 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   uint8_t           smvdMode;
   uint8_t           ispMode;
 
-  CodingUnit() : chType( CH_L ) { pu = cu = this;}
+  CodingUnit() : chType( CH_L ) {}
   CodingUnit(const UnitArea& unit);
   CodingUnit(const ChromaFormat _chromaFormat, const Area& area);
 
@@ -396,9 +395,6 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   unsigned    idx;
   CodingUnit *next;
 
-  CodingUnit *pu;
-  CodingUnit *cu;
-
   TransformUnit *firstTU;
   TransformUnit *lastTU;
 
@@ -410,36 +406,6 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   bool        isConsIntra()         const { return modeType == MODE_TYPE_INTRA; }
 };
 
-typedef CodingUnit PredictionUnit;
-
-/*
-struct PredictionUnit : public UnitArea, public IntraPredictionData, public InterPredictionData
-{
-  CodingUnit*      cu;
-  CodingStructure* cs;
-  ChannelType      chType;
-
-  unsigned        idx;
-
-  // constructors
-  PredictionUnit  (): chType( CH_L ) { }
-  PredictionUnit  ( const UnitArea& unit);
-  PredictionUnit  ( const ChromaFormat _chromaFormat, const Area& area);
-
-  void initData   ();
-
-  PredictionUnit& operator= ( const PredictionUnit& other);
-  PredictionUnit& operator= ( const MotionInfo& mi);
-
-
-  // for accessing motion information, which can have higher resolution than PUs (should always be used, when accessing neighboring motion information)
-  const MotionInfo& getMotionInfo () const;
-  const MotionInfo& getMotionInfo ( const Position& pos ) const;
-  MotionBuf         getMotionBuf  ();
-  CMotionBuf        getMotionBuf  () const;
-
-};
-*/
 // ---------------------------------------------------------------------------
 // transform unit
 // ---------------------------------------------------------------------------

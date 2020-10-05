@@ -243,7 +243,7 @@ private:
   void xEncodeInterResidual   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, 
                                 int residualPass = 0, bool* bestHasNonResi = NULL, double* equBcwCost = NULL );
 
-  uint64_t xCalcPuMeBits      ( const PredictionUnit& pu);
+  uint64_t xCalcPuMeBits      ( const CodingUnit& cu);
   double   xCalcDistortion    ( CodingStructure *&cur_CS, ChannelType chType, int BitDepth, int imv);
   int      xCheckMMVDCand     ( uint32_t& mmvdMergeCand, int& bestDir, int tempNum, double& bestCostOffset, double& bestCostMerge, double bestCostList );
 };

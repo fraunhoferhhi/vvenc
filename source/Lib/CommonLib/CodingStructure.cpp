@@ -282,37 +282,7 @@ const CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType
     return m_cuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
   }
 }
-/*
-PredictionUnit* CodingStructure::getPU( const Position& pos, const ChannelType effChType )
-{
-  const CompArea& _blk = area.blocks[effChType];
 
-  if( !_blk.contains( pos ) )
-  {
-    if( parent ) return parent->getPU( pos, effChType );
-    else         return nullptr;
-  }
-  else
-  {
-    return m_puPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
-  }
-}
-
-const PredictionUnit * CodingStructure::getPU( const Position& pos, const ChannelType effChType ) const
-{
-  const CompArea& _blk = area.blocks[effChType];
-
-  if( !_blk.contains( pos ) )
-  {
-    if( parent ) return parent->getPU( pos, effChType );
-    else         return nullptr;
-  }
-  else
-  {
-    return m_puPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
-  }
-}
-*/
 TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType effChType, const int subTuIdx )
 {
   const CompArea& _blk = area.blocks[effChType];
@@ -382,7 +352,7 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
             while( !tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel( effChType )].contains( pos ) )
             {
               extraIdx++;
-              CHECK( tus[idx - 1 + extraIdx]->cu->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
+              CHECK( tus[idx - 1 + extraIdx]->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
               CHECK( extraIdx > 3, "extraIdx > 3" );
             }
           }
@@ -464,7 +434,7 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
             while ( !tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel( effChType )].contains(pos) )
             {
               extraIdx++;
-              CHECK( tus[idx - 1 + extraIdx]->cu->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
+              CHECK( tus[idx - 1 + extraIdx]->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
               CHECK( extraIdx > 3, "extraIdx > 3" );
             }
           }
@@ -492,7 +462,7 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   cu->cs        = this;
   cu->slice     = nullptr;
   cu->next      = nullptr;
-//  cu->pu        = nullptr;
+//  cu->cu        = nullptr;
   cu->firstTU   = nullptr;
   cu->lastTU    = nullptr;
   cu->chType    = chType;
@@ -600,7 +570,7 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const UnitScale& scale = unitScale[_blk.compID];
 
         const Area scaledSelf  = scale.scale( _selfBlk );
-        const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
+        const Area scaledBlk   = isIspTu ? scale.scale( tu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
         CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
@@ -783,7 +753,6 @@ void CodingStructure::allocateVectorsAtPicLevel()
   size_t allocSize = twice * unitScale[0].scale( area.blocks[0].size() ).area();
 
   cus.reserve( allocSize );
-  pus.reserve( allocSize );
   tus.reserve( allocSize );
 }
 
@@ -835,7 +804,6 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
     unsigned _area = unitScale[i].scale( area.blocks[i].size() ).area();
 
     m_cuPtr[i]    = _area > 0 ? new CodingUnit*    [_area] : nullptr;
-//    m_puPtr[i]    = _area > 0 ? new PredictionUnit*[_area] : nullptr;
     m_tuPtr[i]    = _area > 0 ? new TransformUnit* [_area] : nullptr;
     m_isDecomp[i] = _area > 0 ? new bool           [_area] : nullptr;
   }
@@ -1230,7 +1198,7 @@ void CodingStructure::clearPUs()
 
   for( auto &pcu : cus )
   {
-    pcu->pu = nullptr;
+    pcu->cu = nullptr;
   }
 }
 */
@@ -1429,20 +1397,7 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const P
 
   return ( cu && cu->slice->independentSliceIdx == curSliceIdx && cu->tileIdx == curTileIdx ) ? cu : nullptr;
 }
-/*
-const PredictionUnit* CodingStructure::getPURestricted( const Position& pos, const PredictionUnit& curPu, const ChannelType _chType ) const
-{
-  if( sps->entropyCodingSyncEnabled )
-  {
-    const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, curPu.chromaFormat );
-    const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, curPu.chromaFormat );
-    if( (pos.x >> xshift) > (curPu.blocks[_chType].x >> xshift) || (pos.y >> yshift) > (curPu.blocks[_chType].y >> yshift) )
-      return nullptr;
-  }
-  const PredictionUnit* pu = getPU( pos, _chType );
-  return ( pu && CU::isSameSliceAndTile( *pu->cu, *curPu.cu ) && ( pu->cs != curPu.cs || pu->idx <= curPu.idx ) ) ? pu : nullptr;
-}
-*/
+
 const TransformUnit* CodingStructure::getTURestricted( const Position& pos, const TransformUnit& curTu, const ChannelType _chType ) const
 {
   if( sps->entropyCodingSyncEnabled )
