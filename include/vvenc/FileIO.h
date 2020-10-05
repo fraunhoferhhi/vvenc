@@ -47,8 +47,8 @@ vvc@hhi.fraunhofer.de
 
 #include <fstream>
 #include <vector>
-#include "../vvenc/Basics.h"
-#include "../vvenc/vvencDecl.h"
+#include "vvenc/vvencDecl.h"
+#include "vvenc/Basics.h"
 
 //! \ingroup Interface
 //! \{
