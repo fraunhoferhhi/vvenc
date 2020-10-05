@@ -50,7 +50,7 @@ vvc@hhi.fraunhofer.de
 #include <chrono>
 #include <ctime>
 
-#include "../../../include/vvenc/version.h"
+#include "vvenc/version.h"
 #include "../vvencFFapp/EncApp.h"
 #include "../vvencFFapp/ParseArg.h"
 
