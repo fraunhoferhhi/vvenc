@@ -111,7 +111,7 @@ public:
       }
       std::cout <<
           "\t [--bitrate,-b  <int>     ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
-          "\t [--qp,-q <int>           ] : quantization parameter, QP (0-63) default: [" << rcParams.m_iQp << "]\n"
+          "\t [--qp,-q <int>           ] : quantization parameter, QP (0-51) default: [" << rcParams.m_iQp << "]\n"
           "\t [--qpa   <int>           ] : perceptual QP adaptation to improve visual coding quality (0: off, on for 1: SDR (WPSNR), 2: SDR (XPSNR),\n\t\t\t\t      3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.m_iPerceptualQPA << "]\n"
           "\t [--threads,-t  <int>     ] : number of threads (1-n) default: [size <= HD: " << rcParams.m_iThreadCount << ", UHD: 6]\n"
           "\n"

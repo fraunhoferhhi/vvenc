@@ -79,7 +79,7 @@ int main( int argc, char* argv[] )
 
   vvenc::VVEncParameter cVVEncParameter;
   // set desired encoding options
-  cVVEncParameter.m_iQp             = 32;                         // quantization parameter 0-63
+  cVVEncParameter.m_iQp             = 32;                         // quantization parameter 0-51
   cVVEncParameter.m_iWidth          = 1920;                       // luminance width of input picture
   cVVEncParameter.m_iHeight         = 1080;                       // luminance height of input picture
   cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)

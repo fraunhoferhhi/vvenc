@@ -307,7 +307,7 @@ typedef struct VVENC_DECL VVEncParameter
 {
   VVEncParameter()           ///< default constructor, sets member attributes to default values
   {}
-  int m_iQp                   = 30;     ///< quantization parameter                                 (no default || 0-63)
+  int m_iQp                   = 30;     ///< quantization parameter                                 (no default || 0-51)
   int m_iWidth                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
   int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
   int m_iGopSize              = 16;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)

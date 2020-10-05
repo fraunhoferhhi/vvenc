@@ -6,7 +6,7 @@ tag 0.1.1.0
                  Internally, the refresh rate in seconds is translated into the frames where the refresh is set.
  - changed parameter: --intraperiod,-ip is 0 per default because --refreshsec is used for that purpose instead.
                       In case of a value greater than 0, intraperiod overwrites refreshsec.
- - changed parameter: Abbreviation -q is now supported in addition to --qp. Corrected the value range (51->63).
+ - changed parameter: Abbreviation -q is now supported in addition to --qp.
  - fullhelp changed: all internal encoding parameters are now shown as strings when --fullhelp is called.
 
 /////////////////////////////////////////
