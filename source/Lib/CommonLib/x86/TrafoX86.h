@@ -772,7 +772,7 @@ void cpyCoeff_SSE( const Pel* src, ptrdiff_t stride, TCoeff* dst, unsigned width
 }
 
 template<X86_VEXT vext>
-void TCoeffOps::_initTCoeffOps()
+void TCoeffOps::_initTCoeffOpsX86()
 {
   cpyResi4     = cpyResi_SSE  <vext, 4>;
   cpyResi8     = cpyResi_SSE  <vext, 8>;
@@ -788,7 +788,7 @@ void TCoeffOps::_initTCoeffOps()
                = fastFwd_SSE  <vext, 8>;
 }
 
-template void TCoeffOps::_initTCoeffOps<SIMDX86>();
+template void TCoeffOps::_initTCoeffOpsX86<SIMDX86>();
 
 }
 
