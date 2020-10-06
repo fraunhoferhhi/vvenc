@@ -846,7 +846,16 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
 
     if (lfnstIdx < 3)
     {
+#if ISP_VVC
+      if (tu.cu->ispMode && isLuma(compID))
+      {
+        intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
+      }
+      else
+        intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
+#else
       intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
+#endif
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;
       bool      tu4x4Flag     = (width == 4 && height == 4);
@@ -948,7 +957,16 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
 
     if (lfnstIdx < 3)
     {
+#if ISP_VVC
+      if (tu.cu->ispMode && isLuma(compID))
+      {
+        intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
+      }
+      else
+        intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
+#else
       intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
+#endif
 
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;

@@ -125,8 +125,9 @@ int motionErrorLumaInt( const Pel* origOrigin, const ptrdiff_t origStride, const
 int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
-  int tempArray[64 + 8][64];
+  Pel tempArray[64 + 8][64];
   int sum, base;
+  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
   for( int y1 = 1; y1 < bs + 7; y1++ )
   {
@@ -145,11 +146,13 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
       sum += xFilter[5] * rowStart[5];
       sum += xFilter[6] * rowStart[6];
 
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+
       tempArray[y1][x1] = sum;
     }
   }
 
-  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
   for( int y1 = 0; y1 < bs; y1++ )
   {
     const Pel* origRow = origOrigin + ( y + y1 )*origStride + 0;
@@ -163,7 +166,7 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
       sum += yFilter[5] * tempArray[y1 + 5][x1];
       sum += yFilter[6] * tempArray[y1 + 6][x1];
 
-      sum = ( sum + ( 1 << 11 ) ) >> 12;
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
       sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
 
       error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
