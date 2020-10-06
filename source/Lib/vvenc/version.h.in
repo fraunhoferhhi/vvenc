@@ -39,51 +39,19 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
-#pragma once
 
-#include "libmd5.h"
-#include <string>
+#if !defined( VVENC_VERSION )
 
-//! \ingroup libMD5
-//! \{
+#define VVENC_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${PROJECT_VERSION_TWEAK}"
 
-namespace vvenc {
+#define VVENC_VERSION_MAJOR ${PROJECT_VERSION_MAJOR}
+#define VVENC_VERSION_MINOR ${PROJECT_VERSION_MINOR}
+#define VVENC_VERSION_PATCH ${PROJECT_VERSION_PATCH}
+#define VVENC_VERSION_TWEAK ${PROJECT_VERSION_TWEAK}
 
-static const uint32_t MD5_DIGEST_STRING_LENGTH=16;
+#ifdef _WIN32
+#define VVENC_VS_VERSION      ${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},${PROJECT_VERSION_TWEAK}
+#define VVENC_VS_VERSION_STR "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${PROJECT_VERSION_TWEAK}"
+#endif
 
-class MD5
-{
-public:
-  /**
-   * initialize digest state
-   */
-  MD5()
-  {
-    MD5Init(&m_state);
-  }
-
-  /**
-   * compute digest over buf of length len.
-   * multiple calls may extend the digest over more data.
-   */
-  void update(unsigned char *buf, unsigned len)
-  {
-    MD5Update(&m_state, buf, len);
-  }
-
-  /**
-   * flush any outstanding MD5 data, write the digest into digest.
-   */
-  void finalize(unsigned char digest[MD5_DIGEST_STRING_LENGTH])
-  {
-    MD5Final(digest, &m_state);
-  }
-
-private:
-  context_md5_t m_state;
-};
-
-} // namespace vvenc
-
-//! \}
-
+#endif

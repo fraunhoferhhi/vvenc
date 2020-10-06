@@ -46,7 +46,8 @@ endmacro( install_exe_pdb )
 target_include_directories( vvenc  SYSTEM INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> )
 
 # install headers
-install( DIRECTORY include/vvenc  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
+install( FILES     ${CMAKE_BINARY_DIR}/vvenc/version.h  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vvenc )
+install( DIRECTORY include/vvenc                        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
 
 # install targets
 install_targets( Release )

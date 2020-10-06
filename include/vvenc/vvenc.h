@@ -51,8 +51,8 @@ vvc@hhi.fraunhofer.de
 
 #include "stdint.h"
 #include <string>
-#include "../vvenc/vvencDecl.h"
-#include "../vvenc/Basics.h"
+#include "vvenc/vvencDecl.h"
+#include "vvenc/Basics.h"
 
 namespace vvenc {
 

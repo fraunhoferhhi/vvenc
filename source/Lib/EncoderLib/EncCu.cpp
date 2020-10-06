@@ -2787,7 +2787,6 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
           bestCostIMV = costCur;
           tempCSbest->getPredBuf().copyFrom(tempCS->getPredBuf());
           tempCSbest->clearCUs();
-//          tempCSbest->clearPUs();
           tempCSbest->clearTUs();
           tempCSbest->copyStructure(*tempCS, partitioner.chType, TREE_D);
         }
