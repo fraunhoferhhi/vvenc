@@ -48,7 +48,7 @@ vvc@hhi.fraunhofer.de
 #include <cstdint>
 #include <cstdarg>
 #include <vector>
-#include "../vvenc/vvencDecl.h"
+#include "vvenc/vvencDecl.h"
 
 
 //! \ingroup Interface

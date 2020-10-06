@@ -43,8 +43,8 @@ vvc@hhi.fraunhofer.de
 
 #include <sstream>
 #include <list>
-#include "../vvenc/Basics.h"
-#include "../vvenc/vvencDecl.h"
+#include "vvenc/vvencDecl.h"
+#include "vvenc/Basics.h"
 
 //! \ingroup Interface
 //! \{

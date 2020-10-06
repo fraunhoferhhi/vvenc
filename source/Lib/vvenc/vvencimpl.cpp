@@ -54,8 +54,8 @@ vvc@hhi.fraunhofer.de
 #include <stdio.h>
 #include <algorithm>
 
-#include "../../../include/vvenc/Nal.h"
-#include "../../../include/vvenc/version.h"
+#include "vvenc/Nal.h"
+#include "vvenc/version.h"
 
 
 namespace vvenc {

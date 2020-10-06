@@ -46,8 +46,8 @@ vvc@hhi.fraunhofer.de
 #pragma once
 
 #include <string>
-#include "../vvenc/Basics.h"
-#include "../vvenc/vvencDecl.h"
+#include "vvenc/vvencDecl.h"
+#include "vvenc/Basics.h"
 
 //! \ingroup Interface
 //! \{
