@@ -4117,7 +4117,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
       }
     }
 
-    CodingUnit& cu = *cs.getPU(partitioner.chType);
+    CodingUnit& cu = *cs.getCU(partitioner.chType, TREE_D);
     m_CABACEstimator->resetBits();
     m_CABACEstimator->cu_skip_flag  ( cu );
     m_CABACEstimator->merge_data(cu);

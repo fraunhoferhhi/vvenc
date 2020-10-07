@@ -598,8 +598,8 @@ const CodingUnit& CU::getCoLocatedLumaPU(const CodingUnit& cu)
   Position              topLeftPos = cu.blocks[cu.chType].lumaPos();
   Position              refPos     = topLeftPos.offset(cu.blocks[cu.chType].lumaSize().width  >> 1,
                                                        cu.blocks[cu.chType].lumaSize().height >> 1);
-  const CodingUnit& lumaCU     = cu.isSepTree() ? *cu.cs->refCS->getPU(refPos, CH_L)
-                                                        : *cu.cs->getPU(topLeftPos, CH_L);
+  const CodingUnit& lumaCU     = cu.isSepTree() ? *cu.cs->refCS->getCU(refPos, CH_L, TREE_D)
+                                                        : *cu.cs->getCU(topLeftPos, CH_L, TREE_D);
 
   return lumaCU;
 }

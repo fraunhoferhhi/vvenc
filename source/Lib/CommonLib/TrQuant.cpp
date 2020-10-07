@@ -826,7 +826,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getPU(area.pos(), toChannelType(compID)); //th just cu
+    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -935,7 +935,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
   if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
   {
-    const CodingUnit& cu = *tu.cs->getPU(area.pos(), toChannelType(compID));
+    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3

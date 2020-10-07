@@ -150,7 +150,7 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
         PelBuf piPred       = m_PredBuffer.getCompactBuf( area );
 #endif
 
-  const CodingUnit& cu  = *tu.cs->getPU( area.pos(), chType );
+  const CodingUnit& cu  = *tu.cs->getCU( area.pos(), chType, TREE_D );
   const uint32_t uiChFinalMode  = CU::getFinalIntraMode( cu, chType );
   PelBuf pReco              = cs.getRecoBuf(area);
 

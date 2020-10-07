@@ -1366,7 +1366,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   PelBuf         piReco           = cs.getRecoBuf   (compID);
 #endif
 
-  const CodingUnit& cu        = *cs.getPU(area.pos(), chType);
+  const CodingUnit& cu        = *cs.getCU(area.pos(), chType, TREE_D);
 
   //===== init availability pattern =====
   CHECK( tu.jointCbCr && compID == COMP_Cr, "wrong combination of compID and jointCbCr" );
@@ -2092,7 +2092,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
 #endif
 
   TransformUnit& currTU     = *cs.getTU( currArea.chromaPos(), CH_C );
-  const CodingUnit& cu  = *cs.getPU( currArea.chromaPos(), CH_C );
+  const CodingUnit& cu  = *cs.getCU( currArea.chromaPos(), CH_C, TREE_D );
 #if ISP_VVC
   ChromaCbfs cbfs(false);
   uint32_t   currDepth = partitioner.currTrDepth;
@@ -2672,7 +2672,7 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
   PelBuf piPred    = cs.getPredBuf(COMP_Y);
   PelBuf piResi    = cs.getResiBuf(COMP_Y);
 
-  const CodingUnit& cu = *cs.getPU(area.pos(), CH_L);
+  const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
   initIntraPatternChType(*tu.cu, area);
   if( predBuf )
   {

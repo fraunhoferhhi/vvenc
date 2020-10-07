@@ -78,7 +78,6 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   , picHeader       ( nullptr )
   , m_isTuEnc       ( false )
   , m_cuCache       ( unitCache.cuCache )
-//  , m_puCache       ( unitCache.puCache )
   , m_tuCache       ( unitCache.tuCache )
   , m_unitCacheMutex( mutex )
   , bestParent      ( nullptr )
@@ -94,7 +93,6 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   {
     m_runType [ i ] = nullptr;
     m_cuPtr   [ i ] = nullptr;
-//    m_puPtr   [ i ] = nullptr;
     m_tuPtr   [ i ] = nullptr;
     m_isDecomp[ i ] = nullptr;
   }
@@ -131,9 +129,6 @@ void CodingStructure::destroy()
     delete[] m_cuPtr[ i ];
     m_cuPtr[ i ] = nullptr;
 
-//    delete[] m_puPtr[ i ];
-//    m_puPtr[ i ] = nullptr;
-
     delete[] m_tuPtr[ i ];
     m_tuPtr[ i ] = nullptr;
 
@@ -152,7 +147,6 @@ void CodingStructure::destroy()
   if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
 
   m_tuCache.cache( tus );
-//  m_puCache.cache( pus );
   m_cuCache.cache( cus );
 
   if ( m_unitCacheMutex ) m_unitCacheMutex->unlock();
@@ -161,7 +155,6 @@ void CodingStructure::destroy()
 void CodingStructure::releaseIntermediateData()
 {
   clearTUs();
-//  clearPUs();
   clearCUs();
 }
 
@@ -352,7 +345,7 @@ TransformUnit* CodingStructure::getTU( const Position& pos, const ChannelType ef
             while( !tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel( effChType )].contains( pos ) )
             {
               extraIdx++;
-              CHECK( tus[idx - 1 + extraIdx]->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
+              CHECK( tus[idx - 1 + extraIdx]->cu->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
               CHECK( extraIdx > 3, "extraIdx > 3" );
             }
           }
@@ -434,7 +427,7 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
             while ( !tus[idx - 1 + extraIdx]->blocks[getFirstComponentOfChannel( effChType )].contains(pos) )
             {
               extraIdx++;
-              CHECK( tus[idx - 1 + extraIdx]->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
+              CHECK( tus[idx - 1 + extraIdx]->cu->treeType == TREE_C, "tu searched by position points to a chroma tree CU" );
               CHECK( extraIdx > 3, "extraIdx > 3" );
             }
           }
@@ -462,7 +455,6 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   cu->cs        = this;
   cu->slice     = nullptr;
   cu->next      = nullptr;
-//  cu->cu        = nullptr;
   cu->firstTU   = nullptr;
   cu->lastTU    = nullptr;
   cu->chType    = chType;
@@ -1129,7 +1121,6 @@ void CodingStructure::copyStructure( const CodingStructure& other, const Channel
 
 void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
 {
-//  clearPUs();
   clearTUs();
   clearCUs();
 
@@ -1181,27 +1172,6 @@ void CodingStructure::clearTUs()
   m_numTUs = 0;
 }
 
-/*
-void CodingStructure::clearPUs()
-{
-  int numCh = getNumberValidChannels( area.chromaFormat );
-  for( int i = 0; i < numCh; i++ )
-  {
-    memset( m_puPtr[i], 0, sizeof( *m_puPtr[0] ) * unitScale[i].scaleArea( area.blocks[i].area() ) );
-  }
-
-  if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
-  m_puCache.cache( pus );
-  if ( m_unitCacheMutex ) m_unitCacheMutex->unlock();
-
-  m_numPUs = 0;
-
-  for( auto &pcu : cus )
-  {
-    pcu->cu = nullptr;
-  }
-}
-*/
 void CodingStructure::clearCUs()
 {
   int numCh = getNumberValidChannels( area.chromaFormat );

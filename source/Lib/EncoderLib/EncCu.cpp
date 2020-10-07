@@ -3181,13 +3181,13 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
     if( NULL != bestHasNonResi && (bestCostInternal > tempCS->cost) )
     {
       bestCostInternal = tempCS->cost;
-      if (!(tempCS->getPU(partitioner.chType)->ciip))
+      if (!(cu->ciip))
       *bestHasNonResi  = !cu->rootCbf;
     }
 
     if (cu->rootCbf == false)
     {
-      if (tempCS->getPU(partitioner.chType)->ciip)
+      if (cu->ciip)
       {
         tempCS->cost = MAX_DOUBLE;
         tempCS->costDbOffset = 0;
@@ -3326,7 +3326,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
       if( NULL != bestHasNonResi && ( bestCostInternal > tempCS->cost ) )
       {
         bestCostInternal = tempCS->cost;
-        if( !( tempCS->getPU( partitioner.chType )->ciip ) )
+        if( !( cu->ciip ) )
           *bestHasNonResi = !cu->rootCbf;
       }
 
@@ -3736,13 +3736,14 @@ double EncCu::xCalcDistortion(CodingStructure *&cur_CS, ChannelType chType, int 
   const auto currDist1 = m_cRdCost.getDistPart(cur_CS->getOrgBuf( COMP_Y ), cur_CS->getPredBuf( COMP_Y ), BitDepth, COMP_Y, DF_HAD);
   unsigned int uiMvBits = 0;
   unsigned imvShift = imv == IMV_HPEL ? 1 : (imv << 1);
-  if (cur_CS->getPU(chType)->interDir != 2)
+  const CodingUnit& cu = *cur_CS->getCU( chType, TREE_D);
+  if (cu.interDir != 2)
   {
-    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cur_CS->getPU(chType)->mvd[0].hor, cur_CS->getPU(chType)->mvd[0].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
+    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cu.mvd[0].hor, cu.mvd[0].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
   }
-  if (cur_CS->getPU(chType)->interDir != 1)
+  if (cu.interDir != 1)
   {
-    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cur_CS->getPU(chType)->mvd[1].hor, cur_CS->getPU(chType)->mvd[1].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
+    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cu.mvd[1].hor, cu.mvd[1].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
   }
   return (double(currDist1) + (double)m_cRdCost.getCost(uiMvBits));
 }
