@@ -78,8 +78,7 @@ endif()
 #set( ENABLE_LINK_TIME_OPT ON       CACHE BOOL   "Enable link time optimization for release and profile builds" )
 #set( OPT_TARGET_ARCH      "native" CACHE STRING "Create code and optimize for this architecture (default native)" )
 
-#set( SET_ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING as a compiler flag" )
-#set( ENABLE_TRACING OFF CACHE BOOL "If SET_ENABLE_TRACING is on, it will be set to this value" )
+set( ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING=1 as a compiler flag" )
 
 # set c++11
 set( CMAKE_CXX_STANDARD 14 )
@@ -116,6 +115,10 @@ if( MSVC )
   # add compile options
   add_compile_options( "/MP" )
   add_compile_options( "/EHsc" )
+endif()
+
+if( ENABLE_TRACING )
+  add_definitions( -DENABLE_TRACING=1 )
 endif()
 
 # set address sanitizer compiler arguments
