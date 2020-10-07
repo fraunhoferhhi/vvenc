@@ -83,7 +83,7 @@ void CS::setRefinedMotionField(CodingStructure &cs)
   {
     CodingUnit& cu = *ptrCU;
     
-    if( isLuma( cu.chType ) && PU::checkDMVRCondition( cu ) )
+    if( isLuma( cu.chType ) && CU::checkDMVRCondition( cu ) )
     {
       const int dy = std::min<int>( cu.lumaSize().height, DMVR_SUBCU_SIZE );
       const int dx = std::min<int>( cu.lumaSize().width,  DMVR_SUBCU_SIZE );
@@ -395,7 +395,7 @@ const CodingUnit* CU::getAbove(const CodingUnit& curr)
 
 // PU tools
 
-int PU::getIntraMPMs( const CodingUnit& cu, unsigned* mpm )
+int CU::getIntraMPMs( const CodingUnit& cu, unsigned* mpm )
 {
   const int numMPMs = NUM_MOST_PROBABLE_MODES;
   {
@@ -410,14 +410,14 @@ int PU::getIntraMPMs( const CodingUnit& cu, unsigned* mpm )
     const CodingUnit* puLeft = cu.cs->getCURestricted(posLB.offset(-1, 0), cu, CH_L);
     if (puLeft && CU::isIntra(*puLeft))
     {
-      leftIntraDir = PU::getIntraDirLuma( *puLeft );
+      leftIntraDir = CU::getIntraDirLuma( *puLeft );
     }
 
     // Get intra direction of above PU
     const CodingUnit* puAbove = cu.cs->getCURestricted(posRT.offset(0, -1), cu, CH_L);
     if (puAbove && CU::isIntra(*puAbove) && CU::isSameCtu(cu, *puAbove))
     {
-      aboveIntraDir = PU::getIntraDirLuma( *puAbove );
+      aboveIntraDir = CU::getIntraDirLuma( *puAbove );
     }
 
     CHECK(2 >= numMPMs, "Invalid number of most probable modes");
@@ -504,18 +504,18 @@ int PU::getIntraMPMs( const CodingUnit& cu, unsigned* mpm )
   }
 }
 
-bool PU::isMIP(const CodingUnit& cu, const ChannelType chType)
+bool CU::isMIP(const CodingUnit& cu, const ChannelType chType)
 {
   return chType == CH_L ? cu.mipFlag : ((cu.intraDir[CH_C] == DM_CHROMA_IDX) && isDMChromaMIP(cu));
 }
 
-bool PU::isDMChromaMIP(const CodingUnit& cu)
+bool CU::isDMChromaMIP(const CodingUnit& cu)
 {
   return !cu.isSepTree() && (cu.chromaFormat == CHROMA_444) && getCoLocatedLumaPU(cu).mipFlag;
 }
 
 
-uint32_t PU::getIntraDirLuma( const CodingUnit& cu )
+uint32_t CU::getIntraDirLuma( const CodingUnit& cu )
 {
   if (isMIP(cu))
   {
@@ -528,7 +528,7 @@ uint32_t PU::getIntraDirLuma( const CodingUnit& cu )
 }
 
 
-void PU::getIntraChromaCandModes( const CodingUnit& cu, unsigned modeList[NUM_CHROMA_MODE] )
+void CU::getIntraChromaCandModes( const CodingUnit& cu, unsigned modeList[NUM_CHROMA_MODE] )
 {
   {
     modeList[0] = PLANAR_IDX;
@@ -558,17 +558,17 @@ void PU::getIntraChromaCandModes( const CodingUnit& cu, unsigned modeList[NUM_CH
   }
 }
 
-bool PU::isLMCMode(unsigned mode)
+bool CU::isLMCMode(unsigned mode)
 {
   return (mode >= LM_CHROMA_IDX && mode <= MDLM_T_IDX);
 }
 
-bool PU::isLMCModeEnabled(const CodingUnit& cu, unsigned mode)
+bool CU::isLMCModeEnabled(const CodingUnit& cu, unsigned mode)
 {
   return ( cu.cs->sps->LMChroma && cu.checkCCLMAllowed() );
 }
 
-int PU::getLMSymbolList(const CodingUnit& cu, int *modeList)
+int CU::getLMSymbolList(const CodingUnit& cu, int *modeList)
 {
   int idx = 0;
 
@@ -578,12 +578,7 @@ int PU::getLMSymbolList(const CodingUnit& cu, int *modeList)
   return idx;
 }
 
-bool PU::isChromaIntraModeCrossCheckMode( const CodingUnit& cu )
-{
-  return !cu.bdpcmModeChroma && cu.intraDir[CH_C] == DM_CHROMA_IDX;
-}
-
-uint32_t PU::getFinalIntraMode( const CodingUnit& cu, const ChannelType chType )
+uint32_t CU::getFinalIntraMode( const CodingUnit& cu, const ChannelType chType )
 {
   uint32_t uiIntraMode = cu.intraDir[chType];
 
@@ -598,7 +593,7 @@ uint32_t PU::getFinalIntraMode( const CodingUnit& cu, const ChannelType chType )
   return uiIntraMode;
 }
 
-const CodingUnit& PU::getCoLocatedLumaPU(const CodingUnit& cu)
+const CodingUnit& CU::getCoLocatedLumaPU(const CodingUnit& cu)
 {
   Position              topLeftPos = cu.blocks[cu.chType].lumaPos();
   Position              refPos     = topLeftPos.offset(cu.blocks[cu.chType].lumaSize().width  >> 1,
@@ -609,12 +604,12 @@ const CodingUnit& PU::getCoLocatedLumaPU(const CodingUnit& cu)
   return lumaCU;
 }
 
-uint32_t PU::getCoLocatedIntraLumaMode(const CodingUnit& cu)
+uint32_t CU::getCoLocatedIntraLumaMode(const CodingUnit& cu)
 {
-  return PU::getIntraDirLuma(PU::getCoLocatedLumaPU(cu));
+  return CU::getIntraDirLuma(CU::getCoLocatedLumaPU(cu));
 }
 
-bool PU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo& miLeft, const bool isAvailableB1, const MotionInfo& miAbove, const bool ibcFlag, const bool isGt4x4)
+bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo& miLeft, const bool isAvailableB1, const MotionInfo& miAbove, const bool ibcFlag, const bool isGt4x4)
 {
   const Slice& slice = *cs.slice;
   HPMVInfo miNeighbor;
@@ -661,7 +656,7 @@ bool PU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
 }
 
 
-void PU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx )
+void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx )
 {
   const unsigned plevel = cu.cs->sps->log2ParallelMergeLevelMinus2 + 2;
   const CodingStructure &cs  = *cu.cs;
@@ -1061,7 +1056,7 @@ void PU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
   mrgCtx.numValidMergeCand = uiArrayAddr;
 }
 
-bool PU::checkDMVRCondition(const CodingUnit& cu)
+bool CU::checkDMVRCondition(const CodingUnit& cu)
 {
   if (!cu.cs->sps->DMVR || cu.cs->slice->picHeader->disDmvrFlag)
   {
@@ -1074,7 +1069,7 @@ bool PU::checkDMVRCondition(const CodingUnit& cu)
     && !cu.affine
     && !cu.mmvdMergeFlag
     && !cu.mmvdSkip
-    && PU::isBiPredFromDifferentDirEqDistPoc(cu)
+    && CU::isBiPredFromDifferentDirEqDistPoc(cu)
     && (cu.lheight() >= 8)
     && (cu.lwidth() >= 8)
     && ((cu.lheight() * cu.lwidth()) >= 128)
@@ -1116,7 +1111,7 @@ int roundMvComp(int x)
   return convertMvFloatToFixed(convertMvFixedToFloat(x));
 }
 
-int PU::getDistScaleFactor(const int currPOC, const int currRefPOC, const int colPOC, const int colRefPOC)
+int CU::getDistScaleFactor(const int currPOC, const int currRefPOC, const int colPOC, const int colRefPOC)
 {
   int iDiffPocD = colPOC - colRefPOC;
   int iDiffPocB = currPOC - currRefPOC;
@@ -1135,7 +1130,7 @@ int PU::getDistScaleFactor(const int currPOC, const int currRefPOC, const int co
   }
 }
 
-void PU::getInterMMVDMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx)
+void CU::getInterMMVDMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx)
 {
   int refIdxList0, refIdxList1;
   int k;
@@ -1174,7 +1169,7 @@ void PU::getInterMMVDMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, con
   }
 }
 
-bool PU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, const Position& _pos, Mv& rcMv, const int refIdx, bool sbFlag )
+bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, const Position& _pos, Mv& rcMv, const int refIdx, bool sbFlag )
 {
   // don't perform MV compression when generally disabled or SbTMVP is used
   const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
@@ -1291,7 +1286,7 @@ bool PU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   return true;
 }
 
-bool PU::isDiffMER(const Position &pos1, const Position &pos2, const unsigned plevel)
+bool CU::isDiffMER(const Position &pos1, const Position &pos2, const unsigned plevel)
 {
   const unsigned xN = pos1.x;
   const unsigned yN = pos1.y;
@@ -1319,7 +1314,7 @@ bool PU::isDiffMER(const Position &pos1, const Position &pos2, const unsigned pl
 * \param iRefIdx
 * \param pInfo
 */
-void PU::fillMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo)
+void CU::fillMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo)
 {
   CodingStructure &cs = *cu.cs;
 
@@ -1436,7 +1431,7 @@ void PU::fillMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refI
   }
 }
 
-bool PU::addAffineMVPCandUnscaled(const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAMVPInfo)
+bool CU::addAffineMVPCandUnscaled(const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAMVPInfo)
 {
   CodingStructure &cs = *cu.cs;
   const CodingUnit* neibPU = NULL;
@@ -1505,7 +1500,7 @@ bool PU::addAffineMVPCandUnscaled(const CodingUnit& cu, const RefPicList refPicL
   return false;
 }
 
-void PU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* puNeighbour, RefPicList refPicList, Mv rcMv[3])
+void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* puNeighbour, RefPicList refPicList, Mv rcMv[3])
 {
   int posNeiX = puNeighbour->Y().pos().x;
   int posNeiY = puNeighbour->Y().pos().y;
@@ -1582,7 +1577,7 @@ void PU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* puNeighbour,
   }
 }
 
-void PU::fillAffineMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo)
+void CU::fillAffineMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo)
 {
   affiAMVPInfo.numCand = 0;
 
@@ -1756,7 +1751,7 @@ void PU::fillAffineMvpCand(CodingUnit& cu, const RefPicList refPicList, const in
   }
 }
 
-bool PU::addMVPCandUnscaled( const CodingUnit& cu, const RefPicList refPicList, const int iRefIdx, const Position& pos, const MvpDir dir, AMVPInfo &info )
+bool CU::addMVPCandUnscaled( const CodingUnit& cu, const RefPicList refPicList, const int iRefIdx, const Position& pos, const MvpDir dir, AMVPInfo &info )
 {
         CodingStructure &cs    = *cu.cs;
   const CodingUnit* neibPU = NULL;
@@ -1811,7 +1806,7 @@ bool PU::addMVPCandUnscaled( const CodingUnit& cu, const RefPicList refPicList, 
 }
 
 
-void PU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info)
+void CU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info)
 {
   const Slice &slice = *(*cu.cs).slice;
 
@@ -1848,7 +1843,7 @@ void PU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, cons
   }
 }
 
-bool PU::isBipredRestriction(const CodingUnit& cu)
+bool CU::isBipredRestriction(const CodingUnit& cu)
 {
   if(cu.lumaSize().width == 4 && cu.lumaSize().height ==4 )
   {
@@ -1862,7 +1857,7 @@ bool PU::isBipredRestriction(const CodingUnit& cu)
   return false;
 }
 
-void PU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgType)
+void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgType)
 {
   int cuW = cu.Y().width;
   int cuH = cu.Y().height;
@@ -2002,7 +1997,7 @@ void PU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
 }
 
 
-bool PU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& LICFlag, const int count, int mmvdList)
+bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& LICFlag, const int count, int mmvdList)
 {
   const Slice   &slice = *cu.cs->slice;
   const unsigned scale = 4 * std::max<int>(1, 4 * AMVP_DECIMATION_FACTOR / 4);
@@ -2163,7 +2158,7 @@ const int getAvailableAffineNeighboursForLeftPredictor(const CodingUnit& cu, con
   const CodingUnit* puLeftBottom = cu.cs->getCURestricted(posLB.offset(-1, 1), cu, cu.chType);
   if (puLeftBottom && puLeftBottom->affine
     && puLeftBottom->mergeType == MRG_TYPE_DEFAULT_N
-    && PU::isDiffMER(cu.lumaPos(), posLB.offset(-1, 1), plevel)
+    && CU::isDiffMER(cu.lumaPos(), posLB.offset(-1, 1), plevel)
     )
   {
     npu[num++] = puLeftBottom;
@@ -2173,7 +2168,7 @@ const int getAvailableAffineNeighboursForLeftPredictor(const CodingUnit& cu, con
   const CodingUnit* puLeft = cu.cs->getCURestricted(posLB.offset(-1, 0), cu, cu.chType);
   if (puLeft && puLeft->affine
     && puLeft->mergeType == MRG_TYPE_DEFAULT_N
-    && PU::isDiffMER(cu.lumaPos(), posLB.offset(-1, 0), plevel)
+    && CU::isDiffMER(cu.lumaPos(), posLB.offset(-1, 0), plevel)
     )
   {
     npu[num++] = puLeft;
@@ -2193,7 +2188,7 @@ const int getAvailableAffineNeighboursForAbovePredictor(const CodingUnit& cu, co
   const CodingUnit* puAboveRight = cu.cs->getCURestricted(posRT.offset(1, -1), cu, cu.chType);
   if (puAboveRight && puAboveRight->affine
     && puAboveRight->mergeType == MRG_TYPE_DEFAULT_N
-    && PU::isDiffMER(cu.lumaPos(), posRT.offset(1, -1), plevel)
+    && CU::isDiffMER(cu.lumaPos(), posRT.offset(1, -1), plevel)
     )
   {
     npu[num++] = puAboveRight;
@@ -2203,7 +2198,7 @@ const int getAvailableAffineNeighboursForAbovePredictor(const CodingUnit& cu, co
   const CodingUnit* puAbove = cu.cs->getCURestricted(posRT.offset(0, -1), cu, cu.chType);
   if (puAbove && puAbove->affine
     && puAbove->mergeType == MRG_TYPE_DEFAULT_N
-    && PU::isDiffMER(cu.lumaPos(), posRT.offset(0, -1), plevel)
+    && CU::isDiffMER(cu.lumaPos(), posRT.offset(0, -1), plevel)
     )
   {
     npu[num++] = puAbove;
@@ -2213,7 +2208,7 @@ const int getAvailableAffineNeighboursForAbovePredictor(const CodingUnit& cu, co
   const CodingUnit* puAboveLeft = cu.cs->getCURestricted(posLT.offset(-1, -1), cu, cu.chType);
   if (puAboveLeft && puAboveLeft->affine
     && puAboveLeft->mergeType == MRG_TYPE_DEFAULT_N
-    && PU::isDiffMER(cu.lumaPos(), posLT.offset(-1, -1), plevel)
+    && CU::isDiffMER(cu.lumaPos(), posLT.offset(-1, -1), plevel)
     )
   {
     npu[num++] = puAboveLeft;
@@ -2223,7 +2218,7 @@ const int getAvailableAffineNeighboursForAbovePredictor(const CodingUnit& cu, co
   return num;
 }
 
-void PU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx)
+void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx)
 {
   const CodingStructure &cs = *cu.cs;
   const Slice &slice = *cu.cs->slice;
@@ -2367,7 +2362,7 @@ void PU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
         const Position pos = posLT[i];
         const CodingUnit* puNeigh = cs.getCURestricted(pos, cu, cu.chType);
 
-        if (puNeigh && CU::isInter(*puNeigh) && PU::isDiffMER(cu.lumaPos(), pos, plevel))
+        if (puNeigh && CU::isInter(*puNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
         {
           isAvailable[0] = true;
           mi[0] = puNeigh->getMotionInfo(pos);
@@ -2383,7 +2378,7 @@ void PU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
         const Position pos = posRT[i];
         const CodingUnit* puNeigh = cs.getCURestricted(pos, cu, cu.chType);
 
-        if (puNeigh && CU::isInter(*puNeigh) && PU::isDiffMER(cu.lumaPos(), pos, plevel))
+        if (puNeigh && CU::isInter(*puNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
         {
           isAvailable[1] = true;
           mi[1] = puNeigh->getMotionInfo(pos);
@@ -2399,7 +2394,7 @@ void PU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
         const Position pos = posLB[i];
         const CodingUnit* puNeigh = cs.getCURestricted(pos, cu, cu.chType);
 
-        if (puNeigh && CU::isInter(*puNeigh) && PU::isDiffMER(cu.lumaPos(), pos, plevel))
+        if (puNeigh && CU::isInter(*puNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
         {
           isAvailable[2] = true;
           mi[2] = puNeigh->getMotionInfo(pos);
@@ -2521,7 +2516,7 @@ void PU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
   }
 }
 
-void PU::setAllAffineMvField(CodingUnit& cu, MvField *mvField, RefPicList eRefList)
+void CU::setAllAffineMvField(CodingUnit& cu, MvField *mvField, RefPicList eRefList)
 {
   // Set Mv
   Mv mv[3];
@@ -2536,7 +2531,7 @@ void PU::setAllAffineMvField(CodingUnit& cu, MvField *mvField, RefPicList eRefLi
   cu.refIdx[eRefList] = mvField[0].refIdx;
 }
 
-void PU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs)
+void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs)
 {
   int width = cu.Y().width;
   int shift = MAX_CU_DEPTH;
@@ -2652,7 +2647,7 @@ void clipColPos(int& posX, int& posY, const CodingUnit& cu)
 }
 
 
-void PU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
+void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
 {
   MotionBuf mb = cu.getMotionBuf();
   if (!cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N)
@@ -2704,7 +2699,7 @@ void PU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
   }
 }
 
-bool PU::isBiPredFromDifferentDirEqDistPoc(const CodingUnit& cu)
+bool CU::isBiPredFromDifferentDirEqDistPoc(const CodingUnit& cu)
 {
   if (cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0)
   {
@@ -2727,9 +2722,9 @@ bool PU::isBiPredFromDifferentDirEqDistPoc(const CodingUnit& cu)
   return false;
 }
 
-void PU::restrictBiPredMergeCandsOne(CodingUnit& cu)
+void CU::restrictBiPredMergeCandsOne(CodingUnit& cu)
 {
-  if (PU::isBipredRestriction(cu))
+  if (CU::isBipredRestriction(cu))
   {
     if (cu.interDir == 3)
     {
@@ -2741,7 +2736,7 @@ void PU::restrictBiPredMergeCandsOne(CodingUnit& cu)
   }
 }
 
-void PU::getGeoMergeCandidates(const CodingUnit& cu, MergeCtx &geoMrgCtx)
+void CU::getGeoMergeCandidates(const CodingUnit& cu, MergeCtx &geoMrgCtx)
 {
   MergeCtx tmpMergeCtx;
 
@@ -2762,7 +2757,7 @@ void PU::getGeoMergeCandidates(const CodingUnit& cu, MergeCtx &geoMrgCtx)
     geoMrgCtx.useAltHpelIf[i]                        = false;
   }
 
-  PU::getInterMergeCandidates(cu, tmpMergeCtx, 0);
+  CU::getInterMergeCandidates(cu, tmpMergeCtx, 0);
 
   for (int32_t i = 0; i < maxNumMergeCand; i++)
   {
@@ -2804,7 +2799,7 @@ void PU::getGeoMergeCandidates(const CodingUnit& cu, MergeCtx &geoMrgCtx)
   }
 }
 
-void PU::spanGeoMotionInfo(CodingUnit& cu, MergeCtx &geoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0,
+void CU::spanGeoMotionInfo(CodingUnit& cu, MergeCtx &geoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0,
                            const uint8_t candIdx1)
 {
   cu.geoSplitDir  = splitDir;
@@ -2917,7 +2912,7 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
       Mv mv        = cu.mv[0];
       Mv mvPred;
       AMVPInfo amvpInfo;
-      PU::fillMvpCand(cu, REF_PIC_LIST_0, cu.refIdx[0], amvpInfo);
+      CU::fillMvpCand(cu, REF_PIC_LIST_0, cu.refIdx[0], amvpInfo);
       cu.mvpNum[0] = amvpInfo.numCand;
 
       mvPred       = amvpInfo.mvCand[cu.mvpIdx[0]];
@@ -2931,7 +2926,7 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
       Mv mv        = cu.mv[1];
       Mv mvPred;
       AMVPInfo amvpInfo;
-      PU::fillMvpCand(cu, REF_PIC_LIST_1, cu.refIdx[1], amvpInfo);
+      CU::fillMvpCand(cu, REF_PIC_LIST_1, cu.refIdx[1], amvpInfo);
       cu.mvpNum[1] = amvpInfo.numCand;
 
       mvPred       = amvpInfo.mvCand[cu.mvpIdx[1]];
@@ -2953,11 +2948,11 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
   }
   else
   {
-    PU::getInterMergeCandidates ( cu, mrgCtx, 0 );
+    CU::getInterMergeCandidates ( cu, mrgCtx, 0 );
     mrgCtx.setMergeInfo( cu, cu.mergeIdx );
   }
 
-  PU::spanMotionInfo( cu, mrgCtx );
+  CU::spanMotionInfo( cu, mrgCtx );
 }
 
 bool CU::hasSubCUNonZeroMVd( const CodingUnit& cu )
@@ -3065,21 +3060,16 @@ PartSplit CU::getSbtTuSplit( const uint8_t sbtInfo )
   return PartSplit(sbtTuSplitType);
 }
 
-bool CU::isPredRegDiffFromTB(const CodingUnit &cu, const ComponentID compID)
+bool CU::isPredRegDiffFromTB(const CodingUnit &cu)
 {
-  return (compID == COMP_Y)
-    && (cu.ispMode == VER_INTRA_SUBPARTITIONS &&
-      CU::isMinWidthPredEnabledForBlkSize(cu.blocks[compID].width, cu.blocks[compID].height)
-      );
+  return (cu.ispMode == VER_INTRA_SUBPARTITIONS && ((cu.blocks[0].width == 4 )|| ((cu.blocks[0].width == 8) && (cu.blocks[0].height > 4))));
 }
-bool CU::isMinWidthPredEnabledForBlkSize(const int w, const int h)
+
+bool CU::isFirstTBInPredReg(const CodingUnit& cu, const CompArea& area)
 {
-  return ((w == 8 && h > 4) || w == 4);
+  return ((area.topLeft().x - cu.Y().topLeft().x) % PRED_REG_MIN_WIDTH == 0);
 }
-bool CU::isFirstTBInPredReg(const CodingUnit& cu, const ComponentID compID, const CompArea& area)
-{
-  return (compID == COMP_Y) && cu.ispMode && ((area.topLeft().x - cu.Y().topLeft().x) % PRED_REG_MIN_WIDTH == 0);
-}
+
 void CU::adjustPredArea(CompArea& area)
 {
   area.width = std::max<int>(PRED_REG_MIN_WIDTH, area.width);

@@ -991,7 +991,7 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 
   // prev_intra_luma_pred_flag
   {
-    PU::getIntraMPMs( cu, mpm_pred );
+    CU::getIntraMPMs( cu, mpm_pred );
 
     ipred_mode = cu.intraDir[0];
     mpm_idx    = numMPMs;
@@ -1080,7 +1080,7 @@ void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu )
   const int numMPMs  = NUM_MOST_PROBABLE_MODES;
   unsigned  mpm_pred[numMPMs];
 
-  PU::getIntraMPMs( cu, mpm_pred );
+  CU::getIntraMPMs( cu, mpm_pred );
 
   unsigned ipred_mode = cu.intraDir[0];
   unsigned mpm_idx = numMPMs;
@@ -1165,7 +1165,7 @@ void CABACWriter::intra_chroma_lmc_mode(const CodingUnit& cu)
 {
   const unsigned intraDir = cu.intraDir[1];
   int lmModeList[10];
-  PU::getLMSymbolList(cu, lmModeList);
+  CU::getLMSymbolList(cu, lmModeList);
   int symbol = -1;
   for (int k = 0; k < LM_SYMBOL_NUM; k++)
   {
@@ -1199,8 +1199,8 @@ void CABACWriter::intra_chroma_pred_mode(const CodingUnit& cu)
   const unsigned intraDir = cu.intraDir[1];
   if (cu.cs->sps->LMChroma && cu.checkCCLMAllowed())
   {
-    m_BinEncoder.encodeBin(PU::isLMCMode(intraDir) ? 1 : 0, Ctx::CclmModeFlag(0));
-    if (PU::isLMCMode(intraDir))
+    m_BinEncoder.encodeBin(CU::isLMCMode(intraDir) ? 1 : 0, Ctx::CclmModeFlag(0));
+    if (CU::isLMCMode(intraDir))
     {
       intra_chroma_lmc_mode(cu);
       return;
@@ -1216,7 +1216,7 @@ void CABACWriter::intra_chroma_pred_mode(const CodingUnit& cu)
 
   // chroma candidate index
   unsigned chromaCandModes[NUM_CHROMA_MODE];
-  PU::getIntraChromaCandModes(cu, chromaCandModes);
+  CU::getIntraChromaCandModes(cu, chromaCandModes);
 
   int candId = 0;
   for (; candId < NUM_CHROMA_MODE; candId++)
@@ -1803,7 +1803,7 @@ void CABACWriter::inter_pred_idc( const CodingUnit& cu )
   {
     return;
   }
-  if( !(PU::isBipredRestriction(cu)) )
+  if( !(CU::isBipredRestriction(cu)) )
   {
     unsigned ctxId = DeriveCtx::CtxInterDir(cu);
     if( cu.interDir == 3 )

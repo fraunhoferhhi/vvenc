@@ -151,16 +151,18 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
 #endif
 
   const CodingUnit& cu  = *tu.cs->getPU( area.pos(), chType );
-  const uint32_t uiChFinalMode  = PU::getFinalIntraMode( cu, chType );
+  const uint32_t uiChFinalMode  = CU::getFinalIntraMode( cu, chType );
   PelBuf pReco              = cs.getRecoBuf(area);
 
   //===== init availability pattern =====
-  bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu, compID);
-  bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, compID, area);
   CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
 #if ISP_VVC
+  bool predRegDiffFromTB = false;
+  bool firstTBInPredReg  = false;
   if (tu.cu->ispMode && isLuma(compID))
   {
+    bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu);
+    bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, area);
     if (predRegDiffFromTB)
     {
       if (firstTBInPredReg)
@@ -181,13 +183,13 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   }
 
   //===== get prediction signal =====
-  if( compID != COMP_Y && PU::isLMCMode( uiChFinalMode ) )
+  if( compID != COMP_Y && CU::isLMCMode( uiChFinalMode ) )
   {
     const CodingUnit& cu = *tu.cu;
     m_pcIntraPred->loadLMLumaRecPels( cu, area );
     m_pcIntraPred->predIntraChromaLM( compID, piPred, cu, area, uiChFinalMode );
   }
-  else if( PU::isMIP( cu, chType ) )
+  else if( CU::isMIP( cu, chType ) )
   {
     m_pcIntraPred->initIntraMip( cu );
     m_pcIntraPred->predIntraMip( piPred, cu );
@@ -328,7 +330,7 @@ void DecCu::xReconInter(CodingUnit &cu)
   if (cu.geo)
   {
     m_pcInterPred->motionCompensationGeo(cu, predBuf, m_geoMrgCtx);
-    PU::spanGeoMotionInfo(cu, m_geoMrgCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
+    CU::spanGeoMotionInfo(cu, m_geoMrgCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
   }
   else if( cu.predMode == MODE_IBC )
   {
@@ -486,16 +488,16 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         mrgCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
       }
       int   fPosBaseIdx = cu.mmvdMergeIdx / MMVD_MAX_REFINE_NUM;
-      PU::getInterMergeCandidates(cu, mrgCtx, 1, fPosBaseIdx + 1);
-      PU::getInterMMVDMergeCandidates(cu, mrgCtx, cu.mmvdMergeIdx);
+      CU::getInterMergeCandidates(cu, mrgCtx, 1, fPosBaseIdx + 1);
+      CU::getInterMMVDMergeCandidates(cu, mrgCtx, cu.mmvdMergeIdx);
       mrgCtx.setMmvdMergeCandiInfo(cu, cu.mmvdMergeIdx);
-      PU::spanMotionInfo(cu, mrgCtx);
+      CU::spanMotionInfo(cu, mrgCtx);
     }
     else
     {
       if (cu.geo)
       {
-        PU::getGeoMergeCandidates(cu, m_geoMrgCtx);
+        CU::getGeoMergeCandidates(cu, m_geoMrgCtx);
       }
       else
       {
@@ -508,7 +510,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
             mrgCtx.subPuMvpMiBuf  = MotionBuf(m_subPuMiBuf, bufSize);
             affineMergeCtx.mrgCtx = &mrgCtx;
           }
-          PU::getAffineMergeCand(cu, affineMergeCtx, cu.mergeIdx);
+          CU::getAffineMergeCand(cu, affineMergeCtx, cu.mergeIdx);
           cu.interDir       = affineMergeCtx.interDirNeighbours[cu.mergeIdx];
           cu.affineType = affineMergeCtx.affineType[cu.mergeIdx];
           cu.BcwIdx     = affineMergeCtx.BcwIdx[cu.mergeIdx];
@@ -529,18 +531,18 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
                 cu.mvpIdx[i]     = 0;
                 cu.mvpNum[i]     = 0;
                 cu.mvd[i]        = Mv();
-                PU::setAllAffineMvField(cu, mvField, RefPicList(i));
+                CU::setAllAffineMvField(cu, mvField, RefPicList(i));
               }
             }
           }
         }
         else
         {
-          PU::getInterMergeCandidates(cu, mrgCtx, 0, cu.mergeIdx);
+          CU::getInterMergeCandidates(cu, mrgCtx, 0, cu.mergeIdx);
           mrgCtx.setMergeInfo(cu, cu.mergeIdx);
         }
 
-        PU::spanMotionInfo(cu, mrgCtx);
+        CU::spanMotionInfo(cu, mrgCtx);
       }
     }
   } 
@@ -554,7 +556,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         if (cu.cs->slice->numRefIdx[eRefList] > 0 && (cu.interDir & (1 << uiRefListIdx)))
         {
           AffineAMVPInfo affineAMVPInfo;
-          PU::fillAffineMvpCand(cu, eRefList, cu.refIdx[eRefList], affineAMVPInfo);
+          CU::fillAffineMvpCand(cu, eRefList, cu.refIdx[eRefList], affineAMVPInfo);
 
           const unsigned mvp_idx = cu.mvpIdx[eRefList];
 
@@ -582,7 +584,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
             mvLB = affineAMVPInfo.mvCandLB[mvp_idx] + cu.mvdAffi[eRefList][2];
             mvLB += cu.mvdAffi[eRefList][0];
           }
-          PU::setAllAffineMv(cu, mvLT, mvRT, mvLB, eRefList, true);
+          CU::setAllAffineMv(cu, mvLT, mvRT, mvLB, eRefList, true);
         }
       }
     }
@@ -594,7 +596,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         if ((cu.cs->slice->numRefIdx[eRefList] > 0 || (eRefList == REF_PIC_LIST_0 && CU::isIBC(cu))) && (cu.interDir & (1 << uiRefListIdx)))
         {
           AMVPInfo amvpInfo;
-          PU::fillMvpCand(cu, eRefList, cu.refIdx[eRefList], amvpInfo);
+          CU::fillMvpCand(cu, eRefList, cu.refIdx[eRefList], amvpInfo);
           cu.mvpNum [eRefList] = amvpInfo.numCand;
           if (!cu.cs->pcv->isEncoder)
           {
@@ -605,7 +607,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         }
       }
     }
-    PU::spanMotionInfo( cu, mrgCtx );
+    CU::spanMotionInfo( cu, mrgCtx );
   }
 }
 

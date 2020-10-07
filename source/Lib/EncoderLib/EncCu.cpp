@@ -1632,8 +1632,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     cu.slice    = tempCS->slice;
     cu.tileIdx  = 0;
 
-    PU::getInterMergeCandidates(cu, mergeCtx, 0 );
-    PU::getInterMMVDMergeCandidates(cu, mergeCtx);
+    CU::getInterMergeCandidates(cu, mergeCtx, 0 );
+    CU::getInterMMVDMergeCandidates(cu, mergeCtx);
 
     cu.regularMergeFlag = true;
   }
@@ -1746,7 +1746,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         }
         mergeCtx.setMergeInfo( cu, uiMergeCand );
 
-        PU::spanMotionInfo( cu, mergeCtx );
+        CU::spanMotionInfo( cu, mergeCtx );
         cu.mvRefine = true;
         bool BioOrDmvr = m_cInterSearch.motionCompensation(cu, m_SortedPelUnitBufs.getTestBuf(), REF_PIC_LIST_X);
         cu.mvRefine = false;
@@ -1756,7 +1756,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           mergeCtx.mvFieldNeighbours[2*uiMergeCand].mv   = cu.mv[0];
           mergeCtx.mvFieldNeighbours[2*uiMergeCand+1].mv = cu.mv[1];
           {
-            if (PU::checkDMVRCondition(cu))
+            if (CU::checkDMVRCondition(cu))
             {
               int num = 0;
               for (int i = 0; i < (cu.lumaSize().height); i += DMVR_SUBCU_SIZE)
@@ -1940,7 +1940,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           }
           mergeCtx.setMmvdMergeCandiInfo(cu, mmvdMergeCand);
 
-          PU::spanMotionInfo(cu, mergeCtx);
+          CU::spanMotionInfo(cu, mergeCtx);
           cu.mvRefine = true;
           cu.mcControl = (refineStep > 2) || (m_pcEncCfg->m_MMVD > 1) ? 3 : 0;
           CHECK(!cu.mmvdMergeFlag, "MMVD merge should be set");
@@ -2103,7 +2103,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         mergeCtx.setMergeInfo(cu, uiMergeCand);
       }
 
-      PU::spanMotionInfo( cu, mergeCtx );
+      CU::spanMotionInfo( cu, mergeCtx );
       {
         if (!cu.affine && cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 && (cu.lwidth() + cu.lheight() == 12)) 
         { 
@@ -2113,7 +2113,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
         if( mrgTempBufSet )
         {
-          if( PU::checkDMVRCondition( cu ) )
+          if( CU::checkDMVRCondition( cu ) )
           {
             int num = 0;
             for( int i = 0; i < ( cu.lumaSize().height ); i += DMVR_SUBCU_SIZE )
@@ -2280,7 +2280,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   cu.initPuData();
   cu.mergeFlag        = true;
   cu.regularMergeFlag = false;
-  PU::getGeoMergeCandidates(cu, mergeCtx);
+  CU::getGeoMergeCandidates(cu, mergeCtx);
 
   GeoComboCostList comboList;
   int              bitsCandTB = floorLog2(GEO_NUM_PARTITION_MODE);
@@ -2383,7 +2383,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       }
 
       mergeCtx.setMergeInfo(cu, mergeCand);
-      PU::spanMotionInfo(cu, mergeCtx);
+      CU::spanMotionInfo(cu, mergeCtx);
       m_cInterSearch.motionCompensation(cu, mcBuf[mergeCand], REF_PIC_LIST_X); //new
 
       g_pelBufOP.roundGeo( mcBuf[mergeCand].Y().buf, sadBuf[mergeCand].buf, numSamples, rshift, offset, lclpRng);
@@ -2619,7 +2619,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       cu.mmvdMergeFlag    = false;
       cu.mmvdMergeIdx     = MAX_UINT;
 
-      PU::spanGeoMotionInfo(cu, mergeCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
+      CU::spanGeoMotionInfo(cu, mergeCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
       tempCS->getPredBuf().copyFrom(geoCombinations[candidateIdx]);
 
       xEncodeInterResidual(tempCS, bestCS, pm, encTestMode, noResidualPass,
@@ -3451,7 +3451,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
     cu.mmvdSkip = false;
 
     cu.regularMergeFlag = false;
-    PU::getAffineMergeCand(cu, affineMergeCtx);
+    CU::getAffineMergeCand(cu, affineMergeCtx);
     cu.regularMergeFlag = true;
 
     if (affineMergeCtx.numValidMergeCand <= 0)
@@ -3552,13 +3552,13 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
         {
           cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0][0].refIdx;
           cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1][0].refIdx;
-          PU::spanMotionInfo(cu, mrgCtx);
+          CU::spanMotionInfo(cu, mrgCtx);
         }
         else
         {
-          PU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0], REF_PIC_LIST_0);
-          PU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1], REF_PIC_LIST_1);
-          PU::spanMotionInfo(cu);
+          CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0], REF_PIC_LIST_0);
+          CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1], REF_PIC_LIST_1);
+          CU::spanMotionInfo(cu);
         }
 
         distParam.cur.buf = m_SortedPelUnitBufs.getTestBuf().Y().buf;
@@ -3652,14 +3652,14 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
       {
         cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0][0].refIdx;
         cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1][0].refIdx;
-        PU::spanMotionInfo(cu, mrgCtx);
+        CU::spanMotionInfo(cu, mrgCtx);
       }
       else
       {
-        PU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0], REF_PIC_LIST_0);
-        PU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1], REF_PIC_LIST_1);
+        CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0], REF_PIC_LIST_0);
+        CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1], REF_PIC_LIST_1);
 
-        PU::spanMotionInfo(cu);
+        CU::spanMotionInfo(cu);
       }
 
       PelUnitBuf* sortedListBuf = m_SortedPelUnitBufs.getBufFromSortedList(uiMrgHADIdx);

@@ -346,7 +346,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
 {
   const ComponentID    compID       = compId;
   const ChannelType    channelType  = toChannelType( compID );
-  const uint32_t       uiDirMode    = /*isLuma( compId ) && cu.bdpcmMode ? BDPCM_IDX : */PU::getFinalIntraMode( cu, channelType );
+  const uint32_t       uiDirMode    = /*isLuma( compId ) && cu.bdpcmMode ? BDPCM_IDX : */CU::getFinalIntraMode( cu, channelType );
 
   CHECK( Log2(piPred.width) < 2 && cu.cs->pcv->noChroma2x2, "Size not allowed" );
   CHECK( Log2(piPred.width) > 7, "Size not allowed" );
@@ -409,7 +409,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   const Size   cuSize    = Size( cu.blocks[compId].width, cu.blocks[compId].height );
   const Size   puSize    = Size( area.width, area.height );
   const Size&  blockSize = useISP ? cuSize : puSize;
-  const int      dirMode = PU::getFinalIntraMode(cu, chType);
+  const int      dirMode = CU::getFinalIntraMode(cu, chType);
   const int     predMode = getWideAngle( blockSize.width, blockSize.height, dirMode );
 
   m_ipaParam.isModeVer            = predMode >= DIA_IDX;
@@ -454,7 +454,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   if(   sps.spsRExt.intraSmoothingDisabled
     || !isLuma( chType )
     || useISP
-    || PU::isMIP( cu, chType ) //th remove this
+    || CU::isMIP( cu, chType ) //th remove this
     || m_ipaParam.multiRefIndex
     || DC_IDX == dirMode
     )

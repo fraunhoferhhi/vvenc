@@ -379,7 +379,7 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
       }
       else
       {
-        if (PU::isBiPredFromDifferentDirEqDistPoc(cu)
+        if (CU::isBiPredFromDifferentDirEqDistPoc(cu)
           && (cu.Y().height >= 8)
           && (cu.Y().width >= 8)
           && ((cu.Y().height * cu.Y().width) >= 128)
@@ -394,7 +394,7 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
     }
 
     bool dmvrApplied = false;
-    dmvrApplied = (cu.mvRefine) && PU::checkDMVRCondition(cu);
+    dmvrApplied = (cu.mvRefine) && CU::checkDMVRCondition(cu);
     if ((cu.lumaSize().width > MAX_BDOF_APPLICATION_REGION || cu.lumaSize().height > MAX_BDOF_APPLICATION_REGION) && cu.mergeType != MRG_TYPE_SUBPU_ATMVP && (bdofApplied && !dmvrApplied))
     {
       xSubPuBDOF( cu, predBuf, refPicList );
@@ -460,7 +460,7 @@ void InterPrediction::xSubPuMC(CodingUnit& cu, PelUnitBuf& predBuf, const RefPic
 
   cu.refIdx[0] = 0;
   cu.refIdx[1] = cu.cs->slice->sliceType == B_SLICE ? 0 : -1;
-  bool scaled = false;//!PU::isRefPicSameSize(cu);
+  bool scaled = false;//!CU::isRefPicSameSize(cu);
 
   m_subPuMC = true;
 
@@ -894,11 +894,11 @@ void InterPrediction::motionCompensationGeo(CodingUnit& cu, PelUnitBuf& predBuf,
   PelUnitBuf     tmpGeoBuf1 = m_geoPartBuf[1].getBuf(localUnitArea);
 
   geoMrgCtx.setMergeInfo(cu, cu.geoMergeIdx0);
-  PU::spanMotionInfo(cu);
+  CU::spanMotionInfo(cu);
   motionCompensation(cu, tmpGeoBuf0, REF_PIC_LIST_X);   // TODO: check 4:0:0 interaction with weighted prediction.
 
   geoMrgCtx.setMergeInfo(cu, cu.geoMergeIdx1);
-  PU::spanMotionInfo(cu);
+  CU::spanMotionInfo(cu);
   motionCompensation(cu, tmpGeoBuf1, REF_PIC_LIST_X);   // TODO: check 4:0:0 interaction with weighted prediction.
 
   weightedGeoBlk(clpRngs, cu, cu.geoSplitDir, isChromaEnabled(cu.chromaFormat) ? MAX_NUM_CH : CH_L, predBuf, tmpGeoBuf0,

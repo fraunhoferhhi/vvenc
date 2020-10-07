@@ -82,7 +82,7 @@ namespace vvenc {
 #endif
 
 #ifndef ENABLE_TRACING
-#define ENABLE_TRACING                                    0 // DISABLED by default (enable only when debugging, requires 15% run-time in decoding) -- see documentation in 'doc/DTrace for NextSoftware.pdf'
+#define ENABLE_TRACING                                    1 // DISABLED by default (enable only when debugging, requires 15% run-time in decoding) -- see documentation in 'doc/DTrace for NextSoftware.pdf'
 #endif
 
 #ifndef ENABLE_TIME_PROFILING

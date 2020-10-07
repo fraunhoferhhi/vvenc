@@ -249,7 +249,7 @@ void MergeCtx::setMergeInfo( CodingUnit& cu, int candIdx ) const
   cu.mvpNum [REF_PIC_LIST_1] = NOT_VALID;
   cu.BcwIdx = ( interDirNeighbours[candIdx] == 3 ) ? BcwIdx[candIdx] : BCW_DEFAULT;
 
-  PU::restrictBiPredMergeCandsOne(cu);
+  CU::restrictBiPredMergeCandsOne(cu);
   cu.mcControl = 0;
 }
 
@@ -307,7 +307,7 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
     }
     else if (abs(poc1 - currPoc) > abs(poc0 - currPoc))
     {
-      const int scale = PU::getDistScaleFactor(currPoc, poc0, currPoc, poc1);
+      const int scale = CU::getDistScaleFactor(currPoc, poc0, currPoc, poc1);
       tempMv[1] = tempMv[0];
       const bool isL0RefLongTerm = slice.getRefPic(REF_PIC_LIST_0, refList0)->isLongTerm;
       const bool isL1RefLongTerm = slice.getRefPic(REF_PIC_LIST_1, refList1)->isLongTerm;
@@ -327,7 +327,7 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
     }
     else
     {
-      const int scale = PU::getDistScaleFactor(currPoc, poc1, currPoc, poc0);
+      const int scale = CU::getDistScaleFactor(currPoc, poc1, currPoc, poc0);
       const bool isL0RefLongTerm = slice.getRefPic(REF_PIC_LIST_0, refList0)->isLongTerm;
       const bool isL1RefLongTerm = slice.getRefPic(REF_PIC_LIST_1, refList1)->isLongTerm;
       if (isL0RefLongTerm || isL1RefLongTerm)
@@ -425,7 +425,7 @@ void MergeCtx::setMmvdMergeCandiInfo(CodingUnit& cu, int candIdx) const
   }
 
 
-  PU::restrictBiPredMergeCandsOne(cu);
+  CU::restrictBiPredMergeCandsOne(cu);
 }
 
 unsigned DeriveCtx::CtxMipFlag( const CodingUnit& cu ) const

@@ -325,7 +325,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   {
     cu.multiRefIdx = 1;
     unsigned  multiRefMPM [NUM_MOST_PROBABLE_MODES];
-    PU::getIntraMPMs(cu, multiRefMPM);
+    CU::getIntraMPMs(cu, multiRefMPM);
 
     for (int mRefNum = 1; mRefNum < MRL_NUM_REF_LINES; mRefNum++)
     {
@@ -415,7 +415,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
     cu.multiRefIdx = 0;
 
-    const int numCand = PU::getIntraMPMs( cu, intraMpms );
+    const int numCand = CU::getIntraMPMs( cu, intraMpms );
     ModeInfo mostProbableMode(false, false, 0, NOT_INTRA_SUBPARTITIONS, 0);
 
     for( int j = 0; j < numCand; j++ )
@@ -769,7 +769,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 
     //----- check chroma modes -----
     uint32_t chromaCandModes[ NUM_CHROMA_MODE ];
-    PU::getIntraChromaCandModes( cu, chromaCandModes );
+    CU::getIntraChromaCandModes( cu, chromaCandModes );
 
     // create a temporary CS
     CodingStructure &saveCS = *m_pSaveCS[0];
@@ -861,7 +861,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     {
       int mode = chromaCandModes[idx];
       satdModeList[idx] = mode;
-      if (PU::isLMCMode(mode) && !PU::isLMCModeEnabled(cu, mode))
+      if (CU::isLMCMode(mode) && !CU::isLMCModeEnabled(cu, mode))
       {
         continue;
       }
@@ -872,7 +872,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 
       cu.intraDir[1]    = mode; // temporary assigned, for SATD checking.
 
-      const bool isLMCMode = PU::isLMCMode(mode);
+      const bool isLMCMode = CU::isLMCMode(mode);
       if( isLMCMode )
       {
         predIntraChromaLM(COMP_Cb, predCb, cu, areaCb, mode);
@@ -927,11 +927,11 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     for (uint32_t uiMode = uiMinMode; uiMode < uiMaxMode; uiMode++)
     {
       const int chromaIntraMode = chromaCandModes[uiMode];
-      if( PU::isLMCMode( chromaIntraMode ) && ! PU::isLMCModeEnabled( cu, chromaIntraMode ) )
+      if( CU::isLMCMode( chromaIntraMode ) && ! CU::isLMCModeEnabled( cu, chromaIntraMode ) )
       {
         continue;
       }
-      if( modeDisable[chromaIntraMode] && PU::isLMCModeEnabled(cu, chromaIntraMode)) // when CCLM is disable, then MDLM is disable. not use satd checking
+      if( modeDisable[chromaIntraMode] && CU::isLMCModeEnabled(cu, chromaIntraMode)) // when CCLM is disable, then MDLM is disable. not use satd checking
       {
         continue;
       }
@@ -1374,12 +1374,13 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
   if ( isLuma(compID) )
   {
-    bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu, compID);
-    bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, compID, area);
+    bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu );
+    bool firstTBInPredReg  = false;
     CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
-    #if ISP_VVC
-    if (tu.cu->ispMode /*&& isLuma(compID)*/)
+#if ISP_VVC
+    if (tu.cu->ispMode )
     {
+      firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, area);
       if (predRegDiffFromTB)
       {
         if (firstTBInPredReg)
@@ -1412,7 +1413,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       {
         piPred.copyFrom( predBuf->Y() );
       }
-      else if( PU::isMIP( cu, CH_L ) )
+      else if( CU::isMIP( cu, CH_L ) )
       {
         initIntraMip( cu );
         predIntraMip( piPred, cu );
@@ -1423,7 +1424,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       }
     }
   }
-  DTRACE( g_trace_ctx, D_PRED, "@(%4d,%4d) [%2dx%2d] IMode=%d\n", tu.lx(), tu.ly(), tu.lwidth(), tu.lheight(), PU::getFinalIntraMode(cu, chType) );
+  DTRACE( g_trace_ctx, D_PRED, "@(%4d,%4d) [%2dx%2d] IMode=%d\n", tu.lx(), tu.ly(), tu.lwidth(), tu.lheight(), CU::getFinalIntraMode(cu, chType) );
   const Slice &slice = *cs.slice;
   bool flag = cs.picHeader->lmcsEnabled && (slice.isIntra() || (!slice.isIntra() && reshapeData.getCTUFlag()));
 
@@ -2130,7 +2131,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     currTU.jointCbCr = 0;
 
     // Do predictions here to avoid repeating the "default0Save1Load2" stuff
-    uint32_t  predMode = PU::getFinalIntraMode(cu, CH_C);
+    uint32_t  predMode = CU::getFinalIntraMode(cu, CH_C);
 
     PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
     PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
@@ -2138,7 +2139,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     initIntraPatternChType(*currTU.cu, cbArea);
     initIntraPatternChType(*currTU.cu, crArea);
 
-    if (PU::isLMCMode(predMode))
+    if (CU::isLMCMode(predMode))
     {
       loadLMLumaRecPels(cu, cbArea);
       predIntraChromaLM(COMP_Cb, piPredCb, cu, cbArea, predMode);
@@ -2677,7 +2678,7 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
   {
     piPred.copyFrom( predBuf->Y() );
   }
-  else if (PU::isMIP(cu, CH_L))
+  else if (CU::isMIP(cu, CH_L))
   {
     initIntraMip(cu);
     predIntraMip( piPred, cu);

@@ -1271,7 +1271,7 @@ void CABACReader::intra_luma_pred_modes( CodingUnit &cu )
 
   unsigned mpm_pred[NUM_MOST_PROBABLE_MODES];  // mpm_idx / rem_intra_luma_pred_mode
   {
-    PU::getIntraMPMs( cu, mpm_pred );
+    CU::getIntraMPMs( cu, mpm_pred );
 
     if( mpmFlag )
     {
@@ -1343,7 +1343,7 @@ void CABACReader::intra_chroma_pred_modes( CodingUnit& cu )
 bool CABACReader::intra_chroma_lmc_mode(CodingUnit& cu)
 {
   int lmModeList[10];
-  PU::getLMSymbolList(cu, lmModeList);
+  CU::getLMSymbolList(cu, lmModeList);
 
   int symbol = m_BinDecoder.decodeBin(Ctx::CclmModeIdx(0));
 
@@ -1388,10 +1388,10 @@ void CABACReader::intra_chroma_pred_mode(CodingUnit& cu)
   unsigned candId = m_BinDecoder.decodeBinsEP(2);
 
   unsigned chromaCandModes[NUM_CHROMA_MODE];
-  PU::getIntraChromaCandModes(cu, chromaCandModes);
+  CU::getIntraChromaCandModes(cu, chromaCandModes);
 
   CHECK(candId >= NUM_CHROMA_MODE, "Chroma prediction mode index out of bounds");
-  CHECK(PU::isLMCMode(chromaCandModes[candId]), "The intra dir cannot be LM_CHROMA for this path");
+  CHECK(CU::isLMCMode(chromaCandModes[candId]), "The intra dir cannot be LM_CHROMA for this path");
   CHECK(chromaCandModes[candId] == DM_CHROMA_IDX, "The intra dir cannot be DM_CHROMA for this path");
 
   cu.intraDir[1] = chromaCandModes[candId];
@@ -1652,7 +1652,7 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
       mvp_flag    ( cu, REF_PIC_LIST_1 );
     }
   }
-  if( cu.interDir == 3 /* PRED_BI */ && PU::isBipredRestriction(cu) )
+  if( cu.interDir == 3 /* PRED_BI */ && CU::isBipredRestriction(cu) )
   {
     cu.mv    [REF_PIC_LIST_1] = Mv(0, 0);
     cu.refIdx[REF_PIC_LIST_1] = -1;
@@ -1668,7 +1668,7 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
     cu.refIdx[1 - eCurRefList] = cu.cs->slice->symRefIdx[ 1 - eCurRefList ];
   }
 
-  PU::spanMotionInfo( cu, mrgCtx );
+  CU::spanMotionInfo( cu, mrgCtx );
 }
 
 void CABACReader::smvd_mode( CodingUnit& cu )
@@ -1955,7 +1955,7 @@ void CABACReader::inter_pred_idc( CodingUnit& cu )
     cu.interDir = 1;
     return;
   }
-  if( !(PU::isBipredRestriction(cu)) )
+  if( !(CU::isBipredRestriction(cu)) )
   {
     unsigned ctxId = DeriveCtx::CtxInterDir(cu);
     if( m_BinDecoder.decodeBin( Ctx::InterDir(ctxId) ) )

@@ -832,13 +832,13 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
         : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width), Log2(area.height));
-    uint32_t intraMode = PU::getFinalIntraMode(cu, toChannelType(compID));
+    uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
-    if (PU::isLMCMode( cu.intraDir[toChannelType(compID)]))
+    if (CU::isLMCMode( cu.intraDir[toChannelType(compID)]))
     {
-      intraMode = PU::getCoLocatedIntraLumaMode(cu);
+      intraMode = CU::getCoLocatedIntraLumaMode(cu);
     }
-    if (PU::isMIP(cu, toChannelType(compID)))
+    if (CU::isMIP(cu, toChannelType(compID)))
     {
       intraMode = PLANAR_IDX;
     }
@@ -943,13 +943,13 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         : g_scanOrderRom.getScanOrder(
           SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width),
           Log2(area.height));   
-    uint32_t intraMode = PU::getFinalIntraMode(cu, toChannelType(compID));
+    uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
-    if (PU::isLMCMode(cu.intraDir[toChannelType(compID)]))
+    if (CU::isLMCMode(cu.intraDir[toChannelType(compID)]))
     {
-      intraMode = PU::getCoLocatedIntraLumaMode(cu);
+      intraMode = CU::getCoLocatedIntraLumaMode(cu);
     }
-    if (PU::isMIP(cu, toChannelType(compID)))
+    if (CU::isMIP(cu, toChannelType(compID)))
     {
       intraMode = PLANAR_IDX;
     }

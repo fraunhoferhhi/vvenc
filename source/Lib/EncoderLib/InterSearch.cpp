@@ -1056,7 +1056,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       Size bufSize = g_miScaling.scale(cu.lumaSize());
       mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
     }
-    PU::spanMotionInfo( cu );
+    CU::spanMotionInfo( cu );
     Distortion   uiCost[2] = { MAX_DISTORTION, MAX_DISTORTION };
     Distortion   uiCostBi  =   MAX_DISTORTION;
     Distortion   uiCostTemp;
@@ -1184,7 +1184,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       }
 
       //  Bi-predictive Motion estimation
-      if( cs.slice->isInterB() && !PU::isBipredRestriction( cu ) && (cu.slice->checkLDC || BcwIdx == BCW_DEFAULT) )
+      if( cs.slice->isInterB() && !CU::isBipredRestriction( cu ) && (cu.slice->checkLDC || BcwIdx == BCW_DEFAULT) )
       {
         bool doBiPred = true;
         cMvBi[0] = cMv[0];
@@ -1684,8 +1684,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
               cu.mvdAffi[REF_PIC_LIST_1][verIdx] = bestMvd[1][verIdx];
             }
 
-            PU::setAllAffineMv(cu, bestMv[0][0], bestMv[0][1], bestMv[0][2], REF_PIC_LIST_0);
-            PU::setAllAffineMv(cu, bestMv[1][0], bestMv[1][1], bestMv[1][2], REF_PIC_LIST_1);
+            CU::setAllAffineMv(cu, bestMv[0][0], bestMv[0][1], bestMv[0][2], REF_PIC_LIST_0);
+            CU::setAllAffineMv(cu, bestMv[1][0], bestMv[1][1], bestMv[1][2], REF_PIC_LIST_1);
           }
           else
           {
@@ -1725,7 +1725,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
     }
 
     
-    PU::spanMotionInfo( cu, mergeCtx );
+    CU::spanMotionInfo( cu, mergeCtx );
 
     m_skipPROF = false;
     m_encOnly  = false;
@@ -1751,7 +1751,7 @@ void InterSearch::xEstimateMvPredAMVP( CodingUnit& cu, CPelUnitBuf& origBuf, Ref
   AMVPInfo*  pcAMVPInfo = &rAMVPInfo;
 
   // Fill the MV Candidates
-  PU::fillMvpCand( cu, refPicList, iRefIdx, *pcAMVPInfo );
+  CU::fillMvpCand( cu, refPicList, iRefIdx, *pcAMVPInfo );
 
   // initialize Mvp index & Mvp
   iBestIdx = 0;
@@ -4763,7 +4763,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
   }
 
   // Bi-directional prediction
-  if (slice.isInterB() && !PU::isBipredRestriction(cu))
+  if (slice.isInterB() && !CU::isBipredRestriction(cu))
   {
     cu.interDir = 3;
     m_isBi = true;
@@ -4795,7 +4795,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
       iRefIdxBi[1] = bestBiPRefIdxL1;
 
       // Get list1 prediction block
-      PU::setAllAffineMv(cu, cMvBi[1][0], cMvBi[1][1], cMvBi[1][2], REF_PIC_LIST_1);
+      CU::setAllAffineMv(cu, cMvBi[1][0], cMvBi[1][1], cMvBi[1][2], REF_PIC_LIST_1);
       cu.refIdx[REF_PIC_LIST_1] = iRefIdxBi[1];
 
       PelUnitBuf predBufTmp = m_tmpPredStorage[REF_PIC_LIST_1].getCompactBuf( cu );
@@ -4856,7 +4856,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
         // First iterate, get prediction block of opposite direction
         if (iIter == 0 && !slice.picHeader->mvdL1Zero)
         {
-          PU::setAllAffineMv(cu, aacMv[1 - iRefList][0], aacMv[1 - iRefList][1], aacMv[1 - iRefList][2], RefPicList(1 - iRefList));
+          CU::setAllAffineMv(cu, aacMv[1 - iRefList][0], aacMv[1 - iRefList][1], aacMv[1 - iRefList][2], RefPicList(1 - iRefList));
           cu.refIdx[1 - iRefList] = iRefIdx[1 - iRefList];
 
           PelUnitBuf predBufTmp = m_tmpPredStorage[1 - iRefList].getCompactBuf( cu );
@@ -4916,7 +4916,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
             if (iNumIter != 1) // MC for next iter
             {
               //  Set motion
-              PU::setAllAffineMv(cu, cMvBi[iRefList][0], cMvBi[iRefList][1], cMvBi[iRefList][2], refPicList);
+              CU::setAllAffineMv(cu, cMvBi[iRefList][0], cMvBi[iRefList][1], cMvBi[iRefList][2], refPicList);
               cu.refIdx[refPicList] = iRefIdxBi[refPicList];
               PelUnitBuf predBufTmp = m_tmpPredStorage[iRefList].getCompactBuf( cu );
               motionCompensation(cu, predBufTmp, refPicList);
@@ -4978,8 +4978,8 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
     lastMode = 2;
     affineCost = uiCostBi;
     cu.interDir = 3;
-    PU::setAllAffineMv(cu, cMvBi[0][0], cMvBi[0][1], cMvBi[0][2], REF_PIC_LIST_0);
-    PU::setAllAffineMv(cu, cMvBi[1][0], cMvBi[1][1], cMvBi[1][2], REF_PIC_LIST_1);
+    CU::setAllAffineMv(cu, cMvBi[0][0], cMvBi[0][1], cMvBi[0][2], REF_PIC_LIST_0);
+    CU::setAllAffineMv(cu, cMvBi[1][0], cMvBi[1][1], cMvBi[1][2], REF_PIC_LIST_1);
     cu.refIdx[REF_PIC_LIST_0] = iRefIdxBi[0];
     cu.refIdx[REF_PIC_LIST_1] = iRefIdxBi[1];
 
@@ -5005,7 +5005,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
     lastMode = 0;
     affineCost = uiCost[0];
     cu.interDir = 1;
-    PU::setAllAffineMv(cu, aacMv[0][0], aacMv[0][1], aacMv[0][2], REF_PIC_LIST_0);
+    CU::setAllAffineMv(cu, aacMv[0][0], aacMv[0][1], aacMv[0][2], REF_PIC_LIST_0);
     cu.refIdx[REF_PIC_LIST_0] = iRefIdx[0];
 
     for (int verIdx = 0; verIdx < mvNum; verIdx++)
@@ -5025,7 +5025,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
     lastMode = 1;
     affineCost = uiCost[1];
     cu.interDir = 2;
-    PU::setAllAffineMv(cu, aacMv[1][0], aacMv[1][1], aacMv[1][2], REF_PIC_LIST_1);
+    CU::setAllAffineMv(cu, aacMv[1][0], aacMv[1][1], aacMv[1][2], REF_PIC_LIST_1);
     cu.refIdx[REF_PIC_LIST_1] = iRefIdx[1];
 
     for (int verIdx = 0; verIdx < mvNum; verIdx++)
@@ -5586,7 +5586,7 @@ void InterSearch::xEstimateAffineAMVP(CodingUnit& cu, AffineAMVPInfo& affineAMVP
   Distortion uiBestCost = MAX_DISTORTION;
 
   // Fill the MV Candidates
-  PU::fillAffineMvpCand(cu, refPicList, iRefIdx, affineAMVPInfo);
+  CU::fillAffineMvpCand(cu, refPicList, iRefIdx, affineAMVPInfo);
   CHECK(affineAMVPInfo.numCand == 0, "Assertion failed.");
 
   PelUnitBuf predBuf = m_tmpStorageLCU.getCompactBuf( cu );

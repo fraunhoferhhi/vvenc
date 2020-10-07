@@ -570,7 +570,7 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const UnitScale& scale = unitScale[_blk.compID];
 
         const Area scaledSelf  = scale.scale( _selfBlk );
-        const Area scaledBlk   = isIspTu ? scale.scale( tu->blocks[i] ) : scale.scale( _blk );
+        const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
         CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
