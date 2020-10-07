@@ -336,7 +336,7 @@ public:
   bool                m_useFastDecisionForMerge;                        ///< flag for using Fast Decision Merge RD-Cost
   bool                m_useEarlySkipDetection;                          ///< flag for using Early SKIP Detection
 
-  bool                m_bDisableIntraPUsInInterSlices;                  ///< Flag for disabling intra predicted PUs in inter slices.
+  bool                m_bDisableIntraCUsInInterSlices;                  ///< Flag for disabling intra predicted CUs in inter slices.
   bool                m_bUseConstrainedIntraPred;                       ///< flag for using constrained intra prediction
   bool                m_bFastUDIUseMPMEnabled;
   bool                m_bFastMEForGenBLowDelayEnabled;
@@ -624,7 +624,7 @@ public:
       , m_useFastDecisionForMerge                     ( true )
       , m_useEarlySkipDetection                       ( false )
 
-      , m_bDisableIntraPUsInInterSlices               ( false )
+      , m_bDisableIntraCUsInInterSlices               ( false )
       , m_bUseConstrainedIntraPred                    ( false )
       , m_bFastUDIUseMPMEnabled                       ( true )
       , m_bFastMEForGenBLowDelayEnabled               ( true )

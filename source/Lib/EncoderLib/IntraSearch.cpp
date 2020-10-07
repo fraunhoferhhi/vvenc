@@ -208,7 +208,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   const bool fastMip = sps.MIP && m_pcEncCfg->m_useFastMIP;
 
   // this should always be true
-  CHECK( !cu.Y().valid(), "PU is not valid" );
+  CHECK( !cu.Y().valid(), "CU is not valid" );
 
   const CompArea& area = cu.Y();
 
@@ -781,7 +781,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       if( !cu.isSepTree() && cu.ispMode )
       {
         saveCS.clearCUs();
-//        saveCS.clearPUs();
       }
 
     if( cu.isSepTree() )
@@ -808,7 +807,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       CodingUnit& auxCU = saveCS.addCU(cu, partitioner.chType);
       auxCU.ispMode = cu.ispMode;
       saveCS.sps = cu.cs->sps;
-//      saveCS.addPU(cu, partitioner.chType, &cu);
     }
 #endif
 

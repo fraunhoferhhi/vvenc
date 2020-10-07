@@ -177,7 +177,7 @@ inline void dtraceCCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const Coding
 
 inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
 {
-  DTRACE( trace_ctx, D_MOT_FIELD, "PU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
+  DTRACE( trace_ctx, D_MOT_FIELD, "CU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
   const CMotionBuf mb = cu.getMotionBuf();
   for( uint32_t listIdx = 0; listIdx < 2; listIdx++ )
   {

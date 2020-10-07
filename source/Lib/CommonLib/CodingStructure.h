@@ -176,7 +176,6 @@ public:
   void useSubStructure (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
 
   void clearTUs();
-//  void clearPUs();
   void clearCUs();
   const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 

@@ -882,7 +882,6 @@ typedef dynamic_cache<struct TransformUnit > TUCache;
 struct XUCache
 {
   CUCache cuCache;
-//  PUCache puCache;
   TUCache tuCache;
 };
 

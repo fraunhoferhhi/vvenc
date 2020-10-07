@@ -249,7 +249,6 @@ bool InterPrediction::xCheckIdenticalMotion( const CodingUnit& cu ) const
 
 void InterPrediction::xSubPuBDOF( const CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& refPicList /*= REF_PIC_LIST_X*/)
 {
-  // compute the location of the current PU
   Position puPos = cu.lumaPos();
   Size puSize = cu.lumaSize();
 
@@ -428,7 +427,6 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
 
 void InterPrediction::xSubPuMC(CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& eRefPicList /*= REF_PIC_LIST_X*/)
 {
-  // compute the location of the current PU
   Position puPos = cu.lumaPos();
   Size puSize = cu.lumaSize();
 
@@ -441,9 +439,7 @@ void InterPrediction::xSubPuMC(CodingUnit& cu, PelUnitBuf& predBuf, const RefPic
   }
 
   CodingUnit subCu = cu;
-
   subCu.cs = cu.cs;
-//  subCu.cu = cu.cu;
   subCu.mergeType = MRG_TYPE_DEFAULT_N;
 
   bool isAffine = cu.affine;

@@ -683,10 +683,10 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
 
 
 inline bool isAboveLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT );
-inline int  isAboveAvailable      ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *validFlags );
-inline int  isLeftAvailable       ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *validFlags );
-inline int  isAboveRightAvailable ( const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *validFlags );
-inline int  isBelowLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *validFlags );
+inline int  isAboveAvailable      ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *validFlags );
+inline int  isLeftAvailable       ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *validFlags );
+inline int  isAboveRightAvailable ( const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t numUnits, const uint32_t unitHeight, bool *validFlags );
+inline int  isBelowLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t numUnits, const uint32_t unitHeight, bool *validFlags );
 
 void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompArea& area, const bool forceRefFilterFlag)
 {
@@ -1020,13 +1020,13 @@ bool isAboveLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const
   return (cs.getCURestricted(refPos, cu, chType) != NULL);
 }
 
-int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *bValidFlags)
+int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *bValidFlags)
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags  = bValidFlags;
   int       numIntra    = 0;
-  const int maxDx       = uiNumUnitsInPU * unitWidth;
+  const int maxDx       = numUnits * unitWidth;
   unsigned  checkPosX   = 0;
   bool      valid       = false;
 
@@ -1055,13 +1055,13 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Posi
   return numIntra;
 }
 
-int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *bValidFlags)
+int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitHeight, bool *bValidFlags)
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags = bValidFlags;
   int       numIntra   = 0;
-  const int maxDy      = uiNumUnitsInPU * unitHeight;
+  const int maxDy      = numUnits * unitHeight;
   unsigned checkPosY   = 0;
   bool     valid       = false;
 
@@ -1089,13 +1089,13 @@ int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Posit
   return numIntra;
 }
 
-int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *bValidFlags )
+int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t numUnits, const uint32_t unitWidth, bool *bValidFlags )
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags = bValidFlags;
   int       numIntra   = 0;
-  const int maxDx      = uiNumUnitsInPU * unitWidth;
+  const int maxDx      = numUnits * unitWidth;
   unsigned  checkPosX   = 0;
   bool      valid       = false;
 
@@ -1123,13 +1123,13 @@ int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const
   return numIntra;
 }
 
-int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *bValidFlags )
+int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t numUnits, const uint32_t unitHeight, bool *bValidFlags )
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags = bValidFlags;
   int       numIntra   = 0;
-  const int maxDy      = uiNumUnitsInPU * unitHeight;
+  const int maxDy      = numUnits * unitHeight;
   unsigned  checkPosY   = 0;
   bool      valid       = false;
 
