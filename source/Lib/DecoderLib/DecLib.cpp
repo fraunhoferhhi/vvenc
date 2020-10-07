@@ -412,7 +412,7 @@ DecLib::DecLib()
   g_pelBufOP.initPelBufOpsX86();
 #endif
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.initTCoeffOps();
+  g_tCoeffOps.initTCoeffOpsX86();
 #endif
 }
 
