@@ -357,7 +357,11 @@ public:
           std::string cPreset = argv[i_arg++];
           std::transform( cPreset.begin(), cPreset.end(), cPreset.begin(), ::tolower );
 
-          if( "slow" == cPreset)
+          if( "tooltest" == cPreset)
+          {
+            rcParams.m_iQuality = 255;
+          }
+          else if( "slow" == cPreset)
           {
             rcParams.m_iQuality = 3;
           }
