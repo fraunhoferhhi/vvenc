@@ -176,6 +176,16 @@ add_test( NAME Test_vvenclibtest-calling_order COMMAND vvenclibtest 2 )
 add_test( NAME Test_vvenclibtest-input_params COMMAND vvenclibtest 3 )
 add_test( NAME Test_vvenclibtest-output_params COMMAND vvenclibtest 4 )
 
+add_test( NAME Test_vvencapp-tooltest COMMAND vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o out.vvc )
+set_tests_properties( Test_vvencapp-tooltest PROPERTIES TIMEOUT 60 )
+add_test( NAME Test_vvencFFapp-tooltest COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-tooltest PROPERTIES TIMEOUT 40 )
+add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+#add_test( NAME Test_vvencFFapp-tooltesttrans COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=outf.vvc --DebugPOC=3 -b out.vvc )
+#set_tests_properties( Test_vvencFFapp-tooltesttrans PROPERTIES TIMEOUT 10 )
+#add_test( NAME Test_output-tooltesttrans COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
 add_test( NAME Test_vvencapp-faster COMMAND vvencapp --preset faster -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 11 -o out.vvc )
 set_tests_properties( Test_vvencapp-faster PROPERTIES TIMEOUT 20 )
 add_test( NAME Test_vvencFFapp-faster COMMAND vvencFFapp -c ../../cfg/randomaccess_faster.cfg -c ../../test/data/RTn23.cfg -f 11 -b outf.vvc )

@@ -548,7 +548,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_eProfile != VVC_PROFILE_MAIN_10 && rcSrc.m_eProfile != VVC_PROFILE_MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != VVC_PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3,                                  "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
+  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,        "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
   ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
@@ -875,6 +875,42 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
 
           rcEncCfg.m_useNonLinearAlfLuma   = true;
           rcEncCfg.m_useNonLinearAlfChroma = true;
+    break;
+
+  case 255:  // tooltest (=atc)
+
+          rcEncCfg.m_AMVRspeed = 3;
+
+          rcEncCfg.m_SMVD = 3;
+
+          rcEncCfg.m_MCTF = 2;
+          rcEncCfg.m_MCTFNumLeadFrames = 0;
+          rcEncCfg.m_MCTFNumTrailFrames = 0;
+
+          rcEncCfg.m_Affine           = 2;
+          rcEncCfg.m_PROF             = 1;
+
+          rcEncCfg.m_MMVD             = 2;
+          rcEncCfg.m_allowDisFracMMVD = 1;
+
+          rcEncCfg.m_MIP             = 1;
+          rcEncCfg.m_useFastMIP      = 4;
+
+          rcEncCfg.m_ccalf           = true;
+          rcEncCfg.m_SbTMVP          = 1;
+          rcEncCfg.m_Geo             = 2;
+          rcEncCfg.m_CIIP            = 3;
+          rcEncCfg.m_SBT             = 2;
+          rcEncCfg.m_LFNST           = 1;
+          rcEncCfg.m_LFNST           = 1;
+          rcEncCfg.m_ISP             = 2;
+          rcEncCfg.m_MTS             = 1;
+
+          rcEncCfg.m_RCKeepHierarchicalBit = 2;
+          rcEncCfg.m_useNonLinearAlfLuma   = true;
+          rcEncCfg.m_useNonLinearAlfChroma = true;
+          rcEncCfg.m_MTSImplicit = true;
+
     break;
 
   default:
