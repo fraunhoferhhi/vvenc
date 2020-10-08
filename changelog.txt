@@ -1,17 +1,19 @@
-///////////////////////////////////////// 
-tag 0.2.0.0
+/////////////////////////////////////////
+tag 0.1.1.0
 
 * vvencapp:
- - new parameter --refreshsec,-rs  to define intra refresh in seconds depending on given framerate
-                 internally the refresh rate in sec. is translated into frame where refresh is set
- - changed parameter: --intraperiod,-ip is 0 per default, because --refreshsec is used for that, if > 0 intraperiod overwrites refreshsec
- - fullhelp changed: all inernal encoding parameter are now shown as string if --fullhelp is used
+ - new parameter --refreshsec,-rs to define the intra refresh rate in seconds depending on the given frame rate.
+                 Internally, the refresh rate in seconds is translated into the frames where the refresh is set.
+ - changed parameter: --intraperiod,-ip is 0 per default because --refreshsec is used for that purpose instead.
+                      In case of a value greater than 0, intraperiod overwrites refreshsec.
+ - changed parameter: Abbreviation -q is now supported in addition to --qp.
+ - fullhelp changed: all internal encoding parameters are now shown as strings when --fullhelp is called.
 
-///////////////////////////////////////// 
+/////////////////////////////////////////
 tag 0.1.0.0
 
-* initial version 
+* initial version
 
-///////////////////////////////////////// 
+/////////////////////////////////////////
 
 

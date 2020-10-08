@@ -7,7 +7,7 @@
 * Valeri George, , Fraunhofer HHI
 * Ivan Zupancic, , Fraunhofer HHI
 * Christian Lehmann, , Fraunhofer HHI
-* Christian Helmrich, , Fraunhofer HHI
+* Christian Helmrich, @crhelmrich, Fraunhofer HHI
 * Christian Stoffers, , Fraunhofer HHI
 * Gabriel Hege, , Fraunhofer HHI
 * Jens Güther, , Fraunhofer HHI
