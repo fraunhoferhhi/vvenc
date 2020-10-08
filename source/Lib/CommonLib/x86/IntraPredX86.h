@@ -816,9 +816,9 @@ void xPredIntraPlanar_SIMD( PelBuf& pDst, const CPelBuf& pSrc)
 
   const uint32_t width  = pDst.width;
   const uint32_t height = pDst.height;
-#if ISP_VVC && ISP_VVC_SIMD
-  const uint32_t log2W = floorLog2(width);
-  const uint32_t log2H = floorLog2(height);
+#if ISP_VVC
+  const uint32_t log2W  = floorLog2(width);
+  const uint32_t log2H  = floorLog2(height);
 #else
   const uint32_t log2W  = floorLog2( width  < 2 ? 2 : width );
   const uint32_t log2H  = floorLog2( height < 2 ? 2 : height );

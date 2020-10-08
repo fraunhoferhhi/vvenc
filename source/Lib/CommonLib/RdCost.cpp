@@ -239,10 +239,10 @@ Distortion RdCost::getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitD
   }
   else
   {
-#if ISP_VVC_SIMD
-    if ((org.width == 1))
+#if ISP_VVC
+    if( ( org.width == 1 ) )
     {
-      dist = xGetSSE(dp);
+      dist = xGetSSE( dp );
     }
     else
 #endif

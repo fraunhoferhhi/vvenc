@@ -606,42 +606,44 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
   }
   else
   {
-    if ( !isIntegerSlope( abs(intraPredAngle) ) )
+    if( !isIntegerSlope( abs( intraPredAngle ) ) )
     {
-      int deltaPos = intraPredAngle * (1 + multiRefIdx);
-      if( isLuma(channelType) )
+      int deltaPos = intraPredAngle * ( 1 + multiRefIdx );
+      if( isLuma( channelType ) )
       {
-#if ISP_VVC_SIMD
-        if (width <= 2)
+#if ISP_VVC
+        if( width <= 2 )
         {
-          for (int y = 0, deltaPos = intraPredAngle * (1 + multiRefIdx); y < height;
-            y++, deltaPos += intraPredAngle, pDsty += dstStride)
+          for( int y = 0, deltaPos = intraPredAngle * ( 1 + multiRefIdx );
+               y < height;
+               y++, deltaPos += intraPredAngle, pDsty += dstStride )
           {
-            const int deltaInt = deltaPos >> 5;
+            const int deltaInt   = deltaPos >> 5;
             const int deltaFract = deltaPos & 31;
-            if (!isIntegerSlope(abs(intraPredAngle)))
+
+            if( !isIntegerSlope( abs( intraPredAngle ) ) )
             {
               const bool useCubicFilter = !m_ipaParam.interpolationFlag;
 
-              const TFilterCoeff        intraSmoothingFilter[4] = { TFilterCoeff(16 - (deltaFract >> 1)),
-                                                             TFilterCoeff(32 - (deltaFract >> 1)),
-                                                             TFilterCoeff(16 + (deltaFract >> 1)),
-                                                             TFilterCoeff(deltaFract >> 1) };
+              const TFilterCoeff intraSmoothingFilter[4] = { TFilterCoeff( 16 - ( deltaFract >> 1 ) ),
+                                                             TFilterCoeff( 32 - ( deltaFract >> 1 ) ),
+                                                             TFilterCoeff( 16 + ( deltaFract >> 1 ) ),
+                                                             TFilterCoeff(      ( deltaFract >> 1 ) ) };
               const TFilterCoeff* const f =
-                (useCubicFilter) ? InterpolationFilter::getChromaFilterTable(deltaFract) : intraSmoothingFilter;
+                ( useCubicFilter ) ? InterpolationFilter::getChromaFilterTable( deltaFract ) : intraSmoothingFilter;
 
-              for (int x = 0; x < width; x++)
+              for( int x = 0; x < width; x++ )
               {
                 Pel p[4];
 
-                p[0] = refMain[deltaInt + x];
+                p[0] = refMain[deltaInt + x + 0];
                 p[1] = refMain[deltaInt + x + 1];
                 p[2] = refMain[deltaInt + x + 2];
                 p[3] = refMain[deltaInt + x + 3];
 
-                Pel val = (f[0] * p[0] + f[1] * p[1] + f[2] * p[2] + f[3] * p[3] + 32) >> 6;
+                Pel val = ( f[0] * p[0] + f[1] * p[1] + f[2] * p[2] + f[3] * p[3] + 32 ) >> 6;
 
-                pDsty[x] = ClipPel(val, clpRng);   // always clip even though not always needed
+                pDsty[x] = ClipPel( val, clpRng );   // always clip even though not always needed
               }
             }
           }
