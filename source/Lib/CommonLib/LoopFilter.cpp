@@ -808,13 +808,11 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
   
 
   static constexpr int subBlockSize = 8;
-  const PredictionUnit& currPU  = *cu.pu;
-  const Area& areaPu            = area;
   LFCUParam stLFCUParam         { xGetLoopfilterParam( cu ) };
   const UnitScale scaling       = cu.cs->getScaling( UnitScale::LF_PARAM_MAP, cu.chType );
   // for SUBPU ATMVP and Affine, more PU deblocking needs to be found, for ISP the chroma block will be deferred to the last luma block,
   // so the processing order is different. For all other cases the boundary strenght can be directly obtained in the TU loop.
-  const bool refineBs     = ( currPU.mergeFlag && currPU.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine || cu.ispMode;
+  const bool refineBs     = ( cu.mergeFlag && cu.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine || cu.ispMode;
 
   const int maskBlkX = ~( ( 1 << scaling.posx ) - 1 );
   const int maskBlkY = ~( ( 1 << scaling.posy ) - 1 );
@@ -840,11 +838,11 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
 
   if( !refineBs ) return;
 
-  if( ( currPU.mergeFlag && currPU.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine )
+  if( ( cu.mergeFlag && cu.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine )
   {
     CHECK( cu.chType != CH_L, "This path is only valid for single tree blocks!" );
 
-    for( int off = subBlockSize; off < areaPu.width; off += subBlockSize )
+    for( int off = subBlockSize; off < area.width; off += subBlockSize )
     {
       const Area mvBlockV( cu.Y().x + off, cu.Y().y, subBlockSize, cu.Y().height );
       verEdgeFilter = true;
@@ -861,7 +859,7 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
 
     xSetMaxFilterLengthPQForCodingSubBlocks<EDGE_VER>( cu );
 
-    for( int off = subBlockSize; off < areaPu.height; off += subBlockSize )
+    for( int off = subBlockSize; off < area.height; off += subBlockSize )
     {
       const Area mvBlockH( cu.Y().x, cu.Y().y + off, cu.Y().width, subBlockSize );
       horEdgeFilter = true;
@@ -1291,7 +1289,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     lfp.bs |= ( BsSet( chrmBS, COMP_Cb ) + BsSet( chrmBS, COMP_Cr ) );
   }
 
-  if( ( lfp.bs & bsMask ) && ( cuP.pu->ciip || cuQ.pu->ciip ) )
+  if( ( lfp.bs & bsMask ) && ( cuP.ciip || cuQ.ciip ) )
   {
     lfp.bs |= ( BsSet( 2, COMP_Y ) + BsSet( 2, COMP_Cb ) + BsSet( 2, COMP_Cr ) ) & bsMask;
 
@@ -1315,7 +1313,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     return;
   }
 
-  if( cuP.pu->ciip || cuQ.pu->ciip )
+  if( cuP.ciip || cuQ.ciip )
   {
     lfp.bs |= 1 & bsMask;
 

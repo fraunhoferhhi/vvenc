@@ -79,10 +79,10 @@ private:
   struct ModeInfo
   {
     bool     mipFlg;    // CU::mipFlag
-    bool     mipTrFlg;  // PU::mipTransposeFlag
-    int8_t   mRefId;    // PU::multiRefIdx
+    bool     mipTrFlg;  // CU::mipTransposeFlag
+    int8_t   mRefId;    // CU::multiRefIdx
     uint8_t  ispMod;    // CU::ispMode
-    uint8_t  modeId;    // PU::intraDir[CH_L]
+    uint8_t  modeId;    // CU::intraDir[CH_L]
 
     ModeInfo() : mipFlg(false), mipTrFlg(false), mRefId(0), ispMod(NOT_INTRA_SUBPARTITIONS), modeId(0) {}
     ModeInfo(const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode) : mipFlg(mipf), mipTrFlg(miptf), mRefId(mrid), ispMod(ispm), modeId(mode) {}
@@ -176,7 +176,7 @@ private:
   // -------------------------------------------------------------------------------------------------------------------
   // Intra search
   // -------------------------------------------------------------------------------------------------------------------
-  uint64_t  xFracModeBitsIntraLuma    ( const PredictionUnit &pu );
+  uint64_t  xFracModeBitsIntraLuma    ( const CodingUnit& cu );
 
   void      xEncIntraHeader           ( CodingStructure &cs, Partitioner& pm, const bool luma );
   void      xEncSubdivCbfQT           ( CodingStructure &cs, Partitioner& pm, const bool luma );
@@ -202,7 +202,7 @@ private:
 #endif
 
   template<typename T, size_t N, int M>
-  void      xReduceHadCandList        ( static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const PredictionUnit &pu, const bool fastMip);
+  void      xReduceHadCandList        ( static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const CodingUnit& cu, const bool fastMip);
 
 };// END CLASS DEFINITION EncSearch
 

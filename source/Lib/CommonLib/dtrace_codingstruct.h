@@ -102,8 +102,8 @@ inline void dtraceModeCost(CodingStructure &cs, double lambda)
   }
 
   bool isIntra = CU::isIntra( *cs.cus.front() );
-  int intraModeL = isIntra ? cs.pus.front()->intraDir[0] : 0;
-  int intraModeC = isIntra ? cs.pus.front()->intraDir[1] : 0;
+  int intraModeL = isIntra ? cs.cus.front()->intraDir[0] : 0;
+  int intraModeC = isIntra ? cs.cus.front()->intraDir[1] : 0;
   if (isIntra && intraModeC == DM_CHROMA_IDX)
     intraModeC = 68;
   int imvVal = 0;
@@ -117,7 +117,7 @@ inline void dtraceModeCost(CodingStructure &cs, double lambda)
     cs.cus[0]->qp,
     cs.cus[0]->predMode,
     cs.cus[0]->skip,
-    cs.pus[0]->mergeFlag,
+    cs.cus[0]->mergeFlag,
     0, 0,
     imvVal,
     0, 0,
@@ -157,8 +157,8 @@ inline void dtraceBestMode(CodingStructure *&tempCS, CodingStructure *&bestCS, d
   }
 
   bool isIntra = CU::isIntra( *tempCS->cus[0] );
-  int intraModeL = isIntra ? tempCS->pus[0]->intraDir[0] : 0;
-  int intraModeC = isIntra ? tempCS->pus[0]->intraDir[1] : 0;
+  int intraModeL = isIntra ? tempCS->cus[0]->intraDir[0] : 0;
+  int intraModeC = isIntra ? tempCS->cus[0]->intraDir[1] : 0;
 
   if(!bSplitCS)
   {
@@ -170,7 +170,7 @@ inline void dtraceBestMode(CodingStructure *&tempCS, CodingStructure *&bestCS, d
             tempCS->cus[0]->qtDepth,
             tempCS->cus[0]->qp,
             tempCS->cus[0]->predMode,
-            tempCS->pus[0]->mergeFlag,
+            tempCS->cus[0]->mergeFlag,
             intraModeL, intraModeC,
             tempCost, tempBits, tempDist,
             bestCost, bestBits, bestCS->dist,

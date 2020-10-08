@@ -230,9 +230,7 @@ void SaveLoadEncInfoSbt::resetSaveloadSbt( int maxSbtSize )
   }
 }
 
-static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, const Partitioner &partitioner
-                            , const PredictionUnit &pu, int picW, int picH
-                           )
+static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, const Partitioner &partitioner, int picW, int picH )
 {
   if( cu.chType != partitioner.chType )
   {
@@ -286,7 +284,6 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
             const UnitArea area( chFmt, Area( 0, 0, 1<<(wIdx+2), 1<<(hIdx+2) ) );
 
             new ( &m_bestEncInfo[wIdx][hIdx][x][y]->cu ) CodingUnit    ( area );
-            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->pu ) PredictionUnit( area );
             new ( &m_bestEncInfo[wIdx][hIdx][x][y]->tu ) TransformUnit( area );
 
             m_bestEncInfo[wIdx][hIdx][x][y]->poc      = -1;
@@ -416,7 +413,7 @@ void BestEncInfoCache::init( const Slice &slice )
 
 bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& partitioner )
 {
-  if( cs.cus.size() != 1 || cs.tus.size() != 1 || cs.pus.size() != 1 )
+  if( cs.cus.size() != 1 || cs.tus.size() != 1 )
   {
     return false;
   }
@@ -428,10 +425,8 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& 
 
   encInfo.poc            =  cs.picture->poc;
   encInfo.cu.repositionTo( *cs.cus.front() );
-  encInfo.pu.repositionTo( *cs.pus.front() );
   encInfo.tu.repositionTo( *cs.tus.front() );
   encInfo.cu             = *cs.cus.front();
-  encInfo.pu             = *cs.pus.front();
   for( auto &blk : cs.tus.front()->blocks )
   {
     if( blk.valid() ) encInfo.tu.copyComponentFrom( *cs.tus.front(), blk.compID );
@@ -460,9 +455,9 @@ bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partit
   }
   if( encInfo.cu.qp != qp )
     return false;
-  if( cs.picture->poc != encInfo.poc || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) || !isTheSameNbHood( encInfo.cu, cs, partitioner
-    , encInfo.pu, (cs.picture->Y().width), (cs.picture->Y().height)
-)
+  if( cs.picture->poc != encInfo.poc 
+    || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) 
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
     || CU::isIBC(encInfo.cu)
     || partitioner.currQgEnable() || cs.currQP[partitioner.chType] != encInfo.cu.qp
     )
@@ -482,9 +477,9 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 
   BestEncodingInfo& encInfo = *m_bestEncInfo[idx1][idx2][idx3][idx4];
 
-  if( cs.picture->poc != encInfo.poc || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) || !isTheSameNbHood( encInfo.cu, cs, partitioner
-    , encInfo.pu, (cs.picture->Y().width), (cs.picture->Y().height)
-    )
+  if( cs.picture->poc != encInfo.poc 
+    || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) 
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
     || partitioner.currQgEnable() || cs.currQP[partitioner.chType] != encInfo.cu.qp
     )
   {
@@ -495,15 +490,15 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
   CodingUnit     &cu = cs.addCU( ua, partitioner.chType );
   cu.treeType = partitioner.treeType;
   cu.modeType = partitioner.modeType;
-  PredictionUnit &pu = cs.addPU( ua, partitioner.chType, &cu );
+  cu.initPuData();
   TransformUnit  &tu = cs.addTU( ua, partitioner.chType, &cu );
 
   cu          .repositionTo( encInfo.cu );
-  pu          .repositionTo( encInfo.pu );
+  cu          .repositionTo( encInfo.cu );
   tu          .repositionTo( encInfo.tu );
 
   cu          = encInfo.cu;
-  pu          = encInfo.pu;
+  cu          = encInfo.cu;
   for( auto &blk : tu.blocks )
   {
     if( blk.valid() ) tu.copyComponentFrom( encInfo.tu, blk.compID );
@@ -892,7 +887,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     }
     else
     if( !( slice.isIRAP() || /*bestModeType == ETM_INTRA || */!cuECtx.bestTU ||
-      ((!m_pcEncCfg->m_bDisableIntraPUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
+      ((!m_pcEncCfg->m_bDisableIntraCUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
                                          ( cuECtx.bestTU->cbf[0] != 0 ) ||
            ( ( numComp > COMP_Cb ) && cuECtx.bestTU->cbf[1] != 0 ) ||
            ( ( numComp > COMP_Cr ) && cuECtx.bestTU->cbf[2] != 0 )  // avoid very complex intra if it is unlikely

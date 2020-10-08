@@ -300,7 +300,6 @@ public:
 struct BestEncodingInfo
 {
   CodingUnit     cu;
-  PredictionUnit pu;
   TransformUnit  tu;
   EncTestMode    testMode;
   int            poc;
