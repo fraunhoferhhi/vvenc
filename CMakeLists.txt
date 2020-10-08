@@ -13,6 +13,16 @@ endif()
 project( vvenc VERSION 0.1.1.0 )
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
+  # enable sse4.1 build for all source files for gcc and clang
+  if( UNIX OR MINGW )
+    add_compile_options( "-msse4.1" )
+  endif()
+  
+  # set exception handling
+  if( MSVC )
+    add_compile_options( "/EHsc" )
+  endif()
+
   # vvenc embedded by superproject, always include source/Lib/vvenc  as first component
   list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvenc" )
   list( REMOVE_DUPLICATES ${PROJECT_NAME}_ADD_SUBDIRECTORIES )
@@ -78,8 +88,7 @@ endif()
 #set( ENABLE_LINK_TIME_OPT ON       CACHE BOOL   "Enable link time optimization for release and profile builds" )
 #set( OPT_TARGET_ARCH      "native" CACHE STRING "Create code and optimize for this architecture (default native)" )
 
-#set( SET_ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING as a compiler flag" )
-#set( ENABLE_TRACING OFF CACHE BOOL "If SET_ENABLE_TRACING is on, it will be set to this value" )
+set( ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING=1 as a compiler flag" )
 
 # set c++11
 set( CMAKE_CXX_STANDARD 14 )
@@ -116,6 +125,10 @@ if( MSVC )
   # add compile options
   add_compile_options( "/MP" )
   add_compile_options( "/EHsc" )
+endif()
+
+if( ENABLE_TRACING )
+  add_definitions( -DENABLE_TRACING=1 )
 endif()
 
 # set address sanitizer compiler arguments

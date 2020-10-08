@@ -446,9 +446,9 @@ private:
   // Inter search (AMP)
   // -------------------------------------------------------------------------------------------------------------------
 
-  void       xEstimateMvPredAMVP  ( PredictionUnit& pu, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv& rcMvPred, AMVPInfo& amvpInfo, Distortion& distBiP );
+  void       xEstimateMvPredAMVP  ( CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv& rcMvPred, AMVPInfo& amvpInfo, Distortion& distBiP );
   void       xCheckBestMVP        ( RefPicList refPicList, const Mv& cMv, Mv& rcMvPred, int& riMVPIdx, AMVPInfo& amvpInfo, uint32_t&  ruiBits, Distortion& ruiCost, const uint8_t imv);
-  Distortion xGetTemplateCost     ( const PredictionUnit& pu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv cMvCand, int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx );
+  Distortion xGetTemplateCost     ( const CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv cMvCand, int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx );
 
   void       xCopyAMVPInfo        ( AMVPInfo* pSrc, AMVPInfo* pDst );
   uint32_t   xGetMvpIdxBits       ( int iIdx, int iNum );
@@ -459,7 +459,7 @@ private:
   // motion estimation
   // -------------------------------------------------------------------------------------------------------------------
 
-  void xMotionEstimation          ( PredictionUnit&       pu,
+  void xMotionEstimation          ( CodingUnit&           cu,
                                     CPelUnitBuf&          origBuf,
                                     RefPicList            refPicList,
                                     Mv&                   rcMvPred,
@@ -472,7 +472,7 @@ private:
                                     bool                  bBi = false
                                   );
 
-  void xTZSearch                  ( const PredictionUnit& pu,
+  void xTZSearch                  ( const CodingUnit&     cu,
                                     RefPicList            refPicList,
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
@@ -483,7 +483,7 @@ private:
                                     const bool            bFastSettings = false
                                   );
 
-  void xTZSearchSelective         ( const PredictionUnit& pu,
+  void xTZSearchSelective         ( const CodingUnit&     cu,
                                     RefPicList            refPicList,
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
@@ -492,13 +492,13 @@ private:
                                     const Mv* const       pIntegerMv2Nx2NPred
                                   );
 
-  void xSetSearchRange            ( const PredictionUnit& pu,
+  void xSetSearchRange            ( const CodingUnit&     cu,
                                     const Mv&             cMvPred,
                                     const int             iSrchRng,
                                     SearchRange&          sr                                  
                                   );
 
-  void xPatternSearchFast         ( const PredictionUnit& pu,
+  void xPatternSearchFast         ( const CodingUnit&     cu,
                                     RefPicList            refPicList,
                                     int                   iRefIdxPred,
                                     TZSearchStruct&       cStruct,
@@ -512,7 +512,7 @@ private:
                                     Distortion&           ruiSAD
                                   );
 
-  void xPatternSearchIntRefine    ( PredictionUnit&     pu,
+  void xPatternSearchIntRefine    ( CodingUnit&         cu,
                                     TZSearchStruct&     cStruct,
                                     Mv&                 rcMv,
                                     Mv&                 rcMvPred,
@@ -523,7 +523,7 @@ private:
                                     double              fWeight
                                   );
 
-  void xPatternSearchFracDIF      ( const PredictionUnit& pu,
+  void xPatternSearchFracDIF      ( const CodingUnit&     cu,
                                     RefPicList            refPicList,
                                     int                   iRefIdx,
                                     TZSearchStruct&       cStruct,
@@ -533,7 +533,7 @@ private:
                                     Distortion&           ruiCost
                                   );
 
-  void xPredAffineInterSearch     ( PredictionUnit&       pu,
+  void xPredAffineInterSearch     ( CodingUnit&           cu,
                                     CPelUnitBuf&          origBuf,
                                     int                   puIdx,
                                     uint32_t&             lastMode,
@@ -546,7 +546,7 @@ private:
                                     uint32_t              BcwIdxBits = 0
                                   );
 
-  void  xAffineMotionEstimation  ( PredictionUnit&       pu,
+  void  xAffineMotionEstimation  ( CodingUnit&           cu,
                                    CPelUnitBuf&          origBuf,
                                    RefPicList            refPicList,
                                    Mv                    acMvPred[3],
@@ -559,20 +559,20 @@ private:
                                    bool                  bBi = false
                                  );
 
-  void        xEstimateAffineAMVP     ( PredictionUnit& pu, AffineAMVPInfo& affineAMVPInfo, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv acMvPred[3], Distortion& distBiP);
+  void        xEstimateAffineAMVP     ( CodingUnit& cu, AffineAMVPInfo& affineAMVPInfo, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv acMvPred[3], Distortion& distBiP);
 
-  Distortion  xGetAffineTemplateCost  ( PredictionUnit& pu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv acMvCand[3], int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx);
+  Distortion  xGetAffineTemplateCost  ( CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv acMvCand[3], int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx);
   void        xCopyAffineAMVPInfo     ( AffineAMVPInfo& src, AffineAMVPInfo& dst );
-  void        xCheckBestAffineMVP     ( PredictionUnit &pu, AffineAMVPInfo &affineAMVPInfo, RefPicList refPicList, Mv acMv[3], Mv acMvPred[3], int& riMVPIdx, uint32_t& ruiBits, Distortion& ruiCost );
-  uint32_t    xCalcAffineMVBits       ( PredictionUnit& pu, Mv mvCand[3], Mv mvPred[3]);
+  void        xCheckBestAffineMVP     ( CodingUnit& cu, AffineAMVPInfo &affineAMVPInfo, RefPicList refPicList, Mv acMv[3], Mv acMvPred[3], int& riMVPIdx, uint32_t& ruiBits, Distortion& ruiCost );
+  uint32_t    xCalcAffineMVBits       ( CodingUnit& cu, Mv mvCand[3], Mv mvPred[3]);
 
-  Distortion  xGetSymCost             ( const PredictionUnit& pu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField , int BcwIdx );
-  Distortion  xSymRefineMvSearch      ( PredictionUnit& pu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList,
+  Distortion  xGetSymCost             ( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField , int BcwIdx );
+  Distortion  xSymRefineMvSearch      ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList,
                                         MvField& rCurMvField, MvField& rTarMvField, Distortion uiMinCost, int searchPattern, int nSearchStepShift, uint32_t uiMaxSearchRounds, int BcwIdx );
-  void        xSymMotionEstimation    ( PredictionUnit& pu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList, MvField& rCurMvField, MvField& rTarMvField, Distortion& ruiCost, int BcwIdx );
+  void        xSymMotionEstimation    ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList, MvField& rCurMvField, MvField& rTarMvField, Distortion& ruiCost, int BcwIdx );
   double      xGetMEDistortionWeight  ( uint8_t BcwIdx, RefPicList refPicList);
 
-  void xSymMvdCheckBestMvp            ( PredictionUnit& pu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
+  void xSymMvdCheckBestMvp            ( CodingUnit& cu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
                                         int32_t BcwIdx, Mv cMvPredSym[2], int32_t mvpIdxSym[2], Distortion& bestCost, bool skip );
 
   void xExtDIFUpSamplingH             ( CPelBuf* pcPattern, bool useAltHpelIf);

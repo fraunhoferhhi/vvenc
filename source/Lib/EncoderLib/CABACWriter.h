@@ -100,13 +100,12 @@ public:
 
   void        cu_pred_data              ( const CodingUnit&             cu );
   void        cu_bcw_flag               ( const CodingUnit&             cu );
-  void        extend_ref_line           ( const PredictionUnit&         pu );
   void        extend_ref_line           ( const CodingUnit&             cu );
   void        intra_luma_pred_modes     ( const CodingUnit&             cu );
-  void        intra_luma_pred_mode      ( const PredictionUnit&         pu );
+  void        intra_luma_pred_mode      ( const CodingUnit&             cu );
   void        intra_chroma_pred_modes   ( const CodingUnit&             cu );
-  void        intra_chroma_lmc_mode     ( const PredictionUnit&         pu );
-  void        intra_chroma_pred_mode    ( const PredictionUnit&         pu );
+  void        intra_chroma_lmc_mode     ( const CodingUnit&             cu );
+  void        intra_chroma_pred_mode    ( const CodingUnit&             cu );
   void        cu_residual               ( const CodingUnit&             cu,       Partitioner&      pm,         CUCtx& cuCtx );
   void        rqt_root_cbf              ( const CodingUnit&             cu );
   void        adaptive_color_transform  ( const CodingUnit&             cu);
@@ -114,25 +113,25 @@ public:
   void        end_of_ctu                ( const CodingUnit&             cu,       CUCtx&            cuCtx );
   void        mip_flag                  ( const CodingUnit&             cu );
   void        mip_pred_modes            ( const CodingUnit&             cu );
-  void        mip_pred_mode             ( const PredictionUnit&         pu );
+  void        mip_pred_mode             ( const CodingUnit&             cu );
   void        cu_palette_info           ( const CodingUnit&             cu,       ComponentID       compBegin,     uint32_t numComp,          CUCtx&       cuCtx);
   void        cuPaletteSubblockInfo     ( const CodingUnit&             cu,       ComponentID       compBegin,     uint32_t numComp,          int subSetId,               uint32_t& prevRunPos,        unsigned& prevRunType );
   // prediction unit (clause 7.3.8.6)
-  void        prediction_unit           ( const PredictionUnit&         pu );
-  void        merge_flag                ( const PredictionUnit&         pu );
-  void        merge_data                ( const PredictionUnit&         pu );
+  void        prediction_unit           ( const CodingUnit&             cu );
+  void        merge_flag                ( const CodingUnit&             cu );
+  void        merge_data                ( const CodingUnit&             cu );
   void        affine_flag               ( const CodingUnit&             cu );
   void        subblock_merge_flag       ( const CodingUnit&             cu );
-  void        merge_idx                 ( const PredictionUnit&         pu );
-  void        mmvd_merge_idx            ( const PredictionUnit&         pu);
+  void        merge_idx                 ( const CodingUnit&             cu );
+  void        mmvd_merge_idx            ( const CodingUnit&             cu);
   void        imv_mode                  ( const CodingUnit&             cu );
   void        affine_amvr_mode          ( const CodingUnit&             cu );
-  void        inter_pred_idc            ( const PredictionUnit&         pu );
-  void        ref_idx                   ( const PredictionUnit&         pu,       RefPicList        eRefList );
-  void        mvp_flag                  ( const PredictionUnit&         pu,       RefPicList        eRefList );
+  void        inter_pred_idc            ( const CodingUnit&             cu );
+  void        ref_idx                   ( const CodingUnit&             cu,       RefPicList        eRefList );
+  void        mvp_flag                  ( const CodingUnit&             cu,       RefPicList        eRefList );
 
-  void        ciip_flag                 ( const PredictionUnit&         pu );
-  void        smvd_mode                 ( const PredictionUnit&         pu );
+  void        ciip_flag                 ( const CodingUnit&             cu );
+  void        smvd_mode                 ( const CodingUnit&             cu );
 
   // transform tree (clause 7.3.8.8)
   void        transform_tree            ( const CodingStructure&        cs,       Partitioner&      pm,     CUCtx& cuCtx,                         const PartSplit ispType = TU_NO_ISP, const int subTuIdx = -1 );

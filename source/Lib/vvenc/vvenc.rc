@@ -78,7 +78,7 @@ VS_VERSION_INFO VERSIONINFO
  FILEFLAGS 0x0L
 #endif
  FILEOS 0x40004L
- FILETYPE 0x1L
+ FILETYPE 0x2L
  FILESUBTYPE 0x0L
 BEGIN
     BLOCK "StringFileInfo"
@@ -86,12 +86,12 @@ BEGIN
         BLOCK "200004b0"
         BEGIN
             VALUE "CompanyName", "Fraunhofer Heinrich Hertz Institute"
-            VALUE "FileDescription", "vvenclibtest Application"
+            VALUE "FileDescription", "vvenc DLL"
             VALUE "FileVersion", VS_FILE_VERSION_STR
-            VALUE "InternalName", "vvenclibtest.exe"
+            VALUE "InternalName", "vvenc.dll"
             VALUE "LegalCopyright", "(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
-            VALUE "OriginalFilename", "vvenclibtest.exe"
-            VALUE "ProductName", "vvenclibtest"
+            VALUE "OriginalFilename", "vvenc.dll"
+            VALUE "ProductName", "vvenc"
             VALUE "ProductVersion", VS_FILE_VERSION_STR
         END
     END

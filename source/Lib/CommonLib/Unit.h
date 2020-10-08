@@ -284,10 +284,51 @@ struct UnitAreaRelative : public UnitArea
 namespace vvenc {
 
 struct TransformUnit;
-struct PredictionUnit;
 class  CodingStructure;
 
-struct CodingUnit : public UnitArea
+
+// ---------------------------------------------------------------------------
+// prediction unit
+// ---------------------------------------------------------------------------
+
+struct IntraPredictionData
+{
+  uint32_t  intraDir[MAX_NUM_CH];
+  int       multiRefIdx;
+  bool      mipTransposedFlag;
+};
+
+struct InterPredictionData
+{
+  InterPredictionData() : mvdL0SubPu(mvdL0SubPuBuffer) {}
+  bool        mergeFlag;
+  bool        regularMergeFlag;
+  bool        ciip;
+  bool        mvRefine;
+  uint8_t     mergeIdx;
+  uint8_t     geoSplitDir;
+  uint8_t     geoMergeIdx0;
+  uint8_t     geoMergeIdx1;
+  uint32_t    mmvdMergeIdx;
+  bool        mmvdMergeFlag;
+  uint8_t     interDir;
+  uint8_t     mcControl; // mmvd(bio), luma/chroma
+
+  uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
+  uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
+  Mv          mvd     [NUM_REF_PIC_LIST_01];
+  Mv          mv      [NUM_REF_PIC_LIST_01];
+  int16_t     refIdx  [NUM_REF_PIC_LIST_01];
+  MergeType   mergeType;
+  Mv*         mvdL0SubPu;
+  Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
+  Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
+  Mv          mvdL0SubPuBuffer[MAX_NUM_SUBCU_DMVR];
+};
+
+
+
+struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPredictionData
 {
   CodingStructure*  cs;
   Slice*            slice;
@@ -329,7 +370,7 @@ struct CodingUnit : public UnitArea
   uint8_t           smvdMode;
   uint8_t           ispMode;
 
-  CodingUnit() : chType( CH_L ) { }
+  CodingUnit() : chType( CH_L ) {}
   CodingUnit(const UnitArea& unit);
   CodingUnit(const ChromaFormat _chromaFormat, const Area& area);
 
@@ -337,10 +378,22 @@ struct CodingUnit : public UnitArea
 
   void initData();
 
+  void initPuData   ();
+
+  CodingUnit& operator= ( const InterPredictionData& other);
+  CodingUnit& operator= ( const IntraPredictionData& other);
+  CodingUnit& operator= ( const MotionInfo& mi);
+
+
+  // for accessing motion information, which can have higher resolution than PUs (should always be used, when accessing neighboring motion information)
+  const MotionInfo& getMotionInfo () const;
+  const MotionInfo& getMotionInfo ( const Position& pos ) const;
+  MotionBuf         getMotionBuf  ();
+  CMotionBuf        getMotionBuf  () const;
+
+
   unsigned    idx;
   CodingUnit *next;
-
-  PredictionUnit *pu;
 
   TransformUnit *firstTU;
   TransformUnit *lastTU;
@@ -351,72 +404,6 @@ struct CodingUnit : public UnitArea
   bool        isLocalSepTree()      const;
   bool        isConsInter()         const { return modeType == MODE_TYPE_INTER; }
   bool        isConsIntra()         const { return modeType == MODE_TYPE_INTRA; }
-};
-
-// ---------------------------------------------------------------------------
-// prediction unit
-// ---------------------------------------------------------------------------
-
-struct IntraPredictionData
-{
-  uint32_t  intraDir[MAX_NUM_CH];
-  int       multiRefIdx;
-  bool      mipTransposedFlag;
-};
-
-struct InterPredictionData
-{
-  InterPredictionData() : mvdL0SubPu(mvdL0SubPuBuffer) {}
-  bool        mergeFlag;
-  bool        regularMergeFlag;
-  bool        ciip;
-  bool        mvRefine;
-  uint8_t     mergeIdx;
-  uint8_t     geoSplitDir;
-  uint8_t     geoMergeIdx0;
-  uint8_t     geoMergeIdx1;
-  uint32_t    mmvdMergeIdx;
-  bool        mmvdMergeFlag;
-  uint8_t     interDir;
-  uint8_t     mcControl; // mmvd(bio), luma/chroma
-
-  uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
-  uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
-  Mv          mvd     [NUM_REF_PIC_LIST_01];
-  Mv          mv      [NUM_REF_PIC_LIST_01];
-  int16_t     refIdx  [NUM_REF_PIC_LIST_01];
-  MergeType   mergeType;
-  Mv*         mvdL0SubPu;
-  Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
-  Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
-  Mv          mvdL0SubPuBuffer[MAX_NUM_SUBCU_DMVR];
-};
-
-struct PredictionUnit : public UnitArea, public IntraPredictionData, public InterPredictionData
-{
-  CodingUnit*      cu;
-  CodingStructure* cs;
-  ChannelType      chType;
-
-  unsigned        idx;
-
-  // constructors
-  PredictionUnit  (): chType( CH_L ) { }
-  PredictionUnit  ( const UnitArea& unit);
-  PredictionUnit  ( const ChromaFormat _chromaFormat, const Area& area);
-
-  void initData   ();
-
-  PredictionUnit& operator= ( const PredictionUnit& other);
-  PredictionUnit& operator= ( const MotionInfo& mi);
-
-
-  // for accessing motion information, which can have higher resolution than PUs (should always be used, when accessing neighboring motion information)
-  const MotionInfo& getMotionInfo () const;
-  const MotionInfo& getMotionInfo ( const Position& pos ) const;
-  MotionBuf         getMotionBuf  ();
-  CMotionBuf        getMotionBuf  () const;
-
 };
 
 // ---------------------------------------------------------------------------

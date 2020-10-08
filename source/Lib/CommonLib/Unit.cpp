@@ -248,8 +248,8 @@ const UnitArea UnitArea::singleChan(const ChannelType chType) const
 // coding unit method definitions
 // ---------------------------------------------------------------------------
 
-CodingUnit::CodingUnit(const UnitArea& unit)                                : UnitArea(unit),                 cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), pu(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); }
-CodingUnit::CodingUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), pu(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); }
+CodingUnit::CodingUnit(const UnitArea& unit)                                : UnitArea(unit),                 cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); }
+CodingUnit::CodingUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); }
 
 CodingUnit& CodingUnit::operator=( const CodingUnit& other )
 {
@@ -289,6 +289,12 @@ CodingUnit& CodingUnit::operator=( const CodingUnit& other )
   treeType          = other.treeType;
   modeType          = other.modeType;
   modeTypeSeries    = other.modeTypeSeries;
+
+  const IntraPredictionData& ipd = other;
+  *this = ipd;
+
+  const InterPredictionData& tpd = other;
+  *this = tpd;
   return *this;
 }
 
@@ -414,7 +420,7 @@ bool CodingUnit::checkCCLMAllowed() const
 
 uint8_t CodingUnit::checkAllowedSbt() const
 {
-  if( !slice->sps->SBT || predMode != MODE_INTER || pu->ciip)
+  if( !slice->sps->SBT || predMode != MODE_INTER || ciip)
   {
     return 0;
   }
@@ -448,10 +454,7 @@ uint8_t CodingUnit::checkAllowedSbt() const
 // prediction unit method definitions
 // ---------------------------------------------------------------------------
 
-PredictionUnit::PredictionUnit(const UnitArea& unit)                                : UnitArea(unit)                , cu(nullptr), cs(nullptr), chType( CH_L ) { initData(); }
-PredictionUnit::PredictionUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cu(nullptr), cs(nullptr), chType( CH_L ) { initData(); }
-
-void PredictionUnit::initData()
+void CodingUnit::initPuData()
 {
   // intra data - need this default initialization for PCM
   intraDir[0]       = DC_IDX;
@@ -498,7 +501,7 @@ void PredictionUnit::initData()
   ciip      = false;
 }
 
-PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
+CodingUnit& CodingUnit::operator=( const IntraPredictionData& other )
 {
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
@@ -506,6 +509,11 @@ PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
   }
   mipTransposedFlag = other.mipTransposedFlag;
   multiRefIdx       = other.multiRefIdx;
+  return *this;
+}
+
+CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
+{
   mergeFlag         = other.mergeFlag;
   regularMergeFlag  = other.regularMergeFlag;
   mergeIdx          = other.mergeIdx;
@@ -546,7 +554,7 @@ PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
   return *this;
 }
 
-PredictionUnit& PredictionUnit::operator=( const MotionInfo& mi )
+CodingUnit& CodingUnit::operator=( const MotionInfo& mi )
 {
   interDir = mi.interDir;
 
@@ -559,23 +567,23 @@ PredictionUnit& PredictionUnit::operator=( const MotionInfo& mi )
   return *this;
 }
 
-const MotionInfo& PredictionUnit::getMotionInfo() const
+const MotionInfo& CodingUnit::getMotionInfo() const
 {
   return cs->getMotionInfo( lumaPos() );
 }
 
-const MotionInfo& PredictionUnit::getMotionInfo( const Position& pos ) const
+const MotionInfo& CodingUnit::getMotionInfo( const Position& pos ) const
 {
   CHECKD( !Y().contains( pos ), "Trying to access motion info outsied of PU" );
   return cs->getMotionInfo( pos );
 }
 
-MotionBuf PredictionUnit::getMotionBuf()
+MotionBuf CodingUnit::getMotionBuf()
 {
   return cs->getMotionBuf( *this );
 }
 
-CMotionBuf PredictionUnit::getMotionBuf() const
+CMotionBuf CodingUnit::getMotionBuf() const
 {
   return cs->getMotionBuf( *this );
 }

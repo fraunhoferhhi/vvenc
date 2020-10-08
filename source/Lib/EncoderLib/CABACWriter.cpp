@@ -636,7 +636,7 @@ void CABACWriter::split_cu_mode( const PartSplit split, const CodingStructure& c
 //    void  cu_pred_data              ( pus )
 //    void  cu_lic_flag               ( cu )
 //    void  intra_luma_pred_modes     ( pus )
-//    void  intra_chroma_pred_mode    ( pu )
+//    void  intra_chroma_pred_mode    ( cu )
 //    void  cu_residual               ( cu, partitioner, cuCtx )
 //    void  rqt_root_cbf              ( cu )
 //    void  end_of_ctu                ( cu, cuCtx )
@@ -659,8 +659,8 @@ void CABACWriter::coding_unit( const CodingUnit& cu, Partitioner& partitioner, C
   // skip data
   if( cu.skip )
   {
-    CHECK( !cu.pu->mergeFlag, "Merge flag has to be on!" );
-    prediction_unit ( *cu.pu );
+    CHECK( !cu.mergeFlag, "Merge flag has to be on!" );
+    prediction_unit ( cu );
     CHECK(cu.colorTransform, "ACT should not be enabled for skip mode");
     end_of_ctu      ( cu, cuCtx );
     return;
@@ -847,7 +847,7 @@ void CABACWriter::cu_pred_data( const CodingUnit& cu )
     return;
   }
 
-  prediction_unit ( *cu.pu );
+  prediction_unit ( cu );
   imv_mode        ( cu );
   affine_amvr_mode( cu );
   cu_bcw_flag     ( cu );
@@ -932,34 +932,6 @@ void CABACWriter::xWriteTruncBinCode(uint32_t symbol, uint32_t maxSymbol)
 }
 
 
-void CABACWriter::extend_ref_line(const PredictionUnit& pu)
-{
-  const CodingUnit& cu = *pu.cu;
-  if( !cu.Y().valid() || cu.predMode != MODE_INTRA || !isLuma( cu.chType ) || cu.bdpcmMode )
-  {
-    return;
-  }  if( !cu.cs->sps->MRL )
-  {
-    return;
-  }
-  
-  bool isFirstLineOfCtu = (((cu.block(COMP_Y).y)&((cu.cs->sps)->CTUSize - 1)) == 0);
-  if (isFirstLineOfCtu)
-  {
-    return;
-  }
-  int multiRefIdx = pu.multiRefIdx;
-  if (MRL_NUM_REF_LINES > 1)
-  {
-    m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[0], Ctx::MultiRefLineIdx(0));
-    if (MRL_NUM_REF_LINES > 2 && multiRefIdx != MULTI_REF_LINE_IDX[0])
-    {
-      m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[1], Ctx::MultiRefLineIdx(1));
-    }
-  }
-}
-
-
 void CABACWriter::extend_ref_line(const CodingUnit& cu)
 {
   if ( !cu.Y().valid() || cu.predMode != MODE_INTRA || !isLuma(cu.chType) || cu.bdpcmMode )
@@ -976,7 +948,7 @@ void CABACWriter::extend_ref_line(const CodingUnit& cu)
   {
     return;
   }
-  int multiRefIdx = cu.pu->multiRefIdx;
+  int multiRefIdx = cu.multiRefIdx;
   if (MRL_NUM_REF_LINES > 1)
   {
     m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[0], Ctx::MultiRefLineIdx(0));
@@ -984,7 +956,6 @@ void CABACWriter::extend_ref_line(const CodingUnit& cu)
     {
       m_BinEncoder.encodeBin(multiRefIdx != MULTI_REF_LINE_IDX[1], Ctx::MultiRefLineIdx(1));
     }
-
   }
 }
 
@@ -998,7 +969,8 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 
   if( cu.bdpcmMode )
   {
-    cu.pu->intraDir[0] = cu.bdpcmMode == 2? VER_IDX : HOR_IDX;
+    //th ?
+    //cu.intraDir[0] = cu.bdpcmMode == 2? VER_IDX : HOR_IDX;
     return;
   }
 
@@ -1017,13 +989,11 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
   unsigned  mpm_idx;
   unsigned  ipred_mode ;
 
-  const PredictionUnit* pu = cu.pu;
-
   // prev_intra_luma_pred_flag
   {
-    PU::getIntraMPMs( *pu, mpm_pred );
+    CU::getIntraMPMs( cu, mpm_pred );
 
-    ipred_mode = pu->intraDir[0];
+    ipred_mode = cu.intraDir[0];
     mpm_idx    = numMPMs;
     for( unsigned idx = 0; idx < numMPMs; idx++ )
     {
@@ -1033,7 +1003,7 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
         break;
       }
     }
-    if ( pu->multiRefIdx )
+    if ( cu.multiRefIdx )
     {
       CHECK(mpm_idx >= numMPMs, "use of non-MPM");
     }
@@ -1048,8 +1018,8 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
     if( mpm_idx < numMPMs )
     {
       {
-        unsigned ctx = (pu->cu->ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
-        if (pu->multiRefIdx == 0)
+        unsigned ctx = (cu.ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
+        if (cu.multiRefIdx == 0)
           m_BinEncoder.encodeBin(mpm_idx > 0, Ctx::IntraLumaPlanarFlag(ctx));
         if( mpm_idx )
         {
@@ -1087,32 +1057,32 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
       }
     }
 
-    DTRACE( g_trace_ctx, D_SYNTAX, "intra_luma_pred_modes() idx=%d pos=(%d,%d) mode=%d\n", 0, pu->lumaPos().x, pu->lumaPos().y, pu->intraDir[0] );
+    DTRACE( g_trace_ctx, D_SYNTAX, "intra_luma_pred_modes() idx=%d pos=(%d,%d) mode=%d\n", 0, cu.lumaPos().x, cu.lumaPos().y, cu.intraDir[0] );
   }
 }
 
 
-void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
+void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu )
 {
 
-  if( pu.cu->bdpcmMode ) return;
-  mip_flag(*pu.cu);
-  if (pu.cu->mipFlag)
+  if( cu.bdpcmMode ) return;
+  mip_flag(cu);
+  if (cu.mipFlag)
   {
-    mip_pred_mode(pu);
+    mip_pred_mode(cu);
     return;
   }
-  extend_ref_line( pu );
+  extend_ref_line( cu );
 
-  isp_mode( *pu.cu );
+  isp_mode( cu );
 
   // prev_intra_luma_pred_flag
   const int numMPMs  = NUM_MOST_PROBABLE_MODES;
   unsigned  mpm_pred[numMPMs];
 
-  PU::getIntraMPMs( pu, mpm_pred );
+  CU::getIntraMPMs( cu, mpm_pred );
 
-  unsigned ipred_mode = pu.intraDir[0];
+  unsigned ipred_mode = cu.intraDir[0];
   unsigned mpm_idx = numMPMs;
 
   for( int idx = 0; idx < numMPMs; idx++ )
@@ -1123,7 +1093,7 @@ void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
       break;
     }
   }
-  if ( pu.multiRefIdx )
+  if ( cu.multiRefIdx )
   {
     CHECK(mpm_idx >= numMPMs, "use of non-MPM");
   }
@@ -1136,8 +1106,8 @@ void CABACWriter::intra_luma_pred_mode( const PredictionUnit& pu )
   if( mpm_idx < numMPMs )
   {
     {
-      unsigned ctx = (pu.cu->ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
-      if (pu.multiRefIdx == 0)
+      unsigned ctx = (cu.ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
+      if (cu.multiRefIdx == 0)
         m_BinEncoder.encodeBin( mpm_idx > 0, Ctx::IntraLumaPlanarFlag(ctx) );
       if( mpm_idx )
       {
@@ -1182,19 +1152,20 @@ void CABACWriter::intra_chroma_pred_modes( const CodingUnit& cu )
   }
   if( cu.bdpcmModeChroma )
   {
-    cu.pu->intraDir[1] = cu.bdpcmModeChroma == 2 ? VER_IDX : HOR_IDX;
+    //th ?
+//    cu.intraDir[1] = cu.bdpcmModeChroma == 2 ? VER_IDX : HOR_IDX;
     return;
   }
 
-  intra_chroma_pred_mode( *cu.pu );
+  intra_chroma_pred_mode( cu );
 }
 
 
-void CABACWriter::intra_chroma_lmc_mode(const PredictionUnit& pu)
+void CABACWriter::intra_chroma_lmc_mode(const CodingUnit& cu)
 {
-  const unsigned intraDir = pu.intraDir[1];
+  const unsigned intraDir = cu.intraDir[1];
   int lmModeList[10];
-  PU::getLMSymbolList(pu, lmModeList);
+  CU::getLMSymbolList(cu, lmModeList);
   int symbol = -1;
   for (int k = 0; k < LM_SYMBOL_NUM; k++)
   {
@@ -1217,21 +1188,21 @@ void CABACWriter::intra_chroma_lmc_mode(const PredictionUnit& pu)
 }
 
 
-void CABACWriter::intra_chroma_pred_mode(const PredictionUnit& pu)
+void CABACWriter::intra_chroma_pred_mode(const CodingUnit& cu)
 {
-  if (pu.cu->colorTransform)
+  if (cu.colorTransform)
   {
-    CHECK(pu.intraDir[CH_C] != DM_CHROMA_IDX, "chroma should use DM for adaptive color transform");
+    CHECK(cu.intraDir[CH_C] != DM_CHROMA_IDX, "chroma should use DM for adaptive color transform");
     return;
   }
 
-  const unsigned intraDir = pu.intraDir[1];
-  if (pu.cs->sps->LMChroma && pu.cu->checkCCLMAllowed())
+  const unsigned intraDir = cu.intraDir[1];
+  if (cu.cs->sps->LMChroma && cu.checkCCLMAllowed())
   {
-    m_BinEncoder.encodeBin(PU::isLMCMode(intraDir) ? 1 : 0, Ctx::CclmModeFlag(0));
-    if (PU::isLMCMode(intraDir))
+    m_BinEncoder.encodeBin(CU::isLMCMode(intraDir) ? 1 : 0, Ctx::CclmModeFlag(0));
+    if (CU::isLMCMode(intraDir))
     {
-      intra_chroma_lmc_mode(pu);
+      intra_chroma_lmc_mode(cu);
       return;
     }
   }
@@ -1245,7 +1216,7 @@ void CABACWriter::intra_chroma_pred_mode(const PredictionUnit& pu)
 
   // chroma candidate index
   unsigned chromaCandModes[NUM_CHROMA_MODE];
-  PU::getIntraChromaCandModes(pu, chromaCandModes);
+  CU::getIntraChromaCandModes(cu, chromaCandModes);
 
   int candId = 0;
   for (; candId < NUM_CHROMA_MODE; candId++)
@@ -1268,8 +1239,7 @@ void CABACWriter::cu_residual( const CodingUnit& cu, Partitioner& partitioner, C
 {
   if (!CU::isIntra(cu))
   {
-    PredictionUnit& pu = *cu.pu;
-    if( !pu.mergeFlag )
+    if( !cu.mergeFlag )
     {
       rqt_root_cbf( cu );
     }
@@ -1419,124 +1389,124 @@ void CABACWriter::cu_palette_info(const CodingUnit& cu, ComponentID compBegin, u
 //================================================================================
 //  clause 7.3.8.6
 //--------------------------------------------------------------------------------
-//    void  prediction_unit ( pu );
-//    void  merge_flag      ( pu );
-//    void  merge_idx       ( pu );
-//    void  inter_pred_idc  ( pu );
-//    void  ref_idx         ( pu, refList );
-//    void  mvp_flag        ( pu, refList );
+//    void  prediction_unit ( cu );
+//    void  merge_flag      ( cu );
+//    void  merge_idx       ( cu );
+//    void  inter_pred_idc  ( cu );
+//    void  ref_idx         ( cu, refList );
+//    void  mvp_flag        ( cu, refList );
 //================================================================================
 
-void CABACWriter::prediction_unit( const PredictionUnit& pu )
+void CABACWriter::prediction_unit( const CodingUnit& cu )
 {
-  CHECK( pu.cu->treeType == TREE_C, "cannot be chroma CU" );
-  if( pu.cu->skip )
+  CHECK( cu.treeType == TREE_C, "cannot be chroma CU" );
+  if( cu.skip )
   {
-    CHECK( !pu.mergeFlag, "merge_flag must be true for skipped CUs" );
+    CHECK( !cu.mergeFlag, "merge_flag must be true for skipped CUs" );
   }
   else
   {
-    merge_flag( pu );
+    merge_flag( cu );
   }
-  if( pu.mergeFlag )
+  if( cu.mergeFlag )
   {
-    merge_data(pu);
+    merge_data(cu);
   }
-  else if (CU::isIBC(*pu.cu))
+  else if (CU::isIBC(cu))
   {
-    ref_idx(pu, REF_PIC_LIST_0);
-    Mv mvd = pu.mvd[REF_PIC_LIST_0];
-    mvd.changeIbcPrecInternal2Amvr(pu.cu->imv);
+    ref_idx(cu, REF_PIC_LIST_0);
+    Mv mvd = cu.mvd[REF_PIC_LIST_0];
+    mvd.changeIbcPrecInternal2Amvr(cu.imv);
     mvd_coding(mvd, 0); // already changed to signaling precision
-    if ( pu.cu->slice->sps->maxNumIBCMergeCand == 1 )
+    if ( cu.slice->sps->maxNumIBCMergeCand == 1 )
     {
-      CHECK( pu.mvpIdx[REF_PIC_LIST_0], "mvpIdx for IBC mode should be 0" );
+      CHECK( cu.mvpIdx[REF_PIC_LIST_0], "mvpIdx for IBC mode should be 0" );
     }
     else
-    mvp_flag(pu, REF_PIC_LIST_0);
+    mvp_flag(cu, REF_PIC_LIST_0);
   }
   else
   {
-    inter_pred_idc( pu );
-    affine_flag   ( *pu.cu );
-    smvd_mode( pu );
-    if( pu.interDir != 2 /* PRED_L1 */ )
+    inter_pred_idc( cu );
+    affine_flag   ( cu );
+    smvd_mode( cu );
+    if( cu.interDir != 2 /* PRED_L1 */ )
     {
-      ref_idx     ( pu, REF_PIC_LIST_0 );
-      if ( pu.cu->affine )
+      ref_idx     ( cu, REF_PIC_LIST_0 );
+      if ( cu.affine )
       {
-        Mv mvd = pu.mvdAffi[REF_PIC_LIST_0][0];
-        mvd.changeAffinePrecInternal2Amvr(pu.cu->imv);
+        Mv mvd = cu.mvdAffi[REF_PIC_LIST_0][0];
+        mvd.changeAffinePrecInternal2Amvr(cu.imv);
         mvd_coding(mvd, 0); // already changed to signaling precision
-        mvd = pu.mvdAffi[REF_PIC_LIST_0][1];
-        mvd.changeAffinePrecInternal2Amvr(pu.cu->imv);
+        mvd = cu.mvdAffi[REF_PIC_LIST_0][1];
+        mvd.changeAffinePrecInternal2Amvr(cu.imv);
         mvd_coding(mvd, 0); // already changed to signaling precision
-        if ( pu.cu->affineType == AFFINEMODEL_6PARAM )
+        if ( cu.affineType == AFFINEMODEL_6PARAM )
         {
-          mvd = pu.mvdAffi[REF_PIC_LIST_0][2];
-          mvd.changeAffinePrecInternal2Amvr(pu.cu->imv);
+          mvd = cu.mvdAffi[REF_PIC_LIST_0][2];
+          mvd.changeAffinePrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
         }
       }
       else
       {
-        Mv mvd = pu.mvd[REF_PIC_LIST_0];
-        mvd.changeTransPrecInternal2Amvr(pu.cu->imv);
+        Mv mvd = cu.mvd[REF_PIC_LIST_0];
+        mvd.changeTransPrecInternal2Amvr(cu.imv);
         mvd_coding(mvd, 0); // already changed to signaling precision
       }
-      mvp_flag    ( pu, REF_PIC_LIST_0 );
+      mvp_flag    ( cu, REF_PIC_LIST_0 );
     }
-    if( pu.interDir != 1 /* PRED_L0 */ )
+    if( cu.interDir != 1 /* PRED_L0 */ )
     {
-      if ( pu.cu->smvdMode != 1 )
+      if ( cu.smvdMode != 1 )
       {
-      ref_idx     ( pu, REF_PIC_LIST_1 );
-      if( !pu.cs->picHeader->mvdL1Zero || pu.interDir != 3 /* PRED_BI */ )
+      ref_idx     ( cu, REF_PIC_LIST_1 );
+      if( !cu.cs->picHeader->mvdL1Zero || cu.interDir != 3 /* PRED_BI */ )
       {
-        if ( pu.cu->affine )
+        if ( cu.affine )
         {
-          Mv mvd = pu.mvdAffi[REF_PIC_LIST_1][0];
-          mvd.changeAffinePrecInternal2Amvr(pu.cu->imv);
+          Mv mvd = cu.mvdAffi[REF_PIC_LIST_1][0];
+          mvd.changeAffinePrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
-          mvd = pu.mvdAffi[REF_PIC_LIST_1][1];
-          mvd.changeAffinePrecInternal2Amvr(pu.cu->imv);
+          mvd = cu.mvdAffi[REF_PIC_LIST_1][1];
+          mvd.changeAffinePrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
-          if ( pu.cu->affineType == AFFINEMODEL_6PARAM )
+          if ( cu.affineType == AFFINEMODEL_6PARAM )
           {
-            mvd = pu.mvdAffi[REF_PIC_LIST_1][2];
-            mvd.changeAffinePrecInternal2Amvr(pu.cu->imv);
+            mvd = cu.mvdAffi[REF_PIC_LIST_1][2];
+            mvd.changeAffinePrecInternal2Amvr(cu.imv);
             mvd_coding(mvd, 0); // already changed to signaling precision
           }
         }
         else
         {
-          Mv mvd = pu.mvd[REF_PIC_LIST_1];
-          mvd.changeTransPrecInternal2Amvr(pu.cu->imv);
+          Mv mvd = cu.mvd[REF_PIC_LIST_1];
+          mvd.changeTransPrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
         }
       }
       }
-      mvp_flag    ( pu, REF_PIC_LIST_1 );
+      mvp_flag    ( cu, REF_PIC_LIST_1 );
     }
   }
 }
 
 
-void CABACWriter::smvd_mode( const PredictionUnit& pu )
+void CABACWriter::smvd_mode( const CodingUnit& cu )
 {
-  if ( pu.interDir != 3 || pu.cu->affine )
+  if ( cu.interDir != 3 || cu.affine )
   {
     return;
   }
 
-  if ( pu.cs->slice->biDirPred == false )
+  if ( cu.cs->slice->biDirPred == false )
   {
     return;
   }
 
-  m_BinEncoder.encodeBin( pu.cu->smvdMode ? 1 : 0, Ctx::SmvdFlag() );
+  m_BinEncoder.encodeBin( cu.smvdMode ? 1 : 0, Ctx::SmvdFlag() );
 
-  DTRACE( g_trace_ctx, D_SYNTAX, "symmvd_flag() symmvd=%d pos=(%d,%d) size=%dx%d\n", pu.cu->smvdMode ? 1 : 0, pu.lumaPos().x, pu.lumaPos().y, pu.lumaSize().width, pu.lumaSize().height );
+  DTRACE( g_trace_ctx, D_SYNTAX, "symmvd_flag() symmvd=%d pos=(%d,%d) size=%dx%d\n", cu.smvdMode ? 1 : 0, cu.lumaPos().x, cu.lumaPos().y, cu.lumaSize().width, cu.lumaSize().height );
 }
 
 
@@ -1570,60 +1540,60 @@ void CABACWriter::affine_flag( const CodingUnit& cu )
 }
 
 
-void CABACWriter::merge_flag( const PredictionUnit& pu )
+void CABACWriter::merge_flag( const CodingUnit& cu )
 {
-  m_BinEncoder.encodeBin( pu.mergeFlag, Ctx::MergeFlag() );
+  m_BinEncoder.encodeBin( cu.mergeFlag, Ctx::MergeFlag() );
 
-  DTRACE( g_trace_ctx, D_SYNTAX, "merge_flag() merge=%d pos=(%d,%d) size=%dx%d\n", pu.mergeFlag ? 1 : 0, pu.lumaPos().x, pu.lumaPos().y, pu.lumaSize().width, pu.lumaSize().height );
+  DTRACE( g_trace_ctx, D_SYNTAX, "merge_flag() merge=%d pos=(%d,%d) size=%dx%d\n", cu.mergeFlag ? 1 : 0, cu.lumaPos().x, cu.lumaPos().y, cu.lumaSize().width, cu.lumaSize().height );
 
 }
 
 
-void CABACWriter::merge_data(const PredictionUnit& pu)
+void CABACWriter::merge_data(const CodingUnit& cu)
 {
-  if (CU::isIBC(*pu.cu))
+  if (CU::isIBC(cu))
   {
-    merge_idx(pu);
+    merge_idx(cu);
     return;
   }
-  subblock_merge_flag(*pu.cu);
-  if (pu.cu->affine)
+  subblock_merge_flag(cu);
+  if (cu.affine)
   {
-    merge_idx(pu);
+    merge_idx(cu);
     return;
   }
-  const bool ciipAvailable = pu.cs->sps->CIIP && !pu.cu->skip && pu.cu->lwidth() < MAX_CU_SIZE && pu.cu->lheight() < MAX_CU_SIZE && pu.cu->lwidth() * pu.cu->lheight() >= 64;
-  const bool geoAvailable = pu.cu->cs->slice->sps->GEO && pu.cu->cs->slice->isInterB() && pu.cu->cs->sps->maxNumGeoCand > 1
-                                                   && pu.cu->lwidth() >= GEO_MIN_CU_SIZE && pu.cu->lheight() >= GEO_MIN_CU_SIZE
-                                                   && pu.cu->lwidth() <= GEO_MAX_CU_SIZE && pu.cu->lheight() <= GEO_MAX_CU_SIZE
-                                                   && pu.cu->lwidth() < 8 * pu.cu->lheight() && pu.cu->lheight() < 8 * pu.cu->lwidth();
+  const bool ciipAvailable = cu.cs->sps->CIIP && !cu.skip && cu.lwidth() < MAX_CU_SIZE && cu.lheight() < MAX_CU_SIZE && cu.lwidth() * cu.lheight() >= 64;
+  const bool geoAvailable = cu.cs->slice->sps->GEO && cu.cs->slice->isInterB() && cu.cs->sps->maxNumGeoCand > 1
+                                                   && cu.lwidth() >= GEO_MIN_CU_SIZE && cu.lheight() >= GEO_MIN_CU_SIZE
+                                                   && cu.lwidth() <= GEO_MAX_CU_SIZE && cu.lheight() <= GEO_MAX_CU_SIZE
+                                                   && cu.lwidth() < 8 * cu.lheight() && cu.lheight() < 8 * cu.lwidth();
   if (geoAvailable || ciipAvailable)
   {
-    m_BinEncoder.encodeBin(pu.regularMergeFlag, Ctx::RegularMergeFlag(pu.cu->skip ? 0 : 1));
+    m_BinEncoder.encodeBin(cu.regularMergeFlag, Ctx::RegularMergeFlag(cu.skip ? 0 : 1));
   }
-  if (pu.regularMergeFlag)
+  if (cu.regularMergeFlag)
   {
-    if (pu.cs->sps->MMVD)
+    if (cu.cs->sps->MMVD)
     {
-      m_BinEncoder.encodeBin(pu.mmvdMergeFlag, Ctx::MmvdFlag(0));
-      DTRACE(g_trace_ctx, D_SYNTAX, "mmvd_merge_flag() mmvd_merge=%d pos=(%d,%d) size=%dx%d\n", pu.mmvdMergeFlag ? 1 : 0, pu.lumaPos().x, pu.lumaPos().y, pu.lumaSize().width, pu.lumaSize().height);
+      m_BinEncoder.encodeBin(cu.mmvdMergeFlag, Ctx::MmvdFlag(0));
+      DTRACE(g_trace_ctx, D_SYNTAX, "mmvd_merge_flag() mmvd_merge=%d pos=(%d,%d) size=%dx%d\n", cu.mmvdMergeFlag ? 1 : 0, cu.lumaPos().x, cu.lumaPos().y, cu.lumaSize().width, cu.lumaSize().height);
     }
-    if (pu.mmvdMergeFlag || pu.cu->mmvdSkip)
+    if (cu.mmvdMergeFlag || cu.mmvdSkip)
     {
-      mmvd_merge_idx(pu);
+      mmvd_merge_idx(cu);
     }
     else
     {
-      merge_idx(pu);
+      merge_idx(cu);
     }
   }
   else
   {
     if (geoAvailable && ciipAvailable)
     {
-      ciip_flag(pu);
+      ciip_flag(cu);
     }
-    merge_idx(pu);
+    merge_idx(cu);
   }
 }
 
@@ -1695,17 +1665,17 @@ void CABACWriter::affine_amvr_mode( const CodingUnit& cu )
 }
 
 
-void CABACWriter::merge_idx( const PredictionUnit& pu )
+void CABACWriter::merge_idx( const CodingUnit& cu )
 {
-  if ( pu.cu->affine )
+  if ( cu.affine )
   {
-    int numCandminus1 = int( pu.cs->picHeader->maxNumAffineMergeCand ) - 1;
+    int numCandminus1 = int( cu.cs->picHeader->maxNumAffineMergeCand ) - 1;
     if ( numCandminus1 > 0 )
     {
-      if ( pu.mergeIdx == 0 )
+      if ( cu.mergeIdx == 0 )
       {
         m_BinEncoder.encodeBin( 0, Ctx::AffMergeIdx() );
-        DTRACE( g_trace_ctx, D_SYNTAX, "aff_merge_idx() aff_merge_idx=%d\n", pu.mergeIdx );
+        DTRACE( g_trace_ctx, D_SYNTAX, "aff_merge_idx() aff_merge_idx=%d\n", cu.mergeIdx );
         return;
       }
       else
@@ -1713,29 +1683,29 @@ void CABACWriter::merge_idx( const PredictionUnit& pu )
         m_BinEncoder.encodeBin( 1, Ctx::AffMergeIdx() );
         for ( unsigned idx = 1; idx < numCandminus1; idx++ )
         {
-            m_BinEncoder.encodeBinEP( pu.mergeIdx == idx ? 0 : 1 );
-          if ( pu.mergeIdx == idx )
+            m_BinEncoder.encodeBinEP( cu.mergeIdx == idx ? 0 : 1 );
+          if ( cu.mergeIdx == idx )
           {
             break;
           }
         }
       }
     }
-    DTRACE( g_trace_ctx, D_SYNTAX, "aff_merge_idx() aff_merge_idx=%d\n", pu.mergeIdx );
+    DTRACE( g_trace_ctx, D_SYNTAX, "aff_merge_idx() aff_merge_idx=%d\n", cu.mergeIdx );
   }
   else
   {
-    if( pu.cu->geo )
+    if( cu.geo )
     {
-      uint8_t splitDir = pu.geoSplitDir;
-      uint8_t candIdx0 = pu.geoMergeIdx0;
-      uint8_t candIdx1 = pu.geoMergeIdx1;
+      uint8_t splitDir = cu.geoSplitDir;
+      uint8_t candIdx0 = cu.geoMergeIdx0;
+      uint8_t candIdx1 = cu.geoMergeIdx1;
       DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() geo_split_dir=%d\n", splitDir );
       DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() geo_idx0=%d\n", candIdx0 );
       DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() geo_idx1=%d\n", candIdx1 );
       xWriteTruncBinCode(splitDir, GEO_NUM_PARTITION_MODE);
       candIdx1 -= candIdx1 < candIdx0 ? 0 : 1;
-      const int maxNumGeoCand = pu.cs->sps->maxNumGeoCand;
+      const int maxNumGeoCand = cu.cs->sps->maxNumGeoCand;
       CHECK(maxNumGeoCand < 2, "Incorrect max number of geo candidates");
       CHECK(candIdx0 >= maxNumGeoCand, "Incorrect candIdx0");
       CHECK(candIdx1 >= maxNumGeoCand, "Incorrect candIdx1");
@@ -1755,13 +1725,13 @@ void CABACWriter::merge_idx( const PredictionUnit& pu )
       }
       return;
     }
-    int numCandminus1 = (pu.cu->predMode == MODE_IBC) ? (int(pu.cs->sps->maxNumIBCMergeCand) - 1) : (int(pu.cs->sps->maxNumMergeCand) - 1);
+    int numCandminus1 = (cu.predMode == MODE_IBC) ? (int(cu.cs->sps->maxNumIBCMergeCand) - 1) : (int(cu.cs->sps->maxNumMergeCand) - 1);
     if( numCandminus1 > 0 )
     {
-      if( pu.mergeIdx == 0 )
+      if( cu.mergeIdx == 0 )
       {
         m_BinEncoder.encodeBin( 0, Ctx::MergeIdx() );
-        DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() merge_idx=%d\n", pu.mergeIdx );
+        DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() merge_idx=%d\n", cu.mergeIdx );
         return;
       }
       else
@@ -1769,28 +1739,28 @@ void CABACWriter::merge_idx( const PredictionUnit& pu )
         m_BinEncoder.encodeBin( 1, Ctx::MergeIdx() );
         for( unsigned idx = 1; idx < numCandminus1; idx++ )
         {
-          m_BinEncoder.encodeBinEP( pu.mergeIdx == idx ? 0 : 1 );
-          if( pu.mergeIdx == idx )
+          m_BinEncoder.encodeBinEP( cu.mergeIdx == idx ? 0 : 1 );
+          if( cu.mergeIdx == idx )
           {
             break;
           }
         }
       }
     }
-    DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() merge_idx=%d\n", pu.mergeIdx );
+    DTRACE( g_trace_ctx, D_SYNTAX, "merge_idx() merge_idx=%d\n", cu.mergeIdx );
   }
 }
 
 
-void CABACWriter::mmvd_merge_idx(const PredictionUnit& pu)
+void CABACWriter::mmvd_merge_idx(const CodingUnit& cu)
 {
   int var0, var1, var2;
-  int mvpIdx = pu.mmvdMergeIdx;
+  int mvpIdx = cu.mmvdMergeIdx;
   var0 = mvpIdx / MMVD_MAX_REFINE_NUM;
   var1 = (mvpIdx - (var0 * MMVD_MAX_REFINE_NUM)) / 4;
   var2 = mvpIdx - (var0 * MMVD_MAX_REFINE_NUM) - var1 * 4;
 
-  if (pu.cs->sps->maxNumMergeCand > 1)
+  if (cu.cs->sps->maxNumMergeCand > 1)
   {
     static_assert(MMVD_BASE_MV_NUM == 2, "");
     assert(var0 < 2);
@@ -1823,23 +1793,23 @@ void CABACWriter::mmvd_merge_idx(const PredictionUnit& pu)
   m_BinEncoder.encodeBinsEP(var2, 2);
 
   DTRACE(g_trace_ctx, D_SYNTAX, "pos() pos=%d\n", var2);
-  DTRACE(g_trace_ctx, D_SYNTAX, "mmvd_merge_idx() mmvd_merge_idx=%d\n", pu.mmvdMergeIdx);
+  DTRACE(g_trace_ctx, D_SYNTAX, "mmvd_merge_idx() mmvd_merge_idx=%d\n", cu.mmvdMergeIdx);
 }
 
 
-void CABACWriter::inter_pred_idc( const PredictionUnit& pu )
+void CABACWriter::inter_pred_idc( const CodingUnit& cu )
 {
-  if( !pu.cs->slice->isInterB() )
+  if( !cu.cs->slice->isInterB() )
   {
     return;
   }
-  if( !(PU::isBipredRestriction(pu)) )
+  if( !(CU::isBipredRestriction(cu)) )
   {
-    unsigned ctxId = DeriveCtx::CtxInterDir(pu);
-    if( pu.interDir == 3 )
+    unsigned ctxId = DeriveCtx::CtxInterDir(cu);
+    if( cu.interDir == 3 )
     {
       m_BinEncoder.encodeBin( 1, Ctx::InterDir(ctxId) );
-      DTRACE( g_trace_ctx, D_SYNTAX, "inter_pred_idc() ctx=%d value=%d pos=(%d,%d)\n", ctxId, pu.interDir, pu.lumaPos().x, pu.lumaPos().y );
+      DTRACE( g_trace_ctx, D_SYNTAX, "inter_pred_idc() ctx=%d value=%d pos=(%d,%d)\n", ctxId, cu.interDir, cu.lumaPos().x, cu.lumaPos().y );
       return;
     }
     else
@@ -1847,24 +1817,24 @@ void CABACWriter::inter_pred_idc( const PredictionUnit& pu )
       m_BinEncoder.encodeBin( 0, Ctx::InterDir(ctxId) );
     }
   }
-  m_BinEncoder.encodeBin( ( pu.interDir == 2 ), Ctx::InterDir( 5 ) );
-  DTRACE( g_trace_ctx, D_SYNTAX, "inter_pred_idc() ctx=5 value=%d pos=(%d,%d)\n", pu.interDir, pu.lumaPos().x, pu.lumaPos().y );
+  m_BinEncoder.encodeBin( ( cu.interDir == 2 ), Ctx::InterDir( 5 ) );
+  DTRACE( g_trace_ctx, D_SYNTAX, "inter_pred_idc() ctx=5 value=%d pos=(%d,%d)\n", cu.interDir, cu.lumaPos().x, cu.lumaPos().y );
 }
 
 
-void CABACWriter::ref_idx( const PredictionUnit& pu, RefPicList eRefList )
+void CABACWriter::ref_idx( const CodingUnit& cu, RefPicList eRefList )
 {
-  if ( pu.cu->smvdMode )
+  if ( cu.smvdMode )
   {
-    CHECK( pu.refIdx[eRefList] != pu.cs->slice->symRefIdx[ eRefList ], "Invalid reference index!\n" );
+    CHECK( cu.refIdx[eRefList] != cu.cs->slice->symRefIdx[ eRefList ], "Invalid reference index!\n" );
     return;
   }
 
-  int numRef  = pu.cs->slice->numRefIdx[eRefList];
+  int numRef  = cu.cs->slice->numRefIdx[eRefList];
 
-  if (eRefList == REF_PIC_LIST_0 && pu.cs->sps->IBC)
+  if (eRefList == REF_PIC_LIST_0 && cu.cs->sps->IBC)
   {
-    if (CU::isIBC(*pu.cu))
+    if (CU::isIBC(cu))
       return;
   }
 
@@ -1872,17 +1842,17 @@ void CABACWriter::ref_idx( const PredictionUnit& pu, RefPicList eRefList )
   {
     return;
   }
-  int refIdx  = pu.refIdx[eRefList];
+  int refIdx  = cu.refIdx[eRefList];
   m_BinEncoder.encodeBin( (refIdx > 0), Ctx::RefPic() );
   if( numRef <= 2 || refIdx == 0 )
   {
-    DTRACE( g_trace_ctx, D_SYNTAX, "ref_idx() value=%d pos=(%d,%d)\n", refIdx, pu.lumaPos().x, pu.lumaPos().y );
+    DTRACE( g_trace_ctx, D_SYNTAX, "ref_idx() value=%d pos=(%d,%d)\n", refIdx, cu.lumaPos().x, cu.lumaPos().y );
     return;
   }
   m_BinEncoder.encodeBin( (refIdx > 1), Ctx::RefPic(1) );
   if( numRef <= 3 || refIdx == 1 )
   {
-    DTRACE( g_trace_ctx, D_SYNTAX, "ref_idx() value=%d pos=(%d,%d)\n", refIdx, pu.lumaPos().x, pu.lumaPos().y );
+    DTRACE( g_trace_ctx, D_SYNTAX, "ref_idx() value=%d pos=(%d,%d)\n", refIdx, cu.lumaPos().x, cu.lumaPos().y );
     return;
   }
   for( int idx = 3; idx < numRef; idx++ )
@@ -1897,32 +1867,32 @@ void CABACWriter::ref_idx( const PredictionUnit& pu, RefPicList eRefList )
       break;
     }
   }
-  DTRACE( g_trace_ctx, D_SYNTAX, "ref_idx() value=%d pos=(%d,%d)\n", refIdx, pu.lumaPos().x, pu.lumaPos().y );
+  DTRACE( g_trace_ctx, D_SYNTAX, "ref_idx() value=%d pos=(%d,%d)\n", refIdx, cu.lumaPos().x, cu.lumaPos().y );
 }
 
 
-void CABACWriter::mvp_flag( const PredictionUnit& pu, RefPicList eRefList )
+void CABACWriter::mvp_flag( const CodingUnit& cu, RefPicList eRefList )
 {
-  m_BinEncoder.encodeBin( pu.mvpIdx[eRefList], Ctx::MVPIdx() );
-  DTRACE( g_trace_ctx, D_SYNTAX, "mvp_flag() value=%d pos=(%d,%d)\n", pu.mvpIdx[eRefList], pu.lumaPos().x, pu.lumaPos().y );
-  DTRACE( g_trace_ctx, D_SYNTAX, "mvpIdx(refList:%d)=%d\n", eRefList, pu.mvpIdx[eRefList] );
+  m_BinEncoder.encodeBin( cu.mvpIdx[eRefList], Ctx::MVPIdx() );
+  DTRACE( g_trace_ctx, D_SYNTAX, "mvp_flag() value=%d pos=(%d,%d)\n", cu.mvpIdx[eRefList], cu.lumaPos().x, cu.lumaPos().y );
+  DTRACE( g_trace_ctx, D_SYNTAX, "mvpIdx(refList:%d)=%d\n", eRefList, cu.mvpIdx[eRefList] );
 }
 
 
-void CABACWriter::ciip_flag(const PredictionUnit& pu)
+void CABACWriter::ciip_flag(const CodingUnit& cu)
 {
-  if (!pu.cs->sps->CIIP)
+  if (!cu.cs->sps->CIIP)
   {
-    CHECK(pu.ciip == true, "invalid Ciip SPS");
+    CHECK(cu.ciip == true, "invalid Ciip SPS");
     return;
   }
-  if (pu.cu->skip)
+  if (cu.skip)
   {
-    CHECK(pu.ciip == true, "invalid Ciip and skip");
+    CHECK(cu.ciip == true, "invalid Ciip and skip");
     return;
   }
-  m_BinEncoder.encodeBin(pu.ciip, Ctx::CiipFlag());
-  DTRACE(g_trace_ctx, D_SYNTAX, "Ciip_flag() Ciip=%d pos=(%d,%d) size=%dx%d\n", pu.ciip ? 1 : 0, pu.lumaPos().x, pu.lumaPos().y, pu.lumaSize().width, pu.lumaSize().height);
+  m_BinEncoder.encodeBin(cu.ciip, Ctx::CiipFlag());
+  DTRACE(g_trace_ctx, D_SYNTAX, "Ciip_flag() Ciip=%d pos=(%d,%d) size=%dx%d\n", cu.ciip ? 1 : 0, cu.lumaPos().x, cu.lumaPos().y, cu.lumaSize().width, cu.lumaSize().height);
 }
 
 
@@ -2008,7 +1978,7 @@ void CABACWriter::cbf_comp( const CodingUnit& cu, bool cbf, const CompArea& area
 //================================================================================
 //  clause 7.3.8.9
 //--------------------------------------------------------------------------------
-//    void  mvd_coding( pu, refList )
+//    void  mvd_coding( cu, refList )
 //================================================================================
 void CABACWriter::mvd_coding( const Mv &rMvd, int8_t imv )
 {
@@ -2430,7 +2400,7 @@ void CABACWriter::mts_idx( const CodingUnit& cu, CUCtx* cuCtx )
 
 void CABACWriter::isp_mode( const CodingUnit& cu )
 {
-  if( !CU::isIntra( cu ) || !isLuma( cu.chType ) || cu.pu->multiRefIdx || !cu.cs->sps->ISP || cu.bdpcmMode || !CU::canUseISP( cu, getFirstComponentOfChannel( cu.chType ) )  || cu.colorTransform)
+  if( !CU::isIntra( cu ) || !isLuma( cu.chType ) || cu.multiRefIdx || !cu.cs->sps->ISP || cu.bdpcmMode || !CU::canUseISP( cu, getFirstComponentOfChannel( cu.chType ) )  || cu.colorTransform)
   {
     CHECK( cu.ispMode != NOT_INTRA_SUBPARTITIONS, "cu.ispMode != 0" );
     return;
@@ -2452,7 +2422,7 @@ void CABACWriter::residual_lfnst_mode( const CodingUnit& cu, CUCtx& cuCtx )
 {
   int chIdx = CS::isDualITree( *cu.cs ) && cu.chType == CH_C ? 1 : 0;
   if( ( cu.ispMode && !CU::canUseLfnstWithISP( cu, cu.chType ) ) ||
-      (cu.cs->sps->LFNST && CU::isIntra(cu) && cu.mipFlag && !allowLfnstWithMip(cu.pu->lumaSize())) ||
+      (cu.cs->sps->LFNST && CU::isIntra(cu) && cu.mipFlag && !allowLfnstWithMip(cu.lumaSize())) ||
     ( cu.isSepTree() && cu.chType == CH_C && std::min( cu.blocks[ 1 ].width, cu.blocks[ 1 ].height ) < 4 )
     || ( cu.blocks[ chIdx ].lumaSize().width > cu.cs->sps->getMaxTbSize() || cu.blocks[ chIdx ].lumaSize().height > cu.cs->sps->getMaxTbSize() )
     )
@@ -3041,19 +3011,19 @@ void CABACWriter::mip_pred_modes( const CodingUnit& cu )
     return;
   }
 
-  mip_pred_mode( *cu.pu );
+  mip_pred_mode( cu );
 }
 
 
-void CABACWriter::mip_pred_mode( const PredictionUnit& pu )
+void CABACWriter::mip_pred_mode( const CodingUnit& cu )
 {
-  m_BinEncoder.encodeBinEP( (pu.mipTransposedFlag ? 1 : 0) );
+  m_BinEncoder.encodeBinEP( (cu.mipTransposedFlag ? 1 : 0) );
 
-  const int numModes = getNumModesMip( pu.Y() );
-  CHECKD( pu.intraDir[CH_L] < 0 || pu.intraDir[CH_L] >= numModes, "Invalid MIP mode" );
-  xWriteTruncBinCode( pu.intraDir[CH_L], numModes );
+  const int numModes = getNumModesMip( cu.Y() );
+  CHECKD( cu.intraDir[CH_L] < 0 || cu.intraDir[CH_L] >= numModes, "Invalid MIP mode" );
+  xWriteTruncBinCode( cu.intraDir[CH_L], numModes );
 
-  DTRACE( g_trace_ctx, D_SYNTAX, "mip_pred_mode() pos=(%d,%d) mode=%d transposed=%d\n", pu.lumaPos().x, pu.lumaPos().y, pu.intraDir[CH_L], pu.mipTransposedFlag ? 1 : 0 );
+  DTRACE( g_trace_ctx, D_SYNTAX, "mip_pred_mode() pos=(%d,%d) mode=%d transposed=%d\n", cu.lumaPos().x, cu.lumaPos().y, cu.intraDir[CH_L], cu.mipTransposedFlag ? 1 : 0 );
 }
 
 

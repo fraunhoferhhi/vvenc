@@ -73,7 +73,7 @@ namespace vvenc {
 #define cond_mm_prefetch(a,b) _mm_prefetch(a,b)
 //#define cond_mm_prefetch(a,b)
 
-// because of sub pu atmvp and tripple split
+// because of sub cu atmvp and tripple split
 #define JEM_UNALIGNED_DST 1
 
 // ===========================
@@ -2427,7 +2427,7 @@ void simdFilter8xX_N4( const ClpRng& clpRng, Pel const *src, int srcStride, Pel*
 #endif
 
 template<X86_VEXT vext>
-void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const PredictionUnit &pu, const uint32_t width, const uint32_t height,
+void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint32_t width, const uint32_t height,
                          const ComponentID compIdx, const uint8_t splitDir, PelUnitBuf &predDst, PelUnitBuf &predSrc0,
                          PelUnitBuf &predSrc1)
 {
@@ -2442,8 +2442,8 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const PredictionUnit &pu, const 
   const int32_t shiftWeighted  = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.comp[compIdx].bd)) + log2WeightBase;
   const int32_t offsetWeighted = (1 << (shiftWeighted - 1)) + (IF_INTERNAL_OFFS << log2WeightBase);
 
-  int16_t wIdx = floorLog2(pu.lwidth()) - GEO_MIN_CU_LOG2;
-  int16_t hIdx = floorLog2(pu.lheight()) - GEO_MIN_CU_LOG2;
+  int16_t wIdx = floorLog2(cu.lwidth()) - GEO_MIN_CU_LOG2;
+  int16_t hIdx = floorLog2(cu.lheight()) - GEO_MIN_CU_LOG2;
   int16_t angle = g_GeoParams[splitDir][0];
   int16_t stepY = 0;
   int16_t *weight = nullptr;
@@ -2475,7 +2475,7 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const PredictionUnit &pu, const 
   const __m128i mmMin    = _mm_set1_epi16(clpRng.comp[compIdx].min);
   const __m128i mmMax    = _mm_set1_epi16(clpRng.comp[compIdx].max);
 
-  if (compIdx != COMP_Y && pu.chromaFormat == CHROMA_420)
+  if (compIdx != COMP_Y && cu.chromaFormat == CHROMA_420)
     stepY <<= 1;
   if (width == 4)
   {
@@ -2525,7 +2525,7 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const PredictionUnit &pu, const 
         __m256i s1 = _mm256_lddqu_si256((__m256i *) (src1 + x));
 
         __m256i w0 = _mm256_lddqu_si256((__m256i *) (weight + x));
-        if (compIdx != COMP_Y && pu.chromaFormat != CHROMA_444)
+        if (compIdx != COMP_Y && cu.chromaFormat != CHROMA_444)
         {
           const __m256i mask = _mm256_set_epi16(0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1);
           __m256i w0p0, w0p1;
@@ -2598,7 +2598,7 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const PredictionUnit &pu, const 
         __m128i s0 = _mm_lddqu_si128((__m128i *) (src0 + x));
         __m128i s1 = _mm_lddqu_si128((__m128i *) (src1 + x));
         __m128i w0;
-        if (compIdx != COMP_Y && pu.chromaFormat != CHROMA_444)
+        if (compIdx != COMP_Y && cu.chromaFormat != CHROMA_444)
         {
           const __m128i mask = _mm_set_epi16(0, 1, 0, 1, 0, 1, 0, 1);
           __m128i w0p0, w0p1;

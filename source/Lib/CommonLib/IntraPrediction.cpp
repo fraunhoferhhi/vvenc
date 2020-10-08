@@ -342,13 +342,13 @@ int IntraPrediction::getWideAngle( int width, int height, int predMode )
   return predMode;
 }
 
-void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, const PredictionUnit &pu)
+void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, const CodingUnit& cu)
 {
   const ComponentID    compID       = compId;
   const ChannelType    channelType  = toChannelType( compID );
-  const uint32_t       uiDirMode    = /*isLuma( compId ) && pu.cu->bdpcmMode ? BDPCM_IDX : */PU::getFinalIntraMode( pu, channelType );
+  const uint32_t       uiDirMode    = /*isLuma( compId ) && cu.bdpcmMode ? BDPCM_IDX : */CU::getFinalIntraMode( cu, channelType );
 
-  CHECK( Log2(piPred.width) < 2 && pu.cs->pcv->noChroma2x2, "Size not allowed" );
+  CHECK( Log2(piPred.width) < 2 && cu.cs->pcv->noChroma2x2, "Size not allowed" );
   CHECK( Log2(piPred.width) > 7, "Size not allowed" );
 
 //  const int multiRefIdx = m_ipaParam.multiRefIndex;
@@ -356,13 +356,13 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   const int srcHStride = 2;
 
   const CPelBuf& srcBuf = CPelBuf(getPredictorPtr(compID), srcStride, srcHStride);
-  const ClpRng& clpRng(pu.cu->cs->slice->clpRngs[compID]);
+  const ClpRng& clpRng(cu.cs->slice->clpRngs[compID]);
 
   switch (uiDirMode)
   {
     case(PLANAR_IDX): xPredIntraPlanar(piPred, srcBuf); break;
     case(DC_IDX):     xPredIntraDc    ( piPred, srcBuf ); break;
-//    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, pu.cu->bdpcmMode, clpRng); break;
+//    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, cu.bdpcmMode, clpRng); break;
     default:          xPredIntraAng   ( piPred, srcBuf, channelType, clpRng); break;
   }
 
@@ -375,18 +375,18 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   }
 }
 
-void IntraPrediction::predIntraChromaLM(const ComponentID compID, PelBuf& piPred, const PredictionUnit &pu, const CompArea& chromaArea, int intraDir)
+void IntraPrediction::predIntraChromaLM(const ComponentID compID, PelBuf& piPred, const CodingUnit& cu, const CompArea& chromaArea, int intraDir)
 {
   CHECK( piPred.width > MAX_TB_SIZEY || piPred.height > MAX_TB_SIZEY, "not enough memory");
   const int iLumaStride = 2 * MAX_TB_SIZEY + 1;
   PelBuf Temp = PelBuf(m_pMdlmTemp + iLumaStride + 1, iLumaStride, Size(chromaArea));
 
   int a, b, iShift;
-  xGetLMParameters(pu, compID, chromaArea, a, b, iShift); // th shift result is unsigned
+  xGetLMParameters(cu, compID, chromaArea, a, b, iShift); // th shift result is unsigned
 
   ////// final prediction
   piPred.copyFrom(Temp);
-  piPred.linearTransform(a, iShift, b, true, pu.cs->slice->clpRngs[compID]);
+  piPred.linearTransform(a, iShift, b, true, cu.cs->slice->clpRngs[compID]);
 }
 
 /** Function for deriving planar intra prediction. This function derives the prediction samples for planar mode (intra coding).
@@ -399,21 +399,21 @@ void IntraPrediction::xPredIntraDc( PelBuf& pDst, const CPelBuf& pSrc )
 }
 
 // Function for initialization of intra prediction parameters
-void IntraPrediction::initPredIntraParams(const PredictionUnit & pu, const CompArea area, const SPS& sps)
+void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea area, const SPS& sps)
 {
   const ComponentID compId = area.compID;
   const ChannelType chType = toChannelType(compId);
 
-  const bool        useISP = NOT_INTRA_SUBPARTITIONS != pu.cu->ispMode && isLuma( chType );
+  const bool        useISP = NOT_INTRA_SUBPARTITIONS != cu.ispMode && isLuma( chType );
 
-  const Size   cuSize    = Size( pu.cu->blocks[compId].width, pu.cu->blocks[compId].height );
+  const Size   cuSize    = Size( cu.blocks[compId].width, cu.blocks[compId].height );
   const Size   puSize    = Size( area.width, area.height );
   const Size&  blockSize = useISP ? cuSize : puSize;
-  const int      dirMode = PU::getFinalIntraMode(pu, chType);
+  const int      dirMode = CU::getFinalIntraMode(cu, chType);
   const int     predMode = getWideAngle( blockSize.width, blockSize.height, dirMode );
 
   m_ipaParam.isModeVer            = predMode >= DIA_IDX;
-  m_ipaParam.multiRefIndex        = isLuma (chType) ? pu.multiRefIdx : 0 ;
+  m_ipaParam.multiRefIndex        = isLuma (chType) ? cu.multiRefIdx : 0 ;
   m_ipaParam.refFilterFlag        = false;
   m_ipaParam.interpolationFlag    = false;
   m_ipaParam.applyPDPC            = (puSize.width >= MIN_TB_SIZEY && puSize.height >= MIN_TB_SIZEY) && m_ipaParam.multiRefIndex == 0;
@@ -454,13 +454,13 @@ void IntraPrediction::initPredIntraParams(const PredictionUnit & pu, const CompA
   if(   sps.spsRExt.intraSmoothingDisabled
     || !isLuma( chType )
     || useISP
-    || PU::isMIP( pu, chType ) //th remove this
+    || CU::isMIP( cu, chType ) //th remove this
     || m_ipaParam.multiRefIndex
     || DC_IDX == dirMode
     )
   {
   }
-  else if (isLuma( chType ) && pu.cu->bdpcmMode) // BDPCM
+  else if (isLuma( chType ) && cu.bdpcmMode) // BDPCM
   {
     m_ipaParam.refFilterFlag = false;
   }
@@ -606,42 +606,44 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
   }
   else
   {
-    if ( !isIntegerSlope( abs(intraPredAngle) ) )
+    if( !isIntegerSlope( abs( intraPredAngle ) ) )
     {
-      int deltaPos = intraPredAngle * (1 + multiRefIdx);
-      if( isLuma(channelType) )
+      int deltaPos = intraPredAngle * ( 1 + multiRefIdx );
+      if( isLuma( channelType ) )
       {
-#if ISP_VVC_SIMD
-        if (width <= 2)
+#if ISP_VVC
+        if( width <= 2 )
         {
-          for (int y = 0, deltaPos = intraPredAngle * (1 + multiRefIdx); y < height;
-            y++, deltaPos += intraPredAngle, pDsty += dstStride)
+          for( int y = 0, deltaPos = intraPredAngle * ( 1 + multiRefIdx );
+               y < height;
+               y++, deltaPos += intraPredAngle, pDsty += dstStride )
           {
-            const int deltaInt = deltaPos >> 5;
+            const int deltaInt   = deltaPos >> 5;
             const int deltaFract = deltaPos & 31;
-            if (!isIntegerSlope(abs(intraPredAngle)))
+
+            if( !isIntegerSlope( abs( intraPredAngle ) ) )
             {
               const bool useCubicFilter = !m_ipaParam.interpolationFlag;
 
-              const TFilterCoeff        intraSmoothingFilter[4] = { TFilterCoeff(16 - (deltaFract >> 1)),
-                                                             TFilterCoeff(32 - (deltaFract >> 1)),
-                                                             TFilterCoeff(16 + (deltaFract >> 1)),
-                                                             TFilterCoeff(deltaFract >> 1) };
+              const TFilterCoeff intraSmoothingFilter[4] = { TFilterCoeff( 16 - ( deltaFract >> 1 ) ),
+                                                             TFilterCoeff( 32 - ( deltaFract >> 1 ) ),
+                                                             TFilterCoeff( 16 + ( deltaFract >> 1 ) ),
+                                                             TFilterCoeff(      ( deltaFract >> 1 ) ) };
               const TFilterCoeff* const f =
-                (useCubicFilter) ? InterpolationFilter::getChromaFilterTable(deltaFract) : intraSmoothingFilter;
+                ( useCubicFilter ) ? InterpolationFilter::getChromaFilterTable( deltaFract ) : intraSmoothingFilter;
 
-              for (int x = 0; x < width; x++)
+              for( int x = 0; x < width; x++ )
               {
                 Pel p[4];
 
-                p[0] = refMain[deltaInt + x];
+                p[0] = refMain[deltaInt + x + 0];
                 p[1] = refMain[deltaInt + x + 1];
                 p[2] = refMain[deltaInt + x + 2];
                 p[3] = refMain[deltaInt + x + 3];
 
-                Pel val = (f[0] * p[0] + f[1] * p[1] + f[2] * p[2] + f[3] * p[3] + 32) >> 6;
+                Pel val = ( f[0] * p[0] + f[1] * p[1] + f[2] * p[2] + f[3] * p[3] + 32 ) >> 6;
 
-                pDsty[x] = ClipPel(val, clpRng);   // always clip even though not always needed
+                pDsty[x] = ClipPel( val, clpRng );   // always clip even though not always needed
               }
             }
           }
@@ -683,10 +685,10 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
 
 
 inline bool isAboveLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT );
-inline int  isAboveAvailable      ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *validFlags );
-inline int  isLeftAvailable       ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *validFlags );
-inline int  isAboveRightAvailable ( const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *validFlags );
-inline int  isBelowLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *validFlags );
+inline int  isAboveAvailable      ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *validFlags );
+inline int  isLeftAvailable       ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *validFlags );
+inline int  isAboveRightAvailable ( const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t numUnits, const uint32_t unitHeight, bool *validFlags );
+inline int  isBelowLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t numUnits, const uint32_t unitHeight, bool *validFlags );
 
 void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompArea& area, const bool forceRefFilterFlag)
 {
@@ -694,7 +696,7 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
 
   if (!forceRefFilterFlag)
   {
-    initPredIntraParams(*cu.pu, area, *cs.sps);
+    initPredIntraParams(cu, area, *cs.sps);
   }
 
   Pel *refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
@@ -709,7 +711,7 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   // ----- Step 2: filtered reference samples -----
   if( m_ipaParam.refFilterFlag || forceRefFilterFlag )
   {
-    xFilterReferenceSamples( refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.pu->multiRefIdx );
+    xFilterReferenceSamples( refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.multiRefIdx );
   }
 }
 
@@ -726,7 +728,7 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
   const SPS             &sps    = *cs.sps;
   const PreCalcValues   &pcv    = *cs.pcv;
 
-  const int multiRefIdx         = (area.compID == COMP_Y) ? cu.pu->multiRefIdx : 0;
+  const int multiRefIdx         = (area.compID == COMP_Y) ? cu.multiRefIdx : 0;
 
   const int  tuWidth            = area.width;
   const int  tuHeight           = area.height;
@@ -1020,13 +1022,13 @@ bool isAboveLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const
   return (cs.getCURestricted(refPos, cu, chType) != NULL);
 }
 
-int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *bValidFlags)
+int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *bValidFlags)
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags  = bValidFlags;
   int       numIntra    = 0;
-  const int maxDx       = uiNumUnitsInPU * unitWidth;
+  const int maxDx       = numUnits * unitWidth;
   unsigned  checkPosX   = 0;
   bool      valid       = false;
 
@@ -1055,13 +1057,13 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Posi
   return numIntra;
 }
 
-int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *bValidFlags)
+int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitHeight, bool *bValidFlags)
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags = bValidFlags;
   int       numIntra   = 0;
-  const int maxDy      = uiNumUnitsInPU * unitHeight;
+  const int maxDy      = numUnits * unitHeight;
   unsigned checkPosY   = 0;
   bool     valid       = false;
 
@@ -1089,13 +1091,13 @@ int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Posit
   return numIntra;
 }
 
-int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t uiNumUnitsInPU, const uint32_t unitWidth, bool *bValidFlags )
+int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posRT, const uint32_t numUnits, const uint32_t unitWidth, bool *bValidFlags )
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags = bValidFlags;
   int       numIntra   = 0;
-  const int maxDx      = uiNumUnitsInPU * unitWidth;
+  const int maxDx      = numUnits * unitWidth;
   unsigned  checkPosX   = 0;
   bool      valid       = false;
 
@@ -1123,13 +1125,13 @@ int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const
   return numIntra;
 }
 
-int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t uiNumUnitsInPU, const uint32_t unitHeight, bool *bValidFlags )
+int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Position& posLB, const uint32_t numUnits, const uint32_t unitHeight, bool *bValidFlags )
 {
   const CodingStructure& cs = *cu.cs;
 
   bool *    validFlags = bValidFlags;
   int       numIntra   = 0;
-  const int maxDy      = uiNumUnitsInPU * unitHeight;
+  const int maxDy      = numUnits * unitHeight;
   unsigned  checkPosY   = 0;
   bool      valid       = false;
 
@@ -1158,31 +1160,30 @@ int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const 
 }
 
 // LumaRecPixels
-void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea& chromaArea )
+void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& chromaArea )
 {
   int iDstStride = 2 * MAX_TB_SIZEY + 1;
   Pel* pDst0 = m_pMdlmTemp + iDstStride + 1;
   //assert 420 chroma subsampling
-  CompArea lumaArea = CompArea( COMP_Y, pu.chromaFormat, chromaArea.lumaPos(), recalcSize( pu.chromaFormat, CH_C, CH_L, chromaArea.size() ) );//needed for correct pos/size (4x4 Tus)
+  CompArea lumaArea = CompArea( COMP_Y, cu.chromaFormat, chromaArea.lumaPos(), recalcSize( cu.chromaFormat, CH_C, CH_L, chromaArea.size() ) );//needed for correct pos/size (4x4 Tus)
 
-  CHECK(lumaArea.width == chromaArea.width && CHROMA_444 != pu.chromaFormat, "");
-  CHECK(lumaArea.height == chromaArea.height && CHROMA_444 != pu.chromaFormat && CHROMA_422 != pu.chromaFormat, "");
+  CHECK(lumaArea.width == chromaArea.width && CHROMA_444 != cu.chromaFormat, "");
+  CHECK(lumaArea.height == chromaArea.height && CHROMA_444 != cu.chromaFormat && CHROMA_422 != cu.chromaFormat, "");
 
   const SizeType uiCWidth = chromaArea.width;
   const SizeType uiCHeight = chromaArea.height;
 
-  const CPelBuf Src = pu.cs->picture->getRecoBuf( lumaArea );
+  const CPelBuf Src = cu.cs->picture->getRecoBuf( lumaArea );
   Pel const* pRecSrc0   = Src.bufAt( 0, 0 );
   int iRecStride        = Src.stride;
-  int logSubWidthC  = getChannelTypeScaleX(CH_C, pu.chromaFormat);
-  int logSubHeightC = getChannelTypeScaleY(CH_C, pu.chromaFormat);
+  int logSubWidthC  = getChannelTypeScaleX(CH_C, cu.chromaFormat);
+  int logSubHeightC = getChannelTypeScaleY(CH_C, cu.chromaFormat);
 
   int iRecStride2       = iRecStride << logSubHeightC;
 
-  const CodingUnit& lumaCU = isChroma( pu.chType ) ? *pu.cs->picture->cs->getCU( lumaArea.pos(), CH_L, TREE_D ) : *pu.cu;
-  const CodingUnit&     cu = *pu.cu;
+  const CodingUnit& lumaCU = isChroma( cu.chType ) ? *cu.cs->picture->cs->getCU( lumaArea.pos(), CH_L, TREE_D ) : cu;
 
-  const CompArea& area = isChroma( pu.chType ) ? chromaArea : lumaArea;
+  const CompArea& area = isChroma( cu.chType ) ? chromaArea : lumaArea;
 
   const uint32_t uiTuWidth  = area.width;
   const uint32_t uiTuHeight = area.height;
@@ -1214,7 +1215,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
   bool  bNeighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1];
   memset(bNeighborFlags, 0, totalUnits);
   bool aboveIsAvailable, leftIsAvailable;
-  const CodingUnit& chromaCU = isChroma( pu.chType ) ? cu : lumaCU;
+  const CodingUnit& chromaCU = isChroma( cu.chType ) ? cu : lumaCU;
   const ChannelType areaCh = toChannelType( area.compID );
 
   int availlableUnit = isLeftAvailable(chromaCU, areaCh, area.pos(), iLeftUnits, unitHeight, (bNeighborFlags + iLeftUnits + leftBelowUnits - 1));
@@ -1238,20 +1239,20 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
   Pel*       pDst  = nullptr;
   Pel const* piSrc = nullptr;
 
-  bool isFirstRowOfCtu = (lumaArea.y & ((pu.cs->sps)->CTUSize - 1)) == 0;
+  bool isFirstRowOfCtu = (lumaArea.y & ((cu.cs->sps)->CTUSize - 1)) == 0;
 
   if (aboveIsAvailable)
   {
     pDst  = pDst0    - iDstStride;
     int addedAboveRight = 0;
-    if ((pu.intraDir[1] == MDLM_L_IDX) || (pu.intraDir[1] == MDLM_T_IDX))
+    if ((cu.intraDir[1] == MDLM_L_IDX) || (cu.intraDir[1] == MDLM_T_IDX))
     {
       addedAboveRight = avaiAboveRightUnits*chromaUnitWidth;
     }
     for (int i = 0; i < uiCWidth + addedAboveRight; i++)
     {
       const bool leftPadding = i == 0 && !leftIsAvailable;
-      if (pu.chromaFormat == CHROMA_444)
+      if (cu.chromaFormat == CHROMA_444)
       {
         piSrc = pRecSrc0 - iRecStride;
         pDst[i] = piSrc[i];
@@ -1261,7 +1262,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
         piSrc   = pRecSrc0 - iRecStride;
         pDst[i] = (piSrc[2 * i] * 2 + piSrc[2 * i - (leftPadding ? 0 : 1)] + piSrc[2 * i + 1] + 2) >> 2;
       }
-      else if (pu.chromaFormat == CHROMA_422)
+      else if (cu.chromaFormat == CHROMA_422)
       {
         piSrc = pRecSrc0 - iRecStride2;
 
@@ -1271,7 +1272,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
         s += piSrc[2 * i + 1];
         pDst[i] = s >> 2;
       }
-      else if (pu.cs->sps->verCollocatedChroma )
+      else if (cu.cs->sps->verCollocatedChroma )
       {
         piSrc = pRecSrc0 - iRecStride2;
 
@@ -1304,18 +1305,18 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
     piSrc = pRecSrc0 - 1 - logSubWidthC;
 
     int addedLeftBelow = 0;
-    if ((pu.intraDir[1] == MDLM_L_IDX) || (pu.intraDir[1] == MDLM_T_IDX))
+    if ((cu.intraDir[1] == MDLM_L_IDX) || (cu.intraDir[1] == MDLM_T_IDX))
     {
       addedLeftBelow = avaiLeftBelowUnits*chromaUnitHeight;
     }
 
     for (int j = 0; j < uiCHeight + addedLeftBelow; j++)
     {
-      if (pu.chromaFormat == CHROMA_444)
+      if (cu.chromaFormat == CHROMA_444)
       {
         pDst[0] = piSrc[0];
       }
-      else if (pu.chromaFormat == CHROMA_422)
+      else if (cu.chromaFormat == CHROMA_422)
       {
         int s = 2;
         s += piSrc[0] * 2;
@@ -1323,7 +1324,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
         s += piSrc[1];
         pDst[0] = s >> 2;
       }
-      else if (pu.cs->sps->verCollocatedChroma)
+      else if (cu.cs->sps->verCollocatedChroma)
       {
         const bool abovePadding = j == 0 && !aboveIsAvailable;
 
@@ -1357,11 +1358,11 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
   {
     for( int i = 0; i < uiCWidth; i++ )
     {
-      if (pu.chromaFormat == CHROMA_444)
+      if (cu.chromaFormat == CHROMA_444)
       {
         pDst0[i] = pRecSrc0[i];
       }
-      else if (pu.chromaFormat == CHROMA_422)
+      else if (cu.chromaFormat == CHROMA_422)
       {
         const bool leftPadding  = i == 0 && !leftIsAvailable;
 
@@ -1371,7 +1372,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
         s += pRecSrc0[2 * i + 1];
         pDst0[i] = s >> 2;
       }
-      else if (pu.cs->sps->verCollocatedChroma)
+      else if (cu.cs->sps->verCollocatedChroma)
       {
         const bool leftPadding  = i == 0 && !leftIsAvailable;
         const bool abovePadding = j == 0 && !aboveIsAvailable;
@@ -1386,7 +1387,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
       }
       else
       {
-        CHECK(pu.chromaFormat != CHROMA_420, "Chroma format must be 4:2:0 for vertical filtering");
+        CHECK(cu.chromaFormat != CHROMA_420, "Chroma format must be 4:2:0 for vertical filtering");
         const bool leftPadding = i == 0 && !leftIsAvailable;
 
         int s = 4;
@@ -1405,7 +1406,7 @@ void IntraPrediction::loadLMLumaRecPels(const PredictionUnit &pu, const CompArea
   }
 }
 
-void IntraPrediction::xGetLMParameters(const PredictionUnit &pu, const ComponentID compID,
+void IntraPrediction::xGetLMParameters(const CodingUnit& cu, const ComponentID compID,
                                               const CompArea& chromaArea,
                                               int& a, int& b, int& iShift)
 {
@@ -1416,8 +1417,7 @@ void IntraPrediction::xGetLMParameters(const PredictionUnit &pu, const Component
 
   const Position posLT = chromaArea;
 
-  CodingStructure & cs = *(pu.cs);
-  const CodingUnit &cu = *(pu.cu);
+  CodingStructure & cs = *(cu.cs);
 
   const SPS &        sps           = *cs.sps;
   const uint32_t     tuWidth     = chromaArea.width;
@@ -1445,7 +1445,7 @@ void IntraPrediction::xGetLMParameters(const PredictionUnit &pu, const Component
   int avaiAboveUnits = 0;
   int avaiLeftUnits = 0;
 
-  const int curChromaMode = pu.intraDir[1];
+  const int curChromaMode = cu.intraDir[1];
   bool neighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1];
   memset(neighborFlags, 0, totalUnits);
 
@@ -1605,9 +1605,9 @@ void IntraPrediction::xGetLMParameters(const PredictionUnit &pu, const Component
   }
 }
 
-void IntraPrediction::initIntraMip( const PredictionUnit &pu )
+void IntraPrediction::initIntraMip( const CodingUnit& cu )
 {
-  CHECK( pu.lwidth() > pu.cs->sps->getMaxTbSize() || pu.lheight() > pu.cs->sps->getMaxTbSize(), "Error: block size not supported for MIP" );
+  CHECK( cu.lwidth() > cu.cs->sps->getMaxTbSize() || cu.lheight() > cu.cs->sps->getMaxTbSize(), "Error: block size not supported for MIP" );
 
   // prepare input (boundary) data for prediction
   CHECK(m_ipaParam.refFilterFlag, "ERROR: unfiltered refs expected for MIP");
@@ -1615,20 +1615,20 @@ void IntraPrediction::initIntraMip( const PredictionUnit &pu )
   const int srcStride  = m_refBufferStride[COMP_Y];
   const int srcHStride = 2;
 
-  m_matrixIntraPred.prepareInputForPred(CPelBuf(ptrSrc, srcStride, srcHStride), pu.Y(), pu.cu->slice->sps->bitDepths[CH_L]);
+  m_matrixIntraPred.prepareInputForPred(CPelBuf(ptrSrc, srcStride, srcHStride), cu.Y(), cu.slice->sps->bitDepths[CH_L]);
 }
 
-void IntraPrediction::predIntraMip( PelBuf &piPred, const PredictionUnit &pu )
+void IntraPrediction::predIntraMip( PelBuf &piPred, const CodingUnit& cu )
 {
-  CHECK( pu.lwidth() > pu.cs->sps->getMaxTbSize() || pu.lheight() > pu.cs->sps->getMaxTbSize(), "Error: block size not supported for MIP" );
-  CHECK( pu.lwidth() != (1 << floorLog2(pu.lwidth())) || pu.lheight() != (1 << floorLog2(pu.lheight())), "Error: expecting blocks of size 2^M x 2^N" );
+  CHECK( cu.lwidth() > cu.cs->sps->getMaxTbSize() || cu.lheight() > cu.cs->sps->getMaxTbSize(), "Error: block size not supported for MIP" );
+  CHECK( cu.lwidth() != (1 << floorLog2(cu.lwidth())) || cu.lheight() != (1 << floorLog2(cu.lheight())), "Error: expecting blocks of size 2^M x 2^N" );
 
   // generate mode-specific prediction
-  const int bitDepth = pu.cu->slice->sps->bitDepths[CH_L];
+  const int bitDepth = cu.slice->sps->bitDepths[CH_L];
 
-  CHECK( pu.lwidth() != piPred.stride, " no support yet" );
+  CHECK( cu.lwidth() != piPred.stride, " no support yet" );
  
-  m_matrixIntraPred.predBlock(piPred.buf, pu.intraDir[CH_L], pu.mipTransposedFlag, bitDepth);
+  m_matrixIntraPred.predBlock(piPred.buf, cu.intraDir[CH_L], cu.mipTransposedFlag, bitDepth);
 }
 
 #if ISP_VVC
@@ -1639,7 +1639,7 @@ void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const Comp
 
   if (!forceRefFilterFlag)
   {
-    initPredIntraParams(*cu.pu, area, *cs.sps);
+    initPredIntraParams(cu, area, *cs.sps);
   }
 
   const Position posLT = area;
@@ -1748,7 +1748,7 @@ void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const Comp
   {
     Pel* refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
     Pel* refBufFiltered = m_refBuffer[area.compID][PRED_BUF_FILTERED];
-    xFilterReferenceSamples(refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.pu->multiRefIdx);
+    xFilterReferenceSamples(refBufUnfiltered, refBufFiltered, area, *cs.sps, cu.multiRefIdx);
   }
 }
 

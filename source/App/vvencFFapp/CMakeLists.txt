@@ -10,7 +10,7 @@ file( GLOB INC_FILES "*.h" )
 # set resource file for MSVC compilers
 if( MSVC )
   set( RESOURCE_FILE ${EXE_NAME}.rc )
-    file( GLOB NATVIS_FILES "../../VisualStudio/*.natvis" )
+  file( GLOB NATVIS_FILES "../../VisualStudio/*.natvis" )
   # extend the stack size on windows to 2MB
   set( CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} /STACK:0x200000" )
 endif()

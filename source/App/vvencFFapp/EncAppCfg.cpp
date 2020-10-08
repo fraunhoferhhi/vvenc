@@ -516,7 +516,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("FDM",                                             m_useFastDecisionForMerge,                                     "Fast decision for Merge RD Cost")
   ("ESD",                                             m_useEarlySkipDetection,                                       "Early SKIP detection setting")
 
-  ("DisableIntraInInter",                             m_bDisableIntraPUsInInterSlices,                               "Flag to disable intra PUs in inter slices")
+  ("DisableIntraInInter",                             m_bDisableIntraCUsInInterSlices,                               "Flag to disable intra CUs in inter slices")
   ("ConstrainedIntraPred",                            m_bUseConstrainedIntraPred,                                    "Constrained Intra Prediction")
   ("FastUDIUseMPMEnabled",                            m_bFastUDIUseMPMEnabled,                                       "If enabled, adapt intra direction search, accounting for MPM")
   ("FastMEForGenBLowDelayEnabled",                    m_bFastMEForGenBLowDelayEnabled,                               "If enabled use a fast ME for generalised B Low Delay slices")

@@ -88,10 +88,10 @@ public:
   template<bool isLast, int w>
   static void filterXxY_N8     (const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV);
 
-  static void xWeightedGeoBlk(const ClpRngs &clpRngs, const PredictionUnit &pu, const uint32_t width,
+  static void xWeightedGeoBlk(const ClpRngs &clpRngs, const CodingUnit& cu, const uint32_t width,
                               const uint32_t height, const ComponentID compIdx, const uint8_t splitDir,
                               PelUnitBuf &predDst, PelUnitBuf &predSrc0, PelUnitBuf &predSrc1);
-  void weightedGeoBlk(const ClpRngs &clpRngs, const PredictionUnit &pu, const uint32_t width, const uint32_t height,
+  void weightedGeoBlk(const ClpRngs &clpRngs, const CodingUnit& cu, const uint32_t width, const uint32_t height,
                       const ComponentID compIdx, const uint8_t splitDir, PelUnitBuf &predDst, PelUnitBuf &predSrc0,
                       PelUnitBuf &predSrc1);
   InterpolationFilter();
@@ -103,7 +103,7 @@ public:
   void( *m_filter4x4  [2][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
   void( *m_filter8x8  [3][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
   void( *m_filter16x16[3][2] ) ( const ClpRng& clpRng, Pel const *src, int srcStride, Pel* dst, int dstStride, int width, int height, TFilterCoeff const *coeffH, TFilterCoeff const *coeffV );
-  void (*m_weightedGeoBlk)(const ClpRngs &clpRngs, const PredictionUnit &pu, const uint32_t width, const uint32_t height,
+  void (*m_weightedGeoBlk)(const ClpRngs &clpRngs, const CodingUnit& cu, const uint32_t width, const uint32_t height,
                            const ComponentID compIdx, const uint8_t splitDir, PelUnitBuf &predDst, PelUnitBuf &predSrc0,
                            PelUnitBuf &predSrc1);
 

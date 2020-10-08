@@ -53,10 +53,5 @@
     <DisplayString Condition="blocks._size > 1 &amp;&amp; ((CompArea*) blocks._arr)->width == 0">{{(chroma) TU: x = {((CompArea*) blocks._arr)[1].x}, y = {((CompArea*) blocks._arr)[1].y}, width = {((CompArea*) blocks._arr)[1].width}, height = {((CompArea*) blocks._arr)[1].height}}}</DisplayString>
     <DisplayString Condition="blocks._size == 0">{{empty TU}}</DisplayString>
   </Type>
-  <Type Name="VVCEncoderLib::PredictionUnit">
-    <DisplayString Condition="blocks._size > 0 &amp;&amp; ((CompArea*) blocks._arr)->width > 0">{{PU: x = {((CompArea*) blocks._arr)->x}, y = {((CompArea*) blocks._arr)->y}, width = {((CompArea*) blocks._arr)->width}, height = {((CompArea*) blocks._arr)->height}}}</DisplayString>
-    <DisplayString Condition="blocks._size > 1 &amp;&amp; ((CompArea*) blocks._arr)->width == 0">{{(chroma) PU: x = {((CompArea*) blocks._arr)[1].x}, y = {((CompArea*) blocks._arr)[1].y}, width = {((CompArea*) blocks._arr)[1].width}, height = {((CompArea*) blocks._arr)[1].height}}}</DisplayString>
-    <DisplayString Condition="blocks._size == 0">{{empty PU}}</DisplayString>
-  </Type>
 
 </AutoVisualizer>

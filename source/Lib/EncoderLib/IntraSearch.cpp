@@ -204,19 +204,18 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
   CHECK(numModesForFullRD >= numModesAvailable, "Too many modes for full RD search");
 
-  PredictionUnit &pu = *cu.pu;
   const SPS& sps     = *cu.cs->sps;
   const bool fastMip = sps.MIP && m_pcEncCfg->m_useFastMIP;
 
   // this should always be true
-  CHECK( !pu.Y().valid(), "PU is not valid" );
+  CHECK( !cu.Y().valid(), "CU is not valid" );
 
-  const CompArea& area = pu.Y();
+  const CompArea& area = cu.Y();
 
   const UnitArea localUnitArea(area.chromaFormat, Area(0, 0, area.width, area.height));
   if( testMip)
   {
-    numModesForFullRD += fastMip? std::max(numModesForFullRD, floorLog2(std::min(pu.lwidth(), pu.lheight())) - m_pcEncCfg->m_useFastMIP) : numModesForFullRD;
+    numModesForFullRD += fastMip? std::max(numModesForFullRD, floorLog2(std::min(cu.lwidth(), cu.lheight())) - m_pcEncCfg->m_useFastMIP) : numModesForFullRD;
     m_SortedPelUnitBufs->prepare( localUnitArea, numModesForFullRD + 1 );
   }
   else
@@ -238,10 +237,10 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
   //*** Derive (regular) candidates using Hadamard
   cu.mipFlag = false;
-  pu.multiRefIdx = 0;
+  cu.multiRefIdx = 0;
 
   //===== init pattern for luma prediction =====
-  initIntraPatternChType(cu, pu.Y(), true);
+  initIntraPatternChType(cu, cu.Y(), true);
 
   bool satdChecked[NUM_INTRA_MODE] = { false };
 
@@ -253,17 +252,17 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       continue;
     }
 
-    pu.intraDir[0] = mode;
+    cu.intraDir[0] = mode;
 
-    initPredIntraParams(pu, pu.Y(), sps);
+    initPredIntraParams(cu, cu.Y(), sps);
     distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-    predIntraAng( COMP_Y, piPred, pu);
+    predIntraAng( COMP_Y, piPred, cu);
 
     // Use the min between SAD and HAD as the cost criterion
     // SAD is scaled by 2 to align with the scaling of HAD
     Distortion minSadHad = distParam.distFunc(distParam);
 
-    uint64_t fracModeBits = xFracModeBitsIntraLuma( pu );
+    uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
 
     //restore ctx
     m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
@@ -293,17 +292,17 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
         if( ! satdChecked[mode])
         {
-          pu.intraDir[0] = mode;
+          cu.intraDir[0] = mode;
 
-          initPredIntraParams(pu, pu.Y(), sps);
+          initPredIntraParams(cu, cu.Y(), sps);
           distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-          predIntraAng(COMP_Y, piPred, pu );
+          predIntraAng(COMP_Y, piPred, cu );
 
           // Use the min between SAD and SATD as the cost criterion
           // SAD is scaled by 2 to align with the scaling of HAD
           Distortion minSadHad = distParam.distFunc(distParam);
 
-          uint64_t fracModeBits = xFracModeBitsIntraLuma( pu );
+          uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
           //restore ctx
           m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
 
@@ -321,76 +320,76 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
     }
   }
 
-  const bool isFirstLineOfCtu = (((pu.block(COMP_Y).y)&((pu.cs->sps)->CTUSize - 1)) == 0);
+  const bool isFirstLineOfCtu = (((cu.block(COMP_Y).y)&((cu.cs->sps)->CTUSize - 1)) == 0);
   if( m_pcEncCfg->m_MRL && ! isFirstLineOfCtu )
   {
-    pu.multiRefIdx = 1;
+    cu.multiRefIdx = 1;
     unsigned  multiRefMPM [NUM_MOST_PROBABLE_MODES];
-    PU::getIntraMPMs(pu, multiRefMPM);
+    CU::getIntraMPMs(cu, multiRefMPM);
 
     for (int mRefNum = 1; mRefNum < MRL_NUM_REF_LINES; mRefNum++)
     {
       int multiRefIdx = MULTI_REF_LINE_IDX[mRefNum];
 
-      pu.multiRefIdx = multiRefIdx;
-      initIntraPatternChType(cu, pu.Y(), true);
+      cu.multiRefIdx = multiRefIdx;
+      initIntraPatternChType(cu, cu.Y(), true);
 
       for (int x = 1; x < NUM_MOST_PROBABLE_MODES; x++)
       {
-        pu.intraDir[0] = multiRefMPM[x];
-        initPredIntraParams(pu, pu.Y(), sps);
+        cu.intraDir[0] = multiRefMPM[x];
+        initPredIntraParams(cu, cu.Y(), sps);
         distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-        predIntraAng(COMP_Y, piPred, pu);
+        predIntraAng(COMP_Y, piPred, cu);
 
         // Use the min between SAD and SATD as the cost criterion
         // SAD is scaled by 2 to align with the scaling of HAD
         Distortion minSadHad = distParam.distFunc(distParam);
 
         // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
-        uint64_t fracModeBits = xFracModeBitsIntraLuma( pu );
+        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
 
         //restore ctx
         m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
 
         double cost = (double) minSadHad + (double) fracModeBits * sqrtLambdaForFirstPass;
-//        DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMRL: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, pu.intraDir[0]);
+//        DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMRL: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, cu.intraDir[0]);
 
         int insertPos = -1;
-        updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, pu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD, &insertPos );
-        updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, pu.intraDir[0] ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
+        updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD, &insertPos );
+        updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
         m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
       }
     }
-    pu.multiRefIdx = 0;
+    cu.multiRefIdx = 0;
   }
 
   if (testMip)
   {
     cu.mipFlag = true;
-    pu.multiRefIdx = 0;
+    cu.multiRefIdx = 0;
 
     double mipHadCost[MAX_NUM_MIP_MODE] = { MAX_DOUBLE };
 
-    initIntraPatternChType(cu, pu.Y());
-    initIntraMip( pu );
+    initIntraPatternChType(cu, cu.Y());
+    initIntraMip( cu );
 
-    const int transpOff    = getNumModesMip( pu.Y() );
+    const int transpOff    = getNumModesMip( cu.Y() );
     const int numModesFull = (transpOff << 1);
     for( uint32_t uiModeFull = 0; uiModeFull < numModesFull; uiModeFull++ )
     {
       const bool     isTransposed = (uiModeFull >= transpOff ? true : false);
       const uint32_t uiMode       = (isTransposed ? uiModeFull - transpOff : uiModeFull);
 
-      pu.mipTransposedFlag = isTransposed;
-      pu.intraDir[CH_L] = uiMode;
+      cu.mipTransposedFlag = isTransposed;
+      cu.intraDir[CH_L] = uiMode;
       distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-      predIntraMip(piPred, pu);
+      predIntraMip(piPred, cu);
 
       // Use the min between SAD and HAD as the cost criterion
       // SAD is scaled by 2 to align with the scaling of HAD
       Distortion minSadHad = distParam.distFunc(distParam);
 
-      uint64_t fracModeBits = xFracModeBitsIntraLuma( pu );
+      uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
 
       //restore ctx
       m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
@@ -400,13 +399,13 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMIP: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, uiModeFull);
 
       int insertPos = -1;
-      updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, pu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD+1, &insertPos );
-      updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, pu.intraDir[0] ), 0.8*(double)minSadHad, HadModeList, CandHadList,  numHadCand );
+      updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD+1, &insertPos );
+      updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), 0.8*(double)minSadHad, HadModeList, CandHadList,  numHadCand );
       m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
     }
 
-    const double thresholdHadCost = 1.0 + 1.4 / sqrt((double)(pu.lwidth()*pu.lheight()));
-    xReduceHadCandList(RdModeList, CandCostList, *m_SortedPelUnitBufs, numModesForFullRD, thresholdHadCost, mipHadCost, pu, fastMip);
+    const double thresholdHadCost = 1.0 + 1.4 / sqrt((double)(cu.lwidth()*cu.lheight()));
+    xReduceHadCandList(RdModeList, CandCostList, *m_SortedPelUnitBufs, numModesForFullRD, thresholdHadCost, mipHadCost, cu, fastMip);
   }
 
   if( m_pcEncCfg->m_bFastUDIUseMPMEnabled )
@@ -414,9 +413,9 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
     const int numMPMs = NUM_MOST_PROBABLE_MODES;
     unsigned  intraMpms[numMPMs];
 
-    pu.multiRefIdx = 0;
+    cu.multiRefIdx = 0;
 
-    const int numCand = PU::getIntraMPMs( pu, intraMpms );
+    const int numCand = CU::getIntraMPMs( cu, intraMpms );
     ModeInfo mostProbableMode(false, false, 0, NOT_INTRA_SUBPARTITIONS, 0);
 
     for( int j = 0; j < numCand; j++ )
@@ -447,15 +446,11 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   //===== loop over partitions =====
 
   const TempCtx ctxStart           ( m_CtxCache, m_CABACEstimator->getCtx() );
-  CHECK( !cu.pu, "CU has no PUs" );
 
   // variables for saving fast intra modes scan results across multiple LFNST passes
   double costInterCU = xFindInterCUCost( cu );
 
-  auto &pu = *cu.pu;
   bool validReturn = false;
-
-  CHECK(pu.cu != &cu, "PU is not contained in the CU");
 
   //===== determine set of modes to be tested (using prediction signal only) =====
   int numModesAvailable = NUM_LUMA_MODE; // total number of Intra modes
@@ -470,7 +465,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   numModesForFullRD = numModesAvailable;
 #endif
   const SPS& sps = *cu.cs->sps;
-  const bool mipAllowed = sps.MIP && pu.lwidth() <= sps.getMaxTbSize() && pu.lheight() <= sps.getMaxTbSize() && ((cu.lfnstIdx == 0) || allowLfnstWithMip(cu.pu->lumaSize()));
+  const bool mipAllowed = sps.MIP && cu.lwidth() <= sps.getMaxTbSize() && cu.lheight() <= sps.getMaxTbSize() && ((cu.lfnstIdx == 0) || allowLfnstWithMip(cu.lumaSize()));
   const int SizeThr = 8>>std::max(0,m_pcEncCfg->m_useFastMIP-2);
   const bool testMip    = mipAllowed && (cu.lwidth() <= (SizeThr * cu.lheight()) && cu.lheight() <= (SizeThr * cu.lwidth())) && (cu.lwidth() <= MIP_MAX_WIDTH && cu.lheight() <= MIP_MAX_HEIGHT);
 #if ISP_VVC
@@ -603,9 +598,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
         cu.ispMode = testMode.ispMod;
 #endif
         cu.mipFlag = testMode.mipFlg;
-        pu.mipTransposedFlag = testMode.mipTrFlg;
-        pu.multiRefIdx = testMode.mRefId;
-        pu.intraDir[CH_L] = testMode.modeId;
+        cu.mipTransposedFlag = testMode.mipTrFlg;
+        cu.multiRefIdx = testMode.mRefId;
+        cu.intraDir[CH_L] = testMode.modeId;
 #if ISP_VVC 
         if (cu.ispMode)
         {
@@ -616,10 +611,10 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
           }
         }
 #endif
-        CHECK(cu.mipFlag && pu.multiRefIdx, "Error: combination of MIP and MRL not supported");
-        CHECK(pu.multiRefIdx && (pu.intraDir[0] == PLANAR_IDX), "Error: combination of MRL and Planar mode not supported");
+        CHECK(cu.mipFlag && cu.multiRefIdx, "Error: combination of MIP and MRL not supported");
+        CHECK(cu.multiRefIdx && (cu.intraDir[0] == PLANAR_IDX), "Error: combination of MRL and Planar mode not supported");
         CHECK(cu.ispMode && cu.mipFlag, "Error: combination of ISP and MIP not supported");
-        CHECK(cu.ispMode && pu.multiRefIdx, "Error: combination of ISP and MRL not supported");
+        CHECK(cu.ispMode && cu.multiRefIdx, "Error: combination of ISP and MRL not supported");
       }
 
       // determine residual for partition
@@ -633,7 +628,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraCost T [x=%d,y=%d,w=%d,h=%d] %f (%d,%d,%d,%d,%d,%d) \n", cu.blocks[0].x,
         cu.blocks[0].y, width, height, csTemp->cost, testMode.modeId, testMode.ispMod,
-        pu.multiRefIdx, cu.mipFlag, cu.lfnstIdx, cu.mtsFlag);
+        cu.multiRefIdx, cu.mipFlag, cu.lfnstIdx, cu.mtsFlag);
 
 #if ISP_VVC
       if (cu.ispMode && !csTemp->cus[0]->firstTU->cbf[COMP_Y])
@@ -663,7 +658,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
         bestLfnstIdx = csBest->cus[0]->lfnstIdx;
 #if ISP_VVC
         mip = csBest->cus[0]->mipFlag;
-        mrl = csBest->cus[0]->pu->multiRefIdx;
+        mrl = csBest->cus[0]->multiRefIdx;
         bestISP = csBest->cus[0]->ispMode;
 #if  ISP_VVC
         m_ispTestedModes[bestLfnstIdx].bestSplitSoFar = ISPType(bestISP);
@@ -711,7 +706,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 #endif
   if (validReturn)
   {
-    cs.useSubStructure(*csBest, partitioner.chType, TREE_D, pu.singleChan(CH_L), true);
+    cs.useSubStructure(*csBest, partitioner.chType, TREE_D, cu.singleChan(CH_L), true);
     const ReshapeData& reshapeData = cs.picture->reshapeData;
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
@@ -724,12 +719,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     cu.ispMode = uiBestPUMode.ispMod;
 #endif
     cu.mipFlag = uiBestPUMode.mipFlg;
-    pu.mipTransposedFlag = uiBestPUMode.mipTrFlg;
-    pu.multiRefIdx = uiBestPUMode.mRefId;
-    pu.intraDir[CH_L] = uiBestPUMode.modeId;
+    cu.mipTransposedFlag = uiBestPUMode.mipTrFlg;
+    cu.multiRefIdx = uiBestPUMode.mRefId;
+    cu.intraDir[CH_L] = uiBestPUMode.modeId;
 #if ISP_VVC
     cu.mipFlag = mip;
-    cu.pu->multiRefIdx = mrl;
+    cu.multiRefIdx = mrl;
 #endif
   }
   else
@@ -763,8 +758,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 
   cs.setDecomp( cs.area.Cb(), false );
 
-  auto &pu = *cu.pu;
-
   uint32_t   uiBestMode = 0;
   Distortion uiBestDist = 0;
   double     dBestCost  = MAX_DOUBLE;
@@ -776,7 +769,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 
     //----- check chroma modes -----
     uint32_t chromaCandModes[ NUM_CHROMA_MODE ];
-    PU::getIntraChromaCandModes( pu, chromaCandModes );
+    CU::getIntraChromaCandModes( cu, chromaCandModes );
 
     // create a temporary CS
     CodingStructure &saveCS = *m_pSaveCS[0];
@@ -788,7 +781,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       if( !cu.isSepTree() && cu.ispMode )
       {
         saveCS.clearCUs();
-        saveCS.clearPUs();
       }
 
     if( cu.isSepTree() )
@@ -815,7 +807,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       CodingUnit& auxCU = saveCS.addCU(cu, partitioner.chType);
       auxCU.ispMode = cu.ispMode;
       saveCS.sps = cu.cs->sps;
-      saveCS.addPU(cu, partitioner.chType, &cu);
     }
 #endif
 
@@ -824,9 +815,9 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     {
       // for split TUs in HEVC, add the TUs without Chroma parts for correct setting of Cbfs
 #if ISP_VVC
-      if (lumaUsesISP || pu.contains(*ptu, CH_C))
+      if (lumaUsesISP || cu.contains(*ptu, CH_C))
 #else
-      if( /*lumaUsesISP ||*/ pu.contains( *ptu, CH_C ) )
+      if( /*lumaUsesISP ||*/ cu.contains( *ptu, CH_C ) )
 #endif
       {
         saveCS.addTU( *ptu, partitioner.chType, nullptr );
@@ -845,30 +836,30 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     int64_t satdSortedCost[NUM_CHROMA_MODE] = { 0 };
     bool    modeDisable[NUM_INTRA_MODE + 1] = { false }; // use intra mode idx to check whether enable
 
-    CodingStructure& cs = *(pu.cs);
-    CompArea areaCb = pu.Cb();
-    CompArea areaCr = pu.Cr();
+    CodingStructure& cs = *(cu.cs);
+    CompArea areaCb = cu.Cb();
+    CompArea areaCr = cu.Cr();
     CPelBuf orgCb  = cs.getOrgBuf (COMP_Cb);
     PelBuf predCb  = cs.getPredBuf(COMP_Cb);
     CPelBuf orgCr  = cs.getOrgBuf (COMP_Cr);
     PelBuf predCr  = cs.getPredBuf(COMP_Cr);
 
-    DistParam distParamSadCb  = m_pcRdCost->setDistParam( orgCb, predCb, pu.cs->sps->bitDepths[ CH_C ], DF_SAD);
-    DistParam distParamSatdCb = m_pcRdCost->setDistParam( orgCb, predCb, pu.cs->sps->bitDepths[ CH_C ], DF_HAD);
-    DistParam distParamSadCr  = m_pcRdCost->setDistParam( orgCr, predCr, pu.cs->sps->bitDepths[ CH_C ], DF_SAD);
-    DistParam distParamSatdCr = m_pcRdCost->setDistParam( orgCr, predCr, pu.cs->sps->bitDepths[ CH_C ], DF_HAD);
+    DistParam distParamSadCb  = m_pcRdCost->setDistParam( orgCb, predCb, cu.cs->sps->bitDepths[ CH_C ], DF_SAD);
+    DistParam distParamSatdCb = m_pcRdCost->setDistParam( orgCb, predCb, cu.cs->sps->bitDepths[ CH_C ], DF_HAD);
+    DistParam distParamSadCr  = m_pcRdCost->setDistParam( orgCr, predCr, cu.cs->sps->bitDepths[ CH_C ], DF_SAD);
+    DistParam distParamSatdCr = m_pcRdCost->setDistParam( orgCr, predCr, cu.cs->sps->bitDepths[ CH_C ], DF_HAD);
 
-    pu.intraDir[1] = MDLM_L_IDX; // temporary assigned, just to indicate this is a MDLM mode. for luma down-sampling operation.
+    cu.intraDir[1] = MDLM_L_IDX; // temporary assigned, just to indicate this is a MDLM mode. for luma down-sampling operation.
 
-    initIntraPatternChType(cu, pu.Cb());
-    initIntraPatternChType(cu, pu.Cr());
-    loadLMLumaRecPels(pu, pu.Cb());
+    initIntraPatternChType(cu, cu.Cb());
+    initIntraPatternChType(cu, cu.Cr());
+    loadLMLumaRecPels(cu, cu.Cb());
 
     for (int idx = uiMinMode; idx < uiMaxMode; idx++)
     {
       int mode = chromaCandModes[idx];
       satdModeList[idx] = mode;
-      if (PU::isLMCMode(mode) && !PU::isLMCModeEnabled(pu, mode))
+      if (CU::isLMCMode(mode) && !CU::isLMCModeEnabled(cu, mode))
       {
         continue;
       }
@@ -877,17 +868,17 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
         continue;
       }
 
-      pu.intraDir[1]    = mode; // temporary assigned, for SATD checking.
+      cu.intraDir[1]    = mode; // temporary assigned, for SATD checking.
 
-      const bool isLMCMode = PU::isLMCMode(mode);
+      const bool isLMCMode = CU::isLMCMode(mode);
       if( isLMCMode )
       {
-        predIntraChromaLM(COMP_Cb, predCb, pu, areaCb, mode);
+        predIntraChromaLM(COMP_Cb, predCb, cu, areaCb, mode);
       }
       else
       {
-        initPredIntraParams(pu, pu.Cb(), *cs.sps);
-        predIntraAng(COMP_Cb, predCb, pu);
+        initPredIntraParams(cu, cu.Cb(), *cs.sps);
+        predIntraAng(COMP_Cb, predCb, cu);
       }
       int64_t sadCb = distParamSadCb.distFunc(distParamSadCb) * 2;
       int64_t satdCb = distParamSatdCb.distFunc(distParamSatdCb);
@@ -895,12 +886,12 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 
       if( isLMCMode )
       {
-        predIntraChromaLM(COMP_Cr, predCr, pu, areaCr, mode);
+        predIntraChromaLM(COMP_Cr, predCr, cu, areaCr, mode);
       }
       else
       {
-        initPredIntraParams(pu, pu.Cr(), *cs.sps);
-        predIntraAng(COMP_Cr, predCr, pu);
+        initPredIntraParams(cu, cu.Cr(), *cs.sps);
+        predIntraAng(COMP_Cr, predCr, cu);
       }
       int64_t sadCr = distParamSadCr.distFunc(distParamSadCr) * 2;
       int64_t satdCr = distParamSatdCr.distFunc(distParamSatdCr);
@@ -934,21 +925,21 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     for (uint32_t uiMode = uiMinMode; uiMode < uiMaxMode; uiMode++)
     {
       const int chromaIntraMode = chromaCandModes[uiMode];
-      if( PU::isLMCMode( chromaIntraMode ) && ! PU::isLMCModeEnabled( pu, chromaIntraMode ) )
+      if( CU::isLMCMode( chromaIntraMode ) && ! CU::isLMCModeEnabled( cu, chromaIntraMode ) )
       {
         continue;
       }
-      if( modeDisable[chromaIntraMode] && PU::isLMCModeEnabled(pu, chromaIntraMode)) // when CCLM is disable, then MDLM is disable. not use satd checking
+      if( modeDisable[chromaIntraMode] && CU::isLMCModeEnabled(cu, chromaIntraMode)) // when CCLM is disable, then MDLM is disable. not use satd checking
       {
         continue;
       }
-      cs.setDecomp( pu.Cb(), false );
+      cs.setDecomp( cu.Cb(), false );
       cs.dist = baseDist;
       //----- restore context models -----
       m_CABACEstimator->getCtx() = ctxStart;
 
       //----- chroma coding -----
-      pu.intraDir[1] = chromaIntraMode;
+      cu.intraDir[1] = chromaIntraMode;
 #if ISP_VVC 
       m_ispTestedModes[0].IspType = ispType;
       m_ispTestedModes[0].subTuCounter = -1;
@@ -984,7 +975,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 #endif
         for( uint32_t i = getFirstComponentOfChannel( CH_C ); i < numberValidComponents; i++ )
         {
-          const CompArea& area = pu.blocks[i];
+          const CompArea& area = cu.blocks[i];
           saveCS.getRecoBuf     ( area ).copyFrom( cs.getRecoBuf   ( area ) );
           cs.picture->getRecoBuf( area ).copyFrom( cs.getRecoBuf   ( area ) );
           for( uint32_t j = 0; j < saveCS.tus.size(); j++ )
@@ -1002,7 +993,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 
     for( uint32_t i = getFirstComponentOfChannel( CH_C ); i < numberValidComponents; i++ )
     {
-      const CompArea& area = pu.blocks[i];
+      const CompArea& area = cu.blocks[i];
 
       cs.getRecoBuf         ( area ).copyFrom( saveCS.getRecoBuf( area ) );
       cs.picture->getRecoBuf( area ).copyFrom( cs.getRecoBuf    ( area ) );
@@ -1014,7 +1005,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     }
   }
 
-  pu.intraDir[1] = uiBestMode;
+  cu.intraDir[1] = uiBestMode;
   cs.dist        = uiBestDist;
 
   //----- restore context models -----
@@ -1079,7 +1070,7 @@ void IntraSearch::xEncIntraHeader( CodingStructure &cs, Partitioner &partitioner
       {
         m_CABACEstimator->pred_mode( cu );
       }
-      m_CABACEstimator->intra_luma_pred_mode( *cu.pu );
+      m_CABACEstimator->intra_luma_pred_mode( cu );
     }
   }
   else //  if (chroma)
@@ -1088,7 +1079,7 @@ void IntraSearch::xEncIntraHeader( CodingStructure &cs, Partitioner &partitioner
 
     if( isFirst )
     {
-      m_CABACEstimator->intra_chroma_pred_mode(  *cu.pu );
+      m_CABACEstimator->intra_chroma_pred_mode(  cu );
     }
   }
 }
@@ -1373,7 +1364,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   PelBuf         piReco           = cs.getRecoBuf   (compID);
 #endif
 
-  const PredictionUnit &pu        = *cs.getPU(area.pos(), chType);
+  const CodingUnit& cu        = *cs.getCU(area.pos(), chType, TREE_D);
 
   //===== init availability pattern =====
   CHECK( tu.jointCbCr && compID == COMP_Cr, "wrong combination of compID and jointCbCr" );
@@ -1381,12 +1372,13 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
   if ( isLuma(compID) )
   {
-    bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu, compID);
-    bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, compID, area);
+    bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu );
+    bool firstTBInPredReg  = false;
     CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
-    #if ISP_VVC
-    if (tu.cu->ispMode /*&& isLuma(compID)*/)
+#if ISP_VVC
+    if (tu.cu->ispMode )
     {
+      firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, area);
       if (predRegDiffFromTB)
       {
         if (firstTBInPredReg)
@@ -1410,7 +1402,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       if (firstTBInPredReg)
       {
         PelBuf piPredReg = cs.getPredBuf(areaPredReg);
-        predIntraAng(compID, piPredReg, pu);
+        predIntraAng(compID, piPredReg, cu);
       }
     }
     else
@@ -1419,18 +1411,18 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       {
         piPred.copyFrom( predBuf->Y() );
       }
-      else if( PU::isMIP( pu, CH_L ) )
+      else if( CU::isMIP( cu, CH_L ) )
       {
-        initIntraMip( pu );
-        predIntraMip( piPred, pu );
+        initIntraMip( cu );
+        predIntraMip( piPred, cu );
       }
       else
       {
-        predIntraAng(compID, piPred, pu);
+        predIntraAng(compID, piPred, cu);
       }
     }
   }
-  DTRACE( g_trace_ctx, D_PRED, "@(%4d,%4d) [%2dx%2d] IMode=%d\n", tu.lx(), tu.ly(), tu.lwidth(), tu.lheight(), PU::getFinalIntraMode(pu, chType) );
+  DTRACE( g_trace_ctx, D_PRED, "@(%4d,%4d) [%2dx%2d] IMode=%d\n", tu.lx(), tu.ly(), tu.lwidth(), tu.lheight(), CU::getFinalIntraMode(cu, chType) );
   const Slice &slice = *cs.slice;
   bool flag = cs.picHeader->lmcsEnabled && (slice.isIntra() || (!slice.isIntra() && reshapeData.getCTUFlag()));
 
@@ -1634,7 +1626,7 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
                         || (currArea.lwidth() > sps.getMaxTbSize() || currArea.lheight() > sps.getMaxTbSize()) || !sps.LFNST ? 0 : 2;
 #endif
 
-  if (cu.mipFlag && !allowLfnstWithMip(cu.pu->lumaSize()))
+  if (cu.mipFlag && !allowLfnstWithMip(cu.lumaSize()))
   {
     endLfnstIdx = 0;
   }
@@ -1735,7 +1727,7 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     {
       if (m_pcEncCfg->m_LFNST )
       {
-        uint32_t uiIntraMode = cs.pus[0]->intraDir[partitioner.chType];
+        uint32_t uiIntraMode = cs.cus[0]->intraDir[partitioner.chType];
         int MTScur = (uiIntraMode < 34) ? MTS_DST7_DCT8 : MTS_DCT8_DST7;
         trModes.push_back(TrMode(2, true));
         trModes.push_back(TrMode(MTScur, true));
@@ -2098,7 +2090,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
 #endif
 
   TransformUnit& currTU     = *cs.getTU( currArea.chromaPos(), CH_C );
-  const PredictionUnit &pu  = *cs.getPU( currArea.chromaPos(), CH_C );
+  const CodingUnit& cu  = *cs.getCU( currArea.chromaPos(), CH_C, TREE_D );
 #if ISP_VVC
   ChromaCbfs cbfs(false);
   uint32_t   currDepth = partitioner.currTrDepth;
@@ -2137,7 +2129,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     currTU.jointCbCr = 0;
 
     // Do predictions here to avoid repeating the "default0Save1Load2" stuff
-    uint32_t  predMode = PU::getFinalIntraMode(pu, CH_C);
+    uint32_t  predMode = CU::getFinalIntraMode(cu, CH_C);
 
     PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
     PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
@@ -2145,16 +2137,16 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     initIntraPatternChType(*currTU.cu, cbArea);
     initIntraPatternChType(*currTU.cu, crArea);
 
-    if (PU::isLMCMode(predMode))
+    if (CU::isLMCMode(predMode))
     {
-      loadLMLumaRecPels(pu, cbArea);
-      predIntraChromaLM(COMP_Cb, piPredCb, pu, cbArea, predMode);
-      predIntraChromaLM(COMP_Cr, piPredCr, pu, crArea, predMode);
+      loadLMLumaRecPels(cu, cbArea);
+      predIntraChromaLM(COMP_Cb, piPredCb, cu, cbArea, predMode);
+      predIntraChromaLM(COMP_Cr, piPredCr, cu, crArea, predMode);
     }
     else
     {
-      predIntraAng(COMP_Cb, piPredCb, pu);
-      predIntraAng(COMP_Cr, piPredCr, pu);
+      predIntraAng(COMP_Cb, piPredCb, cu);
+      predIntraAng(COMP_Cr, piPredCr, cu);
     }
 
     // determination of chroma residuals including reshaping and cross-component prediction
@@ -2561,20 +2553,20 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
 #endif
 }
 
-uint64_t IntraSearch::xFracModeBitsIntraLuma(const PredictionUnit &pu)
+uint64_t IntraSearch::xFracModeBitsIntraLuma(const CodingUnit& cu)
 {
   m_CABACEstimator->resetBits();
 
-  if (!pu.ciip)
+  if (!cu.ciip)
   {
-    m_CABACEstimator->intra_luma_pred_mode(pu);
+    m_CABACEstimator->intra_luma_pred_mode(cu);
   }
 
   return m_CABACEstimator->getEstFracBits();
 }
 
 template<typename T, size_t N, int M>
-void IntraSearch::xReduceHadCandList(static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const PredictionUnit &pu, const bool fastMip)
+void IntraSearch::xReduceHadCandList(static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const CodingUnit& cu, const bool fastMip)
 {
   const int maxCandPerType = numModesForFullRD >> 1;
   static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM> tempRdModeList;
@@ -2626,10 +2618,10 @@ void IntraSearch::xReduceHadCandList(static_vector<T, N>& candModeList, static_v
   }
   sortedPelBuffer.reduceTo( (int)tempRdModeList.size() );
 
-  if ((pu.lwidth() > 8 && pu.lheight() > 8))
+  if ((cu.lwidth() > 8 && cu.lheight() > 8))
   {
     // Sort MIP candidates by Hadamard cost
-    const int transpOff = getNumModesMip(pu.Y());
+    const int transpOff = getNumModesMip(cu.Y());
     static_vector<uint8_t, FAST_UDI_MAX_RDMODE_NUM> sortedMipModes(0);
     static_vector<double, FAST_UDI_MAX_RDMODE_NUM> sortedMipCost(0);
     for (uint8_t mode : { 0, 1, 2 })
@@ -2678,20 +2670,20 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
   PelBuf piPred    = cs.getPredBuf(COMP_Y);
   PelBuf piResi    = cs.getResiBuf(COMP_Y);
 
-  const PredictionUnit &pu = *cs.getPU(area.pos(), CH_L);
+  const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
   initIntraPatternChType(*tu.cu, area);
   if( predBuf )
   {
     piPred.copyFrom( predBuf->Y() );
   }
-  else if (PU::isMIP(pu, CH_L))
+  else if (CU::isMIP(cu, CH_L))
   {
-    initIntraMip(pu);
-    predIntraMip( piPred, pu);
+    initIntraMip(cu);
+    predIntraMip( piPred, cu);
   }
   else
   {
-    predIntraAng( COMP_Y, piPred, pu);
+    predIntraAng( COMP_Y, piPred, cu);
   }
 
   //===== get residual signal =====
@@ -2898,15 +2890,15 @@ int IntraSearch::xSpeedISP(int speed, bool& testISP, int mode, int& noISP, int& 
         }
       }
     }
-    if (cu.mipFlag || cu.pu->multiRefIdx)
+    if (cu.mipFlag || cu.multiRefIdx)
     {
       cu.mipFlag = false;
-      cu.pu->multiRefIdx = 0;
+      cu.multiRefIdx = 0;
       if (!stopFound)
       {
         for (int k = 0; k < mode; k++)
         {
-          if (cu.pu->intraDir[CH_L] == RdModeList[k].modeId)
+          if (cu.intraDir[CH_L] == RdModeList[k].modeId)
           {
             stopFound = true;
             break;
@@ -2920,7 +2912,7 @@ int IntraSearch::xSpeedISP(int speed, bool& testISP, int mode, int& noISP, int& 
       endISP = 0;
       return 1;
     }
-    if (!stopFound && (m_pcEncCfg->m_ISP >= 2) && (cu.pu->intraDir[CH_L] == DC_IDX))
+    if (!stopFound && (m_pcEncCfg->m_ISP >= 2) && (cu.intraDir[CH_L] == DC_IDX))
     {
       stopFound = true;
       endISP = 0;

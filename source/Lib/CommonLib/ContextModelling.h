@@ -451,8 +451,8 @@ struct MergeCtx
 {
   MergeCtx() : numValidMergeCand( 0 ), hasMergedCandList( false ) { for( unsigned i = 0; i < MRG_MAX_NUM_CANDS; i++ ) mrgTypeNeighbours[i] = MRG_TYPE_DEFAULT_N; }
 
-  void          setMmvdMergeCandiInfo ( PredictionUnit& pu, int candIdx) const;
-  void          setMergeInfo          ( PredictionUnit& pu, int candIdx) const;
+  void          setMmvdMergeCandiInfo ( CodingUnit& cu, int candIdx) const;
+  void          setMergeInfo          ( CodingUnit& cu, int candIdx) const;
 
   MvField       mvFieldNeighbours [ MRG_MAX_NUM_CANDS << 1 ]; // double length for mv of both lists
   uint8_t       BcwIdx            [ MRG_MAX_NUM_CANDS      ];
@@ -493,7 +493,7 @@ struct DeriveCtx
   inline static unsigned CtxQtCbf ( const ComponentID compID, const bool prevCbf = false, const int ispIdx = 0 )   { return ( ispIdx && isLuma( compID ) ) ? (2 + (int)prevCbf) : (((compID == COMP_Cr) && prevCbf) ? 1 : 0); }
   void     CtxSplit               ( const Partitioner& partitioner, unsigned& ctxSpl, unsigned& ctxQt, unsigned& ctxHv, unsigned& ctxHorBt, unsigned& ctxVerBt, const bool canSplit[6] ) const;
   unsigned CtxMipFlag             ( const CodingUnit& cu ) const;
-  unsigned CtxInterDir            ( const PredictionUnit& pu ) const { return ( 7 - ((Log2(pu.lumaSize().area()) + 1) >> 1) ); }
+  unsigned CtxInterDir            ( const CodingUnit& cu ) const { return ( 7 - ((Log2(cu.lumaSize().area()) + 1) >> 1) ); }
 
   unsigned CtxModeConsFlag() const
   {

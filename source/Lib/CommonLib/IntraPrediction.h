@@ -129,7 +129,7 @@ private:
 
   void xFillReferenceSamples      ( const CPelBuf& recoBuf,      Pel* refBufUnfiltered, const CompArea& area, const CodingUnit &cu );
   void xFilterReferenceSamples    ( const Pel* refBufUnfiltered, Pel* refBufFiltered, const CompArea& area, const SPS &sps, int multiRefIdx, int predStride = 0 );
-  void xGetLMParameters(const PredictionUnit &pu, const ComponentID compID, const CompArea& chromaArea, int& a, int& b, int& iShift);
+  void xGetLMParameters(const CodingUnit& cu, const ComponentID compID, const CompArea& chromaArea, int& a, int& b, int& iShift);
 
   void ( *IntraPredAngleLuma )    ( Pel* pDstBuf, const ptrdiff_t dstStride, Pel* refMain, int width, int height, int deltaPos, int intraPredAngle, const TFilterCoeff *ff, const bool useCubicFilter, const ClpRng& clpRng);
   void ( *IntraPredAngleChroma )  ( Pel* pDst,    const ptrdiff_t dstStride, Pel* pBorder, int width, int height, int deltaPos, int intraPredAngle);
@@ -151,15 +151,15 @@ public:
   void reset                  ();
   void destroy                ();
 
-  void initPredIntraParams    ( const PredictionUnit & pu,  const CompArea compArea, const SPS& sps );
+  void initPredIntraParams    ( const CodingUnit& cu,  const CompArea compArea, const SPS& sps );
 
   // Angular Intra
-  void predIntraAng           ( const ComponentID compId, PelBuf& piPred, const PredictionUnit &pu);
+  void predIntraAng           ( const ComponentID compId, PelBuf& piPred, const CodingUnit& cu);
   Pel* getPredictorPtr        ( const ComponentID compId ) { return m_refBuffer[compId][m_ipaParam.refFilterFlag ? PRED_BUF_FILTERED : PRED_BUF_UNFILTERED]; }
 
   // Cross-component Chroma
-  void predIntraChromaLM      ( const ComponentID compID, PelBuf& piPred, const PredictionUnit &pu, const CompArea& chromaArea, int intraDir);
-  void loadLMLumaRecPels      ( const PredictionUnit &pu, const CompArea& chromaArea );
+  void predIntraChromaLM      ( const ComponentID compID, PelBuf& piPred, const CodingUnit& cu, const CompArea& chromaArea, int intraDir);
+  void loadLMLumaRecPels      ( const CodingUnit& cu, const CompArea& chromaArea );
   /// set parameters from CU data for accessing intra data
   void initIntraPatternChType ( const CodingUnit &cu, const CompArea& area, const bool forceRefFilterFlag = false); // use forceRefFilterFlag to get both filtered and unfiltered buffers
 #if ISP_VVC
@@ -167,19 +167,19 @@ public:
 #endif
 
   // Matrix-based intra prediction
-  void initIntraMip           ( const PredictionUnit &pu);
-  void predIntraMip           ( PelBuf &piPred, const PredictionUnit &pu);
+  void initIntraMip           ( const CodingUnit& cu);
+  void predIntraMip           ( PelBuf &piPred, const CodingUnit& cu);
 
-  int getNumIntraCiip         ( const PredictionUnit& pu )
+  int getNumIntraCiip         ( const CodingUnit& cu )
   {
-    const Position posBL = pu.Y().bottomLeft();
-    const Position posTR = pu.Y().topRight();
-    const PredictionUnit *neigh0 = pu.cs->getPURestricted(posBL.offset(-1, 0), pu, CH_L);
-    const PredictionUnit *neigh1 = pu.cs->getPURestricted(posTR.offset(0, -1), pu, CH_L);
+    const Position posBL = cu.Y().bottomLeft();
+    const Position posTR = cu.Y().topRight();
+    const CodingUnit *neigh0 = cu.cs->getCURestricted(posBL.offset(-1, 0), cu, CH_L);
+    const CodingUnit *neigh1 = cu.cs->getCURestricted(posTR.offset(0, -1), cu, CH_L);
 
     int numIntra = 0;
-    numIntra += (neigh0 && (neigh0->cu->predMode == MODE_INTRA))?1:0;
-    numIntra += (neigh1 && (neigh1->cu->predMode == MODE_INTRA))?1:0;
+    numIntra += (neigh0 && (neigh0->predMode == MODE_INTRA))?1:0;
+    numIntra += (neigh1 && (neigh1->predMode == MODE_INTRA))?1:0;
 
     return numIntra;
   }
