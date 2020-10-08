@@ -10,6 +10,15 @@ tag 0.1.1.0
  - fullhelp changed: all internal encoding parameters are now shown as strings when --fullhelp is called.
 
 /////////////////////////////////////////
+tag 0.1.0.1
+
+* libvvenc:
+ - VVEnc::init() correctly initializes SIMD for transformation (TrafoX86) and sample operations (BufferX86).
+ 
+* vvencapp:
+ - Improved speed because of the bugfix to libvvenc.
+
+/////////////////////////////////////////
 tag 0.1.0.0
 
 * initial version
