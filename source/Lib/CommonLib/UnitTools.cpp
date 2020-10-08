@@ -1500,31 +1500,31 @@ bool CU::addAffineMVPCandUnscaled(const CodingUnit& cu, const RefPicList refPicL
   return false;
 }
 
-void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* puNeighbour, RefPicList refPicList, Mv rcMv[3])
+void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour, RefPicList refPicList, Mv rcMv[3])
 {
-  int posNeiX = puNeighbour->Y().pos().x;
-  int posNeiY = puNeighbour->Y().pos().y;
+  int posNeiX = cuNeighbour->Y().pos().x;
+  int posNeiY = cuNeighbour->Y().pos().y;
   int posCurX = cu.Y().pos().x;
   int posCurY = cu.Y().pos().y;
 
-  int neiW = puNeighbour->Y().width;
+  int neiW = cuNeighbour->Y().width;
   int curW = cu.Y().width;
-  int neiH = puNeighbour->Y().height;
+  int neiH = cuNeighbour->Y().height;
   int curH = cu.Y().height;
 
   Mv mvLT, mvRT, mvLB;
-  mvLT = puNeighbour->mvAffi[refPicList][0];
-  mvRT = puNeighbour->mvAffi[refPicList][1];
-  mvLB = puNeighbour->mvAffi[refPicList][2];
+  mvLT = cuNeighbour->mvAffi[refPicList][0];
+  mvRT = cuNeighbour->mvAffi[refPicList][1];
+  mvLB = cuNeighbour->mvAffi[refPicList][2];
 
   bool isTopCtuBoundary = false;
   if ((posNeiY + neiH) % cu.cs->sps->CTUSize == 0 && (posNeiY + neiH) == posCurY)
   {
     // use bottom-left and bottom-right sub-block MVs for inheritance
-    const Position posRB = puNeighbour->Y().bottomRight();
-    const Position posLB = puNeighbour->Y().bottomLeft();
-    mvLT = puNeighbour->getMotionInfo(posLB).mv[refPicList];
-    mvRT = puNeighbour->getMotionInfo(posRB).mv[refPicList];
+    const Position posRB = cuNeighbour->Y().bottomRight();
+    const Position posLB = cuNeighbour->Y().bottomLeft();
+    mvLT = cuNeighbour->getMotionInfo(posLB).mv[refPicList];
+    mvRT = cuNeighbour->getMotionInfo(posRB).mv[refPicList];
     posNeiY += neiH;
     isTopCtuBoundary = true;
   }
@@ -1534,7 +1534,7 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* puNeighbour,
 
   iDMvHorX = (mvRT - mvLT).hor << (shift - Log2(neiW));
   iDMvHorY = (mvRT - mvLT).ver << (shift - Log2(neiW));
-  if (puNeighbour->affineType == AFFINEMODEL_6PARAM && !isTopCtuBoundary)
+  if (cuNeighbour->affineType == AFFINEMODEL_6PARAM && !isTopCtuBoundary)
   {
     iDMvVerX = (mvLB - mvLT).hor << (shift - Log2(neiH));
     iDMvVerY = (mvLB - mvLT).ver << (shift - Log2(neiH));
@@ -2312,28 +2312,28 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
     {
       // derive Mv from Neigh affine PU
       Mv cMv[2][3];
-      const CodingUnit* puNeigh = npu[idx];
-      cu.affineType = puNeigh->affineType;
-      if (puNeigh->interDir != 2)
+      const CodingUnit* cuNeigh = npu[idx];
+      cu.affineType = cuNeigh->affineType;
+      if (cuNeigh->interDir != 2)
       {
-        xInheritedAffineMv(cu, puNeigh, REF_PIC_LIST_0, cMv[0]);
+        xInheritedAffineMv(cu, cuNeigh, REF_PIC_LIST_0, cMv[0]);
       }
       if (slice.isInterB())
       {
-        if (puNeigh->interDir != 1)
+        if (cuNeigh->interDir != 1)
         {
-          xInheritedAffineMv(cu, puNeigh, REF_PIC_LIST_1, cMv[1]);
+          xInheritedAffineMv(cu, cuNeigh, REF_PIC_LIST_1, cMv[1]);
         }
       }
 
       for (int mvNum = 0; mvNum < 3; mvNum++)
       {
-        affMrgCtx.mvFieldNeighbours[(affMrgCtx.numValidMergeCand << 1) + 0][mvNum].setMvField(cMv[0][mvNum], puNeigh->refIdx[0]);
-        affMrgCtx.mvFieldNeighbours[(affMrgCtx.numValidMergeCand << 1) + 1][mvNum].setMvField(cMv[1][mvNum], puNeigh->refIdx[1]);
+        affMrgCtx.mvFieldNeighbours[(affMrgCtx.numValidMergeCand << 1) + 0][mvNum].setMvField(cMv[0][mvNum], cuNeigh->refIdx[0]);
+        affMrgCtx.mvFieldNeighbours[(affMrgCtx.numValidMergeCand << 1) + 1][mvNum].setMvField(cMv[1][mvNum], cuNeigh->refIdx[1]);
       }
-      affMrgCtx.interDirNeighbours[affMrgCtx.numValidMergeCand] = puNeigh->interDir;
-      affMrgCtx.affineType[affMrgCtx.numValidMergeCand] = (EAffineModel)(puNeigh->affineType);
-      affMrgCtx.BcwIdx[affMrgCtx.numValidMergeCand] = puNeigh->BcwIdx;
+      affMrgCtx.interDirNeighbours[affMrgCtx.numValidMergeCand] = cuNeigh->interDir;
+      affMrgCtx.affineType[affMrgCtx.numValidMergeCand] = (EAffineModel)(cuNeigh->affineType);
+      affMrgCtx.BcwIdx[affMrgCtx.numValidMergeCand] = cuNeigh->BcwIdx;
 
       if (affMrgCtx.numValidMergeCand == mrgCandIdx)
       {
@@ -2360,13 +2360,13 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
       for (int i = 0; i < 3; i++)
       {
         const Position pos = posLT[i];
-        const CodingUnit* puNeigh = cs.getCURestricted(pos, cu, cu.chType);
+        const CodingUnit* cuNeigh = cs.getCURestricted(pos, cu, cu.chType);
 
-        if (puNeigh && CU::isInter(*puNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
+        if (cuNeigh && CU::isInter(*cuNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
         {
           isAvailable[0] = true;
-          mi[0] = puNeigh->getMotionInfo(pos);
-          neighBcw[0] = puNeigh->BcwIdx;
+          mi[0] = cuNeigh->getMotionInfo(pos);
+          neighBcw[0] = cuNeigh->BcwIdx;
           break;
         }
       }
@@ -2376,13 +2376,13 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
       for (int i = 0; i < 2; i++)
       {
         const Position pos = posRT[i];
-        const CodingUnit* puNeigh = cs.getCURestricted(pos, cu, cu.chType);
+        const CodingUnit* cuNeigh = cs.getCURestricted(pos, cu, cu.chType);
 
-        if (puNeigh && CU::isInter(*puNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
+        if (cuNeigh && CU::isInter(*cuNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
         {
           isAvailable[1] = true;
-          mi[1] = puNeigh->getMotionInfo(pos);
-          neighBcw[1] = puNeigh->BcwIdx;
+          mi[1] = cuNeigh->getMotionInfo(pos);
+          neighBcw[1] = cuNeigh->BcwIdx;
           break;
         }
       }
@@ -2392,12 +2392,12 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
       for (int i = 0; i < 2; i++)
       {
         const Position pos = posLB[i];
-        const CodingUnit* puNeigh = cs.getCURestricted(pos, cu, cu.chType);
+        const CodingUnit* cuNeigh = cs.getCURestricted(pos, cu, cu.chType);
 
-        if (puNeigh && CU::isInter(*puNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
+        if (cuNeigh && CU::isInter(*cuNeigh) && CU::isDiffMER(cu.lumaPos(), pos, plevel))
         {
           isAvailable[2] = true;
-          mi[2] = puNeigh->getMotionInfo(pos);
+          mi[2] = cuNeigh->getMotionInfo(pos);
           break;
         }
       }
