@@ -40,114 +40,13 @@ www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
 
-// Microsoft Visual C++ generated resource script.
-//
-#pragma code_page(65001)
+#if !defined( resource_version_h )
+#  define resource_version_h
 
-#include "resource.h"
-#include "resource_version.h"
+// pick up top level version information.
+#  include "vvenc/version.h"
 
-#define APSTUDIO_READONLY_SYMBOLS
-/////////////////////////////////////////////////////////////////////////////
-//
-// Generated from the TEXTINCLUDE 2 resource.
-//
-#include "winres.h"
+#  define VS_FILE_VERSION VVENC_VS_VERSION
+#  define VS_FILE_VERSION_STR VVENC_VS_VERSION_STR
 
-/////////////////////////////////////////////////////////////////////////////
-#undef APSTUDIO_READONLY_SYMBOLS
-
-/////////////////////////////////////////////////////////////////////////////
-// Neutral (Default) (unknown sub-lang: 0x8) resources
-
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ZZZ)
-LANGUAGE LANG_NEUTRAL, 0x8
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// Version
-//
-
-VS_VERSION_INFO VERSIONINFO
- FILEVERSION VS_FILE_VERSION
- PRODUCTVERSION VS_FILE_VERSION
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
-#else
- FILEFLAGS 0x0L
 #endif
- FILEOS 0x40004L
- FILETYPE 0x1L
- FILESUBTYPE 0x0L
-BEGIN
-    BLOCK "StringFileInfo"
-    BEGIN
-        BLOCK "200004b0"
-        BEGIN
-            VALUE "CompanyName", "Fraunhofer Heinrich Hertz Institute"
-            VALUE "FileDescription", "vvenclibtest Application"
-            VALUE "FileVersion", VS_FILE_VERSION_STR
-            VALUE "InternalName", "vvenclibtest.exe"
-            VALUE "LegalCopyright", "(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
-            VALUE "OriginalFilename", "vvenclibtest.exe"
-            VALUE "ProductName", "vvenclibtest"
-            VALUE "ProductVersion", VS_FILE_VERSION_STR
-        END
-    END
-    BLOCK "VarFileInfo"
-    BEGIN
-        VALUE "Translation", 0x2000, 1200
-    END
-END
-
-#endif    // Neutral (Default) (unknown sub-lang: 0x8) resources
-/////////////////////////////////////////////////////////////////////////////
-
-
-/////////////////////////////////////////////////////////////////////////////
-// English (United States) resources
-
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-
-#ifdef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// TEXTINCLUDE
-//
-
-1 TEXTINCLUDE 
-BEGIN
-    "resource.h\0"
-END
-
-2 TEXTINCLUDE 
-BEGIN
-    "#include ""winres.h""\r\n"
-    "\0"
-END
-
-3 TEXTINCLUDE 
-BEGIN
-    "\r\n"
-    "\0"
-END
-
-#endif    // APSTUDIO_INVOKED
-
-#endif    // English (United States) resources
-/////////////////////////////////////////////////////////////////////////////
-
-
-
-#ifndef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// Generated from the TEXTINCLUDE 3 resource.
-//
-
-
-/////////////////////////////////////////////////////////////////////////////
-#endif    // not APSTUDIO_INVOKED
-
