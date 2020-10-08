@@ -92,6 +92,10 @@ int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
     return iRet;
   }
 
+  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
+  std::string simdOpt;
+  vvenc::setSIMDExtension( simdOpt );
+
   return VVENC_OK;
 }
 

@@ -57,9 +57,9 @@ struct TCoeffOps
 {
   TCoeffOps();
 
-  void initTCoeffOps();
+  void initTCoeffOpsX86();
   template<X86_VEXT vext>
-  void _initTCoeffOps();
+  void _initTCoeffOpsX86();
 
   void( *cpyResi8 )       ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
   void( *cpyResi4 )       ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
