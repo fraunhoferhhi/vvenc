@@ -224,6 +224,10 @@ void Picture::destroy()
 
 void Picture::createTempBuffers( unsigned _maxCUSize )
 {
+#if ISP_VVC
+  UnitArea m_ctuArea = UnitArea(cs->sps->chromaFormatIdc, Area(Position{ 0, 0 }, Size(_maxCUSize, _maxCUSize)));
+  m_bufs[PIC_PREDICTION].create(chromaFormat, m_ctuArea.Y(), _maxCUSize);
+#endif
   if( cs ) cs->rebindPicBufs();
 }
 
