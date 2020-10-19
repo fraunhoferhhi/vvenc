@@ -42,13 +42,18 @@ set( VVENC_ENABLE_BUILD_TYPE_POSTFIX OFF CACHE BOOL "Enable or disable build typ
 
 if( VVENC_ENABLE_BUILD_TYPE_POSTFIX )
   if( BUILD_SHARED_LIBS )
-    set( VVENC_BUILD_TYPE_POSTFIX "-s" )
+    # set postfixes for shared libraries
+    set( CMAKE_RELEASE_POSTFIX        "-s"   CACHE STRING "Set release library postfix" )
+    set( CMAKE_DEBUG_POSTFIX          "-ds"  CACHE STRING "Set debug library postfix" )
+    set( CMAKE_RELWITHDEBINFO_POSTFIX "-rds" CACHE STRING "Set relwithdebinfo library postfix" )
+    set( CMAKE_MINSIZEREL_POSTFIX     "-mrs" CACHE STRING "Set minsizerel library postfix" )
+  else()
+    # set postfixes for static libraries
+    set( CMAKE_RELEASE_POSTFIX        ""     CACHE STRING "Set release library postfix" )
+    set( CMAKE_DEBUG_POSTFIX          "-d"   CACHE STRING "Set debug library postfix" )
+    set( CMAKE_RELWITHDEBINFO_POSTFIX "-rd"  CACHE STRING "Set relwithdebinfo library postfix" )
+    set( CMAKE_MINSIZEREL_POSTFIX     "-mr"  CACHE STRING "Set minsizerel library postfix" )
   endif()
-  # set postfixes for libraries
-  set( CMAKE_RELEASE_POSTFIX        "${VVENC_BUILD_TYPE_POSTFIX}"    CACHE STRING "Set release library postfix" )
-  set( CMAKE_DEBUG_POSTFIX          "-d${VVENC_BUILD_TYPE_POSTFIX}"  CACHE STRING "Set debug library postfix" )
-  set( CMAKE_RELWITHDEBINFO_POSTFIX "-rd${VVENC_BUILD_TYPE_POSTFIX}" CACHE STRING "Set relwithdebinfo library postfix" )
-  set( CMAKE_MINSIZEREL_POSTFIX     "-mr${VVENC_BUILD_TYPE_POSTFIX}" CACHE STRING "Set minsizerel library postfix" )
 endif()
 
 # set VVENC_OUTPUT_DIR_POSTFIX
