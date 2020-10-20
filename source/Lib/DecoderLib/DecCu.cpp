@@ -157,12 +157,10 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   //===== init availability pattern =====
   CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
 #if ISP_VVC
-  bool predRegDiffFromTB = false;
-  bool firstTBInPredReg  = false;
+  bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu);
+  bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, area);
   if (tu.cu->ispMode && isLuma(compID))
   {
-    bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu);
-    bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, area);
     if (predRegDiffFromTB)
     {
       if (firstTBInPredReg)
