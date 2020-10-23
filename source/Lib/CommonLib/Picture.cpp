@@ -187,6 +187,9 @@ void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _ma
   if( _decoder )
   {
     m_bufs[ PIC_RESIDUAL ].create( _chromaFormat, Area( 0, 0, _maxCUSize, _maxCUSize ) );
+#if ISP_VVC
+    m_bufs[PIC_PREDICTION].create( _chromaFormat, Area( 0, 0, _maxCUSize, _maxCUSize ) );
+#endif
   }
   else
   {
