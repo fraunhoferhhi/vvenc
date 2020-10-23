@@ -442,7 +442,7 @@ void EncRCGOP::create( EncRCSeq* encRCSeq, int numPic )
       lambdaRatio[ 14 ] = lambdaLev5 / lambdaLev1;
       lambdaRatio[ 15 ] = lambdaLev5 / lambdaLev1;
     }
-    else if ( encRCSeq->adaptiveBits == 2 && encRCSeq->gopSize == 32 )
+    else if ( encRCSeq->adaptiveBits == 2 && encRCSeq->gopSize == 32 ) // for GOP size = 32, random access case
     {
       const double qdfParaLev2A = 0.7534;
       const double qdfParaLev2B = -0.0303;
@@ -511,7 +511,6 @@ void EncRCGOP::create( EncRCSeq* encRCSeq, int numPic )
       lambdaRatio[ 29 ] = lambdaLev5 / lambdaLev1;
       lambdaRatio[ 30 ] = lambdaLev6 / lambdaLev1;
       lambdaRatio[ 31 ] = lambdaLev6 / lambdaLev1;
-
     }
 
     xCalEquaCoeff( encRCSeq, lambdaRatio, equaCoeffA, equaCoeffB, encRCSeq->gopSize );
