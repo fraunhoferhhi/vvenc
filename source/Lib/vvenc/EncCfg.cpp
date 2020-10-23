@@ -536,7 +536,6 @@ bool EncCfg::initCfgParameter()
 
   confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode");
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode > 1 && m_GOPSize == 32, "Rate control is currently not supported for GOP size 32" );
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
   confirmParameter(!((m_level==Level::LEVEL1) 
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)

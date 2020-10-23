@@ -129,9 +129,6 @@ namespace vvenc {
     int             numberOfLevel;
     int64_t         targetBits;
     int64_t         bitsLeft;
-    double          seqTargetBpp;
-    double          alphaUpdate;
-    double          betaUpdate;
   };
 
   class EncRCGOP
