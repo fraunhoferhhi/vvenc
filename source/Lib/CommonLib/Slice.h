@@ -1130,7 +1130,7 @@ struct PicHeader
     deblockingFilterBetaOffsetDiv2[COMP_Cr]       = 0;
     deblockingFilterTcOffsetDiv2[COMP_Cr]         = 0;
     lmcsEnabled                                   = 0;
-    lmcsApsId                                     = -1;
+    lmcsApsId                                     = 0;
     lmcsAps                                       = nullptr;
     lmcsChromaResidualScale                       = 0;
     explicitScalingListEnabled                    = 0;
