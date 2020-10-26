@@ -1348,7 +1348,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 #if ISP_VVC
   bool NSTOP_CHECK = true;
 #endif
-  if( tempCS->area.chromaFormat != CHROMA_400 && ( partitioner.chType == CH_C || !cu.isSepTree() ) )
+  if( tempCS->area.chromaFormat != CHROMA_400 && ( partitioner.chType == CH_C || !CU::isSepTree(cu) ) )
   {
 #if ISP_VVC
     bool useIntraSubPartitions = false;
@@ -1359,7 +1359,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
       maxCostAllowedForChroma = bestCS->cost < MAX_DOUBLE ? bestCS->cost - tempCS->lumaCost : MAX_DOUBLE;
     }
     m_cIntraSearch.estIntraPredChromaQT(
-      cu, (!useIntraSubPartitions || (cu.isSepTree() && !isLuma(CH_C))) ? partitioner : subTuPartitioner,
+      cu, (!useIntraSubPartitions || (CU::isSepTree(cu) && !isLuma(CH_C))) ? partitioner : subTuPartitioner,
       maxCostAllowedForChroma);
     if ((m_pcEncCfg->m_ISP >= 3) && useIntraSubPartitions && !cu.ispMode)
     {
@@ -1615,7 +1615,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     Size bufSize = g_miScaling.scale(tempCS->area.lumaSize());
     mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
   }
-  Mv   refinedMvdL0[MRG_MAX_NUM_CANDS][MAX_NUM_SUBCU_DMVR];
 
   m_mergeBestSATDCost = MAX_DOUBLE;
 
@@ -1738,6 +1737,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         }
       }
 
+      Mv* cu_mvdL0SubPuBackup = cu.mvdL0SubPu; //we have to restore this later
       for( uint32_t uiMergeCand = 0; uiMergeCand < mergeCtx.numValidMergeCand; uiMergeCand++ )
       {
         if (sameMV[uiMergeCand])
@@ -1748,6 +1748,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
         CU::spanMotionInfo( cu, mergeCtx );
         cu.mvRefine = true;
+        cu.mvdL0SubPu = m_refinedMvdL0[uiMergeCand]; // set an alternative storage for sub mvs
         bool BioOrDmvr = m_cInterSearch.motionCompensation(cu, m_SortedPelUnitBufs.getTestBuf(), REF_PIC_LIST_X);
         cu.mvRefine = false;
 
@@ -1755,20 +1756,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         {
           mergeCtx.mvFieldNeighbours[2*uiMergeCand].mv   = cu.mv[0];
           mergeCtx.mvFieldNeighbours[2*uiMergeCand+1].mv = cu.mv[1];
-          {
-            if (CU::checkDMVRCondition(cu))
-            {
-              int num = 0;
-              for (int i = 0; i < (cu.lumaSize().height); i += DMVR_SUBCU_SIZE)
-              {
-                for (int j = 0; j < (cu.lumaSize().width); j += DMVR_SUBCU_SIZE)
-                {
-                  refinedMvdL0[uiMergeCand][num] = cu.mvdL0SubPu[num];
-                  num++;
-                }
-              }
-            }
-          }
         }
         distParam.cur.buf = m_SortedPelUnitBufs.getTestBuf().Y().buf;
 
@@ -1788,7 +1775,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         }
       }
 
-
+      cu.mvdL0SubPu = cu_mvdL0SubPuBackup; // restore original stoarge
       if (testCIIP)
       {
         unsigned numCiipInitialCand = std::min(NUM_MRG_SATD_CAND-1+numCiiPExtraTests, (const int)RdModeList.size());
@@ -2116,11 +2103,11 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           if( CU::checkDMVRCondition( cu ) )
           {
             int num = 0;
-            for( int i = 0; i < ( cu.lumaSize().height ); i += DMVR_SUBCU_SIZE )
+            for( int i = 0; i < ( cu.lheight() ); i += DMVR_SUBCU_SIZE )
             {
-              for( int j = 0; j < ( cu.lumaSize().width ); j += DMVR_SUBCU_SIZE )
+              for( int j = 0; j < ( cu.lwidth() ); j += DMVR_SUBCU_SIZE )
               {
-                cu.mvdL0SubPu[num] = refinedMvdL0[uiMergeCand][num];
+                cu.mvdL0SubPu[num] = m_refinedMvdL0[uiMergeCand][num];
                 num++;
               }
             }
@@ -2850,8 +2837,8 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     return;
   }
 
-  ComponentID compStr = ( cu->isSepTree() && !isLuma( partitioner.chType ) ) ? COMP_Cb : COMP_Y;
-  ComponentID compEnd = ( cu->isSepTree() &&  isLuma( partitioner.chType ) ) ? COMP_Y : COMP_Cr;
+  ComponentID compStr = ( CU::isSepTree(*cu) && !isLuma( partitioner.chType ) ) ? COMP_Cb : COMP_Y;
+  ComponentID compEnd = ( CU::isSepTree(*cu) &&  isLuma( partitioner.chType ) ) ? COMP_Y : COMP_Cr;
   const UnitArea currCsArea = clipArea( CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ), *cs.picture );
 
   PelStorage&  picDbBuf = m_dbBuffer; //th we could reduce the buffer size and do some relocate
@@ -2940,9 +2927,9 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     }
   }
 
-  ChannelType dbChType = cu->isSepTree() ? partitioner.chType : MAX_NUM_CH;
+  ChannelType dbChType = CU::isSepTree(*cu) ? partitioner.chType : MAX_NUM_CH;
 
-  CHECK( cu->isSepTree() && !cu->Y().valid() && partitioner.chType == CH_L, "xxx" );
+  CHECK( CU::isSepTree(*cu) && !cu->Y().valid() && partitioner.chType == CH_L, "xxx" );
 
   //deblock
   if( leftEdgeAvai )
@@ -3155,7 +3142,7 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
   bool       doPreAnalyzeResi  = false;
   const bool mtsAllowed        = tempCS->sps->MTSInter && partitioner.currArea().lwidth() <= MTS_INTER_MAX_CU_SIZE && partitioner.currArea().lheight() <= MTS_INTER_MAX_CU_SIZE;
 
-  uint8_t sbtAllowed = cu->checkAllowedSbt();
+  uint8_t sbtAllowed = CU::checkAllowedSbt(*cu);
   if( tempCS->pps->picWidthInLumaSamples < (uint32_t)SBT_FAST64_WIDTH_THRESHOLD || m_pcEncCfg->m_SBT>1)
   {
     sbtAllowed = ((cu->lwidth() > 32 || cu->lheight() > 32)) ? 0 : sbtAllowed;

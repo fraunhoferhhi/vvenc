@@ -470,6 +470,13 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
 
   uint32_t idx = ++m_numCUs;
   cu->idx  = idx;
+  cu->mvdL0SubPu = nullptr;
+  if( isLuma( chType ) && unit.lheight() >= 8 && unit.lwidth()  >= 8 && unit.Y().area() >= 128 )
+  {
+    CHECKD( m_dmvrMvCacheOffset >= m_dmvrMvCache.size(), "dmvr cache offset out of bounds" )
+    cu->mvdL0SubPu       = &m_dmvrMvCache[m_dmvrMvCacheOffset];
+    m_dmvrMvCacheOffset += std::max<int>( 1, unit.lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, unit.lheight() >> DMVR_SUBCU_SIZE_LOG2 );
+  }
 
   uint32_t numCh = getNumberValidChannels( area.chromaFormat );
 
@@ -800,10 +807,10 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
     m_isDecomp[i] = _area > 0 ? new bool           [_area] : nullptr;
   }
 
-    for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
-    {
+  for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
+  {
     m_lfParam[i] = ( isTopLayer && m_mapSize[0].area() > 0 ) ? ( LoopFilterParam* ) xMalloc( LoopFilterParam, m_mapSize[0].area() ) : nullptr;
-    }
+  }
 
   numCh = getNumberValidComponents(area.chromaFormat);
 
@@ -823,6 +830,10 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
 
   unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
   m_motionBuf       = new MotionInfo[_lumaAreaScaled];
+
+  unsigned _maxNumDmvrMvs = ( area.lwidth() >> 3 ) * ( area.lheight() >> 3 );
+  m_dmvrMvCache.resize( _maxNumDmvrMvs );
+
   initStructData();
 }
 
@@ -1133,6 +1144,8 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
   {
     getMotionBuf()      .memset( 0 );
   }
+
+  m_dmvrMvCacheOffset = 0;
 
   fracBits      = 0;
   dist          = 0;

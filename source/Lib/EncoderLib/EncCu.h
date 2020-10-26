@@ -192,6 +192,8 @@ private:
   double                m_mergeBestSATDCost;
 
   MotionInfo            m_subPuMiBuf[(MAX_CU_SIZE * MAX_CU_SIZE) >> (MIN_CU_LOG2 << 1)];
+  
+  Mv                    m_refinedMvdL0[MRG_MAX_NUM_CANDS][MAX_NUM_SUBCU_DMVR];
 
   double                m_sbtCostSave[2];
   // thread stuff

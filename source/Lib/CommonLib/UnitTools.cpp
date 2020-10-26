@@ -126,6 +126,110 @@ void CS::setRefinedMotionField(CodingStructure &cs)
 }
 // CU tools
 
+bool CU::checkCCLMAllowed(const CodingUnit& cu) 
+{
+  bool allowCCLM = false;
+
+  if( !CS::isDualITree( *cu.cs ) ) //single tree I slice or non-I slice (Note: judging chType is no longer equivalent to checking dual-tree I slice since the local dual-tree is introduced)
+  {
+    allowCCLM = true;
+  }
+  else if( cu.slice->sps->CTUSize <= 32 ) //dual tree, CTUsize < 64
+  {
+    allowCCLM = true;
+  }
+  else //dual tree, CTU size 64 or 128
+  {
+    int depthFor64x64Node = cu.slice->sps->CTUSize == 128 ? 1 : 0;
+    const PartSplit cuSplitTypeDepth1 = CU::getSplitAtDepth( cu, depthFor64x64Node );
+    const PartSplit cuSplitTypeDepth2 = CU::getSplitAtDepth( cu, depthFor64x64Node + 1 );
+
+    //allow CCLM if 64x64 chroma tree node uses QT split or HBT+VBT split combination
+    if( cuSplitTypeDepth1 == CU_QUAD_SPLIT || (cuSplitTypeDepth1 == CU_HORZ_SPLIT && cuSplitTypeDepth2 == CU_VERT_SPLIT) )
+    {
+      if( cu.chromaFormat == CHROMA_420 )
+      {
+        CHECK( !(cu.blocks[COMP_Cb].width <= 16 && cu.blocks[COMP_Cb].height <= 16), "chroma cu size shall be <= 16x16 for YUV420 format" );
+      }
+      allowCCLM = true;
+    }
+    //allow CCLM if 64x64 chroma tree node uses NS (No Split) and becomes a chroma CU containing 32x32 chroma blocks
+    else if( cuSplitTypeDepth1 == CU_DONT_SPLIT )
+    {
+      if( cu.chromaFormat == CHROMA_420 )
+      {
+        CHECK( !(cu.blocks[COMP_Cb].width == 32 && cu.blocks[COMP_Cb].height == 32), "chroma cu size shall be 32x32 for YUV420 format" );
+      }
+      allowCCLM = true;
+    }
+    //allow CCLM if 64x32 chroma tree node uses NS and becomes a chroma CU containing 32x16 chroma blocks
+    else if( cuSplitTypeDepth1 == CU_HORZ_SPLIT && cuSplitTypeDepth2 == CU_DONT_SPLIT )
+    {
+      if( cu.chromaFormat == CHROMA_420 )
+      {
+        CHECK( !(cu.blocks[COMP_Cb].width == 32 && cu.blocks[COMP_Cb].height == 16), "chroma cu size shall be 32x16 for YUV420 format" );
+      }
+      allowCCLM = true;
+    }
+
+    //further check luma conditions
+    if( allowCCLM )
+    {
+      //disallow CCLM if luma 64x64 block uses BT or TT or NS with ISP
+      const Position lumaRefPos( cu.chromaPos().x << getComponentScaleX( COMP_Cb, cu.chromaFormat ), cu.chromaPos().y << getComponentScaleY( COMP_Cb, cu.chromaFormat ) );
+      const CodingUnit* colLumaCu = cu.cs->refCS->getCU( lumaRefPos, CH_L, TREE_D );
+
+      if( colLumaCu->lwidth() < 64 || colLumaCu->lheight() < 64 ) //further split at 64x64 luma node
+      {
+        const PartSplit cuSplitTypeDepth1Luma = CU::getSplitAtDepth( *colLumaCu, depthFor64x64Node );
+        CHECK( !(cuSplitTypeDepth1Luma >= CU_QUAD_SPLIT && cuSplitTypeDepth1Luma <= CU_TRIV_SPLIT), "split mode shall be BT, TT or QT" );
+        if( cuSplitTypeDepth1Luma != CU_QUAD_SPLIT )
+        {
+          allowCCLM = false;
+        }
+      }
+      else if( colLumaCu->lwidth() == 64 && colLumaCu->lheight() == 64 && colLumaCu->ispMode ) //not split at 64x64 luma node and use ISP mode
+      {
+        allowCCLM = false;
+      }
+    }
+  }
+
+  return allowCCLM;
+}
+
+uint8_t CU::checkAllowedSbt(const CodingUnit& cu) 
+{
+  if( !cu.slice->sps->SBT || cu.predMode != MODE_INTER || cu.ciip)
+  {
+    return 0;
+  }
+
+  const int cuWidth  = cu.lwidth();
+  const int cuHeight = cu.lheight();
+
+  //parameter
+  const int maxSbtCUSize = cu.cs->sps->getMaxTbSize();
+
+  //check on size
+  if( cuWidth > maxSbtCUSize || cuHeight > maxSbtCUSize )
+  {
+    return 0;
+  }
+
+  const int minSbtCUSize  = 1 << ( MIN_CU_LOG2 + 1 );
+  const int minQuadCUSize = 1 << ( MIN_CU_LOG2 + 2 );
+
+  uint8_t sbtAllowed = 0;
+  if( cuWidth  >= minSbtCUSize )  sbtAllowed += 1 << SBT_VER_HALF;
+  if( cuHeight >= minSbtCUSize )  sbtAllowed += 1 << SBT_HOR_HALF;
+  if( cuWidth  >= minQuadCUSize ) sbtAllowed += 1 << SBT_VER_QUAD;
+  if( cuHeight >= minQuadCUSize ) sbtAllowed += 1 << SBT_HOR_QUAD;
+
+  return sbtAllowed;
+}
+
+
 bool CU::getRprScaling( const SPS* sps, const PPS* curPPS, Picture* refPic, int& xScale, int& yScale )
 {
   const Window& curScalingWindow = curPPS->scalingWindow;
@@ -168,7 +272,7 @@ bool CU::isSameCtu(const CodingUnit& cu, const CodingUnit& cu2)
 
 bool CU::isLastSubCUOfCtu( const CodingUnit &cu )
 {
-  const Area cuAreaY = cu.isSepTree() ? Area( recalcPosition( cu.chromaFormat, cu.chType, CH_L, cu.blocks[cu.chType].pos() ), recalcSize( cu.chromaFormat, cu.chType, CH_L, cu.blocks[cu.chType].size() ) ) : (const Area&)cu.Y();
+  const Area cuAreaY = CU::isSepTree(cu) ? Area( recalcPosition( cu.chromaFormat, cu.chType, CH_L, cu.blocks[cu.chType].pos() ), recalcSize( cu.chromaFormat, cu.chType, CH_L, cu.blocks[cu.chType].size() ) ) : (const Area&)cu.Y();
 
   return ( ( ( ( cuAreaY.x + cuAreaY.width  ) & cu.cs->pcv->maxCUSizeMask ) == 0 || cuAreaY.x + cuAreaY.width  == cu.cs->pcv->lumaWidth  ) &&
            ( ( ( cuAreaY.y + cuAreaY.height ) & cu.cs->pcv->maxCUSizeMask ) == 0 || cuAreaY.y + cuAreaY.height == cu.cs->pcv->lumaHeight ) );
@@ -511,7 +615,7 @@ bool CU::isMIP(const CodingUnit& cu, const ChannelType chType)
 
 bool CU::isDMChromaMIP(const CodingUnit& cu)
 {
-  return !cu.isSepTree() && (cu.chromaFormat == CHROMA_444) && getCoLocatedLumaPU(cu).mipFlag;
+  return !CU::isSepTree(cu) && (cu.chromaFormat == CHROMA_444) && getCoLocatedLumaPU(cu).mipFlag;
 }
 
 
@@ -565,7 +669,7 @@ bool CU::isLMCMode(unsigned mode)
 
 bool CU::isLMCModeEnabled(const CodingUnit& cu, unsigned mode)
 {
-  return ( cu.cs->sps->LMChroma && cu.checkCCLMAllowed() );
+  return ( cu.cs->sps->LMChroma && CU::checkCCLMAllowed(cu) );
 }
 
 int CU::getLMSymbolList(const CodingUnit& cu, int *modeList)
@@ -598,7 +702,7 @@ const CodingUnit& CU::getCoLocatedLumaPU(const CodingUnit& cu)
   Position              topLeftPos = cu.blocks[cu.chType].lumaPos();
   Position              refPos     = topLeftPos.offset(cu.blocks[cu.chType].lumaSize().width  >> 1,
                                                        cu.blocks[cu.chType].lumaSize().height >> 1);
-  const CodingUnit& lumaCU     = cu.isSepTree() ? *cu.cs->refCS->getCU(refPos, CH_L, TREE_D)
+  const CodingUnit& lumaCU     = CU::isSepTree(cu) ? *cu.cs->refCS->getCU(refPos, CH_L, TREE_D)
                                                 : *cu.cs->getCU(topLeftPos, CH_L, TREE_D);
 
   return lumaCU;

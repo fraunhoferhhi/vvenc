@@ -298,13 +298,15 @@ public:
 };
 
 struct BestEncodingInfo
-{
-  CodingUnit     cu;
-  TransformUnit  tu;
-  EncTestMode    testMode;
-  int            poc;
-  Distortion     dist;
-  double         costEDO;
+{ 
+  BestEncodingInfo( int dmvrSize ) { dmvrMvdBuffer.resize(dmvrSize); }
+  CodingUnit      cu;
+  TransformUnit   tu;
+  EncTestMode     testMode;
+  int             poc;
+  Distortion      dist;
+  double          costEDO;
+  std::vector<Mv> dmvrMvdBuffer;
 };
 
 class BestEncInfoCache
