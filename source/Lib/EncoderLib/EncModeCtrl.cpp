@@ -722,8 +722,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
     if( cuWidth == cuHeight && condIntraInter && split != CU_QUAD_SPLIT )
     {
-      const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
-
       double horVal = cuECtx.grad_horVal;
       double verVal = cuECtx.grad_verVal;
       double dupVal = cuECtx.grad_dupVal;
