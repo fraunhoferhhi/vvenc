@@ -67,6 +67,11 @@ namespace CS
 // CU tools
 namespace CU
 {
+  inline bool isSepTree                 (const CodingUnit &cu)                          { return cu.treeType != TREE_D || CS::isDualITree( *cu.cs ); }
+  inline bool isLocalSepTree            (const CodingUnit &cu)                          { return cu.treeType != TREE_D && !CS::isDualITree(*cu.cs); }
+  inline bool isConsInter               (const CodingUnit &cu)                          { return cu.modeType == MODE_TYPE_INTER; }
+  inline bool isConsIntra               (const CodingUnit &cu)                          { return cu.modeType == MODE_TYPE_INTRA; }
+
   inline bool isIntra                   (const CodingUnit &cu)                          { return cu.predMode == MODE_INTRA; }
   inline bool isInter                   (const CodingUnit &cu)                          { return cu.predMode == MODE_INTER; }
   inline bool isIBC                     (const CodingUnit &cu)                          { return cu.predMode == MODE_IBC; }
@@ -76,6 +81,8 @@ namespace CU
   inline bool isSameTile                (const CodingUnit& cu, const CodingUnit& cu2)   { return cu.tileIdx == cu2.tileIdx; }
   inline bool isSameSliceAndTile        (const CodingUnit& cu, const CodingUnit& cu2)   { return ( cu.slice->independentSliceIdx == cu2.slice->independentSliceIdx ) && ( cu.tileIdx == cu2.tileIdx ); }
 
+  uint8_t   checkAllowedSbt             (const CodingUnit &cu);
+  bool      checkCCLMAllowed            (const CodingUnit &cu);
   bool      isSameCtu                   (const CodingUnit &cu, const CodingUnit &cu2);
   bool      isSameSubPic                (const CodingUnit &cu, const CodingUnit &cu2);
   bool      isLastSubCUOfCtu            (const CodingUnit &cu);

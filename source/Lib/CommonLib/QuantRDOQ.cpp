@@ -599,7 +599,7 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
   const bool   isTransformSkip    = tu.mtsIdx[compID]==MTS_SKIP;
   const double *const pdErrScale  = xGetErrScaleCoeffSL(scalingListType, uiLog2BlockWidth, uiLog2BlockHeight, cQP.rem(isTransformSkip));
   const int    *const piQCoef     = getQuantCoeff(scalingListType, cQP.rem(isTransformSkip), uiLog2BlockWidth, uiLog2BlockHeight);
-  const bool isLfnstApplied       = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+  const bool isLfnstApplied       = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
   const bool enableScalingLists   = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
   const int    defaultQuantisationCoefficient = g_quantScales[ needSqrtAdjustment ?1:0][cQP.rem(isTransformSkip)];
   const double defaultErrorScale              = xGetErrScaleCoeffNoScalingList(scalingListType, uiLog2BlockWidth, uiLog2BlockHeight, cQP.rem(isTransformSkip));

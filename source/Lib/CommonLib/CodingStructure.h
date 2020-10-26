@@ -197,9 +197,9 @@ private:
   // needed for TU encoding
   bool m_isTuEnc;
 
-  CodingUnit      **m_cuPtr   [MAX_NUM_CH];
-  TransformUnit   **m_tuPtr   [MAX_NUM_CH];
-  bool             *m_isDecomp[MAX_NUM_CH];
+  CodingUnit**      m_cuPtr   [MAX_NUM_CH];
+  TransformUnit**   m_tuPtr   [MAX_NUM_CH];
+  bool*             m_isDecomp[MAX_NUM_CH];
 
   unsigned m_numCUs;
   unsigned m_numTUs;
@@ -210,23 +210,26 @@ private:
 
   std::vector<SAOBlkParam> m_sao;
 
-  PelStorage m_pred;
-  PelStorage m_resi;
-  PelStorage m_reco;
-  PelStorage m_rspreco;
+  PelStorage  m_pred;
+  PelStorage  m_resi;
+  PelStorage  m_reco;
+  PelStorage  m_rspreco;
   PelStorage* m_org;
   PelStorage* m_rsporg;
 
-  TCoeff *m_coeffs [MAX_NUM_COMP];
-  Pel    *m_pcmbuf [MAX_NUM_COMP];
-  bool   *m_runType[MAX_NUM_CH];
+  TCoeff* m_coeffs [MAX_NUM_COMP];
+  Pel*    m_pcmbuf [MAX_NUM_COMP];
+  bool*   m_runType[MAX_NUM_CH];
   int     m_offsets[MAX_NUM_COMP];
 
-  MotionInfo *m_motionBuf;
+  std::vector<Mv>   m_dmvrMvCache;
+  int               m_dmvrMvCacheOffset;
 
-  LoopFilterParam *m_lfParam[NUM_EDGE_DIR];
+  MotionInfo*       m_motionBuf;
 
-  Size             m_mapSize[MAX_NUM_CH];
+  LoopFilterParam*  m_lfParam[NUM_EDGE_DIR];
+
+  Size              m_mapSize[MAX_NUM_CH];
 
 
 public:

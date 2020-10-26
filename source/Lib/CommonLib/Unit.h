@@ -293,37 +293,37 @@ class  CodingStructure;
 
 struct IntraPredictionData
 {
-  uint32_t  intraDir[MAX_NUM_CH];
-  int       multiRefIdx;
-  bool      mipTransposedFlag;
+  uint8_t  intraDir[MAX_NUM_CH];
+  uint8_t  multiRefIdx;
+  bool     mipTransposedFlag;
 };
 
 struct InterPredictionData
 {
-  InterPredictionData() : mvdL0SubPu(mvdL0SubPuBuffer) {}
+  InterPredictionData() : mvdL0SubPu(nullptr) {}
+
   bool        mergeFlag;
   bool        regularMergeFlag;
   bool        ciip;
   bool        mvRefine;
+  bool        mmvdMergeFlag;
   uint8_t     mergeIdx;
   uint8_t     geoSplitDir;
   uint8_t     geoMergeIdx0;
   uint8_t     geoMergeIdx1;
-  uint32_t    mmvdMergeIdx;
-  bool        mmvdMergeFlag;
   uint8_t     interDir;
   uint8_t     mcControl; // mmvd(bio), luma/chroma
+  uint32_t    mmvdMergeIdx;
+  MergeType   mergeType;
+  Mv*         mvdL0SubPu;
 
   uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
   uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
   Mv          mvd     [NUM_REF_PIC_LIST_01];
   Mv          mv      [NUM_REF_PIC_LIST_01];
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
-  MergeType   mergeType;
-  Mv*         mvdL0SubPu;
   Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
   Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
-  Mv          mvdL0SubPuBuffer[MAX_NUM_SUBCU_DMVR];
 };
 
 
@@ -349,41 +349,38 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   ModeTypeSeries    modeTypeSeries;
   bool              skip;
   bool              mmvdSkip;
-  bool              affine;
-  int               affineType;
   bool              colorTransform;
   bool              geo;
-  int               bdpcmMode;
-  int               bdpcmModeChroma;
-  uint8_t           imv;
   bool              rootCbf;
-  uint8_t           sbtInfo;
-  uint32_t          tileIdx;
-  uint8_t           mtsFlag;
-  uint32_t          lfnstIdx;
-  uint8_t           BcwIdx;
-  int               refIdxBi[2];
   bool              mipFlag;
-
-  // needed for fast imv mode decisions
+  bool              affine;
+  uint8_t           affineType;
+  uint8_t           imv;
+  uint8_t           sbtInfo;
+  uint8_t           mtsFlag;
+  uint8_t           lfnstIdx;
+  uint8_t           BcwIdx;
   int8_t            imvNumCand;
   uint8_t           smvdMode;
   uint8_t           ispMode;
+  int               bdpcmMode;
+  int               bdpcmModeChroma;
+  int               refIdxBi[2];
+  uint32_t          tileIdx;
+
+  // needed for fast imv mode decisions
 
   CodingUnit() : chType( CH_L ) {}
   CodingUnit(const UnitArea& unit);
   CodingUnit(const ChromaFormat _chromaFormat, const Area& area);
 
-  CodingUnit& operator=( const CodingUnit& other );
-
   void initData();
+  void initPuData();
 
-  void initPuData   ();
-
+  CodingUnit& operator= ( const CodingUnit& other );
   CodingUnit& operator= ( const InterPredictionData& other);
   CodingUnit& operator= ( const IntraPredictionData& other);
   CodingUnit& operator= ( const MotionInfo& mi);
-
 
   // for accessing motion information, which can have higher resolution than PUs (should always be used, when accessing neighboring motion information)
   const MotionInfo& getMotionInfo () const;
@@ -392,18 +389,11 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   CMotionBuf        getMotionBuf  () const;
 
 
-  unsigned    idx;
-  CodingUnit *next;
+  unsigned       idx;
+  CodingUnit*    next;
 
-  TransformUnit *firstTU;
-  TransformUnit *lastTU;
-
-  uint8_t     checkAllowedSbt()     const;
-  bool        checkCCLMAllowed()    const;
-  bool        isSepTree()           const;
-  bool        isLocalSepTree()      const;
-  bool        isConsInter()         const { return modeType == MODE_TYPE_INTER; }
-  bool        isConsIntra()         const { return modeType == MODE_TYPE_INTRA; }
+  TransformUnit* firstTU;
+  TransformUnit* lastTU;
 };
 
 // ---------------------------------------------------------------------------
@@ -443,7 +433,7 @@ struct TransformUnit : public UnitArea
 const CCoeffBuf getCoeffs                 ( ComponentID id) const { return CCoeffBuf(m_coeffs[id], blocks[id]); }
 
 private:
-  TCoeff *m_coeffs[ MAX_NUM_TBLOCKS ];
+  TCoeff* m_coeffs[ MAX_NUM_TBLOCKS ];
 };
 
 // ---------------------------------------------------------------------------

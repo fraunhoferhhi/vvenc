@@ -272,6 +272,11 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   {
     for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
     {
+      int dmvrSize = 0;
+      if( hIdx >= 1 && wIdx >= 1 && (wIdx+hIdx) >= 3 )
+      {
+        dmvrSize = (1 << std::max(0,(wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2))) * (1 << std::max(0,(hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2)));
+      }
       for( unsigned x = 0; x < numPos; x++ )
       {
         for( unsigned y = 0; y < numPos; y++ )
@@ -279,12 +284,16 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
           if(( x + (1<<(wIdx) ) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
            &&( y + (1<<(hIdx) ) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) ))
           {
-            m_bestEncInfo[wIdx][hIdx][x][y] = new BestEncodingInfo;
+            m_bestEncInfo[wIdx][hIdx][x][y] = new BestEncodingInfo(dmvrSize);
 
             const UnitArea area( chFmt, Area( 0, 0, 1<<(wIdx+2), 1<<(hIdx+2) ) );
 
-            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->cu ) CodingUnit    ( area );
+            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->cu ) CodingUnit   ( area );
             new ( &m_bestEncInfo[wIdx][hIdx][x][y]->tu ) TransformUnit( area );
+            if( dmvrSize )
+            {
+              m_bestEncInfo[wIdx][hIdx][x][y]->cu.mvdL0SubPu = &m_bestEncInfo[wIdx][hIdx][x][y]->dmvrMvdBuffer[0]; 
+            }
 
             m_bestEncInfo[wIdx][hIdx][x][y]->poc      = -1;
             m_bestEncInfo[wIdx][hIdx][x][y]->testMode = EncTestMode();

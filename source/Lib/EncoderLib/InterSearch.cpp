@@ -3265,7 +3265,7 @@ void InterSearch::xEncodeInterResidualQT(CodingStructure &cs, Partitioner &parti
     CHECK(CU::isIntra(cu), "Inter search provided with intra CU");
 
     if( cu.chromaFormat != CHROMA_400
-      && (!cu.isSepTree() || isChroma(partitioner.chType))
+      && (!CU::isSepTree(cu) || isChroma(partitioner.chType))
       )
     {
       {
@@ -4070,7 +4070,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   if( cu.predMode == MODE_INTER )
-    CHECK( cu.isSepTree(), "CU with Inter mode must be in single tree" );
+    CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );
 
   const ChromaFormat format      = cs.area.chromaFormat;;
   const int  numValidComponents  = getNumberValidComponents(format);

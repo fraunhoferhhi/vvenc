@@ -824,7 +824,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  width    = area.width;
   const uint32_t  height   = area.height;
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
-  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
+  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
     const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;
@@ -933,7 +933,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  width    = area.width;
   const uint32_t  height   = area.height;
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
-  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
+  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
     const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;

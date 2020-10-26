@@ -176,7 +176,7 @@ static constexpr double COST_UNKNOWN = -65536.0;
 
 double IntraSearch::xFindInterCUCost( CodingUnit &cu )
 {
-  if( cu.isConsIntra() && !cu.slice->isIntra() )
+  if( CU::isConsIntra(cu) && !cu.slice->isIntra() )
   {
     //search corresponding inter CU cost
     for( int i = 0; i < m_numCuInSCIPU; i++ )
@@ -675,7 +675,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
       csTemp->releaseIntermediateData();
 
-      if (m_pcEncCfg->m_fastLocalDualTreeMode && cu.isConsIntra() && !cu.slice->isIntra() && csBest->cost != MAX_DOUBLE && costInterCU != COST_UNKNOWN && mode >= 0)
+      if (m_pcEncCfg->m_fastLocalDualTreeMode && CU::isConsIntra(cu) && !cu.slice->isIntra() && csBest->cost != MAX_DOUBLE && costInterCU != COST_UNKNOWN && mode >= 0)
       {
         if (m_pcEncCfg->m_fastLocalDualTreeMode == 2)
         {
@@ -749,7 +749,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
   CodingStructure &cs = *cu.cs;
   const TempCtx ctxStart  ( m_CtxCache, m_CABACEstimator->getCtx() );
 #if ISP_VVC
-  bool      lumaUsesISP = !cu.isSepTree() && cu.ispMode;
+  bool      lumaUsesISP = !CU::isSepTree(cu) && cu.ispMode;
   PartSplit ispType = lumaUsesISP ? CU::getISPType(cu, COMP_Y) : TU_NO_ISP;
 #if ISP_VVC
   double bestCostSoFar = maxCostAllowed;
@@ -778,12 +778,12 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     saveCS.area.repositionTo( cs.area );
     saveCS.clearTUs();
 
-      if( !cu.isSepTree() && cu.ispMode )
+      if( !CU::isSepTree(cu) && cu.ispMode )
       {
         saveCS.clearCUs();
       }
 
-    if( cu.isSepTree() )
+    if( CU::isSepTree(cu) )
     {
       if( partitioner.canSplit( TU_MAX_TR_SPLIT, cs ) )
       {
@@ -1277,7 +1277,7 @@ uint64_t IntraSearch::xGetIntraFracBitsQT( CodingStructure &cs, Partitioner &par
 
     CodingUnit &cu = *cs.cus[0];
 #if ISP_VVC
-    if (cuCtx /*&& cu.isSepTree()*/
+    if (cuCtx /*&& CU::isSepTree(cu)*/
       && (!cu.ispMode || (cu.lfnstIdx && m_ispTestedModes[0].subTuCounter == 0)
         || (!cu.lfnstIdx
           && m_ispTestedModes[0].subTuCounter == m_ispTestedModes[cu.lfnstIdx].numTotalParts[cu.ispMode - 1] - 1)))
@@ -1865,7 +1865,7 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
           {
             endLfnstIdx = lfnstIdx; // break the loop
           }
-          bool cbfAtZeroDepth = cu.isSepTree()
+          bool cbfAtZeroDepth = CU::isSepTree(cu)
             ? rootCbfL
             : (cs.area.chromaFormat != CHROMA_400
               && std::min(cu.firstTU->blocks[1].width, cu.firstTU->blocks[1].height) < 4)
@@ -2315,7 +2315,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
 
       if (NOTONE_LFNST && lfnstIdx && !cuCtx.lfnstLastScanPos)
       {
-        bool cbfAtZeroDepth = currTU.cu->isSepTree()
+        bool cbfAtZeroDepth = CU::isSepTree(*currTU.cu)
           ? rootCbfL : (cs.area.chromaFormat != CHROMA_400
             && std::min(tmpTU.blocks[1].width, tmpTU.blocks[1].height) < 4)
           ? TU::getCbfAtDepth(currTU, COMP_Y, currTU.depth) : rootCbfL;
@@ -2440,7 +2440,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
           }
           if (NOTONE_LFNST && currTU.cu->lfnstIdx && !cuCtx.lfnstLastScanPos)
           {
-            bool cbfAtZeroDepth = currTU.cu->isSepTree() ? rootCbfL
+            bool cbfAtZeroDepth = CU::isSepTree(*currTU.cu) ? rootCbfL
               : (cs.area.chromaFormat != CHROMA_400 && std::min(tmpTU.blocks[1].width, tmpTU.blocks[1].height) < 4)
               ? TU::getCbfAtDepth(currTU, COMP_Y, currTU.depth) : rootCbfL;
             if (cbfAtZeroDepth)

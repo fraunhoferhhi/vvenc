@@ -336,118 +336,6 @@ void CodingUnit::initData()
 }
 
 
-bool CodingUnit::isSepTree() const
-{
-  return treeType != TREE_D || CS::isDualITree( *cs );
-}
-
-bool CodingUnit::isLocalSepTree() const
-{
-  return treeType != TREE_D && !CS::isDualITree(*cs);
-}
-
-bool CodingUnit::checkCCLMAllowed() const
-{
-  bool allowCCLM = false;
-
-  if( !CS::isDualITree( *cs ) ) //single tree I slice or non-I slice (Note: judging chType is no longer equivalent to checking dual-tree I slice since the local dual-tree is introduced)
-  {
-    allowCCLM = true;
-  }
-  else if( slice->sps->CTUSize <= 32 ) //dual tree, CTUsize < 64
-  {
-    allowCCLM = true;
-  }
-  else //dual tree, CTU size 64 or 128
-  {
-    int depthFor64x64Node = slice->sps->CTUSize == 128 ? 1 : 0;
-    const PartSplit cuSplitTypeDepth1 = CU::getSplitAtDepth( *this, depthFor64x64Node );
-    const PartSplit cuSplitTypeDepth2 = CU::getSplitAtDepth( *this, depthFor64x64Node + 1 );
-
-    //allow CCLM if 64x64 chroma tree node uses QT split or HBT+VBT split combination
-    if( cuSplitTypeDepth1 == CU_QUAD_SPLIT || (cuSplitTypeDepth1 == CU_HORZ_SPLIT && cuSplitTypeDepth2 == CU_VERT_SPLIT) )
-    {
-      if( chromaFormat == CHROMA_420 )
-      {
-        CHECK( !(blocks[COMP_Cb].width <= 16 && blocks[COMP_Cb].height <= 16), "chroma cu size shall be <= 16x16 for YUV420 format" );
-      }
-      allowCCLM = true;
-    }
-    //allow CCLM if 64x64 chroma tree node uses NS (No Split) and becomes a chroma CU containing 32x32 chroma blocks
-    else if( cuSplitTypeDepth1 == CU_DONT_SPLIT )
-    {
-      if( chromaFormat == CHROMA_420 )
-      {
-        CHECK( !(blocks[COMP_Cb].width == 32 && blocks[COMP_Cb].height == 32), "chroma cu size shall be 32x32 for YUV420 format" );
-      }
-      allowCCLM = true;
-    }
-    //allow CCLM if 64x32 chroma tree node uses NS and becomes a chroma CU containing 32x16 chroma blocks
-    else if( cuSplitTypeDepth1 == CU_HORZ_SPLIT && cuSplitTypeDepth2 == CU_DONT_SPLIT )
-    {
-      if( chromaFormat == CHROMA_420 )
-      {
-        CHECK( !(blocks[COMP_Cb].width == 32 && blocks[COMP_Cb].height == 16), "chroma cu size shall be 32x16 for YUV420 format" );
-      }
-      allowCCLM = true;
-    }
-
-    //further check luma conditions
-    if( allowCCLM )
-    {
-      //disallow CCLM if luma 64x64 block uses BT or TT or NS with ISP
-      const Position lumaRefPos( chromaPos().x << getComponentScaleX( COMP_Cb, chromaFormat ), chromaPos().y << getComponentScaleY( COMP_Cb, chromaFormat ) );
-      const CodingUnit* colLumaCu = cs->refCS->getCU( lumaRefPos, CH_L, TREE_D );
-
-      if( colLumaCu->lwidth() < 64 || colLumaCu->lheight() < 64 ) //further split at 64x64 luma node
-      {
-        const PartSplit cuSplitTypeDepth1Luma = CU::getSplitAtDepth( *colLumaCu, depthFor64x64Node );
-        CHECK( !(cuSplitTypeDepth1Luma >= CU_QUAD_SPLIT && cuSplitTypeDepth1Luma <= CU_TRIV_SPLIT), "split mode shall be BT, TT or QT" );
-        if( cuSplitTypeDepth1Luma != CU_QUAD_SPLIT )
-        {
-          allowCCLM = false;
-        }
-      }
-      else if( colLumaCu->lwidth() == 64 && colLumaCu->lheight() == 64 && colLumaCu->ispMode ) //not split at 64x64 luma node and use ISP mode
-      {
-        allowCCLM = false;
-      }
-    }
-  }
-
-  return allowCCLM;
-}
-
-uint8_t CodingUnit::checkAllowedSbt() const
-{
-  if( !slice->sps->SBT || predMode != MODE_INTER || ciip)
-  {
-    return 0;
-  }
-
-  const int cuWidth  = lwidth();
-  const int cuHeight = lheight();
-
-  //parameter
-  const int maxSbtCUSize = cs->sps->getMaxTbSize();
-
-  //check on size
-  if( cuWidth > maxSbtCUSize || cuHeight > maxSbtCUSize )
-  {
-    return 0;
-  }
-
-  const int minSbtCUSize  = 1 << ( MIN_CU_LOG2 + 1 );
-  const int minQuadCUSize = 1 << ( MIN_CU_LOG2 + 2 );
-
-  uint8_t sbtAllowed = 0;
-  if( cuWidth  >= minSbtCUSize )  sbtAllowed += 1 << SBT_VER_HALF;
-  if( cuHeight >= minSbtCUSize )  sbtAllowed += 1 << SBT_HOR_HALF;
-  if( cuWidth  >= minQuadCUSize ) sbtAllowed += 1 << SBT_VER_QUAD;
-  if( cuHeight >= minQuadCUSize ) sbtAllowed += 1 << SBT_HOR_QUAD;
-
-  return sbtAllowed;
-}
 
 
 // ---------------------------------------------------------------------------
@@ -459,25 +347,33 @@ void CodingUnit::initPuData()
   // intra data - need this default initialization for PCM
   intraDir[0]       = DC_IDX;
   intraDir[1]       = PLANAR_IDX;
-  mipTransposedFlag = false;
   multiRefIdx       = 0;
+  mipTransposedFlag = false;
 
   // inter data
   mergeFlag         = false;
   regularMergeFlag  = false;
+  ciip              = false;
+  mvRefine          = false;
+  mmvdMergeFlag     = false;
   mergeIdx          = MAX_UCHAR;
   geoSplitDir       = MAX_UCHAR;
   geoMergeIdx0      = MAX_UCHAR;
   geoMergeIdx1      = MAX_UCHAR;
-  mmvdMergeFlag     = false;
-  mmvdMergeIdx      = MAX_UINT;
-  interDir          = MAX_UCHAR;
-  mergeType         = MRG_TYPE_DEFAULT_N;
-  mvRefine          = false;
 
-  for (uint32_t i = 0; i < MAX_NUM_SUBCU_DMVR; i++)
+  mcControl         = 0;
+
+  interDir          = MAX_UCHAR;
+  mmvdMergeIdx      = MAX_UINT;
+  mergeType         = MRG_TYPE_DEFAULT_N;
+
+  if( mvdL0SubPu )
   {
-    mvdL0SubPu[i].setZero();
+    int maxDmvrMvds = std::max<int>( 1, lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, lheight() >> DMVR_SUBCU_SIZE_LOG2 );
+    for (uint32_t i = 0; i < maxDmvrMvds; i++)
+    {
+      mvdL0SubPu[i].setZero();
+    }
   }
 
   for (uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++)
@@ -485,8 +381,8 @@ void CodingUnit::initPuData()
     mvpIdx[i] = MAX_UCHAR;
     mvpNum[i] = MAX_UCHAR;
     refIdx[i] = -1;
-    mv[i]     .setZero();
     mvd[i]    .setZero();
+    mv[i]     .setZero();
     for( uint32_t j = 0; j < 3; j++ )
     {
       mvdAffi[i][j].setZero();
@@ -496,9 +392,6 @@ void CodingUnit::initPuData()
       mvAffi[i][j].setZero();
     }
   }
-
-  mcControl = 0;
-  ciip      = false;
 }
 
 CodingUnit& CodingUnit::operator=( const IntraPredictionData& other )
@@ -526,12 +419,11 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
   mergeType         = other.mergeType;
   mvRefine          = other.mvRefine;
 
-  if( other.mergeFlag )
+  if( other.mergeFlag && mvdL0SubPu )
   {
-    for (uint32_t i = 0; i < MAX_NUM_SUBCU_DMVR; i++)
-    {
-      mvdL0SubPu[i] = other.mvdL0SubPu[i];
-    }
+    const int maxDmvrMvds = std::max<int>( 1, lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, lheight() >> DMVR_SUBCU_SIZE_LOG2 );
+    
+    memcpy( mvdL0SubPu, other.mvdL0SubPu, sizeof( Mv ) * maxDmvrMvds );
   }
 
   for (uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++)

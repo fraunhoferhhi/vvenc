@@ -814,7 +814,7 @@ void CABACReader::coding_unit( CodingUnit &cu, Partitioner &partitioner, CUCtx& 
 
 void CABACReader::cu_skip_flag( CodingUnit& cu )
 {
-  if ((cu.slice->isIntra() || cu.isConsIntra()) && cu.cs->slice->sps->IBC)
+  if ((cu.slice->isIntra() || CU::isConsIntra(cu)) && cu.cs->slice->sps->IBC)
   {
     cu.skip = false;
     cu.rootCbf = false;
@@ -839,7 +839,7 @@ void CABACReader::cu_skip_flag( CodingUnit& cu )
   {
     return;
   }
-  if( !cu.cs->slice->sps->IBC && cu.isConsIntra() )
+  if( !cu.cs->slice->sps->IBC && CU::isConsIntra(cu) )
   {
     return;
   }
@@ -850,7 +850,7 @@ void CABACReader::cu_skip_flag( CodingUnit& cu )
 
   if (skip && cu.cs->slice->sps->IBC)
   {
-    if (cu.lwidth() < 128 && cu.lheight() < 128 && !cu.isConsInter()) // disable IBC mode larger than 64x64 and disable IBC when only allowing inter mode
+    if (cu.lwidth() < 128 && cu.lheight() < 128 && !CU::isConsInter(cu)) // disable IBC mode larger than 64x64 and disable IBC when only allowing inter mode
     {
       if ( cu.lwidth() == 4 && cu.lheight() == 4 )
       {
@@ -974,13 +974,13 @@ void CABACReader::pred_mode( CodingUnit& cu )
 {
   if (cu.cs->slice->sps->IBC && cu.chType != CH_C)
   {
-    if( cu.isConsInter() )
+    if( CU::isConsInter(cu) )
     {
       cu.predMode = MODE_INTER;
       return;
     }
 
-    if ( cu.cs->slice->isIntra() || ( cu.lwidth() == 4 && cu.lheight() == 4 ) || cu.isConsIntra() )
+    if ( cu.cs->slice->isIntra() || ( cu.lwidth() == 4 && cu.lheight() == 4 ) || CU::isConsIntra(cu) )
     {
       cu.predMode = MODE_INTRA;
       if (cu.lwidth() < 128 && cu.lheight() < 128) // disable IBC mode larger than 64x64
@@ -1028,16 +1028,16 @@ void CABACReader::pred_mode( CodingUnit& cu )
   }
   else
   {
-    if( cu.isConsInter() )
+    if( CU::isConsInter(cu) )
     {
       cu.predMode = MODE_INTER;
       return;
     }
 
-    if ( cu.cs->slice->isIntra() || (cu.lwidth() == 4 && cu.lheight() == 4) || cu.isConsIntra() )
+    if ( cu.cs->slice->isIntra() || (cu.lwidth() == 4 && cu.lheight() == 4) || CU::isConsIntra(cu) )
     {
       cu.predMode = MODE_INTRA;
-      if (cu.cs->slice->sps->PLT && cu.lwidth() <= 64 && cu.lheight() <= 64 && (((isLuma(cu.chType) && cu.lwidth() * cu.lheight() > 16) || (!isLuma(cu.chType) && cu.chromaSize().area() > 16))) && (!cu.isLocalSepTree() || isLuma(cu.chType)  )  )
+      if (cu.cs->slice->sps->PLT && cu.lwidth() <= 64 && cu.lheight() <= 64 && (((isLuma(cu.chType) && cu.lwidth() * cu.lheight() > 16) || (!isLuma(cu.chType) && cu.chromaSize().area() > 16))) && (!CU::isLocalSepTree(cu) || isLuma(cu.chType)  )  )
       {
         if (m_BinDecoder.decodeBin(Ctx::PLTFlag(0)))
         {
@@ -1048,7 +1048,7 @@ void CABACReader::pred_mode( CodingUnit& cu )
     else
     {
       cu.predMode = m_BinDecoder.decodeBin(Ctx::PredMode(DeriveCtx::CtxPredModeFlag())) ? MODE_INTRA : MODE_INTER;
-      if (cu.cs->slice->sps->PLT && cu.lwidth() <= 64 && cu.lheight() <= 64 && (((isLuma(cu.chType) && cu.lwidth() * cu.lheight() > 16) || (!isLuma(cu.chType) && cu.chromaSize().area() > 16)))&& (!cu.isLocalSepTree() || isLuma(cu.chType)  )  )
+      if (cu.cs->slice->sps->PLT && cu.lwidth() <= 64 && cu.lheight() <= 64 && (((isLuma(cu.chType) && cu.lwidth() * cu.lheight() > 16) || (!isLuma(cu.chType) && cu.chromaSize().area() > 16)))&& (!CU::isLocalSepTree(cu) || isLuma(cu.chType)  )  )
       {
         if (m_BinDecoder.decodeBin(Ctx::PLTFlag(0)))
         {
@@ -1112,7 +1112,7 @@ void CABACReader::cu_pred_data( CodingUnit &cu )
       bdpcm_mode(cu, COMP_Y );
     }
     intra_luma_pred_modes( cu );
-    if( ( !cu.Y().valid() || (!cu.isSepTree() && cu.Y().valid() ) ) && isChromaEnabled(cu.chromaFormat) )
+    if( ( !cu.Y().valid() || (!CU::isSepTree(cu) && cu.Y().valid() ) ) && isChromaEnabled(cu.chromaFormat) )
     {
       bdpcm_mode(cu, ComponentID(CH_C));
     } 
@@ -1325,7 +1325,7 @@ void CABACReader::intra_luma_pred_modes( CodingUnit &cu )
 
 void CABACReader::intra_chroma_pred_modes( CodingUnit& cu )
 {
-  if( cu.chromaFormat == CHROMA_400 || ( cu.isSepTree() && cu.chType == CH_L ) )
+  if( cu.chromaFormat == CHROMA_400 || ( CU::isSepTree(cu) && cu.chType == CH_L ) )
   {
     return;
   }
@@ -1368,7 +1368,7 @@ void CABACReader::intra_chroma_pred_mode(CodingUnit& cu)
   }
 
   // LM chroma mode
-  if (cu.cs->sps->LMChroma && cu.checkCCLMAllowed())
+  if (cu.cs->sps->LMChroma && CU::checkCCLMAllowed(cu))
   {
     bool isLMCMode = m_BinDecoder.decodeBin(Ctx::CclmModeFlag(0)) ? true : false;
     if (isLMCMode)
@@ -1468,7 +1468,7 @@ void CABACReader::adaptive_color_transform(CodingUnit& cu)
     return;
   }
 
-  if (cu.isSepTree())
+  if (CU::isSepTree(cu))
   {
     return;
   }
@@ -1481,7 +1481,7 @@ void CABACReader::adaptive_color_transform(CodingUnit& cu)
 
 void CABACReader::sbt_mode( CodingUnit& cu )
 {
-  const uint8_t sbtAllowed = cu.checkAllowedSbt();
+  const uint8_t sbtAllowed = CU::checkAllowedSbt(cu);
   if( !sbtAllowed )
   {
     return;
@@ -1543,7 +1543,7 @@ void CABACReader::end_of_ctu( CodingUnit& cu, CUCtx& cuCtx )
 
   if ( ( ( rbPos.x & cu.cs->pcv->maxCUSizeMask  ) == 0 || rbPos.x == cu.cs->pcv->lumaWidth )
     && ( ( rbPos.y & cu.cs->pcv->maxCUSizeMask ) == 0 || rbPos.y == cu.cs->pcv->lumaHeight )
-    && ( !cu.isSepTree() || cu.chromaFormat == CHROMA_400 || isChroma( cu.chType ) )
+    && ( !CU::isSepTree(cu) || cu.chromaFormat == CHROMA_400 || isChroma( cu.chType ) )
       )
   {
     cuCtx.isDQPCoded = ( cu.cs->pps->useDQP && !cuCtx.isDQPCoded );
@@ -2219,7 +2219,7 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
   const bool chromaCbfISP = area.blocks[COMP_Cb].valid() && cu.ispMode;
 
   // cbf_cb & cbf_cr
-  if (area.chromaFormat != CHROMA_400 && area.blocks[COMP_Cb].valid() && (!cu.isSepTree() || partitioner.chType == CH_C) && (!cu.ispMode || chromaCbfISP))
+  if (area.chromaFormat != CHROMA_400 && area.blocks[COMP_Cb].valid() && (!CU::isSepTree(cu) || partitioner.chType == CH_C) && (!cu.ispMode || chromaCbfISP))
   {
     const int cbfDepth = chromaCbfISP ? trDepth - 1 : trDepth;
     if (!(cu.sbtInfo && tu.noResidual))
@@ -2232,7 +2232,7 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
         chromaCbfs.Cr = cbf_comp(cs, area.blocks[COMP_Cr], cbfDepth, chromaCbfs.Cb);
     }
   }
-  else if (cu.isSepTree())
+  else if (CU::isSepTree(cu))
   {
     chromaCbfs = ChromaCbfs(false);
   }
@@ -2293,7 +2293,7 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
   bool        cbfChroma  = ( lumaOnly ? false : ( chromaCbfs.Cb || chromaCbfs.Cr ) );
 
   if( ( cu.lwidth() > 64 || cu.lheight() > 64 || cbfLuma || cbfChroma ) &&
-    (!tu.cu->isSepTree() || isLuma(tu.chType)) )
+    (!CU::isSepTree(*tu.cu) || isLuma(tu.chType)) )
   {
     if( cu.cs->pps->useDQP && !cuCtx.isDQPCoded )
     {
@@ -2302,10 +2302,10 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
       cuCtx.isDQPCoded = true;
     }
   }
-  if (!cu.isSepTree() || isChroma(tu.chType))   // !DUAL_TREE_LUMA
+  if (!CU::isSepTree(cu) || isChroma(tu.chType))   // !DUAL_TREE_LUMA
   {
-    SizeType channelWidth = !cu.isSepTree() ? cu.lwidth() : cu.chromaSize().width;
-    SizeType channelHeight = !cu.isSepTree() ? cu.lheight() : cu.chromaSize().height;
+    SizeType channelWidth = !CU::isSepTree(cu) ? cu.lwidth() : cu.chromaSize().width;
+    SizeType channelHeight = !CU::isSepTree(cu) ? cu.lheight() : cu.chromaSize().height;
 
     if (cu.cs->slice->chromaQpAdjEnabled && (channelWidth > 64 || channelHeight > 64 || cbfChroma) && !cuCtx.isChromaQpAdjCoded)
     {
@@ -2536,7 +2536,7 @@ void CABACReader::residual_lfnst_mode( CodingUnit& cu,  CUCtx& cuCtx  )
   int chIdx = CS::isDualITree( *cu.cs ) && cu.chType == CH_C ? 1 : 0;
   if ( (cu.ispMode && !CU::canUseLfnstWithISP( cu, cu.chType ) ) ||
       (cu.cs->sps->LFNST && CU::isIntra(cu) && cu.mipFlag && !allowLfnstWithMip(cu.lumaSize())) ||
-    ( cu.isSepTree() && cu.chType == CH_C && std::min( cu.blocks[ 1 ].width, cu.blocks[ 1 ].height ) < 4 )
+    ( CU::isSepTree(cu) && cu.chType == CH_C && std::min( cu.blocks[ 1 ].width, cu.blocks[ 1 ].height ) < 4 )
     || ( cu.blocks[ chIdx ].lumaSize().width > cu.cs->sps->getMaxTbSize() || cu.blocks[ chIdx ].lumaSize().height > cu.cs->sps->getMaxTbSize() )
     )
   {
@@ -2545,8 +2545,8 @@ void CABACReader::residual_lfnst_mode( CodingUnit& cu,  CUCtx& cuCtx  )
 
   if( cu.cs->sps->LFNST && CU::isIntra( cu ) )
   {
-    const bool lumaFlag              = cu.isSepTree() ? (   isLuma( cu.chType ) ? true : false ) : true;
-    const bool chromaFlag            = cu.isSepTree() ? ( isChroma( cu.chType ) ? true : false ) : true;
+    const bool lumaFlag              = CU::isSepTree(cu) ? (   isLuma( cu.chType ) ? true : false ) : true;
+    const bool chromaFlag            = CU::isSepTree(cu) ? ( isChroma( cu.chType ) ? true : false ) : true;
     bool nonZeroCoeffNonTsCorner8x8 = ( lumaFlag && cuCtx.violatesLfnstConstrained[CH_L] ) || (chromaFlag && cuCtx.violatesLfnstConstrained[CH_C] );
     bool isTrSkip = false;
     for (auto &currTU : CU::traverseTUs(cu))
@@ -2574,7 +2574,7 @@ void CABACReader::residual_lfnst_mode( CodingUnit& cu,  CUCtx& cuCtx  )
   }
 
   unsigned cctx = 0;
-  if ( cu.isSepTree() ) cctx++;
+  if ( CU::isSepTree(cu) ) cctx++;
 
   uint32_t idxLFNST = m_BinDecoder.decodeBin( Ctx::LFNSTIdx( cctx ) );
   if( idxLFNST )

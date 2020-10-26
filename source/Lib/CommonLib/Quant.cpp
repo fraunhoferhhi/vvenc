@@ -369,7 +369,7 @@ void Quant::dequant(const TransformUnit& tu,
   const TCoeff          transformMinimum   = -(1 << maxLog2TrDynamicRange);
   const TCoeff          transformMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
   const bool            isTransformSkip    = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
-  const bool            isLfnstApplied     = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+  const bool            isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
   const bool            enableScalingLists = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
   const int             scalingListType    = getScalingListType(tu.cu->predMode, compID);
   const int             channelBitDepth    = sps->bitDepths[toChannelType(compID)];
@@ -623,7 +623,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     const uint32_t uiLog2TrHeight = Log2(uiHeight);
     int *piQuantCoeff             = getQuantCoeff(scalingListType, cQP.rem(useTransformSkip), uiLog2TrWidth, uiLog2TrHeight);
 
-    const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+    const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
     const bool enableScalingLists = getUseScalingList(uiWidth, uiHeight, useTransformSkip, isLfnstApplied);
 
     // for blocks that where width*height != 4^N, the effective scaling applied during transformation cannot be
@@ -709,7 +709,7 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
   const uint32_t uiLog2TrHeight = Log2(uiHeight);
   int *piQuantCoeff             = getQuantCoeff(scalingListType, cQP.rem(useTransformSkip), uiLog2TrWidth, uiLog2TrHeight);
 
-  const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+  const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
   const bool enableScalingLists = getUseScalingList(uiWidth, uiHeight, (useTransformSkip != 0), isLfnstApplied);
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
