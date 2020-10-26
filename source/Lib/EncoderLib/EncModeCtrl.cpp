@@ -599,6 +599,44 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.isReusingCu    = isReusingCuValid( cs, partitioner, cs.baseQP );
   cuECtx.didHorzSplit   = partitioner.canSplit( CU_HORZ_SPLIT, cs );
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
+  
+
+  if( m_pcEncCfg->m_contentBasedFastQtbt )
+  {
+    const CompArea& currArea = partitioner.currArea().Y();
+    int cuHeight  = currArea.height;
+    int cuWidth   = currArea.width;
+
+    const bool condIntraInter = m_pcEncCfg->m_IntraPeriod == 1 ? ( partitioner.currBtDepth == 0 ) : ( cuHeight > 32 && cuWidth > 32 );
+
+    if( cuWidth == cuHeight && condIntraInter )
+    {
+      const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
+
+      double horVal = 0;
+      double verVal = 0;
+      double dupVal = 0;
+      double dowVal = 0;
+
+      unsigned j, k;
+      
+      for( k = 0; k < cuHeight - 1; k++ )
+      {
+        for( j = 0; j < cuWidth - 1; j++ )
+        {
+          horVal += abs( bufCurrArea.at( j + 1, k     ) - bufCurrArea.at( j, k ) );
+          verVal += abs( bufCurrArea.at( j    , k + 1 ) - bufCurrArea.at( j, k ) );
+          dowVal += abs( bufCurrArea.at( j + 1, k )     - bufCurrArea.at( j, k + 1 ) );
+          dupVal += abs( bufCurrArea.at( j + 1, k + 1 ) - bufCurrArea.at( j, k ) );
+        }
+      }
+
+      cuECtx.grad_horVal = horVal;
+      cuECtx.grad_verVal = verVal;
+      cuECtx.grad_dowVal = dowVal;
+      cuECtx.grad_dupVal = dupVal;
+    }
+  }
 }
 
 void EncModeCtrl::finishCULevel( Partitioner &partitioner )
@@ -686,25 +724,13 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
     {
       const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
 
-      double horVal = 0;
-      double verVal = 0;
-      double dupVal = 0;
-      double dowVal = 0;
+      double horVal = cuECtx.grad_horVal;
+      double verVal = cuECtx.grad_verVal;
+      double dupVal = cuECtx.grad_dupVal;
+      double dowVal = cuECtx.grad_dowVal;
 
       const double th = m_pcEncCfg->m_IntraPeriod == 1 ? 1.2 : 1.0;
 
-      unsigned j, k;
-
-      for( j = 0; j < cuWidth - 1; j++ )
-      {
-        for( k = 0; k < cuHeight - 1; k++ )
-        {
-          horVal += abs( bufCurrArea.at( j + 1, k     ) - bufCurrArea.at( j, k ) );
-          verVal += abs( bufCurrArea.at( j    , k + 1 ) - bufCurrArea.at( j, k ) );
-          dowVal += abs( bufCurrArea.at( j + 1, k )     - bufCurrArea.at( j, k + 1 ) );
-          dupVal += abs( bufCurrArea.at( j + 1, k + 1 ) - bufCurrArea.at( j, k ) );
-        }
-      }
       if( horVal > th * verVal && sqrt( 2 ) * horVal > th * dowVal && sqrt( 2 ) * horVal > th * dupVal && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
       {
         return false;

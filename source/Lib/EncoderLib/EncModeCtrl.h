@@ -191,6 +191,10 @@ struct ComprCUCtx
     , bestCostTriHorzSplit  (MAX_DOUBLE)
     , bestCostImv           (MAX_DOUBLE *.5)
     , bestCostNoImv         (MAX_DOUBLE *.5)
+    , grad_horVal           (0)
+    , grad_verVal           (0)
+    , grad_dupVal           (0)
+    , grad_dowVal           (0)
     , interHad              (MAX_DISTORTION)
     , maxQtSubDepth         (0)
     , earlySkip             (false)
@@ -218,6 +222,10 @@ struct ComprCUCtx
   double            bestCostTriHorzSplit;
   double            bestCostImv;
   double            bestCostNoImv;
+  double            grad_horVal;
+  double            grad_verVal;
+  double            grad_dupVal;
+  double            grad_dowVal;
   Distortion        interHad;
   int               maxQtSubDepth;
   bool              earlySkip;
