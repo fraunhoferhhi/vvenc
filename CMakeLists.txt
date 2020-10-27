@@ -63,6 +63,8 @@ else()
   set( VVENC_OUTPUT_DIR_POSTFIX static )
 endif()
 
+set( VVENC_ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING=1 as a compiler flag" )
+
 # Using CMake's default library name convention which is the same for all configurations.
 set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/lib/debug-${VVENC_OUTPUT_DIR_POSTFIX}" )
 set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/lib/release-${VVENC_OUTPUT_DIR_POSTFIX}" )
@@ -92,8 +94,6 @@ endif()
 
 #set( ENABLE_LINK_TIME_OPT ON       CACHE BOOL   "Enable link time optimization for release and profile builds" )
 #set( OPT_TARGET_ARCH      "native" CACHE STRING "Create code and optimize for this architecture (default native)" )
-
-set( ENABLE_TRACING OFF CACHE BOOL "Set ENABLE_TRACING=1 as a compiler flag" )
 
 # set c++11
 set( CMAKE_CXX_STANDARD 14 )
@@ -132,7 +132,7 @@ if( MSVC )
   add_compile_options( "/EHsc" )
 endif()
 
-if( ENABLE_TRACING )
+if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
 endif()
 
@@ -200,9 +200,9 @@ add_test( NAME Test_vvencFFapp-tooltest COMMAND vvencFFapp -c ../../cfg/randomac
 set_tests_properties( Test_vvencFFapp-tooltest PROPERTIES TIMEOUT 40 )
 add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 
-#add_test( NAME Test_vvencFFapp-tooltesttrans COMMAND vvencFFapp -c ../../cfg/randomaccess_fast.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=outf.vvc --DebugPOC=3 -b out.vvc )
-#set_tests_properties( Test_vvencFFapp-tooltesttrans PROPERTIES TIMEOUT 10 )
-#add_test( NAME Test_output-tooltesttrans COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+add_test( NAME Test_vvencFFapp-tooltesttrans COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=outf.vvc --DebugPOC=3 -b out.vvc )
+set_tests_properties( Test_vvencFFapp-tooltesttrans PROPERTIES TIMEOUT 10 )
+add_test( NAME Test_output-tooltesttrans COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 
 add_test( NAME Test_vvencapp-faster COMMAND vvencapp --preset faster -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 11 -o out.vvc )
 set_tests_properties( Test_vvencapp-faster PROPERTIES TIMEOUT 20 )

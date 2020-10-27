@@ -967,7 +967,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     }
 
     APS* lmcsAPS = NULL;
-    if (m_picHeader.lmcsApsId != -1)
+    if (m_picHeader.lmcsEnabled)
     {
       lmcsAPS = m_parameterSetManager.getAPS(m_picHeader.lmcsApsId, LMCS_APS);
       CHECK(lmcsAPS == 0, "No LMCS APS present");
