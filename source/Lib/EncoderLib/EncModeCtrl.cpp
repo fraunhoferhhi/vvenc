@@ -613,10 +613,10 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
     {
       const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
 
-      double horVal = 0;
-      double verVal = 0;
-      double dupVal = 0;
-      double dowVal = 0;
+      Intermediate_Int horVal = 0;
+      Intermediate_Int verVal = 0;
+      Intermediate_Int dupVal = 0;
+      Intermediate_Int dowVal = 0;
 
       unsigned j, k;
       
@@ -631,10 +631,10 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
         }
       }
 
-      cuECtx.grad_horVal = horVal;
-      cuECtx.grad_verVal = verVal;
-      cuECtx.grad_dowVal = dowVal;
-      cuECtx.grad_dupVal = dupVal;
+      cuECtx.grad_horVal = (double)horVal;
+      cuECtx.grad_verVal = (double)verVal;
+      cuECtx.grad_dowVal = (double)dowVal;
+      cuECtx.grad_dupVal = (double)dupVal;
     }
   }
 }
@@ -722,18 +722,14 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
     if( cuWidth == cuHeight && condIntraInter && split != CU_QUAD_SPLIT )
     {
-      double horVal = cuECtx.grad_horVal;
-      double verVal = cuECtx.grad_verVal;
-      double dupVal = cuECtx.grad_dupVal;
-      double dowVal = cuECtx.grad_dowVal;
+      const double th1 = m_pcEncCfg->m_IntraPeriod == 1 ?  1.2              :  1.0;
+      const double th2 = m_pcEncCfg->m_IntraPeriod == 1 ? (1.2 / sqrt( 2 )) : (1.0 / sqrt( 2 ));
 
-      const double th = m_pcEncCfg->m_IntraPeriod == 1 ? 1.2 : 1.0;
-
-      if( horVal > th * verVal && sqrt( 2 ) * horVal > th * dowVal && sqrt( 2 ) * horVal > th * dupVal && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
+      if( cuECtx.grad_horVal > th1 * cuECtx.grad_verVal && cuECtx.grad_horVal > th2 * cuECtx.grad_dowVal && cuECtx.grad_horVal > th2 * cuECtx.grad_dupVal && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
       {
         return false;
       }
-      if( th * dupVal < sqrt( 2 ) * verVal && th * dowVal < sqrt( 2 ) * verVal && th * horVal < verVal && ( split == CU_VERT_SPLIT || split == CU_TRIV_SPLIT ) )
+      if( th2 * cuECtx.grad_dupVal < cuECtx.grad_verVal && th2 * cuECtx.grad_dowVal < cuECtx.grad_verVal && th1 * cuECtx.grad_horVal < cuECtx.grad_verVal && ( split == CU_VERT_SPLIT || split == CU_TRIV_SPLIT ) )
       {
         return false;
       }
