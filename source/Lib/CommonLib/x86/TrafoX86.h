@@ -344,6 +344,25 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
+        
+        __m256i vsrcarr[2][4];
+          
+        for( int k = 0; k < trSize; k += 16 )
+        {
+          __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[k + 0] );
+          __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[k + 8] );
+          __m256i vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
+          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+          vsrcarr[0][k >> 4] = vsrc;
+          
+          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[k + 0 + trSize] );
+          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[k + 8 + trSize] );
+          vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
+          vsrc  = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+          vsrcarr[1][k >> 4] = vsrc;
+        }
 
         for( int j = 0; j < cutoff; j += 4 )
         {
@@ -363,28 +382,25 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
 #if 0
 #if defined( _MSC_VER ) && _MSC_VER > 1900
-            __m256i vit0  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m256i vit1  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m256i vit2  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m256i vit3  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m256i vit0  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 * trSize] );
+            __m256i vit1  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 1 * trSize] );
+            __m256i vit2  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 2 * trSize] );
+            __m256i vit3  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 3 * trSize] );
 #else
-            __m256i vit0  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m256i vit1  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m256i vit2  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m256i vit3  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m256i vit0  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 * trSize] );
+            __m256i vit1  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 1 * trSize] );
+            __m256i vit2  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 2 * trSize] );
+            __m256i vit3  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 3 * trSize] );
 #endif
 #else
-            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 * trSize] );
+            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 1 * trSize] );
+            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 2 * trSize] );
+            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 3 * trSize] );
 #endif
-            // first source line
-            __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src  [k + 0] );
-            __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src  [k + 8] );
 
-            __m256i vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
-            vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+            // first source line
+            __m256i vsrc  = vsrcarr[0][k >> 4];
 
             __m256i
             vtmp   = _mm256_madd_epi16( vit0,   vsrc );
@@ -398,13 +414,8 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
           
             vtmp   = _mm256_madd_epi16( vit3,   vsrc );
             vsum03 = _mm256_add_epi32 ( vsum03, vtmp );
-          
-            // second source line
-            vsrc0  = _mm256_load_si256( ( const __m256i* ) &src[k + 0 + trSize] );
-            vsrc1  = _mm256_load_si256( ( const __m256i* ) &src[k + 8 + trSize] );
-
-            vsrc   = _mm256_packs_epi32( vsrc0, vsrc1 );
-            vsrc   = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+     
+            vsrc  = vsrcarr[1][k >> 4];
           
             vtmp   = _mm256_madd_epi16( vit0,   vsrc );
             vsum10 = _mm256_add_epi32 ( vsum10, vtmp );
@@ -470,6 +481,27 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
+        
+#if USE_AVX2
+        __m128i vsrcarr[2][1];
+#else
+        __m128i vsrcarr[2][8];
+#endif
+          
+        for( int k = 0; k < trSize; k += 8 )
+        {
+          __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0] );
+          __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4] );
+          __m128i vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+
+          vsrcarr[0][k >> 3] = vsrc;
+          
+          vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0 + trSize] );
+          vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4 + trSize] );
+          vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+
+          vsrcarr[1][k >> 3] = vsrc;
+        }
 
         for( int j = 0; j < cutoff; j += 4 )
         {
@@ -489,27 +521,25 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
   #if 0
   #if defined( _MSC_VER ) && _MSC_VER > 1900
-            __m128i vit0  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m128i vit1  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m128i vit2  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m128i vit3  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m128i vit0  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 * trSize] );
+            __m128i vit1  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 1 * trSize] );
+            __m128i vit2  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 2 * trSize] );
+            __m128i vit3  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 3 * trSize] );
   #else
-            __m128i vit0  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m128i vit1  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m128i vit2  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m128i vit3  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m128i vit0  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 * trSize] );
+            __m128i vit1  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 1 * trSize] );
+            __m128i vit2  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 2 * trSize] );
+            __m128i vit3  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 3 * trSize] );
   #endif
   #else
-            __m128i vit0  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m128i vit1  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m128i vit2  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m128i vit3  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m128i vit0  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 * trSize] );
+            __m128i vit1  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 1 * trSize] );
+            __m128i vit2  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 2 * trSize] );
+            __m128i vit3  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 3 * trSize] );
   #endif
-            // first source line
-            __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src  [k + 0] );
-            __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src  [k + 4] );
-
-            __m128i vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+            
+            // fist source line
+            __m128i vsrc  = vsrcarr[0][k >> 3];
 
             __m128i
             vtmp   = _mm_madd_epi16( vit0,   vsrc );
@@ -525,10 +555,7 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
             vsum03 = _mm_add_epi32 ( vsum03, vtmp );
           
             // second source line
-            vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0 + trSize] );
-            vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4 + trSize] );
-
-            vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+            vsrc   = vsrcarr[1][k >> 3];
           
             vtmp   = _mm_madd_epi16( vit0,   vsrc );
             vsum10 = _mm_add_epi32 ( vsum10, vtmp );
