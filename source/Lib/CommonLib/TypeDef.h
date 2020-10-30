@@ -411,8 +411,6 @@ enum MESearchMethod
 enum CoeffScanType
 {
   SCAN_DIAG = 0,        ///< up-right diagonal scan
-  SCAN_TRAV_HOR = 1,
-  SCAN_TRAV_VER = 2,
   SCAN_NUMBER_OF_TYPES
 };
 

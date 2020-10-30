@@ -149,9 +149,9 @@ namespace DQIntern
     void  xUninitScanArrays ();
   private:
     bool          m_scansInitialized;
-    NbInfoSbb*    m_scanId2NbInfoSbbArray[ MAX_CU_SIZE_IDX ][ MAX_CU_SIZE_IDX ];
-    NbInfoOut*    m_scanId2NbInfoOutArray[ MAX_CU_SIZE_IDX ][ MAX_CU_SIZE_IDX ];
-    TUParameters* m_tuParameters         [ MAX_CU_SIZE_IDX ][ MAX_CU_SIZE_IDX ][ MAX_NUM_CH ];
+    NbInfoSbb*    m_scanId2NbInfoSbbArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
+    NbInfoOut*    m_scanId2NbInfoOutArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
+    TUParameters* m_tuParameters         [ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ][ MAX_NUM_CH ];
   };
 
   void Rom::xInitScanArrays()
@@ -167,9 +167,9 @@ namespace DQIntern
     uint32_t raster2id[ MAX_CU_SIZE * MAX_CU_SIZE ];
     ::memset(raster2id, 0, sizeof(raster2id));
 
-    for( int hd = 0; hd < MAX_CU_SIZE_IDX; hd++ )
+    for( int hd = 0; hd < MAX_TU_SIZE_IDX; hd++ )
     {
-      for( int vd = 0; vd < MAX_CU_SIZE_IDX; vd++ )
+      for( int vd = 0; vd < MAX_TU_SIZE_IDX; vd++ )
       {
         if( (hd == 0 && vd <= 1) || (hd <= 1 && vd == 0) )
         {
@@ -312,9 +312,9 @@ namespace DQIntern
     {
       return;
     }
-    for( int hd = 0; hd < MAX_CU_SIZE_IDX; hd++ )
+    for( int hd = 0; hd < MAX_TU_SIZE_IDX; hd++ )
     {
-      for( int vd = 0; vd < MAX_CU_SIZE_IDX; vd++ )
+      for( int vd = 0; vd < MAX_TU_SIZE_IDX; vd++ )
       {
         NbInfoSbb*& sId2NbSbb = m_scanId2NbInfoSbbArray[hd][vd];
         NbInfoOut*& sId2NbOut = m_scanId2NbInfoOutArray[hd][vd];
