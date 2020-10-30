@@ -422,7 +422,7 @@ void BestEncInfoCache::init( const Slice &slice )
 
 bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& partitioner )
 {
-  if( cs.cus.size() != 1 || cs.tus.size() != 1 )
+  if( cs.cus.size() != 1 || cs.tus.size() != 1 || partitioner.maxBTD <= 1 )
   {
     return false;
   }
@@ -449,10 +449,11 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& 
 
 bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp )
 {
-  if( partitioner.treeType == TREE_C )
+  if( partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 )
   {
     return false; //if save & load is allowed for chroma CUs, we should check whether luma info (pred, recon, etc) is the same, which is quite complex
   }
+
   unsigned idx1, idx2, idx3, idx4;
   getAreaIdxNew( cs.area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
 
