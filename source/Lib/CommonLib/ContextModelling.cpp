@@ -55,7 +55,7 @@ vvc@hhi.fraunhofer.de
 
 namespace vvenc {
 
-static const int prefix_ctx[8]  = { 0, 0, 0, 3, 6, 10, 15, 21 };
+static const int prefix_ctx[7]  = { 0, 0, 0, 3, 6, 10, 15 };
 
 CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm )
   : m_compID                    (component)

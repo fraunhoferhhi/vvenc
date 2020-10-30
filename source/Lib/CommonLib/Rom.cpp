@@ -574,47 +574,6 @@ public:
         }
         break;
 
-      case SCAN_TRAV_HOR:
-        if (m_line % 2 == 0)
-        {
-          if (m_column == (m_blockWidth - 1))
-          {
-            m_line++;
-            m_column = m_blockWidth - 1;
-          }
-          else m_column++;
-        }
-        else
-        {
-          if (m_column == 0)
-          {
-            m_line++;
-            m_column = 0;
-          }
-          else m_column--;
-        }
-        break;
-
-      case SCAN_TRAV_VER:
-        if (m_column % 2 == 0)
-        {
-          if (m_line == (m_blockHeight - 1))
-          {
-            m_column++;
-            m_line = m_blockHeight - 1;
-          }
-          else m_line++;
-        }
-        else
-        {
-          if (m_line == 0)
-          {
-            m_column++;
-            m_line = 0;
-          }
-          else m_line--;
-        }
-        break;
       //------------------------------------------------
 
       default:
@@ -627,24 +586,23 @@ public:
   }
 };
 
-uint32_t const g_log2SbbSize[MAX_CU_SIZE_IDX][MAX_CU_SIZE_IDX][2] =
+uint32_t const g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2] =
 //===== luma/chroma =====
 {
-  { { 0,0 },{ 0,1 },{ 0,2 },{ 0,3 },{ 0,4 },{ 0,4 },{ 0,4 },{ 0,4 } },
-  { { 1,0 },{ 1,1 },{ 1,1 },{ 1,3 },{ 1,3 },{ 1,3 },{ 1,3 },{ 1,3 } },
-  { { 2,0 },{ 1,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
-  { { 3,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
-  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
-  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
-  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
-  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } }
+  { { 0,0 },{ 0,1 },{ 0,2 },{ 0,3 },{ 0,4 },{ 0,4 },{ 0,4 } },
+  { { 1,0 },{ 1,1 },{ 1,1 },{ 1,3 },{ 1,3 },{ 1,3 },{ 1,3 } },
+  { { 2,0 },{ 1,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
+  { { 3,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
+  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
+  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
+  { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } }
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
 
 void ScanOrderRom::initScanOrderRom()
 {
-  const uint32_t maxSizeIdx = MAX_CU_SIZE_IDX;
+  const uint32_t maxSizeIdx = MAX_TU_SIZE_IDX;
   // initialize scan orders
   for (uint32_t blockHeightIdx = 0; blockHeightIdx < maxSizeIdx; blockHeightIdx++)
   {
@@ -754,8 +712,8 @@ void ScanOrderRom::initScanOrderRom()
 
 void ScanOrderRom::destroyScanOrderRom()
 {
-  unsigned numWidths = MAX_CU_SIZE_IDX;
-  unsigned numHeights = MAX_CU_SIZE_IDX;
+  unsigned numWidths  = MAX_TU_SIZE_IDX;
+  unsigned numHeights = MAX_TU_SIZE_IDX;
 
   for (uint32_t groupTypeIndex = 0; groupTypeIndex < SCAN_NUMBER_OF_GROUP_TYPES; groupTypeIndex++)
   {
