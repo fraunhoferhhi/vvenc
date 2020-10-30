@@ -236,7 +236,7 @@ public:
   RPLEntry            m_RPLList1[ MAX_GOP ];                            ///< the RPL entries from the config file
   GOPEntry            m_GOPList [ MAX_GOP ];                            ///< the coding structure entries from the config file
   int                 m_maxDecPicBuffering[ MAX_TLAYER ];               ///< total number of pictures in the decoded picture buffer
-  int                 m_numReorderPics    [ MAX_TLAYER ];               ///< total number of reorder pictures
+  int                 m_maxNumReorderPics [ MAX_TLAYER ];               ///< total number of reorder pictures
   int                 m_maxTempLayer;                                   ///< Max temporal layer
   int                 m_numRPLList0;
   int                 m_numRPLList1;
@@ -524,7 +524,7 @@ public:
       , m_rewriteParamSets                            ( false )
       , m_idrRefParamList                             ( false )
       , m_maxDecPicBuffering                          { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
-      , m_numReorderPics                              { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
+      , m_maxNumReorderPics                           { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
       , m_maxTempLayer                                ( 0 )                             // not set -> derived
       , m_numRPLList0                                 ( 0 )                             // not set -> derived
       , m_numRPLList1                                 ( 0 )                             // not set -> derived

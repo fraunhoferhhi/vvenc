@@ -175,10 +175,10 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   bpSei.sublayerDpbOutputOffsetsPresent = true;
   for(int i = 0; i < bpSei.bpMaxSubLayers; i++)
   {
-    bpSei.dpbOutputTidOffset[i] = m_pcEncCfg->m_numReorderPics[i] * (1<<(bpSei.bpMaxSubLayers-1-i));
-    if(bpSei.dpbOutputTidOffset[i] >= m_pcEncCfg->m_numReorderPics[bpSei.bpMaxSubLayers-1])
+    bpSei.dpbOutputTidOffset[i] = m_pcEncCfg->m_maxNumReorderPics[i] * (1<<(bpSei.bpMaxSubLayers-1-i));
+    if(bpSei.dpbOutputTidOffset[i] >= m_pcEncCfg->m_maxNumReorderPics[bpSei.bpMaxSubLayers-1])
     {
-      bpSei.dpbOutputTidOffset[i] -= m_pcEncCfg->m_numReorderPics[bpSei.bpMaxSubLayers-1];
+      bpSei.dpbOutputTidOffset[i] -= m_pcEncCfg->m_maxNumReorderPics[bpSei.bpMaxSubLayers-1];
     }
     else
     {
