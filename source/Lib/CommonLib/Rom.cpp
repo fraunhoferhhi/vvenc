@@ -972,8 +972,6 @@ const char *MatrixType[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM] =
     "INTER64X64_CHROMAU_FROM16x16_CHROMAU",
     "INTER64X64_CHROMAV_FROM16x16_CHROMAV"
   },
-  {
-  },
 };
 
 const char *MatrixType_DC[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM] =
@@ -1010,8 +1008,6 @@ const char *MatrixType_DC[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM] =
     "INTER64X64_CHROMAU_DC_FROM16x16_CHROMAU",
     "INTER64X64_CHROMAV_DC_FROM16x16_CHROMAV"
   },
-  {
-  },
 };
 
 const int g_quantTSDefault4x4[4 * 4] =
@@ -1046,8 +1042,8 @@ const int g_quantInterDefault8x8[8 * 8] =
   16,16,16,16,16,16,16,16
 };
 
-const uint32_t g_scalingListSize [SCALING_LIST_SIZE_NUM] = { 1, 4, 16, 64, 256, 1024, 4096, 16384 };
-const uint32_t g_scalingListSizeX[SCALING_LIST_SIZE_NUM] = { 1, 2,  4,  8,  16,   32,   64,   128 };
+const uint32_t g_scalingListSize [SCALING_LIST_SIZE_NUM] = { 1, 4, 16, 64, 256, 1024, 4096 };
+const uint32_t g_scalingListSizeX[SCALING_LIST_SIZE_NUM] = { 1, 2,  4,  8,  16,   32,   64 };
 
 const uint8_t g_aucChromaScale[NUM_CHROMA_FORMAT][chromaQPMappingTableSize] =
 {

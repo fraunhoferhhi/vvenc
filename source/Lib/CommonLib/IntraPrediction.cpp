@@ -1014,11 +1014,6 @@ bool isAboveLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const
   const CodingStructure& cs = *cu.cs;
   const Position refPos = posLT.offset(-1, -1);
 
-  if (!cs.isDecomp(refPos, chType))
-  {
-    return false;
-  }
-
   return (cs.getCURestricted(refPos, cu, chType) != NULL);
 }
 
@@ -1037,11 +1032,6 @@ int isAboveAvailable(const CodingUnit &cu, const ChannelType& chType, const Posi
     if( dx >= checkPosX )
     {
       const Position refPos = posLT.offset(dx, -1);
-
-      if (!cs.isDecomp(refPos, chType))
-      {
-        break;
-      }
 
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
@@ -1073,11 +1063,6 @@ int isLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const Posit
     {
       const Position refPos = posLT.offset(-1, dy);
 
-      if (!cs.isDecomp(refPos, chType))
-      {
-        break;
-      }
-
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
       if( cuN ) checkPosY = chType == CH_C ? (cuN->Cb().y + cuN->Cb().height - posLT.y) : (cuN->Y().y + cuN->Y().height - posLT.y);
@@ -1107,11 +1092,6 @@ int isAboveRightAvailable(const CodingUnit &cu, const ChannelType& chType, const
     {
       const Position refPos = posRT.offset(unitWidth + dx, -1);
 
-      if (!cs.isDecomp(refPos, chType))
-      {
-        break;
-      }
-
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
       if(cuN) checkPosX = chType == CH_C ? (cuN->Cb().x + cuN->Cb().width - (posRT.x + unitWidth)) : (cuN->Y().x + cuN->Y().width - (posRT.x + unitWidth));
@@ -1140,11 +1120,6 @@ int isBelowLeftAvailable(const CodingUnit &cu, const ChannelType& chType, const 
     if( dy >= checkPosY )
     {
       const Position refPos = posLB.offset(-1, unitHeight + dy);
-
-      if (!cs.isDecomp(refPos, chType))
-      {
-        break;
-      }
 
       const CodingUnit* cuN = cs.getCURestricted(refPos, cu, chType);
       valid = (cuN != NULL);
@@ -1644,9 +1619,9 @@ void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const Comp
 
   const Position posLT = area;
   bool           isLeftAvail =
-    (cs.getCURestricted(posLT.offset(-1, 0), cu, CH_L) != NULL) && cs.isDecomp(posLT.offset(-1, 0), CH_L);
+    (cs.getCURestricted(posLT.offset(-1, 0), cu, CH_L) != NULL);
   bool isAboveAvail =
-    (cs.getCURestricted(posLT.offset(0, -1), cu, CH_L) != NULL) && cs.isDecomp(posLT.offset(0, -1), CH_L);
+    (cs.getCURestricted(posLT.offset(0, -1), cu, CH_L) != NULL);
   // ----- Step 1: unfiltered reference samples -----
   if (cu.blocks[area.compID].x == area.x && cu.blocks[area.compID].y == area.y)
   {

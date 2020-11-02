@@ -124,11 +124,6 @@ public:
   // global accessors
   // ---------------------------------------------------------------------------
 
-  bool isDecomp (const Position& pos, const ChannelType _chType) const;
-  bool isDecomp (const Position& pos, const ChannelType _chType);
-  void setDecomp(const CompArea& area, const bool _isCoded = true);
-  void setDecomp(const UnitArea& area, const bool _isCoded = true);
-
   const CodingUnit*    getCU(const Position& pos, const ChannelType _chType, const TreeType _treeType) const;
   const TransformUnit* getTU(const Position& pos, const ChannelType _chType, const int subTuIdx = -1) const;
 
@@ -199,7 +194,6 @@ private:
 
   CodingUnit**      m_cuPtr   [MAX_NUM_CH];
   TransformUnit**   m_tuPtr   [MAX_NUM_CH];
-  bool*             m_isDecomp[MAX_NUM_CH];
 
   unsigned m_numCUs;
   unsigned m_numTUs;
@@ -218,8 +212,6 @@ private:
   PelStorage* m_rsporg;
 
   TCoeff* m_coeffs [MAX_NUM_COMP];
-  Pel*    m_pcmbuf [MAX_NUM_COMP];
-  bool*   m_runType[MAX_NUM_CH];
   int     m_offsets[MAX_NUM_COMP];
 
   std::vector<Mv>   m_dmvrMvCache;

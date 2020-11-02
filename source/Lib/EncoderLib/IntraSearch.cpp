@@ -756,8 +756,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 #endif
 #endif
 
-  cs.setDecomp( cs.area.Cb(), false );
-
   uint32_t   uiBestMode = 0;
   Distortion uiBestDist = 0;
   double     dBestCost  = MAX_DOUBLE;
@@ -933,7 +931,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       {
         continue;
       }
-      cs.setDecomp( cu.Cb(), false );
       cs.dist = baseDist;
       //----- restore context models -----
       m_CABACEstimator->getCtx() = ctxStart;
@@ -2052,7 +2049,6 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
 #if ISP_VVC
   if(cu.ispMode)
   { 
-    cs.setDecomp(cu.Y());
     for (auto& ptu : cs.tus)
     {
       if (currArea.Y().contains(ptu->Y()))
@@ -2110,7 +2106,6 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
     tmpTU.initData();
     tmpTU.UnitArea::operator=(currArea);
-    cs.setDecomp(currArea.Cb(), true); // set in advance (required for Cb2/Cr2 in 4:2:2 video)
 
     const unsigned      numTBlocks = getNumberValidTBlocks(*cs.pcv);
 

@@ -85,16 +85,13 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
   {
     m_coeffs[ i ] = nullptr;
-    m_pcmbuf[ i ] = nullptr;
     m_offsets[ i ] = 0;
   }
 
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
-    m_runType [ i ] = nullptr;
     m_cuPtr   [ i ] = nullptr;
     m_tuPtr   [ i ] = nullptr;
-    m_isDecomp[ i ] = nullptr;
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -123,15 +120,11 @@ void CodingStructure::destroy()
 
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
-    delete[] m_isDecomp[ i ];
-    m_isDecomp[ i ] = nullptr;
-
     delete[] m_cuPtr[ i ];
     m_cuPtr[ i ] = nullptr;
 
     delete[] m_tuPtr[ i ];
     m_tuPtr[ i ] = nullptr;
-
   }
 
   for( int i = 0; i < NUM_EDGE_DIR; i++ )
@@ -156,57 +149,6 @@ void CodingStructure::releaseIntermediateData()
 {
   clearTUs();
   clearCUs();
-}
-
-bool CodingStructure::isDecomp( const Position& pos, const ChannelType effChType )
-{
-  if( area.blocks[effChType].contains( pos ) )
-  {
-    return m_isDecomp[effChType][rsAddr( pos, area.blocks[effChType], area.blocks[effChType].width, unitScale[effChType] )];
-  }
-  else if( parent )
-  {
-    return parent->isDecomp( pos, effChType );
-  }
-  else
-  {
-    return false;
-  }
-}
-
-bool CodingStructure::isDecomp( const Position& pos, const ChannelType effChType ) const
-{
-  if( area.blocks[effChType].contains( pos ) )
-  {
-    return m_isDecomp[effChType][rsAddr( pos, area.blocks[effChType], area.blocks[effChType].width, unitScale[effChType] )];
-  }
-  else if( parent )
-  {
-    return parent->isDecomp( pos, effChType );
-  }
-  else
-  {
-    return false;
-  }
-}
-
-void CodingStructure::setDecomp(const CompArea& _area, const bool _isCoded /*= true*/)
-{
-  const UnitScale& scale = unitScale[_area.compID];
-
-  AreaBuf<bool> isCodedBlk( m_isDecomp[toChannelType( _area.compID )] + rsAddr( _area, area.blocks[_area.compID].pos(), area.blocks[_area.compID].width, scale ),
-                            area.blocks[_area.compID].width >> scale.posx,
-                            _area.width                     >> scale.posx,
-                            _area.height                    >> scale.posy);
-  isCodedBlk.fill( _isCoded );
-}
-
-void CodingStructure::setDecomp(const UnitArea& _area, const bool _isCoded /*= true*/)
-{
-  for( uint32_t i = 0; i < _area.blocks.size(); i++ )
-  {
-    if( _area.blocks[i].valid() ) setDecomp( _area.blocks[i], _isCoded );
-  }
 }
 
 const int CodingStructure::signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const
@@ -540,8 +482,6 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
   tu->idx  = idx;
 
   TCoeff *coeffs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
-  Pel    *pcmbuf[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
-  bool   *runType[5]   = { nullptr, nullptr, nullptr, nullptr, nullptr };
 
   uint32_t numCh = getNumberValidComponents( area.chromaFormat );
 
@@ -577,17 +517,12 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
     }
 
     coeffs[i] = m_coeffs[i] + m_offsets[i];
-    pcmbuf[i] = m_pcmbuf[i] + m_offsets[i];
-    if (i < MAX_NUM_CH)
-    {
-      if (m_runType[i] != nullptr) runType[i] = m_runType[i] + m_offsets[i];
-    }
 
     unsigned areaSize = tu->blocks[i].area();
     m_offsets[i] += areaSize;
   }
 
-  tu->init( coeffs, pcmbuf, runType);
+  tu->init( coeffs );
 
   return *tu;
 }
@@ -804,7 +739,6 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
 
     m_cuPtr[i]    = _area > 0 ? new CodingUnit*    [_area] : nullptr;
     m_tuPtr[i]    = _area > 0 ? new TransformUnit* [_area] : nullptr;
-    m_isDecomp[i] = _area > 0 ? new bool           [_area] : nullptr;
   }
 
   for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
@@ -882,14 +816,6 @@ void CodingStructure::createCoeffs()
     unsigned _area = area.blocks[i].area();
 
     m_coeffs[i] = _area > 0 ? ( TCoeff* ) xMalloc( TCoeff, _area ) : nullptr;
-    m_pcmbuf[i] = _area > 0 ? ( Pel*    ) xMalloc( Pel,    _area ) : nullptr;
-  }
-
-  const unsigned numCh = getNumberValidChannels( area.chromaFormat );
-  for( unsigned i = 0; i < numCh; i++ )
-  {
-    unsigned _area = area.blocks[i].area();
-    m_runType[i]   = _area > 0 ? ( bool*  ) xMalloc( bool, _area ) : nullptr;
   }
 }
 
@@ -898,11 +824,6 @@ void CodingStructure::destroyCoeffs()
   for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
   {
     if( m_coeffs[i] ) { xFree( m_coeffs[i] ); m_coeffs[i] = nullptr; }
-    if( m_pcmbuf[i] ) { xFree( m_pcmbuf[i] ); m_pcmbuf[i] = nullptr; }
-}
-  for (uint32_t i = 0; i < MAX_NUM_CH; i++)
-  {
-    if (m_runType[i])   { xFree(m_runType[i]);   m_runType[i]   = nullptr; }
   }
 }
 
@@ -971,20 +892,12 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
       cu = *pcu;
     }
-
-    unsigned numComp = getNumberValidChannels( area.chromaFormat );
-    for( unsigned i = 0; i < numComp; i++)
-    {
-      ::memcpy( subStruct.m_isDecomp[i], m_isDecomp[i], (unitScale[i].scale( area.blocks[i].size() ).area() * sizeof( bool ) ) );
-    }
   }
 }
 
 void CodingStructure::useSubStructure( const CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyReco )
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
-
-  setDecomp( clippedArea );
 
   if( cpyReco )
   {
@@ -1163,8 +1076,7 @@ void CodingStructure::clearTUs()
   {
     size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
 
-    memset( m_isDecomp[i], false, sizeof( *m_isDecomp[0] ) * _area );
-    memset( m_tuPtr   [i],     0, sizeof( *m_tuPtr   [0] ) * _area );
+    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
   }
 
   numCh = getNumberValidComponents( area.chromaFormat );

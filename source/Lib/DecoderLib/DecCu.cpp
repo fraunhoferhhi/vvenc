@@ -256,15 +256,6 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
     piResi.scaleSignal(tu.chromaAdj, 0, tu.cu->cs->slice->clpRngs[compID]);
   }
 
-  if( !tu.cu->ispMode || !isLuma( compID ) )
-  {
-    cs.setDecomp( area );
-  }
-  else if( tu.cu->ispMode && isLuma( compID ) && CU::isISPFirst( *tu.cu, tu.blocks[compID], compID ) )
-  {
-    cs.setDecomp( tu.cu->blocks[compID] );
-  }
-
   piPred.reconstruct( piPred, piResi, tu.cu->cs->slice->clpRngs[ compID ] );
   pReco.copyFrom( piPred );
 
@@ -392,8 +383,6 @@ void DecCu::xReconInter(CodingUnit &cu)
   {
     cs.getRecoBuf(cu).copyClip( predBuf, cs.slice->clpRngs);
   }
-
-  cs.setDecomp(cu);
 }
 
 void DecCu::xDecodeInterTU( TransformUnit&  currTU, const ComponentID compID )

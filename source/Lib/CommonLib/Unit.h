@@ -422,7 +422,7 @@ struct TransformUnit : public UnitArea
   TransformUnit                           ( const UnitArea& unit);
   TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area);
   void          initData                  ();
-  void          init                      ( TCoeff **coeffs, Pel** pcmbuf, bool** runType);
+  void          init                      ( TCoeff **coeffs);
 
   TransformUnit& operator=                ( const TransformUnit& other);
   void          copyComponentFrom         ( const TransformUnit& other, const ComponentID compID);
