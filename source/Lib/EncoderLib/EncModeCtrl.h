@@ -323,8 +323,6 @@ private:
   const PreCalcValues* m_pcv;
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
   TCoeff*              m_pCoeff;
-  Pel*                 m_pPcmBuf;
-  bool*                m_runType;
   CodingStructure      m_dummyCS;
   XUCache              m_dummyCache;
 
@@ -333,7 +331,7 @@ protected:
   void create   ( const ChromaFormat chFmt );
   void destroy  ();
 public:
-  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_pPcmBuf( nullptr ), m_runType( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
+  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
   virtual ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );
