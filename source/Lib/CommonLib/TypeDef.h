@@ -386,7 +386,8 @@ enum MvpDir
   MD_ABOVE,             ///< MVP of above block
   MD_ABOVE_RIGHT,       ///< MVP of above right block
   MD_BELOW_LEFT,        ///< MVP of below left block
-  MD_ABOVE_LEFT         ///< MVP of above left block
+  MD_ABOVE_LEFT,        ///< MVP of above left block
+  MD_COLOCATED
 };
 
 enum TransformDirection

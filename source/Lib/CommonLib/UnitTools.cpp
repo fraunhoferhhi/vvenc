@@ -1535,6 +1535,88 @@ void CU::fillMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refI
   }
 }
 
+void CU::fillMvpCandFull(CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo)
+{
+  CodingStructure &cs = *cu.cs;
+
+  AMVPInfo *pInfo = &amvpInfo;
+
+  pInfo->numCand = 0;
+  pInfo->available = 0;
+
+  if (refIdx < 0)
+  {
+    return;
+  }
+
+  //-- Get Spatial MV
+  Position posLT = cu.Y().topLeft();
+  Position posRT = cu.Y().topRight();
+  Position posLB = cu.Y().bottomLeft();
+
+  pInfo->available += addMVPCandUnscaled( cu, refPicList, refIdx, posLB, MD_BELOW_LEFT, *pInfo ) ? 1<<MD_BELOW_LEFT : 0;
+  pInfo->available += addMVPCandUnscaled( cu, refPicList, refIdx, posLB, MD_LEFT, *pInfo )       ? 1<<MD_LEFT : 0;
+
+  // Above predictor search
+  pInfo->available += addMVPCandUnscaled( cu, refPicList, refIdx, posLT, MD_ABOVE_LEFT, *pInfo ) ? 1<<MD_ABOVE_LEFT : 0;
+  pInfo->available += addMVPCandUnscaled( cu, refPicList, refIdx, posRT, MD_ABOVE_RIGHT, *pInfo )? 1<<MD_ABOVE_RIGHT : 0;
+  pInfo->available += addMVPCandUnscaled( cu, refPicList, refIdx, posRT, MD_ABOVE, *pInfo )      ? 1<<MD_ABOVE : 0;
+
+
+  for( int i = 0; i < pInfo->numCand; i++ )
+  {
+    pInfo->mvCand[i].roundTransPrecInternal2Amvr(cu.imv);
+  }
+
+  if (cs.picHeader->enableTMVP && (cu.lumaSize().width + cu.lumaSize().height > 12))
+  {
+    // Get Temporal Motion Predictor
+    const int refIdx_Col = refIdx;
+
+    Position posRB = cu.Y().bottomRight().offset(-3, -3);
+
+    const PreCalcValues& pcv = *cs.pcv;
+
+    Position posC0;
+    bool C0Avail = false;
+    Position posC1 = cu.Y().center();
+    Mv cColMv;
+
+    bool boundaryCond = ((posRB.x + pcv.minCUSize) < pcv.lumaWidth) && ((posRB.y + pcv.minCUSize) < pcv.lumaHeight);
+    SubPic curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
+    if (curSubPic.treatedAsPic)
+    {
+      boundaryCond = ((posRB.x + pcv.minCUSize) <= curSubPic.subPicRight &&
+                      (posRB.y + pcv.minCUSize) <= curSubPic.subPicBottom);
+    }    
+    if (boundaryCond)
+    {
+      int posYInCtu = posRB.y & pcv.maxCUSizeMask;
+      if (posYInCtu + 4 < pcv.maxCUSize)
+      {
+        posC0 = posRB.offset(4, 4);
+        C0Avail = true;
+      }
+    }
+    if ( ( C0Avail && getColocatedMVP( cu, refPicList, posC0, cColMv, refIdx_Col ) ) || getColocatedMVP( cu, refPicList, posC1, cColMv, refIdx_Col ) )
+    {
+      cColMv.roundTransPrecInternal2Amvr(cu.imv);
+      pInfo->mvCand[pInfo->numCand++] = cColMv;
+      pInfo->available += 1<<MD_COLOCATED;
+    }
+  }
+
+//  {
+//    const int        currRefPOC = cs.slice->getRefPic(refPicList, refIdx)->getPOC();
+//    addAMVPHMVPCand(cu, refPicList, currRefPOC, *pInfo);
+//  }
+
+  for (Mv &mv : pInfo->mvCand)
+  {
+    mv.roundTransPrecInternal2Amvr(cu.imv);
+  }
+}
+
 bool CU::addAffineMVPCandUnscaled(const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAMVPInfo)
 {
   CodingStructure &cs = *cu.cs;
