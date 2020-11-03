@@ -534,6 +534,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("Geo",                                             m_Geo,                                                        "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                              "Maximum number of geometric partitioning mode candidates")
   ("RateControl",                                     m_RCRateControlMode,                                           "Rate control: enable rate control; 1: CTU-level RC; 2: picture-level RC; 3: GOP-level RC" )
+  ("NumPasses",                                       m_RCNumPasses,                                                 "Rate control: number of passes; 1: one-pass rate control; 2: two-pass rate control" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                             "Rate control: target bit-rate" )
   ("KeepHierarchicalBit",                             m_RCKeepHierarchicalBit,                                       "Rate control: 0: equal bit allocation; 1: fixed ratio bit allocation; 2: adaptive ratio bit allocation" )
   ("RCLCUSeparateModel",                              m_RCUseLCUSeparateModel,                                       "Rate control: use CTU level separate R-lambda model" )
@@ -888,6 +889,7 @@ void EncAppCfg::printCfg()
   msgApp( VERBOSE, "RateControl:%d ",          m_RCRateControlMode );
   if ( m_RCRateControlMode )
   {
+    msgApp( VERBOSE, "NumPasses:%d ",               m_RCNumPasses );
     msgApp( VERBOSE, "TargetBitrate:%d ",           m_RCTargetBitrate );
     msgApp( VERBOSE, "KeepHierarchicalBit:%d ",     m_RCKeepHierarchicalBit );
     msgApp( VERBOSE, "RCLCUSeparateModel:%d ",      m_RCUseLCUSeparateModel );

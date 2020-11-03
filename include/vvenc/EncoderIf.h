@@ -86,8 +86,9 @@ class VVENC_DECL EncoderIf
     ~EncoderIf();
 
     void  createEncoderLib ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf = nullptr );
-    void  destroyEncoderLib();
+    void  initEncoderLib   ( int pass = 0 );
     void  encodePicture    ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
+    void  destroyEncoderLib();
     void  printSummary     ();
 };
 

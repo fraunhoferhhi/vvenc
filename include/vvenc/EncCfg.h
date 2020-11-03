@@ -354,6 +354,7 @@ public:
   int                 m_Geo;
   unsigned            m_maxNumGeoCand;
   int                 m_RCRateControlMode;
+  int                 m_RCNumPasses;
   int                 m_RCTargetBitrate;
   int                 m_RCKeepHierarchicalBit;
   bool                m_RCUseLCUSeparateModel;
@@ -642,6 +643,7 @@ public:
       , m_Geo                                         ( 0 )
       , m_maxNumGeoCand                               ( 5 )
       , m_RCRateControlMode                           ( 0 )
+      , m_RCNumPasses                                 ( 1 )
       , m_RCTargetBitrate                             ( 0 )
       , m_RCKeepHierarchicalBit                       ( 0 )
       , m_RCUseLCUSeparateModel                       ( false )

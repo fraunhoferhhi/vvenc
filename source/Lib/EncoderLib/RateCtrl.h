@@ -220,6 +220,17 @@ namespace vvenc {
     double  picMSE;
   };
 
+  struct TRCPassStats
+  {
+    TRCPassStats( int _poc, int _qp, uint32_t _numBytes, double _yPsnr, double _uPsnr, double _vPsnr ) : poc( _poc ), qp( _qp ), numBytes( _numBytes ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ) {}
+    int       poc;
+    int       qp;
+    uint32_t  numBytes;
+    double    yPsnr;
+    double    uPsnr;
+    double    vPsnr;
+  };
+
   class RateCtrl
   {
   public:
@@ -232,6 +243,9 @@ namespace vvenc {
     void initRCGOP( int numberOfPictures );
     void destroyRCGOP();
 
+    void setRCPass( int pass, int maxPass );
+    void addRCPassStats( int poc, int qp, uint32_t numBytes, double yPsnr, double uPsnr, double vPsnr );
+
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
 
   public:
@@ -240,9 +254,13 @@ namespace vvenc {
     EncRCPic*   encRCPic;
     std::mutex  rcMutex;
     int         rcQP;
+    int         rcPass;
+    int         rcMaxPass;
+    bool        rcIsFinalPass;
 
   private:
-    std::list<EncRCPic*> m_listRCPictures;
+    std::list<EncRCPic*>    m_listRCPictures;
+    std::list<TRCPassStats> m_listRCFirstPassStats;
   };
 }
 #endif

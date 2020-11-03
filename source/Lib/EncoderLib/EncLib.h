@@ -48,9 +48,9 @@ vvc@hhi.fraunhofer.de
 #include "EncGOP.h"
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
-#include <mutex>
 #include "../../../include/vvenc/EncCfg.h"
 #include "../../../include/vvenc/Nal.h"
+#include <mutex>
 
 //! \ingroup EncoderLib
 //! \{
@@ -73,9 +73,12 @@ private:
   int                       m_numPicsCoded;
   int                       m_pocEncode;
   int                       m_pocRecOut;
+  int                       m_GOPSizeLog2;
+  int                       m_TicksPerFrameMul4;
 
   const EncCfg              m_cEncCfg;
-  EncGOP                    m_cGOPEncoder;
+  EncCfg                    m_cBckCfg;
+  EncGOP*                   m_cGOPEncoder;
   EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
   PicList                   m_cListPic;
@@ -94,19 +97,21 @@ private:
   std::vector<int>          m_pocToGopId;
   std::vector<int>          m_nextPocOffset;
 
-  int                       m_GOPSizeLog2;
-  int                       m_TicksPerFrameMul4;
-
 public:
   EncLib();
   virtual ~EncLib();
 
-  void     init                ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf );
-  void     destroy             ();
+  void     createEncoderLib    ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf );
+  void     initEncoderLib      ( int pass );
   void     encodePicture       ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
+  void     destroyEncoderLib   ();
   void     printSummary        ();
 
 private:
+  void     xUninitLib          ();
+  void     xResetLib           ();
+  void     xSetRCEncCfg        ( int pass );
+
   int      xGetGopIdFromPoc    ( int poc ) const { return m_pocToGopId[ poc % m_cEncCfg.m_GOPSize ]; }
   int      xGetNextPocICO      ( int poc, bool flush, int max ) const;
   void     xCreateCodingOrder  ( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList );

@@ -74,17 +74,23 @@ void EncoderIf::createEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf
 {
   CHECK( m_pEncLib != nullptr, "encoder library already initialized" );
   m_pEncLib = new EncLib;
-  m_pEncLib->init( encCfg, yuvWriterIf );
+  m_pEncLib->createEncoderLib( encCfg, yuvWriterIf );
 }
 
 void EncoderIf::destroyEncoderLib()
 {
   if ( m_pEncLib )
   {
-    m_pEncLib->destroy();
+    m_pEncLib->destroyEncoderLib();
     delete m_pEncLib;
     m_pEncLib = nullptr;
   }
+}
+
+void EncoderIf::initEncoderLib( int pass )
+{
+  CHECK( m_pEncLib == nullptr, "encoder library not created" );
+  m_pEncLib->initEncoderLib( pass );
 }
 
 void EncoderIf::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty )

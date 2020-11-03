@@ -1477,10 +1477,13 @@ double EncRCPic::getLCUEstLambdaAndQP(double bpp, int clipPicQP, int *estQP, con
 
 RateCtrl::RateCtrl()
 {
-  encRCSeq = NULL;
-  encRCGOP = NULL;
-  encRCPic = NULL;
-  rcQP     = 0;
+  encRCSeq      = NULL;
+  encRCGOP      = NULL;
+  encRCPic      = NULL;
+  rcQP          = 0;
+  rcPass        = 0;
+  rcMaxPass     = 0;
+  rcIsFinalPass = true;
 }
 
 RateCtrl::~RateCtrl()
@@ -1850,6 +1853,20 @@ void RateCtrl::destroyRCGOP()
   encRCGOP = NULL;
 }
 
+void RateCtrl::setRCPass( int pass, int maxPass )
+{
+  rcPass        = pass;
+  rcMaxPass     = maxPass;
+  rcIsFinalPass = ( pass >= maxPass );
+}
+
+void RateCtrl::addRCPassStats( int poc, int qp, uint32_t numBytes, double yPsnr, double uPsnr, double vPsnr )
+{
+  if( rcPass < rcMaxPass )
+  {
+    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, numBytes, yPsnr, uPsnr, vPsnr ) );
+  }
+}
 
 
 static int xCalcHADs8x8_ISlice( const Pel *piOrg, const int iStrideOrg )

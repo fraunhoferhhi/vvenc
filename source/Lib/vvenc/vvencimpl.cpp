@@ -270,6 +270,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
   AccessUnit cAu;
   bool encDone = false;
 
+  // TODO (jb): add 2pass encoding
   m_cEncoderIf.encodePicture( false, cYUVBuffer, cAu, encDone );
 
   /* copy output AU */
@@ -301,6 +302,7 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   /* encode till next output AU done */
   while( !m_bFlushed && cAu.empty() )
   {
+    // TODO (jb): add 2pass encoding
     m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, m_bFlushed );
   }
 

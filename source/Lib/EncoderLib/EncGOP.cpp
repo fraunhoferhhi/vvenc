@@ -433,6 +433,7 @@ void EncGOP::encodePicture( std::vector<Picture*> encList, PicList& picList, Acc
   if ( pic->writePic )
   {
     xWritePicture( *pic, au, isEncodeLtRef );
+    xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
   }
 
   xUpdateAfterPicRC( pic );
@@ -1213,7 +1214,6 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
   std::string digestStr;
   xWriteTrailingSEIs( pic, au, digestStr );
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
-  xSyncAlfAps( pic, m_gopApsMap, pic.picApsMap );
 }
 
 
@@ -1711,6 +1711,8 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     }
   }
 
+  m_pcRateCtrl->addRCPassStats( slice->poc, slice->sliceQp, numRBSPBytes, dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+
   const uint32_t uibits = numRBSPBytes * 8;
 
   //===== add PSNR =====
@@ -1747,63 +1749,77 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   if( m_pcEncCfg->m_verbosity >= NOTICE )
   {
-    std::string cInfo = print("POC %4d TId: %1d ( %c-SLICE, QP %d ) %10d bits",
-        slice->poc,
-        slice->TLayer,
-        c,
-        slice->sliceQp,
-        uibits );
-
-    std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
-
-    accessUnit.m_cInfo.append( cInfo );
-    accessUnit.m_cInfo.append( cPSNR );
-
-    msg( NOTICE, cInfo.c_str() );
-    msg( NOTICE, cPSNR.c_str() );
-
-
-    if ( m_pcEncCfg->m_printHexPsnr )
+    if( ! m_pcRateCtrl->rcIsFinalPass )
     {
-      uint64_t xPsnr[MAX_NUM_COMP];
-      for (int i = 0; i < MAX_NUM_COMP; i++)
+      std::string cInfo = print("RC pass %d/%d, analyze poc %d",
+          m_pcRateCtrl->rcPass + 1,
+          m_pcRateCtrl->rcMaxPass + 1,
+          slice->poc );
+
+          accessUnit.m_cInfo.append( cInfo );
+
+          msg( NOTICE, cInfo.c_str() );
+    }
+    else
+    {
+      std::string cInfo = print("POC %4d TId: %1d ( %c-SLICE, QP %d ) %10d bits",
+          slice->poc,
+          slice->TLayer,
+          c,
+          slice->sliceQp,
+          uibits );
+
+      std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+
+      accessUnit.m_cInfo.append( cInfo );
+      accessUnit.m_cInfo.append( cPSNR );
+
+      msg( NOTICE, cInfo.c_str() );
+      msg( NOTICE, cPSNR.c_str() );
+
+
+      if ( m_pcEncCfg->m_printHexPsnr )
       {
-        std::copy(reinterpret_cast<uint8_t *>(&dPSNR[i]),
-                  reinterpret_cast<uint8_t *>(&dPSNR[i]) + sizeof(dPSNR[i]),
-                  reinterpret_cast<uint8_t *>(&xPsnr[i]));
+        uint64_t xPsnr[MAX_NUM_COMP];
+        for (int i = 0; i < MAX_NUM_COMP; i++)
+        {
+          std::copy(reinterpret_cast<uint8_t *>(&dPSNR[i]),
+              reinterpret_cast<uint8_t *>(&dPSNR[i]) + sizeof(dPSNR[i]),
+              reinterpret_cast<uint8_t *>(&xPsnr[i]));
+        }
+
+        std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+
+        accessUnit.m_cInfo.append( cPSNRHex );
+        msg(NOTICE, cPSNRHex.c_str() );
       }
 
-      std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
-
-      accessUnit.m_cInfo.append( cPSNRHex );
-      msg(NOTICE, cPSNRHex.c_str() );
-    }
-
-    if( printFrameMSE )
-    {
-      std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
-      accessUnit.m_cInfo.append( cFrameMSE );
-      msg(NOTICE, cFrameMSE.c_str() );
-    }
-
-    std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
-    accessUnit.m_cInfo.append( cEncTime );
-    msg(NOTICE, cEncTime.c_str() );
-
-    std::string cRefPics;
-    for( int iRefList = 0; iRefList < 2; iRefList++ )
-    {
-      std::string tmp = print(" [L%d ", iRefList);
-      cRefPics.append( tmp );
-      for( int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++ )
+      if( printFrameMSE )
       {
-        tmp = print("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
+        std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
+        accessUnit.m_cInfo.append( cFrameMSE );
+        msg(NOTICE, cFrameMSE.c_str() );
+      }
+
+      std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
+      accessUnit.m_cInfo.append( cEncTime );
+      msg(NOTICE, cEncTime.c_str() );
+
+      std::string cRefPics;
+      for( int iRefList = 0; iRefList < 2; iRefList++ )
+      {
+        std::string tmp = print(" [L%d ", iRefList);
         cRefPics.append( tmp );
+        for( int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++ )
+        {
+          tmp = print("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
+          cRefPics.append( tmp );
+        }
+        cRefPics.append( "]" );
       }
-      cRefPics.append( "]" );
+      accessUnit.m_cInfo.append( cRefPics );
+      msg(NOTICE, cRefPics.c_str() );
     }
-    accessUnit.m_cInfo.append( cRefPics );
-    msg(NOTICE, cRefPics.c_str() );
   }
 }
 
@@ -1855,31 +1871,34 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnit& accessUnit, cons
   double PSNR_Y;
   xCalculateAddPSNR( &pic, pic.getRecoBuf(), accessUnit, printFrameMSE, &PSNR_Y, isEncodeLtRef );
 
-  std::string modeName;
-  switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
+  if( m_pcRateCtrl->rcIsFinalPass )
   {
-    case HASHTYPE_MD5:
-      modeName = "MD5";
-      break;
-    case HASHTYPE_CRC:
-      modeName = "CRC";
-      break;
-    case HASHTYPE_CHECKSUM:
-      modeName = "Checksum";
-      break;
-    default:
-      break;
-  }
-
-  if ( modeName.length() )
-  {
-    if ( digestStr.empty() )
+    std::string modeName;
+    switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
     {
-      msg( NOTICE, " [%s:%s]", modeName.c_str(), "?" );
+      case HASHTYPE_MD5:
+        modeName = "MD5";
+        break;
+      case HASHTYPE_CRC:
+        modeName = "CRC";
+        break;
+      case HASHTYPE_CHECKSUM:
+        modeName = "Checksum";
+        break;
+      default:
+        break;
     }
-    else
+
+    if ( modeName.length() )
     {
-      msg( NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
+      if ( digestStr.empty() )
+      {
+        msg( NOTICE, " [%s:%s]", modeName.c_str(), "?" );
+      }
+      else
+      {
+        msg( NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
+      }
     }
   }
 

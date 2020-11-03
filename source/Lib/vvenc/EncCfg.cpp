@@ -534,8 +534,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
 
 
-  confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode");
+  confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode" );
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
   confirmParameter(!((m_level==Level::LEVEL1) 
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
@@ -650,7 +651,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
   confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
-  
+
   confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
   confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
   confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
