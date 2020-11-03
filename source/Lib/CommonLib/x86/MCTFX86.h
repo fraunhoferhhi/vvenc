@@ -177,29 +177,35 @@ template<X86_VEXT vext>
 int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
-  Pel tempArray[64 + 8][64];
-  int base;
+  const int base = x + ( dx >> 4 ) - 3;
   
   CHECK( bs & 7, "SIMD blockSize needs to be a multiple of 8" );
 
   const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
 #if USE_AVX2
+  __m256i vfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[1] ), _mm256_set1_epi16( yFilter[2] ) );
+  __m256i vfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[3] ), _mm256_set1_epi16( yFilter[4] ) );
+  __m256i vfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[5] ), _mm256_set1_epi16( yFilter[6] ) );
+
   __m256i vfilt1 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) xFilter ) );
           vfilt1 = _mm256_inserti128_si256( vfilt1, _mm256_castsi256_si128( vfilt1 ), 1 );
   __m256i vmax   = _mm256_set1_epi32( maxSampleValue );
   __m256i vmin   = _mm256_setzero_si256();
+  
+  const int yOffset    = y + 1 + ( dy >> 4 ) - 3;
+  const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
+  const Pel* origCol   = origOrigin + y * origStride + x;
 
-  for( int y1 = 1; y1 < bs + 7; y1++ )
+  for( int x1 = 0; x1 < bs; x1 += 8, sourceCol += 8, origCol += 8 )
   {
-    const int yOffset    = y + y1 + ( dy >> 4 ) - 3;
-    const Pel* sourceRow = buffOrigin + ( yOffset ) *buffStride + 0;
+    const Pel* origRow  = origCol;
+    const Pel* rowStart = sourceCol;
 
-    for( int x1 = 0; x1 < bs; x1 += 8 )
+    __m128i xsrc[6];
+
+    for( int y1 = 1; y1 < bs + 6; y1++, rowStart += buffStride )
     {
-      base                = x + x1 + ( dx >> 4 ) - 3;
-      const Pel* rowStart = sourceRow + base;
-
       __m256i vsrc0 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[0] ) );
       __m256i vsrc1 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[1] ) );
       __m256i vsrc2 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[2] ) );
@@ -228,102 +234,104 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
       __m128i
       xsum = _mm256_cvtepi32_epi16x( vsum );
 
-      _mm_storeu_si128( ( __m128i * ) &tempArray[y1][x1], xsum );
-      
-      //sum  = 0;
-      //sum += xFilter[1] * rowStart[1];
-      //sum += xFilter[2] * rowStart[2];
-      //sum += xFilter[3] * rowStart[3];
-      //sum += xFilter[4] * rowStart[4];
-      //sum += xFilter[5] * rowStart[5];
-      //sum += xFilter[6] * rowStart[6];
-      //
-      //sum = ( sum + ( 1 << 5 ) ) >> 6;
-      //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
-      //
-      //tempArray[y1][x1] = sum;
-    }
-  }
-
-  __m256i vfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[1] ), _mm256_set1_epi16( yFilter[2] ) );
-  __m256i vfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[3] ), _mm256_set1_epi16( yFilter[4] ) );
-  __m256i vfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[5] ), _mm256_set1_epi16( yFilter[6] ) );
-
-  for( int y1 = 0; y1 < bs; y1++ )
-  {
-    const Pel* origRow = origOrigin + ( y + y1 )*origStride + 0;
-    for( int x1 = 0; x1 < bs; x1 += 8 )
-    {
-      __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &tempArray[y1 + 1][x1] );
-      __m128i xsrc2 = _mm_loadu_si128( ( const __m128i * ) &tempArray[y1 + 2][x1] );
-      __m128i xsrc3 = _mm_loadu_si128( ( const __m128i * ) &tempArray[y1 + 3][x1] );
-      __m128i xsrc4 = _mm_loadu_si128( ( const __m128i * ) &tempArray[y1 + 4][x1] );
-      __m128i xsrc5 = _mm_loadu_si128( ( const __m128i * ) &tempArray[y1 + 5][x1] );
-      __m128i xsrc6 = _mm_loadu_si128( ( const __m128i * ) &tempArray[y1 + 6][x1] );
-
-      __m256i vsrc12 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc1, xsrc2 ) ),
-                                                                        _mm_unpackhi_epi16( xsrc1, xsrc2 ), 1 );
-      __m256i vsrc34 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc3, xsrc4 ) ),
-                                                                        _mm_unpackhi_epi16( xsrc3, xsrc4 ), 1 );
-      __m256i vsrc56 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc5, xsrc6 ) ),
-                                                                        _mm_unpackhi_epi16( xsrc5, xsrc6 ), 1 );
-      
-      __m256i
-      vsum = _mm256_set1_epi32( 1 << 5 );
-      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vfilt12, vsrc12 ) );
-      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vfilt34, vsrc34 ) );
-      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vfilt56, vsrc56 ) );
-        
-      vsum = _mm256_srai_epi32 ( vsum, 6 );
-      vsum = _mm256_min_epi32  ( vmax, _mm256_max_epi32( vmin, vsum ) );
-
-      __m128i
-      xsum = _mm256_cvtepi32_epi16x( vsum );
-      __m128i
-      xorg = _mm_loadu_si128( ( const __m128i * ) &origRow[x + x1] );
-
-      xsum = _mm_sub_epi16 ( xsum, xorg );
-      xsum = _mm_madd_epi16( xsum, xsum );
-
-      xsum = _mm_hadd_epi32( xsum, xsum );
-
-      error += _mm_extract_epi32( xsum, 0 );
-      error += _mm_extract_epi32( xsum, 1 );
-
-      //sum = 0;
-      //sum += yFilter[1] * tempArray[y1 + 1][x1];
-      //sum += yFilter[2] * tempArray[y1 + 2][x1];
-      //sum += yFilter[3] * tempArray[y1 + 3][x1];
-      //sum += yFilter[4] * tempArray[y1 + 4][x1];
-      //sum += yFilter[5] * tempArray[y1 + 5][x1];
-      //sum += yFilter[6] * tempArray[y1 + 6][x1];
-      //
-      //sum = ( sum + ( 1 << 5 ) ) >> 6;
-      //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
-      //
-      //error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
-
-      if( error > besterror )
+      if( y1 >= 6 )
       {
-        return error;
+        xsrc[0] = xsrc[1];
+        xsrc[1] = xsrc[2];
+        xsrc[2] = xsrc[3];
+        xsrc[3] = xsrc[4];
+        xsrc[4] = xsrc[5];
+        xsrc[5] = xsum;
+
+        __m256i vsrc12 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc[0], xsrc[1] ) ),
+                                                                          _mm_unpackhi_epi16( xsrc[0], xsrc[1] ), 1 );
+        __m256i vsrc34 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc[2], xsrc[3] ) ),
+                                                                          _mm_unpackhi_epi16( xsrc[2], xsrc[3] ), 1 );
+        __m256i vsrc56 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc[4], xsrc[5] ) ),
+                                                                          _mm_unpackhi_epi16( xsrc[4], xsrc[5] ), 1 );
+      
+        __m256i
+        vsum = _mm256_set1_epi32( 1 << 5 );
+        vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vfilt12, vsrc12 ) );
+        vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vfilt34, vsrc34 ) );
+        vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vfilt56, vsrc56 ) );
+        
+        vsum = _mm256_srai_epi32 ( vsum, 6 );
+        vsum = _mm256_min_epi32  ( vmax, _mm256_max_epi32( vmin, vsum ) );
+
+        __m128i
+        xorg = _mm_loadu_si128( ( const __m128i * ) origRow );
+        origRow += origStride;
+      
+        xsum = _mm256_cvtepi32_epi16x( vsum );
+
+        xsum = _mm_sub_epi16 ( xsum, xorg );
+        xsum = _mm_madd_epi16( xsum, xsum );
+
+        xsum = _mm_hadd_epi32( xsum, xsum );
+
+        error += _mm_extract_epi32( xsum, 0 );
+        error += _mm_extract_epi32( xsum, 1 );
+
+        //sum = 0;
+        //sum += yFilter[1] * tempArray[y1 + 1][x1];
+        //sum += yFilter[2] * tempArray[y1 + 2][x1];
+        //sum += yFilter[3] * tempArray[y1 + 3][x1];
+        //sum += yFilter[4] * tempArray[y1 + 4][x1];
+        //sum += yFilter[5] * tempArray[y1 + 5][x1];
+        //sum += yFilter[6] * tempArray[y1 + 6][x1];
+        //
+        //sum = ( sum + ( 1 << 5 ) ) >> 6;
+        //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+        //
+        //error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
+
+        if( error > besterror )
+        {
+          return error;
+        }
+      }
+      else
+      {
+        xsrc[y1] = xsum;
+
+        //sum  = 0;
+        //sum += xFilter[1] * rowStart[1];
+        //sum += xFilter[2] * rowStart[2];
+        //sum += xFilter[3] * rowStart[3];
+        //sum += xFilter[4] * rowStart[4];
+        //sum += xFilter[5] * rowStart[5];
+        //sum += xFilter[6] * rowStart[6];
+        //
+        //sum = ( sum + ( 1 << 5 ) ) >> 6;
+        //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+        //
+        //tempArray[y1][x1] = sum;
       }
     }
   }
 #else
+  __m128i xfilt12 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[1] ), _mm_set1_epi16( yFilter[2] ) );
+  __m128i xfilt34 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[3] ), _mm_set1_epi16( yFilter[4] ) );
+  __m128i xfilt56 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[5] ), _mm_set1_epi16( yFilter[6] ) );
+  
   __m128i xfilt1 = _mm_loadu_si128( ( const __m128i * ) xFilter );
   __m128i xmax   = _mm_set1_epi32( maxSampleValue );
   __m128i xmin   = _mm_setzero_si128();
+  
+  const int yOffset    = y + 1 + ( dy >> 4 ) - 3;
+  const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
+  const Pel* origCol   = origOrigin + y * origStride + x;
 
-  for( int y1 = 1; y1 < bs + 7; y1++ )
+  for( int x1 = 0; x1 < bs; x1 += 4, sourceCol += 4, origCol += 4 )
   {
-    const int yOffset    = y + y1 + ( dy >> 4 ) - 3;
-    const Pel* sourceRow = buffOrigin + ( yOffset ) *buffStride + 0;
+    const Pel* origRow  = origCol;
+    const Pel* rowStart = sourceCol;
 
-    for( int x1 = 0; x1 < bs; x1 += 4 )
+    __m128i xsrc[6];
+
+    for( int y1 = 1; y1 < bs + 6; y1++, rowStart += buffStride )
     {
-      base                = x + x1 + ( dx >> 4 ) - 3;
-      const Pel* rowStart = sourceRow + base;
-
       __m128i xsrc0 = _mm_loadu_si128( ( const __m128i * ) &rowStart[0] );
       __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &rowStart[1] );
       __m128i xsrc2 = _mm_loadu_si128( ( const __m128i * ) &rowStart[2] );
@@ -345,73 +353,69 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
       xsum = _mm_min_epi32  ( xmax,  _mm_max_epi32( xmin, xsum ) );
       xsum = _mm_packs_epi32( xsum,  _mm_setzero_si128() );
 
-      _mm_storel_epi64( ( __m128i * ) &tempArray[y1][x1], xsum );
-      
-      //sum  = 0;
-      //sum += xFilter[1] * rowStart[1];
-      //sum += xFilter[2] * rowStart[2];
-      //sum += xFilter[3] * rowStart[3];
-      //sum += xFilter[4] * rowStart[4];
-      //sum += xFilter[5] * rowStart[5];
-      //sum += xFilter[6] * rowStart[6];
-      //
-      //sum = ( sum + ( 1 << 5 ) ) >> 6;
-      //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
-      //
-      //tempArray[y1][x1] = sum;
-    }
-  }
-
-  __m128i xfilt12 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[1] ), _mm_set1_epi16( yFilter[2] ) );
-  __m128i xfilt34 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[3] ), _mm_set1_epi16( yFilter[4] ) );
-  __m128i xfilt56 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[5] ), _mm_set1_epi16( yFilter[6] ) );
-
-  for( int y1 = 0; y1 < bs; y1++ )
-  {
-    const Pel* origRow = origOrigin + ( y + y1 )*origStride + 0;
-    for( int x1 = 0; x1 < bs; x1 += 4 )
-    {
-      __m128i
-      xsum = _mm_set1_epi32( 1 << 5 );
-
-      xsum = _mm_add_epi32( xsum, _mm_madd_epi16( xfilt12, _mm_unpacklo_epi16( _mm_loadl_epi64( ( const __m128i * ) &tempArray[y1 + 1][x1] ),
-                                                                               _mm_loadl_epi64( ( const __m128i * ) &tempArray[y1 + 2][x1] ) ) ) );
-      xsum = _mm_add_epi32( xsum, _mm_madd_epi16( xfilt34, _mm_unpacklo_epi16( _mm_loadl_epi64( ( const __m128i * ) &tempArray[y1 + 3][x1] ),
-                                                                               _mm_loadl_epi64( ( const __m128i * ) &tempArray[y1 + 4][x1] ) ) ) );
-      xsum = _mm_add_epi32( xsum, _mm_madd_epi16( xfilt56, _mm_unpacklo_epi16( _mm_loadl_epi64( ( const __m128i * ) &tempArray[y1 + 5][x1] ),
-                                                                               _mm_loadl_epi64( ( const __m128i * ) &tempArray[y1 + 6][x1] ) ) ) );
-        
-      xsum = _mm_srai_epi32 ( xsum, 6 );
-      xsum = _mm_min_epi32  ( xmax, _mm_max_epi32( xmin, xsum ) );
-      xsum = _mm_packs_epi32( xsum, _mm_setzero_si128() );
-
-      __m128i
-      xorg = _mm_loadl_epi64( ( const __m128i * ) &origRow[x + x1] );
-
-      xsum = _mm_sub_epi16 ( xsum, xorg );
-      xsum = _mm_madd_epi16( xsum, xsum );
-
-      xsum = _mm_hadd_epi32( xsum, xsum );
-
-      error += _mm_extract_epi32( xsum, 0 );
-      error += _mm_extract_epi32( xsum, 1 );
-
-      //sum = 0;
-      //sum += yFilter[1] * tempArray[y1 + 1][x1];
-      //sum += yFilter[2] * tempArray[y1 + 2][x1];
-      //sum += yFilter[3] * tempArray[y1 + 3][x1];
-      //sum += yFilter[4] * tempArray[y1 + 4][x1];
-      //sum += yFilter[5] * tempArray[y1 + 5][x1];
-      //sum += yFilter[6] * tempArray[y1 + 6][x1];
-      //
-      //sum = ( sum + ( 1 << 5 ) ) >> 6;
-      //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
-      //
-      //error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
-
-      if( error > besterror )
+      if( y1 >= 6 )
       {
-        return error;
+        xsrc[0] = xsrc[1];
+        xsrc[1] = xsrc[2];
+        xsrc[2] = xsrc[3];
+        xsrc[3] = xsrc[4];
+        xsrc[4] = xsrc[5];
+        xsrc[5] = xsum;
+        
+        xsum = _mm_set1_epi32( 1 << 5 );
+
+        xsum = _mm_add_epi32( xsum, _mm_madd_epi16( xfilt12, _mm_unpacklo_epi16( xsrc[0], xsrc[1] ) ) );
+        xsum = _mm_add_epi32( xsum, _mm_madd_epi16( xfilt34, _mm_unpacklo_epi16( xsrc[2], xsrc[3] ) ) );
+        xsum = _mm_add_epi32( xsum, _mm_madd_epi16( xfilt56, _mm_unpacklo_epi16( xsrc[4], xsrc[5] ) ) );
+        
+        xsum = _mm_srai_epi32 ( xsum, 6 );
+        xsum = _mm_min_epi32  ( xmax, _mm_max_epi32( xmin, xsum ) );
+        xsum = _mm_packs_epi32( xsum, _mm_setzero_si128() );
+
+        __m128i
+        xorg = _mm_loadl_epi64( ( const __m128i * ) origRow );
+        origRow += origStride;
+
+        xsum = _mm_sub_epi16 ( xsum, xorg );
+        xsum = _mm_madd_epi16( xsum, xsum );
+
+        error += _mm_extract_epi32( xsum, 0 );
+        error += _mm_extract_epi32( xsum, 1 );
+
+        //sum = 0;
+        //sum += yFilter[1] * tempArray[y1 + 1][x1];
+        //sum += yFilter[2] * tempArray[y1 + 2][x1];
+        //sum += yFilter[3] * tempArray[y1 + 3][x1];
+        //sum += yFilter[4] * tempArray[y1 + 4][x1];
+        //sum += yFilter[5] * tempArray[y1 + 5][x1];
+        //sum += yFilter[6] * tempArray[y1 + 6][x1];
+        //
+        //sum = ( sum + ( 1 << 5 ) ) >> 6;
+        //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+        //
+        //error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
+
+        if( error > besterror )
+        {
+          return error;
+        }
+      }
+      else
+      {
+        xsrc[y1] = xsum;
+      
+        //sum  = 0;
+        //sum += xFilter[1] * rowStart[1];
+        //sum += xFilter[2] * rowStart[2];
+        //sum += xFilter[3] * rowStart[3];
+        //sum += xFilter[4] * rowStart[4];
+        //sum += xFilter[5] * rowStart[5];
+        //sum += xFilter[6] * rowStart[6];
+        //
+        //sum = ( sum + ( 1 << 5 ) ) >> 6;
+        //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+        //
+        //tempArray[y1][x1] = sum;
       }
     }
   }
