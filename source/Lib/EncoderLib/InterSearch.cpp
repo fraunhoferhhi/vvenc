@@ -278,7 +278,10 @@ void InterSearch::destroy()
 {
   for( auto*os : gos )
   {
-    if( os ) os->flush(); os->close(); delete os; os = nullptr; 
+    if( os )
+    {
+      os->flush(); os->close(); delete os; os = nullptr; 
+    }
   }
 
   if ( m_pTempPel )
