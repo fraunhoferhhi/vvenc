@@ -1407,9 +1407,10 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
       piOrg += iStrideOrg;
     }
 
+#if 0
     constexpr int perm_unpacklo_epi128 = ( 0 << 0 ) + ( 2 << 4 );
     constexpr int perm_unpackhi_epi128 = ( 1 << 0 ) + ( 3 << 4 );
-#if 0
+
     for( int i = 0; i < 2; i++ )
     {
       m1[i][0] = _mm256_add_epi32( m2[i][0], m2[i][4] );
@@ -1468,6 +1469,24 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
       m2[i][6] = _mm256_permute2x128_si256( m1[i][5], m1[i][7], perm_unpacklo_epi128 );
       m2[i][7] = _mm256_permute2x128_si256( m1[i][5], m1[i][7], perm_unpackhi_epi128 );
     }
+
+    m1[0][0] = _mm256_permute2x128_si256( m2[0][0], m2[1][0], perm_unpacklo_epi128 );
+    m1[0][1] = _mm256_permute2x128_si256( m2[0][1], m2[1][1], perm_unpacklo_epi128 );
+    m1[0][2] = _mm256_permute2x128_si256( m2[0][2], m2[1][2], perm_unpacklo_epi128 );
+    m1[0][3] = _mm256_permute2x128_si256( m2[0][3], m2[1][3], perm_unpacklo_epi128 );
+    m1[0][4] = _mm256_permute2x128_si256( m2[0][4], m2[1][4], perm_unpacklo_epi128 );
+    m1[0][5] = _mm256_permute2x128_si256( m2[0][5], m2[1][5], perm_unpacklo_epi128 );
+    m1[0][6] = _mm256_permute2x128_si256( m2[0][6], m2[1][6], perm_unpacklo_epi128 );
+    m1[0][7] = _mm256_permute2x128_si256( m2[0][7], m2[1][7], perm_unpacklo_epi128 );
+
+    m1[1][0] = _mm256_permute2x128_si256( m2[0][0], m2[1][0], perm_unpackhi_epi128 );
+    m1[1][1] = _mm256_permute2x128_si256( m2[0][1], m2[1][1], perm_unpackhi_epi128 );
+    m1[1][2] = _mm256_permute2x128_si256( m2[0][2], m2[1][2], perm_unpackhi_epi128 );
+    m1[1][3] = _mm256_permute2x128_si256( m2[0][3], m2[1][3], perm_unpackhi_epi128 );
+    m1[1][4] = _mm256_permute2x128_si256( m2[0][4], m2[1][4], perm_unpackhi_epi128 );
+    m1[1][5] = _mm256_permute2x128_si256( m2[0][5], m2[1][5], perm_unpackhi_epi128 );
+    m1[1][6] = _mm256_permute2x128_si256( m2[0][6], m2[1][6], perm_unpackhi_epi128 );
+    m1[1][7] = _mm256_permute2x128_si256( m2[0][7], m2[1][7], perm_unpackhi_epi128 );
 #else
     m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][4] );
     m1[0][1] = _mm256_add_epi16( m2[0][1], m2[0][5] );
@@ -1525,30 +1544,25 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
     m2[0][6] = _mm256_unpacklo_epi64( m1[0][5], m1[0][7] );
     m2[0][7] = _mm256_unpackhi_epi64( m1[0][5], m1[0][7] );
 
-    for( int k = 0; k < 8; k++ )
-    {
-      m2[1][k] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m2[0][k], 1 ) );
-      m2[0][k] = _mm256_cvtepi16_epi32( _mm256_castsi256_si128  ( m2[0][k]    ) );
-    }
+    __m256i vzero = _mm256_setzero_si256();
+    __m256i vtmp;
+
+#define UNPACKX(x)                                        \
+    vtmp = _mm256_cmpgt_epi16( vzero, m2[0][x] );         \
+    m1[0][x] = _mm256_unpacklo_epi16( m2[0][x], vtmp );   \
+    m1[1][x] = _mm256_unpackhi_epi16( m2[0][x], vtmp );
+
+    UNPACKX( 0 );
+    UNPACKX( 1 );
+    UNPACKX( 2 );
+    UNPACKX( 3 );
+    UNPACKX( 4 );
+    UNPACKX( 5 );
+    UNPACKX( 6 );
+    UNPACKX( 7 );
+
+#undef UNPACKX
 #endif
-
-    m1[0][0] = _mm256_permute2x128_si256( m2[0][0], m2[1][0], perm_unpacklo_epi128 );
-    m1[0][1] = _mm256_permute2x128_si256( m2[0][1], m2[1][1], perm_unpacklo_epi128 );
-    m1[0][2] = _mm256_permute2x128_si256( m2[0][2], m2[1][2], perm_unpacklo_epi128 );
-    m1[0][3] = _mm256_permute2x128_si256( m2[0][3], m2[1][3], perm_unpacklo_epi128 );
-    m1[0][4] = _mm256_permute2x128_si256( m2[0][4], m2[1][4], perm_unpacklo_epi128 );
-    m1[0][5] = _mm256_permute2x128_si256( m2[0][5], m2[1][5], perm_unpacklo_epi128 );
-    m1[0][6] = _mm256_permute2x128_si256( m2[0][6], m2[1][6], perm_unpacklo_epi128 );
-    m1[0][7] = _mm256_permute2x128_si256( m2[0][7], m2[1][7], perm_unpacklo_epi128 );
-
-    m1[1][0] = _mm256_permute2x128_si256( m2[0][0], m2[1][0], perm_unpackhi_epi128 );
-    m1[1][1] = _mm256_permute2x128_si256( m2[0][1], m2[1][1], perm_unpackhi_epi128 );
-    m1[1][2] = _mm256_permute2x128_si256( m2[0][2], m2[1][2], perm_unpackhi_epi128 );
-    m1[1][3] = _mm256_permute2x128_si256( m2[0][3], m2[1][3], perm_unpackhi_epi128 );
-    m1[1][4] = _mm256_permute2x128_si256( m2[0][4], m2[1][4], perm_unpackhi_epi128 );
-    m1[1][5] = _mm256_permute2x128_si256( m2[0][5], m2[1][5], perm_unpackhi_epi128 );
-    m1[1][6] = _mm256_permute2x128_si256( m2[0][6], m2[1][6], perm_unpackhi_epi128 );
-    m1[1][7] = _mm256_permute2x128_si256( m2[0][7], m2[1][7], perm_unpackhi_epi128 );
 
     for( int i = 0; i < 2; i++ )
     {
