@@ -503,6 +503,10 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
 
   if( cEncCfg.m_SBT )          { css << "SBT " ;}
   if( cEncCfg.m_CIIP )         { css << "CIIP ";}
+#if 1//TS_VVC
+  if (cEncCfg.m_ISP)           { css << "ISP "; }
+  if (cEncCfg.m_TS)            { css << "TS "; }
+#endif
 
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
@@ -905,6 +909,12 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
           rcEncCfg.m_LFNST           = 1;
           rcEncCfg.m_ISP             = 2;
           rcEncCfg.m_MTS             = 1;
+#if 1//TS_VVC
+          rcEncCfg.m_TS              = 2;
+          rcEncCfg.m_TSsize          = 3;
+          rcEncCfg.m_TS = 1;
+          rcEncCfg.m_useChromaTS     = 0;
+#endif
 
           rcEncCfg.m_RCKeepHierarchicalBit = 2;
           rcEncCfg.m_useNonLinearAlfLuma   = true;
@@ -1042,6 +1052,10 @@ void VVEncImpl::xPrintCfg()
     msgApp( LL_VERBOSE, "LFNST:%d ",              m_cEncCfg.m_LFNST);
     msgApp( LL_VERBOSE, "MTS:%d ",                m_cEncCfg.m_MTS);
     msgApp( LL_VERBOSE, "MTSIntraCand:%d ",       m_cEncCfg.m_MTSIntraMaxCand);
+#if 1 // TS_VVC
+    msgApp( LL_VERBOSE, "ISP:%d ",                m_cEncCfg.m_ISP);
+    msgApp( LL_VERBOSE, "TS:%d ",                 m_cEncCfg.m_TS);
+#endif
   }
 
   msgApp( LL_VERBOSE, "\nFAST TOOL CFG: " );

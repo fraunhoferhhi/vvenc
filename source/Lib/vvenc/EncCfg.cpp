@@ -523,6 +523,10 @@ bool EncCfg::initCfgParameter()
 #if ISP_VVC
   confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
 #endif
+#if TS_VVC
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
+#endif
 
   if( m_alf )
   {

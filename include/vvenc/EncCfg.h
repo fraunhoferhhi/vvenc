@@ -398,6 +398,11 @@ public:
 #if 1   // ISP_VVC
   int                 m_ISP;
 #endif
+#if 1//TS_VVC
+  int                 m_TS;
+  int                 m_TSsize;
+  bool                m_useChromaTS;
+#endif
 
   bool                m_bLoopFilterDisable;                             ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                          ///< offset for deblocking filter in 0 = slice header, 1 = PPS
@@ -684,9 +689,13 @@ public:
       , m_MTS                                         ( 0 )
       , m_MTSIntraMaxCand                             ( 3 ) 
 #if 1   // ISP_VVC
-      , m_ISP(0)
+      , m_ISP                                         ( 0 )
 #endif
-
+#if 1//TS_VVC
+      , m_TS                                          ( 0 )
+      , m_TSsize                                      ( 3 )
+      , m_useChromaTS                                 ( false )
+#endif
       , m_bLoopFilterDisable                          ( false )
       , m_loopFilterOffsetInPPS                       ( true )
       , m_loopFilterBetaOffsetDiv2                    { 0 }

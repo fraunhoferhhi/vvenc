@@ -237,6 +237,9 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   StopClock                     encTime;
+#if DETECT_SC
+  bool                          useSC;
+#endif
 
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];

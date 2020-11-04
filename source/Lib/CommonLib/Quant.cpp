@@ -368,7 +368,11 @@ void Quant::dequant(const TransformUnit& tu,
   const int             maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
   const TCoeff          transformMinimum   = -(1 << maxLog2TrDynamicRange);
   const TCoeff          transformMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
+#if TS_VVC
+  const bool            isTransformSkip    = tu.mtsIdx[compID] == MTS_SKIP;
+#else
   const bool            isTransformSkip    = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+#endif
   const bool            isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
   const bool            enableScalingLists = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
   const int             scalingListType    = getScalingListType(tu.cu->predMode, compID);
@@ -396,7 +400,11 @@ void Quant::dequant(const TransformUnit& tu,
   const int QP_per = cQP.per(isTransformSkip);
   const int QP_rem = cQP.rem(isTransformSkip);
 
+#if TS_VVC
+  const int  rightShift = (IQUANT_SHIFT - ((isTransformSkip ? 0 : iTransformShift) + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+#else
   const int  rightShift = (IQUANT_SHIFT - (iTransformShift + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+#endif
 
   if(enableScalingLists)
   {
@@ -607,7 +615,11 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
   const CCoeffBuf& piCoef   = pSrc;
         CoeffBuf   piQCoef  = tu.getCoeffs(compID);
 
+#if  TS_VVC
+  const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
+#else
   const bool useTransformSkip      = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+#endif
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
 
   {
@@ -638,8 +650,11 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
       iTransformShift = std::max<int>(0, iTransformShift);
     }
 
-
+#if TS_VVC
+    const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + (useTransformSkip ? 0 : iTransformShift);
+#else
     const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + iTransformShift;
+#endif
     // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
 
     const int64_t iAdd = int64_t(tu.cs->slice->isIRAP() ? 171 : 85) << int64_t(iQBits - 9);
@@ -699,7 +714,11 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
 
   const CCoeffBuf piCoef    = pSrc;
 
+#if TS_VVC
+  const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
+#else
   const bool useTransformSkip      = tu.mtsIdx[compID] == MTS_SKIP && isLuma(compID);
+#endif
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
 
   int scalingListType = getScalingListType(tu.cu->predMode, compID);
