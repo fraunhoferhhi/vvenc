@@ -1851,7 +1851,7 @@ uint32_t PPS::getSubPicIdxFromSubPicId( uint32_t subPicId ) const
 }
 
 
-SubPic PPS::getSubPicFromPos(const Position& pos)  const
+const SubPic& PPS::getSubPicFromPos(const Position& pos)  const
 {
   for (int i = 0; i< numSubPics; i++)
   {
@@ -1864,7 +1864,7 @@ SubPic PPS::getSubPicFromPos(const Position& pos)  const
 }
 
 
-SubPic  PPS::getSubPicFromCU(const CodingUnit& cu) const
+const SubPic& PPS::getSubPicFromCU(const CodingUnit& cu) const
 {
   const Position lumaPos = cu.Y().valid() ? cu.Y().pos() : recalcPosition(cu.chromaFormat, cu.chType, CH_L, cu.blocks[cu.chType].pos());
   return getSubPicFromPos(lumaPos);

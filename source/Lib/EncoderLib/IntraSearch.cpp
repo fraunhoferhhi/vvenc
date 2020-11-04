@@ -1609,15 +1609,15 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
   uint32_t   numSig         = 0;
   const SPS &sps            = *cs.sps;
   CodingUnit &cu            = *cs.cus[0];
-  bool mtsAllowed = CU::isMTSAllowed(cu, COMP_Y);
-  uint64_t singleFracBits = 0;
-#if  ISP_VVC
-  bool   splitCbfLumaSum = false;
-  double bestCostForISP = bestCostSoFar;
-  double dSingleCost = MAX_DOUBLE;
-  int endLfnstIdx = (partitioner.isSepTree(cs) && partitioner.chType == CH_C && (currArea.lwidth() < 8 || currArea.lheight() < 8))
-    || (currArea.lwidth() > sps.getMaxTbSize() || currArea.lheight() > sps.getMaxTbSize()) || !sps.LFNST || (numMode < 0) ? 0 : 2;
-  numMode = (numMode < 0) ? -numMode : numMode;
+  bool mtsAllowed           = CU::isMTSAllowed(cu, COMP_Y);
+  uint64_t singleFracBits   = 0;
+#if  ISP_VVC               
+  bool   splitCbfLumaSum    = false;
+  double bestCostForISP     = bestCostSoFar;
+  double dSingleCost        = MAX_DOUBLE;
+  int endLfnstIdx           = (partitioner.isSepTree(cs) && partitioner.chType == CH_C && (currArea.lwidth() < 8 || currArea.lheight() < 8))
+                           || (currArea.lwidth() > sps.getMaxTbSize() || currArea.lheight() > sps.getMaxTbSize()) || !sps.LFNST || (numMode < 0) ? 0 : 2;
+  numMode                   = (numMode < 0) ? -numMode : numMode;
 #else
   int endLfnstIdx   = (partitioner.isSepTree(cs) && partitioner.chType == CH_C && (currArea.lwidth() < 8 || currArea.lheight() < 8))
                         || (currArea.lwidth() > sps.getMaxTbSize() || currArea.lheight() > sps.getMaxTbSize()) || !sps.LFNST ? 0 : 2;
@@ -1628,13 +1628,13 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     endLfnstIdx = 0;
   }
   int bestMTS = 0;
-  int EndMTS = mtsAllowed ? m_pcEncCfg->m_MTSIntraMaxCand +1 : 0;
+  int EndMTS  = mtsAllowed ? m_pcEncCfg->m_MTSIntraMaxCand +1 : 0;
 #if ISP_VVC
   if (cu.ispMode && (EndMTS || endLfnstIdx))
   {
     EndMTS = 0;
     if ((m_ispTestedModes[1].numTotalParts[cu.ispMode - 1] == 0)
-      && (m_ispTestedModes[2].numTotalParts[cu.ispMode - 1] == 0))
+     && (m_ispTestedModes[2].numTotalParts[cu.ispMode - 1] == 0))
     {
       endLfnstIdx = 0;
     }
@@ -1643,39 +1643,29 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
   if (endLfnstIdx || EndMTS)
   {
 #if ISP_VVC
-    bool       splitCbfLuma = false;
-    const PartSplit ispType = CU::getISPType(cu, COMP_Y);
-    Partitioner     subTuPartitioner = partitioner;
-
-    if (cu.ispMode)
-    {
-      subTuPartitioner.splitCurrArea(ispType, cs);
-    }
-
-    TransformUnit& tu = cu.ispMode
-      ? cs.addTU(CS::getArea(cs, subTuPartitioner.currArea(), subTuPartitioner.chType, subTuPartitioner.treeType), subTuPartitioner.chType, cs.cus[0])
-      : cs.addTU(CS::getArea(cs, currArea, partitioner.chType, partitioner.treeType), partitioner.chType, cs.cus[0]);
-#endif
+    bool       splitCbfLuma  = false;
+    const PartSplit ispType  = CU::getISPType(cu, COMP_Y);
     CUCtx cuCtx;
     cuCtx.isDQPCoded         = true;
     cuCtx.isChromaQpAdjCoded = true;
     cs.cost                  = 0.0;
-#if !ISP_VVC
-    double           dSingleCost       = MAX_DOUBLE;
+#else
+    double dSingleCost       = MAX_DOUBLE;
 #endif
     Distortion       singleDistTmpLuma = 0;
     uint64_t         singleTmpFracBits = 0;
     double           singleCostTmp     = 0;
-    const TempCtx    ctxStart(m_CtxCache, m_CABACEstimator->getCtx());
-    TempCtx          ctxBest(m_CtxCache);
-    CodingStructure &saveCS        = *m_pSaveCS[0];
-    TransformUnit *  tmpTU         = nullptr;
-    int bestLfnstIdx  = 0;
-    int startLfnstIdx = 0;
+    const TempCtx    ctxStart          (m_CtxCache, m_CABACEstimator->getCtx());
+          TempCtx    ctxBest           (m_CtxCache);
+    CodingStructure &saveCS            = *m_pSaveCS[0];
+    TransformUnit *  tmpTU             = nullptr;
+    int              bestLfnstIdx      = 0;
+    int              startLfnstIdx     = 0;
     // speedUps LFNST
-    bool   rapidLFNST   = false;
-    bool   rapidDCT     = false;
-    double thresholdDCT = 1;
+    bool   rapidLFNST                  = false;
+    bool   rapidDCT                    = false;
+    double thresholdDCT                = 1;
+
     if (m_pcEncCfg->m_MTS == 2)
     {
       thresholdDCT += 1.4 / sqrt(cu.lwidth() * cu.lheight());
@@ -1684,28 +1674,37 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     if (m_pcEncCfg->m_LFNST > 1)
     {
       rapidLFNST = true;
+
       if (m_pcEncCfg->m_LFNST > 2)
       {
-        rapidDCT = true;
+        rapidDCT    = true;
         endLfnstIdx = endLfnstIdx ? 1 : 0;
       }
     }
 
-    saveCS.pcv     = cs.pcv;
-    saveCS.picture = cs.picture;
-    saveCS.area.repositionTo(cs.area);
+    saveCS.pcv              = cs.pcv;
+    saveCS.picture          = cs.picture;
+    saveCS.area.repositionTo( cs.area);
     saveCS.clearTUs();
+
 #if ISP_VVC
     if (cu.ispMode)
     {
-      Partitioner subTuPartitioner1 = partitioner;
-      subTuPartitioner1.splitCurrArea(ispType, cs);
+      partitioner.splitCurrArea(ispType, cs);
+    }
+
+    TransformUnit& tu = cs.addTU(CS::getArea(cs, partitioner.currArea(), partitioner.chType, partitioner.treeType), partitioner.chType, cs.cus[0]);
+
+    if (cu.ispMode)
+    {
       do
       {
         saveCS.addTU(
-          CS::getArea(cs, subTuPartitioner1.currArea(), subTuPartitioner1.chType, subTuPartitioner1.treeType),
-          subTuPartitioner1.chType, cs.cus[0]);
-      } while (subTuPartitioner1.nextPart(cs));
+          CS::getArea(cs, partitioner.currArea(), partitioner.chType, partitioner.treeType),
+          partitioner.chType, cs.cus[0]);
+      } while (partitioner.nextPart(cs));
+
+      partitioner.exitCurrSplit();
     }
     else
     {
@@ -1715,21 +1714,24 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     tmpTU = &saveCS.addTU( currArea, partitioner.chType, cs.cus[0] );
 #endif
 
-    std::vector<TrMode> trModes;
-    trModes.push_back(TrMode(0, true)); 
-    double dct2Cost = MAX_DOUBLE;
-    double trGrpStopThreshold =  1.001;
+    std::vector<TrMode> trModes{ TrMode(0, true) };
+    double dct2Cost           = MAX_DOUBLE;
+    double trGrpStopThreshold = 1.001;
     double trGrpBestCost      = MAX_DOUBLE;
+
     if (mtsAllowed)
     {
-      if (m_pcEncCfg->m_LFNST )
+      if (m_pcEncCfg->m_LFNST)
       {
         uint32_t uiIntraMode = cs.cus[0]->intraDir[partitioner.chType];
-        int MTScur = (uiIntraMode < 34) ? MTS_DST7_DCT8 : MTS_DCT8_DST7;
-        trModes.push_back(TrMode(2, true));
+        int MTScur           = (uiIntraMode < 34) ? MTS_DST7_DCT8 : MTS_DCT8_DST7;
+
+        trModes.push_back(TrMode(     2, true));
         trModes.push_back(TrMode(MTScur, true));
+
         MTScur = (uiIntraMode < 34) ? MTS_DCT8_DST7 : MTS_DST7_DCT8;
-        trModes.push_back(TrMode(MTScur, true));
+
+        trModes.push_back(TrMode(MTScur,            true));
         trModes.push_back(TrMode(MTS_DST7_DST7 + 3, true));
       }
       else 
@@ -1740,237 +1742,271 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
         }
       }
     }
+
     if (EndMTS && !m_pcEncCfg->m_LFNST)
     {
       xPreCheckMTS(tu, &trModes, m_pcEncCfg->m_MTSIntraMaxCand, predBuf);
     }
+
     bool NStopMTS = true;
-    for (int modeId = 0; (modeId <= EndMTS)&&NStopMTS; modeId++)
+
+    for (int modeId = 0; modeId <= EndMTS && NStopMTS; modeId++)
     {
       if (modeId > 1)
       {
         trGrpBestCost = MAX_DOUBLE;
       }
-    for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
-    {
-      if (lfnstIdx && modeId)
+
+      for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
       {
-        continue;
-      }
-      if (mtsAllowed)
-      {
-        if (!m_pcEncCfg->m_LFNST  && !trModes[modeId].second)
+        if (lfnstIdx && modeId)
         {
           continue;
         }
-        tu.mtsIdx[COMP_Y] = trModes[modeId].first;
-      }
-#if ISP_VVC
-      if (cu.ispMode && lfnstIdx)
-      {
-        if (m_ispTestedModes[lfnstIdx].numTotalParts[cu.ispMode - 1] == 0)
+
+        if (mtsAllowed)
         {
-          if (lfnstIdx == 2)
+          if (!m_pcEncCfg->m_LFNST  && !trModes[modeId].second)
           {
-            endLfnstIdx = 1;
+            continue;
           }
-          continue;
-        }
-        subTuPartitioner.exitCurrSplit();
-      }
-#endif
-      cu.lfnstIdx                          = lfnstIdx;
-      cuCtx.lfnstLastScanPos               = false;
-      cuCtx.violatesLfnstConstrained[CH_L] = false;
-      cuCtx.violatesLfnstConstrained[CH_C] = false;
 
-      if ((lfnstIdx != startLfnstIdx) || (modeId))
-      {
-        m_CABACEstimator->getCtx() = ctxStart;
-      }
-      singleDistTmpLuma = 0;
-#if ISP_VVC
-      if (cu.ispMode)
-      {
-        splitCbfLuma = false;
-        if (lfnstIdx)
-        {
-          subTuPartitioner.splitCurrArea(ispType, cs);
+          tu.mtsIdx[COMP_Y] = trModes[modeId].first;
         }
-        singleCostTmp = xTestISP(cs, subTuPartitioner, bestCostForISP, ispType, splitCbfLuma, singleTmpFracBits, singleDistTmpLuma, cuCtx);
-        if (modeId && (singleCostTmp == MAX_DOUBLE))
-        {
-          m_ispTestedModes[lfnstIdx].numTotalParts[cu.ispMode - 1] = 0;
-        }
-        bool storeCost = (numMode == 1) ? true : false;
-        if ((m_pcEncCfg->m_ISP >= 2) && (numMode <= 1))
-        {
-          storeCost = true;
-        }
-        if (storeCost)
-        {
-          m_ispTestedModes[0].bestCost[cu.ispMode - 1] = singleCostTmp;
-        }
-      }
-      else
-#endif
-      {
-        bool TrLoad = (EndMTS && !m_pcEncCfg->m_LFNST) ? true : false;
-        xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad);
 
-        cuCtx.mtsLastScanPos = false;
-        //----- determine rate and r-d cost -----
 #if ISP_VVC
-        m_ispTestedModes[0].IspType = TU_NO_ISP;
-        m_ispTestedModes[0].subTuCounter = -1;
-#endif
-        singleTmpFracBits = xGetIntraFracBitsQT(cs, partitioner, true, &cuCtx);
-        if (tu.mtsIdx[COMP_Y] > MTS_SKIP)
+        if (cu.ispMode && lfnstIdx)
         {
-          if (!cuCtx.mtsLastScanPos)
+          if (m_ispTestedModes[lfnstIdx].numTotalParts[cu.ispMode - 1] == 0)
           {
-            singleCostTmp = MAX_DOUBLE;
+            if (lfnstIdx == 2)
+            {
+              endLfnstIdx = 1;
+            }
+            continue;
+          }
+        }
+
+#endif
+        cu.lfnstIdx                          = lfnstIdx;
+        cuCtx.lfnstLastScanPos               = false;
+        cuCtx.violatesLfnstConstrained[CH_L] = false;
+        cuCtx.violatesLfnstConstrained[CH_C] = false;
+
+        if ((lfnstIdx != startLfnstIdx) || (modeId))
+        {
+          m_CABACEstimator->getCtx() = ctxStart;
+        }
+
+        singleDistTmpLuma = 0;
+
+#if ISP_VVC
+        if (cu.ispMode)
+        {
+          splitCbfLuma = false;
+
+          partitioner.splitCurrArea(ispType, cs);
+
+          singleCostTmp = xTestISP(cs, partitioner, bestCostForISP, ispType, splitCbfLuma, singleTmpFracBits, singleDistTmpLuma, cuCtx);
+
+          partitioner.exitCurrSplit();
+
+          if (modeId && (singleCostTmp == MAX_DOUBLE))
+          {
+            m_ispTestedModes[lfnstIdx].numTotalParts[cu.ispMode - 1] = 0;
+          }
+
+          bool storeCost = (numMode == 1) ? true : false;
+
+          if ((m_pcEncCfg->m_ISP >= 2) && (numMode <= 1))
+          {
+            storeCost = true;
+          }
+
+          if (storeCost)
+          {
+            m_ispTestedModes[0].bestCost[cu.ispMode - 1] = singleCostTmp;
+          }
+        }
+        else
+#endif
+        {
+          bool TrLoad = EndMTS && !m_pcEncCfg->m_LFNST;
+
+          xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad);
+
+          cuCtx.mtsLastScanPos = false;
+          //----- determine rate and r-d cost -----
+#if ISP_VVC
+          m_ispTestedModes[0].IspType      = TU_NO_ISP;
+          m_ispTestedModes[0].subTuCounter = -1;
+#endif
+          singleTmpFracBits = xGetIntraFracBitsQT(cs, partitioner, true, &cuCtx);
+
+          if (tu.mtsIdx[COMP_Y] > MTS_SKIP)
+          {
+            if (!cuCtx.mtsLastScanPos)
+            {
+              singleCostTmp = MAX_DOUBLE;
+            }
+            else
+            {
+              singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
+            }
           }
           else
           {
             singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
           }
+
+          if (((EndMTS && (m_pcEncCfg->m_MTS == 2)) || rapidLFNST) && modeId == 0 && lfnstIdx == 0)
+          {
+            if (singleCostTmp > bestCostSoFar * thresholdDCT)
+            {
+              EndMTS = 0;
+
+              if (rapidDCT)
+              {
+                endLfnstIdx = 0;   // break the loop but do not cpy best
+              }
+            }
+          }
+
+          if (lfnstIdx && !cuCtx.lfnstLastScanPos && !cu.ispMode)
+          {
+            bool rootCbfL = false;
+
+            for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
+            {
+              rootCbfL |= tu.cbf[t] != 0;
+            }
+
+            if (rapidLFNST && !rootCbfL)
+            {
+              endLfnstIdx = lfnstIdx; // break the loop
+            }
+            bool cbfAtZeroDepth = CU::isSepTree(cu)
+              ? rootCbfL
+              : (cs.area.chromaFormat != CHROMA_400 && std::min(cu.firstTU->blocks[1].width, cu.firstTU->blocks[1].height) < 4)
+                ? TU::getCbfAtDepth(tu, COMP_Y, currDepth)
+                : rootCbfL;
+
+            if (cbfAtZeroDepth)
+            {
+              singleCostTmp = MAX_DOUBLE;
+            }
+          }
+        }
+
+        if (singleCostTmp < dSingleCost)
+        {
+          trGrpBestCost  = singleCostTmp;
+          dSingleCost    = singleCostTmp;
+          singleDistLuma = singleDistTmpLuma;
+          singleFracBits = singleTmpFracBits;
+          bestLfnstIdx   = lfnstIdx;
+          bestMTS        = modeId;
+
+#if ISP_VVC
+          if (dSingleCost < bestCostForISP)
+          {
+            bestCostForISP = dSingleCost;
+          }
+
+          splitCbfLumaSum = splitCbfLuma;
+
+          if (lfnstIdx == 0 && modeId == 0 && cu.ispMode == 0)
+#else
+          if ((lfnstIdx == 0) && (modeId == 0) )
+#endif
+          {
+            dct2Cost = singleCostTmp;
+
+            if (!TU::getCbfAtDepth(tu, COMP_Y, currDepth))
+            {
+              if (rapidLFNST)
+              {
+                 endLfnstIdx = 0;   // break the loop but do not cpy best
+              }
+
+              EndMTS = 0;
+            }
+          }
+
+          if (bestLfnstIdx != endLfnstIdx || bestMTS != EndMTS)
+          {
+#if ISP_VVC
+            if (cu.ispMode)
+            {
+              saveCS.getRecoBuf(currArea.Y()).copyFrom(cs.getRecoBuf(currArea.Y()));
+
+              for (uint32_t j = 0; j < cs.tus.size(); j++)
+              {
+                saveCS.tus[j]->copyComponentFrom(*cs.tus[j], COMP_Y);
+              }
+            }
+            else
+#endif
+            {
+              saveCS.getPredBuf(tu.Y()).copyFrom(cs.getPredBuf(tu.Y()));
+              saveCS.getRecoBuf(tu.Y()).copyFrom(cs.getRecoBuf(tu.Y()));
+
+              tmpTU->copyComponentFrom(tu, COMP_Y);
+            }
+
+            ctxBest = m_CABACEstimator->getCtx();
+          }
+      
         }
         else
         {
-          singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
-        }
-        if (((EndMTS && (m_pcEncCfg->m_MTS == 2)) || rapidLFNST) && (modeId == 0) && (lfnstIdx == 0))
-        {
-          if (singleCostTmp > bestCostSoFar * thresholdDCT)
-          {
-            EndMTS = 0;
-            if (rapidDCT)
-            {
-              endLfnstIdx = 0;   // break the loop but do not cpy best
-            }
-          }
-        }
-        if (lfnstIdx && !cuCtx.lfnstLastScanPos && !cu.ispMode)
-        {
-          bool rootCbfL = false;
-          for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
-          {
-            rootCbfL |= tu.cbf[t] != 0;
-          }
-          if (rapidLFNST && !rootCbfL)
+          if( rapidLFNST )
           {
             endLfnstIdx = lfnstIdx; // break the loop
           }
-          bool cbfAtZeroDepth = CU::isSepTree(cu)
-            ? rootCbfL
-            : (cs.area.chromaFormat != CHROMA_400
-              && std::min(cu.firstTU->blocks[1].width, cu.firstTU->blocks[1].height) < 4)
-            ? TU::getCbfAtDepth(tu, COMP_Y, currDepth)
-            : rootCbfL;
-          if (cbfAtZeroDepth)
-          {
-            singleCostTmp = MAX_DOUBLE;
-          }
         }
       }
-      if (singleCostTmp < dSingleCost)
-      {
-        trGrpBestCost = singleCostTmp;
-        dSingleCost    = singleCostTmp;
-        singleDistLuma = singleDistTmpLuma;
-        singleFracBits = singleTmpFracBits;
-        bestLfnstIdx   = lfnstIdx;
-        bestMTS        = modeId;
-#if ISP_VVC
-        if (dSingleCost < bestCostForISP)
-        {
-          bestCostForISP = dSingleCost;
-        }
-        splitCbfLumaSum = splitCbfLuma;
-        if ((lfnstIdx == 0) && (modeId == 0) && (cu.ispMode == 0))
-#else
-        if ((lfnstIdx == 0) && (modeId == 0) )
-#endif
-        {
-          dct2Cost = singleCostTmp;
-          if (!TU::getCbfAtDepth(tu, COMP_Y, currDepth))
-          {
-            if (rapidLFNST)
-            {
-               endLfnstIdx = 0;   // break the loop but do not cpy best
-            } 
-            EndMTS = 0;
-          }
-        }
-
-        if ((bestLfnstIdx != endLfnstIdx) || (bestMTS != EndMTS))
-        {
-#if ISP_VVC
-          if (cu.ispMode)
-          {
-            const UnitArea& currArea = partitioner.currArea();
-            saveCS.getRecoBuf(currArea.Y()).copyFrom(cs.getRecoBuf(currArea.Y()));
-            for (uint32_t j = 0; j < cs.tus.size(); j++)
-            {
-              saveCS.tus[j]->copyComponentFrom(*cs.tus[j], COMP_Y);
-            }
-          }
-          else
-#endif
-          {
-            saveCS.getPredBuf(tu.Y()).copyFrom(cs.getPredBuf(tu.Y()));
-            saveCS.getRecoBuf(tu.Y()).copyFrom(cs.getRecoBuf(tu.Y()));
-
-            tmpTU->copyComponentFrom(tu, COMP_Y);
-          }
-
-          ctxBest = m_CABACEstimator->getCtx();
-        }
-      
-      }
-      else
-      {
-        if( rapidLFNST )
-        {
-          endLfnstIdx = lfnstIdx; // break the loop
-        }
-      }
-      }
-      if (m_pcEncCfg->m_LFNST && ( m_pcEncCfg->m_MTS==2) && modeId && (modeId != EndMTS))
+      if (m_pcEncCfg->m_LFNST && m_pcEncCfg->m_MTS == 2 && modeId && modeId != EndMTS)
       {
         NStopMTS = false;
+
         if (bestMTS || bestLfnstIdx)
         {
-          if ((modeId > 1 && (bestMTS == modeId))
-            || (modeId == 1))
+          if ((modeId > 1 && bestMTS == modeId) || modeId == 1)
           {
             NStopMTS = (dct2Cost / trGrpBestCost) < trGrpStopThreshold;
           }
         }
       }
     }
+
     cu.lfnstIdx = bestLfnstIdx;
 #if ISP_VVC
     if (dSingleCost != MAX_DOUBLE)
 #endif
     {
-      if ((bestLfnstIdx != endLfnstIdx) || (bestMTS != EndMTS))
+      if (bestLfnstIdx != endLfnstIdx || bestMTS != EndMTS)
       {
 #if ISP_VVC
         if (cu.ispMode)
         {
           const UnitArea& currArea = partitioner.currArea();
           cs.getRecoBuf(currArea.Y()).copyFrom(saveCS.getRecoBuf(currArea.Y()));
+
           if (saveCS.tus.size() != cs.tus.size())
           {
+            partitioner.splitCurrArea(ispType, cs);
+
             do
             {
-              subTuPartitioner.nextPart(cs);
-              cs.addTU(CS::getArea(cs, subTuPartitioner.currArea(), subTuPartitioner.chType, subTuPartitioner.treeType),
-                subTuPartitioner.chType, cs.cus[0]);
+              partitioner.nextPart(cs);
+              cs.addTU(CS::getArea(cs, partitioner.currArea(), partitioner.chType, partitioner.treeType),
+                partitioner.chType, cs.cus[0]);
             } while (saveCS.tus.size() != cs.tus.size());
+
+            partitioner.exitCurrSplit();
           }
+
           for (uint32_t j = 0; j < saveCS.tus.size(); j++)
           {
             cs.tus[j]->copyComponentFrom(*saveCS.tus[j], COMP_Y);
@@ -1983,14 +2019,10 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
 
           tu.copyComponentFrom(*tmpTU, COMP_Y);
         }
+
         m_CABACEstimator->getCtx() = ctxBest;
       }
-#if ISP_VVC
-      if (cu.ispMode)
-      {
-        subTuPartitioner.exitCurrSplit();
-      }
-#endif
+
       // otherwise this would've happened in useSubStructure
       cs.picture->getRecoBuf(currArea.Y()).copyFrom(cs.getRecoBuf(currArea.Y()));
     }
@@ -1998,56 +2030,52 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
   else
   {
 #if ISP_VVC
-  if (cu.ispMode)
-  {
-    const PartSplit ispType = CU::getISPType(cu, COMP_Y);
-    Partitioner subTuPartitioner = partitioner;
-    subTuPartitioner.splitCurrArea(ispType, cs);
-
-    CUCtx      cuCtx;
-    dSingleCost = xTestISP(cs, subTuPartitioner, bestCostForISP, ispType, splitCbfLumaSum, singleFracBits, singleDistLuma, cuCtx);
-    subTuPartitioner.exitCurrSplit();
-    bool storeCost = (numMode == 1) ? true : false;
-    if ((m_pcEncCfg->m_ISP >= 2) && (numMode <= 1))
+    if (cu.ispMode)
     {
-      storeCost = true;
-    }
-    if (storeCost)
-    {
-      m_ispTestedModes[0].bestCost[cu.ispMode - 1] = dSingleCost;
-    }
-  }
-  else
-  {
-    TransformUnit& tu =
-      cs.addTU(CS::getArea(cs, currArea, partitioner.chType, partitioner.treeType), partitioner.chType, cs.cus[0]);
-    tu.depth = currDepth;
+      const PartSplit ispType = CU::getISPType(cu, COMP_Y);
+      partitioner.splitCurrArea(ispType, cs);
 
-    CHECK(!tu.Y().valid(), "Invalid TU");
-    xIntraCodingTUBlock(tu, COMP_Y, false, singleDistLuma, &numSig, predBuf);
-    //----- determine rate and r-d cost -----
+      CUCtx      cuCtx;
+      dSingleCost = xTestISP(cs, partitioner, bestCostForISP, ispType, splitCbfLumaSum, singleFracBits, singleDistLuma, cuCtx);
+      partitioner.exitCurrSplit();
+      bool storeCost = (numMode == 1) ? true : false;
+      if ((m_pcEncCfg->m_ISP >= 2) && (numMode <= 1))
+      {
+        storeCost = true;
+      }
+      if (storeCost)
+      {
+        m_ispTestedModes[0].bestCost[cu.ispMode - 1] = dSingleCost;
+      }
+    }
+    else
+    {
+      TransformUnit& tu =
+        cs.addTU(CS::getArea(cs, currArea, partitioner.chType, partitioner.treeType), partitioner.chType, cs.cus[0]);
+      tu.depth = currDepth;
+
+      CHECK(!tu.Y().valid(), "Invalid TU");
+      xIntraCodingTUBlock(tu, COMP_Y, false, singleDistLuma, &numSig, predBuf);
+      //----- determine rate and r-d cost -----
 #if ISP_VVC
-    m_ispTestedModes[0].IspType = TU_NO_ISP;
-    m_ispTestedModes[0].subTuCounter = -1;
+      m_ispTestedModes[0].IspType = TU_NO_ISP;
+      m_ispTestedModes[0].subTuCounter = -1;
 #endif
-    singleFracBits = xGetIntraFracBitsQT(cs, partitioner, true);
+      singleFracBits = xGetIntraFracBitsQT(cs, partitioner, true);
 #if ISP_VVC
-    dSingleCost = m_pcRdCost->calcRdCost(singleFracBits, singleDistLuma);
+      dSingleCost = m_pcRdCost->calcRdCost(singleFracBits, singleDistLuma);
 #endif
-  }
+    }
 #else
     xIntraCodingTUBlock(tu, COMP_Y, false, singleDistLuma, &numSig, predBuf);
 
     //----- determine rate and r-d cost -----
-#if ISP_VVC //weg
-    m_ispTestedModes[0].IspType = TU_NO_ISP;
-    m_ispTestedModes[0].subTuCounter = -1;
-#endif
     singleFracBits = xGetIntraFracBitsQT(cs, partitioner, true);
 #endif
   }
 #if ISP_VVC
-  if(cu.ispMode)
+
+  if (cu.ispMode)
   { 
     for (auto& ptu : cs.tus)
     {
