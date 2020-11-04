@@ -372,20 +372,27 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
       // Do for width that multiple of 16
       __m256i vone   = _mm256_set1_epi16( 1 );
       __m256i vsum32 = _mm256_setzero_si256();
+
       for( int iY = 0; iY < iRows; iY+=iSubStep )
       {
-        __m256i vsum16 = _mm256_setzero_si256();
-        for( int iX = 0; iX < iWidth; iX+=16 )
+        __m256i vsrc1  = _mm256_loadu_si256( ( __m256i* )( pSrc1 ) );
+        __m256i vsrc2  = _mm256_loadu_si256( ( __m256i* )( pSrc2 ) );
+        __m256i vsum16 = _mm256_abs_epi16( _mm256_sub_epi16( vsrc1, vsrc2 ) );
+
+        for( int iX = 16; iX < iWidth; iX+=16 )
         {
-          __m256i vsrc1 = _mm256_loadu_si256( ( __m256i* )( &pSrc1[iX] ) );
-          __m256i vsrc2 = _mm256_loadu_si256( ( __m256i* )( &pSrc2[iX] ) );
+          vsrc1  = _mm256_loadu_si256( ( __m256i* )( &pSrc1[iX] ) );
+          vsrc2  = _mm256_loadu_si256( ( __m256i* )( &pSrc2[iX] ) );
           vsum16 = _mm256_add_epi16( vsum16, _mm256_abs_epi16( _mm256_sub_epi16( vsrc1, vsrc2 ) ) );
         }
+
         __m256i vsumtemp = _mm256_madd_epi16( vsum16, vone );
         vsum32 = _mm256_add_epi32( vsum32, vsumtemp );
+
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
       }
+
       vsum32 = _mm256_hadd_epi32( vsum32, vone );
       vsum32 = _mm256_hadd_epi32( vsum32, vone );
       uiSum =  _mm_cvtsi128_si32( _mm256_castsi256_si128( vsum32 ) ) + _mm_cvtsi128_si32( _mm256_extracti128_si256( vsum32, 1 ) );
@@ -394,19 +401,36 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
 #endif
     {
       // For width that multiple of 8
-      __m128i vone = _mm_set1_epi16( 1 );
+      __m128i vone   = _mm_set1_epi16( 1 );
       __m128i vsum32 = _mm_setzero_si128();
+
       for( int iY = 0; iY < iRows; iY+=iSubStep )
       {
-        __m128i vsum16 = _mm_setzero_si128();
-        for( int iX = 0; iX < iWidth; iX+=8 )
+        __m128i vsrc1  = _mm_loadu_si128( ( const __m128i* )( pSrc1 ) );
+        __m128i vsrc2  = _mm_loadu_si128( ( const __m128i* )( pSrc2 ) );
+        __m128i vsum16 = _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) );
+
+        if( iWidth >= 16 )
         {
-          __m128i vsrc1 = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX] ) );
-          __m128i vsrc2 = _mm_lddqu_si128( ( const __m128i* )( &pSrc2[iX] ) );
+          vsrc1  = _mm_loadu_si128( ( const __m128i* )( &pSrc1[8] ) );
+          vsrc2  = _mm_loadu_si128( ( const __m128i* )( &pSrc2[8] ) );
           vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+
+          for( int iX = 16; iX < iWidth; iX += 16 )
+          {
+            vsrc1  = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX] ) );
+            vsrc2  = _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX] ) );
+            vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+            
+            vsrc1  = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX + 8] ) );
+            vsrc2  = _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX + 8] ) );
+            vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+          }
         }
+
         __m128i vsumtemp = _mm_madd_epi16( vsum16, vone );
         vsum32 = _mm_add_epi32( vsum32, vsumtemp );
+
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
       }
