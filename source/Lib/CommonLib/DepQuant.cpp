@@ -40,11 +40,11 @@ www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
 
-
 #include "DepQuant.h"
 #include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
+#include "CommonDefX86.h"
 
 #include <bitset>
 
@@ -1465,7 +1465,6 @@ namespace DQIntern
     }
   }
 
-
   void DepQuant::quant( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
   {
     CHECKD( tu.cs->sps->spsRExt.extendedPrecisionProcessing, "ext precision is not supported" );
@@ -1500,7 +1499,7 @@ namespace DQIntern
     }
     zeroOutforThres = zeroOut || ( 32 < tuPars.m_height || 32 < tuPars.m_width );
     //===== find first test position =====
-    int firstTestPos = numCoeff - 1;
+    int firstTestPos = std::min<int>( tuPars.m_width, JVET_C0024_ZERO_OUT_TH ) * std::min<int>( tuPars.m_height, JVET_C0024_ZERO_OUT_TH ) - 1;
     if( lfnstIdx > 0 && tu.mtsIdx[compID] != MTS_SKIP && width >= 4 && height >= 4 )
     {
       firstTestPos = ( ( width == 4 && height == 4 ) || ( width == 8 && height == 8 ) )  ? 7 : 15 ;
@@ -1524,8 +1523,62 @@ namespace DQIntern
     }
     else
     {
-      const TCoeff defaultTh  = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
+      const TCoeff defaultTh = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
 
+#if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
+      // if more than one 4x4 coding subblock is available, use SIMD to find first subblock with coefficient larger than threshold
+      if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 && read_x86_extension_flags() > SCALAR )
+      {
+        const int sbbSize = tuPars.m_sbbSize;
+        // move the pointer to the beginning of the current subblock
+        firstTestPos -= ( sbbSize - 1 );
+
+        const __m128i xdfTh = _mm_set1_epi32( defaultTh );
+
+        // for each subblock
+        for( ; firstTestPos >= 0; firstTestPos -= sbbSize )
+        {
+          // skip zeroed out blocks
+          // for 64-point transformation the coding order takes care of that
+          if( zeroOutforThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth || tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) )
+          {
+            continue;
+          }
+
+          // read first line of the subblock and check for coefficients larger than the threshold
+          // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of tuPars.m_width
+          int pos = tuPars.m_scanId2BlkPos[firstTestPos].idx;
+          __m128i xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          __m128i xdf = _mm_cmpgt_epi32( xl0, xdfTh );
+
+          // same for the next line in the subblock
+          pos += tuPars.m_width;
+          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+
+          // and the third line
+          pos += tuPars.m_width;
+          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+
+          // and the last line
+          pos += tuPars.m_width;
+          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+
+          // if any of the 16 comparisons were true, break, because this subblock contains a coefficient larger than threshold
+          if( !_mm_testz_si128( xdf, xdf ) ) break;
+        }
+
+        if( firstTestPos >= 0 )
+        {
+          // if a coefficient was found, advance the pointer to the end of the current subblock
+          // for the subsequent coefficient-wise refinement (C-impl after endif)
+          firstTestPos += sbbSize - 1;
+        }
+      }
+
+#endif
       for( ; firstTestPos >= 0; firstTestPos-- )
       {
         if( zeroOutforThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth || tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) ) continue;
@@ -1547,16 +1600,15 @@ namespace DQIntern
       m_allStates[k].init();
     }
     m_startState.init();
-
-
-    int effectWidth = std::min(32, effWidth);
-    int effectHeight = std::min(32, effHeight);
+    
+    int effectWidth  = std::min( 32, effWidth );
+    int effectHeight = std::min( 32, effHeight );
     for (int k = 0; k < 12; k++)
     {
-      m_allStates[k].effWidth = effectWidth;
+      m_allStates[k].effWidth  = effectWidth;
       m_allStates[k].effHeight = effectHeight;
     }
-    m_startState.effWidth = effectWidth;
+    m_startState.effWidth  = effectWidth;
     m_startState.effHeight = effectHeight;
 
     //===== populate trellis =====
