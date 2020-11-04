@@ -912,7 +912,6 @@ int VVEncImpl::xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality )
 #if 1//TS_VVC
           rcEncCfg.m_TS              = 2;
           rcEncCfg.m_TSsize          = 3;
-          rcEncCfg.m_TS = 1;
           rcEncCfg.m_useChromaTS     = 0;
 #endif
 
@@ -1055,6 +1054,8 @@ void VVEncImpl::xPrintCfg()
 #if 1 // TS_VVC
     msgApp( LL_VERBOSE, "ISP:%d ",                m_cEncCfg.m_ISP);
     msgApp( LL_VERBOSE, "TS:%d ",                 m_cEncCfg.m_TS);
+    msgApp( LL_VERBOSE, "TransformSkipLog2MaxSize:%d ", m_cEncCfg.m_TSsize);
+    msgApp( LL_VERBOSE, "useChromaTS:%d ",        m_cEncCfg.m_useChromaTS);
 #endif
   }
 
