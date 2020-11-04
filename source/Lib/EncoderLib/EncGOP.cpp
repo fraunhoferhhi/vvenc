@@ -1591,8 +1591,16 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
       {
         bits = 200;
       }
-      m_pcRateCtrl->encRCPic->targetBits = bits;
-      m_pcRateCtrl->encRCPic->bitsLeft = bits;
+
+      if ( m_pcEncCfg->m_RCNumPasses == 2 )
+      {
+        m_pcRateCtrl->encRCPic->bitsLeft = m_pcRateCtrl->encRCPic->targetBits;
+      }
+      else
+      {
+        m_pcRateCtrl->encRCPic->targetBits = bits;
+        m_pcRateCtrl->encRCPic->bitsLeft = bits;
+      }
     }
 
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
@@ -1711,7 +1719,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     }
   }
 
-  m_pcRateCtrl->addRCPassStats( slice->poc, slice->sliceQp, numRBSPBytes, dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+  m_pcRateCtrl->addRCPassStats( slice->poc, slice->sliceQp, numRBSPBytes * 8, dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr], slice->isIntra(), slice->TLayer );
 
   const uint32_t uibits = numRBSPBytes * 8;
 
