@@ -250,6 +250,7 @@ namespace vvenc {
     double  remainingCostIntra;
     double  picLambda;
     double  picMSE;
+    bool    isNewScene;
   };
 
   class RateCtrl
@@ -271,6 +272,7 @@ namespace vvenc {
     void scaleGops();
     int64_t getTotalBitsInFirstPass();
     void updateFirstPassData();
+    void detectNewScene();
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }

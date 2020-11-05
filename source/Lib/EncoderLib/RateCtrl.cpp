@@ -677,6 +677,7 @@ EncRCPic::EncRCPic()
   picLambda           = 0.0;
   picMSE              = 0.0;
   validPixelsInPic    = 0;
+  isNewScene          = false;
 }
 
 EncRCPic::~EncRCPic()
@@ -714,7 +715,6 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
   {
     double gopVsBitrateRatio = 1.0;
     int tmpTargetBits = 0;
-    bool isNewScene = false;
     double alpha[ 7 ] = { 0.0 };
     encRcSeq->getTargetBitsFromFirstPass( encRcSeq->framesCoded, tmpTargetBits, gopVsBitrateRatio, isNewScene, alpha );
     if ( currPicPosition == 0 || encRCSeq->framesLeft < encRcSeq->gopSize )
@@ -731,13 +731,14 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
       encRcSeq->bitUsageRatio = double( encRcSeq->estimatedBitUsage ) / encRcSeq->bitsUsed;
     }
     encRcSeq->estimatedBitUsage += int64_t( tmpTargetBits );
-    if ( isNewScene || encRcSeq->framesCoded == 0 )
+    if ( isNewScene )
     {
       int bitdepthLumaScale = 2 * ( encRCSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
       int numOfLevels = int( log( encRcSeq->gopSize ) / log( 2 ) + 0.5 ) + 2;
       for ( int i = 1; i < numOfLevels; i++ )
       {
         encRCSeq->picParam[ i ].alpha = alpha[ i ] * pow( 2.0, bitdepthLumaScale );
+        encRcSeq->picParam[ i ].beta = -1.367;
       }
     }
     printf( "\ntargetBits %d GOPratio %f alpha[0] %f alpha[1] %f ", targetBits, gopVsBitrateRatio, encRCSeq->picParam[ 0 ].alpha, encRCSeq->picParam[ 1 ].alpha );
@@ -1195,7 +1196,7 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
   if ( lastLevelLambda > 0.0 )
   {
     lastLevelLambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lastLevelLambda );
-    if( 0 ) //if ( encRCSeq->isNewScene )
+    if( isNewScene )
     {
       lambda = Clip3( lastLevelLambda * pow( 2.0, -6.0 / 3.0 ), lastLevelLambda * pow( 2.0, 6.0 / 3.0 ), lambda );
     }
@@ -1494,7 +1495,7 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( lastLevelQP > RC_INVALID_QP_VALUE )
   {
-    if ( 0 )//( encRCSeq->isNewScene )
+    if ( isNewScene )
     {
       QP = Clip3( lastLevelQP - 6, lastLevelQP + 6, QP );
     }
@@ -2353,12 +2354,18 @@ void RateCtrl::processFirstPassData()
 
   scaleGops();
 
+  detectNewScene();
+
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
-    if ( it->poc == 0 )
+    if ( it->poc == 0 ) // force a new scene at the beginning
     {
       it->isNewScene = true;
+      estimateAlphaFirstPass( numOfLevels, it->poc, encRCSeq->intraPeriod + 1, it->estAlpha );
+    }
+    else if ( it->isNewScene ) // update model parameters at every new scene
+    {
       estimateAlphaFirstPass( numOfLevels, it->poc, encRCSeq->intraPeriod, it->estAlpha );
     }
   }
@@ -2381,6 +2388,47 @@ int64_t RateCtrl::getTotalBitsInFirstPass()
   }
 
   return totalBitsFirstPass;
+}
+
+void RateCtrl::detectNewScene()
+{
+  double meanFeatureValue = 0.0;
+  double newSceneDetectionTH = 0.075;
+  int counter = 0;
+  int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
+  double* gopFeature = new double[ 2 + pocOfLastCompleteGop / encRCSeq->gopSize ]();
+
+  std::list<TRCPassStats>::iterator it;
+  // collect GOP features
+  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
+  {
+    if ( !it->isIntra && it->tempLayer == 0 )
+    {
+      gopFeature[ counter ] = it->yPsnr / log( it->numBits );
+      meanFeatureValue += gopFeature[ counter ];
+      counter++;
+    }
+  }
+  meanFeatureValue /= counter;
+
+  counter = 0;
+  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
+  {
+    if ( !it->isIntra && it->tempLayer == 0 )
+    {
+      gopFeature[ counter ] /= meanFeatureValue; // normalize GOP feature values
+      if ( counter > 0 )
+      {
+        if ( abs( gopFeature[ counter ] - gopFeature[ counter - 1 ] ) > newSceneDetectionTH )
+        {
+          it->isNewScene = true;
+        }
+      }
+      counter++;
+    }
+  }
+
+  delete[] gopFeature;
 }
 
 void RateCtrl::scaleGops()
@@ -2407,6 +2455,7 @@ void RateCtrl::scaleGops()
     }
   }
 
+  // calculate frame and GOP ratios; calculate target bits
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
     if ( it->poc == 0 )
@@ -2429,12 +2478,13 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
   int* bitsData = new int[ numTempLevels ]();
   int* qpData = new int[ numTempLevels ]();
   int* counter = new int[ numTempLevels ]();
+  int iterationCounter = 0;
 
   // collect the first pass data for the specified POC range
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
-    if ( it->poc >= startPoc && it->poc <= startPoc + pocRange )
+    if ( it->poc == startPoc )
     {
       if ( it->isIntra )
       {
@@ -2448,8 +2498,25 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
         qpData[ it->tempLayer + 1 ] = it->qp;
         counter[ it->tempLayer + 1 ]++;
       }
+      iterationCounter++;
     }
-    else if ( it->poc > startPoc + pocRange )
+    else if ( iterationCounter > 0 && iterationCounter < pocRange )
+    {
+      if ( it->isIntra )
+      {
+        bitsData[ it->tempLayer ] += it->numBits;
+        qpData[ it->tempLayer ] = it->qp;
+        counter[ it->tempLayer ]++;
+      }
+      else
+      {
+        bitsData[ it->tempLayer + 1 ] += it->numBits;
+        qpData[ it->tempLayer + 1 ] = it->qp;
+        counter[ it->tempLayer + 1 ]++;
+      }
+      iterationCounter++;
+    }
+    else if ( iterationCounter >= pocRange )
     {
       break;
     }
@@ -2458,7 +2525,7 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
   // calculate alpha parameter based on the collected first pass data
   for ( int i = 0; i < numTempLevels; i++ )
   {
-    if ( counter[i] > 0 )
+    if ( counter[ i ] > 0 )
     {
       double bpp = ( double( bitsData[ i ] ) / counter[ i ] ) / ( encRCSeq->picWidth * encRCSeq->picHeight );
       alphaEstimate[ i ] = exp( ( qpData[ i ] - 13.7122 ) / 4.2005 ) / pow( bpp, -1.367 );
