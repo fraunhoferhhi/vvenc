@@ -364,8 +364,10 @@ static const int RExt__PREDICTION_WEIGHTING_ANALYSIS_DC_PRECISION = 0; ///< Addi
 
 static const int MAX_TIMECODE_SEI_SETS =                            3; ///< Maximum number of time sets
 
+
 static const int MAX_CU_DEPTH =                                     7; ///< log2(CTUSize)
 static const int MAX_CU_SIZE_IDX =                                  MAX_CU_DEPTH + 1; ///< 1+log2(CTUSize)
+static const int MAX_TU_SIZE_IDX =                                  MAX_TB_LOG2_SIZEY + 1; ///< 1+log2(MaxTuSize)
 static const int MAX_CU_SIZE =                                      1<<MAX_CU_DEPTH;
 static const int MIN_CU_LOG2 =                                      2;
 static const int MIN_PU_SIZE =                                      4;

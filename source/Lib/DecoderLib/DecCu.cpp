@@ -139,45 +139,43 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
     return;
   }
 
-        CodingStructure &cs = *tu.cs;
-  const CompArea& area      = tu.blocks[compID];
-
-  const ChannelType chType  = toChannelType( compID );
-
+        CodingStructure &cs     = *tu.cs;
+  const CompArea& area          = tu.blocks[compID];
+  const ChannelType chType      = toChannelType( compID );
 #if ISP_VVC
-        PelBuf piPred       = tu.cu->ispMode ? cs.getPredBuf(area) : m_PredBuffer.getCompactBuf(area);
+  PelBuf piPred                 = tu.cu->ispMode && isLuma( compID ) ? cs.getPredBuf( area ) : m_PredBuffer.getCompactBuf( area );
 #else
-        PelBuf piPred       = m_PredBuffer.getCompactBuf( area );
+  PelBuf piPred                 = m_PredBuffer.getCompactBuf( area );
 #endif
-
-  const CodingUnit& cu  = *tu.cs->getCU( area.pos(), chType, TREE_D );
+  const CodingUnit& cu          = *tu.cu;
   const uint32_t uiChFinalMode  = CU::getFinalIntraMode( cu, chType );
-  PelBuf pReco              = cs.getRecoBuf(area);
+  PelBuf pReco                  = cs.getRecoBuf( area );
 
   //===== init availability pattern =====
   CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
 #if ISP_VVC
-  bool predRegDiffFromTB = CU::isPredRegDiffFromTB(*tu.cu);
-  bool firstTBInPredReg = CU::isFirstTBInPredReg(*tu.cu, area);
-  if (tu.cu->ispMode && isLuma(compID))
+  bool predRegDiffFromTB = isLuma( compID ) && CU::isPredRegDiffFromTB( *tu.cu );
+  bool firstTBInPredReg  = isLuma( compID ) && CU::isFirstTBInPredReg ( *tu.cu, area );
+
+  if( tu.cu->ispMode && isLuma( compID ) )
   {
-    if (predRegDiffFromTB)
+    if( predRegDiffFromTB )
     {
-      if (firstTBInPredReg)
+      if( firstTBInPredReg )
       {
-        CU::adjustPredArea(areaPredReg);
-        m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, areaPredReg, pReco);
+        CU::adjustPredArea( areaPredReg );
+        m_pcIntraPred->initIntraPatternChTypeISP( *tu.cu, areaPredReg, pReco );
       }
     }
     else
     {
-      m_pcIntraPred->initIntraPatternChTypeISP(*tu.cu, area, pReco);
+      m_pcIntraPred->initIntraPatternChTypeISP( *tu.cu, area, pReco );
     }
   }
   else
 #endif
   {
-    m_pcIntraPred->initIntraPatternChType(*tu.cu, area);
+    m_pcIntraPred->initIntraPatternChType( *tu.cu, area );
   }
 
   //===== get prediction signal =====
@@ -254,15 +252,6 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
   if (lmcsflag && (TU::getCbf(tu, compID) || tu.jointCbCr) && isChroma(compID) )
   {
     piResi.scaleSignal(tu.chromaAdj, 0, tu.cu->cs->slice->clpRngs[compID]);
-  }
-
-  if( !tu.cu->ispMode || !isLuma( compID ) )
-  {
-    cs.setDecomp( area );
-  }
-  else if( tu.cu->ispMode && isLuma( compID ) && CU::isISPFirst( *tu.cu, tu.blocks[compID], compID ) )
-  {
-    cs.setDecomp( tu.cu->blocks[compID] );
   }
 
   piPred.reconstruct( piPred, piResi, tu.cu->cs->slice->clpRngs[ compID ] );
@@ -392,8 +381,6 @@ void DecCu::xReconInter(CodingUnit &cu)
   {
     cs.getRecoBuf(cu).copyClip( predBuf, cs.slice->clpRngs);
   }
-
-  cs.setDecomp(cu);
 }
 
 void DecCu::xDecodeInterTU( TransformUnit&  currTU, const ComponentID compID )

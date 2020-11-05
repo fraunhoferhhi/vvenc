@@ -1320,7 +1320,7 @@ bool EncCfg::initCfgParameter()
   }
   for(int i=0; i<MAX_TLAYER; i++)
   {
-    m_numReorderPics[i] = 0;
+    m_maxNumReorderPics[i] = 0;
     m_maxDecPicBuffering[i] = 1;
   }
   for(int i=0; i<m_GOPSize; i++)
@@ -1356,23 +1356,23 @@ bool EncCfg::initCfgParameter()
         numReorder++;
       }
     }
-    if(numReorder > m_numReorderPics[m_GOPList[i].m_temporalId])
+    if(numReorder > m_maxNumReorderPics[m_GOPList[i].m_temporalId])
     {
-      m_numReorderPics[m_GOPList[i].m_temporalId] = numReorder;
+      m_maxNumReorderPics[m_GOPList[i].m_temporalId] = numReorder;
     }
   }
 
   for(int i=0; i<MAX_TLAYER-1; i++)
   {
     // a lower layer can not have higher value of m_numReorderPics than a higher layer
-    if(m_numReorderPics[i+1] < m_numReorderPics[i])
+    if(m_maxNumReorderPics[i+1] < m_maxNumReorderPics[i])
     {
-      m_numReorderPics[i+1] = m_numReorderPics[i];
+      m_maxNumReorderPics[i+1] = m_maxNumReorderPics[i];
     }
     // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] - 1, inclusive
-    if(m_numReorderPics[i] > m_maxDecPicBuffering[i] - 1)
+    if(m_maxNumReorderPics[i] > m_maxDecPicBuffering[i] - 1)
     {
-      m_maxDecPicBuffering[i] = m_numReorderPics[i] + 1;
+      m_maxDecPicBuffering[i] = m_maxNumReorderPics[i] + 1;
     }
     // a lower layer can not have higher value of m_uiMaxDecPicBuffering than a higher layer
     if(m_maxDecPicBuffering[i+1] < m_maxDecPicBuffering[i])
@@ -1382,9 +1382,9 @@ bool EncCfg::initCfgParameter()
   }
 
   // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] -  1, inclusive
-  if(m_numReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
+  if(m_maxNumReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
   {
-    m_maxDecPicBuffering[MAX_TLAYER-1] = m_numReorderPics[MAX_TLAYER-1] + 1;
+    m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
   int   iWidthInCU  = ( m_SourceWidth%m_CTUSize )  ? m_SourceWidth/m_CTUSize  + 1 : m_SourceWidth/m_CTUSize;

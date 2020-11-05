@@ -143,7 +143,7 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
     const unsigned  maxCUSize       = sps->CTUSize;
     Position pos( ctuXPosInCtus*maxCUSize, ctuYPosInCtus*maxCUSize) ;
     UnitArea ctuArea(cs.area.chromaFormat, Area( pos.x, pos.y, maxCUSize, maxCUSize ) );
-    SubPic curSubPic = slice->pps->getSubPicFromPos(pos);
+    const SubPic& curSubPic = slice->pps->getSubPicFromPos(pos);
     // padding/restore at slice level
     if (slice->pps->numSubPics>=2 && curSubPic.treatedAsPic && ctuIdx==0)
     {

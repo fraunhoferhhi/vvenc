@@ -104,7 +104,7 @@ class ScanOrderRom
 
 extern ScanOrderRom g_scanOrderRom;
 
-extern const uint32_t g_log2SbbSize[MAX_CU_DEPTH + 1][MAX_CU_DEPTH + 1][2];
+extern const uint32_t g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2];
 extern ScanElement g_coefTopLeftDiagScan8x8[MAX_CU_SIZE / 2 + 1][64];
 
 extern const int g_quantScales   [2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // Q(QP%6)

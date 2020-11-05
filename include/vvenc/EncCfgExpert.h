@@ -221,7 +221,7 @@ public:
   RPLEntry            m_RPLList1[ MAX_GOP ];                            ///< the RPL entries from the config file
   GOPEntry            m_GOPList [ MAX_GOP ];                            ///< the coding structure entries from the config file
   int                 m_maxDecPicBuffering[ MAX_TLAYER ];               ///< total number of pictures in the decoded picture buffer
-  int                 m_numReorderPics    [ MAX_TLAYER ];               ///< total number of reorder pictures
+  int                 m_maxNumReorderPics [ MAX_TLAYER ];               ///< total number of reorder pictures
   int                 m_maxTempLayer;                                   ///< Max temporal layer
   int                 m_numRPLList0;
   int                 m_numRPLList1;
@@ -420,9 +420,6 @@ public:
   unsigned            m_summaryVerboseness;                             ///< Specifies the level of the verboseness of the text output.
 
   std::string         m_decodeBitstreams[ 2 ];                          ///< filename for decode bitstreams.
-#if REMOVE_DBG_CTU
-  int                 m_debugCTU;                                       ///< dbg ctu
-#endif
   int                 m_switchPOC;                                      ///< dbg poc.
   int                 m_switchDQP;                                      ///< switch DQP.
   int                 m_fastForwardToPOC;                               ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
@@ -485,7 +482,7 @@ public:
       , m_rewriteParamSets                            ( false )
       , m_idrRefParamList                             ( false )
       , m_maxDecPicBuffering                          { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
-      , m_numReorderPics                              { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
+      , m_maxNumReorderPics                           { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
       , m_maxTempLayer                                ( 0 )                             // not set -> derived
       , m_numRPLList0                                 ( 0 )                             // not set -> derived
       , m_numRPLList1                                 ( 0 )                             // not set -> derived
@@ -684,9 +681,6 @@ public:
       , m_summaryVerboseness                          ( 0 )
 
       , m_decodeBitstreams                            { "", "" }
-#if REMOVE_DBG_CTU
-      , m_debugCTU                                    ( -1 )
-#endif
       , m_switchPOC                                   ( -1 )
       , m_switchDQP                                   ( 0 )
       , m_fastForwardToPOC                            ( -1 )
