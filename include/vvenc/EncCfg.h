@@ -510,16 +510,16 @@ public:
       , m_printSequenceMSE                            ( false )
       , m_cabacZeroWordPaddingEnabled                 ( true )
 
-      , m_profile                                     ( Profile::NONE )
+      , m_profile                                     ( Profile::MAIN_10 )
       , m_levelTier                                   ( Level::MAIN )
-      , m_level                                       ( Level::NONE )
+      , m_level                                       ( Level::LEVEL4_1 )
       , m_subProfile                                  ( 0 )
       , m_bitDepthConstraintValue                     ( 10 )
       , m_intraOnlyConstraintFlag                     ( false )
 
-      , m_IntraPeriod                                 ( -1 )
-      , m_DecodingRefreshType                         ( 0 )
-      , m_GOPSize                                     ( 1 )
+      , m_IntraPeriod                                 ( 32 )
+      , m_DecodingRefreshType                         ( 1 )
+      , m_GOPSize                                     ( 16 )
       , m_InputQueueSize                              ( 0 )
       , m_rewriteParamSets                            ( false )
       , m_idrRefParamList                             ( false )
@@ -568,7 +568,7 @@ public:
       , m_internChromaFormat                          ( NUM_CHROMA_FORMAT )
       , m_useIdentityTableForNon420Chroma             ( true )
       , m_inputBitDepth                               { 8, 0 }
-      , m_internalBitDepth                            { 0, 0 }
+      , m_internalBitDepth                            { 10, 0 }
       , m_outputBitDepth                              { 0, 0 }
       , m_MSBExtendedBitDepth                         { 0, 0 }
       , m_costMode                                    ( COST_STANDARD_LOSSY )
@@ -770,6 +770,7 @@ public:
   bool confirmParameter( bool bflag, const char* message );
   bool initCfgParameter();
   void setCfgParameter( const EncCfg& encCfg );
+  int initPreset( int iQuality );
 };
 
 } // namespace vvenc

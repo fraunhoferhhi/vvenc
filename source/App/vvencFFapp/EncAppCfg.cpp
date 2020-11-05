@@ -77,6 +77,76 @@ struct SVPair
   E           value;
 };
 
+template<typename T>
+class IStreamToRefVec
+{
+  public:
+    IStreamToRefVec( std::vector<T*> v, char _sep = 'x' )
+      : valVec( v )
+      , sep( _sep)
+    {
+    }
+
+    ~IStreamToRefVec()
+    {
+    }
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToRefVec<F>& toVec );
+
+  private:
+    std::vector<T*> valVec;
+    char sep;
+};
+
+template<typename T>
+inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
+{
+  const size_t maxSize = toVec.valVec.size();
+  size_t idx = 0;
+  bool fail = false;
+  // split into multiple lines if any
+  while ( ! in.eof() )
+  {
+    string line;
+    std::getline( in, line );
+    // treat all whitespaces and commas as valid separators
+    if( toVec.sep == 'x')
+      std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
+    else
+      std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
+    std::stringstream tokenStream( line );
+    std::string token;
+    // split into multiple tokens if any
+    while( std::getline( tokenStream, token, ' ' ) )
+    {
+      if ( ! token.length() )
+        continue;
+      // convert to value
+      std::stringstream convStream( token );
+      T val;
+      convStream >> val;
+      fail |= convStream.fail();
+      if( idx >= maxSize )
+      {
+        fail = true;//try to write behind buffer
+      }
+      else
+      {
+        *toVec.valVec[idx++] =  val;
+      }
+    }
+  }
+
+  if ( fail || idx != maxSize )
+  {
+    in.setstate( ios::failbit );
+  }
+
+  return in;
+}
+
+
 template<typename E>
 class IStreamToEnum
 {
@@ -131,11 +201,85 @@ inline std::istream& operator >> ( std::istream& in, IStreamToEnum<E>& toEnum )
   in.setstate( ios::failbit );
   return in;
 }
+typedef void (*setParamFunc) (EncCfg*, int);
 
+template<typename E>
+class IStreamToFunc
+{
+  public:
+    IStreamToFunc( setParamFunc func, EncCfg* encCfg, const std::vector<SVPair<E>>* m )
+      : mfunc( func )
+      , mencCfg( encCfg )
+      , toMap( m )
+    {
+    }
+
+    ~IStreamToFunc()
+    {
+    }
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToFunc<F>& toEnum );
+
+    const char* to_string() const
+    {
+      return "";
+    }
+
+  private:
+    setParamFunc                  mfunc;
+    EncCfg*                       mencCfg;
+    E*                            dstVal;
+    const std::vector<SVPair<E>>* toMap;
+};
+
+template<typename E>
+inline std::istream& operator >> ( std::istream& in, IStreamToFunc<E>& toEnum )
+{
+  std::string str;
+  in >> str;
+
+  for ( const auto& map : *toEnum.toMap )
+  {
+    if ( str == map.str )
+    {
+      toEnum.mfunc(toEnum.mencCfg, map.value);
+      return in;
+    }
+  }
+
+  /* not found */
+  in.setstate( ios::failbit );
+  return in;
+}
+
+enum  MyPreset
+{
+ NONE      = -1,
+ FASTER    = 0,
+ FAST      = 1,
+ MEDIUM    = 2,
+ SLOW      = 3,
+ TOOLTEST  = 255,
+};
+
+void setPresets( EncCfg* cfg, int preset)
+{
+  cfg->initPreset( preset );
+}
 
 // ====================================================================================================================
 // string <-> enum fixed mappings
 // ====================================================================================================================
+const std::vector<SVPair<MyPreset>> PresetToEnumMap =
+{
+  { "none",                             MyPreset::NONE },
+  { "faster",                           MyPreset::FASTER },
+  { "fast",                           MyPreset::FAST },
+  { "medium",                 MyPreset::MEDIUM },
+  { "slow",             MyPreset::SLOW },
+  { "tooltest",                    MyPreset::TOOLTEST },
+};
 
 
 const std::vector<SVPair<Profile::Name>> ProfileToEnumMap =
@@ -290,6 +434,8 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
+  IStreamToFunc<MyPreset>      toPreset                     ( setPresets, this, &PresetToEnumMap);
+  IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, 'x' );
 
   IStreamToEnum<Profile::Name> toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
   IStreamToEnum<Level::Tier>   toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
@@ -674,6 +820,8 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 #if 1//ISP_VVC
   ("ISP",                                             m_ISP,                                                         "Enable Intra Sub-Partitions, 0: off, 1: on, 2: fast, 3: faster \n")
 #endif
+  ("preset",                                          toPreset,                                                      "preset test \n")
+  ("Size,-s",                                         toSourceSize,                                                  "source size \n")
       ;
 
   for ( int i = 1; i < MAX_GOP + 1; i++ )
