@@ -1794,7 +1794,6 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
         {
           continue;
         }
-      }
 #if TS_VVC
         if (mtsAllowed || tsAllowed)
 #else
