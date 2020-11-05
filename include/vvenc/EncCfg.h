@@ -61,8 +61,8 @@ namespace vvenc {
 class VVENC_DECL EncCfg : public EncCfgExpert
 {
 public:
-  bool                m_confirmFailed;
-  int                 m_verbosity;
+  bool                m_confirmFailed;                                  ///< state variable 
+  int                 m_verbosity;                                      ///< encoder verbosity
   int                 m_framesToBeEncoded;                              ///< number of encoded frames
   int                 m_FrameRate;                                      ///< source frame-rates (Hz)
   int                 m_FrameSkip;                                      ///< number of skipped frames from the beginning
@@ -86,12 +86,12 @@ public:
   int                 m_inputBitDepth   [ MAX_NUM_CH ];                 ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ];                 ///< bit-depth codec operates at (input/output files will be converted)
 
-  int                 m_numWppThreads;
-  int                 m_ensureWppBitEqual;
+  int                 m_numWppThreads;                                  ///< number of wpp threads
+  int                 m_ensureWppBitEqual;                              ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions  
 public:
 
   EncCfg()
-    : m_confirmFailed                                 ( false )
+    : m_confirmFailed                               ( false )
     , m_verbosity                                   ( VERBOSE )
     , m_framesToBeEncoded                           ( 0 )
     , m_FrameRate                                   ( 0 )

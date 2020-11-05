@@ -39,7 +39,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 ----------------------------------------------------------------------------- */
-/** \file     EncCfg.h
+/** \file     EncCfgExpert.h
     \brief    encoder configuration class (header)
 */
 
