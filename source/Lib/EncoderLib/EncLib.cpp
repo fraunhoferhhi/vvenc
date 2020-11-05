@@ -646,7 +646,6 @@ void EncLib::xInitDCI(DCI &dci, const SPS &sps, const int dciId) const
   // The SPS must have already been set up.
   // set the DPS profile information.
   dci.dciId                 = dciId;
-  dci.maxSubLayersMinus1    = sps.maxTLayers - 1;
 
   dci.profileTierLevel.resize(1);
   // copy profile level tier info
@@ -829,7 +828,7 @@ void EncLib::xInitSPS(SPS &sps) const
   for (int i = 0; i < std::min(sps.maxTLayers, (uint32_t) MAX_TLAYER); i++ )
   {
     sps.maxDecPicBuffering[i]       = m_cEncCfg.m_maxDecPicBuffering[i];
-    sps.numReorderPics[i]           = m_cEncCfg.m_numReorderPics[i];
+    sps.numReorderPics[i]           = m_cEncCfg.m_maxNumReorderPics[i];
   }
 
   sps.vuiParametersPresent          = m_cEncCfg.m_vuiParametersPresent;

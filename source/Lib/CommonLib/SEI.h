@@ -346,6 +346,7 @@ public:
   , duCommonCpbRemovalDelayFlag (false)
   , cpbAltTimingInfoPresent (false)
   , ptDisplayElementalPeriodsMinus1(0)
+  , delayForConcatenationEnsureFlag(false)
   {
     ::memset(ptSubLayerDelaysPresent,     0, sizeof(ptSubLayerDelaysPresent));
     ::memset(duCommonCpbRemovalDelayMinus1,   0, sizeof(duCommonCpbRemovalDelayMinus1));
@@ -376,6 +377,7 @@ public:
   std::vector<uint32_t>               vclCpbDelayOffset;
   std::vector<uint32_t>               vclDpbDelayOffset;
   int                                 ptDisplayElementalPeriodsMinus1;
+  bool                                delayForConcatenationEnsureFlag; 
 };
 
 class SEIDecodingUnitInfo : public SEI
