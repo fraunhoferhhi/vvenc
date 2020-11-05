@@ -505,8 +505,9 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("WppBitEqual",                                     m_ensureWppBitEqual,                                           "Ensure bit equality with WPP case, 0: off (sequencial mode), 1: copy from wpp line above, 2: line wise reset")
     ;
 
-  po::Options easyOpts;
-  easyOpts.initOptions( opts );
+  po::setDefaults( opts );
+  std::ostringstream easyOpts;
+  po::doHelp( easyOpts, opts );
 
   opts.addOptions()
 
@@ -858,7 +859,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   if ( argc == 1 || do_help )
   {
     /* argc == 1: no options have been specified */
-    po::doHelp( cout, easyOpts );
+    cout <<  easyOpts.str();
     return false;
   }
   if ( argc == 1 || do_expert_help )

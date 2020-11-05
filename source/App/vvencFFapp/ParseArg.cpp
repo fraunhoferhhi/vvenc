@@ -84,14 +84,6 @@ namespace df
       }
     }
 
-    void Options::initOptions( const Options& opt)
-    {
-      for( const auto& o : opt.opt_list )
-      {
-        addOption(o->opt);
-      }
-    }
-
     void Options::addOption(OptionBase *opt)
     {
       Names* names = new Names();
