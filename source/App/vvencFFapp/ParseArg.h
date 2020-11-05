@@ -124,6 +124,9 @@ namespace df
       Option(const std::string& name, T& storage, T default_val, const std::string& desc)
       : OptionBase(name, desc), opt_storage(storage), opt_default_val(default_val)
       {}
+      Option( const Option& o )
+      : OptionBase(o.opt_string, o.opt_desc), opt_storage(o.opt_storage), opt_default_val(o.opt_default_val)
+      {}
 
       void parse(const std::string& arg, ErrorReporter&);
 
@@ -209,6 +212,8 @@ namespace df
       };
 
       void addOption(OptionBase *opt);
+
+      void initOptions(const Options& opt);
 
       typedef std::list<Names*> NamesPtrList;
       NamesPtrList opt_list;
