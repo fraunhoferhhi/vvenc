@@ -555,6 +555,12 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
+  if( 0 == rcSrc.m_iTargetBitRate )
+  {
+    ROTPARAMS( rcSrc.m_bHrdParametersPresent,              "hrdParameters present requires rate control" );
+    ROTPARAMS( rcSrc.m_bBufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+    ROTPARAMS( rcSrc.m_bPictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+  }
   return 0;
 }
 
@@ -568,7 +574,10 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 
   rcEncCfg.m_usePerceptQPA                                     = rcVVEncParameter.m_iPerceptualQPA;
 
-  rcEncCfg.m_AccessUnitDelimiter = true;   // enable ACCessUnitDelimiter per default
+  rcEncCfg.m_AccessUnitDelimiter        = rcVVEncParameter.m_bAccessUnitDelimiter;   
+  rcEncCfg.m_hrdParametersPresent       = rcVVEncParameter.m_bHrdParametersPresent;
+  rcEncCfg.m_bufferingPeriodSEIEnabled  = rcVVEncParameter.m_bBufferingPeriodSEIEnabled;
+  rcEncCfg.m_pictureTimingSEIEnabled    = rcVVEncParameter.m_bPictureTimingSEIEnabled;
 
   if(  rcVVEncParameter.m_iTargetBitRate )
   {
