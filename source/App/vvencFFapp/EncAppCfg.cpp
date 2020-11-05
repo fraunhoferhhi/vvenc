@@ -77,6 +77,76 @@ struct SVPair
   E           value;
 };
 
+template<typename T>
+class IStreamToRefVec
+{
+  public:
+    IStreamToRefVec( std::vector<T*> v, char _sep = 'x' )
+      : valVec( v )
+      , sep( _sep)
+    {
+    }
+
+    ~IStreamToRefVec()
+    {
+    }
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToRefVec<F>& toVec );
+
+  private:
+    std::vector<T*> valVec;
+    char sep;
+};
+
+template<typename T>
+inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
+{
+  const size_t maxSize = toVec.valVec.size();
+  size_t idx = 0;
+  bool fail = false;
+  // split into multiple lines if any
+  while ( ! in.eof() )
+  {
+    string line;
+    std::getline( in, line );
+    // treat all whitespaces and commas as valid separators
+    if( toVec.sep == 'x')
+      std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
+    else
+      std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
+    std::stringstream tokenStream( line );
+    std::string token;
+    // split into multiple tokens if any
+    while( std::getline( tokenStream, token, ' ' ) )
+    {
+      if ( ! token.length() )
+        continue;
+      // convert to value
+      std::stringstream convStream( token );
+      T val;
+      convStream >> val;
+      fail |= convStream.fail();
+      if( idx >= maxSize )
+      {
+        fail = true;//try to write behind buffer
+      }
+      else
+      {
+        *toVec.valVec[idx++] =  val;
+      }
+    }
+  }
+
+  if ( fail || idx != maxSize )
+  {
+    in.setstate( ios::failbit );
+  }
+
+  return in;
+}
+
+
 template<typename E>
 class IStreamToEnum
 {
@@ -131,11 +201,85 @@ inline std::istream& operator >> ( std::istream& in, IStreamToEnum<E>& toEnum )
   in.setstate( ios::failbit );
   return in;
 }
+typedef void (*setParamFunc) (EncCfg*, int);
 
+template<typename E>
+class IStreamToFunc
+{
+  public:
+    IStreamToFunc( setParamFunc func, EncCfg* encCfg, const std::vector<SVPair<E>>* m )
+      : mfunc( func )
+      , mencCfg( encCfg )
+      , toMap( m )
+    {
+    }
+
+    ~IStreamToFunc()
+    {
+    }
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToFunc<F>& toEnum );
+
+    const char* to_string() const
+    {
+      return "";
+    }
+
+  private:
+    setParamFunc                  mfunc;
+    EncCfg*                       mencCfg;
+    E*                            dstVal;
+    const std::vector<SVPair<E>>* toMap;
+};
+
+template<typename E>
+inline std::istream& operator >> ( std::istream& in, IStreamToFunc<E>& toEnum )
+{
+  std::string str;
+  in >> str;
+
+  for ( const auto& map : *toEnum.toMap )
+  {
+    if ( str == map.str )
+    {
+      toEnum.mfunc(toEnum.mencCfg, map.value);
+      return in;
+    }
+  }
+
+  /* not found */
+  in.setstate( ios::failbit );
+  return in;
+}
+
+enum  MyPreset
+{
+ NONE      = -1,
+ FASTER    = 0,
+ FAST      = 1,
+ MEDIUM    = 2,
+ SLOW      = 3,
+ TOOLTEST  = 255,
+};
+
+void setPresets( EncCfg* cfg, int preset)
+{
+  cfg->initPreset( preset );
+}
 
 // ====================================================================================================================
 // string <-> enum fixed mappings
 // ====================================================================================================================
+const std::vector<SVPair<MyPreset>> PresetToEnumMap =
+{
+  { "none",                             MyPreset::NONE },
+  { "faster",                           MyPreset::FASTER },
+  { "fast",                           MyPreset::FAST },
+  { "medium",                 MyPreset::MEDIUM },
+  { "slow",             MyPreset::SLOW },
+  { "tooltest",                    MyPreset::TOOLTEST },
+};
 
 
 const std::vector<SVPair<Profile::Name>> ProfileToEnumMap =
@@ -285,11 +429,14 @@ EncAppCfg::~EncAppCfg()
 bool EncAppCfg::parseCfg( int argc, char* argv[] )
 {
   bool do_help                = false;
+  bool do_expert_help         = false;
   int  warnUnknowParameter    = 0;
 
   //
   // link custom formated configuration parameters with istream reader
   //
+  IStreamToFunc<MyPreset>      toPreset                     ( setPresets, this, &PresetToEnumMap);
+  IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, 'x' );
 
   IStreamToEnum<Profile::Name> toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
   IStreamToEnum<Level::Tier>   toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
@@ -320,9 +467,50 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   std::string ignore;
   po::Options opts;
 
+
   opts.addOptions()
 
   ("help",                                            do_help,                                                       "this help text")
+  ("fullhelp",                                        do_expert_help,                                                "expert help text")
+
+  ("InputFile,i",                                     m_inputFileName,                                               "Original YUV input file name")
+  ("BitstreamFile,b",                                 m_bitstreamFileName,                                           "Bitstream output file name")
+  ("ReconFile,o",                                     m_reconFileName,                                               "Reconstructed YUV output file name")
+
+  ("FramesToBeEncoded,f",                             m_framesToBeEncoded,                                           "Number of frames to be encoded (default=all)")
+  ("FrameRate,-fr",                                   m_FrameRate,                                                   "Frame rate")
+  ("FrameSkip,-fs",                                   m_FrameSkip,                                                   "Number of frames to skip at start of input YUV")
+  ("SourceWidth,-wdt",                                m_SourceWidth,                                                 "Source picture width")
+  ("SourceHeight,-hgt",                               m_SourceHeight,                                                "Source picture height")
+  ("TicksPerSecond",                                  m_TicksPerSecond,                                              "Ticks Per Second for dts generation, default 90000 ( 1..27000000)")
+
+  ("Profile",                                         toProfile,                                                     "Profile name to use for encoding. Use [multilayer_]main_10[_444][_still_picture], auto, or none")
+  ("Tier",                                            toLevelTier,                                                   "Tier to use for interpretation of --Level (main or high only)")
+  ("Level",                                           toLevel,                                                       "Level limit to be used, eg 5.1, or none")
+
+  ("IntraPeriod,-ip",                                 m_IntraPeriod,                                                 "Intra period in frames, (-1: only first frame)")
+  ("DecodingRefreshType,-dr",                         m_DecodingRefreshType,                                         "Intra refresh type (0:none 1:CRA 2:IDR 3:RecPointSEI)")
+  ("GOPSize,g",                                       m_GOPSize,                                                     "GOP size of temporal structure")
+
+  ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                                       "Bit-depth of input file")
+  ("OutputBitDepth",                                  m_outputBitDepth[ CH_L ],                                      "Bit-depth of output file (default:InternalBitDepth)")
+
+  ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                               "Mode of perceptually motivated QP adaptation\n\t0: off (default)\n\t1: SDR, WPSNR based\n\t2: SDR, XPSNR based\n\t3: HDR, WPSNR based\n\t4: HDR, XPSNR based\n\t5: HDR, mean-luma based.")
+  ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                                 "Flag indicating if temporal high-pass filter in activity calculation in QPA should (1) or shouldn't (0, default) be applied in I-pictures")
+  
+  ("Verbosity,v",                                     m_verbosity,                                                   "Specifies the level of the verboseness")
+  ("preset",                                          toPreset,                                                      "preset test \n")
+  ("Size,-s",                                         toSourceSize,                                                  "source size \n")
+  ("NumWppThreads",                                   m_numWppThreads,                                               "Number of parallel wpp threads")
+  ("WppBitEqual",                                     m_ensureWppBitEqual,                                           "Ensure bit equality with WPP case, 0: off (sequencial mode), 1: copy from wpp line above, 2: line wise reset")
+    ;
+
+  po::setDefaults( opts );
+  std::ostringstream easyOpts;
+  po::doHelp( easyOpts, opts );
+
+  opts.addOptions()
+
   ("c",                                               po::parseConfigFile,                                           "configuration file name")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                                           "warn for unknown configuration parameters instead of failing")
   ("SIMD",                                            ignore,                                                        "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension");
@@ -330,9 +518,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   // file, i/o and source parameters
   opts.addOptions()
 
-  ("InputFile,i",                                     m_inputFileName,                                               "Original YUV input file name")
-  ("BitstreamFile,b",                                 m_bitstreamFileName,                                           "Bitstream output file name")
-  ("ReconFile,o",                                     m_reconFileName,                                               "Reconstructed YUV output file name")
   ("ClipInputVideoToRec709Range",                     m_bClipInputVideoToRec709Range,                                "If true then clip input video to the Rec. 709 Range on loading when InternalBitDepth is less than MSBExtendedBitDepth")
   ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                               "If true then clip output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
   ("PYUV",                                            m_packedYUVMode,                                               "If true then output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.");
@@ -347,23 +532,13 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   opts.addOptions()
 
-  ("Verbosity,v",                                     m_verbosity,                                                   "Specifies the level of the verboseness")
-
   ("ConformanceWindowMode",                           m_conformanceWindowMode,                                       "Window conformance mode (0: no window, 1:automatic padding, 2:padding, 3:conformance")
   ("ConfWinLeft",                                     m_confWinLeft,                                                 "Left offset for window conformance mode 3")
   ("ConfWinRight",                                    m_confWinRight,                                                "Right offset for window conformance mode 3")
   ("ConfWinTop",                                      m_confWinTop,                                                  "Top offset for window conformance mode 3")
   ("ConfWinBottom",                                   m_confWinBottom,                                               "Bottom offset for window conformance mode 3")
 
-  ("FramesToBeEncoded,f",                             m_framesToBeEncoded,                                           "Number of frames to be encoded (default=all)")
-  ("FrameRate,-fr",                                   m_FrameRate,                                                   "Frame rate")
-  ("FrameSkip,-fs",                                   m_FrameSkip,                                                   "Number of frames to skip at start of input YUV")
   ("TemporalSubsampleRatio,-ts",                      m_temporalSubsampleRatio,                                      "Temporal sub-sample ratio when reading input YUV")
-
-  ("SourceWidth,-wdt",                                m_SourceWidth,                                                 "Source picture width")
-  ("SourceHeight,-hgt",                               m_SourceHeight,                                                "Source picture height")
-
-  ("TicksPerSecond",                                  m_TicksPerSecond,                                              "Ticks Per Second for dts generation, default 90000 ( 1..27000000)")
 
   ("HorizontalPadding,-pdx",                          m_aiPad[0],                                                    "Horizontal source padding for conformance window mode 2")
   ("VerticalPadding,-pdy",                            m_aiPad[1],                                                    "Vertical source padding for conformance window mode 2")
@@ -377,17 +552,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("CabacZeroWordPaddingEnabled",                     m_cabacZeroWordPaddingEnabled,                                 "0 do not add conforming cabac-zero-words to bit streams, 1 (default) = add cabac-zero-words as required")
 
   // Profile and level
-  ("Profile",                                         toProfile,                                                     "Profile name to use for encoding. Use [multilayer_]main_10[_444][_still_picture], auto, or none")
-  ("Tier",                                            toLevelTier,                                                   "Tier to use for interpretation of --Level (main or high only)")
-  ("Level",                                           toLevel,                                                       "Level limit to be used, eg 5.1, or none")
   ("SubProfile",                                      m_subProfile,                                                  "Sub-profile idc")
   ("MaxBitDepthConstraint",                           m_bitDepthConstraintValue,                                     "Bit depth to use for profile-constraint for RExt profiles. 0=automatically choose based upon other parameters")
   ("IntraConstraintFlag",                             m_intraOnlyConstraintFlag,                                     "Value of general_intra_constraint_flag to use for RExt profiles (not used if an explicit RExt sub-profile is specified)")
 
   // Coding structure paramters
-  ("IntraPeriod,-ip",                                 m_IntraPeriod,                                                 "Intra period in frames, (-1: only first frame)")
-  ("DecodingRefreshType,-dr",                         m_DecodingRefreshType,                                         "Intra refresh type (0:none 1:CRA 2:IDR 3:RecPointSEI)")
-  ("GOPSize,g",                                       m_GOPSize,                                                     "GOP size of temporal structure")
   ("InputQueueSize",                                  m_InputQueueSize,                                              "Size of input frames queue (default: 0, use gop size)")
   ("ReWriteParamSets",                                m_rewriteParamSets,                                            "Enable rewriting of Parameter sets before every (intra) random access point")
   ("IDRRefParamList",                                 m_idrRefParamList,                                             "Enable indication of reference picture list syntax elements in slice headers of IDR pictures")
@@ -424,9 +593,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("SliceCbQpOffsetIntraOrPeriodic",                  m_sliceChromaQpOffsetIntraOrPeriodic[0],                       "Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
   ("SliceCrQpOffsetIntraOrPeriodic",                  m_sliceChromaQpOffsetIntraOrPeriodic[1],                       "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
-  ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                               "Mode of perceptually motivated QP adaptation\n\t0: off (default)\n\t1: SDR, WPSNR based\n\t2: SDR, XPSNR based\n\t3: HDR, WPSNR based\n\t4: HDR, XPSNR based\n\t5: HDR, mean-luma based.")
-  ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                                 "Flag indicating if temporal high-pass filter in activity calculation in QPA should (1) or shouldn't (0, default) be applied in I-pictures")
-
   ("LumaLevelToDeltaQPMode",                          m_lumaLevelToDeltaQPEnabled,                         "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
   ("isSDR",                                           m_sdr,                                            "compatibility")
   ("WCGPPSEnable",                                    m_wcgChromaQpControl.enabled,                     "1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
@@ -446,11 +612,9 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("InputChromaFormat",                               toInputFileCoFormat,                                           "input file chroma format (400|420|422|444) default [420]")
   ("ChromaFormatIDC,-cf",                             toInternCoFormat,                                              "intern chroma format (400|420|422|444) or set to 0 (default), same as InputChromaFormat")
   ("UseIdentityTableForNon420Chroma",                 m_useIdentityTableForNon420Chroma,                             "True: Indicates that 422/444 chroma uses identity chroma QP mapping tables; False: explicit Qp table may be specified in config")
-  ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                                       "Bit-depth of input file")
   ("InputBitDepthC",                                  m_inputBitDepth[ CH_C ],                                       "As per InputBitDepth but for chroma component. (default:InputBitDepth)")
   ("InternalBitDepth",                                m_internalBitDepth[ CH_L ],                                    "Bit-depth the codec operates at. (default: MSBExtendedBitDepth). If different to MSBExtendedBitDepth, source data will be converted")
 //  ("InternalBitDepthC",                               m_internalBitDepth[ CH_C ],                                    "As per InternalBitDepth but for chroma component. (default:InternalBitDepth)")
-  ("OutputBitDepth",                                  m_outputBitDepth[ CH_L ],                                      "Bit-depth of output file (default:InternalBitDepth)")
   ("OutputBitDepthC",                                 m_outputBitDepth[ CH_C ],                                      "As per OutputBitDepth but for chroma component. (default: use luma output bit-depth)")
   ("MSBExtendedBitDepth",                             m_MSBExtendedBitDepth[ CH_L ],                                 "bit depth of luma component after addition of MSBs of value 0 (used for synthesising High Dynamic Range source material). (default:InputBitDepth)")
   ("MSBExtendedBitDepthC",                            m_MSBExtendedBitDepth[ CH_C ],                                 "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
@@ -661,8 +825,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("FrameParallel",                                   m_frameParallel,                                               "Encode multiple frames in parallel (if permitted by GOP structure)")
   ("NumFppThreads",                                   m_numFppThreads,                                               "Number of frame parallel processing threads")
   ("FppBitEqual",                                     m_ensureFppBitEqual,                                           "Ensure bit equality with frame parallel processing case")
-  ("NumWppThreads",                                   m_numWppThreads,                                               "Number of parallel wpp threads")
-  ("WppBitEqual",                                     m_ensureWppBitEqual,                                           "Ensure bit equality with WPP case, 0: off (sequencial mode), 1: copy from wpp line above, 2: line wise reset")
   ("EnablePicPartitioning",                           m_picPartitionFlag,                                            "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices can be used)")
   ("SbTMVP",                                          m_SbTMVP,                                                      "Enable Subblock Temporal Motion Vector Prediction (0: off, 1: on) [default: off]")
 
@@ -686,7 +848,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // parse command line parameters and read configuration files
   //
-
+    
   po::setDefaults( opts );
   po::ErrorReporter err;
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
@@ -695,6 +857,12 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
     msgApp( ERROR, "Unhandled argument ignored: `%s'\n", *it);
   }
   if ( argc == 1 || do_help )
+  {
+    /* argc == 1: no options have been specified */
+    cout <<  easyOpts.str();
+    return false;
+  }
+  if ( argc == 1 || do_expert_help )
   {
     /* argc == 1: no options have been specified */
     po::doHelp( cout, opts );
