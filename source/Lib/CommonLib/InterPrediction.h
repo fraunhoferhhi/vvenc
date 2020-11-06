@@ -127,15 +127,13 @@ class DMVR : public InterPredInterpolation
   PelStorage              m_yuvPred[NUM_REF_PIC_LIST_01];
   PelStorage              m_yuvTmp[NUM_REF_PIC_LIST_01];
   PelStorage              m_yuvPad[NUM_REF_PIC_LIST_01];
-  PelStorage              m_yuvRef[NUM_REF_PIC_LIST_01];
   const Mv m_pSearchOffset[25] = { Mv(-2,-2), Mv(-1,-2), Mv(0,-2), Mv(1,-2), Mv(2,-2),
                                    Mv(-2,-1), Mv(-1,-1), Mv(0,-1), Mv(1,-1), Mv(2,-1),
                                    Mv(-2, 0), Mv(-1, 0), Mv(0, 0), Mv(1, 0), Mv(2, 0),
                                    Mv(-2, 1), Mv(-1, 1), Mv(0, 1), Mv(1, 1), Mv(2, 1),
                                    Mv(-2, 2), Mv(-1, 2), Mv(0, 2), Mv(1, 2), Mv(2, 2) };
 private:
-  void     xPrefetch            ( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool isPadding = false, bool forLuma = true, bool forChroma = true );
-  void     xCopyAndPad          ( const CodingUnit& cu, const PelUnitBuf& srcBuf, const PelUnitBuf& pcPad );
+  void     xCopyAndPad          ( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool forLuma);
   void     xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, const PelUnitBuf *refBuf, const bool bioApplied, const Mv startMV[NUM_REF_PIC_LIST_01], const Mv& refMV );
 
 protected:
