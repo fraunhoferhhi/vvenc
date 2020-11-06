@@ -163,6 +163,10 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
   cVVEncParameter.m_eLevel          = vvenc::VVC_LEVEL_4_1;       // level
   cVVEncParameter.m_eTier           = vvenc::VVC_TIER_MAIN;       // tier
+  cVVEncParameter.m_bAccessUnitDelimiter       = false;
+  cVVEncParameter.m_bHrdParametersPresent      = false;
+  cVVEncParameter.m_bBufferingPeriodSEIEnabled = false;
+  cVVEncParameter.m_bPictureTimingSEIEnabled   = false;
 }
 
 void fillInputPic( vvenc::InputPicture& cInputPic )
@@ -264,6 +268,12 @@ int testLibParameterRanges()
 
   testParamList( "TicksPerSecond",      vvencParams.m_iTicksPerSecond,            vvencParams, { 90000,27000000,60,120 } );
   testParamList( "TicksPerSecond",      vvencParams.m_iTicksPerSecond,            vvencParams, { -1,0, 50, 27000001 }, true );
+  
+  vvencParams.m_iTargetBitRate = 0;
+  testParamList( "HrdParametersPresent",      vvencParams.m_bHrdParametersPresent,          vvencParams, { true }, true );
+  testParamList( "BufferingPeriodSEIEnabled", vvencParams.m_bBufferingPeriodSEIEnabled,     vvencParams, { true }, true );
+  testParamList( "PictureTimingSEIEnabled",   vvencParams.m_bPictureTimingSEIEnabled,       vvencParams, { true }, true );
+
   return 0;
 }
 

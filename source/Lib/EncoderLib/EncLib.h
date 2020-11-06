@@ -129,6 +129,9 @@ private:
   void     xInitRPL            ( SPS &sps ) const;
   void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
+#if DETECT_SC
+  void     xDetectScreenC      ( Picture& pic , PelUnitBuf yuvOrgBuf, int useTS);
+#endif
 };
 
 } // namespace vvenc

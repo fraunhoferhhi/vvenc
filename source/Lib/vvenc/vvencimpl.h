@@ -101,7 +101,6 @@ private:
   int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString );
 
   int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
-  static int xInitPreset( vvenc::EncCfg& rcEncCfg, int iQuality );
   void xPrintCfg();
 
   int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,

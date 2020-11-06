@@ -443,6 +443,9 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
 
+#if DETECT_SC
+      xDetectScreenC(*pic, yuvOrgBuf, m_cEncCfg.m_TS );
+#endif
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
@@ -760,7 +763,6 @@ void EncLib::xInitDCI(DCI &dci, const SPS &sps, const int dciId) const
   // The SPS must have already been set up.
   // set the DPS profile information.
   dci.dciId                 = dciId;
-  dci.maxSubLayersMinus1    = sps.maxTLayers - 1;
 
   dci.profileTierLevel.resize(1);
   // copy profile level tier info
@@ -825,7 +827,11 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noCiipConstraintFlag                         = m_cEncCfg.m_CIIP == 0;
   ci.noGeoConstraintFlag                          = m_cEncCfg.m_Geo == 0;
   ci.noLadfConstraintFlag                         = true;
+#if TS_VVC
+  ci.noTransformSkipConstraintFlag                = m_cEncCfg.m_TS == 0;
+#else
   ci.noTransformSkipConstraintFlag                = true;
+#endif
   ci.noBDPCMConstraintFlag                        = true;
   ci.noJointCbCrConstraintFlag                    = ! m_cEncCfg.m_JointCbCrMode;
   ci.noMrlConstraintFlag                          = ! m_cEncCfg.m_MRL;
@@ -921,6 +927,10 @@ void EncLib::xInitSPS(SPS &sps) const
 #if 1//ISP_VVC
   sps.ISP                           = m_cEncCfg.m_ISP;
 #endif
+#if 1 //TS_VVC
+  sps.transformSkip                 = m_cEncCfg.m_TS;
+  sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
+#endif
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {
@@ -943,7 +953,7 @@ void EncLib::xInitSPS(SPS &sps) const
   for (int i = 0; i < std::min(sps.maxTLayers, (uint32_t) MAX_TLAYER); i++ )
   {
     sps.maxDecPicBuffering[i]       = m_cEncCfg.m_maxDecPicBuffering[i];
-    sps.numReorderPics[i]           = m_cEncCfg.m_numReorderPics[i];
+    sps.numReorderPics[i]           = m_cEncCfg.m_maxNumReorderPics[i];
   }
 
   sps.vuiParametersPresent          = m_cEncCfg.m_vuiParametersPresent;
@@ -1268,6 +1278,80 @@ void EncLib::xInitHrdParameters(SPS &sps)
     sps.olsHrdParams[i] = m_cEncHRD.olsHrdParams[i];
   }
 }
+
+#if DETECT_SC
+void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
+{
+  if (useTS < 2)
+  {
+    pic.useSC = useTS;
+  }
+  else
+  {
+    int K_SC = 5;
+    int SIZE_BL = 4;
+    int TH_SC = 6;
+    const Pel* piSrc = yuvOrgBuf.Y().buf;
+    uint32_t   uiStride = yuvOrgBuf.Y().stride;
+    uint32_t   uiWidth = yuvOrgBuf.Y().width;
+    uint32_t   uiHeight = yuvOrgBuf.Y().height;
+    unsigned   i, j;
+    int size = SIZE_BL;
+    std::vector<int> Vall;
+    for (j = 0; j < uiHeight;)
+    {
+      for (i = 0; i < uiWidth;)
+      {
+        int sum = 0;
+        int Mit = 0;
+        int V = 0;
+        int h = i;
+        int w = j;
+        for (h = j; (h < j + size) && (h < uiHeight); h++)
+        {
+          for (w = i; (w < i + size) && (w < uiWidth); w++)
+          {
+            sum += int(piSrc[h * uiStride + w]);
+          }
+        }
+        int sizeEnd = ((h - j) * (w - i));
+        Mit = sum / sizeEnd;
+        for (h = j; (h < j + size) && (h < uiHeight); h++)
+        {
+          for (w = i; (w < i + size) && (w < uiWidth); w++)
+          {
+            V += abs(Mit - int(piSrc[h * uiStride + w]));
+          }
+        }
+        // Variance in Block (SIZE_BL*SIZE_BL)
+        V = V / sizeEnd;
+        Vall.push_back(V);
+        i += size;
+      }
+      j += size;
+    }
+    int s = 0;
+    for (auto it = Vall.begin(); it != Vall.end(); ++it)
+    {
+      if (*it < TH_SC)
+      {
+        s++;
+      }
+    }
+    if (s > (Vall.size() / K_SC))
+    {
+      pic.useSC = true;
+     //  printf(" s= %d  all= %d SSC\n", s, int(Vall.size() / K_SC));
+    }
+    else
+    {
+      pic.useSC = false;
+      // printf(" s= %d  all= %d NC\n", s, int(Vall.size() / K_SC));
+    }
+    Vall.clear();
+  }
+}
+#endif
 
 } // namespace vvenc
 

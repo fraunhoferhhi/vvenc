@@ -141,7 +141,12 @@ private:
 
   // inverse transform
   void xIT     ( const TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pCoeff, PelBuf& pResidual );
-
+#if TS_VVC
+  // skipping Transform
+  void xTransformSkip(const TransformUnit& tu, const ComponentID& compID, const CPelBuf& resi, TCoeff* psCoeff);
+  // inverse skipping transform
+  void xITransformSkip(const CCoeffBuf& plCoef, PelBuf& pResidual, const TransformUnit& tu, const ComponentID& component);
+#endif
   void xGetCoeffEnergy(
                        TransformUnit  &tu,
                  const ComponentID    &compID,

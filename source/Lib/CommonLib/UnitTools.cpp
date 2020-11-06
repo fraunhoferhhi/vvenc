@@ -984,7 +984,7 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
     Position posC1 = cu.Y().center();
     bool C0Avail = false;
     bool boundaryCond = ((posRB.x + pcv.minCUSize) < pcv.lumaWidth) && ((posRB.y + pcv.minCUSize) < pcv.lumaHeight);
-    SubPic curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
+    const SubPic& curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
     if (curSubPic.treatedAsPic )
     {
       boundaryCond = ((posRB.x + pcv.minCUSize) <= curSubPic.subPicRight &&
@@ -1292,7 +1292,7 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   }
 
   // Check the position of colocated block is within a subpicture
-  SubPic curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
+  const SubPic& curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
   if (curSubPic.treatedAsPic)
   {
     if (!curSubPic.isContainingPos(pos))
@@ -1490,7 +1490,7 @@ void CU::fillMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refI
     Mv cColMv;
 
     bool boundaryCond = ((posRB.x + pcv.minCUSize) < pcv.lumaWidth) && ((posRB.y + pcv.minCUSize) < pcv.lumaHeight);
-    SubPic curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
+    const SubPic& curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
     if (curSubPic.treatedAsPic)
     {
       boundaryCond = ((posRB.x + pcv.minCUSize) <= curSubPic.subPicRight &&
@@ -1809,7 +1809,7 @@ void CU::fillAffineMvpCand(CodingUnit& cu, const RefPicList refPicList, const in
       Position posC1 = cu.Y().center();
       Mv cColMv;
       bool boundaryCond = ((posRB.x + pcv.minCUSize) < pcv.lumaWidth) && ((posRB.y + pcv.minCUSize) < pcv.lumaHeight);
-      SubPic curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
+      const SubPic& curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
       if (curSubPic.treatedAsPic)
       {
         boundaryCond = ((posRB.x + pcv.minCUSize) <= curSubPic.subPicRight &&
@@ -2518,7 +2518,7 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
         bool C0Avail = false;
 
         bool boundaryCond = ((posRB.x + pcv.minCUSize) < pcv.lumaWidth) && ((posRB.y + pcv.minCUSize) < pcv.lumaHeight);
-        SubPic curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
+        const SubPic& curSubPic = cu.cs->slice->pps->getSubPicFromPos(cu.lumaPos());
         if (curSubPic.treatedAsPic)
         {
           boundaryCond = ((posRB.x + pcv.minCUSize) <= curSubPic.subPicRight &&
@@ -2733,7 +2733,7 @@ void clipColPos(int& posX, int& posY, const CodingUnit& cu)
   int ctuX = ((puPos.x >> log2CtuSize) << log2CtuSize);
   int ctuY = ((puPos.y >> log2CtuSize) << log2CtuSize);
   int horMax;
-  SubPic curSubPic = cu.slice->pps->getSubPicFromPos(puPos);
+  const SubPic& curSubPic = cu.slice->pps->getSubPicFromPos(puPos);
   if (curSubPic.treatedAsPic)
   {
     horMax = std::min((int)curSubPic.subPicRight, ctuX + (int)cu.cs->sps->CTUSize + 3);
@@ -3334,7 +3334,6 @@ bool TU::isTSAllowed(const TransformUnit &tu, const ComponentID compID)
   return tsAllowed;
 }
 
-
 int TU::getICTMode( const TransformUnit& tu, int jointCbCr )
 {
   if( jointCbCr < 0 )
@@ -3347,7 +3346,11 @@ int TU::getICTMode( const TransformUnit& tu, int jointCbCr )
 bool TU::needsSqrt2Scale( const TransformUnit& tu, const ComponentID compID )
 {
   const Size& size=tu.blocks[compID];
+#if TS_VVC
+  const bool isTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
+#else
   const bool isTransformSkip = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+#endif
   return (!isTransformSkip) && (((Log2(size.width * size.height)) & 1) == 1);
 }
 

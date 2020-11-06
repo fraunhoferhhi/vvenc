@@ -523,6 +523,10 @@ bool EncCfg::initCfgParameter()
 #if ISP_VVC
   confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
 #endif
+#if TS_VVC
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
+#endif
 
   if( m_alf )
   {
@@ -1321,7 +1325,7 @@ bool EncCfg::initCfgParameter()
   }
   for(int i=0; i<MAX_TLAYER; i++)
   {
-    m_numReorderPics[i] = 0;
+    m_maxNumReorderPics[i] = 0;
     m_maxDecPicBuffering[i] = 1;
   }
   for(int i=0; i<m_GOPSize; i++)
@@ -1357,23 +1361,23 @@ bool EncCfg::initCfgParameter()
         numReorder++;
       }
     }
-    if(numReorder > m_numReorderPics[m_GOPList[i].m_temporalId])
+    if(numReorder > m_maxNumReorderPics[m_GOPList[i].m_temporalId])
     {
-      m_numReorderPics[m_GOPList[i].m_temporalId] = numReorder;
+      m_maxNumReorderPics[m_GOPList[i].m_temporalId] = numReorder;
     }
   }
 
   for(int i=0; i<MAX_TLAYER-1; i++)
   {
     // a lower layer can not have higher value of m_numReorderPics than a higher layer
-    if(m_numReorderPics[i+1] < m_numReorderPics[i])
+    if(m_maxNumReorderPics[i+1] < m_maxNumReorderPics[i])
     {
-      m_numReorderPics[i+1] = m_numReorderPics[i];
+      m_maxNumReorderPics[i+1] = m_maxNumReorderPics[i];
     }
     // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] - 1, inclusive
-    if(m_numReorderPics[i] > m_maxDecPicBuffering[i] - 1)
+    if(m_maxNumReorderPics[i] > m_maxDecPicBuffering[i] - 1)
     {
-      m_maxDecPicBuffering[i] = m_numReorderPics[i] + 1;
+      m_maxDecPicBuffering[i] = m_maxNumReorderPics[i] + 1;
     }
     // a lower layer can not have higher value of m_uiMaxDecPicBuffering than a higher layer
     if(m_maxDecPicBuffering[i+1] < m_maxDecPicBuffering[i])
@@ -1383,9 +1387,9 @@ bool EncCfg::initCfgParameter()
   }
 
   // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] -  1, inclusive
-  if(m_numReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
+  if(m_maxNumReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
   {
-    m_maxDecPicBuffering[MAX_TLAYER-1] = m_numReorderPics[MAX_TLAYER-1] + 1;
+    m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
   int   iWidthInCU  = ( m_SourceWidth%m_CTUSize )  ? m_SourceWidth/m_CTUSize  + 1 : m_SourceWidth/m_CTUSize;
@@ -1525,6 +1529,227 @@ bool EncCfg::initCfgParameter()
 void EncCfg::setCfgParameter( const EncCfg& encCfg )
 {
   *this = encCfg;
+}
+
+int EncCfg::initPreset( int iQuality )
+{
+  m_maxTempLayer = 5;
+  m_numRPLList0  = 20;
+  m_numRPLList1  = 20;
+
+  m_intraQPOffset = -3;
+  m_lambdaFromQPEnable = true;
+
+  m_MaxCodingDepth = 5;
+  m_log2DiffMaxMinCodingBlockSize = 5;
+
+  m_bUseASR   = true;
+  m_bUseHADME = true;
+  m_RDOQ      = 1;
+  m_useRDOQTS = true;
+  m_useSelectiveRDOQ = false;
+  m_JointCbCrMode = true;
+  m_cabacInitPresent = true;
+  m_useFastLCTU = true;
+  m_usePbIntraFast = true;
+  m_useFastMrg = 2;
+  m_fastLocalDualTreeMode = 1;
+  m_fastSubPel            = 1;
+  m_qtbttSpeedUp          = 1;
+
+  m_useAMaxBT = true;
+  m_fastQtBtEnc = true;
+  m_contentBasedFastQtbt = true;
+  m_fastInterSearchMode = 1;
+
+  m_MTSImplicit = true;
+
+  m_motionEstimationSearchMethod = 4;
+  m_SearchRange = 384;
+  m_minSearchWindow = 96;
+
+  m_AMVRspeed = 1;
+  m_LMChroma = true;
+
+  m_BDOF = true;
+  m_DMVR = true;
+  m_EDO = 1;
+  m_lumaReshapeEnable = true;
+  m_alf               = true;
+
+  m_LMCSOffset      = 6;
+
+  m_maxMTTDepth        = 1;
+  m_maxMTTDepthI       = 2;
+  m_maxMTTDepthIChroma = 2;
+  m_maxNumMergeCand    = 6;
+
+  m_useNonLinearAlfLuma   = false;
+  m_useNonLinearAlfChroma = false;
+
+  // adapt to RA config files
+  m_qpInValsCb.clear();
+  m_qpInValsCb.push_back(17);
+  m_qpInValsCb.push_back(22);
+  m_qpInValsCb.push_back(34);
+  m_qpInValsCb.push_back(42);
+
+  m_qpOutValsCb.clear();
+  m_qpOutValsCb.push_back(17);
+  m_qpOutValsCb.push_back(23);
+  m_qpOutValsCb.push_back(35);
+  m_qpOutValsCb.push_back(39);
+
+  switch( iQuality )
+  {
+  case 0: // faster
+          m_RDOQ                  = 2;
+          m_DepQuantEnabled       = false;
+          m_SignDataHidingEnabled = true;
+          m_BDOF                  = false;
+          m_alf                   = false;
+          m_DMVR                  = false;
+          m_JointCbCrMode         = false;
+          m_AMVRspeed             = 0;
+          m_lumaReshapeEnable     = false;
+          m_EDO                   = 0;
+
+          m_MRL                   = false;
+
+          break;
+  case 1: //fast
+
+          m_RDOQ                  = 2;
+          m_DepQuantEnabled       = false;
+          m_SignDataHidingEnabled = true;
+          m_BDOF                  = true;
+          m_ccalf                 = true;
+          m_DMVR                  = true;
+          m_JointCbCrMode         = false;
+          m_AMVRspeed             = 0;
+          m_lumaReshapeEnable     = false;
+          m_EDO                   = 0;
+
+          m_MCTF               = 2;
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_MRL                = false;
+
+    break;
+  case 2:  // medium ( = ftc )
+
+          m_AMVRspeed = 5;
+
+          m_SMVD = 3;
+
+          m_MCTF = 2;
+          m_MCTFNumLeadFrames = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_Affine = 2;
+          m_PROF   = 1;
+
+          m_MMVD             = 3;
+          m_allowDisFracMMVD = 1;
+
+          m_MIP             = 1;
+          m_useFastMIP      = 4;
+
+          m_ccalf           = true;
+          m_SbTMVP          = 1;
+          m_Geo             = 3;
+          m_LFNST           = 1;
+
+          m_RCKeepHierarchicalBit = 2;
+
+    break;
+
+  case 3: // slower
+
+          m_AMVRspeed = 1;
+
+          m_SMVD = 3;
+
+          m_MCTF = 2;
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_Affine = 2;
+          m_PROF = 1;
+
+          m_MMVD = 3;
+          m_allowDisFracMMVD = 1;
+
+          m_maxMTTDepth        = 2;
+          m_maxMTTDepthI       = 3;
+          m_maxMTTDepthIChroma = 3;
+
+          m_MIP             = 1;
+          m_useFastMIP      = 4;
+
+          m_ccalf           = true;
+          m_SbTMVP          = 1;
+          m_Geo             = 1;
+          m_LFNST           = 1;
+
+          m_RCKeepHierarchicalBit = 2;
+
+          m_SBT  = 1;
+          m_CIIP = 1;
+
+          m_contentBasedFastQtbt = false;
+
+          m_useNonLinearAlfLuma   = true;
+          m_useNonLinearAlfChroma = true;
+    break;
+
+  case 255:  // tooltest (=atc)
+
+          m_AMVRspeed = 3;
+
+          m_SMVD = 3;
+
+          m_MCTF = 2;
+          m_MCTFNumLeadFrames = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_Affine           = 2;
+          m_PROF             = 1;
+
+          m_MMVD             = 2;
+          m_allowDisFracMMVD = 1;
+
+          m_MIP             = 1;
+          m_useFastMIP      = 4;
+
+          m_ccalf           = true;
+          m_SbTMVP          = 1;
+          m_Geo             = 2;
+          m_CIIP            = 3;
+          m_SBT             = 2;
+          m_LFNST           = 1;
+          m_LFNST           = 1;
+          m_ISP             = 2;
+          m_MTS             = 1;
+
+          m_RCKeepHierarchicalBit = 2;
+          m_useNonLinearAlfLuma   = true;
+          m_useNonLinearAlfChroma = true;
+          m_MTSImplicit = true;
+#if 1//TS_VVC
+          m_TS = 1;
+          m_TSsize = 3;
+          m_useChromaTS = false;
+#endif
+
+    break;
+
+  default:
+    return -1;
+  }
+
+  return 0;
 }
 
 } // namespace vvenc

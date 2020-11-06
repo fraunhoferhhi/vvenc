@@ -442,10 +442,9 @@ struct SubPic
 struct DCI
 {
   uint32_t   dciId;
-  uint32_t   maxSubLayersMinus1;
   std::vector<ProfileTierLevel> profileTierLevel;
 
-  DCI() : dciId(0), maxSubLayersMinus1 (0) {};
+  DCI() : dciId(0) {}
 };
 
 struct VPS
@@ -454,6 +453,7 @@ struct VPS
   uint32_t              maxLayers;
   uint32_t              maxSubLayers;
   uint32_t              layerId[MAX_VPS_LAYERS];
+  bool                  defaultPtlDpbHrdMaxTidFlag;
   bool                  allLayersSameNumSubLayers;
   bool                  allIndependentLayers;
   uint32_t              vpsCfgPredDirection[MAX_VPS_SUBLAYERS];
@@ -509,6 +509,7 @@ struct VPS
   : vpsId                       ( 0 )
   , maxLayers                   ( 0 )
   , maxSubLayers                ( 0 )
+  , defaultPtlDpbHrdMaxTidFlag  ( false )
   , allLayersSameNumSubLayers   ( false )
   , allIndependentLayers        ( false )
   , eachLayerIsAnOls            ( false )
@@ -957,8 +958,8 @@ public:
 
 
   uint32_t               getTileIdx( const Position& pos ) const                          { return 0; } //tbd
-  SubPic                 getSubPicFromPos(const Position& pos)  const;
-  SubPic                 getSubPicFromCU (const CodingUnit& cu) const;
+  const SubPic&          getSubPicFromPos(const Position& pos)  const;
+  const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
 
   void resetTileSliceInfo();
   void initTiles();
