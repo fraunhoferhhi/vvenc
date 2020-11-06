@@ -186,10 +186,8 @@ CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType effCh
   if( !_blk.contains( pos ) || (_treeType == TREE_C && effChType == CH_L) )
   {
     //keep this check, which is helpful to identify bugs
-    if( _treeType == TREE_C && effChType == CH_L )
-    {
-      CHECK( parent == nullptr, "parent shall be valid; consider using function getLumaCU()" );
-    }
+    CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr, "parent shall be valid; consider using function getLumaCU()" );
+
     if( parent ) return parent->getCU( pos, effChType, TREE_D );
     else         return nullptr;
   }
@@ -205,10 +203,8 @@ const CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType
 
   if( !_blk.contains( pos ) || (_treeType == TREE_C && effChType == CH_L) )
   {
-    if( _treeType == TREE_C && effChType == CH_L )
-    {
-      CHECK( parent == nullptr, "parent shall be valid; consider using function getLumaCU()" );
-    }
+    CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr, "parent shall be valid; consider using function getLumaCU()");
+
     if( parent ) return parent->getCU( pos, effChType, TREE_D );
     else         return nullptr;
   }
