@@ -85,6 +85,31 @@ void addBDOFAvgCore(const Pel* src0, int src0Stride, const Pel* src1, int src1St
   }
 }
 
+void applyPROFCore(Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng)
+{
+  int idx = 0;
+  const int dILimit = 1 << std::max<int>(clpRng.bd + 1, 13);
+  for (int h = 0; h < height; h++)
+  {
+    for (int w = 0; w < width; w++)
+    {
+      int32_t dI = dMvX[idx] * gradX[w] + dMvY[idx] * gradY[w];
+      dI = Clip3(-dILimit, dILimit - 1, dI);
+      dst[w] = src[w] + dI;
+      if (!bi)
+      {
+        dst[w] = (dst[w] + offset) >> shiftNum;
+        dst[w] = ClipPel(dst[w], clpRng);
+      }
+      idx++;
+    }
+    gradX += gradStride;
+    gradY += gradStride;
+    dst += dstStride;
+    src += srcStride;
+  }
+}
+
 template<bool PAD = true>
 void gradFilterCore(const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth)
 {
@@ -569,9 +594,10 @@ void InterPredInterpolation::init()
 
   m_if.initInterpolationFilter( true );
 
-  xFpAddBDOFAvg4    = addBDOFAvgCore;
   xFpBDOFGradFilter = gradFilterCore;
-  xFpCalcBDOFSums   = calcBDOFSumsCore;
+  xFpProfGradFilter = gradFilterCore<false>;
+  xFpApplyPROF      = applyPROFCore;
+
 #if ENABLE_SIMD_OPT_BDOF
   initInterPredictionX86();
 #endif
@@ -786,6 +812,12 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
   const int   offset = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
   const int   limit = (1 << 4) - 1;
 
+  if( xFpBiDirOptFlow )
+  {
+    xFpBiDirOptFlow( srcY0, srcY1, gradX0, gradX1, gradY0, gradY1, width, height, dstY, dstStride, shiftNum, offset, limit, clpRng, bitDepth );
+    return;
+  }
+
   int xUnit = (width >> 2);
   int yUnit = (height >> 2);
 
@@ -808,7 +840,7 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
       const Pel* SrcY1Tmp = srcY1 + (xu << 2) + (yu << 2) * src1Stride;
       const Pel* SrcY0Tmp = srcY0 + (xu << 2) + (yu << 2) * src0Stride;
 
-      xFpCalcBDOFSums(SrcY0Tmp, SrcY1Tmp, pGradX0Tmp, pGradX1Tmp, pGradY0Tmp, pGradY1Tmp, xu, yu, src0Stride, src1Stride, widthG, bitDepth, &sumAbsGX, &sumAbsGY, &sumDIX, &sumDIY, &sumSignGY_GX);
+      calcBDOFSumsCore(SrcY0Tmp, SrcY1Tmp, pGradX0Tmp, pGradX1Tmp, pGradY0Tmp, pGradY1Tmp, xu, yu, src0Stride, src1Stride, widthG, bitDepth, &sumAbsGX, &sumAbsGY, &sumDIX, &sumDIY, &sumSignGY_GX);
       tmpx = (sumAbsGX == 0 ? 0 : xRightShiftMSB(sumDIX << 2, sumAbsGX));
       tmpx = Clip3(-limit, limit, tmpx);
 
@@ -827,7 +859,7 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
       gradY1 = m_gradY1 + offsetPos + ((yu*widthG + xu) << 2);
 
       dstY0 = dstY + ((yu*dstStride + xu) << 2);
-      xFpAddBDOFAvg4(srcY0Temp, src0Stride, srcY1Temp, src1Stride, dstY0, dstStride, gradX0, gradX1, gradY0, gradY1, widthG, (1 << 2), (1 << 2), tmpx, tmpy, shiftNum, offset, clpRng);
+      addBDOFAvgCore(srcY0Temp, src0Stride, srcY1Temp, src1Stride, dstY0, dstStride, gradX0, gradX1, gradY0, gradY1, widthG, (1 << 2), (1 << 2), tmpx, tmpy, shiftNum, offset, clpRng);
     }  // xu
   }  // yu
 }
@@ -1730,7 +1762,8 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         PelBuf gradXBuf = gradXExt.subBuf(0, 0, blockWidth + 2, blockHeight + 2);
         PelBuf gradYBuf = gradYExt.subBuf(0, 0, blockWidth + 2, blockHeight + 2);
 
-        g_pelBufOP.profGradFilter(dstExtBuf.buf, dstExtBuf.stride, blockWidth + 2, blockHeight + 2, gradXBuf.stride, gradXBuf.buf, gradYBuf.buf, clpRng.bd);
+        xFpProfGradFilter(dstExtBuf.buf, dstExtBuf.stride, blockWidth + 2, blockHeight + 2, gradXBuf.stride, gradXBuf.buf, gradYBuf.buf, clpRng.bd);
+
         const int shiftNum = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
         const Pel offset = (1 << (shiftNum - 1)) + IF_INTERNAL_OFFS;
         Pel* src = dstExtBuf.bufAt(PROF_BORDER_EXT_W, PROF_BORDER_EXT_H);
@@ -1739,7 +1772,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
 
         Pel*  dstY = dstBuf.bufAt(w, h);
 
-        g_pelBufOP.applyPROF(dstY, dstBuf.stride, src, dstExtBuf.stride, blockWidth, blockHeight, gX, gY, gradXBuf.stride, dMvScaleHor, dMvScaleVer, blockWidth, bi, shiftNum, offset, clpRng);
+        xFpApplyPROF(dstY, dstBuf.stride, src, dstExtBuf.stride, blockWidth, blockHeight, gX, gY, gradXBuf.stride, dMvScaleHor, dMvScaleVer, blockWidth, bi, shiftNum, offset, clpRng);
       }
     }
   }
