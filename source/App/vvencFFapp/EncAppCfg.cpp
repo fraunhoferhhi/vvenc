@@ -836,6 +836,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 #if 1//ISP_VVC
   ("ISP",                                             m_ISP,                                                         "Enable Intra Sub-Partitions, 0: off, 1: on, 2: fast, 3: faster \n")
 #endif
+#if 1//TS_VVC
+  ("TransformSkip",                                   m_TS,                                                          "Intra transform skipping, 0: off, 1: TS, 2: TS with SC detection ")
+  ("TransformSkipLog2MaxSize",                        m_TSsize,                                                      "Specify transform-skip maximum size. Minimum 2, Maximum 5")
+  ("ChromaTS",                                        m_useChromaTS,                                                 "Enable encoder search of chromaTS")
+#endif
       ;
 
   for ( int i = 1; i < MAX_GOP + 1; i++ )
@@ -1038,6 +1043,11 @@ void EncAppCfg::printCfg()
     msgApp(VERBOSE, "MTSIntraCand:%d ",        m_MTSIntraMaxCand);
 #if 1// ISP_VVC
     msgApp(VERBOSE, "ISP:%d ",                 m_ISP);
+#endif
+#if 1//TS_VVC
+    msgApp(VERBOSE, "TransformSkip:%d ",       m_TS);
+    msgApp(VERBOSE, "TransformSkipLog2MaxSize:%d ", m_TSsize);
+    msgApp(VERBOSE, "useChromaTS:%d ",         m_useChromaTS);
 #endif
   }
 

@@ -3334,7 +3334,6 @@ bool TU::isTSAllowed(const TransformUnit &tu, const ComponentID compID)
   return tsAllowed;
 }
 
-
 int TU::getICTMode( const TransformUnit& tu, int jointCbCr )
 {
   if( jointCbCr < 0 )
@@ -3347,7 +3346,11 @@ int TU::getICTMode( const TransformUnit& tu, int jointCbCr )
 bool TU::needsSqrt2Scale( const TransformUnit& tu, const ComponentID compID )
 {
   const Size& size=tu.blocks[compID];
+#if TS_VVC
+  const bool isTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
+#else
   const bool isTransformSkip = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+#endif
   return (!isTransformSkip) && (((Log2(size.width * size.height)) & 1) == 1);
 }
 

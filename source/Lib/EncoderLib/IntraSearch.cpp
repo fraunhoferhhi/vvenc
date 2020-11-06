@@ -1640,6 +1640,21 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     }
   }
 #endif
+#if TS_VVC
+  bool checkTransformSkip = sps.transformSkip;
+
+  SizeType transformSkipMaxSize = 1 << sps.log2MaxTransformSkipBlockSize;
+  //bool tsAllowed = TU::isTSAllowed(tu, COMP_Y);
+  bool tsAllowed = cu.cs->sps->transformSkip && (!cu.ispMode) && (!cu.bdpcmMode) &&(!cu.sbtInfo);
+  tsAllowed &= cu.blocks[COMP_Y].width <= transformSkipMaxSize && cu.blocks[COMP_Y].height <= transformSkipMaxSize;
+#if DETECT_SC
+  tsAllowed &= cs.picture->useSC;
+#endif
+  if (tsAllowed)
+  {
+    EndMTS += 1;
+  }
+#endif
   if (endLfnstIdx || EndMTS)
   {
 #if ISP_VVC
@@ -1714,7 +1729,14 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     tmpTU = &saveCS.addTU( currArea, partitioner.chType, cs.cus[0] );
 #endif
 
+
     std::vector<TrMode> trModes{ TrMode(0, true) };
+#if TS_VVC
+    if (tsAllowed)
+    {
+      trModes.push_back(TrMode(1, true));
+    }
+#endif
     double dct2Cost           = MAX_DOUBLE;
     double trGrpStopThreshold = 1.001;
     double trGrpBestCost      = MAX_DOUBLE;
@@ -1734,7 +1756,7 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
         trModes.push_back(TrMode(MTScur,            true));
         trModes.push_back(TrMode(MTS_DST7_DST7 + 3, true));
       }
-      else 
+      else
       {
         for (int i = 2; i < 6; i++)
         {
@@ -1743,9 +1765,19 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
       }
     }
 
+#if TS_VVC
+    if ((EndMTS && !m_pcEncCfg->m_LFNST) || (tsAllowed && !mtsAllowed))
+#else
     if (EndMTS && !m_pcEncCfg->m_LFNST)
+#endif
     {
       xPreCheckMTS(tu, &trModes, m_pcEncCfg->m_MTSIntraMaxCand, predBuf);
+#if TS_VVC
+      if (!mtsAllowed && !trModes[1].second)
+      {
+        EndMTS = 0;
+      }
+#endif
     }
 
     bool NStopMTS = true;
@@ -1756,17 +1788,27 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
       {
         trGrpBestCost = MAX_DOUBLE;
       }
-
       for (int lfnstIdx = startLfnstIdx; lfnstIdx <= endLfnstIdx; lfnstIdx++)
       {
         if (lfnstIdx && modeId)
         {
           continue;
         }
-
+#if TS_VVC
+        if (mtsAllowed || tsAllowed)
+#else
         if (mtsAllowed)
+#endif
         {
+#if TS_VVC
+          if (m_pcEncCfg->m_TS && bestMTS == MTS_SKIP)
+          {
+            break;
+          }
+          if (!m_pcEncCfg->m_LFNST && !trModes[modeId].second && mtsAllowed)
+#else
           if (!m_pcEncCfg->m_LFNST  && !trModes[modeId].second)
+#endif
           {
             continue;
           }
@@ -1831,12 +1873,24 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
         else
 #endif
         {
+#if TS_VVC
+          bool TrLoad = (EndMTS && !m_pcEncCfg->m_LFNST) || (tsAllowed && !mtsAllowed && (lfnstIdx == 0)) ? true : false;
+#else
           bool TrLoad = EndMTS && !m_pcEncCfg->m_LFNST;
+#endif
 
           xIntraCodingTUBlock(tu, COMP_Y, false, singleDistTmpLuma, &numSig, predBuf, TrLoad);
 
           cuCtx.mtsLastScanPos = false;
           //----- determine rate and r-d cost -----
+#if TS_VVC
+        if ((sps.LFNST ? (modeId == EndMTS && modeId != 0 && checkTransformSkip) : (trModes[modeId].first != 0)) && !TU::getCbfAtDepth(tu, COMP_Y, currDepth))
+        {
+          singleCostTmp = MAX_DOUBLE;
+        }
+        else
+#endif
+        {
 #if ISP_VVC
           m_ispTestedModes[0].IspType      = TU_NO_ISP;
           m_ispTestedModes[0].subTuCounter = -1;
@@ -1858,6 +1912,7 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
           {
             singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
           }
+        }
 
           if (((EndMTS && (m_pcEncCfg->m_MTS == 2)) || rapidLFNST) && modeId == 0 && lfnstIdx == 0)
           {
