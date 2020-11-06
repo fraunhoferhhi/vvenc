@@ -83,7 +83,7 @@ namespace vvenc {
 
   struct TRCPassStats
   {
-    TRCPassStats( int _poc, int _qp, uint32_t _numBits, double _yPsnr, double _uPsnr, double _vPsnr, bool _isIntra, int _tempLayer ) : poc( _poc ), qp( _qp ), numBits( _numBits ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ), isIntra( _isIntra ), tempLayer( _tempLayer ), isNewScene( false ), frameInGopRatio( -1.0 ), gopBitsVsBitrate( -1.0 ), targetBits( 0 ), estAlpha() {}
+    TRCPassStats( int _poc, int _qp, uint32_t _numBits, double _yPsnr, double _uPsnr, double _vPsnr, bool _isIntra, int _tempLayer ) : poc( _poc ), qp( _qp ), numBits( _numBits ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ), isIntra( _isIntra ), tempLayer( _tempLayer ), isNewScene( false ), frameInGopRatio( -1.0 ), gopBitsVsBitrate( -1.0 ), scaledBits( double( numBits ) ), targetBits( 0 ), estAlpha() {}
     int       poc;
     int       qp;
     uint32_t  numBits;
@@ -96,6 +96,7 @@ namespace vvenc {
     bool      isNewScene;
     double    frameInGopRatio;
     double    gopBitsVsBitrate;
+    double    scaledBits;
     int       targetBits;
     double    estAlpha[ 7 ];
   };
