@@ -712,11 +712,18 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
 }
 
-
+#if TS_CHROMA
+void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID& compID)
+#else
 void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand)
+#endif
 {
   CodingStructure &cs     = *tu.cs;
+#if TS_CHROMA
+  const CompArea& rect = tu.blocks[compID];
+#else
   const CompArea & rect   = tu.blocks[COMP_Y];
+#endif
   const uint32_t   width  = rect.width;
   const uint32_t   height = rect.height;
 
@@ -729,8 +736,13 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   const double                  facBB[] = { 1.2, 1.3, 1.3, 1.4, 1.5 };
   while (it != trModes->end())
   {
+#if TS_CHROMA
+    tu.mtsIdx[compID] = it->first;
+    CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[compID]], rect);
+#else
     tu.mtsIdx[COMP_Y] = it->first;
     CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[COMP_Y]], rect);
+#endif
     if (tu.noResidual)
     {
       int sumAbs = 0;
@@ -738,6 +750,16 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
       it++;
       continue;
     }
+#if TS_CHROMA
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
+    }
+    else
+    {
+      xT(tu, compID, resiBuf, tempCoeff, width, height);
+    }
+#else
 #if TS_VVC
     if (tu.mtsIdx[COMP_Y] == MTS_SKIP)
     {
@@ -748,6 +770,7 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     {
       xT(tu, COMP_Y, resiBuf, tempCoeff, width, height);
     }
+#endif
 
     int sumAbs = 0;
     for (int pos = 0; pos < width * height; pos++)
@@ -756,16 +779,28 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     }
 
     double scaleSAD = 1.0;
+#if TS_CHROMA
+    if (tu.mtsIdx[compID] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
+#else
     if (tu.mtsIdx[COMP_Y] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
+#endif
     {
       scaleSAD = 1.0 / 1.414213562;   // compensate for not scaling transform skip coefficients by 1/sqrt(2)
     }
 #if TS_VVC
+#if TS_CHROMA
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(compID)));
+      scaleSAD *= pow(2, trShift);
+    }
+#else
     if (tu.mtsIdx[COMP_Y] == MTS_SKIP)
     {
       int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(COMP_Y)));
       scaleSAD *= pow(2, trShift);
     }
+#endif
     trCosts.push_back(TrCost(int(std::min<double>(sumAbs * scaleSAD, std::numeric_limits<int>::max())), pos++));
 #else
     trCosts.push_back(TrCost(int(sumAbs * scaleSAD), pos++));
