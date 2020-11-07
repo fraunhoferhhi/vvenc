@@ -3663,6 +3663,12 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 #if TS_VVC
       bool tsAllowed =
         TU::isTSAllowed(tu, compID) && (isLuma(compID) || (isChroma(compID) && m_pcEncCfg->m_useChromaTS));
+#if TS_CHROMA
+      if (isChroma(compID) && tsAllowed && (tu.mtsIdx[COMP_Y] != MTS_SKIP))
+      {
+        tsAllowed = false;
+      }
+#endif
 #if DETECT_SC
       tsAllowed &= cs.picture->useSC;
 #endif
