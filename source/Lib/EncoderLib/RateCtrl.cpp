@@ -2348,10 +2348,13 @@ void RateCtrl::processFirstPassData()
 
   int numOfLevels = int( log( encRCSeq->gopSize ) / log( 2 ) + 0.5 ) + 2;
 
+  // run a simple scene change detection
   detectNewScene();
 
-  scaleGops();
+  // process and scale GOP and frame bits using the data from the first pass to account for different target bitrates
+  processGops();
 
+  // loop though the first pass data and update alpha parameters when new scenes are detected
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
@@ -2365,19 +2368,13 @@ void RateCtrl::processFirstPassData()
       estimateAlphaFirstPass( numOfLevels, it->poc, encRCSeq->intraPeriod, it->estAlpha );
     }
   }
-
-}
-
-void RateCtrl::updateFirstPassData()
-{
-  encRCSeq->firstPassData = getFirstPassStats();
 }
 
 int64_t RateCtrl::getTotalBitsInFirstPass()
 {
   int64_t totalBitsFirstPass = 0;
-  std::list<TRCPassStats>::iterator it;
 
+  std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
     totalBitsFirstPass += it->numBits;
@@ -2394,8 +2391,8 @@ void RateCtrl::detectNewScene()
   int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
   double* gopFeature = new double[ 2 + pocOfLastCompleteGop / encRCSeq->gopSize ]();
 
+  // collect the GOP features which will be used to detect scene changes
   std::list<TRCPassStats>::iterator it;
-  // collect GOP features
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
     if ( !it->isIntra && it->tempLayer == 0 )
@@ -2408,6 +2405,7 @@ void RateCtrl::detectNewScene()
   meanFeatureValue /= counter;
 
   counter = 0;
+  // iterate through the first pass frame data to detect scene changes
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
     if ( !it->isIntra && it->tempLayer == 0 )
@@ -2427,21 +2425,13 @@ void RateCtrl::detectNewScene()
   delete[] gopFeature;
 }
 
-void RateCtrl::scaleGops()
+void RateCtrl::processGops()
 {
-  int64_t totalBitsFirstPass = getTotalBitsInFirstPass();
-  double averageBitrateFirstPass = double( totalBitsFirstPass ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
-  double scalingParameter = 0.15; // tuning parameter
-  double gopScalingFactor = 1.0 - scalingParameter * log( encRCSeq->targetRate / averageBitrateFirstPass ) / log( 2 );
-  double frameScalingFactor = 1.0;
+  int iterationCounter = 0;
+  double actualBitrateAfterScaling = -1.0;
   int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
-  int pocOfLastCompleteIp = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->intraPeriod ) * encRCSeq->intraPeriod );
-  int gopsInIntraPeriod = encRCSeq->intraPeriod / encRCSeq->gopSize;
-
   int* gopBits = new int[ 2 + pocOfLastCompleteGop / encRCSeq->gopSize ](); // +2 for the first I frame (GOP) and a potential last incomplete GOP
   double *scaledBits = new double[ int( m_listRCFirstPassStats.size() ) ]();
-
-  int iterationCounter = 0;
 
   // count total bits in every GOP
   std::list<TRCPassStats>::iterator it;
@@ -2458,25 +2448,63 @@ void RateCtrl::scaleGops()
     scaledBits[ iterationCounter ] = double( it->numBits );
   }
 
+  // scale GOP and frame bits to account for different target bitrates besed on the first pass data
+  scaleGops( scaledBits, gopBits, actualBitrateAfterScaling );
+
+  // calculate frame and GOP ratios; calculate target bits
+  iterationCounter = 0;
+  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++, iterationCounter++ )
+  {
+    it->scaledBits = scaledBits[ iterationCounter ];
+    if ( it->poc == 0 ) // distinguish between the first frame and the rest of the sequence
+    {
+      it->frameInGopRatio = it->scaledBits / gopBits[ 0 ];
+      it->gopBitsVsBitrate = double( gopBits[ 0 ] ) / actualBitrateAfterScaling;
+    }
+    else
+    {
+      it->frameInGopRatio = it->scaledBits / gopBits[ 1 + ( it->poc - 1 ) / encRCSeq->gopSize ];
+      it->gopBitsVsBitrate = double( gopBits[ 1 + ( it->poc - 1 ) / encRCSeq->gopSize ] ) / actualBitrateAfterScaling;
+    }
+    it->targetBits = int( it->frameInGopRatio * it->gopBitsVsBitrate * encRCSeq->targetRate + 0.5 );
+  }
+
+  delete[] gopBits;
+  delete[] scaledBits;
+}
+
+void RateCtrl::scaleGops( double *scaledBits, int *gopBits, double &actualBitrateAfterScaling )
+{
+  int64_t totalBitsInFirstPass = getTotalBitsInFirstPass();
+  double averageBitrateFirstPass = double( totalBitsInFirstPass ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
+  double scalingParameter = 0.175; // tuning parameter
+  double gopScalingFactor = 1.0 - scalingParameter * log( encRCSeq->targetRate / averageBitrateFirstPass ) / log( 2 );
+  double frameScalingFactor = 1.0;
+  int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
+  int pocOfLastCompleteIp = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->intraPeriod ) * encRCSeq->intraPeriod );
+  int gopsInIntraPeriod = encRCSeq->intraPeriod / encRCSeq->gopSize;
+
+  // scale the first frame in the sequence
+  scaledBits[ 0 ] *= gopScalingFactor;
+
   // scale GOP and frame bits to account for different target rates
   for ( int i = 0; i < pocOfLastCompleteIp / encRCSeq->gopSize; i += gopsInIntraPeriod )
   {
     double meanGopBits = 0.0;
-    // iterate through GOPs inside an IP to calculate the average GOP bits within one IP
+    // iterate through GOPs inside an IP to calculate an average GOP bits within one IP
     for ( int j = 0; j < gopsInIntraPeriod; j++ )
     {
       meanGopBits += double( gopBits[ 1 + i + j ] );
     }
     meanGopBits /= gopsInIntraPeriod;
 
-    // scale GOP bits
+    // scale GOP bits in an IP
     for ( int j = 0; j < gopsInIntraPeriod; j++ )
     {
       double tmpGopScaledBits = std::max( 2000.0, ( gopBits[ 1 + i + j ] - meanGopBits ) * gopScalingFactor + meanGopBits );
       frameScalingFactor = tmpGopScaledBits / gopBits[ 1 + i + j ];
       gopBits[ 1 + i + j ] = tmpGopScaledBits;
-      // scale frame bits inside the scaled GOP
-      for ( int k = 0; k < encRCSeq->gopSize; k++ )
+      for ( int k = 0; k < encRCSeq->gopSize; k++ ) // scale frame bits inside the scaled GOP
       {
         scaledBits[ 1 + ( i + j ) * encRCSeq->gopSize + k ] *= frameScalingFactor;
       }
@@ -2506,35 +2534,13 @@ void RateCtrl::scaleGops()
     }
   }
 
-  scaledBits[ 0 ] *= gopScalingFactor; // scale the first frame in the sequence
-
   // make sure that the total scaled frame bits match the average bitrate
   int64_t totalScaledBits = 0;
   for ( int i = 0; i < m_listRCFirstPassStats.size(); i++ )
   {
     totalScaledBits += int64_t( scaledBits[ i ] );
   }
-  double actualBitrateAfterScaling = double( totalScaledBits ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
-
-  // calculate frame and GOP ratios; calculate target bits
-  iterationCounter = 0;
-  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++, iterationCounter++ )
-  {
-    it->scaledBits = scaledBits[ iterationCounter ];
-    if ( it->poc == 0 )
-    {
-      it->frameInGopRatio = it->scaledBits / gopBits[ 0 ];
-      it->gopBitsVsBitrate = double( gopBits[ 0 ] ) / actualBitrateAfterScaling;
-    }
-    else
-    {
-      it->frameInGopRatio = it->scaledBits / gopBits[ 1 + ( it->poc - 1 ) / encRCSeq->gopSize ];
-      it->gopBitsVsBitrate = double( gopBits[ 1 + ( it->poc - 1 ) / encRCSeq->gopSize ] ) / actualBitrateAfterScaling;
-    }
-    it->targetBits = int( it->frameInGopRatio * it->gopBitsVsBitrate * encRCSeq->targetRate + 0.5 );
-  }
-  delete[] gopBits;
-  delete[] scaledBits;
+  actualBitrateAfterScaling = double( totalScaledBits ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
 }
 
 void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocRange, double *alphaEstimate )
@@ -2544,7 +2550,7 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
   int* counter = new int[ numTempLevels ]();
   int iterationCounter = 0;
 
-  // collect the first pass data for the specified POC range
+  // collect the first pass TL data for the specified POC range
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
@@ -2612,7 +2618,6 @@ void RateCtrl::addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, 
     m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, numBits, yPsnr, uPsnr, vPsnr, isIntra, tempLayer ) );
   }
 }
-
 
 static int xCalcHADs8x8_ISlice( const Pel *piOrg, const int iStrideOrg )
 {

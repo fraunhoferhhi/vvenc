@@ -270,9 +270,9 @@ namespace vvenc {
     void addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
     void processFirstPassData();
     void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
-    void scaleGops();
+    void processGops();
+    void scaleGops( double *scaledBits, int *gopBits, double &actualBitrateAfterScaling );
     int64_t getTotalBitsInFirstPass();
-    void updateFirstPassData();
     void detectNewScene();
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }

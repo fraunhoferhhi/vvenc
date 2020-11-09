@@ -278,7 +278,8 @@ void EncLib::initEncoderLib( int pass )
     if ( pass == 1 )
     {
       m_cRateCtrl.processFirstPassData();
-      m_cRateCtrl.updateFirstPassData();
+      // update first pass data
+      m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
     }
   }
 
