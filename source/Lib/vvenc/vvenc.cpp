@@ -65,9 +65,9 @@ VVEnc::~VVEnc()
 {
   if( NULL != m_pcVVEncImpl )
   {
-    if( m_pcVVEncImpl->m_bInitialized )
+    if( m_pcVVEncImpl->m_bCreated )
     {
-      uninit();
+      destroy();
     }
     delete m_pcVVEncImpl;
     m_pcVVEncImpl = NULL;
@@ -76,60 +76,40 @@ VVEnc::~VVEnc()
 
 int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
 {
-  if( rcVVEncParameter.m_iThreadCount > 64 )
-  {
-    return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED );
-  }
+  if( rcVVEncParameter.m_iThreadCount > 64 ) { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
-  int iRet = m_pcVVEncImpl->checkConfig( rcVVEncParameter );
-  if( iRet != VVENC_OK )
-  {
-    return iRet;
-  }
-
-  return VVENC_OK;
+  return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
 }
 
-int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
+int VVEnc::create( const VVEncParameter& rcVVEncParameter  )
 {
-  if( m_pcVVEncImpl->m_bInitialized )
-  {
-    return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE );
-  }
-
-  if( rcVVEncParameter.m_iThreadCount > 64 )
-  {
-    return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED );
-  }
-
-  int iRet = m_pcVVEncImpl->init( rcVVEncParameter );
-  if( iRet != VVENC_OK )
-  {
-    return iRet;
-  }
+  if( m_pcVVEncImpl->m_bCreated )            { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_CREATE ); }
+  if( rcVVEncParameter.m_iThreadCount > 64 ) { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
   // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
   std::string simdOpt;
   vvenc::setSIMDExtension( simdOpt );
 
-  return VVENC_OK;
+  return m_pcVVEncImpl->create( rcVVEncParameter );
 }
 
-int VVEnc::uninit()
+int VVEnc::init( int pass )
 {
-  if( !m_pcVVEncImpl->m_bInitialized )
-  {
-    return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE );
-  }
+  if( !m_pcVVEncImpl->m_bCreated ) { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_CREATE ); }
 
-  if ( 0 != m_pcVVEncImpl->uninit( ) )
-  {
-    return VVENC_ERR_INITIALIZE;
-  }
+  return m_pcVVEncImpl->init( pass );
+}
 
-  m_pcVVEncImpl->m_bInitialized = false;
+int VVEnc::destroy()
+{
+  if( !m_pcVVEncImpl->m_bCreated ) { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_CREATE ); }
 
-  return VVENC_OK;
+  return m_pcVVEncImpl->destroy( );
+}
+
+bool VVEnc::isCreated()
+{
+  return m_pcVVEncImpl->m_bCreated;
 }
 
 bool VVEnc::isInitialized()
@@ -139,24 +119,23 @@ bool VVEnc::isInitialized()
 
 int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_pcVVEncImpl->m_bInitialized )
-  { return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->m_bCreated     ) { return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_CREATE); }
+  if( !m_pcVVEncImpl->m_bInitialized ) { return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
 }
 
 int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_pcVVEncImpl->m_bInitialized )
-  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->m_bCreated     ) { return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_CREATE); }
+  if( !m_pcVVEncImpl->m_bInitialized ) { return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->flush( rcVvcAccessUnit ) );
 }
 
 int VVEnc::getPreferredBuffer( PicBuffer &rcPicBuffer )
 {
-  if( !m_pcVVEncImpl->m_bInitialized )
-  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->m_bCreated     ) { return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_CREATE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getPreferredBuffer( rcPicBuffer ) );
 }

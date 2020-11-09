@@ -1046,8 +1046,8 @@ void EncAppCfg::printCfg()
     msgApp(VERBOSE, "ISP:%d ",                 m_ISP);
 #endif
 #if 1//TS_VVC
-    msgApp(VERBOSE, "TransformSkip:%d ",       m_TS);
-    msgApp(VERBOSE, "TransformSkipLog2MaxSize:%d ", m_TSsize);
+    msgApp(VERBOSE, "TS:%d ",                  m_TS);
+    msgApp(VERBOSE, "TSLog2MaxSize:%d ",       m_TSsize);
     msgApp(VERBOSE, "useChromaTS:%d ",         m_useChromaTS);
 #endif
   }

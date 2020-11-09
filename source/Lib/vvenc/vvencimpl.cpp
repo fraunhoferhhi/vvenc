@@ -56,13 +56,13 @@ vvc@hhi.fraunhofer.de
 
 #include "vvenc/Nal.h"
 #include "vvenc/version.h"
+#include "CommonLib/CommonDef.h"
 
 
 namespace vvenc {
 
 std::string VVEncImpl::m_cTmpErrorString;
 std::string VVEncImpl::m_sPresetAsStr;
-int g_LogLevel = LL_ERROR;
 
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
@@ -83,34 +83,21 @@ int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
-  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
-  setMsgFnc( &msgFnc );
-
-  std::stringstream cssCap;
-
   vvenc::EncCfg cEncCfg;
   if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
-  {
-    setMsgFnc( &msgFncDummy );
-  }
-
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
+int VVEncImpl::create( const vvenc::VVEncParameter& rcVVEncParameter )
 {
-  if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( m_bCreated ){ return VVENC_ERR_CREATE; }
 
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
-
-  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
-  setMsgFnc( &msgFnc );
 
   std::stringstream cssCap;
 //  cssCap << NVM_ONOS;
@@ -143,34 +130,41 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
     return VVENC_ERR_INITIALIZE;
   }
 
-  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
-  {
-    setMsgFnc( &msgFncDummy );
-  }
-
   // create the encoder
   m_cEncoderIf.createEncoderLib( m_cEncCfg );
 
-  m_bFlushed     = false;
-  m_bInitialized = true;
+  m_bCreated = true;
   return VVENC_OK;
 }
 
-int VVEncImpl::uninit()
+int VVEncImpl::init( int pass )
 {
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
 
-  setMsgFnc( &msgFnc );
+  m_cEncoderIf.initEncoderLib( pass );
+
+  m_bInitialized = true;
+  m_bFlushed     = false;
+  return VVENC_OK;
+}
+
+int VVEncImpl::destroy()
+{
+  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
+
   m_cEncoderIf.printSummary();
   m_cEncoderIf.destroyEncoderLib();
 
+  m_bCreated     = false;
   m_bInitialized = false;
+  m_bFlushed     = false;
   return VVENC_OK;
 }
 
 
 int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
+  if( !m_bCreated )                 { return VVENC_ERR_CREATE; }
   if( !m_bInitialized )             { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
   if ( m_bFlushed )                 { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
@@ -270,7 +264,6 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
   AccessUnit cAu;
   bool encDone = false;
 
-  // TODO (jb): add 2pass encoding
   m_cEncoderIf.encodePicture( false, cYUVBuffer, cAu, encDone );
 
   /* copy output AU */
@@ -293,6 +286,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 
 int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
+  if( !m_bCreated     ){ return VVENC_ERR_CREATE; }
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
 
@@ -302,7 +296,6 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   /* encode till next output AU done */
   while( !m_bFlushed && cAu.empty() )
   {
-    // TODO (jb): add 2pass encoding
     m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, m_bFlushed );
   }
 
@@ -344,7 +337,7 @@ struct BufferDimensions
 
 int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
 {
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
   int iRet= VVENC_OK;
 
   bool bMarginReq = false;
@@ -382,7 +375,7 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
 
 int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter )
 {
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
 
   rcVVEncParameter = m_cVVEncParameter;
   return 0;
@@ -554,10 +547,12 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_eProfile != VVC_PROFILE_MAIN_10 && rcSrc.m_eProfile != VVC_PROFILE_MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != VVC_PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,        "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
+  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
+  ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
+  ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
 
-  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+  ROTPARAMS( rcSrc.m_iMsgLevel < 0 || rcSrc.m_iMsgLevel > DETAILS,      "log message level range 0 - 6" );
 
   ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
@@ -572,15 +567,15 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_iMsgLevel, (int)vvenc::DETAILS);
 
-  rcEncCfg.m_SourceWidth                                       = rcVVEncParameter.m_iWidth;
-  rcEncCfg.m_SourceHeight                                      = rcVVEncParameter.m_iHeight;
-  rcEncCfg.m_QP                                                = rcVVEncParameter.m_iQp;
+  rcEncCfg.m_SourceWidth                = rcVVEncParameter.m_iWidth;
+  rcEncCfg.m_SourceHeight               = rcVVEncParameter.m_iHeight;
+  rcEncCfg.m_QP                         = rcVVEncParameter.m_iQp;
 
-  rcEncCfg.m_usePerceptQPA                                     = rcVVEncParameter.m_iPerceptualQPA;
+  rcEncCfg.m_usePerceptQPA              = rcVVEncParameter.m_iPerceptualQPA;
 
-  rcEncCfg.m_AccessUnitDelimiter        = rcVVEncParameter.m_bAccessUnitDelimiter;   
+  rcEncCfg.m_AccessUnitDelimiter        = rcVVEncParameter.m_bAccessUnitDelimiter;
   rcEncCfg.m_hrdParametersPresent       = rcVVEncParameter.m_bHrdParametersPresent;
   rcEncCfg.m_bufferingPeriodSEIEnabled  = rcVVEncParameter.m_bBufferingPeriodSEIEnabled;
   rcEncCfg.m_pictureTimingSEIEnabled    = rcVVEncParameter.m_bPictureTimingSEIEnabled;
@@ -588,6 +583,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   if(  rcVVEncParameter.m_iTargetBitRate )
   {
     rcEncCfg.m_RCRateControlMode     = 2;
+    rcEncCfg.m_RCNumPasses           = rcVVEncParameter.m_iNumPasses;
     rcEncCfg.m_RCTargetBitrate       = rcVVEncParameter.m_iTargetBitRate;
     rcEncCfg.m_RCKeepHierarchicalBit = 2;
     rcEncCfg.m_RCUseLCUSeparateModel = 1;
@@ -719,166 +715,165 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 
 void VVEncImpl::xPrintCfg()
 {
-  //msgFnc( (int)LL_DETAILS, "\n" );
-  msgApp( (int)LL_DETAILS, "Real     Format                        : %dx%d %gHz\n", m_cEncCfg.m_SourceWidth - m_cEncCfg.m_confWinLeft - m_cEncCfg.m_confWinRight, m_cEncCfg.m_SourceHeight - m_cEncCfg.m_confWinTop - m_cEncCfg.m_confWinBottom, (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio );
-  msgApp( (int)LL_DETAILS, "Internal Format                        : %dx%d %gHz\n", m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio );
-  msgApp( (int)LL_DETAILS, "Sequence PSNR output                   : %s\n", ( m_cEncCfg.m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" ) );
-  msgApp( (int)LL_DETAILS, "Hexadecimal PSNR output                : %s\n", ( m_cEncCfg.m_printHexPsnr ? "Enabled" : "Disabled" ) );
-  msgApp( (int)LL_DETAILS, "Sequence MSE output                    : %s\n", ( m_cEncCfg.m_printSequenceMSE ? "Enabled" : "Disabled" ) );
-  msgApp( (int)LL_DETAILS, "Frame MSE output                       : %s\n", ( m_cEncCfg.m_printFrameMSE ? "Enabled" : "Disabled" ) );
-  msgApp( (int)LL_DETAILS, "Cabac-zero-word-padding                : %s\n", ( m_cEncCfg.m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" ) );
-  msgApp( (int)LL_DETAILS, "Frame/Field                            : Frame based coding\n" );
+  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n", m_cEncCfg.m_SourceWidth - m_cEncCfg.m_confWinLeft - m_cEncCfg.m_confWinRight, m_cEncCfg.m_SourceHeight - m_cEncCfg.m_confWinTop - m_cEncCfg.m_confWinBottom, (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio );
+  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n", m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio );
+  msg( DETAILS, "Sequence PSNR output                   : %s\n", ( m_cEncCfg.m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" ) );
+  msg( DETAILS, "Hexadecimal PSNR output                : %s\n", ( m_cEncCfg.m_printHexPsnr ? "Enabled" : "Disabled" ) );
+  msg( DETAILS, "Sequence MSE output                    : %s\n", ( m_cEncCfg.m_printSequenceMSE ? "Enabled" : "Disabled" ) );
+  msg( DETAILS, "Frame MSE output                       : %s\n", ( m_cEncCfg.m_printFrameMSE ? "Enabled" : "Disabled" ) );
+  msg( DETAILS, "Cabac-zero-word-padding                : %s\n", ( m_cEncCfg.m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" ) );
+  msg( DETAILS, "Frame/Field                            : Frame based coding\n" );
   if ( m_cEncCfg.m_framesToBeEncoded > 0 )
-    msgApp( (int)LL_DETAILS, "Frame index                            : %d frames\n", m_cEncCfg.m_framesToBeEncoded );
+    msg( DETAILS, "Frame index                            : %d frames\n", m_cEncCfg.m_framesToBeEncoded );
   else
-    msgApp( (int)LL_DETAILS, "Frame index                            : all frames\n" );
-  msgApp( (int)LL_DETAILS, "Profile                                : %s\n", getProfileStr( m_cEncCfg.m_profile).c_str() );
-  msgApp( (int)LL_DETAILS, "Level                                  : %s\n", getLevelStr( m_cEncCfg.m_level).c_str() );
-  msgApp( (int)LL_DETAILS, "CU size / total-depth                  : %d / %d\n", m_cEncCfg.m_CTUSize, m_cEncCfg.m_MaxCodingDepth );
-  msgApp( (int)LL_DETAILS, "Max TB size                            : %d\n", 1 << m_cEncCfg.m_log2MaxTbSize );
-  msgApp( (int)LL_DETAILS, "Motion search range                    : %d\n", m_cEncCfg.m_SearchRange );
-  msgApp( (int)LL_DETAILS, "Intra period                           : %d\n", m_cEncCfg.m_IntraPeriod );
-  msgApp( (int)LL_DETAILS, "Decoding refresh type                  : %d\n", m_cEncCfg.m_DecodingRefreshType );
-  msgApp( (int)LL_DETAILS, "QP                                     : %d\n", m_cEncCfg.m_QP);
-  msgApp( (int)LL_DETAILS, "Percept QPA                            : %d\n", m_cEncCfg.m_usePerceptQPA );
-  msgApp( (int)LL_DETAILS, "Max dQP signaling subdiv               : %d\n", m_cEncCfg.m_cuQpDeltaSubdiv);
+    msg( DETAILS, "Frame index                            : all frames\n" );
+  msg( DETAILS, "Profile                                : %s\n", getProfileStr( m_cEncCfg.m_profile).c_str() );
+  msg( DETAILS, "Level                                  : %s\n", getLevelStr( m_cEncCfg.m_level).c_str() );
+  msg( DETAILS, "CU size / total-depth                  : %d / %d\n", m_cEncCfg.m_CTUSize, m_cEncCfg.m_MaxCodingDepth );
+  msg( DETAILS, "Max TB size                            : %d\n", 1 << m_cEncCfg.m_log2MaxTbSize );
+  msg( DETAILS, "Motion search range                    : %d\n", m_cEncCfg.m_SearchRange );
+  msg( DETAILS, "Intra period                           : %d\n", m_cEncCfg.m_IntraPeriod );
+  msg( DETAILS, "Decoding refresh type                  : %d\n", m_cEncCfg.m_DecodingRefreshType );
+  msg( DETAILS, "QP                                     : %d\n", m_cEncCfg.m_QP);
+  msg( DETAILS, "Percept QPA                            : %d\n", m_cEncCfg.m_usePerceptQPA );
+  msg( DETAILS, "Max dQP signaling subdiv               : %d\n", m_cEncCfg.m_cuQpDeltaSubdiv);
 
-  msgApp( (int)LL_DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n", m_cEncCfg.m_chromaCbQpOffset, m_cEncCfg.m_chromaCbQpOffsetDualTree);
-  msgApp( (int)LL_DETAILS, "Cr QP Offset (dual tree)               : %d (%d)\n", m_cEncCfg.m_chromaCrQpOffset, m_cEncCfg.m_chromaCrQpOffsetDualTree);
-  msgApp( (int)LL_DETAILS, "GOP size                               : %d\n", m_cEncCfg.m_GOPSize );
-  msgApp( (int)LL_DETAILS, "Input queue size                       : %d\n", m_cEncCfg.m_InputQueueSize );
-  msgApp( (int)LL_DETAILS, "Input bit depth                        : (Y:%d, C:%d)\n", m_cEncCfg.m_inputBitDepth[ 0 ], m_cEncCfg.m_inputBitDepth[ 1 ] );
-  msgApp( (int)LL_DETAILS, "MSB-extended bit depth                 : (Y:%d, C:%d)\n", m_cEncCfg.m_MSBExtendedBitDepth[ 0 ], m_cEncCfg.m_MSBExtendedBitDepth[ 1 ] );
-  msgApp( (int)LL_DETAILS, "Internal bit depth                     : (Y:%d, C:%d)\n", m_cEncCfg.m_internalBitDepth[ 0 ], m_cEncCfg.m_internalBitDepth[ 1 ] );
-  msgApp( (int)LL_DETAILS, "cu_chroma_qp_offset_subdiv             : %d\n", m_cEncCfg.m_cuChromaQpOffsetSubdiv);
+  msg( DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n", m_cEncCfg.m_chromaCbQpOffset, m_cEncCfg.m_chromaCbQpOffsetDualTree);
+  msg( DETAILS, "Cr QP Offset (dual tree)               : %d (%d)\n", m_cEncCfg.m_chromaCrQpOffset, m_cEncCfg.m_chromaCrQpOffsetDualTree);
+  msg( DETAILS, "GOP size                               : %d\n", m_cEncCfg.m_GOPSize );
+  msg( DETAILS, "Input queue size                       : %d\n", m_cEncCfg.m_InputQueueSize );
+  msg( DETAILS, "Input bit depth                        : (Y:%d, C:%d)\n", m_cEncCfg.m_inputBitDepth[ 0 ], m_cEncCfg.m_inputBitDepth[ 1 ] );
+  msg( DETAILS, "MSB-extended bit depth                 : (Y:%d, C:%d)\n", m_cEncCfg.m_MSBExtendedBitDepth[ 0 ], m_cEncCfg.m_MSBExtendedBitDepth[ 1 ] );
+  msg( DETAILS, "Internal bit depth                     : (Y:%d, C:%d)\n", m_cEncCfg.m_internalBitDepth[ 0 ], m_cEncCfg.m_internalBitDepth[ 1 ] );
+  msg( DETAILS, "cu_chroma_qp_offset_subdiv             : %d\n", m_cEncCfg.m_cuChromaQpOffsetSubdiv);
   if (m_cEncCfg.m_bUseSAO)
   {
-    msgApp( (int)LL_DETAILS, "log2_sao_offset_scale_luma             : %d\n", m_cEncCfg.m_log2SaoOffsetScale[ 0 ] );
-    msgApp( (int)LL_DETAILS, "log2_sao_offset_scale_chroma           : %d\n", m_cEncCfg.m_log2SaoOffsetScale[ 1 ] );
+    msg( DETAILS, "log2_sao_offset_scale_luma             : %d\n", m_cEncCfg.m_log2SaoOffsetScale[ 0 ] );
+    msg( DETAILS, "log2_sao_offset_scale_chroma           : %d\n", m_cEncCfg.m_log2SaoOffsetScale[ 1 ] );
   }
 
   switch (m_cEncCfg.m_costMode)
   {
-    case vvenc::COST_STANDARD_LOSSY:               msgApp( (int)LL_DETAILS, "Cost function:                         : Lossy coding (default)\n"); break;
-    case vvenc::COST_SEQUENCE_LEVEL_LOSSLESS:      msgApp( (int)LL_DETAILS, "Cost function:                         : Sequence_level_lossless coding\n"); break;
-    case vvenc::COST_LOSSLESS_CODING:              msgApp( (int)LL_DETAILS, "Cost function:                         : Lossless coding with fixed QP\n"); break;
-    case vvenc::COST_MIXED_LOSSLESS_LOSSY_CODING:  msgApp( (int)LL_DETAILS, "Cost function:                         : Mixed_lossless_lossy coding for lossless evaluation\n"); break;
-    default:                                msgApp( (int)LL_DETAILS, "Cost function:                         : Unknown\n"); break;
+    case vvenc::COST_STANDARD_LOSSY:               msg( DETAILS, "Cost function:                         : Lossy coding (default)\n"); break;
+    case vvenc::COST_SEQUENCE_LEVEL_LOSSLESS:      msg( DETAILS, "Cost function:                         : Sequence_level_lossless coding\n"); break;
+    case vvenc::COST_LOSSLESS_CODING:              msg( DETAILS, "Cost function:                         : Lossless coding with fixed QP\n"); break;
+    case vvenc::COST_MIXED_LOSSLESS_LOSSY_CODING:  msg( DETAILS, "Cost function:                         : Mixed_lossless_lossy coding for lossless evaluation\n"); break;
+    default:                                msg( DETAILS, "Cost function:                         : Unknown\n"); break;
   }
 
-  msgApp( (int)LL_DETAILS, "\n");
+  msg( DETAILS, "\n");
 
-  msgApp( LL_VERBOSE, "TOOL CFG: ");
-  msgApp( LL_VERBOSE, "IBD:%d ", ((m_cEncCfg.m_internalBitDepth[ 0 ] > m_cEncCfg.m_MSBExtendedBitDepth[ 0 ]) || (m_cEncCfg.m_internalBitDepth[ 1 ] > m_cEncCfg.m_MSBExtendedBitDepth[ 1 ])));
-  msgApp( LL_VERBOSE, "HAD:%d ", m_cEncCfg.m_bUseHADME                          );
+  msg( VERBOSE, "TOOL CFG: ");
+  msg( VERBOSE, "IBD:%d ", ((m_cEncCfg.m_internalBitDepth[ 0 ] > m_cEncCfg.m_MSBExtendedBitDepth[ 0 ]) || (m_cEncCfg.m_internalBitDepth[ 1 ] > m_cEncCfg.m_MSBExtendedBitDepth[ 1 ])));
+  msg( VERBOSE, "HAD:%d ", m_cEncCfg.m_bUseHADME                          );
 
-  msgApp( LL_VERBOSE, "RDQ:%d ", m_cEncCfg.m_RDOQ                            );
-  msgApp( LL_VERBOSE, "RDQTS:%d ", m_cEncCfg.m_useRDOQTS                        );
-  msgApp( LL_VERBOSE, "ASR:%d ", m_cEncCfg.m_bUseASR                            );
-  msgApp( LL_VERBOSE, "MinSearchWindow:%d ", m_cEncCfg.m_minSearchWindow        );
-  msgApp( LL_VERBOSE, "RestrictMESampling:%d ", m_cEncCfg.m_bRestrictMESampling );
-  msgApp( LL_VERBOSE, "FEN:%d ", m_cEncCfg.m_fastInterSearchMode                );
-  msgApp( LL_VERBOSE, "ECU:%d ", m_cEncCfg.m_bUseEarlyCU                        );
-  msgApp( LL_VERBOSE, "FDM:%d ", m_cEncCfg.m_useFastDecisionForMerge            );
-  msgApp( LL_VERBOSE, "ESD:%d ", m_cEncCfg.m_useEarlySkipDetection              );
-  msgApp( LL_VERBOSE, "Tiles:%dx%d ", m_cEncCfg.m_numTileColumnsMinus1 + 1, m_cEncCfg.m_numTileRowsMinus1 + 1 );
-  msgApp( LL_VERBOSE, "CIP:%d ", m_cEncCfg.m_bUseConstrainedIntraPred);
-  msgApp( LL_VERBOSE, "SAO:%d ", (m_cEncCfg.m_bUseSAO)?(1):(0));
-  msgApp( LL_VERBOSE, "ALF:%d ", m_cEncCfg.m_alf ? 1 : 0 );
+  msg( VERBOSE, "RDQ:%d ", m_cEncCfg.m_RDOQ                            );
+  msg( VERBOSE, "RDQTS:%d ", m_cEncCfg.m_useRDOQTS                        );
+  msg( VERBOSE, "ASR:%d ", m_cEncCfg.m_bUseASR                            );
+  msg( VERBOSE, "MinSearchWindow:%d ", m_cEncCfg.m_minSearchWindow        );
+  msg( VERBOSE, "RestrictMESampling:%d ", m_cEncCfg.m_bRestrictMESampling );
+  msg( VERBOSE, "FEN:%d ", m_cEncCfg.m_fastInterSearchMode                );
+  msg( VERBOSE, "ECU:%d ", m_cEncCfg.m_bUseEarlyCU                        );
+  msg( VERBOSE, "FDM:%d ", m_cEncCfg.m_useFastDecisionForMerge            );
+  msg( VERBOSE, "ESD:%d ", m_cEncCfg.m_useEarlySkipDetection              );
+  msg( VERBOSE, "Tiles:%dx%d ", m_cEncCfg.m_numTileColumnsMinus1 + 1, m_cEncCfg.m_numTileRowsMinus1 + 1 );
+  msg( VERBOSE, "CIP:%d ", m_cEncCfg.m_bUseConstrainedIntraPred);
+  msg( VERBOSE, "SAO:%d ", (m_cEncCfg.m_bUseSAO)?(1):(0));
+  msg( VERBOSE, "ALF:%d ", m_cEncCfg.m_alf ? 1 : 0 );
   if( m_cEncCfg.m_alf )
   {
-      msgApp(LL_VERBOSE, "(NonLinLuma:%d ", m_cEncCfg.m_useNonLinearAlfLuma );
-      msgApp(LL_VERBOSE, "NonLinChr:%d) ", m_cEncCfg.m_useNonLinearAlfChroma );
+      msg( VERBOSE, "(NonLinLuma:%d ", m_cEncCfg.m_useNonLinearAlfLuma );
+      msg( VERBOSE, "NonLinChr:%d) ", m_cEncCfg.m_useNonLinearAlfChroma );
   }
-  msgApp( LL_VERBOSE, "CCALF:%d ", m_cEncCfg.m_ccalf ? 1 : 0 );
+  msg( VERBOSE, "CCALF:%d ", m_cEncCfg.m_ccalf ? 1 : 0 );
   const int iWaveFrontSubstreams = m_cEncCfg.m_entropyCodingSyncEnabled ? (m_cEncCfg.m_SourceHeight + m_cEncCfg.m_CTUSize - 1) / m_cEncCfg.m_CTUSize : 1;
-  msgApp( LL_VERBOSE, "WaveFrontSynchro:%d WaveFrontSubstreams:%d ", m_cEncCfg.m_entropyCodingSyncEnabled?1:0, iWaveFrontSubstreams);
-  msgApp( LL_VERBOSE, "TMVPMode:%d ", m_cEncCfg.m_TMVPModeId     );
+  msg( VERBOSE, "WaveFrontSynchro:%d WaveFrontSubstreams:%d ", m_cEncCfg.m_entropyCodingSyncEnabled?1:0, iWaveFrontSubstreams);
+  msg( VERBOSE, "TMVPMode:%d ", m_cEncCfg.m_TMVPModeId     );
 
-  msgApp( LL_VERBOSE, "DQ:%d "               , m_cEncCfg.m_DepQuantEnabled );
-  if( m_cEncCfg.m_DepQuantEnabled ) { if( m_cEncCfg.m_dqThresholdVal & 1 ) msgApp( LL_VERBOSE, "(Thr: %d.5) ", m_cEncCfg.m_dqThresholdVal >> 1 ); else msgApp( LL_VERBOSE, "(Thr: %d) ", m_cEncCfg.m_dqThresholdVal >> 1 ); }
-  msgApp( LL_VERBOSE, "SignBitHidingFlag:%d ", m_cEncCfg.m_SignDataHidingEnabled );
-  msgApp( LL_VERBOSE, "Perceptual QPA:%d "   , m_cEncCfg.m_usePerceptQPA );
+  msg( VERBOSE, "DQ:%d "               , m_cEncCfg.m_DepQuantEnabled );
+  if( m_cEncCfg.m_DepQuantEnabled ) { if( m_cEncCfg.m_dqThresholdVal & 1 ) msg( VERBOSE, "(Thr: %d.5) ", m_cEncCfg.m_dqThresholdVal >> 1 ); else msg( VERBOSE, "(Thr: %d) ", m_cEncCfg.m_dqThresholdVal >> 1 ); }
+  msg( VERBOSE, "SignBitHidingFlag:%d ", m_cEncCfg.m_SignDataHidingEnabled );
+  msg( VERBOSE, "Perceptual QPA:%d "   , m_cEncCfg.m_usePerceptQPA );
 
   {
-    msgApp( LL_VERBOSE, "\nNEXT TOOL CFG: " );
-    msgApp( LL_VERBOSE, "DualITree:%d ",          m_cEncCfg.m_dualITree );
-    msgApp( LL_VERBOSE, "BIO:%d ",                m_cEncCfg.m_BDOF );
-    msgApp( LL_VERBOSE, "DMVR:%d ",               m_cEncCfg.m_DMVR );
-    msgApp( LL_VERBOSE, "MTSImplicit:%d ",        m_cEncCfg.m_MTSImplicit );
-    msgApp( LL_VERBOSE, "SBT:%d ",                m_cEncCfg.m_SBT );
-    msgApp( LL_VERBOSE, "JointCbCr:%d ",          m_cEncCfg.m_JointCbCrMode );
-    msgApp( LL_VERBOSE, "CabacInitPresent:%d ",   m_cEncCfg.m_cabacInitPresent );
-    msgApp( LL_VERBOSE, "AMVRspeed:%d ",          m_cEncCfg.m_AMVRspeed );
-    msgApp( LL_VERBOSE, "SMVD:%d ",               m_cEncCfg.m_SMVD );
+    msg( VERBOSE, "\nNEXT TOOL CFG: " );
+    msg( VERBOSE, "DualITree:%d ",          m_cEncCfg.m_dualITree );
+    msg( VERBOSE, "BIO:%d ",                m_cEncCfg.m_BDOF );
+    msg( VERBOSE, "DMVR:%d ",               m_cEncCfg.m_DMVR );
+    msg( VERBOSE, "MTSImplicit:%d ",        m_cEncCfg.m_MTSImplicit );
+    msg( VERBOSE, "SBT:%d ",                m_cEncCfg.m_SBT );
+    msg( VERBOSE, "JointCbCr:%d ",          m_cEncCfg.m_JointCbCrMode );
+    msg( VERBOSE, "CabacInitPresent:%d ",   m_cEncCfg.m_cabacInitPresent );
+    msg( VERBOSE, "AMVRspeed:%d ",          m_cEncCfg.m_AMVRspeed );
+    msg( VERBOSE, "SMVD:%d ",               m_cEncCfg.m_SMVD );
 
-    msgApp(LL_VERBOSE, "Reshape:%d ", m_cEncCfg.m_lumaReshapeEnable);
+    msg( VERBOSE, "Reshape:%d ", m_cEncCfg.m_lumaReshapeEnable);
     if (m_cEncCfg.m_lumaReshapeEnable)
     {
-      msgApp(LL_VERBOSE, "(Signal:%s ", m_cEncCfg.m_reshapeSignalType == 0 ? "SDR" : (m_cEncCfg.m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ"));
-      msgApp(LL_VERBOSE, "Opt:%d", m_cEncCfg.m_adpOption);
-      if (m_cEncCfg.m_adpOption > 0) { msgApp(LL_VERBOSE, " CW:%d", m_cEncCfg.m_initialCW); }
-      msgApp(LL_VERBOSE, ") ");
+      msg( VERBOSE, "(Signal:%s ", m_cEncCfg.m_reshapeSignalType == 0 ? "SDR" : (m_cEncCfg.m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ"));
+      msg( VERBOSE, "Opt:%d", m_cEncCfg.m_adpOption);
+      if (m_cEncCfg.m_adpOption > 0) { msg( VERBOSE, " CW:%d", m_cEncCfg.m_initialCW); }
+      msg( VERBOSE, ") ");
     }
-    msgApp(LL_VERBOSE, "CIIP:%d "    , m_cEncCfg.m_CIIP);
-    msgApp(LL_VERBOSE, "MIP:%d "     , m_cEncCfg.m_MIP);
-    msgApp(LL_VERBOSE, "EncDbOpt:%d ", m_cEncCfg.m_EDO);
-    msgApp(LL_VERBOSE, "MCTF:%d "    , m_cEncCfg.m_MCTF);
+    msg( VERBOSE, "CIIP:%d "    , m_cEncCfg.m_CIIP);
+    msg( VERBOSE, "MIP:%d "     , m_cEncCfg.m_MIP);
+    msg( VERBOSE, "EncDbOpt:%d ", m_cEncCfg.m_EDO);
+    msg( VERBOSE, "MCTF:%d "    , m_cEncCfg.m_MCTF);
     if ( m_cEncCfg.m_MCTF )
     {
-      msgApp(LL_VERBOSE, "[L:%d, T:%d] ", m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames);
+      msg( VERBOSE, "[L:%d, T:%d] ", m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames);
     }
-    msgApp( LL_VERBOSE, "Affine:%d ",             m_cEncCfg.m_Affine);
-    msgApp( LL_VERBOSE, "Affine_Prof:%d ",        m_cEncCfg.m_PROF);
-    msgApp( LL_VERBOSE, "Affine_Type:%d ",        m_cEncCfg.m_AffineType);
-    msgApp( LL_VERBOSE, "MMVD:%d ",               m_cEncCfg.m_MMVD);
-    msgApp( LL_VERBOSE, "DisFracMMVD:%d ",        m_cEncCfg.m_allowDisFracMMVD);
-    msgApp( LL_VERBOSE, "FastSearch:%d ",         m_cEncCfg.m_motionEstimationSearchMethod);
-    msgApp( LL_VERBOSE, "SbTMVP:%d ",             m_cEncCfg.m_SbTMVP);
-    msgApp( LL_VERBOSE, "Geo:%d ",                m_cEncCfg.m_Geo);
-    msgApp( LL_VERBOSE, "LFNST:%d ",              m_cEncCfg.m_LFNST);
-    msgApp( LL_VERBOSE, "MTS:%d ",                m_cEncCfg.m_MTS);
-    msgApp( LL_VERBOSE, "MTSIntraCand:%d ",       m_cEncCfg.m_MTSIntraMaxCand);
+    msg( VERBOSE, "Affine:%d ",             m_cEncCfg.m_Affine);
+    msg( VERBOSE, "Affine_Prof:%d ",        m_cEncCfg.m_PROF);
+    msg( VERBOSE, "Affine_Type:%d ",        m_cEncCfg.m_AffineType);
+    msg( VERBOSE, "MMVD:%d ",               m_cEncCfg.m_MMVD);
+    msg( VERBOSE, "DisFracMMVD:%d ",        m_cEncCfg.m_allowDisFracMMVD);
+    msg( VERBOSE, "FastSearch:%d ",         m_cEncCfg.m_motionEstimationSearchMethod);
+    msg( VERBOSE, "SbTMVP:%d ",             m_cEncCfg.m_SbTMVP);
+    msg( VERBOSE, "Geo:%d ",                m_cEncCfg.m_Geo);
+    msg( VERBOSE, "LFNST:%d ",              m_cEncCfg.m_LFNST);
+    msg( VERBOSE, "MTS:%d ",                m_cEncCfg.m_MTS);
+    msg( VERBOSE, "MTSIntraCand:%d ",       m_cEncCfg.m_MTSIntraMaxCand);
 #if 1 // TS_VVC
-    msgApp( LL_VERBOSE, "ISP:%d ",                m_cEncCfg.m_ISP);
-    msgApp( LL_VERBOSE, "TS:%d ",                 m_cEncCfg.m_TS);
-    msgApp( LL_VERBOSE, "TransformSkipLog2MaxSize:%d ", m_cEncCfg.m_TSsize);
-    msgApp( LL_VERBOSE, "useChromaTS:%d ",        m_cEncCfg.m_useChromaTS);
+    msg( VERBOSE, "ISP:%d ",                m_cEncCfg.m_ISP);
+    msg( VERBOSE, "TS:%d ",                 m_cEncCfg.m_TS);
+    msg( VERBOSE, "TSLog2MaxSize:%d ",      m_cEncCfg.m_TSsize);
+    msg( VERBOSE, "useChromaTS:%d ",        m_cEncCfg.m_useChromaTS);
 #endif
   }
 
-  msgApp( LL_VERBOSE, "\nFAST TOOL CFG: " );
-  msgApp( LL_VERBOSE, "LCTUFast:%d ",             m_cEncCfg.m_useFastLCTU );
-  msgApp( LL_VERBOSE, "FastMrg:%d ",              m_cEncCfg.m_useFastMrg );
-  msgApp( LL_VERBOSE, "PBIntraFast:%d ",          m_cEncCfg.m_usePbIntraFast );
-  msgApp( LL_VERBOSE, "AMaxBT:%d ",               m_cEncCfg.m_useAMaxBT );
-  msgApp( LL_VERBOSE, "FastQtBtEnc:%d ",          m_cEncCfg.m_fastQtBtEnc );
-  msgApp( LL_VERBOSE, "ContentBasedFastQtbt:%d ", m_cEncCfg.m_contentBasedFastQtbt );
-  if(m_cEncCfg. m_MIP ) msgApp(LL_VERBOSE, "FastMIP:%d ", m_cEncCfg.m_useFastMIP);
-  msgApp( LL_VERBOSE, "FastLocalDualTree:%d ",m_cEncCfg. m_fastLocalDualTreeMode );
-  msgApp( LL_VERBOSE, "FastSubPel:%d ",           m_cEncCfg.m_fastSubPel );
-  msgApp( LL_VERBOSE, "QtbttExtraFast:%d ",       m_cEncCfg.m_qtbttSpeedUp );
-  msgApp( LL_VERBOSE, "RateControl:%d ",          m_cEncCfg.m_RCRateControlMode );
+  msg( VERBOSE, "\nFAST TOOL CFG: " );
+  msg( VERBOSE, "LCTUFast:%d ",             m_cEncCfg.m_useFastLCTU );
+  msg( VERBOSE, "FastMrg:%d ",              m_cEncCfg.m_useFastMrg );
+  msg( VERBOSE, "PBIntraFast:%d ",          m_cEncCfg.m_usePbIntraFast );
+  msg( VERBOSE, "AMaxBT:%d ",               m_cEncCfg.m_useAMaxBT );
+  msg( VERBOSE, "FastQtBtEnc:%d ",          m_cEncCfg.m_fastQtBtEnc );
+  msg( VERBOSE, "ContentBasedFastQtbt:%d ", m_cEncCfg.m_contentBasedFastQtbt );
+  if(m_cEncCfg. m_MIP ) msg( VERBOSE, "FastMIP:%d ", m_cEncCfg.m_useFastMIP);
+  msg( VERBOSE, "FastLocalDualTree:%d ",m_cEncCfg. m_fastLocalDualTreeMode );
+  msg( VERBOSE, "FastSubPel:%d ",           m_cEncCfg.m_fastSubPel );
+  msg( VERBOSE, "QtbttExtraFast:%d ",       m_cEncCfg.m_qtbttSpeedUp );
+  msg( VERBOSE, "RateControl:%d ",          m_cEncCfg.m_RCRateControlMode );
 
   if ( m_cEncCfg.m_RCRateControlMode )
   {
-    msgApp( LL_VERBOSE, "TargetBitrate:%d ",           m_cEncCfg.m_RCTargetBitrate );
-    msgApp( LL_VERBOSE, "KeepHierarchicalBit:%d ",     m_cEncCfg.m_RCKeepHierarchicalBit );
-    msgApp( LL_VERBOSE, "RCLCUSeparateModel:%d ",      m_cEncCfg.m_RCUseLCUSeparateModel );
-    msgApp( LL_VERBOSE, "InitialQP:%d ",               m_cEncCfg.m_RCInitialQP );
-    msgApp( LL_VERBOSE, "RCForceIntraQP:%d ",          m_cEncCfg.m_RCForceIntraQP );
+    msg( VERBOSE, "TargetBitrate:%d ",           m_cEncCfg.m_RCTargetBitrate );
+    msg( VERBOSE, "KeepHierarchicalBit:%d ",     m_cEncCfg.m_RCKeepHierarchicalBit );
+    msg( VERBOSE, "RCLCUSeparateModel:%d ",      m_cEncCfg.m_RCUseLCUSeparateModel );
+    msg( VERBOSE, "InitialQP:%d ",               m_cEncCfg.m_RCInitialQP );
+    msg( VERBOSE, "RCForceIntraQP:%d ",          m_cEncCfg.m_RCForceIntraQP );
   }
 
-  msgApp( LL_VERBOSE, "\nPARALLEL PROCESSING CFG: " );
-  msgApp( LL_VERBOSE, "FPP:%d ",                  m_cEncCfg.m_frameParallel );
-  msgApp( LL_VERBOSE, "NumFppThreads:%d ",        m_cEncCfg.m_numFppThreads );
-  msgApp( LL_VERBOSE, "FppBitEqual:%d ",          m_cEncCfg.m_ensureFppBitEqual );
-  msgApp( LL_VERBOSE, "WPP:%d ",                  m_cEncCfg.m_numWppThreads );
-  msgApp( LL_VERBOSE, "WppBitEqual:%d ",          m_cEncCfg.m_ensureWppBitEqual );
-  msgApp( LL_VERBOSE, "WF:%d",                    m_cEncCfg.m_entropyCodingSyncEnabled );
-  msgApp( LL_VERBOSE, "\n");
+  msg( VERBOSE, "\nPARALLEL PROCESSING CFG: " );
+  msg( VERBOSE, "FPP:%d ",                  m_cEncCfg.m_frameParallel );
+  msg( VERBOSE, "NumFppThreads:%d ",        m_cEncCfg.m_numFppThreads );
+  msg( VERBOSE, "FppBitEqual:%d ",          m_cEncCfg.m_ensureFppBitEqual );
+  msg( VERBOSE, "WPP:%d ",                  m_cEncCfg.m_numWppThreads );
+  msg( VERBOSE, "WppBitEqual:%d ",          m_cEncCfg.m_ensureWppBitEqual );
+  msg( VERBOSE, "WF:%d",                    m_cEncCfg.m_entropyCodingSyncEnabled );
+  msg( VERBOSE, "\n");
 
-  msgApp( LL_NOTICE, "\n");
+  msg( NOTICE, "\n");
 
   fflush( stdout );
 }
@@ -1017,28 +1012,6 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
 
   return 0;
 }
-
-void VVEncImpl::msgApp( int level, const char* fmt, ... )
-{
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( level, fmt, args );
-    va_end( args );
-}
-
-void VVEncImpl::msgFnc( int level, const char* fmt, va_list args )
-{
-  if ( g_LogLevel >= level )
-  {
-    vfprintf( level == 1 ? stderr : stdout, fmt, args );
-  }
-}
-
-void VVEncImpl::msgFncDummy( int level, const char* fmt, va_list args )
-{
-  // just a dummy to prevent the lib to print stuff to stdout
-}
-
 
 std::string VVEncImpl::getProfileStr( int iProfile )
 {

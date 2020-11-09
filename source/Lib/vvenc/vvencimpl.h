@@ -70,8 +70,9 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncParameter& rcVVEncParameter );
-  int uninit();
+  int create( const VVEncParameter& rcVVEncParameter );
+  int init( int pass );
+  int destroy();
 
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
   int flush( VvcAccessUnit& rcVvcAccessUnit );
@@ -107,14 +108,11 @@ private:
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
   int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
 
-  static void msgApp( int level, const char* fmt, ... );
-  static void msgFnc( int level, const char* fmt, va_list args );
-  static void msgFncDummy( int level, const char* fmt, va_list args );
-
   static std::string getProfileStr( int iProfile );
   static std::string getLevelStr( int iLevel );
 
 public:
+  bool                                                        m_bCreated             = false;
   bool                                                        m_bInitialized         = false;
   bool                                                        m_bFlushed             = false;
 
