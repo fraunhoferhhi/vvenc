@@ -81,13 +81,33 @@ namespace vvenc {
     int     validPix;
   };
 
+  struct TRCPassStats
+  {
+    TRCPassStats( int _poc, int _qp, uint32_t _numBits, double _yPsnr, double _uPsnr, double _vPsnr, bool _isIntra, int _tempLayer ) : poc( _poc ), qp( _qp ), numBits( _numBits ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ), isIntra( _isIntra ), tempLayer( _tempLayer ), isNewScene( false ), frameInGopRatio( -1.0 ), gopBitsVsBitrate( -1.0 ), scaledBits( double( numBits ) ), targetBits( 0 ), estAlpha() {}
+    int       poc;
+    int       qp;
+    uint32_t  numBits;
+    double    yPsnr;
+    double    uPsnr;
+    double    vPsnr;
+    bool      isIntra;
+    int       tempLayer;
+
+    bool      isNewScene;
+    double    frameInGopRatio;
+    double    gopBitsVsBitrate;
+    double    scaledBits;
+    int       targetBits;
+    double    estAlpha[ 7 ];
+  };
+
   class EncRCSeq
   {
   public:
     EncRCSeq();
     ~EncRCSeq();
 
-    void create( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int numberOfLevel, bool useLCUSeparateModel, int adaptiveBit );
+    void create( int RCMode, bool twoPass, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int numberOfLevel, bool useLCUSeparateModel, int adaptiveBit, std::list<TRCPassStats> &firstPassData );
     void destroy();
     void initBitsRatio( int bitsRatio[] );
     void initGOPID2Level( int GOPID2Level[] );
@@ -98,9 +118,11 @@ namespace vvenc {
     void setQpInGOP( int gopId, int gopQp, int &qp );
     bool isQpResetRequired( int gopId );
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
+    void getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, bool &isNewScene, double alpha[] );
 
   public:
     int             rcMode;
+    bool            twoPass;
     int             totalFrames;
     int             targetRate;
     int             frameRate;
@@ -118,12 +140,15 @@ namespace vvenc {
     int             adaptiveBits;
     int             bitDepth;
     int64_t         bitsUsed;
+    int64_t         estimatedBitUsage;
+    double          bitUsageRatio;
     double          lastLambda;
     bool            useLCUSeparateModel;
     TRCParameter*   picParam;
     TRCParameter**  lcuParam;
     int*            bitsRatio;
     int*            gopID2Level;
+    std::list<TRCPassStats> firstPassData;
 
   private:
     int             numberOfLevel;
@@ -172,9 +197,17 @@ namespace vvenc {
 
     void   calCostSliceI( Picture* pic );
     int    estimatePicQP( double lambda, std::list<EncRCPic*>& listPreviousPictures );
+    void   clipQpConventional( std::list<EncRCPic*>& listPreviousPictures, int &QP );
+    void   clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &QP );
+    void   clipQpGopRc( std::list<EncRCPic*>& listPreviousPictures, int &QP );
+    void   clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &QP );
     int    getRefineBitsForIntra( int orgBits );
     double calculateLambdaIntra( double alpha, double beta, double MADPerPixel, double bitsPerPixel );
     double estimatePicLambda( std::list<EncRCPic*>& listPreviousPictures, bool isIRAP );
+    void   clipLambdaConventional( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
+    void   clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
+    void   clipLambdaGopRc( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
+    void   clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale );
     void   updateAlphaBetaIntra( double *alpha, double *beta );
     double getLCUTargetBpp( bool isIRAP, const int ctuRsAddr );
     double getLCUEstLambdaAndQP( double bpp, int clipPicQP, int *estQP, const int ctuRsAddr );
@@ -218,17 +251,7 @@ namespace vvenc {
     double  remainingCostIntra;
     double  picLambda;
     double  picMSE;
-  };
-
-  struct TRCPassStats
-  {
-    TRCPassStats( int _poc, int _qp, uint32_t _numBytes, double _yPsnr, double _uPsnr, double _vPsnr ) : poc( _poc ), qp( _qp ), numBytes( _numBytes ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ) {}
-    int       poc;
-    int       qp;
-    uint32_t  numBytes;
-    double    yPsnr;
-    double    uPsnr;
-    double    vPsnr;
+    bool    isNewScene;
   };
 
   class RateCtrl
@@ -244,9 +267,16 @@ namespace vvenc {
     void destroyRCGOP();
 
     void setRCPass( int pass, int maxPass );
-    void addRCPassStats( int poc, int qp, uint32_t numBytes, double yPsnr, double uPsnr, double vPsnr );
+    void addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
+    void processFirstPassData();
+    void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
+    void processGops();
+    void scaleGops( double *scaledBits, int *gopBits, double &actualBitrateAfterScaling );
+    int64_t getTotalBitsInFirstPass();
+    void detectNewScene();
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
+    std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
 
   public:
     EncRCSeq*   encRCSeq;

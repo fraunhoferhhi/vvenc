@@ -274,6 +274,13 @@ void EncLib::initEncoderLib( int pass )
   {
     m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight,
       m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
+
+    if ( pass == 1 )
+    {
+      m_cRateCtrl.processFirstPassData();
+      // update first pass data
+      m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
+    }
   }
 
   int iOffset = -1;
