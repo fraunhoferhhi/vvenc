@@ -68,7 +68,7 @@ protected:
   virtual ~YUVWriterIf() {}
 
 public:
-  virtual void outputYuv( const YUVBuffer& yuvOutBuf )
+  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
   {
   }
 };
