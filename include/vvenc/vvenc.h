@@ -336,6 +336,10 @@ typedef struct VVENC_DECL VVEncParameter
   VvcLevel m_eLevel           = VVC_LEVEL_5_1;       ///< vvc level_idc                             (default: 5.1)
   VvcTier  m_eTier            = VVC_TIER_MAIN;       ///< vvc tier                                  (default: main)
   VvcSegmentMode m_eSegMode   = VVC_SEG_OFF;         ///< segment mode                              (default: off)
+  bool m_bAccessUnitDelimiter       = false;  ///< enable aud                                       (default: off)
+  bool m_bHrdParametersPresent      = false;  ///< enable hrd                                       (default: off)
+  bool m_bBufferingPeriodSEIEnabled = false;  ///< enable bp sei                                    (default: off)
+  bool m_bPictureTimingSEIEnabled   = false;  ///< enable pt sei                                    (default: off)
 } VVEncParameter_t;
 
 

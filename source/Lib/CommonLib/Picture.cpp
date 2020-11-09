@@ -173,6 +173,9 @@ Picture::Picture()
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
     , picInitialQP    ( 0 )
+#if DETECT_SC
+    , useSC           ( 0 )
+#endif
 {
 }
 

@@ -1237,7 +1237,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
   }
 
   bool IrapOrGdrAu = slice->picHeader->gdrPic || (slice->isIRAP() && !slice->pps->mixedNaluTypesInPic);
-  if ((( slice->vps->maxLayers > 1 && IrapOrGdrAu) || m_pcEncCfg->m_AccessUnitDelimiter) && slice->nuhLayerId )
+  if ((( slice->vps->maxLayers > 1 && IrapOrGdrAu) || m_pcEncCfg->m_AccessUnitDelimiter) && !slice->nuhLayerId )
   {
     xWriteAccessUnitDelimiter( accessUnit, slice, IrapOrGdrAu, hlsWriter );
   }
