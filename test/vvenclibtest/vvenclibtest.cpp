@@ -317,7 +317,11 @@ int callingOrderInitNoUninit()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ))
+  if( 0 != cVVEnc.create( vvencParams ) )
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.init( 0 ) )
   {
     return -1;
   }
@@ -333,7 +337,15 @@ int callingOrderInitTwice()
   {
     return -1;
   }
+  if( 0 != cVVEnc.init( 0 ) )
+  {
+    return -1;
+  }
   if( 0 != cVVEnc.create( vvencParams ))
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.init( 0 ) )
   {
     return -1;
   }
@@ -357,7 +369,7 @@ int callingOrderRegular()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ))
+  if( 0 != cVVEnc.create( vvencParams ) )
   {
     return -1;
   }
@@ -370,6 +382,10 @@ int callingOrderRegular()
     return -1;
   }
   fillInputPic( cInputPic );
+  if( 0 != cVVEnc.init( 0 ) )
+  {
+    return -1;
+  }
   if( 0 != cVVEnc.encode( &cInputPic, cAU))
   {
     return -1;
@@ -404,6 +420,10 @@ int inputBufTest( vvenc::InputPicture& cInputPic )
   vvenc::VvcAccessUnit cAU;
   cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
 
+  if( 0 != cVVEnc.init( 0 ) )
+  {
+    return -1;
+  }
   if( 0 != cVVEnc.encode( &cInputPic, cAU))
   {
     return -1;
@@ -491,6 +511,10 @@ int invaildInputBuf( )
   {
     return -1;
   }
+  if( 0 != cVVEnc.init( 0 ) )
+  {
+    return -1;
+  }
 
   vvenc::InputPicture cInputPic;
   if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
@@ -525,6 +549,10 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.create( vvencParams ))
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.init( 0 ) )
   {
     return -1;
   }
