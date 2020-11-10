@@ -275,10 +275,10 @@ const std::vector<SVPair<MyPreset>> PresetToEnumMap =
 {
   { "none",                             MyPreset::NONE },
   { "faster",                           MyPreset::FASTER },
-  { "fast",                           MyPreset::FAST },
-  { "medium",                 MyPreset::MEDIUM },
-  { "slow",             MyPreset::SLOW },
-  { "tooltest",                    MyPreset::TOOLTEST },
+  { "fast",                             MyPreset::FAST },
+  { "medium",                           MyPreset::MEDIUM },
+  { "slow",                             MyPreset::SLOW },
+  { "tooltest",                         MyPreset::TOOLTEST },
 };
 
 
