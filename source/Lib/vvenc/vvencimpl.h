@@ -70,9 +70,9 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int create( const VVEncParameter& rcVVEncParameter );
-  int init( int pass );
-  int destroy();
+  int init( const VVEncParameter& rcVVEncParameter );
+  int initPass( int pass );
+  int uninit();
 
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
   int flush( VvcAccessUnit& rcVvcAccessUnit );
@@ -112,7 +112,6 @@ private:
   static std::string getLevelStr( int iLevel );
 
 public:
-  bool                                                        m_bCreated             = false;
   bool                                                        m_bInitialized         = false;
   bool                                                        m_bFlushed             = false;
 

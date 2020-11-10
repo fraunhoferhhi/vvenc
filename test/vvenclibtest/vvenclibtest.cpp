@@ -154,7 +154,7 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
   cVVEncParameter.m_iIDRPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_iMsgLevel       = vvenc::SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.m_iMsgLevel       = vvenc::LL_SILENT;           // log level > 4 (VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
@@ -305,7 +305,7 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
 int callingOrderInvalidUninit()
 {
   vvenc::VVEnc cVVEnc;
-  if( 0 != cVVEnc.destroy())
+  if( 0 != cVVEnc.uninit())
   {
     return -1;
   }
@@ -317,11 +317,7 @@ int callingOrderInitNoUninit()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ) )
-  {
-    return -1;
-  }
-  if( 0 != cVVEnc.init( 0 ) )
+  if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
@@ -333,19 +329,11 @@ int callingOrderInitTwice()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams; // 
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ))
+  if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
-  if( 0 != cVVEnc.init( 0 ) )
-  {
-    return -1;
-  }
-  if( 0 != cVVEnc.create( vvencParams ))
-  {
-    return -1;
-  }
-  if( 0 != cVVEnc.init( 0 ) )
+  if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
@@ -369,7 +357,7 @@ int callingOrderRegular()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ) )
+  if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
@@ -382,7 +370,36 @@ int callingOrderRegular()
     return -1;
   }
   fillInputPic( cInputPic );
-  if( 0 != cVVEnc.init( 0 ) )
+  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.uninit())
+  {
+    return -1;
+  }
+  return 0;
+}
+
+int callingOrderRegularInitPass()
+{
+  vvenc::VVEnc cVVEnc;
+  vvenc::VVEncParameter vvencParams;  
+  fillEncoderParameters( vvencParams );
+  if( 0 != cVVEnc.init( vvencParams ) )
+  {
+    return -1;
+  }
+  vvenc::VvcAccessUnit cAU;
+  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+
+  vvenc::InputPicture cInputPic;
+  if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
+  {
+    return -1;
+  }
+  fillInputPic( cInputPic );
+  if( 0 != cVVEnc.initPass( 0 ) )
   {
     return -1;
   }
@@ -390,7 +407,7 @@ int callingOrderRegular()
   {
     return -1;
   }
-  if( 0 != cVVEnc.destroy())
+  if( 0 != cVVEnc.uninit())
   {
     return -1;
   }
@@ -399,11 +416,12 @@ int callingOrderRegular()
 
 int testLibCallingOrder()
 {
-  testfunc( "callingOrderInvalidUninit",  &callingOrderInvalidUninit, true );
-  testfunc( "callingOrderInitNoUninit",   &callingOrderInitNoUninit ); // not calling destroy seems to be valid
-  testfunc( "callingOrderInitTwice",      &callingOrderInitTwice,     true );
-  testfunc( "callingOrderNoInit",         &callingOrderNoInit,        true );
-  testfunc( "callingOrderRegular",        &callingOrderRegular,       false );
+  testfunc( "callingOrderInvalidUninit",   &callingOrderInvalidUninit,   true  );
+  testfunc( "callingOrderInitNoUninit",    &callingOrderInitNoUninit           ); // not calling uninit seems to be valid
+  testfunc( "callingOrderInitTwice",       &callingOrderInitTwice,       true  );
+  testfunc( "callingOrderNoInit",          &callingOrderNoInit,          true  );
+  testfunc( "callingOrderRegular",         &callingOrderRegular,         false );
+  testfunc( "callingOrderRegularInitPass", &callingOrderRegularInitPass, false );
   return 0;
 }
 
@@ -413,22 +431,18 @@ int inputBufTest( vvenc::InputPicture& cInputPic )
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ))
+  if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
   cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
 
-  if( 0 != cVVEnc.init( 0 ) )
-  {
-    return -1;
-  }
   if( 0 != cVVEnc.encode( &cInputPic, cAU))
   {
     return -1;
   }
-  if( 0 != cVVEnc.destroy())
+  if( 0 != cVVEnc.uninit())
   {
     return -1;
   }
@@ -507,11 +521,7 @@ int invaildInputBuf( )
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ))
-  {
-    return -1;
-  }
-  if( 0 != cVVEnc.init( 0 ) )
+  if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
@@ -548,11 +558,7 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.create( vvencParams ))
-  {
-    return -1;
-  }
-  if( 0 != cVVEnc.init( 0 ) )
+  if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
@@ -570,7 +576,7 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
       return -1;
     }
   }
-  if( 0 != cVVEnc.destroy())
+  if( 0 != cVVEnc.uninit())
   {
     return -1;
   }

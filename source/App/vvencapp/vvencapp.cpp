@@ -60,12 +60,13 @@ vvc@hhi.fraunhofer.de
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
+#include "vvenc/EncoderIf.h"
 
 #include "BinFileWriter.h"
 #include "CmdLineParser.h"
 #include "YuvFileReader.h"
 
-int g_verbosity = vvenc::VERBOSE;
+int g_verbosity = vvenc::LL_VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {
@@ -112,7 +113,7 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
   cVVEncParameter.m_iIDRPeriodSec   = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
   cVVEncParameter.m_iIDRPeriod      = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_iMsgLevel       = vvenc::VERBOSE;             // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.m_iMsgLevel       = vvenc::LL_VERBOSE;          // log level > 4 (LL_VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
@@ -177,7 +178,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  if( cVVEncParameter.m_iMsgLevel > vvenc::SILENT && cVVEncParameter.m_iMsgLevel < vvenc::NOTICE )
+  if( cVVEncParameter.m_iMsgLevel > vvenc::LL_SILENT && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE )
   {
     std::cout << "-------------------" << std::endl;
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
@@ -197,15 +198,15 @@ int main( int argc, char* argv[] )
 
   vvenc::VVEnc cVVEnc;
 
-  // create the encoder
-  iRet = cVVEnc.create( cVVEncParameter );
+  // initialize the encoder
+  iRet = cVVEnc.init( cVVEncParameter );
   if( 0 != iRet )
   {
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
     return iRet;
   }
 
-  if( cVVEncParameter.m_iMsgLevel > vvenc::WARNING )
+  if( cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING )
   {
     std::cout << "VVEnc info: " << cVVEnc.getEncoderInfo() << std::endl;
   }
@@ -242,7 +243,7 @@ int main( int argc, char* argv[] )
   cVVEnc.clockStartTime();
   cTPStart = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  if( cVVEncParameter.m_iMsgLevel > vvenc::WARNING )
+  if( cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING )
   {
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
@@ -251,8 +252,8 @@ int main( int argc, char* argv[] )
 
   for( int pass = 0; pass < cVVEncParameter.m_iNumPasses; pass++ )
   {
-    // initialize the encoder
-    iRet = cVVEnc.init( pass );
+    // initialize the encoder pass
+    iRet = cVVEnc.initPass( pass );
     if( 0 != iRet )
     {
       printVVEncErrorMsg( cAppname, "cannot init encoder", iRet, cVVEnc.getLastError() );
@@ -279,7 +280,7 @@ int main( int argc, char* argv[] )
       iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
       if( iRet )
       {
-        if( cVVEncParameter.m_iMsgLevel > vvenc::ERROR && cVVEncParameter.m_iMsgLevel < vvenc::NOTICE )
+        if( cVVEncParameter.m_iMsgLevel > vvenc::LL_ERROR && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE )
         {
           std::cout << "EOF reached" << std::endl;
         }
@@ -313,13 +314,13 @@ int main( int argc, char* argv[] )
           uiFrames++;
           uiFramesTmp++;
 
-          if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::WARNING && cVVEncParameter.m_iMsgLevel < vvenc::NOTICE)
+          if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE)
           {
             cTPEnd = std::chrono::steady_clock::now();
             double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
             if( dTimeMs > 1000.0 )
             {
-              if( cVVEncParameter.m_iMsgLevel > vvenc::INFO ){ std::cout << std::endl;}
+              if( cVVEncParameter.m_iMsgLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
               std::cout <<  "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
               cTPStart = std::chrono::steady_clock::now();
               uiFramesTmp = 0;
@@ -349,13 +350,13 @@ int main( int argc, char* argv[] )
 
       uiFrames++;
 
-      if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::WARNING && cVVEncParameter.m_iMsgLevel < vvenc::NOTICE )
+      if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE )
       {
         cTPEnd = std::chrono::steady_clock::now();
         double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
         if( dTimeMs > 1000.0 )
         {
-          if( cVVEncParameter.m_iMsgLevel > vvenc::INFO ){ std::cout << std::endl;}
+          if( cVVEncParameter.m_iMsgLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
           std::cout << "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
           cTPStart = std::chrono::steady_clock::now();
           uiFramesTmp = 0;
@@ -384,7 +385,7 @@ int main( int argc, char* argv[] )
   }
 
   // un-initialize the encoder
-  iRet = cVVEnc.destroy();
+  iRet = cVVEnc.uninit();
   if( 0 != iRet )
   {
     printVVEncErrorMsg( cAppname, "destroyencoder failed", iRet, cVVEnc.getLastError() );
@@ -396,12 +397,12 @@ int main( int argc, char* argv[] )
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::SILENT )
+  if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::LL_SILENT )
   {
     std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     double dFps = (double)uiFrames / dTimeSec;
 
-    if( cVVEncParameter.m_iMsgLevel > vvenc::WARNING )
+    if( cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING )
     {
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;
     }

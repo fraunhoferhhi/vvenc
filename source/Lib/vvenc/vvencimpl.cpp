@@ -92,9 +92,9 @@ int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
   return VVENC_OK;
 }
 
-int VVEncImpl::create( const vvenc::VVEncParameter& rcVVEncParameter )
+int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 {
-  if( m_bCreated ){ return VVENC_ERR_CREATE; }
+  if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
@@ -130,32 +130,31 @@ int VVEncImpl::create( const vvenc::VVEncParameter& rcVVEncParameter )
     return VVENC_ERR_INITIALIZE;
   }
 
-  // create the encoder
-  m_cEncoderIf.createEncoderLib( m_cEncCfg );
-
-  m_bCreated = true;
-  return VVENC_OK;
-}
-
-int VVEncImpl::init( int pass )
-{
-  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
-
-  m_cEncoderIf.initEncoderLib( pass );
+  // initialize the encoder
+  m_cEncoderIf.initEncoderLib( m_cEncCfg );
 
   m_bInitialized = true;
   m_bFlushed     = false;
   return VVENC_OK;
 }
 
-int VVEncImpl::destroy()
+int VVEncImpl::initPass( int pass )
 {
-  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+
+  m_cEncoderIf.initPass( pass );
+
+  m_bFlushed = false;
+  return VVENC_OK;
+}
+
+int VVEncImpl::uninit()
+{
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
   m_cEncoderIf.printSummary();
-  m_cEncoderIf.destroyEncoderLib();
+  m_cEncoderIf.uninitEncoderLib();
 
-  m_bCreated     = false;
   m_bInitialized = false;
   m_bFlushed     = false;
   return VVENC_OK;
@@ -164,10 +163,9 @@ int VVEncImpl::destroy()
 
 int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_bCreated )                 { return VVENC_ERR_CREATE; }
-  if( !m_bInitialized )             { return VVENC_ERR_INITIALIZE; }
+  if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
-  if ( m_bFlushed )                 { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
+  if( m_bFlushed )                     { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
@@ -286,8 +284,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 
 int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_bCreated     ){ return VVENC_ERR_CREATE; }
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
 
   YUVBuffer cYUVBuffer;
@@ -337,7 +334,7 @@ struct BufferDimensions
 
 int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
 {
-  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   int iRet= VVENC_OK;
 
   bool bMarginReq = false;
@@ -375,7 +372,7 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
 
 int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter )
 {
-  if( !m_bCreated ){ return VVENC_ERR_CREATE; }
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
   rcVVEncParameter = m_cVVEncParameter;
   return 0;
@@ -552,7 +549,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
 
-  ROTPARAMS( rcSrc.m_iMsgLevel < 0 || rcSrc.m_iMsgLevel > DETAILS,      "log message level range 0 - 6" );
+  ROTPARAMS( rcSrc.m_iMsgLevel < 0 || rcSrc.m_iMsgLevel > LL_DETAILS,                       "log message level range 0 - 6" );
 
   ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 

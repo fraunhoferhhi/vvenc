@@ -52,10 +52,26 @@ vvc@hhi.fraunhofer.de
 #include "stdint.h"
 #include <string>
 #include "vvenc/vvencDecl.h"
-#include "vvenc/EncoderIf.h"
 
 namespace vvenc {
 
+
+/**
+  \ingroup VVEncExternalInterfaces
+  \enum LogLevel
+  The enum LogLevel enumerates supported log levels/verbosity.
+*/
+enum LogLevel
+{
+  LL_SILENT  = 0,
+  LL_ERROR   = 1,
+  LL_WARNING = 2,
+  LL_INFO    = 3,
+  LL_NOTICE  = 4,
+  LL_VERBOSE = 5,
+  LL_DETAILS = 6,
+  LL_DEBUG_PLUS_INTERNAL_LOGS = 7,
+};
 
 /**
   \ingroup VVEncExternalInterfaces
@@ -77,9 +93,8 @@ enum ErrorCodes
 {
   VVENC_OK                   = 0,      ///< success
   VVENC_ERR_UNSPECIFIED      = -1,     ///< unspecified malfunction
-  VVENC_ERR_CREATE           = -2,     ///< encoder not created or tried to create multiple times
-  VVENC_ERR_INITIALIZE       = -3,     ///< encoder not initialized
-  VVENC_ERR_ALLOCATE         = -4,     ///< internal allocation error
+  VVENC_ERR_INITIALIZE       = -2,     ///< encoder not initialized or tried to initialize multiple times
+  VVENC_ERR_ALLOCATE         = -3,     ///< internal allocation error
   VVENC_NOT_ENOUGH_MEM       = -5,     ///< allocated memory to small to receive encoded data. After allocating sufficient memory the failed call can be repeated.
   VVENC_ERR_PARAMETER        = -7,     ///< inconsistent or invalid parameters
   VVENC_ERR_NOT_SUPPORTED    = -10,    ///< unsupported request
@@ -306,7 +321,7 @@ typedef struct VVENC_DECL VVEncParameter
   VvcDecodingRefreshType m_eDecodingRefreshType = VVC_DRT_IDR; ///< intra period refresh type            (default: VVC_DRT_IDR )
   int m_iIDRPeriodSec         = 1;      ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
   int m_iIDRPeriod            = 0;      ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
-  int m_iMsgLevel             = INFO;   ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
+  int m_iMsgLevel             = LL_INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
   int m_iTemporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
   int m_iTemporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
   int m_iTicksPerSecond       = 90000;  ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
@@ -352,34 +367,32 @@ public:
 
 public:
   /**
-    This method creates the encoder instance.
+    This method initializes the encoder instance.
     This method is used to initially set up the encoder with the assigned encoder parameter struct.
-    The method fails if the encoder is already created or if the assigned parameter struct
+    The method fails if the encoder is already initialized or if the assigned parameter struct
     does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
     insufficient CPU-capabilities.
     \param[in]  rvVVEncParameter const reference of VVEncParameter struct that holds initial encoder parameters.
     \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
-    \pre        The encoder must not be created.
+    \pre        The encoder must not be initialized.
   */
-   int create( const VVEncParameter& rcVVEncParameter );
+   int init( const VVEncParameter& rcVVEncParameter );
 
   /**
     This method initializes the encoder instance in dependency to the encoder pass.
   */
-   int init( int pass );
+   int initPass( int pass );
 
    /**
     This method resets the encoder instance.
     This method clears the encoder and releases all internally allocated memory.
-    Calling destroy cancels all pending encoding calls. In order to finish pending input pictures use the flush method.
+    Calling uninit cancels all pending encoding calls. In order to finish pending input pictures use the flush method.
     \param[in]  None
     \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
     \pre        None
   */
-   int destroy();
+   int uninit();
 
-
-   bool isCreated();
    bool isInitialized();
 
   /**
