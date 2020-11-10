@@ -176,7 +176,7 @@ private:
   // -------------------------------------------------------------------------------------------------------------------
   // Intra search
   // -------------------------------------------------------------------------------------------------------------------
-  uint64_t  xFracModeBitsIntraLuma    ( const CodingUnit& cu );
+  uint64_t  xFracModeBitsIntraLuma    ( const CodingUnit& cu, const unsigned* mpmLst );
 
   void      xEncIntraHeader           ( CodingStructure &cs, Partitioner& pm, const bool luma );
   void      xEncSubdivCbfQT           ( CodingStructure &cs, Partitioner& pm, const bool luma );

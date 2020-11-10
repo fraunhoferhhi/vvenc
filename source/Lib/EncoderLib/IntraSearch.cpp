@@ -244,6 +244,9 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
 
   bool satdChecked[NUM_INTRA_MODE] = { false };
 
+  unsigned mpmLst[NUM_MOST_PROBABLE_MODES];
+  CU::getIntraMPMs(cu, mpmLst);
+
   for( unsigned mode = 0; mode < numModesAvailable; mode++ )
   {
     // Skip checking extended Angular modes in the first round of SATD
@@ -262,7 +265,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
     // SAD is scaled by 2 to align with the scaling of HAD
     Distortion minSadHad = distParam.distFunc(distParam);
 
-    uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
+    uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
 
     //restore ctx
     m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
@@ -302,7 +305,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
           // SAD is scaled by 2 to align with the scaling of HAD
           Distortion minSadHad = distParam.distFunc(distParam);
 
-          uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
+          uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
           //restore ctx
           m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
 
@@ -346,7 +349,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         Distortion minSadHad = distParam.distFunc(distParam);
 
         // NB xFracModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
-        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
+        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
 
         //restore ctx
         m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
@@ -389,7 +392,7 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       // SAD is scaled by 2 to align with the scaling of HAD
       Distortion minSadHad = distParam.distFunc(distParam);
 
-      uint64_t fracModeBits = xFracModeBitsIntraLuma( cu );
+      uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
 
       //restore ctx
       m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
@@ -1361,7 +1364,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   PelBuf         piReco           = cs.getRecoBuf   (compID);
 #endif
 
-  const CodingUnit& cu        = *cs.getCU(area.pos(), chType, TREE_D);
+  const CodingUnit& cu            = *tu.cu;
 
   //===== init availability pattern =====
   CHECK( tu.jointCbCr && compID == COMP_Cr, "wrong combination of compID and jointCbCr" );
@@ -2631,13 +2634,13 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
 #endif
 }
 
-uint64_t IntraSearch::xFracModeBitsIntraLuma(const CodingUnit& cu)
+uint64_t IntraSearch::xFracModeBitsIntraLuma(const CodingUnit& cu, const unsigned* mpmLst)
 {
   m_CABACEstimator->resetBits();
 
   if (!cu.ciip)
   {
-    m_CABACEstimator->intra_luma_pred_mode(cu);
+    m_CABACEstimator->intra_luma_pred_mode(cu, mpmLst);
   }
 
   return m_CABACEstimator->getEstFracBits();
