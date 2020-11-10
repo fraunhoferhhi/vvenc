@@ -549,7 +549,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
 
-  ROTPARAMS( rcSrc.m_iMsgLevel < 0 || rcSrc.m_iMsgLevel > LL_DETAILS,                       "log message level range 0 - 6" );
+  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DETAILS,                       "log message level range 0 - 6" );
 
   ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
@@ -564,7 +564,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_iMsgLevel, (int)vvenc::DETAILS);
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
 
   rcEncCfg.m_SourceWidth                = rcVVEncParameter.m_iWidth;
   rcEncCfg.m_SourceHeight               = rcVVEncParameter.m_iHeight;

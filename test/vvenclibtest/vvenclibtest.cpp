@@ -154,7 +154,7 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
   cVVEncParameter.m_iIDRPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_iMsgLevel       = vvenc::LL_SILENT;           // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.m_eLogLevel       = vvenc::LL_SILENT;           // log level > 4 (VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
@@ -218,8 +218,8 @@ int testLibParameterRanges()
   testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255} );
   testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, {-1,0,15,31,256,}, true );
 
-//  testParamList( "LogLevel",            vvencParams.m_iMsgLevel,                  vvencParams, { 0,1,2,3,4,5,6} );
-//  testParamList( "LogLevel",            vvencParams.m_iMsgLevel,                  vvencParams, {-1,7,8}, true );
+//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, { 0,1,2,3,4,5,6} );
+//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, {-1,7,8}, true );
 
   testParamList( "Profile",             vvencParams.m_eProfile,                   vvencParams, { 1,3,9} );
   testParamList( "Profile",             vvencParams.m_eProfile,                   vvencParams, {-1,0,2,4,5,6,7,8,10}, true );

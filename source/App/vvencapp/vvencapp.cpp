@@ -113,7 +113,7 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
   cVVEncParameter.m_iIDRPeriodSec   = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
   cVVEncParameter.m_iIDRPeriod      = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_iMsgLevel       = vvenc::LL_VERBOSE;          // log level > 4 (LL_VERBOSE) enables psnr/rate output
+  cVVEncParameter.m_eLogLevel       = vvenc::LL_VERBOSE;          // log level > 4 (LL_VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
@@ -150,7 +150,7 @@ int main( int argc, char* argv[] )
   int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile, iInputBitdepth );
 
   vvenc::setMsgFnc( &msgFnc );
-  g_verbosity = cVVEncParameter.m_iMsgLevel;
+  g_verbosity = cVVEncParameter.m_eLogLevel;
 
   if( iRet != 0 )
   {
@@ -178,7 +178,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  if( cVVEncParameter.m_iMsgLevel > vvenc::LL_SILENT && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE )
+  if( cVVEncParameter.m_eLogLevel > vvenc::LL_SILENT && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
   {
     std::cout << "-------------------" << std::endl;
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
@@ -206,7 +206,7 @@ int main( int argc, char* argv[] )
     return iRet;
   }
 
-  if( cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING )
+  if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
   {
     std::cout << "VVEnc info: " << cVVEnc.getEncoderInfo() << std::endl;
   }
@@ -243,7 +243,7 @@ int main( int argc, char* argv[] )
   cVVEnc.clockStartTime();
   cTPStart = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  if( cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING )
+  if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
   {
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
@@ -280,7 +280,7 @@ int main( int argc, char* argv[] )
       iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
       if( iRet )
       {
-        if( cVVEncParameter.m_iMsgLevel > vvenc::LL_ERROR && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE )
+        if( cVVEncParameter.m_eLogLevel > vvenc::LL_ERROR && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
         {
           std::cout << "EOF reached" << std::endl;
         }
@@ -314,13 +314,13 @@ int main( int argc, char* argv[] )
           uiFrames++;
           uiFramesTmp++;
 
-          if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE)
+          if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE)
           {
             cTPEnd = std::chrono::steady_clock::now();
             double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
             if( dTimeMs > 1000.0 )
             {
-              if( cVVEncParameter.m_iMsgLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
+              if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
               std::cout <<  "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
               cTPStart = std::chrono::steady_clock::now();
               uiFramesTmp = 0;
@@ -350,13 +350,13 @@ int main( int argc, char* argv[] )
 
       uiFrames++;
 
-      if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING && cVVEncParameter.m_iMsgLevel < vvenc::LL_NOTICE )
+      if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
       {
         cTPEnd = std::chrono::steady_clock::now();
         double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
         if( dTimeMs > 1000.0 )
         {
-          if( cVVEncParameter.m_iMsgLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
+          if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
           std::cout << "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
           cTPStart = std::chrono::steady_clock::now();
           uiFramesTmp = 0;
@@ -397,12 +397,12 @@ int main( int argc, char* argv[] )
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && cVVEncParameter.m_iMsgLevel > vvenc::LL_SILENT )
+  if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_SILENT )
   {
     std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     double dFps = (double)uiFrames / dTimeSec;
 
-    if( cVVEncParameter.m_iMsgLevel > vvenc::LL_WARNING )
+    if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
     {
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;
     }
