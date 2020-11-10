@@ -741,7 +741,6 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
         encRcSeq->picParam[ i ].beta = -1.367;
       }
     }
-    printf( "\ntargetBits %d GOPratio %f alpha[1] %f ", targetBits, gopVsBitrateRatio, encRCSeq->picParam[ 1 ].alpha );
   }
 
   return targetBits;

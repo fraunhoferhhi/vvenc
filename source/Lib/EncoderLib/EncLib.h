@@ -101,10 +101,10 @@ public:
   EncLib();
   virtual ~EncLib();
 
-  void     createEncoderLib    ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf );
-  void     initEncoderLib      ( int pass );
+  void     initEncoderLib      ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf );
+  void     initPass            ( int pass );
   void     encodePicture       ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
-  void     destroyEncoderLib   ();
+  void     uninitEncoderLib    ();
   void     printSummary        ();
 
 private:

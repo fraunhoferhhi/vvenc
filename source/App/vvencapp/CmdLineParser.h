@@ -121,6 +121,7 @@ public:
       }
       std::cout <<
           "\t [--bitrate,-b  <int>     ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
+          "\t [--passes,-p   <int>     ] : number of rate control passes (1 or 2) default: [" << rcParams.m_iNumPasses << "]\n"
           "\t [--qp,-q <int>           ] : quantization parameter, QP (0-51) default: [" << rcParams.m_iQp << "]\n"
           "\t [--qpa   <int>           ] : perceptual QP adaptation to improve visual coding quality (0: off, on for 1: SDR (WPSNR), 2: SDR (XPSNR),\n\t\t\t\t      3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.m_iPerceptualQPA << "]\n"
           "\t [--threads,-t  <int>     ] : number of threads (1-n) default: [size <= HD: " << rcParams.m_iThreadCount << ", UHD: 6]\n"
@@ -158,7 +159,7 @@ public:
         i_arg++;
         int iLogLevel = atoi( argv[i_arg++] );
         if( iLogLevel < 0 ) iLogLevel = 0;
-        if( iLogLevel > (int)vvenc::LogLevel::LL_DETAILS ) iLogLevel = (int)vvenc::LogLevel::LL_DETAILS ;
+        if( iLogLevel > (int)vvenc::LL_DETAILS ) iLogLevel = (int)vvenc::LL_DETAILS;
         rcParams.m_eLogLevel = (vvenc::LogLevel)iLogLevel;
 
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
@@ -173,7 +174,6 @@ public:
             case vvenc::LL_NOTICE : cll = "NOTICE"; break;
             case vvenc::LL_VERBOSE: cll = "VERBOSE"; break;
             case vvenc::LL_DETAILS: cll = "DETAILS"; break;
-            case vvenc::LL_DEBUG_PLUS_INTERNAL_LOGS: cll = "DEBUG_PLUS_INTERNAL_LOGS"; break;
             default: cll = "UNKNOWN"; break;
           };
           fprintf( stdout, "[verbosity]            : %d - %s\n", (int)rcParams.m_eLogLevel, cll.c_str() );
@@ -390,6 +390,13 @@ public:
         rcParams.m_iTargetBitRate = atoi( argv[i_arg++] );
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
           fprintf( stdout, "[bitrate]              : %d bits per second\n", rcParams.m_iTargetBitRate );
+      }
+      else if( (!strcmp( (const char*)argv[i_arg], "-p" )) || !strcmp( (const char*)argv[i_arg], "--passes" ) )
+      {
+        i_arg++;
+        rcParams.m_iNumPasses = atoi( argv[i_arg++] );
+        if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
+          fprintf( stdout, "[passes]               : %d\n", rcParams.m_iNumPasses );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-q" )) || !strcmp( (const char*)argv[i_arg], "--qp" ) )
       {

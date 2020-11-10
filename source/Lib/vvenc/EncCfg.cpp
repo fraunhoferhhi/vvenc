@@ -541,6 +541,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode" );
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
   confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2, "Only one pass or two pass encoding supported" );
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
   confirmParameter(!((m_level==Level::LEVEL1) 
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)

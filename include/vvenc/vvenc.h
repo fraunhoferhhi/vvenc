@@ -52,7 +52,6 @@ vvc@hhi.fraunhofer.de
 #include "stdint.h"
 #include <string>
 #include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
 
 namespace vvenc {
 
@@ -320,8 +319,8 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
   int m_iGopSize              = 16;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
   VvcDecodingRefreshType m_eDecodingRefreshType = VVC_DRT_IDR; ///< intra period refresh type            (default: VVC_DRT_IDR )
-  int m_iIDRPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
-  int m_iIDRPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
+  int m_iIDRPeriodSec         = 1;      ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
+  int m_iIDRPeriod            = 0;      ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
   LogLevel m_eLogLevel        = LL_INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
   int m_iTemporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
   int m_iTemporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
@@ -332,6 +331,7 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iQuality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow
   int m_iPerceptualQPA        = 2;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
   int m_iTargetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
+  int m_iNumPasses            = 1;      ///< number of rate control passes                          (default: 1) 
   VvcProfile m_eProfile       = VVC_PROFILE_MAIN_10; ///< vvc profile                               (default: main_10)
   VvcLevel m_eLevel           = VVC_LEVEL_5_1;       ///< vvc level_idc                             (default: 5.1)
   VvcTier  m_eTier            = VVC_TIER_MAIN;       ///< vvc tier                                  (default: main)
@@ -378,6 +378,11 @@ public:
   */
    int init( const VVEncParameter& rcVVEncParameter );
 
+  /**
+    This method initializes the encoder instance in dependency to the encoder pass.
+  */
+   int initPass( int pass );
+
    /**
     This method resets the encoder instance.
     This method clears the encoder and releases all internally allocated memory.
@@ -387,7 +392,6 @@ public:
     \pre        None
   */
    int uninit();
-
 
    bool isInitialized();
 
@@ -456,7 +460,7 @@ public:
      This method reconfigures the encoder instance.
      This method is used to change encoder settings during the encoding process when the encoder was already initialized.
      Some parameter changes might require an internal encoder restart, especially when previously used parameter sets VPS, SPS or PPS
-     become invalid after the parameter change. If changes are limited to TargetBitRate, QP or LogLevel changes then the encoder continues encoding
+     become invalid after the parameter change. If changes are limited to TargetBitRate or QP changes then the encoder continues encoding
      without interruption, using the new parameters. Some parameters e.g. NumTheads are not reconfigurable - in this case the encoder returns an Error.
      The method fails if the encoder is not initialized or if the assigned parameter set given in VVCEncoderParameter struct
      does not pass the consistency and parameter check.

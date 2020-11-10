@@ -275,10 +275,10 @@ const std::vector<SVPair<MyPreset>> PresetToEnumMap =
 {
   { "none",                             MyPreset::NONE },
   { "faster",                           MyPreset::FASTER },
-  { "fast",                           MyPreset::FAST },
-  { "medium",                 MyPreset::MEDIUM },
-  { "slow",             MyPreset::SLOW },
-  { "tooltest",                    MyPreset::TOOLTEST },
+  { "fast",                             MyPreset::FAST },
+  { "medium",                           MyPreset::MEDIUM },
+  { "slow",                             MyPreset::SLOW },
+  { "tooltest",                         MyPreset::TOOLTEST },
 };
 
 
@@ -1046,8 +1046,8 @@ void EncAppCfg::printCfg()
     msgApp(VERBOSE, "ISP:%d ",                 m_ISP);
 #endif
 #if 1//TS_VVC
-    msgApp(VERBOSE, "TransformSkip:%d ",       m_TS);
-    msgApp(VERBOSE, "TransformSkipLog2MaxSize:%d ", m_TSsize);
+    msgApp(VERBOSE, "TS:%d ",                  m_TS);
+    msgApp(VERBOSE, "TSLog2MaxSize:%d ",       m_TSsize);
     msgApp(VERBOSE, "useChromaTS:%d ",         m_useChromaTS);
 #endif
   }
@@ -1067,7 +1067,7 @@ void EncAppCfg::printCfg()
   msgApp( VERBOSE, "RateControl:%d ",          m_RCRateControlMode );
   if ( m_RCRateControlMode )
   {
-    msgApp( VERBOSE, "NumPasses:%d ",               m_RCNumPasses );
+    msgApp( VERBOSE, "Passes:%d ",                  m_RCNumPasses );
     msgApp( VERBOSE, "TargetBitrate:%d ",           m_RCTargetBitrate );
     msgApp( VERBOSE, "KeepHierarchicalBit:%d ",     m_RCKeepHierarchicalBit );
     msgApp( VERBOSE, "RCLCUSeparateModel:%d ",      m_RCUseLCUSeparateModel );

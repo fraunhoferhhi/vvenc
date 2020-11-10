@@ -114,8 +114,8 @@ void EncApp::encode()
     return;
   }
 
-  // create encoder lib
-  m_cEncoderIf.createEncoderLib( m_cEncAppCfg, this );
+  // initialize encoder lib
+  m_cEncoderIf.initEncoderLib( m_cEncAppCfg, this );
 
   printChromaFormat();
 
@@ -144,8 +144,8 @@ void EncApp::encode()
       m_yuvInputFile.skipYuvFrames( skipFrames, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
     }
 
-    // initialize encoder library
-    m_cEncoderIf.initEncoderLib( pass );
+    // initialize encoder pass
+    m_cEncoderIf.initPass( pass );
 
     // loop over input YUV data
     bool inputDone  = false;
@@ -197,8 +197,8 @@ void EncApp::encode()
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );
 
-  // destroy encoder lib
-  m_cEncoderIf.destroyEncoderLib();
+  // cleanup encoder lib
+  m_cEncoderIf.uninitEncoderLib();
 
   closeFileIO();
 }

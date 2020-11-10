@@ -89,13 +89,16 @@ void EncLib::xResetLib()
   m_TicksPerFrameMul4 = 0;
 }
 
-void EncLib::createEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
+void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 {
   // copy config parameter
   const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
   m_cBckCfg.setCfgParameter( encCfg );
 
   m_yuvWriterIf = yuvWriterIf;
+
+  // initialize first pass
+  initPass( 0 );
 
 #if ENABLE_TRACING
   g_trace_ctx = tracing_init( m_cEncCfg.m_traceFile, m_cEncCfg.m_traceRule );
@@ -128,7 +131,7 @@ void EncLib::createEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 #endif
 }
 
-void EncLib::destroyEncoderLib()
+void EncLib::uninitEncoderLib()
 {
   xUninitLib();
 
@@ -210,7 +213,7 @@ void EncLib::destroyEncoderLib()
 #endif
 }
 
-void EncLib::initEncoderLib( int pass )
+void EncLib::initPass( int pass )
 {
   xUninitLib();
 
