@@ -102,7 +102,7 @@ public:
   void        cu_bcw_flag               ( const CodingUnit&             cu );
   void        extend_ref_line           ( const CodingUnit&             cu );
   void        intra_luma_pred_modes     ( const CodingUnit&             cu );
-  void        intra_luma_pred_mode      ( const CodingUnit&             cu );
+  void        intra_luma_pred_mode      ( const CodingUnit&             cu,       const unsigned *mpmLst = nullptr );
   void        intra_chroma_pred_modes   ( const CodingUnit&             cu );
   void        intra_chroma_lmc_mode     ( const CodingUnit&             cu );
   void        intra_chroma_pred_mode    ( const CodingUnit&             cu );
