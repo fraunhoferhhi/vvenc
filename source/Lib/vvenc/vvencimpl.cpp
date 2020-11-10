@@ -854,6 +854,7 @@ void VVEncImpl::xPrintCfg()
 
   if ( m_cEncCfg.m_RCRateControlMode )
   {
+    msg( VERBOSE, "Passes:%d ",                  m_cEncCfg.m_RCNumPasses );
     msg( VERBOSE, "TargetBitrate:%d ",           m_cEncCfg.m_RCTargetBitrate );
     msg( VERBOSE, "KeepHierarchicalBit:%d ",     m_cEncCfg.m_RCKeepHierarchicalBit );
     msg( VERBOSE, "RCLCUSeparateModel:%d ",      m_cEncCfg.m_RCUseLCUSeparateModel );

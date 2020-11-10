@@ -1067,7 +1067,7 @@ void EncAppCfg::printCfg()
   msgApp( VERBOSE, "RateControl:%d ",          m_RCRateControlMode );
   if ( m_RCRateControlMode )
   {
-    msgApp( VERBOSE, "NumPasses:%d ",               m_RCNumPasses );
+    msgApp( VERBOSE, "Passes:%d ",                  m_RCNumPasses );
     msgApp( VERBOSE, "TargetBitrate:%d ",           m_RCTargetBitrate );
     msgApp( VERBOSE, "KeepHierarchicalBit:%d ",     m_RCKeepHierarchicalBit );
     msgApp( VERBOSE, "RCLCUSeparateModel:%d ",      m_RCUseLCUSeparateModel );
