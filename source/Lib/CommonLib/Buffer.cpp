@@ -126,76 +126,6 @@ void mipMatrixMulCore( Pel* res, const Pel* input, const uint8_t* weight, const 
   }
 }
 
-template<bool PAD = true>
-void gradFilterCore(const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth)
-{
-  const Pel* srcTmp = pSrc + srcStride + 1;
-  Pel* gradXTmp = gradX + gradStride + 1;
-  Pel* gradYTmp = gradY + gradStride + 1;
-  int  shift1 = std::max<int>(6, (bitDepth - 6));
-
-  for (int y = 0; y < (height - 2 * BDOF_EXTEND_SIZE); y++)
-  {
-    for (int x = 0; x < (width - 2 * BDOF_EXTEND_SIZE); x++)
-    {
-      gradYTmp[x] = (srcTmp[x + srcStride] >> shift1) - (srcTmp[x - srcStride] >> shift1);
-      gradXTmp[x] = (srcTmp[x + 1] >> shift1) - (srcTmp[x - 1] >> shift1);
-    }
-    gradXTmp += gradStride;
-    gradYTmp += gradStride;
-    srcTmp += srcStride;
-  }
-
-  if (PAD)
-  {
-    gradXTmp = gradX + gradStride + 1;
-    gradYTmp = gradY + gradStride + 1;
-    for (int y = 0; y < (height - 2 * BDOF_EXTEND_SIZE); y++)
-    {
-      gradXTmp[-1] = gradXTmp[0];
-      gradXTmp[width - 2 * BDOF_EXTEND_SIZE] = gradXTmp[width - 2 * BDOF_EXTEND_SIZE - 1];
-      gradXTmp += gradStride;
-
-      gradYTmp[-1] = gradYTmp[0];
-      gradYTmp[width - 2 * BDOF_EXTEND_SIZE] = gradYTmp[width - 2 * BDOF_EXTEND_SIZE - 1];
-      gradYTmp += gradStride;
-    }
-
-    gradXTmp = gradX + gradStride;
-    gradYTmp = gradY + gradStride;
-    ::memcpy(gradXTmp - gradStride, gradXTmp, sizeof(Pel)*(width));
-    ::memcpy(gradXTmp + (height - 2 * BDOF_EXTEND_SIZE)*gradStride, gradXTmp + (height - 2 * BDOF_EXTEND_SIZE - 1)*gradStride, sizeof(Pel)*(width));
-    ::memcpy(gradYTmp - gradStride, gradYTmp, sizeof(Pel)*(width));
-    ::memcpy(gradYTmp + (height - 2 * BDOF_EXTEND_SIZE)*gradStride, gradYTmp + (height - 2 * BDOF_EXTEND_SIZE - 1)*gradStride, sizeof(Pel)*(width));
-  }
-}
-
-
-void applyPROFCore(Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng)
-{
-  int idx = 0;
-  const int dILimit = 1 << std::max<int>(clpRng.bd + 1, 13);
-  for (int h = 0; h < height; h++)
-  {
-    for (int w = 0; w < width; w++)
-    {
-      int32_t dI = dMvX[idx] * gradX[w] + dMvY[idx] * gradY[w];
-      dI = Clip3(-dILimit, dILimit - 1, dI);
-      dst[w] = src[w] + dI;
-      if (!bi)
-      {
-        dst[w] = (dst[w] + offset) >> shiftNum;
-        dst[w] = ClipPel(dst[w], clpRng);
-      }
-      idx++;
-    }
-    gradX += gradStride;
-    gradY += gradStride;
-    dst += dstStride;
-    src += srcStride;
-  }
-}
-
 template< typename T >
 void addAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T* dest, int dstStride, int width, int height, unsigned rshift, int offset, const ClpRng& clpRng )
 {
@@ -428,8 +358,6 @@ PelBufferOps::PelBufferOps()
 
   transpose4x4      = transposeNxNCore<Pel,4>;
   transpose8x8      = transposeNxNCore<Pel,8>;
-  profGradFilter    = gradFilterCore <false>;
-  applyPROF         = applyPROFCore;
   mipMatrixMul_4_4  = mipMatrixMulCore<4,4>;
   mipMatrixMul_8_4  = mipMatrixMulCore<8,4>;
   mipMatrixMul_8_8  = mipMatrixMulCore<8,8>;

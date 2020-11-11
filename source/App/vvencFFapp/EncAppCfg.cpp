@@ -585,12 +585,12 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("OutputBitDepth",                                  m_outputBitDepth[ CH_L ],                         "Bit-depth of output file")
 
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
-  ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in activity calculation in QPA for I Pictures (0:off, 1:on)")
+  ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
   
   ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
-  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow) \n")
   ("Size,-s",                                         toSourceSize,                                     "Input resolution (WidthxHeight)")
   ("Threads,-t",                                      m_numWppThreads,                                  "Number of threads")
+  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow)")
     ;
 
   po::setDefaults( opts );
@@ -697,7 +697,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("MSBExtendedBitDepth",                             m_MSBExtendedBitDepth[ CH_L ],                    "bit depth of luma component after addition of MSBs of value 0 (used for synthesising High Dynamic Range source material). (default:InputBitDepth)")
   ("MSBExtendedBitDepthC",                            m_MSBExtendedBitDepth[ CH_C ],                    "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
   ("CostMode",                                        toCostMode,                                       "Use alternative cost functions: choose between 'lossy', 'sequence_level_lossless', 'lossless' (which forces QP to " MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP) ") and 'mixed_lossless_lossy' (which used QP'=" MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME) " for pre-estimates of transquant-bypass blocks).")
-  ("SEIDecodedPictureHash,-dph",                      toHashType,                                       "Control generation of decode picture hash SEI messages, options are: 1:md5, 2:crc, 3:checksum, 0:off (default)" )
+  ("SEIDecodedPictureHash,-dph",                      toHashType,                                       "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
   ("SEIBufferingPeriod",                              m_bufferingPeriodSEIEnabled,                      "Control generation of buffering period SEI messages")
   ("SEIPictureTiming",                                m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
   ("SEIDecodingUnitInfo",                             m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
@@ -911,6 +911,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("MTSIntraMaxCand",                                 m_MTSIntraMaxCand,                                "Number of additional candidates to test for MTS in intra slices")
 #if 1//ISP_VVC
   ("ISP",                                             m_ISP,                                            "Intra Sub-Partitions Mode (0: off, 1: vtm, 2: fast, 3: faster)")
+#endif
+#if 1//TS_VVC
+  ("TransformSkip",                                   m_TS,                                             "Intra transform skipping, 0: off, 1: TS, 2: TS with SC detection ")
+  ("TransformSkipLog2MaxSize",                        m_TSsize,                                         "Specify transform-skip maximum size. Minimum 2, Maximum 5")
+  ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
 #endif
 
   ("HorCollocatedChroma",                             m_horCollocatedChromaFlag,                        "Specifies location of a chroma sample relatively to the luma sample in horizontal direction in the reference picture resampling"
@@ -1129,6 +1134,11 @@ void EncAppCfg::printCfg()
     msgApp(VERBOSE, "MTSIntraCand:%d ",        m_MTSIntraMaxCand);
 #if 1// ISP_VVC
     msgApp(VERBOSE, "ISP:%d ",                 m_ISP);
+#endif
+#if 1//TS_VVC
+    msgApp(VERBOSE, "TransformSkip:%d ",       m_TS);
+    msgApp(VERBOSE, "TransformSkipLog2MaxSize:%d ", m_TSsize);
+    msgApp(VERBOSE, "useChromaTS:%d ",         m_useChromaTS);
 #endif
   }
 

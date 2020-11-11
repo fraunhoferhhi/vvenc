@@ -503,6 +503,10 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
 
   if( cEncCfg.m_SBT )          { css << "SBT " ;}
   if( cEncCfg.m_CIIP )         { css << "CIIP ";}
+#if 1//TS_VVC
+  if (cEncCfg.m_ISP)           { css << "ISP "; }
+  if (cEncCfg.m_TS)            { css << "TS "; }
+#endif
 
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
@@ -711,7 +715,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   return 0;
 }
 
-
 void VVEncImpl::xPrintCfg()
 {
   //msgFnc( (int)LL_DETAILS, "\n" );
@@ -836,6 +839,12 @@ void VVEncImpl::xPrintCfg()
     msgApp( LL_VERBOSE, "LFNST:%d ",              m_cEncCfg.m_LFNST);
     msgApp( LL_VERBOSE, "MTS:%d ",                m_cEncCfg.m_MTS);
     msgApp( LL_VERBOSE, "MTSIntraCand:%d ",       m_cEncCfg.m_MTSIntraMaxCand);
+#if 1 // TS_VVC
+    msgApp( LL_VERBOSE, "ISP:%d ",                m_cEncCfg.m_ISP);
+    msgApp( LL_VERBOSE, "TS:%d ",                 m_cEncCfg.m_TS);
+    msgApp( LL_VERBOSE, "TransformSkipLog2MaxSize:%d ", m_cEncCfg.m_TSsize);
+    msgApp( LL_VERBOSE, "useChromaTS:%d ",        m_cEncCfg.m_useChromaTS);
+#endif
   }
 
   msgApp( LL_VERBOSE, "\nFAST TOOL CFG: " );

@@ -88,7 +88,11 @@ public:
 public:
   void invTransformNxN    ( TransformUnit& tu, const ComponentID compID, PelBuf& pResi, const QpParam& cQPs);
   void transformNxN       ( TransformUnit& tu, const ComponentID compID, const QpParam& cQP, TCoeff &uiAbsSum, const Ctx& ctx, const bool loadTr = false);
+#if TS_CHROMA
+  void checktransformsNxN ( TransformUnit& tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID& compID = COMP_Y);
+#else 
   void checktransformsNxN ( TransformUnit& tu, std::vector<TrMode> *trModes, const int maxCand);
+#endif
 
   void                        invTransformICT     ( const TransformUnit& tu, PelBuf& resCb, PelBuf& resCr );
   std::pair<int64_t,int64_t>  fwdTransformICT     ( const TransformUnit& tu, const PelBuf& resCb, const PelBuf& resCr, PelBuf& resC1, PelBuf& resC2, int jointCbCr = -1 );
@@ -141,7 +145,12 @@ private:
 
   // inverse transform
   void xIT     ( const TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pCoeff, PelBuf& pResidual );
-
+#if TS_VVC
+  // skipping Transform
+  void xTransformSkip(const TransformUnit& tu, const ComponentID& compID, const CPelBuf& resi, TCoeff* psCoeff);
+  // inverse skipping transform
+  void xITransformSkip(const CCoeffBuf& plCoef, PelBuf& pResidual, const TransformUnit& tu, const ComponentID& component);
+#endif
   void xGetCoeffEnergy(
                        TransformUnit  &tu,
                  const ComponentID    &compID,

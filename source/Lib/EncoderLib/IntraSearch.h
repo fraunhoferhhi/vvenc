@@ -166,7 +166,11 @@ public:
 
 private:
   double    xFindInterCUCost          ( CodingUnit &cu );
+#if TS_CHROMA
+  void      xPreCheckMTS              ( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *pPred, const ComponentID& compID = COMP_Y);
+#else
   void      xPreCheckMTS              ( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *pPred);
+#endif
   void      xEstimateLumaRdModeList   ( int& numModesForFullRD,
                                         static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,
                                         static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& HadModeList,
@@ -176,7 +180,7 @@ private:
   // -------------------------------------------------------------------------------------------------------------------
   // Intra search
   // -------------------------------------------------------------------------------------------------------------------
-  uint64_t  xFracModeBitsIntraLuma    ( const CodingUnit& cu );
+  uint64_t  xFracModeBitsIntraLuma    ( const CodingUnit& cu, const unsigned* mpmLst );
 
   void      xEncIntraHeader           ( CodingStructure &cs, Partitioner& pm, const bool luma );
   void      xEncSubdivCbfQT           ( CodingStructure &cs, Partitioner& pm, const bool luma );

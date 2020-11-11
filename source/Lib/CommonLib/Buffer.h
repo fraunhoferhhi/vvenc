@@ -99,8 +99,6 @@ struct PelBufferOps
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *transpose8x8 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *roundIntVector) ( int* v, int size, unsigned int nShift, const int dmvLimit);
-  void ( *profGradFilter) ( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth);
-  void ( *applyPROF)      ( Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng);
   void ( *mipMatrixMul_4_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_4)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );
   void ( *mipMatrixMul_8_8)( Pel* res, const Pel* input, const uint8_t* weight, const int maxVal, const int offset, bool transpose );

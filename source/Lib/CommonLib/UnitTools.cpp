@@ -511,17 +511,17 @@ int CU::getIntraMPMs( const CodingUnit& cu, unsigned* mpm )
     const Position posLB = area.bottomLeft();
 
     // Get intra direction of left PU
-    const CodingUnit* puLeft = cu.cs->getCURestricted(posLB.offset(-1, 0), cu, CH_L);
-    if (puLeft && CU::isIntra(*puLeft))
+    const CodingUnit* puLeft = (posLB.x & cu.cs->pcv->maxCUSizeMask) ? cu.cs->getCU(posLB.offset(-1, 0), CH_L, cu.treeType) : cu.cs->picture->cs->getCURestricted(posLB.offset(-1, 0), cu, CH_L);
+    if (puLeft && CU::isIntra(*puLeft) && !CU::isMIP(*puLeft))
     {
-      leftIntraDir = CU::getIntraDirLuma( *puLeft );
+      leftIntraDir = puLeft->intraDir[CH_L];
     }
 
-    // Get intra direction of above PU
-    const CodingUnit* puAbove = cu.cs->getCURestricted(posRT.offset(0, -1), cu, CH_L);
-    if (puAbove && CU::isIntra(*puAbove) && CU::isSameCtu(cu, *puAbove))
+    // Get intra direction of above PU, but only from the same CU
+    const CodingUnit* puAbove = (posRT.y & cu.cs->pcv->maxCUSizeMask) ? cu.cs->getCU(posRT.offset(0, -1), CH_L, cu.treeType) : nullptr;
+    if (puAbove && CU::isIntra(*puAbove) && !CU::isMIP(*puAbove))
     {
-      aboveIntraDir = CU::getIntraDirLuma( *puAbove );
+      aboveIntraDir = puAbove->intraDir[CH_L];
     }
 
     CHECK(2 >= numMPMs, "Invalid number of most probable modes");
@@ -619,7 +619,7 @@ bool CU::isDMChromaMIP(const CodingUnit& cu)
 }
 
 
-uint32_t CU::getIntraDirLuma( const CodingUnit& cu )
+uint32_t CU::getIntraDirLuma(const CodingUnit& cu)
 {
   if (isMIP(cu))
   {
@@ -3334,7 +3334,6 @@ bool TU::isTSAllowed(const TransformUnit &tu, const ComponentID compID)
   return tsAllowed;
 }
 
-
 int TU::getICTMode( const TransformUnit& tu, int jointCbCr )
 {
   if( jointCbCr < 0 )
@@ -3347,7 +3346,11 @@ int TU::getICTMode( const TransformUnit& tu, int jointCbCr )
 bool TU::needsSqrt2Scale( const TransformUnit& tu, const ComponentID compID )
 {
   const Size& size=tu.blocks[compID];
+#if TS_VVC
+  const bool isTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
+#else
   const bool isTransformSkip = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+#endif
   return (!isTransformSkip) && (((Log2(size.width * size.height)) & 1) == 1);
 }
 

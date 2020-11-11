@@ -452,6 +452,60 @@ static void simdInterpolateHorM8( const int16_t* src, int srcStride, int16_t *ds
 }
 
 
+
+// SIMD interpolation horizontal, block width modulo 8
+template<X86_VEXT vext, bool shiftBack>
+static void simdInterpolateHorM8_singleCol(const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const* coeff)
+{
+  CHECKD( width != 1 || ( height & 3 ), "Windth needs to be '1'!" );
+
+  cond_mm_prefetch((const char*)src, _MM_HINT_T0);
+  cond_mm_prefetch((const char*)src + srcStride, _MM_HINT_T0);
+
+  __m128i vcoeffh  = _mm_loadu_si128((__m128i const*)coeff);
+  __m128i voffset  = _mm_set1_epi32(offset);
+  __m128i vibdimin = _mm_set1_epi16(clpRng.min);
+  __m128i vibdimax = _mm_set1_epi16(clpRng.max);
+
+  for (int row = 0; row < height; row += 4)
+  {
+    cond_mm_prefetch((const char*)src + 2 * srcStride, _MM_HINT_T0);
+
+    __m128i
+    vsrc0 = _mm_loadu_si128((__m128i const*) src); src += srcStride;
+    vsrc0 = _mm_madd_epi16 (vsrc0, vcoeffh);
+ 
+    __m128i
+    vsrc1 = _mm_loadu_si128((__m128i const*) src); src += srcStride;
+    vsrc1 = _mm_madd_epi16 (vsrc1, vcoeffh);
+    
+    __m128i
+    vsrc2 = _mm_loadu_si128((__m128i const*) src); src += srcStride;
+    vsrc2 = _mm_madd_epi16 (vsrc2, vcoeffh);
+    
+    __m128i
+    vsrc3 = _mm_loadu_si128((__m128i const*) src); src += srcStride;
+    vsrc3 = _mm_madd_epi16 (vsrc3, vcoeffh);
+
+    vsrc0 = _mm_hadd_epi32(vsrc0, vsrc1);
+    vsrc2 = _mm_hadd_epi32(vsrc2, vsrc3);
+    vsrc0 = _mm_hadd_epi32(vsrc0, vsrc2);
+
+    vsrc0 = _mm_add_epi32 (vsrc0, voffset);
+    vsrc0 = _mm_srai_epi32(vsrc0, shift);
+
+    if (shiftBack) { //clip
+      vsrc0 = _mm_min_epi16(vibdimax, _mm_max_epi16(vibdimin, vsrc0));
+    }
+    
+    *dst = _mm_cvtsi128_si32(vsrc0);    dst += dstStride;
+    *dst = _mm_extract_epi32(vsrc0, 1); dst += dstStride;
+    *dst = _mm_extract_epi32(vsrc0, 2); dst += dstStride;
+    *dst = _mm_extract_epi32(vsrc0, 3); dst += dstStride;
+  }
+}
+
+
 template<X86_VEXT vext, int N, bool shiftBack>
 static void simdInterpolateHorM8_AVX2( const int16_t* src, int srcStride, int16_t *dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const *coeff )
 {
@@ -1386,6 +1440,11 @@ static void simdFilter( const ClpRng& clpRng, Pel const *src, int srcStride, Pel
     else if( N == 2 && !( width & 0x03 ) )
     {
       simdInterpolateN2_M4<vext, isLast>( src, srcStride, dst, dstStride, cStride, width, height, shift, offset, clpRng, c );
+      return;
+    }
+    else if( N == 8 && width == 1 && ( height & 3 ) == 0 && !isVertical )
+    {
+      simdInterpolateHorM8_singleCol<vext, isLast>( src, srcStride, dst, dstStride, width, height, shift, offset, clpRng, c );
       return;
     }
   }
