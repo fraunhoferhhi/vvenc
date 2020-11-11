@@ -162,6 +162,7 @@ namespace df
       {
         out << "--" << entry.opt_long.front();
       }
+      out << entry.opt->getDefault();
     }
 
     /* format the help text */
@@ -177,7 +178,7 @@ namespace df
         max_width = std::max(max_width, (unsigned) line.tellp());
       }
 
-      unsigned opt_width = std::min(max_width+2, 28u + pad_short) + 2;
+      unsigned opt_width = std::min(max_width+2, 32u + pad_short) + 2;
       unsigned desc_width = columns - opt_width;
 
       /* second pass: write out formatted option and help text.

@@ -66,6 +66,7 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 #define ISP_VVC 1
+#define NOT_USED                                          0
 
 // ====================================================================================================================
 // General settings
