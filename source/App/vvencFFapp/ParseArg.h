@@ -92,7 +92,7 @@ namespace df
       std::stringstream dest;
     };
 
-    void doHelp(std::ostream& out, Options& opts, unsigned columns = 80);
+    void doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
     std::list<const char*> scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
     void setDefaults(Options& opts);
     void parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
@@ -112,6 +112,7 @@ namespace df
       virtual void parse(const std::string& arg, ErrorReporter&) = 0;
       /* set the argument to the default value */
       virtual void setDefault() = 0;
+      virtual const std::string getDefault() { return std::string(); }
 
       std::string opt_string;
       std::string opt_desc;
@@ -131,10 +132,20 @@ namespace df
       {
         opt_storage = opt_default_val;
       }
+      virtual const std::string getDefault(); 
 
       T& opt_storage;
       T opt_default_val;
     };
+
+    template<typename T>
+    inline 
+    const std::string Option<T>::getDefault() 
+    { 
+      std::ostringstream oss;
+      oss << " [" << opt_default_val << "] ";
+      return oss.str(); 
+    }
 
     /* Generic parsing */
     template<typename T>

@@ -108,7 +108,38 @@ GOPEntry()
       }
 };
 
-inline std::istringstream& operator>> ( std::istringstream& in, GOPEntry& entry )
+inline std::ostream& operator<< ( std::ostream& os, const GOPEntry& entry )
+{
+  os << entry.m_sliceType;
+  os << entry.m_POC;
+  os << entry.m_QPOffset;
+  os << entry.m_QPOffsetModelOffset;
+  os << entry.m_QPOffsetModelScale;
+  os << entry.m_CbQPoffset;
+  os << entry.m_CrQPoffset;
+  os << entry.m_QPFactor;
+  os << entry.m_tcOffsetDiv2;
+  os << entry.m_betaOffsetDiv2;
+  os << entry.m_CbTcOffsetDiv2;
+  os << entry.m_CbBetaOffsetDiv2;
+  os << entry.m_CrTcOffsetDiv2;
+  os << entry.m_CrBetaOffsetDiv2;
+  os << entry.m_temporalId;
+
+  for( int l = 0; l < 2; l++)
+  {
+    os <<  entry.m_numRefPicsActive[l];
+    os <<  entry.m_numRefPics[l];
+    for ( int i = 0; i < entry.m_numRefPics[l]; i++ )
+    {
+      os <<  entry.m_deltaRefPics[l][i];
+    }
+  }
+
+  return os;
+}
+
+inline std::istream& operator>> ( std::istream& in, GOPEntry& entry )
 {
   in >> entry.m_sliceType;
   in >> entry.m_POC;
@@ -268,17 +299,21 @@ public:
   bool                m_bufferingPeriodSEIEnabled;
   bool                m_pictureTimingSEIEnabled;
   bool                m_decodingUnitInfoSEIEnabled;
+#if NOT_USED
   bool                m_tileUniformSpacingFlag;
   int                 m_numTileColumnsMinus1;
   int                 m_numTileRowsMinus1;
   std::vector<int>    m_tileColumnWidth;
   std::vector<int>    m_tileRowHeight;
+#endif
   bool                m_entropyCodingSyncEnabled;
   bool                m_entryPointsPresent;
+#if NOT_USED
   bool                m_rectSliceFlag;
   int                 m_numSlicesInPicMinus1;
   std::vector<int>    m_topLeftBrickIdx;
   std::vector<int>    m_bottomRightBrickIdx;
+#endif
   bool                m_signalledSliceIdFlag;
   int                 m_signalledSliceIdLengthMinus1;
   std::vector<int>    m_rectSliceBoundary;
@@ -535,17 +570,21 @@ public:
       , m_bufferingPeriodSEIEnabled                   ( false )
       , m_pictureTimingSEIEnabled                     ( false )
       , m_decodingUnitInfoSEIEnabled                  ( false )
+#if NOT_USED
       , m_tileUniformSpacingFlag                      ( false )
       , m_numTileColumnsMinus1                        ( 0 )
       , m_numTileRowsMinus1                           ( 0 )
       , m_tileColumnWidth                             ()
       , m_tileRowHeight                               ()
+#endif
       , m_entropyCodingSyncEnabled                    ( false )
-      , m_entryPointsPresent                       ( true )
+      , m_entryPointsPresent                          ( true )
+#if NOT_USED
       , m_rectSliceFlag                               ( true )
       , m_numSlicesInPicMinus1                        ( 0 )
       , m_topLeftBrickIdx                             ()                                // not set -> derived
       , m_bottomRightBrickIdx                         ()                                // not set -> derived
+#endif
       , m_signalledSliceIdFlag                        ( false )
       , m_signalledSliceIdLengthMinus1                ( 0 )
       , m_rectSliceBoundary                           ()

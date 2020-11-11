@@ -181,40 +181,37 @@ CodingUnit* CodingStructure::getLumaCU( const Position& pos )
 
 CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType effChType, const TreeType _treeType )
 {
-  const CompArea& _blk = area.blocks[effChType];
+  CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr && _treeType == TREE_C && effChType == CH_L, "parent shall be valid; consider using function getLumaCU()");
 
-  if( !_blk.contains( pos ) || (_treeType == TREE_C && effChType == CH_L) )
+  CodingStructure* cs = _treeType == TREE_C && effChType == CH_L ? parent : this;
+  while (cs && !cs->area.blocks[effChType].contains(pos)) cs = cs->parent;
+
+  if (!cs)
   {
-    //keep this check, which is helpful to identify bugs
-    if( _treeType == TREE_C && effChType == CH_L )
-    {
-      CHECK( parent == nullptr, "parent shall be valid; consider using function getLumaCU()" );
-    }
-    if( parent ) return parent->getCU( pos, effChType, TREE_D );
-    else         return nullptr;
+    return nullptr;
   }
   else
   {
-    return m_cuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
+    const Area& _blk = cs->area.blocks[effChType];
+    return cs->m_cuPtr[effChType][rsAddr(pos, _blk.pos(), _blk.width, unitScale[effChType])];
   }
 }
 
 const CodingUnit* CodingStructure::getCU( const Position& pos, const ChannelType effChType, const TreeType _treeType ) const
 {
-  const CompArea& _blk = area.blocks[effChType];
+  CHECKD(_treeType == TREE_C && effChType == CH_L && parent == nullptr && _treeType == TREE_C && effChType == CH_L, "parent shall be valid; consider using function getLumaCU()");
 
-  if( !_blk.contains( pos ) || (_treeType == TREE_C && effChType == CH_L) )
+  const CodingStructure* cs = _treeType == TREE_C && effChType == CH_L ? parent : this;
+  while (cs && !cs->area.blocks[effChType].contains(pos)) cs = cs->parent;
+
+  if (!cs)
   {
-    if( _treeType == TREE_C && effChType == CH_L )
-    {
-      CHECK( parent == nullptr, "parent shall be valid; consider using function getLumaCU()" );
-    }
-    if( parent ) return parent->getCU( pos, effChType, TREE_D );
-    else         return nullptr;
+    return nullptr;
   }
   else
   {
-    return m_cuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
+    const Area& _blk = cs->area.blocks[effChType];
+    return cs->m_cuPtr[effChType][rsAddr( pos, _blk.pos(), _blk.width, unitScale[effChType] )];
   }
 }
 
