@@ -348,6 +348,28 @@ void QuantRDOQ2::initQuantX86()
   }
 
 }
+void Quant::initQuantX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch (vext){
+    case AVX512:
+    case AVX2:
+      _initQuantX86<AVX2>();
+      break;
+    case AVX:
+      _initQuantX86<AVX>();
+      break;
+    case SSE42:
+    case SSE41:
+      _initQuantX86<SSE41>();
+      break;
+    default:
+      break;
+  }
+
+}
+
+
 #endif
 
 } // namespace vvenc

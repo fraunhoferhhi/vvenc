@@ -170,6 +170,153 @@ int xQuantCGWise_SSE( short* piQCoef, short* piCbf, const short* piCoef, const i
   return (0xffff & _mm_cvtsi128_si32( AbsSum ));
 }
 
+static constexpr unsigned short levmask[16] = {0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0,0,0,0,0,0};
+template<X86_VEXT vext>
+static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const TCoeff   *const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
+{
+  const int inputMinimum = -(inputMaximum+1);
+  const TCoeff transformMinimum = -(transformMaximum+1);
+  const int width = maxX+1;
+
+  __m128i vlevmask;
+  if (maxX<7)
+    vlevmask = _mm_loadu_si128( ( __m128i const * )&levmask[7-maxX] );
+  else
+    vlevmask = _mm_set_epi64x(0xffffffffffffffff,0xffffffffffffffff);
+
+  if (rightShift>0)
+  {
+    const Intermediate_Int iAdd = (Intermediate_Int) 1 << (rightShift - 1);
+
+    __m128i v_max =  _mm_set1_epi16 ((short)inputMaximum);
+    __m128i v_min =  _mm_set1_epi16 ((short)inputMinimum);
+    __m128i v_Tmax =  _mm_set1_epi32 ((short)transformMaximum);
+    __m128i v_Tmin =  _mm_set1_epi32 ((short)transformMinimum);
+    __m128i v_scale = _mm_set1_epi16 ((short)scale);
+    __m128i v_add = _mm_set1_epi32 (iAdd);
+    __m128i v_rshift = _mm_set1_epi64x (rightShift);
+
+    if (maxX<4)
+    {
+      for( int y = 0; y <= maxY; y++)
+      {
+        __m128i v_level = _mm_loadu_si128( ( __m128i const * )&piQCoef[y * piQCfStride]  );
+        v_level = _mm_packs_epi32 (v_level,v_level);
+        v_level = _mm_and_si128(v_level,vlevmask);
+        v_level = _mm_max_epi16 (v_level, v_min);
+        v_level = _mm_min_epi16 (v_level, v_max);
+        __m128i v_low = _mm_mullo_epi16(v_level,v_scale);
+        __m128i v_high = _mm_mulhi_epi16(v_level,v_scale);
+
+        v_level = _mm_unpacklo_epi16(v_low,v_high);
+        v_level =  _mm_add_epi32(v_level,v_add);
+        v_level = _mm_sra_epi32(v_level,v_rshift);
+
+        v_level = _mm_max_epi32 (v_level, v_Tmin);
+        v_level = _mm_min_epi32 (v_level, v_Tmax);
+        _mm_storeu_si128(( __m128i * )(piCoef+y*width ), v_level );
+      }
+    }
+    else
+    {
+      for( int y = 0; y <= maxY; y++)
+      {
+        for( int x = 0; x <= maxX; x+=8)
+        {
+
+          __m128i v_levell = _mm_loadu_si128( ( __m128i const * )&piQCoef[x+ y * piQCfStride]  );
+          __m128i v_levelh = _mm_loadu_si128( ( __m128i const * )&piQCoef[x+4 + y * piQCfStride]  );
+          __m128i v_level = _mm_packs_epi32 (v_levell,v_levelh);
+          v_level = _mm_and_si128(v_level,vlevmask);
+          v_level = _mm_max_epi16 (v_level, v_min);
+          v_level = _mm_min_epi16 (v_level, v_max);
+          __m128i v_low = _mm_mullo_epi16(v_level,v_scale);
+          __m128i v_high = _mm_mulhi_epi16(v_level,v_scale);
+
+          v_level = _mm_unpacklo_epi16(v_low,v_high);
+          v_level =  _mm_add_epi32(v_level,v_add);
+          v_level = _mm_sra_epi32(v_level,v_rshift);
+
+          v_level = _mm_max_epi32 (v_level, v_Tmin);
+          v_level = _mm_min_epi32 (v_level, v_Tmax);
+          _mm_storeu_si128(( __m128i * )(piCoef+x+y*width ), v_level );
+
+          v_level = _mm_unpackhi_epi16(v_low,v_high);
+          v_level =  _mm_add_epi32(v_level,v_add);
+          v_level = _mm_sra_epi32(v_level,v_rshift);
+
+          v_level = _mm_max_epi32 (v_level, v_Tmin);
+          v_level = _mm_min_epi32 (v_level, v_Tmax);
+          _mm_storeu_si128(( __m128i * )(piCoef+4+x+y*width ), v_level );
+        }
+      }
+    }
+  }
+  else  // rightshift <0
+  {
+
+    __m128i v_max =  _mm_set1_epi16 ((short)inputMaximum);
+    __m128i v_min =  _mm_set1_epi16 ((short)inputMinimum);
+    __m128i v_Tmax =  _mm_set1_epi32 ((short)transformMaximum);
+    __m128i v_Tmin =  _mm_set1_epi32 ((short)transformMinimum);
+    __m128i v_scale = _mm_set1_epi16 ((short)scale);
+    __m128i v_lshift = _mm_set1_epi64x (-rightShift);
+
+    if (maxX<4)
+    {
+      for( int y = 0; y <= maxY; y++)
+      {
+        __m128i v_level = _mm_loadu_si128( ( __m128i const * )&piQCoef[y * piQCfStride]  );
+        v_level = _mm_packs_epi32 (v_level,v_level);
+        v_level = _mm_and_si128(v_level,vlevmask);
+
+        v_level = _mm_max_epi16 (v_level, v_min);
+        v_level = _mm_min_epi16 (v_level, v_max);
+        __m128i v_low = _mm_mullo_epi16(v_level,v_scale);
+        __m128i v_high = _mm_mulhi_epi16(v_level,v_scale);
+
+        v_level = _mm_unpacklo_epi16(v_low,v_high);
+        v_level = _mm_sll_epi32(v_level,v_lshift);
+
+        v_level = _mm_max_epi32 (v_level, v_Tmin);
+        v_level = _mm_min_epi32 (v_level, v_Tmax);
+        _mm_storeu_si128(( __m128i * )(piCoef+y*width ), v_level );
+      }
+    }
+    else
+    {
+      for( int y = 0; y <= maxY; y++)
+      {
+        for( int x = 0; x <= maxX; x+=8)
+        {
+          __m128i v_levell = _mm_loadu_si128( ( __m128i const * )&piQCoef[x+ y * piQCfStride]  );
+          __m128i v_levelh = _mm_loadu_si128( ( __m128i const * )&piQCoef[x+4 + y * piQCfStride]  );
+          __m128i v_level = _mm_packs_epi32 (v_levell,v_levelh);
+          v_level = _mm_and_si128(v_level,vlevmask);
+          v_level = _mm_max_epi16 (v_level, v_min);
+          v_level = _mm_min_epi16 (v_level, v_max);
+          __m128i v_low = _mm_mullo_epi16(v_level,v_scale);
+          __m128i v_high = _mm_mulhi_epi16(v_level,v_scale);
+
+          v_level = _mm_unpacklo_epi16(v_low,v_high);
+          v_level = _mm_sll_epi32(v_level,v_lshift);
+
+          v_level = _mm_max_epi32 (v_level, v_Tmin);
+          v_level = _mm_min_epi32 (v_level, v_Tmax);
+          _mm_storeu_si128(( __m128i * )(piCoef+x+y*width ), v_level );
+
+          v_level = _mm_unpackhi_epi16(v_low,v_high);
+          v_level = _mm_sll_epi32(v_level,v_lshift);
+
+          v_level = _mm_max_epi32 (v_level, v_Tmin);
+          v_level = _mm_min_epi32 (v_level, v_Tmax);
+          _mm_storeu_si128(( __m128i * )(piCoef+4+x+y*width ), v_level );
+        }
+      }
+    }
+  }
+}
+
 
 template <X86_VEXT vext>
 void QuantRDOQ2::_initQuantX86()
@@ -181,6 +328,14 @@ void QuantRDOQ2::_initQuantX86()
 }
 
 template void QuantRDOQ2::_initQuantX86<SIMDX86>();
+
+template<X86_VEXT vext>
+void Quant::_initQuantX86()
+{
+//  DeQuant = DeQuantCoreSIMD<vext>;
+}
+template void Quant::_initQuantX86<SIMDX86>();
+
 
 } // namespace vvenc
 
