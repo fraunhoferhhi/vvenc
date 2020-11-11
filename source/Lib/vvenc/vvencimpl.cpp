@@ -451,7 +451,7 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
 
   std::stringstream css;
   vvenc::EncCfg cEncCfg;
-  if( 0 != cEncCfg.initPreset( iQuality ))
+  if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
   {
     css << "undefined preset " << iQuality;
   }
@@ -665,7 +665,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   rcEncCfg.m_rewriteParamSets        = true;
   rcEncCfg.m_internChromaFormat      = vvenc::CHROMA_420;
 
-  if( 0 != rcEncCfg.initPreset( rcVVEncParameter.m_iQuality  ) )
+  if( 0 != rcEncCfg.initPreset( (PresetMode)rcVVEncParameter.m_iQuality  ) )
   {
     std::stringstream css;
     css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 3.";
