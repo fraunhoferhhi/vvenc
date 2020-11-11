@@ -69,6 +69,7 @@ namespace vvenc {
 #define TS_VVC  1
 #define DETECT_SC 1
 #define TS_CHROMA 1
+#define NOT_USED                                          0
 
 // ====================================================================================================================
 // General settings

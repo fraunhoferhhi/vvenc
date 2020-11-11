@@ -779,7 +779,9 @@ void VVEncImpl::xPrintCfg()
   msgApp( LL_VERBOSE, "ECU:%d ", m_cEncCfg.m_bUseEarlyCU                        );
   msgApp( LL_VERBOSE, "FDM:%d ", m_cEncCfg.m_useFastDecisionForMerge            );
   msgApp( LL_VERBOSE, "ESD:%d ", m_cEncCfg.m_useEarlySkipDetection              );
+#if NOT_USED
   msgApp( LL_VERBOSE, "Tiles:%dx%d ", m_cEncCfg.m_numTileColumnsMinus1 + 1, m_cEncCfg.m_numTileRowsMinus1 + 1 );
+#endif 
   msgApp( LL_VERBOSE, "CIP:%d ", m_cEncCfg.m_bUseConstrainedIntraPred);
   msgApp( LL_VERBOSE, "SAO:%d ", (m_cEncCfg.m_bUseSAO)?(1):(0));
   msgApp( LL_VERBOSE, "ALF:%d ", m_cEncCfg.m_alf ? 1 : 0 );
