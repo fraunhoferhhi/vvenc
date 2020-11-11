@@ -343,60 +343,14 @@ void EncLib::xSetRCEncCfg( int pass )
   // restore encoder configuration for second rate control passes
   const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
 
-  // set encoder config for first rate control pass
+  // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
-    m_cBckCfg.m_RCRateControlMode            = 0;
-    m_cBckCfg.m_motionEstimationSearchMethod = 4;
-    m_cBckCfg.m_QP                           = 32;
-    m_cBckCfg.m_RDOQ                         = 2;
-    m_cBckCfg.m_SignDataHidingEnabled        = 1;
-    m_cBckCfg.m_bUseSAO                      = true;
-    m_cBckCfg.m_CTUSize                      = 128;
-    m_cBckCfg.m_useFastLCTU                  = 1;
-    m_cBckCfg.m_dualITree                    = 1;
-    m_cBckCfg.m_MinQT[ 0 ]                   = 8;
-    m_cBckCfg.m_MinQT[ 1 ]                   = 8;
-    m_cBckCfg.m_MinQT[ 2 ]                   = 4;
-    m_cBckCfg.m_maxMTTDepth                  = 1;
-    m_cBckCfg.m_maxMTTDepthI                 = 2;
-    m_cBckCfg.m_maxMTTDepthIChroma           = 2;
-    m_cBckCfg.m_MRL                          = 0;
-    m_cBckCfg.m_maxNumMergeCand              = 6;
-    m_cBckCfg.m_lumaReshapeEnable            = 0;
-    m_cBckCfg.m_EDO                          = 0;
-    m_cBckCfg.m_TMVPModeId                   = 1;
-    m_cBckCfg.m_LMChroma                     = 1;
-    m_cBckCfg.m_DepQuantEnabled              = 0;
-    m_cBckCfg.m_MTSImplicit                  = 1;
-    m_cBckCfg.m_BDOF                         = 0;
-    m_cBckCfg.m_DMVR                         = 0;
-    m_cBckCfg.m_JointCbCrMode                = 0;
-    m_cBckCfg.m_AMVRspeed                    = 0;
-    m_cBckCfg.m_alf                          = 0;
-    m_cBckCfg.m_ccalf                        = 0;
-    m_cBckCfg.m_useNonLinearAlfLuma          = 0;
-    m_cBckCfg.m_useNonLinearAlfChroma        = 0;
-    m_cBckCfg.m_Affine                       = 0;
-    m_cBckCfg.m_PROF                         = 0;
-    m_cBckCfg.m_MIP                          = 0;
-    m_cBckCfg.m_MMVD                         = 0;
-    m_cBckCfg.m_allowDisFracMMVD             = 0;
-    m_cBckCfg.m_SMVD                         = 0;
-    m_cBckCfg.m_SbTMVP                       = 0;
-    m_cBckCfg.m_Geo                          = 0;
-    m_cBckCfg.m_CIIP                         = 0;
-    m_cBckCfg.m_SBT                          = 0;
-    m_cBckCfg.m_LFNST                        = 0;
-    m_cBckCfg.m_MCTF                         = 0;
-    m_cBckCfg.m_qtbttSpeedUp                 = 1;
-    m_cBckCfg.m_contentBasedFastQtbt         = 1;
-    m_cBckCfg.m_usePbIntraFast               = 1;
-    m_cBckCfg.m_useFastMrg                   = 2;
-    m_cBckCfg.m_useAMaxBT                    = 1;
-    m_cBckCfg.m_useFastMIP                   = 0;
-    m_cBckCfg.m_fastLocalDualTreeMode        = 1;
-    m_cBckCfg.m_fastSubPel                   = 1;
+    m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
+
+    // use fixQP encoding in first pass
+    m_cBckCfg.m_RCRateControlMode = 0;
+    m_cBckCfg.m_QP                = 32;
 
     std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
   }

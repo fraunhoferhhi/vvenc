@@ -235,6 +235,17 @@ enum NalUnitType
   NAL_UNIT_INVALID
 };
 
+enum PresetMode
+{
+ NONE      = -1,
+ FASTER    = 0,
+ FAST      = 1,
+ MEDIUM    = 2,
+ SLOW      = 3,
+ FIRSTPASS = 254,
+ TOOLTEST  = 255,
+};
+
 // ====================================================================================================================
 
 struct VVENC_DECL YUVPlane

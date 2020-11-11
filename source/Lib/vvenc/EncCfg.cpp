@@ -1536,222 +1536,222 @@ void EncCfg::setCfgParameter( const EncCfg& encCfg )
   *this = encCfg;
 }
 
-int EncCfg::initPreset( int iQuality )
+int EncCfg::initPreset( PresetMode preset )
 {
-  m_maxTempLayer = 5;
-  m_numRPLList0  = 20;
-  m_numRPLList1  = 20;
+  m_qpInValsCb.clear();
+  m_qpInValsCb.push_back( 17 );
+  m_qpInValsCb.push_back( 22 );
+  m_qpInValsCb.push_back( 34 );
+  m_qpInValsCb.push_back( 42 );
+  m_qpOutValsCb.clear();
+  m_qpOutValsCb.push_back( 17 );
+  m_qpOutValsCb.push_back( 23 );
+  m_qpOutValsCb.push_back( 35 );
+  m_qpOutValsCb.push_back( 39 );
 
-  m_intraQPOffset = -3;
-  m_lambdaFromQPEnable = true;
-
-  m_MaxCodingDepth = 5;
+  // basic settings
+  m_maxTempLayer                  = 5;
+  m_numRPLList0                   = 20;
+  m_numRPLList1                   = 20;
+  m_intraQPOffset                 = -3;
+  m_lambdaFromQPEnable            = true;
+  m_MaxCodingDepth                = 5;
   m_log2DiffMaxMinCodingBlockSize = 5;
 
-  m_bUseASR   = true;
-  m_bUseHADME = true;
-  m_RDOQ      = 1;
-  m_useRDOQTS = true;
-  m_useSelectiveRDOQ = false;
-  m_JointCbCrMode = true;
-  m_cabacInitPresent = true;
-  m_useFastLCTU = true;
-  m_usePbIntraFast = true;
-  m_useFastMrg = 2;
-  m_fastLocalDualTreeMode = 1;
-  m_fastSubPel            = 1;
-  m_qtbttSpeedUp          = 1;
+  m_bUseASR                       = true;
+  m_bUseHADME                     = true;
+  m_useRDOQTS                     = true;
+  m_useSelectiveRDOQ              = false;
+  m_cabacInitPresent              = true;
+  m_fastQtBtEnc                   = true;
+  m_fastInterSearchMode           = 1;
+  m_motionEstimationSearchMethod  = 4;
+  m_SearchRange                   = 384;
+  m_minSearchWindow               = 96;
+  m_maxNumMergeCand               = 6;
+  m_TSsize                        = 3;
+  m_reshapeSignalType             = 0;
+  m_updateCtrl                    = 0;
+  m_LMCSOffset                    = 6;
 
-  m_useAMaxBT = true;
-  m_fastQtBtEnc = true;
-  m_contentBasedFastQtbt = true;
-  m_fastInterSearchMode = 1;
+  m_RDOQ                          = 1;
+  m_bUseSAO                       = 1;
+  m_TMVPModeId                    = 1;
+  m_useFastLCTU                   = 1;
+  m_dualITree                     = 1;
+  m_MinQT[ 0 ]                    = 8;
+  m_MinQT[ 1 ]                    = 8;
+  m_MinQT[ 2 ]                    = 4;
+  m_maxMTTDepth                   = 1;
+  m_maxMTTDepthI                  = 2;
+  m_maxMTTDepthIChroma            = 2;
 
-  m_MTSImplicit = true;
+  // disable tools
+  m_SignDataHidingEnabled         = 0;
+  m_MRL                           = 0;
+  m_lumaReshapeEnable             = 0;
+  m_EDO                           = 0;
+  m_LMChroma                      = 0;
+  m_DepQuantEnabled               = 0;
+  m_MTSImplicit                   = 0;
+  m_BDOF                          = 0;
+  m_DMVR                          = 0;
+  m_JointCbCrMode                 = 0;
+  m_AMVRspeed                     = 0;
+  m_alf                           = 0;
+  m_ccalf                         = 0;
+  m_useNonLinearAlfLuma           = 0;
+  m_useNonLinearAlfChroma         = 0;
+  m_Affine                        = 0;
+  m_PROF                          = 0;
+  m_MIP                           = 0;
+  m_useFastMIP                    = 0;
+  m_MMVD                          = 0;
+  m_allowDisFracMMVD              = 0;
+  m_SMVD                          = 0;
+  m_SbTMVP                        = 0;
+  m_Geo                           = 0;
+  m_CIIP                          = 0;
+  m_SBT                           = 0;
+  m_LFNST                         = 0;
+  m_MCTF                          = 0;
+  m_ISP                           = 0;
+  m_MTS                           = 0;
+  m_TS                            = 0;
+  m_useChromaTS                   = 0;
 
-  m_motionEstimationSearchMethod = 4;
-  m_SearchRange = 384;
-  m_minSearchWindow = 96;
+  // enable speedups
+  m_qtbttSpeedUp                  = 1;
+  m_contentBasedFastQtbt          = 1;
+  m_usePbIntraFast                = 1;
+  m_useFastMrg                    = 2;
+  m_useAMaxBT                     = 1;
+  m_fastLocalDualTreeMode         = 1;
+  m_fastSubPel                    = 1;
 
-  m_AMVRspeed = 1;
-  m_LMChroma = true;
-
-  m_BDOF = true;
-  m_DMVR = true;
-  m_EDO = 1;
-  m_lumaReshapeEnable = true;
-  m_alf               = true;
-
-  m_LMCSOffset      = 6;
-
-  m_maxMTTDepth        = 1;
-  m_maxMTTDepthI       = 2;
-  m_maxMTTDepthIChroma = 2;
-  m_maxNumMergeCand    = 6;
-
-  m_useNonLinearAlfLuma   = false;
-  m_useNonLinearAlfChroma = false;
-
-  // adapt to RA config files
-  m_qpInValsCb.clear();
-  m_qpInValsCb.push_back(17);
-  m_qpInValsCb.push_back(22);
-  m_qpInValsCb.push_back(34);
-  m_qpInValsCb.push_back(42);
-
-  m_qpOutValsCb.clear();
-  m_qpOutValsCb.push_back(17);
-  m_qpOutValsCb.push_back(23);
-  m_qpOutValsCb.push_back(35);
-  m_qpOutValsCb.push_back(39);
-
-  switch( iQuality )
+  switch( preset )
   {
-  case 0: // faster
-          m_RDOQ                  = 2;
-          m_DepQuantEnabled       = false;
-          m_SignDataHidingEnabled = true;
-          m_BDOF                  = false;
-          m_alf                   = false;
-          m_DMVR                  = false;
-          m_JointCbCrMode         = false;
-          m_AMVRspeed             = 0;
-          m_lumaReshapeEnable     = false;
-          m_EDO                   = 0;
+    case PresetMode::FIRSTPASS:
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+      m_LMChroma                  = 1;
+      m_MTSImplicit               = 1;
+      break;
 
-          m_MRL                   = false;
+    case PresetMode::FASTER:
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+      m_LMChroma                  = 1;
+      m_MTSImplicit               = 1;
+      break;
 
-          break;
-  case 1: //fast
+    case PresetMode::FAST:
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+      m_LMChroma                  = 1;
+      m_MTSImplicit               = 1;
+      m_BDOF                      = 1;
+      m_DMVR                      = 1;
+      m_alf                       = 1;
+      m_ccalf                     = 1;
+      m_MCTF                      = 2;
+      break;
 
-          m_RDOQ                  = 2;
-          m_DepQuantEnabled       = false;
-          m_SignDataHidingEnabled = true;
-          m_BDOF                  = true;
-          m_ccalf                 = true;
-          m_DMVR                  = true;
-          m_JointCbCrMode         = false;
-          m_AMVRspeed             = 0;
-          m_lumaReshapeEnable     = false;
-          m_EDO                   = 0;
+    case PresetMode::MEDIUM:
+      m_MRL                       = 1;
+      m_lumaReshapeEnable         = 1;
+      m_EDO                       = 1;
+      m_LMChroma                  = 1;
+      m_DepQuantEnabled           = 1;
+      m_MTSImplicit               = 1;
+      m_BDOF                      = 1;
+      m_DMVR                      = 1;
+      m_JointCbCrMode             = 1;
+      m_AMVRspeed                 = 5;
+      m_alf                       = 1;
+      m_ccalf                     = 1;
+      m_Affine                    = 2;
+      m_PROF                      = 1;
+      m_MIP                       = 1;
+      m_useFastMIP                = 4;
+      m_MMVD                      = 3;
+      m_allowDisFracMMVD          = 1;
+      m_SMVD                      = 3;
+      m_SbTMVP                    = 1;
+      m_Geo                       = 3;
+      m_LFNST                     = 1;
+      m_MCTF                      = 2;
+      break;
 
-          m_MCTF               = 2;
-          m_MCTFNumLeadFrames  = 0;
-          m_MCTFNumTrailFrames = 0;
+    case PresetMode::SLOW:
+      m_maxMTTDepth               = 2;
+      m_maxMTTDepthI              = 3;
+      m_maxMTTDepthIChroma        = 3;
 
-          m_MRL                = false;
+      m_MRL                       = 1;
+      m_lumaReshapeEnable         = 1;
+      m_EDO                       = 1;
+      m_LMChroma                  = 1;
+      m_DepQuantEnabled           = 1;
+      m_MTSImplicit               = 1;
+      m_BDOF                      = 1;
+      m_DMVR                      = 1;
+      m_JointCbCrMode             = 1;
+      m_AMVRspeed                 = 1;
+      m_alf                       = 1;
+      m_ccalf                     = 1;
+      m_useNonLinearAlfLuma       = 1;
+      m_useNonLinearAlfChroma     = 1;
+      m_Affine                    = 2;
+      m_PROF                      = 1;
+      m_MIP                       = 1;
+      m_useFastMIP                = 4;
+      m_MMVD                      = 3;
+      m_allowDisFracMMVD          = 1;
+      m_SMVD                      = 3;
+      m_SbTMVP                    = 1;
+      m_Geo                       = 1;
+      m_CIIP                      = 1;
+      m_SBT                       = 1;
+      m_LFNST                     = 1;
+      m_MCTF                      = 2;
+      m_contentBasedFastQtbt      = 0;
+      break;
 
-    break;
-  case 2:  // medium ( = ftc )
+    case PresetMode::TOOLTEST:
+      m_MRL                       = 1;
+      m_lumaReshapeEnable         = 1;
+      m_EDO                       = 1;
+      m_LMChroma                  = 1;
+      m_DepQuantEnabled           = 1;
+      m_BDOF                      = 1;
+      m_DMVR                      = 1;
+      m_JointCbCrMode             = 1;
+      m_AMVRspeed                 = 3;
+      m_alf                       = 1;
+      m_ccalf                     = 1;
+      m_useNonLinearAlfLuma       = 1;
+      m_useNonLinearAlfChroma     = 1;
+      m_Affine                    = 2;
+      m_PROF                      = 1;
+      m_MIP                       = 1;
+      m_useFastMIP                = 4;
+      m_MMVD                      = 2;
+      m_allowDisFracMMVD          = 1;
+      m_SMVD                      = 3;
+      m_SbTMVP                    = 1;
+      m_Geo                       = 2;
+      m_CIIP                      = 3;
+      m_SBT                       = 2;
+      m_LFNST                     = 1;
+      m_MCTF                      = 2;
+      m_ISP                       = 2;
+      m_MTS                       = 1;
+      m_TS                        = 1;
+      break;
 
-          m_AMVRspeed = 5;
-
-          m_SMVD = 3;
-
-          m_MCTF = 2;
-          m_MCTFNumLeadFrames = 0;
-          m_MCTFNumTrailFrames = 0;
-
-          m_Affine = 2;
-          m_PROF   = 1;
-
-          m_MMVD             = 3;
-          m_allowDisFracMMVD = 1;
-
-          m_MIP             = 1;
-          m_useFastMIP      = 4;
-
-          m_ccalf           = true;
-          m_SbTMVP          = 1;
-          m_Geo             = 3;
-          m_LFNST           = 1;
-
-          m_RCKeepHierarchicalBit = 2;
-
-    break;
-
-  case 3: // slower
-
-          m_AMVRspeed = 1;
-
-          m_SMVD = 3;
-
-          m_MCTF = 2;
-          m_MCTFNumLeadFrames  = 0;
-          m_MCTFNumTrailFrames = 0;
-
-          m_Affine = 2;
-          m_PROF = 1;
-
-          m_MMVD = 3;
-          m_allowDisFracMMVD = 1;
-
-          m_maxMTTDepth        = 2;
-          m_maxMTTDepthI       = 3;
-          m_maxMTTDepthIChroma = 3;
-
-          m_MIP             = 1;
-          m_useFastMIP      = 4;
-
-          m_ccalf           = true;
-          m_SbTMVP          = 1;
-          m_Geo             = 1;
-          m_LFNST           = 1;
-
-          m_RCKeepHierarchicalBit = 2;
-
-          m_SBT  = 1;
-          m_CIIP = 1;
-
-          m_contentBasedFastQtbt = false;
-
-          m_useNonLinearAlfLuma   = true;
-          m_useNonLinearAlfChroma = true;
-    break;
-
-  case 255:  // tooltest (=atc)
-
-          m_AMVRspeed = 3;
-
-          m_SMVD = 3;
-
-          m_MCTF = 2;
-          m_MCTFNumLeadFrames = 0;
-          m_MCTFNumTrailFrames = 0;
-
-          m_Affine           = 2;
-          m_PROF             = 1;
-
-          m_MMVD             = 2;
-          m_allowDisFracMMVD = 1;
-
-          m_MIP             = 1;
-          m_useFastMIP      = 4;
-
-          m_ccalf           = true;
-          m_SbTMVP          = 1;
-          m_Geo             = 2;
-          m_CIIP            = 3;
-          m_SBT             = 2;
-          m_LFNST           = 1;
-          m_LFNST           = 1;
-          m_ISP             = 2;
-          m_MTS             = 1;
-
-          m_RCKeepHierarchicalBit = 2;
-          m_useNonLinearAlfLuma   = true;
-          m_useNonLinearAlfChroma = true;
-          m_MTSImplicit = true;
-#if 1//TS_VVC
-          m_TS = 1;
-          m_TSsize = 3;
-          m_useChromaTS = false;
-#endif
-
-    break;
-
-  default:
-    return -1;
+    default:
+      return -1;
   }
 
   return 0;
