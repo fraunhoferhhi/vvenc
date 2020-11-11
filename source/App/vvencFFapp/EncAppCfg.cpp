@@ -100,8 +100,8 @@ class IStreamToRefVec
 
   private:
     std::vector<T*> valVec;
-    bool allRequired;
     char sep;
+    bool allRequired;
 };
 
 template<typename T>
@@ -278,8 +278,8 @@ class IStreamToFunc
   private:
     setParamFunc                  mfunc;
     EncCfg*                       mencCfg;
-    E                             dstVal;
     const std::vector<SVPair<E>>* toMap;
+    E                             dstVal;
 };
 
 template<typename E>
