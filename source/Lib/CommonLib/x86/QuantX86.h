@@ -332,7 +332,7 @@ template void QuantRDOQ2::_initQuantX86<SIMDX86>();
 template<X86_VEXT vext>
 void Quant::_initQuantX86()
 {
-//  DeQuant = DeQuantCoreSIMD<vext>;
+  DeQuant = DeQuantCoreSIMD<vext>;
 }
 template void Quant::_initQuantX86<SIMDX86>();
 
