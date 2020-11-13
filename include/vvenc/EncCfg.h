@@ -128,6 +128,7 @@ public:
   bool initCfgParameter();
   void setCfgParameter( const EncCfg& encCfg );
   int  initPreset( int iQuality );
+  virtual void printCfg() const;
 };
 
 

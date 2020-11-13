@@ -82,7 +82,7 @@ public:
 
 public:
   bool parseCfg( int argc, char* argv[] );                    ///< parse configuration file to fill member variables
-  void printCfg();
+  virtual void printCfg() const;
 };
 
 //! \}
