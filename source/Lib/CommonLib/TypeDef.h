@@ -70,7 +70,9 @@ namespace vvenc {
 #define DETECT_SC 1
 #define TS_CHROMA 1
 #define NOT_USED                                          0
-#define BDPCM_VVC 1
+#define BDPCM_VVC   1
+#define CHANGE_SIZE 0 //1,2
+#define DIF_SIZE    1
 
 // ====================================================================================================================
 // General settings
