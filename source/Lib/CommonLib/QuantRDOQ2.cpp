@@ -314,7 +314,11 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
     {
       if( useTransformSkip )
       {
+#if TS_VVC
+        if((isLuma(compID) && tu.cu->bdpcmMode) || (isChroma(compID) && tu.cu->bdpcmModeChroma))
+#else
         if((isLuma(compID) && useTransformSkip) || (isChroma(compID) && tu.cu->bdpcmModeChroma))
+#endif
         {
           forwardRDPCM( tu, compID, pSrc, uiAbsSum, cQP, ctx );
         }
@@ -581,7 +585,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
   const uint32_t uiLog2BlockWidth   = Log2(uiWidth);
   const uint32_t uiLog2BlockHeight  = Log2(uiHeight);
-  const uint32_t uiMaxNumCoeff      = rect.area();
+  const uint32_t uiMaxNumCoeff      = uiWidth * uiHeight;
   const uint32_t log2CGSize         = cctx.log2CGSize();
 
   int scalingListType = getScalingListType( tu.cu->predMode, compID );
@@ -616,7 +620,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   cost_t bestTotalCost  = std::numeric_limits<cost_t>::max() / 2;
 
   int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
-  int remRegBins = (uiWidth * uiHeight * ctxBinSampleRatio) >> 4;
+  int remRegBins = ( tu.getTbAreaAfterCoefZeroOut( compID ) * ctxBinSampleRatio ) >> 4;
   uint32_t  goRiceParam   = 0;
 
 #if ENABLE_TRACING
@@ -644,7 +648,6 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
     uint32_t uiBlkPos = cctx.blockPos( iScanPos );
     if( plSrcCoeff[uiBlkPos] )
       break;
-    piDstCoeff[uiBlkPos] = 0;
   }
 
   //////////////////////////////////////////////////////////////////////////
@@ -683,7 +686,6 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           lastSubSetId = subSetId;
           break;
         }
-        piDstCoeff[uiBlkPos] = 0;
 #if ENABLE_TRACING
         if( bFirstNZSeen )
         {
@@ -753,7 +755,6 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
       {
         // ----------------- ABS LEVEL 0 ----------------
         const BinFracBits fracBitsSig = fracBits.getFracBitsArray( ctxIdSig );
-        piDstCoeff [uiBlkPos]     = 0;
         piCostSig  [iScanPosinCG] = xiGetCostSigCoef( fracBitsSig, 0 );
         piCostCoeff[iScanPosinCG] = piCostCoeff0[iScanPosinCG] + piCostSig[iScanPosinCG];
 

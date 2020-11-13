@@ -114,7 +114,7 @@ bool EncCfg::initCfgParameter()
 
   m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  MCTF_RANGE );
   m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, MCTF_RANGE );
-
+#if NOT_USED
   if( !m_tileUniformSpacingFlag && m_numTileColumnsMinus1 > 0 )
   {
     CONFIRM_PARAMETER_OR_RETURN( m_tileColumnWidth.size() != m_numTileColumnsMinus1, "Error: The number of columns minus 1 does not match size of tile column array." );
@@ -132,7 +132,7 @@ bool EncCfg::initCfgParameter()
   {
     m_tileRowHeight.clear();
   }
-
+#endif
   /* rules for input, output and internal bitdepths as per help text */
   if (m_MSBExtendedBitDepth[CH_L  ] == 0)
   {
@@ -219,9 +219,10 @@ bool EncCfg::initCfgParameter()
     }
   }
 
+  m_sliceId.resize(1,0);
+#if NOT_USED
   m_topLeftBrickIdx.clear();
   m_bottomRightBrickIdx.clear();
-  m_sliceId.clear();
 
   bool singleTileInPicFlag = (m_numTileRowsMinus1 == 0 && m_numTileColumnsMinus1 == 0);
 
@@ -287,7 +288,6 @@ bool EncCfg::initCfgParameter()
       brickToSlice = 0;
     }      // (!m_singleBrickPerSliceFlag && m_rectSliceFlag)
   }        // !singleTileInPicFlag
-
   if (m_rectSliceFlag && m_signalledSliceIdFlag)
   {
     int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
@@ -309,6 +309,7 @@ bool EncCfg::initCfgParameter()
       m_sliceId[i] = i;
     }
   }
+#endif
 
   for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
   {
@@ -523,6 +524,10 @@ bool EncCfg::initCfgParameter()
 #if ISP_VVC
   confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
 #endif
+#if TS_VVC
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
+#endif
 
   if( m_alf )
   {
@@ -617,9 +622,10 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
+#if NOT_USED
   bool tileFlag = (m_numTileColumnsMinus1 > 0 || m_numTileRowsMinus1 > 0 );
   confirmParameter( tileFlag && m_entropyCodingSyncEnabled, "Tiles and entropy-coding-sync (Wavefronts) can not be applied together, except in the High Throughput Intra 4:4:4 16 profile");
-
+#endif
   confirmParameter( m_SourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_SourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -1387,6 +1393,7 @@ bool EncCfg::initCfgParameter()
     m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
+#if NOT_USED
   int   iWidthInCU  = ( m_SourceWidth%m_CTUSize )  ? m_SourceWidth/m_CTUSize  + 1 : m_SourceWidth/m_CTUSize;
   int   iHeightInCU = ( m_SourceHeight%m_CTUSize ) ? m_SourceHeight/m_CTUSize + 1 : m_SourceHeight/m_CTUSize;
   uint32_t  uiCummulativeColumnWidth = 0;
@@ -1415,7 +1422,7 @@ bool EncCfg::initCfgParameter()
     }
     confirmParameter( uiCummulativeRowHeight >= iHeightInCU, "The height of the row is too large." );
   }
-
+#endif
   confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
 
   if( m_MCTF && m_QP < 17 )
@@ -1489,12 +1496,13 @@ bool EncCfg::initCfgParameter()
       m_numRPLList1++;
   }
 
+#if NOT_USED
   int tilesCount = ( m_numTileRowsMinus1 + 1 ) * ( m_numTileColumnsMinus1 + 1 );
   if ( tilesCount == 1 )
   {
     m_bLFCrossTileBoundaryFlag = true;
   }
-
+#endif
   m_PROF &= bool(m_Affine);
   if (m_Affine > 1)
   {
@@ -1524,6 +1532,227 @@ bool EncCfg::initCfgParameter()
 void EncCfg::setCfgParameter( const EncCfg& encCfg )
 {
   *this = encCfg;
+}
+
+int EncCfg::initPreset( int iQuality )
+{
+  m_maxTempLayer = 5;
+  m_numRPLList0  = 20;
+  m_numRPLList1  = 20;
+
+  m_intraQPOffset = -3;
+  m_lambdaFromQPEnable = true;
+
+  m_MaxCodingDepth = 5;
+  m_log2DiffMaxMinCodingBlockSize = 5;
+
+  m_bUseASR   = true;
+  m_bUseHADME = true;
+  m_RDOQ      = 1;
+  m_useRDOQTS = true;
+  m_useSelectiveRDOQ = false;
+  m_JointCbCrMode = true;
+  m_cabacInitPresent = true;
+  m_useFastLCTU = true;
+  m_usePbIntraFast = true;
+  m_useFastMrg = 2;
+  m_fastLocalDualTreeMode = 1;
+  m_fastSubPel            = 1;
+  m_qtbttSpeedUp          = 1;
+
+  m_useAMaxBT = true;
+  m_fastQtBtEnc = true;
+  m_contentBasedFastQtbt = true;
+  m_fastInterSearchMode = 1;
+
+  m_MTSImplicit = true;
+
+  m_motionEstimationSearchMethod = 4;
+  m_SearchRange = 384;
+  m_minSearchWindow = 96;
+
+  m_AMVRspeed = 1;
+  m_LMChroma = true;
+
+  m_BDOF = true;
+  m_DMVR = true;
+  m_EDO = 1;
+  m_lumaReshapeEnable = true;
+  m_alf               = true;
+
+  m_LMCSOffset      = 6;
+
+  m_maxMTTDepth        = 1;
+  m_maxMTTDepthI       = 2;
+  m_maxMTTDepthIChroma = 2;
+  m_maxNumMergeCand    = 6;
+
+  m_useNonLinearAlfLuma   = false;
+  m_useNonLinearAlfChroma = false;
+
+  // adapt to RA config files
+  m_qpInValsCb.clear();
+  m_qpInValsCb.push_back(17);
+  m_qpInValsCb.push_back(22);
+  m_qpInValsCb.push_back(34);
+  m_qpInValsCb.push_back(42);
+
+  m_qpOutValsCb.clear();
+  m_qpOutValsCb.push_back(17);
+  m_qpOutValsCb.push_back(23);
+  m_qpOutValsCb.push_back(35);
+  m_qpOutValsCb.push_back(39);
+
+  switch( iQuality )
+  {
+  case 0: // faster
+          m_RDOQ                  = 2;
+          m_DepQuantEnabled       = false;
+          m_SignDataHidingEnabled = true;
+          m_BDOF                  = false;
+          m_alf                   = false;
+          m_DMVR                  = false;
+          m_JointCbCrMode         = false;
+          m_AMVRspeed             = 0;
+          m_lumaReshapeEnable     = false;
+          m_EDO                   = 0;
+
+          m_MRL                   = false;
+
+          break;
+  case 1: //fast
+
+          m_RDOQ                  = 2;
+          m_DepQuantEnabled       = false;
+          m_SignDataHidingEnabled = true;
+          m_BDOF                  = true;
+          m_ccalf                 = true;
+          m_DMVR                  = true;
+          m_JointCbCrMode         = false;
+          m_AMVRspeed             = 0;
+          m_lumaReshapeEnable     = false;
+          m_EDO                   = 0;
+
+          m_MCTF               = 2;
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_MRL                = false;
+
+    break;
+  case 2:  // medium ( = ftc )
+
+          m_AMVRspeed = 5;
+
+          m_SMVD = 3;
+
+          m_MCTF = 2;
+          m_MCTFNumLeadFrames = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_Affine = 2;
+          m_PROF   = 1;
+
+          m_MMVD             = 3;
+          m_allowDisFracMMVD = 1;
+
+          m_MIP             = 1;
+          m_useFastMIP      = 4;
+
+          m_ccalf           = true;
+          m_SbTMVP          = 1;
+          m_Geo             = 3;
+          m_LFNST           = 1;
+
+          m_RCKeepHierarchicalBit = 2;
+
+    break;
+
+  case 3: // slower
+
+          m_AMVRspeed = 1;
+
+          m_SMVD = 3;
+
+          m_MCTF = 2;
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_Affine = 2;
+          m_PROF = 1;
+
+          m_MMVD = 3;
+          m_allowDisFracMMVD = 1;
+
+          m_maxMTTDepth        = 2;
+          m_maxMTTDepthI       = 3;
+          m_maxMTTDepthIChroma = 3;
+
+          m_MIP             = 1;
+          m_useFastMIP      = 4;
+
+          m_ccalf           = true;
+          m_SbTMVP          = 1;
+          m_Geo             = 1;
+          m_LFNST           = 1;
+
+          m_RCKeepHierarchicalBit = 2;
+
+          m_SBT  = 1;
+          m_CIIP = 1;
+
+          m_contentBasedFastQtbt = false;
+
+          m_useNonLinearAlfLuma   = true;
+          m_useNonLinearAlfChroma = true;
+    break;
+
+  case 255:  // tooltest (=atc)
+
+          m_AMVRspeed = 3;
+
+          m_SMVD = 3;
+
+          m_MCTF = 2;
+          m_MCTFNumLeadFrames = 0;
+          m_MCTFNumTrailFrames = 0;
+
+          m_Affine           = 2;
+          m_PROF             = 1;
+
+          m_MMVD             = 2;
+          m_allowDisFracMMVD = 1;
+
+          m_MIP             = 1;
+          m_useFastMIP      = 4;
+
+          m_ccalf           = true;
+          m_SbTMVP          = 1;
+          m_Geo             = 2;
+          m_CIIP            = 3;
+          m_SBT             = 2;
+          m_LFNST           = 1;
+          m_LFNST           = 1;
+          m_ISP             = 2;
+          m_MTS             = 1;
+
+          m_RCKeepHierarchicalBit = 2;
+          m_useNonLinearAlfLuma   = true;
+          m_useNonLinearAlfChroma = true;
+          m_MTSImplicit = true;
+#if 1//TS_VVC
+          m_TS = 1;
+          m_TSsize = 3;
+          m_useChromaTS = false;
+#endif
+
+    break;
+
+  default:
+    return -1;
+  }
+
+  return 0;
 }
 
 } // namespace vvenc

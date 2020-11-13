@@ -334,15 +334,6 @@ void BestEncInfoCache::destroy()
   delete[] m_pCoeff;
   m_pCoeff = nullptr;
 
-  delete[] m_pPcmBuf;
-  m_pPcmBuf = nullptr;
-
-  if (m_runType != nullptr)
-  {
-    delete[] m_runType;
-    m_runType = nullptr;
-  }
-
   m_pcv = nullptr;
 }
 
@@ -379,12 +370,8 @@ void BestEncInfoCache::init( const Slice &slice )
   }
 
   m_pCoeff  = new TCoeff[numCoeff];
-  m_pPcmBuf = new Pel   [numCoeff];
-  m_runType   = new bool[numCoeff];
 
   TCoeff *coeffPtr = m_pCoeff;
-  Pel    *pcmPtr   = m_pPcmBuf;
-  bool   *runTypePtr   = m_runType;
 
   m_dummyCS.pcv = m_pcv;
 
@@ -399,20 +386,16 @@ void BestEncInfoCache::init( const Slice &slice )
           if( m_bestEncInfo[wIdx][hIdx][x][y] )
           {
             TCoeff *coeff[MAX_NUM_TBLOCKS] = { 0, };
-            Pel    *pcmbf[MAX_NUM_TBLOCKS] = { 0, };
-            bool   *runType[MAX_NUM_TBLOCKS]   = { 0, };
 
             const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
 
             for( int i = 0; i < area.blocks.size(); i++ )
             {
               coeff[i] = coeffPtr; coeffPtr += area.blocks[i].area();
-              pcmbf[i] =   pcmPtr;   pcmPtr += area.blocks[i].area();
-              runType[i] = runTypePtr;     runTypePtr += area.blocks[i].area();
             }
 
             m_bestEncInfo[wIdx][hIdx][x][y]->tu.cs = &m_dummyCS;
-            m_bestEncInfo[wIdx][hIdx][x][y]->tu.init(coeff, pcmbf, runType);
+            m_bestEncInfo[wIdx][hIdx][x][y]->tu.init(coeff);
           }
         }
       }
@@ -422,7 +405,7 @@ void BestEncInfoCache::init( const Slice &slice )
 
 bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& partitioner )
 {
-  if( cs.cus.size() != 1 || cs.tus.size() != 1 )
+  if( cs.cus.size() != 1 || cs.tus.size() != 1 || partitioner.maxBTD <= 1 )
   {
     return false;
   }
@@ -449,10 +432,11 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& 
 
 bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp )
 {
-  if( partitioner.treeType == TREE_C )
+  if( partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 )
   {
     return false; //if save & load is allowed for chroma CUs, we should check whether luma info (pred, recon, etc) is the same, which is quite complex
   }
+
   unsigned idx1, idx2, idx3, idx4;
   getAreaIdxNew( cs.area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
 
@@ -894,7 +878,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 
   if( encTestmode.type == ETM_INTRA )
   {
-    if( lumaArea.width > 64 || lumaArea.height > 64)
+    // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
+    // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
+    if( lumaArea.width > cs.sps->getMaxTbSize() || lumaArea.height > cs.sps->getMaxTbSize() )
     {
       return false;
     }

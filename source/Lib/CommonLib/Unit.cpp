@@ -519,7 +519,7 @@ void TransformUnit::initData()
   chromaAdj   = 0;
 }
 
-void TransformUnit::init(TCoeff** coeffs, Pel** pcmbuf, bool** runType)
+void TransformUnit::init(TCoeff** coeffs)
 {
   uint32_t numBlocks = getNumberValidTBlocks(*cs->pcv);
 

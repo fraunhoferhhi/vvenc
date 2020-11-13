@@ -272,7 +272,16 @@ void TrQuant::invTransformNxN( TransformUnit& tu, const ComponentID compID, PelB
     {
       xInvLfnst(tu, compID);
     }
-    xIT( tu, compID, tempCoeff, pResi );
+#if TS_VVC
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xITransformSkip(tempCoeff, pResi, tu, compID);
+    }
+    else
+#endif
+    {
+      xIT(tu, compID, tempCoeff, pResi);
+    }
   }
 
   //DTRACE_BLOCK_COEFF(tu.getCoeffs(compID), tu, tu.cu->predMode, compID);
@@ -621,6 +630,27 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
 #endif //ENABLE_SIMD_TRAFO
 }
 
+#if TS_VVC
+/** Wrapper function between HM interface and core NxN transform skipping
+ */
+void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
+  PelBuf& pResidual,
+  const TransformUnit& tu,
+  const ComponentID& compID)
+{
+  const CompArea& area = tu.blocks[compID];
+  const int width = area.width;
+  const int height = area.height;
+
+  for (uint32_t y = 0; y < height; y++)
+  {
+    for (uint32_t x = 0; x < width; x++)
+    {
+      pResidual.at(x, y) = Pel(pCoeff.at(x, y));
+    }
+  }
+}
+#endif
 
 void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx)
 {
@@ -657,7 +687,16 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   if (!loadTr)
   {
     DTRACE_PEL_BUF( D_RESIDUALS, resiBuf, tu, tu.cu->predMode, compID );
-    xT( tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight );
+#if TS_VVC
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
+    }
+    else
+#endif
+    {
+      xT(tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight);
+    }
   }
   if (cs.sps->LFNST)
   {
@@ -673,11 +712,18 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
 }
 
-
+#if TS_CHROMA
+void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID& compID)
+#else
 void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand)
+#endif
 {
   CodingStructure &cs     = *tu.cs;
+#if TS_CHROMA
+  const CompArea& rect = tu.blocks[compID];
+#else
   const CompArea & rect   = tu.blocks[COMP_Y];
+#endif
   const uint32_t   width  = rect.width;
   const uint32_t   height = rect.height;
 
@@ -690,8 +736,13 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   const double                  facBB[] = { 1.2, 1.3, 1.3, 1.4, 1.5 };
   while (it != trModes->end())
   {
+#if TS_CHROMA
+    tu.mtsIdx[compID] = it->first;
+    CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[compID]], rect);
+#else
     tu.mtsIdx[COMP_Y] = it->first;
     CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[COMP_Y]], rect);
+#endif
     if (tu.noResidual)
     {
       int sumAbs = 0;
@@ -699,8 +750,27 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
       it++;
       continue;
     }
-
-    xT(tu, COMP_Y, resiBuf, tempCoeff, width, height);
+#if TS_CHROMA
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
+    }
+    else
+    {
+      xT(tu, compID, resiBuf, tempCoeff, width, height);
+    }
+#else
+#if TS_VVC
+    if (tu.mtsIdx[COMP_Y] == MTS_SKIP)
+    {
+      xTransformSkip(tu, COMP_Y, resiBuf, tempCoeff.buf);
+    }
+    else
+#endif
+    {
+      xT(tu, COMP_Y, resiBuf, tempCoeff, width, height);
+    }
+#endif
 
     int sumAbs = 0;
     for (int pos = 0; pos < width * height; pos++)
@@ -709,12 +779,32 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     }
 
     double scaleSAD = 1.0;
+#if TS_CHROMA
+    if (tu.mtsIdx[compID] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
+#else
     if (tu.mtsIdx[COMP_Y] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
+#endif
     {
       scaleSAD = 1.0 / 1.414213562;   // compensate for not scaling transform skip coefficients by 1/sqrt(2)
     }
-
+#if TS_VVC
+#if TS_CHROMA
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(compID)));
+      scaleSAD *= pow(2, trShift);
+    }
+#else
+    if (tu.mtsIdx[COMP_Y] == MTS_SKIP)
+    {
+      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(COMP_Y)));
+      scaleSAD *= pow(2, trShift);
+    }
+#endif
+    trCosts.push_back(TrCost(int(std::min<double>(sumAbs * scaleSAD, std::numeric_limits<int>::max())), pos++));
+#else
     trCosts.push_back(TrCost(int(sumAbs * scaleSAD), pos++));
+#endif
     it++;
   }
 
@@ -1041,6 +1131,22 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   }
 }
 
+#if TS_VVC
+void TrQuant::xTransformSkip(const TransformUnit& tu, const ComponentID& compID, const CPelBuf& resi, TCoeff* psCoeff)
+{
+  const CompArea& rect = tu.blocks[compID];
+  const uint32_t width = rect.width;
+  const uint32_t height = rect.height;
+
+  for (uint32_t y = 0, coefficientIndex = 0; y < height; y++)
+  {
+    for (uint32_t x = 0; x < width; x++, coefficientIndex++)
+    {
+      psCoeff[coefficientIndex] = TCoeff(resi.at(x, y));
+    }
+  }
+}
+#endif
 } // namespace vvenc
 
 //! \}

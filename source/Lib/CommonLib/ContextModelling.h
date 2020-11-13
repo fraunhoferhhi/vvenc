@@ -63,7 +63,7 @@ struct CoeffCodingContext
 public:
   CoeffCodingContext( const TransformUnit& tu, ComponentID component, bool signHide, bool bdpcm = false );
 public:
-  void  initSubblock     ( int SubsetId, bool sigGroupFlag = false );
+  void  initSubblock    ( int SubsetId, bool sigGroupFlag = false );
 public:
   void  resetSigGroup   ()                      { m_sigCoeffGroupFlag.reset( m_subSetPos ); }
   void  setSigGroup     ()                      { m_sigCoeffGroupFlag.set( m_subSetPos ); }

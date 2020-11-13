@@ -84,9 +84,10 @@ protected:
 private:
   int  xRightShiftMSB         ( int numer, int denom );
   void xApplyBDOF             ( PelBuf& yuvDst, const ClpRng& clpRng );
-  void(*xFpAddBDOFAvg4)       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0, const Pel*gradY1, int gradStride, int width, int height, int tmpx, int tmpy, unsigned shift, int offset, const ClpRng& clpRng);
-  void(*xFpBDOFGradFilter)    ( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth);
-  void(*xFpCalcBDOFSums)      ( const Pel* srcY0Tmp, const Pel* srcY1Tmp, Pel* gradX0, Pel* gradX1, Pel* gradY0, Pel* gradY1, int xu, int yu, const int src0Stride, const int src1Stride, const int widthG, const int bitDepth, int* sumAbsGX, int* sumAbsGY, int* sumDIX, int* sumDIY, int* sumSignGY_GX);
+  void(*xFpBiDirOptFlow)      ( const Pel* srcY0, const Pel* srcY1, const Pel* gradX0, const Pel* gradX1, const Pel* gradY0, const Pel* gradY1, const int width, const int height, Pel* dstY, const ptrdiff_t dstStride, const int shiftNum, const int  offset, const int  limit, const ClpRng& clpRng, const int bitDepth ) = nullptr;
+  void(*xFpBDOFGradFilter)    ( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth );
+  void(*xFpProfGradFilter)    ( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth );
+  void(*xFpApplyPROF)         ( Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng );
 
 #if ENABLE_SIMD_OPT_BDOF
   void initInterPredictionX86();
@@ -127,15 +128,13 @@ class DMVR : public InterPredInterpolation
   PelStorage              m_yuvPred[NUM_REF_PIC_LIST_01];
   PelStorage              m_yuvTmp[NUM_REF_PIC_LIST_01];
   PelStorage              m_yuvPad[NUM_REF_PIC_LIST_01];
-  PelStorage              m_yuvRef[NUM_REF_PIC_LIST_01];
   const Mv m_pSearchOffset[25] = { Mv(-2,-2), Mv(-1,-2), Mv(0,-2), Mv(1,-2), Mv(2,-2),
                                    Mv(-2,-1), Mv(-1,-1), Mv(0,-1), Mv(1,-1), Mv(2,-1),
                                    Mv(-2, 0), Mv(-1, 0), Mv(0, 0), Mv(1, 0), Mv(2, 0),
                                    Mv(-2, 1), Mv(-1, 1), Mv(0, 1), Mv(1, 1), Mv(2, 1),
                                    Mv(-2, 2), Mv(-1, 2), Mv(0, 2), Mv(1, 2), Mv(2, 2) };
 private:
-  void     xPrefetch            ( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool isPadding = false, bool forLuma = true, bool forChroma = true );
-  void     xCopyAndPad          ( const CodingUnit& cu, const PelUnitBuf& srcBuf, const PelUnitBuf& pcPad );
+  void     xCopyAndPad          ( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool forLuma);
   void     xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, const PelUnitBuf *refBuf, const bool bioApplied, const Mv startMV[NUM_REF_PIC_LIST_01], const Mv& refMV );
 
 protected:

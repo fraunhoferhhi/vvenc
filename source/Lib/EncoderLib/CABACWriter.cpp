@@ -1062,7 +1062,7 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 }
 
 
-void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu )
+void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu, const unsigned *mpmLst )
 {
 
   if( cu.bdpcmMode ) return;
@@ -1077,23 +1077,29 @@ void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu )
   isp_mode( cu );
 
   // prev_intra_luma_pred_flag
-  const int numMPMs  = NUM_MOST_PROBABLE_MODES;
+  unsigned ipred_mode = cu.intraDir[0];
+  static constexpr int numMPMs = NUM_MOST_PROBABLE_MODES;
+  unsigned mpm_idx = numMPMs;
   unsigned  mpm_pred[numMPMs];
 
-  CU::getIntraMPMs( cu, mpm_pred );
-
-  unsigned ipred_mode = cu.intraDir[0];
-  unsigned mpm_idx = numMPMs;
-
-  for( int idx = 0; idx < numMPMs; idx++ )
+  if (mpmLst)
   {
-    if( ipred_mode == mpm_pred[idx] )
+    memcpy(mpm_pred, mpmLst, sizeof(unsigned) * numMPMs);
+  }
+  else
+  {
+    CU::getIntraMPMs(cu, mpm_pred);
+  }
+
+  for (int idx = 0; idx < numMPMs; idx++)
+  {
+    if (ipred_mode == mpm_pred[idx])
     {
       mpm_idx = idx;
       break;
     }
   }
-  if ( cu.multiRefIdx )
+  if (cu.multiRefIdx)
   {
     CHECK(mpm_idx >= numMPMs, "use of non-MPM");
   }
@@ -1105,41 +1111,40 @@ void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu )
   // mpm_idx / rem_intra_luma_pred_mode
   if( mpm_idx < numMPMs )
   {
+    unsigned ctx = (cu.ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
+    if (cu.multiRefIdx == 0)
+      m_BinEncoder.encodeBin( mpm_idx > 0, Ctx::IntraLumaPlanarFlag(ctx) );
+    if( mpm_idx )
     {
-      unsigned ctx = (cu.ispMode == NOT_INTRA_SUBPARTITIONS ? 1 : 0);
-      if (cu.multiRefIdx == 0)
-        m_BinEncoder.encodeBin( mpm_idx > 0, Ctx::IntraLumaPlanarFlag(ctx) );
-      if( mpm_idx )
-      {
-        m_BinEncoder.encodeBinEP( mpm_idx > 1 );
-      }
-      if (mpm_idx > 1)
-      {
-        m_BinEncoder.encodeBinEP(mpm_idx > 2);
-      }
-      if (mpm_idx > 2)
-      {
-        m_BinEncoder.encodeBinEP(mpm_idx > 3);
-      }
-      if (mpm_idx > 3)
-      {
-        m_BinEncoder.encodeBinEP(mpm_idx > 4);
-      }
+      m_BinEncoder.encodeBinEP( mpm_idx > 1 );
+    }
+    if (mpm_idx > 1)
+    {
+      m_BinEncoder.encodeBinEP(mpm_idx > 2);
+    }
+    if (mpm_idx > 2)
+    {
+      m_BinEncoder.encodeBinEP(mpm_idx > 3);
+    }
+    if (mpm_idx > 3)
+    {
+      m_BinEncoder.encodeBinEP(mpm_idx > 4);
     }
   }
   else
   {
-    std::sort( mpm_pred, mpm_pred + numMPMs );
+    // mpm_pred[0] is always 0, i.e. PLANAR, so its always first in the list
+    std::sort( mpm_pred + 1, mpm_pred + numMPMs );
+
+    for (int idx = numMPMs - 1; idx >= 0; idx--)
     {
-      for (int idx = numMPMs - 1; idx >= 0; idx--)
+      if (ipred_mode > mpm_pred[idx])
       {
-        if (ipred_mode > mpm_pred[idx])
-        {
-          ipred_mode--;
-        }
+        ipred_mode--;
       }
-      xWriteTruncBinCode(ipred_mode, NUM_LUMA_MODE - NUM_MOST_PROBABLE_MODES);  // Remaining mode is truncated binary coded
     }
+
+    xWriteTruncBinCode(ipred_mode, NUM_LUMA_MODE - NUM_MOST_PROBABLE_MODES);  // Remaining mode is truncated binary coded
   }
 }
 

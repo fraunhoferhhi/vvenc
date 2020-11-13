@@ -66,6 +66,10 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 #define ISP_VVC 1
+#define TS_VVC  1
+#define DETECT_SC 1
+#define TS_CHROMA 1
+#define NOT_USED                                          0
 
 // ====================================================================================================================
 // General settings
@@ -412,8 +416,6 @@ enum MESearchMethod
 enum CoeffScanType
 {
   SCAN_DIAG = 0,        ///< up-right diagonal scan
-  SCAN_TRAV_HOR = 1,
-  SCAN_TRAV_VER = 2,
   SCAN_NUMBER_OF_TYPES
 };
 
@@ -433,7 +435,6 @@ enum ScalingListSize
   SCALING_LIST_16x16,
   SCALING_LIST_32x32,
   SCALING_LIST_64x64,
-  SCALING_LIST_128x128,
   SCALING_LIST_SIZE_NUM,
   //for user define matrix
   SCALING_LIST_FIRST_CODED = SCALING_LIST_2x2,

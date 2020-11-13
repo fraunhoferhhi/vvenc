@@ -958,8 +958,8 @@ public:
 
 
   uint32_t               getTileIdx( const Position& pos ) const                          { return 0; } //tbd
-  SubPic                 getSubPicFromPos(const Position& pos)  const;
-  SubPic                 getSubPicFromCU (const CodingUnit& cu) const;
+  const SubPic&          getSubPicFromPos(const Position& pos)  const;
+  const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
 
   void resetTileSliceInfo();
   void initTiles();
