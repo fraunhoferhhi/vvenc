@@ -506,36 +506,9 @@ void Quant::dequant(const TransformUnit& tu,
     //iCoeffQ                         = Intermediate_Int((int64_t(clipQCoef) * scale + iAdd) >> rightShift);
     //(sizeof(Intermediate_Int) * 8)  =                    inputBitDepth   + scaleBits      - rightShift
     const uint32_t             targetInputBitDepth = std::min<uint32_t>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
-    const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
 
     DeQuant(uiWidth-1,uiHeight-1,scale,piQCoef,piStride,piCoef,rightShift,inputMaximum,transformMaximum);
-#if 0
-    if (rightShift > 0)
-    {
-      const Intermediate_Int iAdd = (Intermediate_Int) 1 << (rightShift - 1);
-
-      for( int n = 0; n < numSamplesInBlock; n++ )
-      {
-        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
-        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale + iAdd) >> rightShift;
-
-        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
-      }
-    }
-    else
-    {
-      const int leftShift = -rightShift;
-
-      for( int n = 0; n < numSamplesInBlock; n++ )
-      {
-        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
-        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) << leftShift;
-
-        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
-      }
-    }
-#endif
   }
 }
 
