@@ -337,6 +337,65 @@ static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int fra
   return h;
 }
 
+static inline std::string getProfileStr( int profile )
+{
+  std::string cT;
+  switch( profile )
+  {
+    case Profile::NONE                                 : cT = "none"; break;
+    case Profile::MAIN_10                              : cT = "main_10"; break;
+    case Profile::MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
+    case Profile::MAIN_10_444                          : cT = "main_10_444"; break;
+    case Profile::MAIN_10_444_STILL_PICTURE            : cT = "main_10_444_still_picture"; break;
+    case Profile::MULTILAYER_MAIN_10                   : cT = "multilayer_main_10"; break;
+    case Profile::MULTILAYER_MAIN_10_STILL_PICTURE     : cT = "multilayer_main_10_still_picture"; break;
+    case Profile::MULTILAYER_MAIN_10_444               : cT = "multilayer_main_10_444"; break;
+    case Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE : cT = "multilayer_main_10_444_still_picture"; break;
+    case Profile::AUTO                                 : cT = "auto"; break;
+    default                                            : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getLevelStr( int level )
+{
+  std::string cT;
+  switch( level )
+  {
+    case Level::NONE      : cT = "none";    break;
+    case Level::LEVEL1    : cT = "1";       break;
+    case Level::LEVEL2    : cT = "2";       break;
+    case Level::LEVEL2_1  : cT = "2.1";     break;
+    case Level::LEVEL3    : cT = "3";       break;
+    case Level::LEVEL3_1  : cT = "3.1";     break;
+    case Level::LEVEL4    : cT = "4";       break;
+    case Level::LEVEL4_1  : cT = "4.1";     break;
+    case Level::LEVEL5    : cT = "5";       break;
+    case Level::LEVEL5_1  : cT = "5.1";     break;
+    case Level::LEVEL5_2  : cT = "5.2";     break;
+    case Level::LEVEL6    : cT = "6";       break;
+    case Level::LEVEL6_1  : cT = "6.1";     break;
+    case Level::LEVEL6_2  : cT = "6.2";     break;
+    case Level::LEVEL15_5 : cT = "15.5";    break;
+    default               : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getCostFunctionStr( int cost )
+{
+  std::string cT;
+  switch( cost )
+  {
+    case COST_STANDARD_LOSSY               : cT = "Lossy coding"; break;
+    case COST_SEQUENCE_LEVEL_LOSSLESS      : cT = "Sequence level lossless coding"; break;
+    case COST_LOSSLESS_CODING              : cT = "Lossless coding"; break;
+    case COST_MIXED_LOSSLESS_LOSSY_CODING  : cT = "Mixed lossless lossy coding"; break;
+    default                                : cT = "Unknown"; break;
+  }
+  return cT;
+}
+
 } // namespace vvenc
 
 //! \}
