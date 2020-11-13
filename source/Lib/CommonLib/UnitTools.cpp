@@ -1535,6 +1535,12 @@ void CU::fillMvpCand(CodingUnit& cu, const RefPicList refPicList, const int refI
   }
 }
 
+Mv CU::predictMVPfromModel( const AMVPInfo& AMVPINfo )
+{
+  assert(0);
+  return Mv();
+}
+
 void CU::fillMvpCandFull(CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo)
 {
   CodingStructure &cs = *cu.cs;

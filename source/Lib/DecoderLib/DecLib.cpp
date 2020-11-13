@@ -71,7 +71,7 @@ vvc@hhi.fraunhofer.de
 
 namespace vvenc {
 
-bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap, bool bDecodeUntilPocFound /* = false */, int debugPOC /* = -1*/ )
+bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound /* = false */, int debugPOC /* = -1*/, bool copyToEnc /* = true */ )
 {
   PicList* pcListPic = NULL;
   bool     bRet      = false;
@@ -93,7 +93,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
       ffwdDecoder.pcDecLib->setDebugPOC                    ( debugPOC );
       ffwdDecoder.pcDecLib->setDecodedPictureHashSEIEnabled( true );
-      ffwdDecoder.pcDecLib->setAPSMapEnc                   ( &apsMap );
+      if(apsMap) ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
 
       msg( INFO, "start to decode %s \n", bitstreamFileName.c_str() );
     }
@@ -148,87 +148,90 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
           {
             for( auto & pic : *pcListPic )
             {
-              if( pic->poc == poc && (!bDecodeUntilPocFound || expectedPoc == poc ) )
+              if( copyToEnc )
               {
-                CHECK( pcEncPic->slices.size() == 0, "at least one slice should be available" );
-
-                CHECK( expectedPoc != poc, "mismatch in POC - check encoder configuration" );
-
-                if( poc != debugPOC )
+                if( pic->poc == poc && (!bDecodeUntilPocFound || expectedPoc == poc ) )
                 {
-                  for( int i = 0; i < pic->slices.size(); i++ )
+                  CHECK( pcEncPic->slices.size() == 0, "at least one slice should be available" );
+
+                  CHECK( expectedPoc != poc, "mismatch in POC - check encoder configuration" );
+
+                  if( poc != debugPOC )
                   {
-                    if( pcEncPic->slices.size() <= i )
-                    {
-                      pcEncPic->slices.push_back( new Slice );
-                      pcEncPic->slices.back()->pps = pcEncPic->slices[0]->pps;
-                      pcEncPic->slices.back()->sps = pcEncPic->slices[0]->sps;
-                      pcEncPic->slices.back()->vps = pcEncPic->slices[0]->vps;
-                      pcEncPic->slices.back()->pic = pcEncPic->slices[0]->pic;
-                    }
-                    pcEncPic->slices[i]->copySliceInfo( pic->slices[i], false );
-                  }
-                }
-
-                pcEncPic->cs->slice = pcEncPic->slices.back();
-
-                {
-                  if ( pic->cs->sps->saoEnabled )
-                  {
-                    pcEncPic->copySAO( *pic, 0 );
-                  }
-
-                  if( pic->cs->sps->alfEnabled )
-                  {
-                    std::copy(pic->getAlfCtbFilterIndexVec().begin(), pic->getAlfCtbFilterIndexVec().end(), pcEncPic->getAlfCtbFilterIndexVec().begin());
-                    for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
-                    {
-                      std::copy( pic->getAlfCtuEnabled()[compIdx].begin(), pic->getAlfCtuEnabled()[compIdx].end(), pcEncPic->getAlfCtuEnabled()[compIdx].begin() );
-                    }
-                    pcEncPic->resizeAlfCtbFilterIndex(pic->cs->pcv->sizeInCtus);
-                    memcpy( pcEncPic->getAlfCtbFilterIndex(), pic->getAlfCtbFilterIndex(), sizeof(short)*pic->cs->pcv->sizeInCtus );
-
-                    std::copy( pic->getAlfCtuAlternative(COMP_Cb).begin(), pic->getAlfCtuAlternative(COMP_Cb).end(), pcEncPic->getAlfCtuAlternative(COMP_Cb).begin() );
-                    std::copy( pic->getAlfCtuAlternative(COMP_Cr).begin(), pic->getAlfCtuAlternative(COMP_Cr).end(), pcEncPic->getAlfCtuAlternative(COMP_Cr).begin() );
-
                     for( int i = 0; i < pic->slices.size(); i++ )
                     {
-                      pcEncPic->slices[i]->tileGroupNumAps = (pic->slices[i]->tileGroupNumAps);
-                      pcEncPic->slices[i]->setAlfAPSs(pic->slices[i]->alfAps);
-                      pcEncPic->slices[i]-> tileGroupChromaApsId        = pic->slices[i]->tileGroupChromaApsId;
-                      pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Y]  = pic->slices[i]->tileGroupAlfEnabled[COMP_Y];
-                      pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Cb] = pic->slices[i]->tileGroupAlfEnabled[COMP_Cb];
-                      pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Cr] = pic->slices[i]->tileGroupAlfEnabled[COMP_Cr];
-                      pcEncPic->slices[i]->tileGroupCcAlfCbApsId   = pic->slices[i]->tileGroupCcAlfCbApsId;
-                      pcEncPic->slices[i]->tileGroupCcAlfCbEnabled = pic->slices[i]->tileGroupCcAlfCbEnabled;
-                      pcEncPic->slices[i]->tileGroupCcAlfCrApsId   = pic->slices[i]->tileGroupCcAlfCrApsId;
-                      pcEncPic->slices[i]->tileGroupCcAlfCrEnabled = pic->slices[i]->tileGroupCcAlfCrEnabled;
+                      if( pcEncPic->slices.size() <= i )
+                      {
+                        pcEncPic->slices.push_back( new Slice );
+                        pcEncPic->slices.back()->pps = pcEncPic->slices[0]->pps;
+                        pcEncPic->slices.back()->sps = pcEncPic->slices[0]->sps;
+                        pcEncPic->slices.back()->vps = pcEncPic->slices[0]->vps;
+                        pcEncPic->slices.back()->pic = pcEncPic->slices[0]->pic;
+                      }
+                      pcEncPic->slices[i]->copySliceInfo( pic->slices[i], false );
                     }
                   }
 
-                  pcDecLib->executeLoopFilters();
-                  if ( pic->cs->sps->saoEnabled )
+                  pcEncPic->cs->slice = pcEncPic->slices.back();
+
                   {
-                    pcEncPic->copySAO( *pic, 1 );
+                    if ( pic->cs->sps->saoEnabled )
+                    {
+                      pcEncPic->copySAO( *pic, 0 );
+                    }
+
+                    if( pic->cs->sps->alfEnabled )
+                    {
+                      std::copy(pic->getAlfCtbFilterIndexVec().begin(), pic->getAlfCtbFilterIndexVec().end(), pcEncPic->getAlfCtbFilterIndexVec().begin());
+                      for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
+                      {
+                        std::copy( pic->getAlfCtuEnabled()[compIdx].begin(), pic->getAlfCtuEnabled()[compIdx].end(), pcEncPic->getAlfCtuEnabled()[compIdx].begin() );
+                      }
+                      pcEncPic->resizeAlfCtbFilterIndex(pic->cs->pcv->sizeInCtus);
+                      memcpy( pcEncPic->getAlfCtbFilterIndex(), pic->getAlfCtbFilterIndex(), sizeof(short)*pic->cs->pcv->sizeInCtus );
+
+                      std::copy( pic->getAlfCtuAlternative(COMP_Cb).begin(), pic->getAlfCtuAlternative(COMP_Cb).end(), pcEncPic->getAlfCtuAlternative(COMP_Cb).begin() );
+                      std::copy( pic->getAlfCtuAlternative(COMP_Cr).begin(), pic->getAlfCtuAlternative(COMP_Cr).end(), pcEncPic->getAlfCtuAlternative(COMP_Cr).begin() );
+
+                      for( int i = 0; i < pic->slices.size(); i++ )
+                      {
+                        pcEncPic->slices[i]->tileGroupNumAps = (pic->slices[i]->tileGroupNumAps);
+                        pcEncPic->slices[i]->setAlfAPSs(pic->slices[i]->alfAps);
+                        pcEncPic->slices[i]-> tileGroupChromaApsId        = pic->slices[i]->tileGroupChromaApsId;
+                        pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Y]  = pic->slices[i]->tileGroupAlfEnabled[COMP_Y];
+                        pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Cb] = pic->slices[i]->tileGroupAlfEnabled[COMP_Cb];
+                        pcEncPic->slices[i]->tileGroupAlfEnabled[COMP_Cr] = pic->slices[i]->tileGroupAlfEnabled[COMP_Cr];
+                        pcEncPic->slices[i]->tileGroupCcAlfCbApsId   = pic->slices[i]->tileGroupCcAlfCbApsId;
+                        pcEncPic->slices[i]->tileGroupCcAlfCbEnabled = pic->slices[i]->tileGroupCcAlfCbEnabled;
+                        pcEncPic->slices[i]->tileGroupCcAlfCrApsId   = pic->slices[i]->tileGroupCcAlfCrApsId;
+                        pcEncPic->slices[i]->tileGroupCcAlfCrEnabled = pic->slices[i]->tileGroupCcAlfCrEnabled;
+                      }
+                    }
+
+                    pcDecLib->executeLoopFilters();
+                    if ( pic->cs->sps->saoEnabled )
+                    {
+                      pcEncPic->copySAO( *pic, 1 );
+                    }
+
+                    pcEncPic->cs->copyStructure( *pic->cs, CH_L, TREE_D, true, true );
+
+                    if( CS::isDualITree( *pcEncPic->cs ) )
+                    {
+                      pcEncPic->cs->copyStructure( *pic->cs, CH_C, TREE_D, true, true );
+                    }
                   }
 
-                  pcEncPic->cs->copyStructure( *pic->cs, CH_L, TREE_D, true, true );
-
-                  if( CS::isDualITree( *pcEncPic->cs ) )
+                  pcEncPic->cs->slice = pcEncPic->slices[ 0 ];
+                  pcEncPic->cs->picHeader->copyPicInfo( pic->cs->picHeader, false );
+                  for( auto& cu: pcEncPic->cs->cus)
                   {
-                    pcEncPic->cs->copyStructure( *pic->cs, CH_C, TREE_D, true, true );
+                    cu->slice = pcEncPic->cs->slice;
                   }
+                  goOn = false; // exit the loop return
+                  bRet = true;
+                  break;
                 }
-
-                pcEncPic->cs->slice = pcEncPic->slices[ 0 ];
-                pcEncPic->cs->picHeader->copyPicInfo( pic->cs->picHeader, false );
-                for( auto& cu: pcEncPic->cs->cus)
-                {
-                  cu->slice = pcEncPic->cs->slice;
-                }
-                goOn = false; // exit the loop return
-                bRet = true;
-                break;
               }
             }
           }
@@ -238,7 +241,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
             pcDecLib->executeLoopFilters();
           }
 
-          pcDecLib->finishPicture( poc, pcListPic, DETAILS );
+          pcDecLib->finishPicture( poc, pcListPic, copyToEnc ? DETAILS : INFO );
 
           // write output
           if( ! pcListPic->empty())

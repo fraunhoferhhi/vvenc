@@ -58,6 +58,8 @@ vvc@hhi.fraunhofer.de
 
 namespace vvenc {
 
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
+
 // ====================================================================================================================
 
 EncoderIf::EncoderIf()
@@ -91,6 +93,18 @@ void EncoderIf::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit
 {
   CHECK( m_pEncLib == nullptr, "encoder library not initialized" );
   m_pEncLib->encodePicture( flush, yuvInBuf, au, isQueueEmpty );
+}
+
+void EncoderIf::decodeBitstream( const std::string& FileName)
+{
+  FFwdDecoder ffwdDecoder; 
+  Picture cPicture; cPicture.poc=-8000;
+
+  if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, -8000, false ))
+  {
+    msg( ERROR, "decoding failed");
+    THROW("error decoding");
+  }
 }
 
 void EncoderIf::printSummary()

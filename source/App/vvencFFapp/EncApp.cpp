@@ -99,7 +99,10 @@ bool EncApp::parseCfg( int argc, char* argv[] )
     return false;
   }
 
-  m_cEncAppCfg.printCfg();
+  if( ! m_cEncAppCfg.m_decode )
+  {
+    m_cEncAppCfg.printCfg();
+  }
 
   return true;
 }
@@ -109,6 +112,12 @@ bool EncApp::parseCfg( int argc, char* argv[] )
  */
 void EncApp::encode()
 {
+  if( m_cEncAppCfg.m_decode )
+  {
+    m_cEncoderIf.decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
+    return;
+  }
+
   if ( ! openFileIO() )
     return;
 

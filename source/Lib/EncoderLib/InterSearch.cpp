@@ -1581,16 +1581,22 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
         AMVPInfo tempAMVPINfo;
         CU::fillMvpCandFull(cu, REF_PIC_LIST_0, iRefIdx[0], tempAMVPINfo);
-        std::ofstream* os = gos[Log2(cu.lwidth() * cu.lheight())]; 
-        if( tempAMVPINfo.available == ((2<<MD_COLOCATED)-1) && os  )
+        if(tempAMVPINfo.available == ((2<<MD_COLOCATED)-1))
         {
-//          printf(".");
-          cu.mv  [REF_PIC_LIST_0].binWriteFloat( *os );
-          cu.mvd [REF_PIC_LIST_0].binWriteFloat( *os );
-          for( int i = 0; i < tempAMVPINfo.numCand; i++)
+          std::ofstream* os = gos[Log2(cu.lwidth() * cu.lheight())]; 
+          if( os  )
           {
-            tempAMVPINfo.mvCand[i].binWriteFloat( *os );
+//          printf(".");
+            cu.mv  [REF_PIC_LIST_0].binWriteFloat( *os );
+            cu.mvd [REF_PIC_LIST_0].binWriteFloat( *os );
+            for( int i = 0; i < tempAMVPINfo.numCand; i++)
+            {
+              tempAMVPINfo.mvCand[i].binWriteFloat( *os );
+            }
           }
+
+//          MV cMvPred = CU::predictMVPfromModel( tempAMVPINfo );
+//          cu.mvd   [REF_PIC_LIST_0] = cMv[0] - cMvPred;
         }
       }
       else

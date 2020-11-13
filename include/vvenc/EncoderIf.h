@@ -89,6 +89,7 @@ class VVENC_DECL EncoderIf
     void  destroyEncoderLib();
     void  encodePicture    ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
     void  printSummary     ();
+    void  decodeBitstream  ( const std::string& FileName);
 };
 
 // ====================================================================================================================
