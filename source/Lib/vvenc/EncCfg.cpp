@@ -811,16 +811,16 @@ bool EncCfg::initCfgParameter()
         m_GOPList[i].m_numRefPics[0] = 2;
         m_GOPList[i].m_numRefPics[1] = 2;
       }
-      m_GOPList[0].m_POC  = 32;   m_GOPList[0].m_temporalId  = 0;
-      m_GOPList[1].m_POC  = 16;   m_GOPList[1].m_temporalId  = 1;
-      m_GOPList[2].m_POC  =  8;   m_GOPList[2].m_temporalId  = 2;
-      m_GOPList[3].m_POC  =  4;   m_GOPList[3].m_temporalId  = 3;
-      m_GOPList[4].m_POC  =  2;   m_GOPList[4].m_temporalId  = 4;
-      m_GOPList[5].m_POC  =  1;   m_GOPList[5].m_temporalId  = 5;
-      m_GOPList[6].m_POC  =  3;   m_GOPList[6].m_temporalId  = 5;
-      m_GOPList[7].m_POC  =  6;   m_GOPList[7].m_temporalId  = 4;
-      m_GOPList[8].m_POC  =  5;   m_GOPList[8].m_temporalId  = 5;
-      m_GOPList[9].m_POC  =  7;   m_GOPList[9].m_temporalId  = 5;
+      m_GOPList[ 0].m_POC = 32;   m_GOPList[0].m_temporalId  = 0;
+      m_GOPList[ 1].m_POC = 16;   m_GOPList[1].m_temporalId  = 1;
+      m_GOPList[ 2].m_POC =  8;   m_GOPList[2].m_temporalId  = 2;
+      m_GOPList[ 3].m_POC =  4;   m_GOPList[3].m_temporalId  = 3;
+      m_GOPList[ 4].m_POC =  2;   m_GOPList[4].m_temporalId  = 4;
+      m_GOPList[ 5].m_POC =  1;   m_GOPList[5].m_temporalId  = 5;
+      m_GOPList[ 6].m_POC =  3;   m_GOPList[6].m_temporalId  = 5;
+      m_GOPList[ 7].m_POC =  6;   m_GOPList[7].m_temporalId  = 4;
+      m_GOPList[ 8].m_POC =  5;   m_GOPList[8].m_temporalId  = 5;
+      m_GOPList[ 9].m_POC =  7;   m_GOPList[9].m_temporalId  = 5;
       m_GOPList[10].m_POC = 12;   m_GOPList[10].m_temporalId = 3;
       m_GOPList[11].m_POC = 10;   m_GOPList[11].m_temporalId = 4;
       m_GOPList[12].m_POC =  9;   m_GOPList[12].m_temporalId = 5;
@@ -828,29 +828,45 @@ bool EncCfg::initCfgParameter()
       m_GOPList[14].m_POC = 14;   m_GOPList[14].m_temporalId = 4;
       m_GOPList[15].m_POC = 13;   m_GOPList[15].m_temporalId = 5;
 
-      m_GOPList[16].m_POC  = 15;  m_GOPList[16].m_temporalId  = 5;
-      m_GOPList[17].m_POC  = 24;  m_GOPList[17].m_temporalId  = 2;
-      m_GOPList[18].m_POC  = 20;  m_GOPList[18].m_temporalId  = 3;
-      m_GOPList[19].m_POC  = 18;  m_GOPList[19].m_temporalId  = 4;
-      m_GOPList[20].m_POC  = 17;  m_GOPList[20].m_temporalId  = 5;
-      m_GOPList[21].m_POC  = 19;  m_GOPList[21].m_temporalId  = 5;
-      m_GOPList[22].m_POC  = 22;  m_GOPList[22].m_temporalId  = 4;
-      m_GOPList[23].m_POC  = 21;  m_GOPList[23].m_temporalId  = 5;
-      m_GOPList[24].m_POC  = 23;  m_GOPList[24].m_temporalId  = 5;
-      m_GOPList[25].m_POC  = 28;  m_GOPList[25].m_temporalId  = 3;
-      m_GOPList[26].m_POC  = 26;  m_GOPList[26].m_temporalId = 4;
-      m_GOPList[27].m_POC  = 25;  m_GOPList[27].m_temporalId = 5;
-      m_GOPList[28].m_POC  = 27;  m_GOPList[28].m_temporalId = 5;
-      m_GOPList[29].m_POC  = 30;  m_GOPList[29].m_temporalId = 4;
-      m_GOPList[30].m_POC  = 29;  m_GOPList[30].m_temporalId = 5;
-      m_GOPList[31].m_POC  = 31;  m_GOPList[31].m_temporalId = 5;
+      m_GOPList[16].m_POC = 15;   m_GOPList[16].m_temporalId = 5;
+      m_GOPList[17].m_POC = 24;   m_GOPList[17].m_temporalId = 2;
+      m_GOPList[18].m_POC = 20;   m_GOPList[18].m_temporalId = 3;
+      m_GOPList[19].m_POC = 18;   m_GOPList[19].m_temporalId = 4;
+      m_GOPList[20].m_POC = 17;   m_GOPList[20].m_temporalId = 5;
+      m_GOPList[21].m_POC = 19;   m_GOPList[21].m_temporalId = 5;
+      m_GOPList[22].m_POC = 22;   m_GOPList[22].m_temporalId = 4;
+      m_GOPList[23].m_POC = 21;   m_GOPList[23].m_temporalId = 5;
+      m_GOPList[24].m_POC = 23;   m_GOPList[24].m_temporalId = 5;
+      m_GOPList[25].m_POC = 28;   m_GOPList[25].m_temporalId = 3;
+      m_GOPList[26].m_POC = 26;   m_GOPList[26].m_temporalId = 4;
+      m_GOPList[27].m_POC = 25;   m_GOPList[27].m_temporalId = 5;
+      m_GOPList[28].m_POC = 27;   m_GOPList[28].m_temporalId = 5;
+      m_GOPList[29].m_POC = 30;   m_GOPList[29].m_temporalId = 4;
+      m_GOPList[30].m_POC = 29;   m_GOPList[30].m_temporalId = 5;
+      m_GOPList[31].m_POC = 31;   m_GOPList[31].m_temporalId = 5;
 
-      m_GOPList[0].m_numRefPics[0]  = 3;
-      m_GOPList[9].m_numRefPics[0]  = 3;
+      m_GOPList[ 0].m_numRefPics[0] = 3;
+      m_GOPList[ 1].m_numRefPics[0] = 2;
+      m_GOPList[ 2].m_numRefPics[0] = 2;
+      m_GOPList[ 3].m_numRefPics[0] = 2;
+      m_GOPList[ 4].m_numRefPics[0] = 2;
+      m_GOPList[ 5].m_numRefPics[0] = 2;
+      m_GOPList[ 6].m_numRefPics[0] = 2;
+      m_GOPList[ 7].m_numRefPics[0] = 2;
+      m_GOPList[ 8].m_numRefPics[0] = 2;
+      m_GOPList[ 9].m_numRefPics[0] = 3;
+      m_GOPList[10].m_numRefPics[0] = 2;
+      m_GOPList[11].m_numRefPics[0] = 2;
+      m_GOPList[12].m_numRefPics[0] = 2;
       m_GOPList[13].m_numRefPics[0] = 3;
       m_GOPList[14].m_numRefPics[0] = 3;
       m_GOPList[15].m_numRefPics[0] = 3;
+
       m_GOPList[16].m_numRefPics[0] = 4;
+      m_GOPList[17].m_numRefPics[0] = 2;
+      m_GOPList[18].m_numRefPics[0] = 2;
+      m_GOPList[19].m_numRefPics[0] = 2;
+      m_GOPList[20].m_numRefPics[0] = 2;
       m_GOPList[21].m_numRefPics[0] = 3;
       m_GOPList[22].m_numRefPics[0] = 3;
       m_GOPList[23].m_numRefPics[0] = 3;
@@ -863,35 +879,35 @@ bool EncCfg::initCfgParameter()
       m_GOPList[30].m_numRefPics[0] = 3;
       m_GOPList[31].m_numRefPics[0] = 4;
 
-      m_GOPList[0].m_deltaRefPics[0][0]  = 32; m_GOPList[0].m_deltaRefPics[0][1]  = 48; m_GOPList[0].m_deltaRefPics[0][2]  = 64;
-      m_GOPList[1].m_deltaRefPics[0][0]  = 16; m_GOPList[1].m_deltaRefPics[0][1]  = 32;
-      m_GOPList[2].m_deltaRefPics[0][0]  =  8; m_GOPList[2].m_deltaRefPics[0][1]  = 24;
-      m_GOPList[3].m_deltaRefPics[0][0]  =  4; m_GOPList[3].m_deltaRefPics[0][1]  = 20;
+      m_GOPList[ 0].m_deltaRefPics[0][0] = 32; m_GOPList[ 0].m_deltaRefPics[0][1] = 48; m_GOPList[ 0].m_deltaRefPics[0][2] = 64;
+      m_GOPList[ 1].m_deltaRefPics[0][0] = 16; m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
+      m_GOPList[ 2].m_deltaRefPics[0][0] =  8; m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
+      m_GOPList[ 3].m_deltaRefPics[0][0] =  4; m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
 
-      m_GOPList[4].m_deltaRefPics[0][0]  =  2; m_GOPList[4].m_deltaRefPics[0][1]  = 18;
-      m_GOPList[5].m_deltaRefPics[0][0]  =  1; m_GOPList[5].m_deltaRefPics[0][1]  = -1;
-      m_GOPList[6].m_deltaRefPics[0][0]  =  1; m_GOPList[6].m_deltaRefPics[0][1]  = 3;
-      m_GOPList[7].m_deltaRefPics[0][0]  =  2; m_GOPList[7].m_deltaRefPics[0][1]  = 6;
+      m_GOPList[ 4].m_deltaRefPics[0][0] =  2; m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
+      m_GOPList[ 5].m_deltaRefPics[0][0] =  1; m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
+      m_GOPList[ 6].m_deltaRefPics[0][0] =  1; m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
+      m_GOPList[ 7].m_deltaRefPics[0][0] =  2; m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
 
-      m_GOPList[8].m_deltaRefPics[0][0]  =  1; m_GOPList[8].m_deltaRefPics[0][1]  = 5;
-      m_GOPList[9].m_deltaRefPics[0][0]  =  1; m_GOPList[9].m_deltaRefPics[0][1]  = 3;  m_GOPList[9].m_deltaRefPics[0][2]  = 7;
+      m_GOPList[ 8].m_deltaRefPics[0][0] =  1; m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
+      m_GOPList[ 9].m_deltaRefPics[0][0] =  1; m_GOPList[ 9].m_deltaRefPics[0][1] =  3; m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
       m_GOPList[10].m_deltaRefPics[0][0] =  4; m_GOPList[10].m_deltaRefPics[0][1] = 12;
       m_GOPList[11].m_deltaRefPics[0][0] =  2; m_GOPList[11].m_deltaRefPics[0][1] = 10;
 
-      m_GOPList[12].m_deltaRefPics[0][0] =  1; m_GOPList[12].m_deltaRefPics[0][1] = 9;
-      m_GOPList[13].m_deltaRefPics[0][0] =  1; m_GOPList[13].m_deltaRefPics[0][1] = 3; m_GOPList[13].m_deltaRefPics[0][2]  = 11;
-      m_GOPList[14].m_deltaRefPics[0][0] =  2; m_GOPList[14].m_deltaRefPics[0][1] = 6; m_GOPList[14].m_deltaRefPics[0][2]  = 14;
-      m_GOPList[15].m_deltaRefPics[0][0] =  1; m_GOPList[15].m_deltaRefPics[0][1] = 5; m_GOPList[15].m_deltaRefPics[0][2]  = 13;
+      m_GOPList[12].m_deltaRefPics[0][0] =  1; m_GOPList[12].m_deltaRefPics[0][1] =  9;
+      m_GOPList[13].m_deltaRefPics[0][0] =  1; m_GOPList[13].m_deltaRefPics[0][1] =  3; m_GOPList[13].m_deltaRefPics[0][2] = 11;
+      m_GOPList[14].m_deltaRefPics[0][0] =  2; m_GOPList[14].m_deltaRefPics[0][1] =  6; m_GOPList[14].m_deltaRefPics[0][2] = 14;
+      m_GOPList[15].m_deltaRefPics[0][0] =  1; m_GOPList[15].m_deltaRefPics[0][1] =  5; m_GOPList[15].m_deltaRefPics[0][2] = 13;
 
-      m_GOPList[16].m_deltaRefPics[0][0] =  1; m_GOPList[16].m_deltaRefPics[0][1] = 3;  m_GOPList[16].m_deltaRefPics[0][2] = 7; m_GOPList[16].m_deltaRefPics[0][3] = 15;
+      m_GOPList[16].m_deltaRefPics[0][0] =  1; m_GOPList[16].m_deltaRefPics[0][1] =  3; m_GOPList[16].m_deltaRefPics[0][2] =  7; m_GOPList[16].m_deltaRefPics[0][3] = 15;
       m_GOPList[17].m_deltaRefPics[0][0] =  8; m_GOPList[17].m_deltaRefPics[0][1] = 24;
       m_GOPList[18].m_deltaRefPics[0][0] =  4; m_GOPList[18].m_deltaRefPics[0][1] = 20;
       m_GOPList[19].m_deltaRefPics[0][0] =  2; m_GOPList[19].m_deltaRefPics[0][1] = 18;
 
       m_GOPList[20].m_deltaRefPics[0][0] =  1; m_GOPList[20].m_deltaRefPics[0][1] = 17;
-      m_GOPList[21].m_deltaRefPics[0][0] =  1; m_GOPList[21].m_deltaRefPics[0][1] = 3; m_GOPList[21].m_deltaRefPics[0][2]  = 19;
-      m_GOPList[22].m_deltaRefPics[0][0] =  2; m_GOPList[22].m_deltaRefPics[0][1] = 6; m_GOPList[22].m_deltaRefPics[0][2]  = 22;
-      m_GOPList[23].m_deltaRefPics[0][0] =  1; m_GOPList[23].m_deltaRefPics[0][1] = 5; m_GOPList[23].m_deltaRefPics[0][2]  = 21;
+      m_GOPList[21].m_deltaRefPics[0][0] =  1; m_GOPList[21].m_deltaRefPics[0][1] =  3; m_GOPList[21].m_deltaRefPics[0][2] = 19;
+      m_GOPList[22].m_deltaRefPics[0][0] =  2; m_GOPList[22].m_deltaRefPics[0][1] =  6; m_GOPList[22].m_deltaRefPics[0][2] = 22;
+      m_GOPList[23].m_deltaRefPics[0][0] =  1; m_GOPList[23].m_deltaRefPics[0][1] =  5; m_GOPList[23].m_deltaRefPics[0][2] = 21;
 
       m_GOPList[24].m_deltaRefPics[0][0] =  1; m_GOPList[24].m_deltaRefPics[0][1] =  3; m_GOPList[24].m_deltaRefPics[0][2] =  7; m_GOPList[24].m_deltaRefPics[0][3] = 23;
       m_GOPList[25].m_deltaRefPics[0][0] =  4; m_GOPList[25].m_deltaRefPics[0][1] = 12; m_GOPList[25].m_deltaRefPics[0][2] = 28;
@@ -903,68 +919,79 @@ bool EncCfg::initCfgParameter()
       m_GOPList[30].m_deltaRefPics[0][0] =  1; m_GOPList[30].m_deltaRefPics[0][1] = 13; m_GOPList[30].m_deltaRefPics[0][2] = 29;
       m_GOPList[31].m_deltaRefPics[0][0] =  1; m_GOPList[31].m_deltaRefPics[0][1] =  3; m_GOPList[31].m_deltaRefPics[0][2] = 15; m_GOPList[31].m_deltaRefPics[0][3] = 31;
 
-      m_GOPList[3].m_numRefPics[1]  = 3;
-      m_GOPList[4].m_numRefPics[1]  = 4;
-      m_GOPList[5].m_numRefPics[1]  = 5;
-      m_GOPList[6].m_numRefPics[1]  = 4;
-      m_GOPList[7].m_numRefPics[1]  = 3;
-
-      m_GOPList[8].m_numRefPics[1]  = 4;
-      m_GOPList[9].m_numRefPics[1]  = 3;
+      m_GOPList[ 0].m_numRefPics[1] = 2;
+      m_GOPList[ 1].m_numRefPics[1] = 2;
+      m_GOPList[ 2].m_numRefPics[1] = 2;
+      m_GOPList[ 3].m_numRefPics[1] = 3;
+      m_GOPList[ 4].m_numRefPics[1] = 4;
+      m_GOPList[ 5].m_numRefPics[1] = 5;
+      m_GOPList[ 6].m_numRefPics[1] = 4;
+      m_GOPList[ 7].m_numRefPics[1] = 3;
+      m_GOPList[ 8].m_numRefPics[1] = 4;
+      m_GOPList[ 9].m_numRefPics[1] = 3;
       m_GOPList[10].m_numRefPics[1] = 2;
       m_GOPList[11].m_numRefPics[1] = 3;
-
       m_GOPList[12].m_numRefPics[1] = 4;
       m_GOPList[13].m_numRefPics[1] = 3;
+      m_GOPList[14].m_numRefPics[1] = 2;
       m_GOPList[15].m_numRefPics[1] = 3;
 
+      m_GOPList[16].m_numRefPics[1] = 2;
+      m_GOPList[17].m_numRefPics[1] = 2;
+      m_GOPList[18].m_numRefPics[1] = 2;
       m_GOPList[19].m_numRefPics[1] = 3;
-
       m_GOPList[20].m_numRefPics[1] = 4;
       m_GOPList[21].m_numRefPics[1] = 3;
+      m_GOPList[22].m_numRefPics[1] = 2;
       m_GOPList[23].m_numRefPics[1] = 3;
-
+      m_GOPList[24].m_numRefPics[1] = 2;
+      m_GOPList[25].m_numRefPics[1] = 2;
+      m_GOPList[26].m_numRefPics[1] = 2;
       m_GOPList[27].m_numRefPics[1] = 3;
+      m_GOPList[28].m_numRefPics[1] = 2;
+      m_GOPList[29].m_numRefPics[1] = 2;
+      m_GOPList[30].m_numRefPics[1] = 2;
+      m_GOPList[31].m_numRefPics[1] = 2;
 
-      m_GOPList[0].m_deltaRefPics[1][0] =  32; m_GOPList[0].m_deltaRefPics[1][1] =  48;
-      m_GOPList[1].m_deltaRefPics[1][0] = -16; m_GOPList[1].m_deltaRefPics[1][1] =  16;
-      m_GOPList[2].m_deltaRefPics[1][0] =  -8; m_GOPList[2].m_deltaRefPics[1][1] = -24;
-      m_GOPList[3].m_deltaRefPics[1][0] =  -4; m_GOPList[3].m_deltaRefPics[1][1] = -12; m_GOPList[3].m_deltaRefPics[1][2] = -28;
+      m_GOPList[ 0].m_deltaRefPics[1][0] =  32; m_GOPList[ 0].m_deltaRefPics[1][1] =  48;
+      m_GOPList[ 1].m_deltaRefPics[1][0] = -16; m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
+      m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
+      m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; m_GOPList[ 3].m_deltaRefPics[1][1] = -12; m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
 
-      m_GOPList[4].m_deltaRefPics[1][0] = -2; m_GOPList[4].m_deltaRefPics[1][1] = -4; m_GOPList[4].m_deltaRefPics[1][2] = -14;  m_GOPList[4].m_deltaRefPics[1][3] = -30;
-      m_GOPList[5].m_deltaRefPics[1][0] = -1; m_GOPList[5].m_deltaRefPics[1][1] = -3; m_GOPList[5].m_deltaRefPics[1][2] = -7; m_GOPList[5].m_deltaRefPics[1][3] = -15; m_GOPList[5].m_deltaRefPics[1][4] = -31;
-      m_GOPList[6].m_deltaRefPics[1][0] = -1; m_GOPList[6].m_deltaRefPics[1][1] = -5; m_GOPList[6].m_deltaRefPics[1][2] = -13; m_GOPList[6].m_deltaRefPics[1][3] = -29;
-      m_GOPList[7].m_deltaRefPics[1][0] = -2; m_GOPList[7].m_deltaRefPics[1][1] = -10; m_GOPList[7].m_deltaRefPics[1][2] = -26;
+      m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; m_GOPList[ 4].m_deltaRefPics[1][2] = -14; m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
+      m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; m_GOPList[ 5].m_deltaRefPics[1][3] = -15; m_GOPList[5].m_deltaRefPics[1][4] = -31;
+      m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; m_GOPList[ 6].m_deltaRefPics[1][2] = -13; m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
+      m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; m_GOPList[ 7].m_deltaRefPics[1][1] = -10; m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
 
-      m_GOPList[8].m_deltaRefPics[1][0]  = -1; m_GOPList[8].m_deltaRefPics[1][1]  = -3; m_GOPList[8].m_deltaRefPics[1][2]  = -11; m_GOPList[8].m_deltaRefPics[1][3]  = -27;
-      m_GOPList[9].m_deltaRefPics[1][0]  = -1; m_GOPList[9].m_deltaRefPics[1][1]  = -9; m_GOPList[9].m_deltaRefPics[1][2]  = -25;
-      m_GOPList[10].m_deltaRefPics[1][0] = -4; m_GOPList[10].m_deltaRefPics[1][1] = -20;
-      m_GOPList[11].m_deltaRefPics[1][0] = -2; m_GOPList[11].m_deltaRefPics[1][1] = -6; m_GOPList[11].m_deltaRefPics[1][2]  = -22;
+      m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; m_GOPList[ 8].m_deltaRefPics[1][2] = -11; m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
+      m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
+      m_GOPList[10].m_deltaRefPics[1][0] =  -4; m_GOPList[10].m_deltaRefPics[1][1] = -20;
+      m_GOPList[11].m_deltaRefPics[1][0] =  -2; m_GOPList[11].m_deltaRefPics[1][1] =  -6; m_GOPList[11].m_deltaRefPics[1][2] = -22;
 
-      m_GOPList[12].m_deltaRefPics[1][0] = -1; m_GOPList[12].m_deltaRefPics[1][1] = -3; m_GOPList[12].m_deltaRefPics[1][2] = -7; m_GOPList[12].m_deltaRefPics[1][3] = -23;
-      m_GOPList[13].m_deltaRefPics[1][0] = -1; m_GOPList[13].m_deltaRefPics[1][1] = -5; m_GOPList[13].m_deltaRefPics[1][2] = -21;
-      m_GOPList[14].m_deltaRefPics[1][0] = -2; m_GOPList[14].m_deltaRefPics[1][1] = -18;
-      m_GOPList[15].m_deltaRefPics[1][0] = -1; m_GOPList[15].m_deltaRefPics[1][1] = -3; m_GOPList[15].m_deltaRefPics[1][2] = -19;
+      m_GOPList[12].m_deltaRefPics[1][0] =  -1; m_GOPList[12].m_deltaRefPics[1][1] =  -3; m_GOPList[12].m_deltaRefPics[1][2] =  -7; m_GOPList[12].m_deltaRefPics[1][3] = -23;
+      m_GOPList[13].m_deltaRefPics[1][0] =  -1; m_GOPList[13].m_deltaRefPics[1][1] =  -5; m_GOPList[13].m_deltaRefPics[1][2] = -21;
+      m_GOPList[14].m_deltaRefPics[1][0] =  -2; m_GOPList[14].m_deltaRefPics[1][1] = -18;
+      m_GOPList[15].m_deltaRefPics[1][0] =  -1; m_GOPList[15].m_deltaRefPics[1][1] =  -3; m_GOPList[15].m_deltaRefPics[1][2] = -19;
 
-      m_GOPList[16].m_deltaRefPics[1][0] = -1; m_GOPList[16].m_deltaRefPics[1][1]  =  -17;
-      m_GOPList[17].m_deltaRefPics[1][0] = -8; m_GOPList[17].m_deltaRefPics[1][1]  =   8;
-      m_GOPList[18].m_deltaRefPics[1][0] = -4; m_GOPList[18].m_deltaRefPics[1][1]  = -12;
-      m_GOPList[19].m_deltaRefPics[1][0] = -2; m_GOPList[19].m_deltaRefPics[1][1]  =  -6; m_GOPList[19].m_deltaRefPics[1][2]  = -14;
+      m_GOPList[16].m_deltaRefPics[1][0] =  -1; m_GOPList[16].m_deltaRefPics[1][1] = -17;
+      m_GOPList[17].m_deltaRefPics[1][0] =  -8; m_GOPList[17].m_deltaRefPics[1][1] =   8;
+      m_GOPList[18].m_deltaRefPics[1][0] =  -4; m_GOPList[18].m_deltaRefPics[1][1] = -12;
+      m_GOPList[19].m_deltaRefPics[1][0] =  -2; m_GOPList[19].m_deltaRefPics[1][1] =  -6; m_GOPList[19].m_deltaRefPics[1][2] = -14;
 
-      m_GOPList[20].m_deltaRefPics[1][0] = -1; m_GOPList[20].m_deltaRefPics[1][1]  =  -3; m_GOPList[20].m_deltaRefPics[1][2]  =  -7;  m_GOPList[20].m_deltaRefPics[1][3]  = -15;
-      m_GOPList[21].m_deltaRefPics[1][0] = -1; m_GOPList[21].m_deltaRefPics[1][1]  =  -5; m_GOPList[21].m_deltaRefPics[1][2]  = -13;
-      m_GOPList[22].m_deltaRefPics[1][0] = -2; m_GOPList[22].m_deltaRefPics[1][1]  =  -10;
-      m_GOPList[23].m_deltaRefPics[1][0] = -1; m_GOPList[23].m_deltaRefPics[1][1]  =  -3; m_GOPList[23].m_deltaRefPics[1][2]  = -11;
+      m_GOPList[20].m_deltaRefPics[1][0] =  -1; m_GOPList[20].m_deltaRefPics[1][1] =  -3; m_GOPList[20].m_deltaRefPics[1][2] =  -7; m_GOPList[20].m_deltaRefPics[1][3] = -15;
+      m_GOPList[21].m_deltaRefPics[1][0] =  -1; m_GOPList[21].m_deltaRefPics[1][1] =  -5; m_GOPList[21].m_deltaRefPics[1][2] = -13;
+      m_GOPList[22].m_deltaRefPics[1][0] =  -2; m_GOPList[22].m_deltaRefPics[1][1] = -10;
+      m_GOPList[23].m_deltaRefPics[1][0] =  -1; m_GOPList[23].m_deltaRefPics[1][1] =  -3; m_GOPList[23].m_deltaRefPics[1][2] = -11;
 
-      m_GOPList[24].m_deltaRefPics[1][0] = -1; m_GOPList[24].m_deltaRefPics[1][1]  =  -9;
-      m_GOPList[25].m_deltaRefPics[1][0] = -4; m_GOPList[25].m_deltaRefPics[1][1]  =   4;
-      m_GOPList[26].m_deltaRefPics[1][0] = -2; m_GOPList[26].m_deltaRefPics[1][1] =  -6;
-      m_GOPList[27].m_deltaRefPics[1][0] = -1; m_GOPList[27].m_deltaRefPics[1][1] =  -3; m_GOPList[27].m_deltaRefPics[1][2]  = -7;
+      m_GOPList[24].m_deltaRefPics[1][0] =  -1; m_GOPList[24].m_deltaRefPics[1][1] =  -9;
+      m_GOPList[25].m_deltaRefPics[1][0] =  -4; m_GOPList[25].m_deltaRefPics[1][1] =   4;
+      m_GOPList[26].m_deltaRefPics[1][0] =  -2; m_GOPList[26].m_deltaRefPics[1][1] =  -6;
+      m_GOPList[27].m_deltaRefPics[1][0] =  -1; m_GOPList[27].m_deltaRefPics[1][1] =  -3; m_GOPList[27].m_deltaRefPics[1][2] = -7;
 
-      m_GOPList[28].m_deltaRefPics[1][0] = -1; m_GOPList[28].m_deltaRefPics[1][1] =  -5;
-      m_GOPList[29].m_deltaRefPics[1][0] = -2; m_GOPList[29].m_deltaRefPics[1][1] =   2;
-      m_GOPList[30].m_deltaRefPics[1][0] = -1; m_GOPList[30].m_deltaRefPics[1][1] =  -3;
-      m_GOPList[31].m_deltaRefPics[1][0] = -1; m_GOPList[31].m_deltaRefPics[1][1] =   1;
+      m_GOPList[28].m_deltaRefPics[1][0] =  -1; m_GOPList[28].m_deltaRefPics[1][1] =  -5;
+      m_GOPList[29].m_deltaRefPics[1][0] =  -2; m_GOPList[29].m_deltaRefPics[1][1] =   2;
+      m_GOPList[30].m_deltaRefPics[1][0] =  -1; m_GOPList[30].m_deltaRefPics[1][1] =  -3;
+      m_GOPList[31].m_deltaRefPics[1][0] =  -1; m_GOPList[31].m_deltaRefPics[1][1] =   1;
 
       for( int i = 0; i < 32; i++ )
       {
@@ -1753,6 +1780,172 @@ int EncCfg::initPreset( int iQuality )
   }
 
   return 0;
+}
+
+void EncCfg::printCfg() const
+{
+  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_SourceWidth - m_confWinLeft - m_confWinRight, m_SourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_SourceWidth, m_SourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Sequence PSNR output                   : %s\n",           m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" );
+  msg( DETAILS, "Hexadecimal PSNR output                : %s\n",           m_printHexPsnr ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Sequence MSE output                    : %s\n",           m_printSequenceMSE ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Frame MSE output                       : %s\n",           m_printFrameMSE ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Cabac-zero-word-padding                : %s\n",           m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Frame/Field                            : Frame based coding\n" );
+  if ( m_framesToBeEncoded > 0 )
+    msg( DETAILS, "Frame index                            : %d frames\n",  m_framesToBeEncoded );
+  else
+    msg( DETAILS, "Frame index                            : all frames\n" );
+  msg( DETAILS, "Profile                                : %s\n",           getProfileStr( m_profile ).c_str() );
+  msg( DETAILS, "Level                                  : %s\n",           getLevelStr( m_level ).c_str() );
+  msg( DETAILS, "CU size / total-depth                  : %d / %d\n",      m_CTUSize, m_MaxCodingDepth );
+  msg( DETAILS, "Max TB size                            : %d\n",           1 << m_log2MaxTbSize );
+  msg( DETAILS, "Motion search range                    : %d\n",           m_SearchRange );
+  msg( DETAILS, "Intra period                           : %d\n",           m_IntraPeriod );
+  msg( DETAILS, "Decoding refresh type                  : %d\n",           m_DecodingRefreshType );
+  msg( DETAILS, "QP                                     : %d\n",           m_QP);
+  msg( DETAILS, "Percept QPA                            : %d\n",           m_usePerceptQPA );
+  msg( DETAILS, "Max dQP signaling subdiv               : %d\n",           m_cuQpDeltaSubdiv);
+  msg( DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n",      m_chromaCbQpOffset, m_chromaCbQpOffsetDualTree );
+  msg( DETAILS, "Cr QP Offset (dual tree)               : %d (%d)\n",      m_chromaCrQpOffset, m_chromaCrQpOffsetDualTree );
+  msg( DETAILS, "GOP size                               : %d\n",           m_GOPSize );
+  msg( DETAILS, "Input queue size                       : %d\n",           m_InputQueueSize );
+  msg( DETAILS, "Input bit depth                        : (Y:%d, C:%d)\n", m_inputBitDepth[ CH_L ], m_inputBitDepth[ CH_C ] );
+  msg( DETAILS, "MSB-extended bit depth                 : (Y:%d, C:%d)\n", m_MSBExtendedBitDepth[ CH_L ], m_MSBExtendedBitDepth[ CH_C ] );
+  msg( DETAILS, "Internal bit depth                     : (Y:%d, C:%d)\n", m_internalBitDepth[ CH_L ], m_internalBitDepth[ CH_C ] );
+  msg( DETAILS, "cu_chroma_qp_offset_subdiv             : %d\n",           m_cuChromaQpOffsetSubdiv );
+  if (m_bUseSAO)
+  {
+    msg( DETAILS, "log2_sao_offset_scale_luma             : %d\n",         m_log2SaoOffsetScale[ CH_L ] );
+    msg( DETAILS, "log2_sao_offset_scale_chroma           : %d\n",         m_log2SaoOffsetScale[ CH_C ] );
+  }
+  msg( DETAILS, "Cost function:                         : %s\n",           getCostFunctionStr( m_costMode ).c_str() );
+  msg( DETAILS, "\n");
+
+  msg( VERBOSE, "TOOL CFG: ");
+  msg( VERBOSE, "IBD:%d ",                   ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])));
+  msg( VERBOSE, "HAD:%d ",                   m_bUseHADME );
+  msg( VERBOSE, "RDQ:%d ",                   m_RDOQ );
+  msg( VERBOSE, "RDQTS:%d ",                 m_useRDOQTS );
+  msg( VERBOSE, "ASR:%d ",                   m_bUseASR );
+  msg( VERBOSE, "MinSearchWindow:%d ",       m_minSearchWindow );
+  msg( VERBOSE, "RestrictMESampling:%d ",    m_bRestrictMESampling );
+  msg( VERBOSE, "FEN:%d ",                   m_fastInterSearchMode );
+  msg( VERBOSE, "ECU:%d ",                   m_bUseEarlyCU );
+  msg( VERBOSE, "FDM:%d ",                   m_useFastDecisionForMerge );
+  msg( VERBOSE, "ESD:%d ",                   m_useEarlySkipDetection );
+#if NOT_USED                               
+  msg( VERBOSE, "Tiles:%dx%d ",              m_numTileColumnsMinus1 + 1, m_numTileRowsMinus1 + 1 );
+#endif
+  msg( VERBOSE, "CIP:%d ",                   m_bUseConstrainedIntraPred );
+  msg( VERBOSE, "SAO:%d ",                   m_bUseSAO ? 1 : 0 );
+  msg( VERBOSE, "ALF:%d ",                   m_alf ? 1 : 0 );
+  if( m_alf )
+  {
+    msg( VERBOSE, "(NonLinLuma:%d ",         m_useNonLinearAlfLuma );
+    msg( VERBOSE, "NonLinChr:%d) ",          m_useNonLinearAlfChroma );
+  }
+  msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
+
+  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_SourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
+  msg( VERBOSE, "WaveFrontSynchro:%d ",      m_entropyCodingSyncEnabled ? 1 : 0 );
+  msg( VERBOSE, "WaveFrontSubstreams:%d ",   iWaveFrontSubstreams );
+  msg( VERBOSE, "TMVPMode:%d ",              m_TMVPModeId );
+
+  msg( VERBOSE, "DQ:%d ",                    m_DepQuantEnabled );
+  if( m_DepQuantEnabled )
+  {
+    if( m_dqThresholdVal & 1 )
+      msg( VERBOSE, "(Thr: %d.5) ",          m_dqThresholdVal >> 1 );
+    else
+      msg( VERBOSE, "(Thr: %d) ",            m_dqThresholdVal >> 1 );
+  }
+  msg( VERBOSE, "SignBitHidingFlag:%d ",     m_SignDataHidingEnabled);
+  msg( VERBOSE, "Perceptual QPA:%d ",        m_usePerceptQPA );
+
+  msg( VERBOSE, "\nNEXT TOOL CFG: " );
+  msg( VERBOSE, "DualITree:%d ",             m_dualITree );
+  msg( VERBOSE, "BIO:%d ",                   m_BDOF );
+  msg( VERBOSE, "DMVR:%d ",                  m_DMVR );
+  msg( VERBOSE, "MTSImplicit:%d ",           m_MTSImplicit );
+  msg( VERBOSE, "SBT:%d ",                   m_SBT );
+  msg( VERBOSE, "JointCbCr:%d ",             m_JointCbCrMode );
+  msg( VERBOSE, "CabacInitPresent:%d ",      m_cabacInitPresent );
+  msg( VERBOSE, "AMVRspeed:%d ",             m_AMVRspeed );
+  msg( VERBOSE, "SMVD:%d ",                  m_SMVD );
+
+  msg( VERBOSE, "Reshape:%d ",               m_lumaReshapeEnable );
+  if( m_lumaReshapeEnable )
+  {
+    msg( VERBOSE, "(Signal:%s ",             m_reshapeSignalType == 0 ? "SDR" : (m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ") );
+    msg( VERBOSE, "Opt:%d",                  m_adpOption );
+    if( m_adpOption > 0 )
+    {
+      msg( VERBOSE, " CW:%d",                m_initialCW );
+    }
+    msg( VERBOSE, ") " );
+  }
+  msg( VERBOSE, "CIIP:%d ",                  m_CIIP );
+  msg( VERBOSE, "MIP:%d ",                   m_MIP );
+  msg( VERBOSE, "EncDbOpt:%d ",              m_EDO );
+  msg( VERBOSE, "MCTF:%d ",                  m_MCTF );
+  if( m_MCTF )
+  {
+    msg( VERBOSE, "[L:%d, T:%d] ",           m_MCTFNumLeadFrames, m_MCTFNumTrailFrames );
+  }
+  msg( VERBOSE, "Affine:%d ",                m_Affine );
+  msg( VERBOSE, "Affine_Prof:%d ",           m_PROF );
+  msg( VERBOSE, "Affine_Type:%d ",           m_AffineType );
+  msg( VERBOSE, "MMVD:%d ",                  m_MMVD );
+  msg( VERBOSE, "DisFracMMVD:%d ",           m_allowDisFracMMVD) ;
+  msg( VERBOSE, "FastSearch:%d ",            m_motionEstimationSearchMethod );
+  msg( VERBOSE, "SbTMVP:%d ",                m_SbTMVP );
+  msg( VERBOSE, "Geo:%d ",                   m_Geo );
+  msg( VERBOSE, "LFNST:%d ",                 m_LFNST );
+  msg( VERBOSE, "MTS:%d ",                   m_MTS );
+  msg( VERBOSE, "MTSIntraCand:%d ",          m_MTSIntraMaxCand );
+#if 1// ISP_VVC                              
+  msg( VERBOSE, "ISP:%d ",                   m_ISP );
+#endif
+#if 1//TS_VVC                                
+  msg( VERBOSE, "TS:%d ",                    m_TS );
+  msg( VERBOSE, "TSLog2MaxSize:%d ",         m_TSsize );
+  msg( VERBOSE, "useChromaTS:%d ",           m_useChromaTS );
+#endif
+
+  msg( VERBOSE, "\nFAST TOOL CFG: " );
+  msg( VERBOSE, "LCTUFast:%d ",              m_useFastLCTU );
+  msg( VERBOSE, "FastMrg:%d ",               m_useFastMrg );
+  msg( VERBOSE, "PBIntraFast:%d ",           m_usePbIntraFast );
+  msg( VERBOSE, "AMaxBT:%d ",                m_useAMaxBT );
+  msg( VERBOSE, "FastQtBtEnc:%d ",           m_fastQtBtEnc );
+  msg( VERBOSE, "ContentBasedFastQtbt:%d ",  m_contentBasedFastQtbt );
+  if( m_MIP )
+  {
+    msg( VERBOSE, "FastMIP:%d ",             m_useFastMIP );
+  }
+  msg( VERBOSE, "FastLocalDualTree:%d ",     m_fastLocalDualTreeMode );
+  msg( VERBOSE, "FastSubPel:%d ",            m_fastSubPel );
+  msg( VERBOSE, "QtbttExtraFast:%d ",        m_qtbttSpeedUp );
+
+  msg( VERBOSE, "RateControl:%d ",           m_RCRateControlMode );
+  if ( m_RCRateControlMode )
+  {
+    msg( VERBOSE, "TargetBitrate:%d ",       m_RCTargetBitrate );
+    msg( VERBOSE, "KeepHierarchicalBit:%d ", m_RCKeepHierarchicalBit );
+    msg( VERBOSE, "RCLCUSeparateModel:%d ",  m_RCUseLCUSeparateModel );
+    msg( VERBOSE, "InitialQP:%d ",           m_RCInitialQP );
+    msg( VERBOSE, "RCForceIntraQP:%d ",      m_RCForceIntraQP );
+  }
+
+  msg( VERBOSE, "\nPARALLEL PROCESSING CFG: " );
+  msg( VERBOSE, "FPP:%d ",                   m_frameParallel );
+  msg( VERBOSE, "NumFppThreads:%d ",         m_numFppThreads );
+  msg( VERBOSE, "FppBitEqual:%d ",           m_ensureFppBitEqual );
+  msg( VERBOSE, "WPP:%d ",                   m_numWppThreads );
+  msg( VERBOSE, "WppBitEqual:%d ",           m_ensureWppBitEqual );
+  msg( VERBOSE, "WF:%d",                     m_entropyCodingSyncEnabled );
+  msg( VERBOSE, "\n" );
 }
 
 } // namespace vvenc
