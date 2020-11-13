@@ -972,12 +972,8 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   if( m_decode )
   {
     m_confirmFailed = false;
-    confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (BitstreamFile)" );
-    if ( m_confirmFailed )
-    {
-      return false;
-    }
-    return true;
+    confirmParameter( m_bitstreamFileName.empty(), "A bitstream file name must be specified (BitstreamFile)" );
+    return !m_confirmFailed;
   }
 
   //
