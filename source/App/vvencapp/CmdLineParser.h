@@ -411,12 +411,6 @@ public:
         rcParams.m_iGopSize = atoi( argv[i_arg++] );
         if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
           fprintf( stdout, "[gopsize]              : %d\n", rcParams.m_iGopSize );
-
-        if( rcParams.m_iGopSize != 16 )
-        {
-          std::cerr << "unsupported gopsize " <<  rcParams.m_iGopSize << ". use: --gopsize 16" << std::endl;
-          return -1;
-        }
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-rs" )) || !strcmp( (const char*)argv[i_arg], "--refreshsec" ) )
       {

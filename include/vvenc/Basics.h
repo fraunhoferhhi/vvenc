@@ -96,7 +96,7 @@ namespace Profile
     MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
     MULTILAYER_MAIN_10_444               = 7,
     MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
-    AUTO               
+    AUTO
   };
 }
 
