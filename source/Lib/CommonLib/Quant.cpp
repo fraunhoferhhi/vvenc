@@ -395,25 +395,25 @@ void Quant::dequant(const TransformUnit& tu,
                        const ComponentID compID,
                        const QpParam&    cQP)
 {
-  const SPS            *sps               = tu.cs->sps;
-  const CompArea       &area              = tu.blocks[compID];
-  const uint32_t       uiWidth            = area.width;
-  const uint32_t       uiHeight           = area.height;
-  TCoeff   *const piCoef            = dstCoeff.buf;
-  size_t         piStride;
-  const uint32_t       numSamplesInBlock  = uiWidth * uiHeight;
-  const int             maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
-  const TCoeff          transformMinimum   = -(1 << maxLog2TrDynamicRange);
-  const TCoeff          transformMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
+  const SPS       *sps                  = tu.cs->sps;
+  const CompArea  &area                 = tu.blocks[compID];
+  const uint32_t  uiWidth               = area.width;
+  const uint32_t  uiHeight              = area.height;
+  TCoeff *const   piCoef                = dstCoeff.buf;
+  size_t          piStride;
+  const uint32_t  numSamplesInBlock     = uiWidth * uiHeight;
+  const int       maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const TCoeff    transformMinimum      = -(1 << maxLog2TrDynamicRange);
+  const TCoeff    transformMaximum      =  (1 << maxLog2TrDynamicRange) - 1;
 #if TS_VVC
-  const bool            isTransformSkip    = tu.mtsIdx[compID] == MTS_SKIP;
+  const bool      isTransformSkip       = tu.mtsIdx[compID] == MTS_SKIP;
 #else
-  const bool            isTransformSkip    = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+  const bool      isTransformSkip       = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
 #endif
-  const bool            isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
-  const bool            enableScalingLists = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
-  const int             scalingListType    = getScalingListType(tu.cu->predMode, compID);
-  const int             channelBitDepth    = sps->bitDepths[toChannelType(compID)];
+  const bool      isLfnstApplied        = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
+  const bool      enableScalingLists    = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
+  const int       scalingListType       = getScalingListType(tu.cu->predMode, compID);
+  const int       channelBitDepth       = sps->bitDepths[toChannelType(compID)];
 
   const TCoeff          *coef;
   if( tu.cu->bdpcmMode && isLuma(compID) )
