@@ -67,6 +67,7 @@ public:
   bool         m_bClipInputVideoToRec709Range;
   bool         m_bClipOutputVideoToRec709Range;
   bool         m_packedYUVMode;                                ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_decode;
 
 public:
 
@@ -75,6 +76,7 @@ public:
       , m_bClipInputVideoToRec709Range    ( false )
       , m_bClipOutputVideoToRec709Range   ( false )
       , m_packedYUVMode                   ( false )
+      , m_decode                          ( false )
   {
   }
 

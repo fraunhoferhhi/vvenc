@@ -95,18 +95,6 @@ void EncoderIf::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit
   m_pEncLib->encodePicture( flush, yuvInBuf, au, isQueueEmpty );
 }
 
-void EncoderIf::decodeBitstream( const std::string& FileName)
-{
-  FFwdDecoder ffwdDecoder; 
-  Picture cPicture; cPicture.poc=-8000;
-
-  if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, -8000, false ))
-  {
-    msg( ERROR, "decoding failed");
-    THROW("error decoding");
-  }
-}
-
 void EncoderIf::printSummary()
 {
   CHECK( m_pEncLib == nullptr, "encoder library not initialized" );
@@ -153,6 +141,18 @@ std::string getCompileInfoString()
   snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); compileInfo += convBuf;
   snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      compileInfo += convBuf;
   return compileInfo;
+}
+
+void decodeBitstream( const std::string& FileName)
+{
+  FFwdDecoder ffwdDecoder; 
+  Picture cPicture; cPicture.poc=-8000;
+
+  if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, cPicture.poc, false ))
+  {
+    msg( ERROR, "decoding failed");
+    THROW("error decoding");
+  }
 }
 
 } // namespace vvenc

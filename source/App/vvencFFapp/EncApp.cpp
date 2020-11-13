@@ -114,7 +114,7 @@ void EncApp::encode()
 {
   if( m_cEncAppCfg.m_decode )
   {
-    m_cEncoderIf.decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
+    vvenc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
     return;
   }
 

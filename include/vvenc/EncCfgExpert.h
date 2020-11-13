@@ -459,7 +459,6 @@ public:
   std::string         m_summaryPicFilenameBase;                         ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   unsigned            m_summaryVerboseness;                             ///< Specifies the level of the verboseness of the text output.
 
-  bool                m_decode;
   std::string         m_decodeBitstreams[ 2 ];                          ///< filename for decode bitstreams.
   int                 m_switchPOC;                                      ///< dbg poc.
   int                 m_switchDQP;                                      ///< switch DQP.
@@ -729,7 +728,6 @@ public:
       , m_summaryPicFilenameBase                      ( "" )
       , m_summaryVerboseness                          ( 0 )
 
-      , m_decode                                      ( false )
       , m_decodeBitstreams                            { "", "" }
       , m_switchPOC                                   ( -1 )
       , m_switchDQP                                   ( 0 )
