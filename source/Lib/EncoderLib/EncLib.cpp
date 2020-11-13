@@ -718,7 +718,11 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
 #else
   ci.noTransformSkipConstraintFlag                = true;
 #endif
+#if BDPCM_VVC
+  ci.noBDPCMConstraintFlag                        = m_cEncCfg.m_useBDPCM==0;
+#else
   ci.noBDPCMConstraintFlag                        = true;
+#endif
   ci.noJointCbCrConstraintFlag                    = ! m_cEncCfg.m_JointCbCrMode;
   ci.noMrlConstraintFlag                          = ! m_cEncCfg.m_MRL;
   ci.noIspConstraintFlag                          = true;
@@ -816,6 +820,9 @@ void EncLib::xInitSPS(SPS &sps) const
 #if 1 //TS_VVC
   sps.transformSkip                 = m_cEncCfg.m_TS;
   sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
+#endif
+#if 1//BDPCM_VVC
+  sps.BDPCM                         = m_cEncCfg.m_useBDPCM;
 #endif
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)

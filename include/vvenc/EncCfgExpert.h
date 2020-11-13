@@ -418,6 +418,9 @@ public:
   int                 m_TSsize;
   int                 m_useChromaTS;
 #endif
+#if 1//BDPCM_VVC
+  int                 m_useBDPCM;
+#endif
 
   bool                m_bLoopFilterDisable;                             ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                          ///< offset for deblocking filter in 0 = slice header, 1 = PPS
@@ -687,6 +690,9 @@ public:
       , m_TS                                          ( 0 )
       , m_TSsize                                      ( 3 )
       , m_useChromaTS                                 ( 0 )
+#endif
+#if 1//BDPCM_VVC
+      , m_useBDPCM                                    ( 0 )
 #endif
       , m_bLoopFilterDisable                          ( false )
       , m_loopFilterOffsetInPPS                       ( true )

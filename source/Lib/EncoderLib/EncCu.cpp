@@ -1389,7 +1389,9 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
     }
     m_CABACEstimator->pred_mode(cu);
     m_CABACEstimator->cu_pred_data(cu);
+#if !BDPCM_VVC
     m_CABACEstimator->bdpcm_mode(cu, ComponentID(partitioner.chType));
+#endif
 
     // Encode Coefficients
     CUCtx cuCtx;

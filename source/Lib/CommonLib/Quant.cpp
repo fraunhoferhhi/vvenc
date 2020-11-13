@@ -153,8 +153,11 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffBuf& ds
 
   const TCoeff* coef = &coeffs.buf[0];
   TCoeff* dst = &dstBuf.buf[0];
-
+#if BDPCM_VVC
+  if (isLuma(compID) ? tu.cu->bdpcmMode == 1 : tu.cu->bdpcmModeChroma == 1)
+#else
   if( tu.cu->bdpcmMode == 1 )
+#endif
   {
     for( int y = 0; y < hgt; y++ )
     {
@@ -193,8 +196,11 @@ void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
   CoeffBuf       coeffs = tu.getCoeffs(compID);
 
   TCoeff* coef = &coeffs.buf[0];
-
+#if BDPCM_VVC
+  if (isLuma(compID) ? tu.cu->bdpcmMode == 1 : tu.cu->bdpcmModeChroma == 1)
+#else
   if( tu.cu->bdpcmMode == 1 )
+#endif
   {
     for( int y = 0; y < hgt; y++ )
     {
@@ -379,7 +385,11 @@ void Quant::dequant(const TransformUnit& tu,
   const int             channelBitDepth    = sps->bitDepths[toChannelType(compID)];
 
   const TCoeff          *coef;
+#if BDPCM_VVC
+  if ((tu.cu->bdpcmMode && isLuma(compID)) || (tu.cu->bdpcmModeChroma && isChroma(compID)))
+#else
   if( tu.cu->bdpcmMode && isLuma(compID) )
+#endif
   {
     invResDPCM( tu, compID, dstCoeff );
     coef = piCoef;
@@ -678,8 +688,11 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 
       piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
     } // for n
-    
+#if BDPCM_VVC
+    if ((tu.cu->bdpcmMode && isLuma(compID)) || (tu.cu->bdpcmModeChroma && isChroma(compID)))
+#else
     if( tu.cu->bdpcmMode && isLuma(compID) )
+#endif
     {
       fwdResDPCM( tu, compID );
     }

@@ -507,6 +507,9 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   if (cEncCfg.m_ISP)           { css << "ISP "; }
   if (cEncCfg.m_TS)            { css << "TS "; }
 #endif
+#if 1//BDPCM_VVC
+  if (cEncCfg.m_useBDPCM)      { css << "BDPCM "; }
+#endif
 
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
@@ -844,6 +847,9 @@ void VVEncImpl::xPrintCfg()
     msgApp( LL_VERBOSE, "TS:%d ",                 m_cEncCfg.m_TS);
     msgApp( LL_VERBOSE, "TransformSkipLog2MaxSize:%d ", m_cEncCfg.m_TSsize);
     msgApp( LL_VERBOSE, "useChromaTS:%d ",        m_cEncCfg.m_useChromaTS);
+#endif
+#if 1//BDPCM_VVC
+    msgApp( LL_VERBOSE, "BDPCM:%d ",              m_cEncCfg.m_useBDPCM);
 #endif
   }
 
