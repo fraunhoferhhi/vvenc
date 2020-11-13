@@ -528,6 +528,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
   confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
 #endif
+#if BDPCM_VVC
+  confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
+#endif
 
   if( m_alf )
   {

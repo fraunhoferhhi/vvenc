@@ -677,8 +677,10 @@ void CABACWriter::coding_unit( const CodingUnit& cu, Partitioner& partitioner, C
     THROW("no support");
     return;
   }
+#if 0//!BDPCM_VVC
   if (!CS::isDualITree(cs) && isLuma(partitioner.chType) && isChromaEnabled(cu.chromaFormat))
       bdpcm_mode(cu, ComponentID(CH_C));
+#endif
 
   // prediction data ( intra prediction modes / reference indexes + motion vectors )
   cu_pred_data( cu );
