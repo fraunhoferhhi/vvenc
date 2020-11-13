@@ -102,14 +102,10 @@ private:
   int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString );
 
   int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
-  void xPrintCfg();
 
   int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
   int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
-
-  static std::string getProfileStr( int iProfile );
-  static std::string getLevelStr( int iLevel );
 
 public:
   bool                                                        m_bInitialized         = false;

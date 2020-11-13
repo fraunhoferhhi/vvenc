@@ -128,9 +128,8 @@ public:
   bool initCfgParameter();
   void setCfgParameter( const EncCfg& encCfg );
   int  initPreset( PresetMode preset );
+  virtual void printCfg() const;
 };
-
-
 
 
 } // namespace vvenc
