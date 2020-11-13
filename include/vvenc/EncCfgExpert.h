@@ -492,7 +492,7 @@ public:
 
   EncCfgExpert()
 
-    :  m_listTracingChannels                         ( false )
+    :   m_listTracingChannels                         ( false )
       , m_traceRule                                   ( "" )
       , m_traceFile                                   ( "" )
 

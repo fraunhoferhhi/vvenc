@@ -58,6 +58,8 @@ vvc@hhi.fraunhofer.de
 
 namespace vvenc {
 
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
+
 // ====================================================================================================================
 
 EncoderIf::EncoderIf()
@@ -139,6 +141,18 @@ std::string getCompileInfoString()
   snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); compileInfo += convBuf;
   snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      compileInfo += convBuf;
   return compileInfo;
+}
+
+void decodeBitstream( const std::string& FileName)
+{
+  FFwdDecoder ffwdDecoder; 
+  Picture cPicture; cPicture.poc=-8000;
+
+  if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, cPicture.poc, false ))
+  {
+    msg( ERROR, "decoding failed");
+    THROW("error decoding");
+  }
 }
 
 } // namespace vvenc

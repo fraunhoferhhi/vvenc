@@ -938,6 +938,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), m_GOPList[i], GOPEntry());
   }
+  opts.addOptions()("decode",                          m_decode,                                         "decode only");
 
   //
   // parse command line parameters and read configuration files
@@ -966,6 +967,13 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   {
     /* error report has already been printed on stderr */
     return false;
+  }
+
+  if( m_decode )
+  {
+    m_confirmFailed = false;
+    confirmParameter( m_bitstreamFileName.empty(), "A bitstream file name must be specified (BitstreamFile)" );
+    return !m_confirmFailed;
   }
 
   //
