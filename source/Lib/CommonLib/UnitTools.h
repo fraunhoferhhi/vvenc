@@ -155,8 +155,6 @@ namespace CU
   bool     isDiffMER                    (const Position &pos1, const Position &pos2, const unsigned plevel);
   bool     getColocatedMVP              (const CodingUnit& cu, const RefPicList refPicList, const Position& pos, Mv& rcMv, const int refIdx, bool sbFlag = false);
   void     fillMvpCand                  (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo );
-  void     fillMvpCandFull              (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo );
-  Mv       predictMVPfromModel          ( const AMVPInfo& AMVPINfo );
   bool     addMVPCandUnscaled           (const CodingUnit& cu, const RefPicList refPicList, const int iRefIdx, const Position& pos, const MvpDir dir, AMVPInfo &amvpInfo);
   bool     addMergeHMVPCand             (const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo &miLeft, const bool isAvailableB1, const MotionInfo &miAbove, const bool ibcFlag, const bool isGt4x4);
   void     addAMVPHMVPCand              (const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info);

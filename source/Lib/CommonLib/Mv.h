@@ -274,13 +274,6 @@ public:
     ver = (ver + mvClipPeriod) & (mvClipPeriod - 1);
     ver = (ver >= halMvClipPeriod) ? (ver - mvClipPeriod) : ver;
   }
-
-  void binWriteFloat( std::ostream& os )
-  {
-    float af[2] = {(float)hor, (float)ver };
-    os.write(reinterpret_cast<const char*>(&af), 2*sizeof(float));
-  }
-
 };// END CLASS DEFINITION MV
 
 void clipMv ( Mv& rcMv, const Position& pos,

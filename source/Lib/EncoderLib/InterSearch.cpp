@@ -59,15 +59,11 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/TimeProfiler.h"
 
 #include <math.h>
-#include <fstream>
 
  //! \ingroup EncoderLib
  //! \{
 
 namespace vvenc {
-
-std::ofstream* gos[17] = {nullptr};
-
 
 static const Mv s_acMvRefineH[9] =
 {
@@ -265,25 +261,10 @@ void InterSearch::init( const EncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost
   m_tmpAffiError = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[0] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[1] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
-
-  std::string somePath = "mv_";
-  gos[Log2(8*8)]   = new std::ofstream; gos[Log2(8*8)]  ->open(somePath+"8x8.dat",   std::ios::out | std::ios::binary);
-  gos[Log2(16*8)]  = new std::ofstream; gos[Log2(16*8)] ->open(somePath+"16x8.dat",  std::ios::out | std::ios::binary);
-  gos[Log2(16*16)] = new std::ofstream; gos[Log2(16*16)]->open(somePath+"16x16.dat", std::ios::out | std::ios::binary);
-  gos[Log2(32*16)] = new std::ofstream; gos[Log2(32*16)]->open(somePath+"32x16.dat", std::ios::out | std::ios::binary);
-  gos[Log2(32*32)] = new std::ofstream; gos[Log2(32*32)]->open(somePath+"32x32.dat", std::ios::out | std::ios::binary);
 }
 
 void InterSearch::destroy()
 {
-  for( auto*os : gos )
-  {
-    if( os )
-    {
-      os->flush(); os->close(); delete os; os = nullptr; 
-    }
-  }
-
   if ( m_pTempPel )
   {
     delete [] m_pTempPel;
@@ -1578,26 +1559,6 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         cu.mvpIdx[REF_PIC_LIST_0] = aaiMvpIdx[0][iRefIdx[0]];
         cu.mvpNum[REF_PIC_LIST_0] = aaiMvpNum[0][iRefIdx[0]];
         cu.interDir = 1;
-
-        AMVPInfo tempAMVPINfo;
-        CU::fillMvpCandFull(cu, REF_PIC_LIST_0, iRefIdx[0], tempAMVPINfo);
-        if(tempAMVPINfo.available == ((2<<MD_COLOCATED)-1))
-        {
-          std::ofstream* os = gos[Log2(cu.lwidth() * cu.lheight())]; 
-          if( os  )
-          {
-//          printf(".");
-            cu.mv  [REF_PIC_LIST_0].binWriteFloat( *os );
-            cu.mvd [REF_PIC_LIST_0].binWriteFloat( *os );
-            for( int i = 0; i < tempAMVPINfo.numCand; i++)
-            {
-              tempAMVPINfo.mvCand[i].binWriteFloat( *os );
-            }
-          }
-
-//          MV cMvPred = CU::predictMVPfromModel( tempAMVPINfo );
-//          cu.mvd   [REF_PIC_LIST_0] = cMv[0] - cMvPred;
-        }
       }
       else
       {

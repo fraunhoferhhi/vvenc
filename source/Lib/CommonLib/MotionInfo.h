@@ -61,9 +61,8 @@ namespace vvenc {
 /// parameters for AMVP
 struct AMVPInfo
 {
-  Mv       mvCand[ 7/*AMVP_MAX_NUM_CANDS_MEM*/ ];  ///< array of motion vector predictor candidates
+  Mv       mvCand[ AMVP_MAX_NUM_CANDS_MEM ];  ///< array of motion vector predictor candidates
   unsigned numCand;                       ///< number of motion vector predictor candidates
-  unsigned available;
 };
 
 struct AffineAMVPInfo
