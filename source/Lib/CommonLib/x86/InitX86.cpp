@@ -366,7 +366,6 @@ void Quant::initQuantX86()
     default:
       break;
   }
-
 }
 
 
