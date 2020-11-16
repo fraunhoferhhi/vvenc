@@ -2741,10 +2741,10 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
         {
           jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, orgResiCb, orgResiCr);
         }
-#if BDPCM_VVC
+#if 0//BDPCM_VVC
         if (jointCbfMasksToTest.size() && currTU.cu->bdpcmModeChroma)
         {
-          CHECK(!checkTSOnly || checkDCTOnly, "bdpcm only allows transform skip");
+          //CHECK(!checkTSOnly || checkDCTOnly, "bdpcm only allows transform skip");
         }
 #endif
         for (int cbfMask : jointCbfMasksToTest)
@@ -2781,12 +2781,19 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
           }
           else
           {
+#if DETECT_SC
+            currTU.mtsIdx[codeCompId] = checkTSOnly || currTU.cu->bdpcmModeChroma ? 1 : 0;
+#else
             currTU.mtsIdx[codeCompId] = checkTSOnly ? 1 : 0;
+#endif
           }
 
           for (int modeId = 0; modeId < numTransformCands; modeId++)
           {
             Distortion distTmp = 0;
+#if DETECT_SC
+            currTU.mtsIdx[codeCompId] = currTU.cu->bdpcmModeChroma ? MTS_SKIP : MTS_DCT2_DCT2;
+#endif
             if (numTransformCands > 1)
             {
               currTU.mtsIdx[codeCompId] = currTU.cu->bdpcmModeChroma ? MTS_SKIP : trModes[modeId].first;
