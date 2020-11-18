@@ -572,16 +572,16 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
 {
   rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
 
-  rcEncCfg.m_SourceWidth                                       = rcVVEncParameter.m_iWidth;
-  rcEncCfg.m_SourceHeight                                      = rcVVEncParameter.m_iHeight;
-  rcEncCfg.m_QP                                                = rcVVEncParameter.m_iQp;
+  rcEncCfg.m_SourceWidth               = rcVVEncParameter.m_iWidth;
+  rcEncCfg.m_SourceHeight              = rcVVEncParameter.m_iHeight;
+  rcEncCfg.m_QP                        = rcVVEncParameter.m_iQp;
 
-  rcEncCfg.m_usePerceptQPA                                     = rcVVEncParameter.m_iPerceptualQPA;
+  rcEncCfg.m_usePerceptQPA             = rcVVEncParameter.m_iPerceptualQPA;
 
-  rcEncCfg.m_AccessUnitDelimiter        = rcVVEncParameter.m_bAccessUnitDelimiter;   
-  rcEncCfg.m_hrdParametersPresent       = rcVVEncParameter.m_bHrdParametersPresent;
-  rcEncCfg.m_bufferingPeriodSEIEnabled  = rcVVEncParameter.m_bBufferingPeriodSEIEnabled;
-  rcEncCfg.m_pictureTimingSEIEnabled    = rcVVEncParameter.m_bPictureTimingSEIEnabled;
+  rcEncCfg.m_AccessUnitDelimiter       = rcVVEncParameter.m_bAccessUnitDelimiter;
+  rcEncCfg.m_hrdParametersPresent      = rcVVEncParameter.m_bHrdParametersPresent;
+  rcEncCfg.m_bufferingPeriodSEIEnabled = rcVVEncParameter.m_bBufferingPeriodSEIEnabled;
+  rcEncCfg.m_pictureTimingSEIEnabled   = rcVVEncParameter.m_bPictureTimingSEIEnabled;
 
   if(  rcVVEncParameter.m_iTargetBitRate )
   {

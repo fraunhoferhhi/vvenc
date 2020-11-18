@@ -318,8 +318,8 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iQp                   = 32;     ///< quantization parameter                                 (no default || 0-51)
   int m_iWidth                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
   int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
-  int m_iGopSize              = 16;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
-  VvcDecodingRefreshType m_eDecodingRefreshType = VVC_DRT_IDR; ///< intra period refresh type            (default: VVC_DRT_IDR )
+  int m_iGopSize              = 32;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
+  VvcDecodingRefreshType m_eDecodingRefreshType = VVC_DRT_IDR; ///< intra period refresh type       (default: VVC_DRT_IDR )
   int m_iIDRPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
   int m_iIDRPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
   LogLevel m_eLogLevel        = LL_INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details

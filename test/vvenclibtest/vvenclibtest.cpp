@@ -150,7 +150,7 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.m_iQp             = 32;                         // quantization parameter 0-51
   cVVEncParameter.m_iWidth          = 176;                        // luminance width of input picture
   cVVEncParameter.m_iHeight         = 144;                        // luminance height of input picture
-  cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
+  cVVEncParameter.m_iGopSize        = 32;                         //  gop size (1: intra only, 16, 32: hierarchical b frames)
   cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
   cVVEncParameter.m_iIDRPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
   cVVEncParameter.m_eLogLevel       = vvenc::LL_SILENT;           // log level > 4 (VERBOSE) enables psnr/rate output
