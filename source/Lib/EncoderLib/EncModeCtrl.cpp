@@ -550,6 +550,12 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   {
     m_skipThresholdE0023FastEnc = SKIP_DEPTH;
   }
+  if( ! slice.isIntra() && ( slice.sps->SBT || slice.sps->MTSInter ) )
+  {
+    int maxSLSize = slice.sps->SBT ? (1 << slice.sps->log2MaxTbSize) : MTS_INTER_MAX_CU_SIZE;
+    resetSaveloadSbt( maxSLSize );
+  }
+
 }
 
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )

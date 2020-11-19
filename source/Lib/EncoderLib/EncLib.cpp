@@ -346,11 +346,17 @@ void EncLib::xSetRCEncCfg( int pass )
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
+    // preserve MCTF settings
+    const int mctf = m_cBckCfg.m_MCTF;
+
     m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
 
     // use fixQP encoding in first pass
     m_cBckCfg.m_RCRateControlMode = 0;
     m_cBckCfg.m_QP                = 32;
+
+    // restore MCTF
+    m_cBckCfg.m_MCTF              = mctf;
 
     std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
   }

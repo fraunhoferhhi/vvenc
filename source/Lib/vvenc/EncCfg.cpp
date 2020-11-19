@@ -1007,8 +1007,8 @@ bool EncCfg::initCfgParameter()
                 m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
                 m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
                 break;
-        case 2: m_GOPList[i].m_QPOffset   = 1;
-                m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
+        case 2: m_GOPList[i].m_QPOffset   = 0;
+                m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
                 m_GOPList[i].m_QPOffsetModelScale  =  0.2353;
                 break;
         case 3: m_GOPList[i].m_QPOffset   = 3;
@@ -1577,14 +1577,10 @@ int EncCfg::initPreset( PresetMode preset )
   m_qpOutValsCb.push_back( 39 );
 
   // basic settings
-  m_maxTempLayer                  = 5;
-  m_numRPLList0                   = 20;
-  m_numRPLList1                   = 20;
   m_intraQPOffset                 = -3;
   m_lambdaFromQPEnable            = true;
   m_MaxCodingDepth                = 5;
   m_log2DiffMaxMinCodingBlockSize = 5;
-
   m_bUseASR                       = true;
   m_bUseHADME                     = true;
   m_useRDOQTS                     = true;
@@ -1600,11 +1596,11 @@ int EncCfg::initPreset( PresetMode preset )
   m_reshapeSignalType             = 0;
   m_updateCtrl                    = 0;
   m_LMCSOffset                    = 6;
-
   m_RDOQ                          = 1;
-  m_bUseSAO                       = 1;
-  m_TMVPModeId                    = 1;
+  m_SignDataHidingEnabled         = 0;
   m_useFastLCTU                   = 1;
+
+  // partitioning
   m_dualITree                     = 1;
   m_MinQT[ 0 ]                    = 8;
   m_MinQT[ 1 ]                    = 8;
@@ -1614,38 +1610,38 @@ int EncCfg::initPreset( PresetMode preset )
   m_maxMTTDepthIChroma            = 2;
 
   // disable tools
-  m_SignDataHidingEnabled         = 0;
-  m_MRL                           = 0;
-  m_lumaReshapeEnable             = 0;
-  m_EDO                           = 0;
-  m_LMChroma                      = 0;
-  m_DepQuantEnabled               = 0;
-  m_MTSImplicit                   = 0;
-  m_BDOF                          = 0;
-  m_DMVR                          = 0;
-  m_JointCbCrMode                 = 0;
-  m_AMVRspeed                     = 0;
-  m_alf                           = 0;
-  m_ccalf                         = 0;
-  m_useNonLinearAlfLuma           = 0;
-  m_useNonLinearAlfChroma         = 0;
   m_Affine                        = 0;
-  m_PROF                          = 0;
-  m_MIP                           = 0;
-  m_useFastMIP                    = 0;
-  m_MMVD                          = 0;
+  m_alf                           = 0;
   m_allowDisFracMMVD              = 0;
-  m_SMVD                          = 0;
-  m_SbTMVP                        = 0;
-  m_Geo                           = 0;
-  m_CIIP                          = 0;
-  m_SBT                           = 0;
-  m_LFNST                         = 0;
-  m_MCTF                          = 0;
-  m_ISP                           = 0;
-  m_MTS                           = 0;
-  m_TS                            = 0;
+  m_BDOF                          = 0;
+  m_ccalf                         = 0;
   m_useChromaTS                   = 0;
+  m_CIIP                          = 0;
+  m_DepQuantEnabled               = 0;
+  m_DMVR                          = 0;
+  m_EDO                           = 0;
+  m_Geo                           = 0;
+  m_AMVRspeed                     = 0;
+  m_ISP                           = 0;
+  m_JointCbCrMode                 = 0;
+  m_LFNST                         = 0;
+  m_LMChroma                      = 0;
+  m_lumaReshapeEnable             = 0;
+  m_MCTF                          = 0;
+  m_MIP                           = 0;
+  m_MMVD                          = 0;
+  m_MRL                           = 0;
+  m_MTS                           = 0;
+  m_MTSImplicit                   = 0;
+  m_PROF                          = 0;
+  m_bUseSAO                       = 0;
+  m_SbTMVP                        = 0;
+  m_SBT                           = 0;
+  m_SMVD                          = 0;
+  m_TMVPModeId                    = 0;
+  m_TS                            = 0;
+  m_useNonLinearAlfChroma         = 0;
+  m_useNonLinearAlfLuma           = 0;
 
   // enable speedups
   m_qtbttSpeedUp                  = 1;
@@ -1653,128 +1649,186 @@ int EncCfg::initPreset( PresetMode preset )
   m_usePbIntraFast                = 1;
   m_useFastMrg                    = 2;
   m_useAMaxBT                     = 1;
+  m_useFastMIP                    = 4;
   m_fastLocalDualTreeMode         = 1;
   m_fastSubPel                    = 1;
 
   switch( preset )
   {
     case PresetMode::FIRSTPASS:
+      // Q44B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 32;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
+
+      m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
       break;
 
     case PresetMode::FASTER:
+      // Q44B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 32;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
+
+      m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
       break;
 
     case PresetMode::FAST:
+      // Q43B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 16;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
-      m_LMChroma                  = 1;
-      m_MTSImplicit               = 1;
-      m_BDOF                      = 1;
-      m_DMVR                      = 1;
+
       m_alf                       = 1;
       m_ccalf                     = 1;
+      m_DMVR                      = 1;
+      m_LMChroma                  = 1;
       m_MCTF                      = 2;
+      m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
       break;
 
     case PresetMode::MEDIUM:
-      m_MRL                       = 1;
-      m_lumaReshapeEnable         = 1;
-      m_EDO                       = 1;
-      m_LMChroma                  = 1;
-      m_DepQuantEnabled           = 1;
-      m_MTSImplicit               = 1;
-      m_BDOF                      = 1;
-      m_DMVR                      = 1;
-      m_JointCbCrMode             = 1;
-      m_AMVRspeed                 = 5;
-      m_alf                       = 1;
-      m_ccalf                     = 1;
+      // Q44B21
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 2;
+      m_maxMTTDepthIChroma        = 2;
+
       m_Affine                    = 2;
-      m_PROF                      = 1;
-      m_MIP                       = 1;
-      m_useFastMIP                = 4;
-      m_MMVD                      = 3;
+      m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_SMVD                      = 3;
-      m_SbTMVP                    = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
       m_Geo                       = 3;
+      m_AMVRspeed                 = 5;
+      m_JointCbCrMode             = 1;
       m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
       m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 3;
+      m_MRL                       = 1;
+      m_MTSImplicit               = 1;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SMVD                      = 3;
+      m_TMVPModeId                = 1;
       break;
 
     case PresetMode::SLOW:
+      // Q44B32
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
       m_maxMTTDepth               = 2;
       m_maxMTTDepthI              = 3;
       m_maxMTTDepthIChroma        = 3;
 
-      m_MRL                       = 1;
-      m_lumaReshapeEnable         = 1;
-      m_EDO                       = 1;
-      m_LMChroma                  = 1;
-      m_DepQuantEnabled           = 1;
-      m_MTSImplicit               = 1;
-      m_BDOF                      = 1;
-      m_DMVR                      = 1;
-      m_JointCbCrMode             = 1;
-      m_AMVRspeed                 = 1;
-      m_alf                       = 1;
-      m_ccalf                     = 1;
-      m_useNonLinearAlfLuma       = 1;
-      m_useNonLinearAlfChroma     = 1;
       m_Affine                    = 2;
-      m_PROF                      = 1;
-      m_MIP                       = 1;
-      m_useFastMIP                = 4;
-      m_MMVD                      = 3;
+      m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_SMVD                      = 3;
-      m_SbTMVP                    = 1;
-      m_Geo                       = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
       m_CIIP                      = 1;
-      m_SBT                       = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
+      m_Geo                       = 1;
+      m_AMVRspeed                 = 1;
+      m_ISP                       = 3;
+      m_JointCbCrMode             = 1;
       m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
       m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 3;
+      m_MRL                       = 1;
+      m_MTSImplicit               = 1;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 1;
+      m_SMVD                      = 3;
+      m_TMVPModeId                = 1;
+
       m_contentBasedFastQtbt      = 0;
       break;
 
     case PresetMode::TOOLTEST:
-      m_MRL                       = 1;
-      m_lumaReshapeEnable         = 1;
-      m_EDO                       = 1;
-      m_LMChroma                  = 1;
-      m_DepQuantEnabled           = 1;
-      m_BDOF                      = 1;
-      m_DMVR                      = 1;
-      m_JointCbCrMode             = 1;
-      m_AMVRspeed                 = 3;
-      m_alf                       = 1;
-      m_ccalf                     = 1;
-      m_useNonLinearAlfLuma       = 1;
-      m_useNonLinearAlfChroma     = 1;
+      // Q44B21
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 2;
+      m_maxMTTDepthIChroma        = 2;
+
       m_Affine                    = 2;
-      m_PROF                      = 1;
-      m_MIP                       = 1;
-      m_useFastMIP                = 4;
-      m_MMVD                      = 2;
+      m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_SMVD                      = 3;
-      m_SbTMVP                    = 1;
-      m_Geo                       = 2;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
       m_CIIP                      = 3;
-      m_SBT                       = 2;
-      m_LFNST                     = 1;
-      m_MCTF                      = 2;
+      m_DMVR                      = 1;
+      m_EDO                       = 1;
+      m_Geo                       = 2;
+      m_AMVRspeed                 = 3;
       m_ISP                       = 2;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 2;
+      m_MRL                       = 1;
       m_MTS                       = 1;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 2;
+      m_SMVD                      = 3;
+      m_TMVPModeId                = 1;
       m_TS                        = 1;
+      m_useNonLinearAlfChroma     = 1;
+      m_useNonLinearAlfLuma       = 1;
       break;
 
     default:

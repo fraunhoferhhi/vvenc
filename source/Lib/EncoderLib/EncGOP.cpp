@@ -132,7 +132,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
     {
       if( cfg.m_forceDecodeBitstream1 )
       {
-        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, apsMap, false ) ) )
+        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, false ) ) )
         {
           decPic = ffwdDecoder.bDecode1stPart;
         }
@@ -140,7 +140,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
       else
       {
         // update decode decision
-        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, apsMap, false, cfg.m_switchPOC ) ) ) )
+        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, false, cfg.m_switchPOC ) ) ) )
         {
           decPic = ffwdDecoder.bDecode1stPart;
           return;
@@ -148,7 +148,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
         else if( pic->getPOC() )
         {
           // reset decoder if used and not required any further
-          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, apsMap );
+          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, &apsMap );
         }
       }
     }
@@ -173,7 +173,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
       expectedPoc = pic->getPOC() - iRestartIntraPOC;
       slice0.copySliceInfo( pic->slices[ 0 ], false );
     }
-    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, apsMap, true )) ))
+    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, &apsMap, true )) ))
     {
       decPic = bDecode2ndPart;
       if ( cfg.m_bs2ModPOCAndType )
@@ -258,7 +258,7 @@ EncGOP::~EncGOP()
   if( m_pcEncCfg && (! m_pcEncCfg->m_decodeBitstreams[ 0 ].empty() || ! m_pcEncCfg->m_decodeBitstreams[ 1 ].empty()) )
   {
     // reset potential decoder resources
-    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, m_gopApsMap );
+    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap );
   }
 
   for ( auto& picEncoder : m_picEncoderList )

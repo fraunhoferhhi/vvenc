@@ -129,8 +129,14 @@ public:
           "\t [--gopsize,-g  <int>     ] : GOP size of temporal structure (16) [" <<  rcParams.m_iGopSize << "]\n"
           "\t [--refreshtype,-rt <str> ] : intra refresh type (idr,cra)\n"
           "\t [--refreshsec,-rs <int>  ] : Intra period/refresh in seconds [" <<  rcParams.m_iIDRPeriodSec << "]\n"
-          "\t [--intraperiod,-ip <int> ] : Intra period in frames (0: use intra period in seconds (intraperiods), else: n*gopsize [" <<  rcParams.m_iIDRPeriod << "]\n"
+          "\t [--intraperiod,-ip <int> ] : Intra period in frames (0: use intra period in seconds (intraperiods), else: n*gopsize [" <<  rcParams.m_iIDRPeriod << "]\n";
+      if ( bFullHelp )
+      {
+        std::cout <<
+          "\t [--internal-bitdepth <int> ] : internal bitdepth [" <<  rcParams.m_iInternalBitDepth << "]\n";
+      }
 
+      std::cout <<
           "\n"
           "\t [--profile      <str>    ] : select profile ( main10, main10_stillpic) default: [" << rcProfile << "]\n"
           "\t [--level        <str>    ] : select level ( 1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2, 15.5 ) default: [" << rcLevel << "]\n"
@@ -145,7 +151,7 @@ public:
       std::cout << std::endl;
   }
 
-  static int parse_command_line( int argc, char* argv[] , vvenc::VVEncParameter& rcParams, std::string& rcInputFile, std::string& rcBitstreamFile, int& riInputBitdepth )
+  static int parse_command_line( int argc, char* argv[] , vvenc::VVEncParameter& rcParams, std::string& rcInputFile, std::string& rcBitstreamFile )
   {
     int iRet = 0;
     /* Check command line parameters */
@@ -326,11 +332,11 @@ public:
 
           if( "yuv420" == cColorSpace || "yuv420p" == cColorSpace )
           {
-            riInputBitdepth = 8;
+            rcParams.m_iInputBitDepth = 8;
           }
           else if( "yuv420_10" == cColorSpace )
           {
-            riInputBitdepth = 10;
+            rcParams.m_iInputBitDepth = 10;
           }
           else
           {
@@ -457,6 +463,13 @@ public:
             return -1;
           }
         }
+      }
+      else if( !strcmp( (const char*)argv[i_arg], "--internal-bitdepth" ) )
+      {
+        i_arg++;
+        rcParams.m_iInternalBitDepth = atoi( argv[i_arg++] );
+        if( rcParams.m_eLogLevel > vvenc::LL_VERBOSE )
+          fprintf( stdout, "[internal-bitdepth]      : %d\n", rcParams.m_iInternalBitDepth );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--profile") )
       {

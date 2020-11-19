@@ -346,8 +346,8 @@ void QuantRDOQ2::initQuantX86()
   default:
     break;
   }
-
 }
+
 void Quant::initQuantX86()
 {
   auto vext = read_x86_extension_flags();
