@@ -825,7 +825,7 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
         encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
 
         // cleanup line memory when last ctu in line done to reduce overall memory consumption
-        if( encSlice->m_pcEncCfg->m_numWppThreads > 0 && ctuPosX == pcv.widthInCtus - 1 )
+        if( encSlice->m_pcEncCfg->m_ensureWppBitEqual && ctuPosX == pcv.widthInCtus - 1 )
         {
           lineEncRsrc->m_AffineProfList.resetAffineMVList();
           lineEncRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
