@@ -147,22 +147,24 @@ int main( int argc, char* argv[] )
 
 void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
 {
-  cVVEncParameter.m_iQp             = 32;                         // quantization parameter 0-51
-  cVVEncParameter.m_iWidth          = 176;                        // luminance width of input picture
-  cVVEncParameter.m_iHeight         = 144;                        // luminance height of input picture
-  cVVEncParameter.m_iGopSize        = 16;                         //  gop size (1: intra only, 16: hierarchical b frames)
-  cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;    // intra period refresh type
-  cVVEncParameter.m_iIDRPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_eLogLevel       = vvenc::LL_SILENT;           // log level > 4 (VERBOSE) enables psnr/rate output
-  cVVEncParameter.m_iTemporalRate   = 60;                         // temporal rate (fps)
-  cVVEncParameter.m_iTemporalScale  = 1;                          // temporal scale (fps)
-  cVVEncParameter.m_iTicksPerSecond = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.m_iThreadCount    = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
-  cVVEncParameter.m_iQuality        = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
-  cVVEncParameter.m_iPerceptualQPA  = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cVVEncParameter.m_eProfile        = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.m_eLevel          = vvenc::VVC_LEVEL_4_1;       // level
-  cVVEncParameter.m_eTier           = vvenc::VVC_TIER_MAIN;       // tier
+  cVVEncParameter.m_iQp               = 32;                         // quantization parameter 0-51
+  cVVEncParameter.m_iWidth            = 176;                        // luminance width of input picture
+  cVVEncParameter.m_iHeight           = 144;                        // luminance height of input picture
+  cVVEncParameter.m_iGopSize          = 16;                         // gop size (1: intra only, 16, 32: hierarchical b frames)
+  cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;      // intra period refresh type
+  cVVEncParameter.m_iIDRPeriod        = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  cVVEncParameter.m_eLogLevel         = vvenc::LL_SILENT;           // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.m_iTemporalRate     = 60;                         // temporal rate (fps)
+  cVVEncParameter.m_iTemporalScale    = 1;                          // temporal scale (fps)
+  cVVEncParameter.m_iTicksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
+  cVVEncParameter.m_iThreadCount      = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.m_iQuality          = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
+  cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  cVVEncParameter.m_iInputBitDepth    = 8;                          // 8bit input
+  cVVEncParameter.m_iInternalBitDepth = 10;                         // 10bit internal
+  cVVEncParameter.m_eProfile          = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.m_eLevel            = vvenc::VVC_LEVEL_4_1;       // level
+  cVVEncParameter.m_eTier             = vvenc::VVC_TIER_MAIN;       // tier
   cVVEncParameter.m_bAccessUnitDelimiter       = false;
   cVVEncParameter.m_bHrdParametersPresent      = false;
   cVVEncParameter.m_bBufferingPeriodSEIEnabled = false;
@@ -249,6 +251,12 @@ int testLibParameterRanges()
 
   testParamList( "TargetBitRate",       vvencParams.m_iTargetBitRate,             vvencParams, { 0,1000000,20000000} );
   testParamList( "TargetBitRate",       vvencParams.m_iTargetBitRate,             vvencParams, { -1,100000001}, true );
+
+  testParamList( "InputBitDepth",       vvencParams.m_iInputBitDepth,             vvencParams, { 8,10} );
+  testParamList( "InputBitDepth",       vvencParams.m_iInputBitDepth,             vvencParams, { 0,1,7,9,11}, true );
+
+  testParamList( "InternalBitDepth",    vvencParams.m_iInternalBitDepth,          vvencParams, { 8,10} );
+  testParamList( "InternalBitDepth",    vvencParams.m_iInternalBitDepth,          vvencParams, { 0,1,7,9,11}, true );
 
 //  testParamList( "TemporalScale",       vvencParams.m_iTemporalScale,             vvencParams, { 1,2,4,1001} );
 //  testParamList( "TemporalScale",       vvencParams.m_iTemporalScale,             vvencParams, { -1,0,3,1000 }, true );

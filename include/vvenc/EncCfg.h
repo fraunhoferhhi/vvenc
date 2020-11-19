@@ -107,7 +107,7 @@ public:
 
     , m_IntraPeriod                                 ( 32 )
     , m_DecodingRefreshType                         ( 1 )
-    , m_GOPSize                                     ( 16 )
+    , m_GOPSize                                     ( 32 )
 
     , m_QP                                          ( 32 )
     , m_usePerceptQPA                               ( 0 )
