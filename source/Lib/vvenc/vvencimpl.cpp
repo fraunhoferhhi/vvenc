@@ -538,8 +538,8 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
   ROTPARAMS( rcSrc.m_iIDRPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
 
-  ROTPARAMS( rcSrc.m_iTemporalRate  <= 0,                                                    "TemporalRate must be > 0" );
-  ROTPARAMS( rcSrc.m_iTemporalScale <= 0,                                                    "TemporalScale must be > 0" );
+  ROTPARAMS( rcSrc.m_iTemporalRate  <= 0,                                                   "TemporalRate must be > 0" );
+  ROTPARAMS( rcSrc.m_iTemporalScale <= 0,                                                   "TemporalScale must be > 0" );
 
   ROTPARAMS( rcSrc.m_iGopSize != 1 && rcSrc.m_iGopSize != 16 && rcSrc.m_iGopSize != 32,     "GOP size 1, 16, 32 supported" );
 
@@ -552,7 +552,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_eProfile != VVC_PROFILE_MAIN_10 && rcSrc.m_eProfile != VVC_PROFILE_MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != VVC_PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,        "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
+  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
 
   ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
@@ -565,6 +565,10 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
     ROTPARAMS( rcSrc.m_bBufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
     ROTPARAMS( rcSrc.m_bPictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
   }
+
+  ROTPARAMS( rcSrc.m_iInputBitDepth != 8 && rcSrc.m_iInputBitDepth != 10,                   "Input bitdepth must be 8 or 10 bit" );
+  ROTPARAMS( rcSrc.m_iInternalBitDepth != 8 && rcSrc.m_iInternalBitDepth != 10,             "Internal bitdepth must be 8 or 10 bit" );
+
   return 0;
 }
 
@@ -599,7 +603,10 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     rcEncCfg.m_RCTargetBitrate       = 0;
   }
 
-  rcEncCfg.m_internalBitDepth[0] = 10;
+  rcEncCfg.m_inputBitDepth[0]    = rcVVEncParameter.m_iInputBitDepth;
+  rcEncCfg.m_inputBitDepth[1]    = rcVVEncParameter.m_iInputBitDepth;
+  rcEncCfg.m_internalBitDepth[0] = rcVVEncParameter.m_iInternalBitDepth;
+  rcEncCfg.m_internalBitDepth[1] = rcVVEncParameter.m_iInternalBitDepth;;
 
   rcEncCfg.m_numWppThreads = rcVVEncParameter.m_iThreadCount;
   if( rcVVEncParameter.m_iThreadCount > 0 )

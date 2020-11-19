@@ -332,6 +332,8 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iQuality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow
   int m_iPerceptualQPA        = 2;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
   int m_iTargetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
+  int m_iInputBitDepth        = 0;      ///< input bit-depth                                        (no default)
+  int m_iInternalBitDepth     = 10;     ///< internal bit-depth                                     (default: 10)
   VvcProfile m_eProfile       = VVC_PROFILE_MAIN_10; ///< vvc profile                               (default: main_10)
   VvcLevel m_eLevel           = VVC_LEVEL_5_1;       ///< vvc level_idc                             (default: 5.1)
   VvcTier  m_eTier            = VVC_TIER_MAIN;       ///< vvc tier                                  (default: main)
