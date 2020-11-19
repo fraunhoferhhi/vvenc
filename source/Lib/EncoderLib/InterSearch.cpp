@@ -3672,6 +3672,14 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 #if DETECT_SC
       tsAllowed &= cs.picture->useSC;
 #endif
+#if CHANGE_SIZE
+      if (tsAllowed && sps.BDPCM)
+      {
+        int size = sps.log2MaxTransformSkipBlockSize - DIF_SIZE;
+        SizeType transformSkipMaxSize = 1 << size;
+        tsAllowed &= cu.blocks[COMP_Y].width <= transformSkipMaxSize && cu.blocks[COMP_Y].height <= transformSkipMaxSize;
+      }
+#endif
       uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests
       std::vector<TrMode> trModes;
 

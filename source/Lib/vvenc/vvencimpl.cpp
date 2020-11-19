@@ -507,6 +507,9 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   if (cEncCfg.m_ISP)           { css << "ISP "; }
   if (cEncCfg.m_TS)            { css << "TS "; }
 #endif
+#if 1//BDPCM_VVC
+  if (cEncCfg.m_useBDPCM)      { css << "BDPCM "; }
+#endif
 
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}

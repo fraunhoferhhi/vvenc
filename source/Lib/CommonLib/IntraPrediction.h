@@ -126,6 +126,9 @@ private:
   void xPredIntraDc               ( PelBuf& pDst, const CPelBuf& pSrc );
   void xPredIntraAng              ( PelBuf& pDst, const CPelBuf& pSrc, const ChannelType channelType, const ClpRng& clpRng);
   Pel  xGetPredValDc              ( const CPelBuf& pSrc, const Size& dstSize );
+#if BDPCM_VVC
+  void xPredIntraBDPCM            ( PelBuf& pDst, const CPelBuf& pSrc, const uint32_t dirMode, const ClpRng& clpRng );
+#endif
 
   void xFillReferenceSamples      ( const CPelBuf& recoBuf,      Pel* refBufUnfiltered, const CompArea& area, const CodingUnit &cu );
   void xFilterReferenceSamples    ( const Pel* refBufUnfiltered, Pel* refBufFiltered, const CompArea& area, const SPS &sps, int multiRefIdx, int predStride = 0 );
