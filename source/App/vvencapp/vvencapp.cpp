@@ -95,7 +95,7 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iThreadCount      = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
   cVVEncParameter.m_iQuality          = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow
   cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cVVEncParameter.m_iInputBitDepth    = 0;                          // input bitdepth
+  cVVEncParameter.m_iInputBitDepth    = 8;                          // input bitdepth
   cVVEncParameter.m_iInternalBitDepth = 10;                         // internal bitdepth
   cVVEncParameter.m_eProfile          = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
   cVVEncParameter.m_eLevel            = vvenc::VVC_LEVEL_4_1;       // level
@@ -196,7 +196,7 @@ int main( int argc, char* argv[] )
 
   // open the input file
   vvcutilities::YuvFileReader cYuvFileReader;
-  if( 0 != cYuvFileReader.open( cInputFile.c_str(), cVVEncParameter.m_iInputBitDepth, cVVEncParameter.m_iInputBitDepth, cVVEncParameter.m_iWidth, cVVEncParameter.m_iHeight ) )
+  if( 0 != cYuvFileReader.open( cInputFile.c_str(), cVVEncParameter.m_iInputBitDepth, cVVEncParameter.m_iInternalBitDepth, cVVEncParameter.m_iWidth, cVVEncParameter.m_iHeight ) )
   {
     std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
     return -1;
