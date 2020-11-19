@@ -349,12 +349,8 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
   if( m_pcEncCfg->m_ensureWppBitEqual && ctuXPosInCtus == 0 )
   {
-    if( m_pcEncCfg->m_ensureWppBitEqual
-        && m_pcEncCfg->m_numWppThreads < 1
-        && ctuYPosInCtus > 0 )
+    if( ctuYPosInCtus > 0 )
     {
-      m_cInterSearch.m_AffineProfList->resetAffineMVList ();
-      m_cInterSearch.m_BlkUniMvInfoBuffer->resetUniMvList();
       m_CABACEstimator->initCtxModels( *slice );
     }
 
@@ -601,11 +597,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   }
 
   m_modeCtrl.initCULevel( partitioner, *tempCS );
-  if( partitioner.currQtDepth == 0 && partitioner.currMtDepth == 0 && !tempCS->slice->isIntra() && ( sps.SBT || sps.MTSInter ) )
-  {
-    int maxSLSize = sps.SBT ? (1 << tempCS->slice->sps->log2MaxTbSize) : MTS_INTER_MAX_CU_SIZE;
-    m_modeCtrl.resetSaveloadSbt( maxSLSize );
-  }
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
