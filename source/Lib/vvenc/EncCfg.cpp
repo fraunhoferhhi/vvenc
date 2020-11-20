@@ -1815,6 +1815,9 @@ int EncCfg::initPreset( int preset )
       m_TS                        = 1;
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
+#if BDPCM_VVC
+      m_useBDPCM                  = 1;
+#endif
       break;
 
     default:
