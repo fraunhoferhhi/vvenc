@@ -1775,6 +1775,9 @@ int EncCfg::initPreset( int iQuality )
           m_TSsize = 3;
           m_useChromaTS = false;
 #endif
+#if 1//TS_VVC
+          m_useBDPCM = 1;
+#endif
 
     break;
 
@@ -1973,6 +1976,9 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "TS:%d ",                    m_TS );
   msg( VERBOSE, "TSLog2MaxSize:%d ",         m_TSsize );
   msg( VERBOSE, "useChromaTS:%d ",           m_useChromaTS );
+#endif
+#if 1//BDPCM_VVC                                
+  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
 #endif
 
   msg( VERBOSE, "\nFAST TOOL CFG: " );

@@ -347,7 +347,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   const ComponentID    compID       = compId;
   const ChannelType    channelType  = toChannelType( compID );
 #if BDPCM_VVC
-  const uint32_t       uiDirMode = isLuma(compId) && cu.bdpcmMode ? BDPCM_IDX : !isLuma(compId) && cu.bdpcmModeChroma ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
+  const uint32_t       uiDirMode = isLuma(compID) && cu.bdpcmMode ? BDPCM_IDX : !isLuma(compID) && cu.bdpcmModeChroma ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
 #else
   const uint32_t       uiDirMode    = /*isLuma( compId ) && cu.bdpcmMode ? BDPCM_IDX : */CU::getFinalIntraMode( cu, channelType );
 #endif
@@ -467,7 +467,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   {
   }
 #if BDPCM_VVC
-  else if ((isLuma(chType) && cu.bdpcmMode) || (!isLuma(chType) && cu.bdpcmModeChroma)) // BDPCM
+  else if ((isLuma(chType) && cu.bdpcmMode) || (!isLuma(chType) && cu.bdpcmModeChroma))
 #else
   else if (isLuma( chType ) && cu.bdpcmMode) // BDPCM
 #endif
