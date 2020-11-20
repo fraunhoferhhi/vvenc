@@ -528,6 +528,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
   confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
 #endif
+#if BDPCM_VVC
+  confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
+#endif
 
   if( m_alf )
   {
@@ -1812,6 +1815,9 @@ int EncCfg::initPreset( int preset )
       m_TS                        = 1;
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
+#if BDPCM_VVC
+      m_useBDPCM                  = 1;
+#endif
       break;
 
     default:
@@ -2009,6 +2015,9 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "TS:%d ",                    m_TS );
   msg( VERBOSE, "TSLog2MaxSize:%d ",         m_TSsize );
   msg( VERBOSE, "useChromaTS:%d ",           m_useChromaTS );
+#endif
+#if 1//BDPCM_VVC                                
+  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
 #endif
 
   msg( VERBOSE, "\nFAST TOOL CFG: " );

@@ -551,6 +551,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   csBest->initStructData();
 
   int bestLfnstIdx = 0;
+#if BDPCM_VVC
+  bool testBDPCM = sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType));
+  int            bestBDPCMMode = 0;
+#if DETECT_SC
+  testBDPCM &= cs.picture->useSC;
+#endif
+#endif
 #if ISP_VVC
   int bestISP = 0;
   bool mip = 0;
@@ -561,11 +568,23 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 #if TS_VVC
   bool noLFNST_ts = false;
 #endif
+#if BDPCM_VVC
+  for (int mode_cur = 0; mode_cur < EndMode + (2 * int(testBDPCM)); mode_cur++)
+#else
   for (int mode = 0; mode < EndMode; mode++)
+#endif
 #else
   for (int mode = 0; mode < (int)RdModeList.size(); mode++)
 #endif
   {
+#if BDPCM_VVC
+    int mode = mode_cur;
+    if (mode_cur >= EndMode)
+    {
+      mode = mode_cur - EndMode ? -1 : -2;
+      testISP = false;
+    }
+#endif
     // set CU/PU to luma prediction mode
     ModeInfo testMode;
 #if ISP_VVC
@@ -600,8 +619,19 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
       }
 #endif
       {
-        testMode = RdModeList[mode];
-        cu.bdpcmMode = 0;
+
+#if BDPCM_VVC
+        if (mode < 0)
+        {
+          cu.bdpcmMode = -mode;
+          testMode = ModeInfo(false, false, 0, NOT_INTRA_SUBPARTITIONS, cu.bdpcmMode == 2 ? VER_IDX : HOR_IDX);
+        }
+        else
+#endif
+        {
+          testMode = RdModeList[mode];
+          cu.bdpcmMode = 0;
+        }
 #if ISP_VVC
         cu.ispMode = ispM;
 #else
@@ -666,6 +696,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
         std::swap(csTemp, csBest);
         uiBestPUMode = testMode;
         bestLfnstIdx = csBest->cus[0]->lfnstIdx;
+#if BDPCM_VVC
+        bestBDPCMMode = cu.bdpcmMode;
+#endif
 #if ISP_VVC
         mip = csBest->cus[0]->mipFlag;
         mrl = csBest->cus[0]->multiRefIdx;
@@ -744,6 +777,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 #if ISP_VVC
     cu.mipFlag = mip;
     cu.multiRefIdx = mrl;
+#endif
+#if BDPCM_VVC
+    cu.bdpcmMode = bestBDPCMMode;
 #endif
   }
   else
@@ -938,18 +974,59 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
     int bestLfnstIdx = 0;
     // save the dist
     Distortion baseDist = cs.dist;
-
-    for (uint32_t uiMode = uiMinMode; uiMode < uiMaxMode; uiMode++)
+#if BDPCM_VVC
+    int32_t bestBDPCMMode = 0;
+    bool testBDPCM = CU::bdpcmAllowed(cu, COMP_Cb);
+#if DETECT_SC
+    testBDPCM &= cs.picture->useSC;
+#endif
+    if (partitioner.chType != CH_C)
     {
+      testBDPCM = testBDPCM && cu.ispMode == 0  && cu.lfnstIdx == 0;
+      if (cu.firstTU->mtsIdx[COMP_Y] != MTS_SKIP)
+      {
+        testBDPCM = false;
+      }
+    }
+    for (int mode_cur = uiMinMode; mode_cur < ((int)uiMaxMode + (2 * int(testBDPCM))); mode_cur++)
+#else
+    for (uint32_t uiMode = uiMinMode; uiMode < uiMaxMode; uiMode++)
+#endif
+    {
+#if BDPCM_VVC
+      int uiMode = mode_cur;
+      if (mode_cur >= (int)uiMaxMode)
+      {
+        uiMode = mode_cur - (int)uiMaxMode ? -1 : -2;
+        if ((uiMode == -1) && (saveCS.tus[0]->mtsIdx[COMP_Cb] != MTS_SKIP) && (saveCS.tus[0]->mtsIdx[COMP_Cr] != MTS_SKIP))
+        {
+          continue;
+        }
+      }
+      int chromaIntraMode;
+      if (uiMode < 0)
+      {
+        cu.bdpcmModeChroma = -uiMode;
+        chromaIntraMode = cu.bdpcmModeChroma == 2 ? chromaCandModes[1] : chromaCandModes[2];
+      }
+      else
+      {
+        cu.bdpcmModeChroma = 0;
+        chromaIntraMode = chromaCandModes[uiMode];
+#else
       const int chromaIntraMode = chromaCandModes[uiMode];
-      if( CU::isLMCMode( chromaIntraMode ) && ! CU::isLMCModeEnabled( cu, chromaIntraMode ) )
+#endif
+      if (CU::isLMCMode(chromaIntraMode) && !CU::isLMCModeEnabled(cu, chromaIntraMode))
       {
         continue;
       }
-      if( modeDisable[chromaIntraMode] && CU::isLMCModeEnabled(cu, chromaIntraMode)) // when CCLM is disable, then MDLM is disable. not use satd checking
+      if (modeDisable[chromaIntraMode] && CU::isLMCModeEnabled(cu, chromaIntraMode)) // when CCLM is disable, then MDLM is disable. not use satd checking
       {
         continue;
       }
+#if BDPCM_VVC
+      }
+#endif
       cs.dist = baseDist;
       //----- restore context models -----
       m_CABACEstimator->getCtx() = ctxStart;
@@ -1003,9 +1080,16 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
         uiBestDist   = uiDist;
         uiBestMode   = chromaIntraMode;
         bestLfnstIdx = cu.lfnstIdx;
+#if BDPCM_VVC
+        bestBDPCMMode = cu.bdpcmModeChroma;
+#endif
+
       }
     }
     cu.lfnstIdx = bestLfnstIdx;
+#if BDPCM_VVC
+    cu.bdpcmModeChroma= bestBDPCMMode;
+#endif
 
     for( uint32_t i = getFirstComponentOfChannel( CH_C ); i < numberValidComponents; i++ )
     {
@@ -1020,7 +1104,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       }
     }
   }
-
   cu.intraDir[1] = uiBestMode;
   cs.dist        = uiBestDist;
 
@@ -1095,6 +1178,9 @@ void IntraSearch::xEncIntraHeader( CodingStructure &cs, Partitioner &partitioner
 
     if( isFirst )
     {
+#if BDPCM_VVC
+      m_CABACEstimator->bdpcm_mode(cu, ComponentID(CH_C));
+#endif
       m_CABACEstimator->intra_chroma_pred_mode(  cu );
     }
   }
@@ -1657,6 +1743,13 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
     {
       endLfnstIdx = 0;
     }
+  }
+#endif
+#if BDPCM_VVC
+  if (cu.bdpcmMode)
+  {
+    endLfnstIdx = 0;
+    EndMTS = 0;
   }
 #endif
 #if TS_VVC
@@ -2229,7 +2322,11 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
     currTU.jointCbCr = 0;
 
     // Do predictions here to avoid repeating the "default0Save1Load2" stuff
+#if BDPCM_VVC
+    int  predMode = cu.bdpcmModeChroma ? BDPCM_IDX : CU::getFinalIntraMode(cu, CH_C);
+#else
     uint32_t  predMode = CU::getFinalIntraMode(cu, CH_C);
+#endif
 
     PelBuf piPredCb = cs.getPredBuf(COMP_Cb);
     PelBuf piPredCr = cs.getPredBuf(COMP_Cr);
@@ -2337,6 +2434,13 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
       ts_used = currTU.mtsIdx[COMP_Y];
 #endif
     }
+#if BDPCM_VVC
+    if (cu.bdpcmModeChroma)
+    {
+      endLfnstIdx = 0;
+      NOTONE_LFNST = false;
+    }
+#endif
 
     double dSingleCostAll = MAX_DOUBLE;
     double singleCostTmpAll = 0;
@@ -2369,7 +2473,11 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
         Distortion singleDistCTmp = 0;
         double     singleCostTmp = 0;
 #if TS_CHROMA
+#if BDPCM_VVC
+        bool tsAllowed = TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx && !cu.bdpcmModeChroma;
+#else
         bool tsAllowed = TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx;
+#endif
         if ((partitioner.chType == CH_L) && (!ts_used))
         {
           tsAllowed = false;
@@ -2630,7 +2738,11 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
 #if TS_CHROMA
           ComponentID codeCompId = ((currTU.jointCbCr >> 1) ? COMP_Cb : COMP_Cr);
           ComponentID otherCompId = ((codeCompId == COMP_Cb) ? COMP_Cr : COMP_Cb);
+#if BDPCM_VVC
+          bool tsAllowed = TU::isTSAllowed(currTU, codeCompId) && (m_pcEncCfg->m_useChromaTS) && !currTU.cu->lfnstIdx && !cu.bdpcmModeChroma;
+#else
           bool        tsAllowed = TU::isTSAllowed(currTU, codeCompId) && (m_pcEncCfg->m_useChromaTS) && !currTU.cu->lfnstIdx;
+#endif
           if ((partitioner.chType == CH_L)&& tsAllowed && (currTU.mtsIdx[COMP_Y] != MTS_SKIP))
           {
             tsAllowed = false;
@@ -2651,12 +2763,19 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
           }
           else
           {
+#if DETECT_SC
+            currTU.mtsIdx[codeCompId] = checkTSOnly || currTU.cu->bdpcmModeChroma ? 1 : 0;
+#else
             currTU.mtsIdx[codeCompId] = checkTSOnly ? 1 : 0;
+#endif
           }
 
           for (int modeId = 0; modeId < numTransformCands; modeId++)
           {
             Distortion distTmp = 0;
+#if DETECT_SC
+            currTU.mtsIdx[codeCompId] = currTU.cu->bdpcmModeChroma ? MTS_SKIP : MTS_DCT2_DCT2;
+#endif
             if (numTransformCands > 1)
             {
               currTU.mtsIdx[codeCompId] = currTU.cu->bdpcmModeChroma ? MTS_SKIP : trModes[modeId].first;

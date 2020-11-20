@@ -925,7 +925,9 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("ClipInputVideoToRec709Range",                     m_bClipInputVideoToRec709Range,                   "Enable clipping input video to the Rec. 709 Range on loading when InternalBitDepth is less than MSBExtendedBitDepth")
   ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                  "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
   ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
-
+#if 1//BDPCM_VVC
+  ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma)")
+#endif
     ;
 
   po::setDefaults( opts );
