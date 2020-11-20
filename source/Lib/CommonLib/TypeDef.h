@@ -65,12 +65,6 @@ namespace vvenc {
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
-#define ISP_VVC 1
-#define TS_VVC  1
-#define DETECT_SC 1
-#define TS_CHROMA 1
-#define NOT_USED                                          0
-#define BDPCM_VVC   1
 
 // ====================================================================================================================
 // General settings

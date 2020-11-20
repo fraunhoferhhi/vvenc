@@ -302,23 +302,6 @@ static inline void calcBIOSums2x_AVX2(const Pel* srcY0Tmp, const Pel* srcY1Tmp, 
   int sumSignGY_GX0 = _mm256_extract_epi32( sumSignGyGxTmp, 0 );
   int sumSignGY_GX1 = _mm256_extract_epi32( sumSignGyGxTmp, 4 );
 
-#if 0
-  tmpx0 = sumAbsGX0 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( sumDIX0 << 2, sumAbsGX0 ) );
-  tmpx1 = sumAbsGX1 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( sumDIX1 << 2, sumAbsGX1 ) );
-  __m128i vtmpx         = _mm_setr_epi32 ( tmpx0, tmpx1, 0, 0 );
-  __m128i vsumSignGY_GX = _mm_setr_epi32 ( sumSignGY_GX0, sumSignGY_GX1, 0, 0 );
-  __m128i vmainsGxGy    = _mm_srai_epi32 ( vsumSignGY_GX, 12 );
-  __m128i vsecsGxGy     = _mm_and_si128  ( vsumSignGY_GX, _mm_set1_epi32( ( 1 << 12 ) - 1 ) );
-  __m128i vtmpData      = _mm_mullo_epi32( vtmpx, vmainsGxGy );
-  vtmpData              = _mm_slli_epi32 ( vtmpData, 12 );
-  vtmpData              = _mm_add_epi32  ( vtmpData, _mm_mullo_epi32( vtmpx, vsecsGxGy ) );
-  vtmpData              = _mm_srai_epi32 ( vtmpData, 1 );
-  __m128i vtmpyIn       = _mm_slli_epi32 ( _mm_setr_epi32( sumDIY0, sumDIY1, 0, 0 ), 2 );
-  vtmpyIn               = _mm_sub_epi32  ( vtmpyIn, vtmpData );
-
-  tmpy0 = sumAbsGY0 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( _mm_extract_epi32( vtmpyIn, 0 ), sumAbsGY0 ) );
-  tmpy1 = sumAbsGY1 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( _mm_extract_epi32( vtmpyIn, 1 ), sumAbsGY1 ) );
-#else
   tmpx0 = sumAbsGX0 == 0 ? 0 : rightShiftMSB( sumDIX0 << 2, sumAbsGX0 );
   tmpx0 = Clip3( -limit, limit, tmpx0 );
 
@@ -339,7 +322,6 @@ static inline void calcBIOSums2x_AVX2(const Pel* srcY0Tmp, const Pel* srcY1Tmp, 
   tmpData1 = ( ( tmpData1 << 12 ) + tmpx1 * secsGxGy1 ) >> 1;
   tmpy1 = sumAbsGY1 == 0 ? 0 : rightShiftMSB( ( ( sumDIY1 << 2 ) - tmpData1 ), sumAbsGY1 );
   tmpy1 = Clip3( -limit, limit, tmpy1 );
-#endif
 
 #undef sumAbsGX0
 #undef sumAbsGX1

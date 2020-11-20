@@ -324,9 +324,6 @@ private:
   int                    m_reuseApsId[2];
   bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
-#if ALF_CTU_PAR_TRACING
-  std::stringstream*     m_traceStreams;
-#endif
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }

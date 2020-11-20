@@ -542,10 +542,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToVec<int>            toQpInCbCr                   ( &m_qpInValsCbCr          );
   IStreamToVec<int>            toQpOutCbCr                  ( &m_qpOutValsCbCr         );
   IStreamToVec<double>         toIntraLambdaModifier        ( &m_adIntraLambdaModifier );
-#if NOT_USED
-  IStreamToVec<int>            toTileColumnWidth            ( &m_tileColumnWidth       );
-  IStreamToVec<int>            toTileRowHeight              ( &m_tileRowHeight         );
-#endif
   IStreamToVec<int>            toRectSliceBoundary          ( &m_rectSliceBoundary     );
   IStreamToVec<int>            toSignalledSliceId           ( &m_signalledSliceId      );
 
@@ -701,19 +697,8 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("SEIBufferingPeriod",                              m_bufferingPeriodSEIEnabled,                      "Control generation of buffering period SEI messages")
   ("SEIPictureTiming",                                m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
   ("SEIDecodingUnitInfo",                             m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
-#if NOT_USED
-  ("TileUniformSpacing",                              m_tileUniformSpacingFlag,                         "Indicates that tile columns and rows are distributed uniformly")
-  ("NumTileColumnsMinus1",                            m_numTileColumnsMinus1,                           "Number of tile columns in a picture minus 1")
-  ("NumTileRowsMinus1",                               m_numTileRowsMinus1,                              "Number of rows in a picture minus 1")
-  ("TileColumnWidthArray",                            toTileColumnWidth,                                "Array containing tile column width values in units of CTU")
-  ("TileRowHeightArray",                              toTileRowHeight,                                  "Array containing tile row height values in units of CTU")
-#endif
   ("WaveFrontSynchro",                                m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
   ("EntryPointsPresent",                              m_entryPointsPresent,                             "Enable entry points in slice header")
-#if NOT_USED
-  ("RectSliceFlag",                                   m_rectSliceFlag,                                  "Rectangular slice flag")
-//  ("NumRectSlicesInPicMinus1",                        m_numSlicesInPicMinus1,                           "Number slices in pic minus 1")
-#endif
   ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
   ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
   ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
@@ -909,14 +894,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("LFNST",                                           m_LFNST,                                          "Enable LFNST (0: off, 1: on)" )
   ("MTS",                                             m_MTS,                                            "Multiple Transform Set (MTS)" )
   ("MTSIntraMaxCand",                                 m_MTSIntraMaxCand,                                "Number of additional candidates to test for MTS in intra slices")
-#if 1//ISP_VVC
   ("ISP",                                             m_ISP,                                            "Intra Sub-Partitions Mode (0: off, 1: vtm, 2: fast, 3: faster)")
-#endif
-#if 1//TS_VVC
   ("TransformSkip",                                   m_TS,                                             "Intra transform skipping, 0: off, 1: TS, 2: TS with SC detection ")
   ("TransformSkipLog2MaxSize",                        m_TSsize,                                         "Specify transform-skip maximum size. Minimum 2, Maximum 5")
   ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
-#endif
+  ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma)")
 
   ("HorCollocatedChroma",                             m_horCollocatedChromaFlag,                        "Specifies location of a chroma sample relatively to the luma sample in horizontal direction in the reference picture resampling"
                                                                                                         "(0: horizontally shifted by 0.5 units of luma samples, 1: collocated)")
@@ -925,9 +907,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("ClipInputVideoToRec709Range",                     m_bClipInputVideoToRec709Range,                   "Enable clipping input video to the Rec. 709 Range on loading when InternalBitDepth is less than MSBExtendedBitDepth")
   ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                  "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
   ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
-#if 1//BDPCM_VVC
-  ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma)")
-#endif
     ;
 
   po::setDefaults( opts );

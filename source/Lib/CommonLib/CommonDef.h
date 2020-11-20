@@ -632,7 +632,6 @@ inline std::string print( const char* fmt, ...)
 
 #define ALIGNED_MALLOC              1   ///< use 32-bit aligned malloc/free
 
-#if ALIGNED_MALLOC
 
 #if ( _WIN32 && ( _MSC_VER > 1300 ) ) || defined (__MINGW64_VERSION_MAJOR)
 #define xMalloc( type, len )        _aligned_malloc( sizeof(type)*(len), MEMORY_ALIGN_DEF_SIZE )
@@ -656,10 +655,6 @@ T* aligned_malloc(size_t len, size_t alignement) {
 #define xFree( ptr )                free( ptr )
 #endif
 
-#else
-#define xMalloc( type, len )        malloc   ( sizeof(type)*(len) )
-#define xFree( ptr )                free     ( ptr )
-#endif //#if ALIGNED_MALLOC
 
 #if defined _MSC_VER
 #define ALIGN_DATA(nBytes,v) __declspec(align(nBytes)) v

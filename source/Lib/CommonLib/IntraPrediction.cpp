@@ -346,11 +346,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
 {
   const ComponentID    compID       = compId;
   const ChannelType    channelType  = toChannelType( compID );
-#if BDPCM_VVC
   const uint32_t       uiDirMode = isLuma(compID) && cu.bdpcmMode ? BDPCM_IDX : !isLuma(compID) && cu.bdpcmModeChroma ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
-#else
-  const uint32_t       uiDirMode    = /*isLuma( compId ) && cu.bdpcmMode ? BDPCM_IDX : */CU::getFinalIntraMode( cu, channelType );
-#endif
 
   CHECK( Log2(piPred.width) < 2 && cu.cs->pcv->noChroma2x2, "Size not allowed" );
   CHECK( Log2(piPred.width) > 7, "Size not allowed" );
@@ -366,9 +362,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   {
     case(PLANAR_IDX): xPredIntraPlanar(piPred, srcBuf); break;
     case(DC_IDX):     xPredIntraDc    ( piPred, srcBuf ); break;
-#if BDPCM_VVC
     case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, isLuma(compID) ? cu.bdpcmMode : cu.bdpcmModeChroma, clpRng); break;
-#endif
     default:          xPredIntraAng   ( piPred, srcBuf, channelType, clpRng); break;
   }
 
@@ -466,11 +460,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
     )
   {
   }
-#if BDPCM_VVC
   else if ((isLuma(chType) && cu.bdpcmMode) || (!isLuma(chType) && cu.bdpcmModeChroma))
-#else
-  else if (isLuma( chType ) && cu.bdpcmMode) // BDPCM
-#endif
   {
     m_ipaParam.refFilterFlag = false;
   }
@@ -550,19 +540,11 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
   }
   else
   {
-#if ISP_VVC   
     memcpy(&refAbove[0], pSrc.buf, ((m_topRefLength)+multiRefIdx + 1) * sizeof(Pel));
     for (int y = 0; y <= m_leftRefLength + multiRefIdx; y++)
     {
       refLeft[y] = pSrc.at(y, 1);
     }
-#else
-    memcpy(&refAbove[0],pSrc.buf,((width<<1) + multiRefIdx+1)*sizeof(Pel));
-    for (int y = 0; y <= 2 * height + multiRefIdx; y++)
-    {
-      refLeft[y] = pSrc.at(y,1);
-    }
-#endif
 
     refMain = bIsModeVer ? refAbove : refLeft;
     refSide = bIsModeVer ? refLeft : refAbove;
@@ -571,11 +553,7 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
     const int log2Ratio = Log2(width) - Log2(height);
     const int s         = std::max<int>(0, bIsModeVer ? log2Ratio : -log2Ratio);
     const int maxIndex  = (multiRefIdx << s) + 2;
-#if ISP_VVC
     const int refLength = bIsModeVer ? m_topRefLength : m_leftRefLength;
-#else
-    const int refLength = 2* (bIsModeVer ? width : height);
-#endif
     const Pel val       = refMain[refLength + multiRefIdx];
     for (int z = 1; z <= maxIndex; z++)
     {
@@ -621,7 +599,6 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
       int deltaPos = intraPredAngle * ( 1 + multiRefIdx );
       if( isLuma( channelType ) )
       {
-#if ISP_VVC
         if( width <= 2 )
         {
           for( int y = 0, deltaPos = intraPredAngle * ( 1 + multiRefIdx );
@@ -659,7 +636,6 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
           }
         }
         else
-#endif
         {
           IntraPredAngleLuma(pDstBuf, dstStride, refMain, width, height, deltaPos, intraPredAngle, nullptr, !m_ipaParam.interpolationFlag, clpRng);
         }
@@ -693,7 +669,6 @@ void IntraPrediction::xPredIntraAng( PelBuf& pDst, const CPelBuf& pSrc, const Ch
   }
 }
 
-#if BDPCM_VVC
 void IntraPrediction::xPredIntraBDPCM(PelBuf& pDst, const CPelBuf& pSrc, const uint32_t dirMode, const ClpRng& clpRng)
 {
   const int wdt = pDst.width;
@@ -730,7 +705,6 @@ void IntraPrediction::xPredIntraBDPCM(PelBuf& pDst, const CPelBuf& pSrc, const u
     }
   }
 }
-#endif
 
 inline bool isAboveLeftAvailable  ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT );
 inline int  isAboveAvailable      ( const CodingUnit &cu, const ChannelType& chType, const Position& posLT, const uint32_t numUnits, const uint32_t unitWidth, bool *validFlags );
@@ -750,9 +724,7 @@ void IntraPrediction::initIntraPatternChType(const CodingUnit &cu, const CompAre
   Pel *refBufUnfiltered = m_refBuffer[area.compID][PRED_BUF_UNFILTERED];
   Pel *refBufFiltered   = m_refBuffer[area.compID][PRED_BUF_FILTERED];
 
-#if ISP_VVC
   setReferenceArrayLengths(area);
-#endif
 
   // ----- Step 1: unfiltered reference samples -----
   xFillReferenceSamples( cs.picture->getRecoBuf( area ), refBufUnfiltered, area, cu );
@@ -780,13 +752,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
 
   const int  tuWidth            = area.width;
   const int  tuHeight           = area.height;
-#if ISP_VVC
   const int  predSize           = m_topRefLength;
   const int  predHSize          = m_leftRefLength;
-#else
-  const int  predSize           = 2*area.width;
-  const int  predHSize          = 2*area.height;
-#endif
   const int predStride = predSize + 1 + multiRefIdx;
   m_refBufferStride[area.compID] = predStride;
 
@@ -1023,13 +990,8 @@ void IntraPrediction::xFilterReferenceSamples( const Pel* refBufUnfiltered, Pel*
   {
     multiRefIdx = 0;
   }
-#if ISP_VVC
   const int predSize = m_topRefLength + multiRefIdx;
   const int predHSize = m_leftRefLength + multiRefIdx;
-#else
-  const int predSize = 2*area.width + multiRefIdx;
-  const int predHSize = 2*area.height + multiRefIdx;
-#endif
   const int predStride = stride == 0 ? predSize + 1 : stride;
 
 
@@ -1654,7 +1616,6 @@ void IntraPrediction::predIntraMip( PelBuf &piPred, const CodingUnit& cu )
   m_matrixIntraPred.predBlock(piPred.buf, cu.intraDir[CH_L], cu.mipTransposedFlag, bitDepth);
 }
 
-#if ISP_VVC
 void IntraPrediction::initIntraPatternChTypeISP(const CodingUnit& cu, const CompArea& area, PelBuf& recBuf,
   const bool forceRefFilterFlag)
 {
@@ -1784,7 +1745,6 @@ void IntraPrediction::setReferenceArrayLengths(const CompArea& area)
   m_leftRefLength = (height << 1);
   m_topRefLength = (width << 1);
 }
-#endif
 
 } // namespace vvenc
 

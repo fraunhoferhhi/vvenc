@@ -582,7 +582,6 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
       dest += destStride;
     }                        
   }
-#if ISP_VVC
   else
   {
     CHECKD( width != 1, "Expecting width to be '1'!" );
@@ -596,7 +595,6 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
       dest += destStride;
     }
   }
-#endif
 }
 
 template<>

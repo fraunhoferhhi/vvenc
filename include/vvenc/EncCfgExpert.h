@@ -299,21 +299,8 @@ public:
   bool                m_bufferingPeriodSEIEnabled;
   bool                m_pictureTimingSEIEnabled;
   bool                m_decodingUnitInfoSEIEnabled;
-#if NOT_USED
-  bool                m_tileUniformSpacingFlag;
-  int                 m_numTileColumnsMinus1;
-  int                 m_numTileRowsMinus1;
-  std::vector<int>    m_tileColumnWidth;
-  std::vector<int>    m_tileRowHeight;
-#endif
   bool                m_entropyCodingSyncEnabled;
   bool                m_entryPointsPresent;
-#if NOT_USED
-  bool                m_rectSliceFlag;
-  int                 m_numSlicesInPicMinus1;
-  std::vector<int>    m_topLeftBrickIdx;
-  std::vector<int>    m_bottomRightBrickIdx;
-#endif
   bool                m_signalledSliceIdFlag;
   int                 m_signalledSliceIdLengthMinus1;
   std::vector<int>    m_rectSliceBoundary;
@@ -410,17 +397,11 @@ public:
   int                 m_LFNST;
   int                 m_MTS;
   int                 m_MTSIntraMaxCand;
-#if 1   // ISP_VVC
   int                 m_ISP;
-#endif
-#if 1//TS_VVC
   int                 m_TS;
   int                 m_TSsize;
   int                 m_useChromaTS;
-#endif
-#if 1//BDPCM_VVC
   int                 m_useBDPCM;
-#endif
 
   bool                m_bLoopFilterDisable;                             ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                          ///< offset for deblocking filter in 0 = slice header, 1 = PPS
@@ -572,21 +553,8 @@ public:
       , m_bufferingPeriodSEIEnabled                   ( false )
       , m_pictureTimingSEIEnabled                     ( false )
       , m_decodingUnitInfoSEIEnabled                  ( false )
-#if NOT_USED
-      , m_tileUniformSpacingFlag                      ( false )
-      , m_numTileColumnsMinus1                        ( 0 )
-      , m_numTileRowsMinus1                           ( 0 )
-      , m_tileColumnWidth                             ()
-      , m_tileRowHeight                               ()
-#endif
       , m_entropyCodingSyncEnabled                    ( false )
       , m_entryPointsPresent                          ( true )
-#if NOT_USED
-      , m_rectSliceFlag                               ( true )
-      , m_numSlicesInPicMinus1                        ( 0 )
-      , m_topLeftBrickIdx                             ()                                // not set -> derived
-      , m_bottomRightBrickIdx                         ()                                // not set -> derived
-#endif
       , m_signalledSliceIdFlag                        ( false )
       , m_signalledSliceIdLengthMinus1                ( 0 )
       , m_rectSliceBoundary                           ()
@@ -683,17 +651,12 @@ public:
       , m_LFNST                                       ( 0 )
       , m_MTS                                         ( 0 )
       , m_MTSIntraMaxCand                             ( 3 ) 
-#if 1   // ISP_VVC
       , m_ISP(0)
-#endif
-#if 1//TS_VVC
       , m_TS                                          ( 0 )
       , m_TSsize                                      ( 3 )
       , m_useChromaTS                                 ( 0 )
-#endif
-#if 1//BDPCM_VVC
       , m_useBDPCM                                    ( 0 )
-#endif
+
       , m_bLoopFilterDisable                          ( false )
       , m_loopFilterOffsetInPPS                       ( true )
       , m_loopFilterBetaOffsetDiv2                    { 0 }

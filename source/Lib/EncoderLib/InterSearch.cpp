@@ -3660,18 +3660,13 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         continue;
       }
 
-#if TS_VVC
       bool tsAllowed =
         TU::isTSAllowed(tu, compID) && (isLuma(compID) || (isChroma(compID) && m_pcEncCfg->m_useChromaTS));
-#if TS_CHROMA
       if (isChroma(compID) && tsAllowed && (tu.mtsIdx[COMP_Y] != MTS_SKIP))
       {
         tsAllowed = false;
       }
-#endif
-#if DETECT_SC
       tsAllowed &= cs.picture->useSC;
-#endif
       uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests
       std::vector<TrMode> trModes;
 
@@ -3692,9 +3687,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       for (int transformMode = 0; transformMode < nNumTransformCands; transformMode++)
       {
         const bool isFirstMode = transformMode == 0;
-#else
-      const bool isFirstMode  = true;
-#endif
 
       // copy the original residual into the residual buffer
       csFull->getResiBuf(compArea).copyFrom(orgResiBuf.get(compID));
@@ -3703,13 +3695,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       m_CABACEstimator->getCtx() = ctxStart;
       m_CABACEstimator->resetBits();
 
-#if TS_VVC
       if (bestTU.mtsIdx[compID] == MTS_SKIP && m_pcEncCfg->m_TS)
       {
         continue;
       }
       tu.mtsIdx[compID] = transformMode ? trModes[transformMode].first : 0;
-#endif
 
       const QpParam cQP(tu, compID);  // note: uses tu.transformSkip[compID]
       m_pcTrQuant->selectLambda(compID);
@@ -3739,16 +3729,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         resiBuf.scaleSignal(tu.chromaAdj, 1, slice.clpRngs[compID]);
       }
 
-#if TS_VVC
       if (nNumTransformCands > 1)
       {
         if (transformMode == 0)
         {
-#if TS_CHROMA
           m_pcTrQuant->checktransformsNxN(tu, &trModes, 2, compID);
-#else
-          m_pcTrQuant->checktransformsNxN(tu, &trModes, 2 );
-#endif
           tu.mtsIdx[compID] = trModes[0].first;
           if (!trModes[transformMode + 1].second)
           {
@@ -3758,13 +3743,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         m_pcTrQuant->transformNxN(tu, compID, cQP, currAbsSum, m_CABACEstimator->getCtx(), true);
       }
       else
-#endif
       {
         m_pcTrQuant->transformNxN(tu, compID, cQP, currAbsSum, m_CABACEstimator->getCtx());
       }
-#if TS_VVC
       if (isFirstMode || (currAbsSum == 0))
-#endif
       {
         const CPelBuf zeroBuf(m_pTempPel, compArea);
         const CPelBuf& orgResi = orgResiBuf.get(compID);
@@ -3788,9 +3770,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
       if (currAbsSum > 0) //if non-zero coefficients are present, a residual needs to be derived for further prediction
       {
-#if TS_VVC
         if (isFirstMode)
-#endif
         {
           m_CABACEstimator->getCtx() = ctxStart;
           m_CABACEstimator->resetBits();
@@ -3803,15 +3783,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           const int cbfMask = ( tu.cbf[COMP_Cb] ? 2 : 0 ) + 1;
           m_CABACEstimator->joint_cb_cr( tu, cbfMask );
         }
-#if TS_VVC
         CUCtx cuCtx;
         cuCtx.isDQPCoded = true;
         cuCtx.isChromaQpAdjCoded = true;
         m_CABACEstimator->residual_coding(tu, compID, &cuCtx);
         m_CABACEstimator->mts_idx(cu, &cuCtx);
-#else
-        m_CABACEstimator->residual_coding( tu, compID );
-#endif
 
         currCompFracBits = m_CABACEstimator->getEstFracBits();
 
@@ -3827,12 +3803,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         currCompDist = m_pcRdCost->getDistPart(orgResi, resiBuf, channelBitDepth, compID, DF_SSE);
         currCompCost = m_pcRdCost->calcRdCost(currCompFracBits, currCompDist, false);
       }
-#if TS_VVC
       else if (transformMode > 0)
       {
         currCompCost = MAX_DOUBLE;
       }
-#endif
       else
       {
         currCompFracBits = nonCoeffFracBits;
@@ -3843,11 +3817,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       }
 
       // evaluate
-#if TS_VVC
       if ((currCompCost < minCost[compID]) || (transformMode == 1 && currCompCost == minCost[compID]))
-#else
-      if( ( currCompCost < minCost[compID] ) )
-#endif
       {
         // copy component
         if (isFirstMode && ((nonCoeffCost < currCompCost) || (currAbsSum == 0))) // check for forced null
@@ -3864,7 +3834,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
         uiSingleDistComp[compID] = currCompDist;
         minCost[compID]          = currCompCost;
-#if TS_VVC
         if (transformMode != (nNumTransformCands - 1))
         {
           bestTU.copyComponentFrom(tu, compID);
@@ -3874,20 +3843,17 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         {
           isLast = false;
         }
-#endif
       }
       if( tu.noResidual )
       {
         CHECK( currCompFracBits > 0 || currAbsSum, "currCompFracBits > 0 when tu noResidual" );
       }
-#if TS_VVC
       }
       if (isLast)
       {
         tu.copyComponentFrom(bestTU, compID);
         csFull->getResiBuf(compArea).copyFrom(saveCS.getResiBuf(compArea));
       }
-#endif
     } // component loop
 
     if ( tu.blocks[COMP_Cb].valid() )
@@ -3902,14 +3868,12 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       double minCostCbCr = minCost[COMP_Cb] + minCost[COMP_Cr];
       bool   isLastBest  = false;
 
-#if TS_CHROMA
       bool checkDCTOnly = m_pcEncCfg->m_useChromaTS && ((TU::getCbf(tu, COMP_Cb) && tu.mtsIdx[COMP_Cb] == MTS_DCT2_DCT2 && !TU::getCbf(tu, COMP_Cr)) ||
         (TU::getCbf(tu, COMP_Cr) && tu.mtsIdx[COMP_Cr] == MTS_DCT2_DCT2 && !TU::getCbf(tu, COMP_Cb)) ||
         (TU::getCbf(tu, COMP_Cb) && tu.mtsIdx[COMP_Cb] == MTS_DCT2_DCT2 && TU::getCbf(tu, COMP_Cr) && tu.mtsIdx[COMP_Cr] == MTS_DCT2_DCT2));
       bool checkTSOnly = m_pcEncCfg->m_useChromaTS && ((TU::getCbf(tu, COMP_Cb) && tu.mtsIdx[COMP_Cb] == MTS_SKIP && !TU::getCbf(tu, COMP_Cr)) ||
         (TU::getCbf(tu, COMP_Cr) && tu.mtsIdx[COMP_Cr] == MTS_SKIP && !TU::getCbf(tu, COMP_Cb)) ||
         (TU::getCbf(tu, COMP_Cb) && tu.mtsIdx[COMP_Cb] == MTS_SKIP && TU::getCbf(tu, COMP_Cr) && tu.mtsIdx[COMP_Cr] == MTS_SKIP));
-#endif
 
       CompStorage      orgResiCb[4], orgResiCr[4];   // 0:std, 1-3:jointCbCr
       std::vector<int> jointCbfMasksToTest;
@@ -3935,7 +3899,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
       for (int cbfMask: jointCbfMasksToTest)
       {
-#if TS_CHROMA
         ComponentID codeCompId = (cbfMask >> 1 ? COMP_Cb : COMP_Cr);
         ComponentID otherCompId = (codeCompId == COMP_Cr ? COMP_Cb : COMP_Cr);
 
@@ -3944,9 +3907,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         {
           tsAllowed = false;
         }
-#if DETECT_SC
         tsAllowed &= cs.picture->useSC;
-#endif
         if (!tsAllowed)
         {
           checkTSOnly = false;
@@ -3964,7 +3925,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
         }
         for (int modeId = 0; modeId < numTransformCands; modeId++)
         {
-#endif
           TCoeff     currAbsSum = 0;
           uint64_t   currCompFracBits = 0;
           Distortion currCompDistCb = 0;
@@ -3972,13 +3932,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
           double     currCompCost = 0;
 
           tu.jointCbCr = (uint8_t)cbfMask;
-#if TS_CHROMA
           if (numTransformCands > 1)
           {
             tu.mtsIdx[codeCompId] = trModes[modeId].first;
           }
           tu.mtsIdx[otherCompId] = MTS_DCT2_DCT2;
-#endif
           const QpParam cQP(tu, COMP_Cb);  // note: uses tu.transformSkip[compID]
           m_pcTrQuant->selectLambda(COMP_Cb);
 
@@ -4015,7 +3973,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 
           PelBuf& codeResi = (codeCompId == COMP_Cr ? crResi : cbResi);
           TCoeff  compAbsSum = 0;
-#if TS_CHROMA
           if (numTransformCands > 1)
           {
             if (modeId == 0)
@@ -4031,7 +3988,6 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             m_pcTrQuant->transformNxN(tu, codeCompId, qpCbCr, compAbsSum, m_CABACEstimator->getCtx(), true);
           }
           else
-#endif
           {
             m_pcTrQuant->transformNxN(tu, codeCompId, qpCbCr, compAbsSum, m_CABACEstimator->getCtx());
           }
@@ -4055,12 +4011,10 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             codedCbfMask = 0;
           }
           currAbsSum = codedCbfMask;
-#if TS_CHROMA
           if (!tu.mtsIdx[codeCompId])
           {
             numTransformCands = (currAbsSum <= 0) ? 1 : numTransformCands;
           }
-#endif
           if (currAbsSum > 0)
           {
             m_CABACEstimator->cbf_comp(*tu.cu, codedCbfMask >> 1, cbArea, currDepth, false);
@@ -4092,11 +4046,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
             uiSingleDistComp[COMP_Cb] = currCompDistCb;
             uiSingleDistComp[COMP_Cr] = currCompDistCr;
             minCostCbCr = currCompCost;
-#if TS_CHROMA
             isLastBest = (cbfMask == jointCbfMasksToTest.back()) && (modeId == (numTransformCands - 1));
-#else
-            isLastBest = (cbfMask == jointCbfMasksToTest.back());
-#endif
             if (!isLastBest)
             {
               bestTU.copyComponentFrom(tu, COMP_Cb);
@@ -4105,9 +4055,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
               saveCS.getResiBuf(crArea).copyFrom(csFull->getResiBuf(crArea));
             }
           }
-#if TS_CHROMA
         }
-#endif
 
         if( !isLastBest )
         {

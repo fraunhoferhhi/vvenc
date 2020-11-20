@@ -330,9 +330,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
 
-#if DETECT_SC
       xDetectScreenC(*pic, yuvOrgBuf, m_cEncCfg.m_TS );
-#endif
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
@@ -713,16 +711,8 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noCiipConstraintFlag                         = m_cEncCfg.m_CIIP == 0;
   ci.noGeoConstraintFlag                          = m_cEncCfg.m_Geo == 0;
   ci.noLadfConstraintFlag                         = true;
-#if TS_VVC
   ci.noTransformSkipConstraintFlag                = m_cEncCfg.m_TS == 0;
-#else
-  ci.noTransformSkipConstraintFlag                = true;
-#endif
-#if BDPCM_VVC
   ci.noBDPCMConstraintFlag                        = m_cEncCfg.m_useBDPCM==0;
-#else
-  ci.noBDPCMConstraintFlag                        = true;
-#endif
   ci.noJointCbCrConstraintFlag                    = ! m_cEncCfg.m_JointCbCrMode;
   ci.noMrlConstraintFlag                          = ! m_cEncCfg.m_MRL;
   ci.noIspConstraintFlag                          = true;
@@ -814,16 +804,10 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.depQuantEnabled               = m_cEncCfg.m_DepQuantEnabled;
   sps.signDataHidingEnabled         = m_cEncCfg.m_SignDataHidingEnabled;
   sps.MTSIntra                      = m_cEncCfg.m_MTS ;
-#if 1//ISP_VVC
   sps.ISP                           = m_cEncCfg.m_ISP;
-#endif
-#if 1 //TS_VVC
   sps.transformSkip                 = m_cEncCfg.m_TS;
   sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
-#endif
-#if 1//BDPCM_VVC
   sps.BDPCM                         = m_cEncCfg.m_useBDPCM;
-#endif
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {
@@ -1172,7 +1156,6 @@ void EncLib::xInitHrdParameters(SPS &sps)
   }
 }
 
-#if DETECT_SC
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
 {
   if (useTS < 2)
@@ -1244,7 +1227,6 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
     Vall.clear();
   }
 }
-#endif
 
 } // namespace vvenc
 

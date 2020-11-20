@@ -1435,20 +1435,12 @@ void CABACReader::cu_residual( CodingUnit& cu, Partitioner &partitioner, CUCtx& 
   ChromaCbfs chromaCbfs;
   if( cu.ispMode && isLuma( partitioner.chType ) )
   {
-#if ISP_VVC
     Partitioner subTuPartitioner = partitioner;
     transform_tree(*cu.cs, subTuPartitioner, cuCtx, cu, CU::getISPType(cu, getFirstComponentOfChannel(partitioner.chType)), 0);
-#else
-    transform_tree( *cu.cs, partitioner, cuCtx, CU::getISPType(cu, getFirstComponentOfChannel(partitioner.chType)), 0 );
-#endif
   }
   else
   {
-#if ISP_VVC
     transform_tree(*cu.cs, partitioner, cuCtx, cu);
-#else
-    transform_tree( *cu.cs, partitioner, cuCtx             );
-#endif
   }
   residual_lfnst_mode( cu, cuCtx );
   mts_idx            ( cu, cuCtx );
@@ -2045,11 +2037,7 @@ void CABACReader::Ciip_flag(CodingUnit& cu)
 //    bool  split_transform_flag( depth )
 //    bool  cbf_comp            ( area, depth )
 //================================================================================
-#if ISP_VVC
 void CABACReader::transform_tree(CodingStructure& cs, Partitioner& partitioner, CUCtx& cuCtx, CodingUnit& cuTop, const PartSplit ispType, const int subTuIdx)
-#else
-void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner, CUCtx& cuCtx, const PartSplit ispType, const int subTuIdx )
-#endif
 {
   const UnitArea&   area = partitioner.currArea();
   CodingUnit&         cu = *cs.getCU(area.blocks[partitioner.chType], partitioner.chType, partitioner.treeType );
@@ -2066,11 +2054,7 @@ void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner,
 
   if( !split && cu.ispMode )
   {
-#if ISP_VVC
     split = partitioner.canSplitISP(ispType, cs, cuTop);
-#else
-    split = partitioner.canSplit( ispType, cs );
-#endif
   }
 
   if( split )
@@ -2099,11 +2083,7 @@ void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner,
 
     do
     {
-#if ISP_VVC
       transform_tree(cs, partitioner, cuCtx, cuTop, ispType, subTuCounter);
-#else
-      transform_tree( cs, partitioner, cuCtx, ispType, subTuCounter );
-#endif
       subTuCounter += subTuCounter != -1 ? 1 : 0;
     } while( partitioner.nextPart( cs ) );
 
@@ -2128,32 +2108,16 @@ void CABACReader::transform_tree( CodingStructure &cs, Partitioner &partitioner,
     transform_unit(tu, cuCtx, partitioner, subTuCounter);
   }
 }
-#if BDPCM_VVC
 bool CABACReader::cbf_comp(CodingUnit& cu, const CompArea& area, unsigned depth, const bool prevCbf, const bool useISP)
-#else
-bool CABACReader::cbf_comp(CodingStructure& cs, const CompArea& area, unsigned depth, const bool prevCbf, const bool useISP)
-#endif
 {
-#if BDPCM_VVC
   unsigned  ctxId = DeriveCtx::CtxQtCbf(area.compID, prevCbf, useISP && isLuma(area.compID));
-#else
-  const unsigned  ctxId = DeriveCtx::CtxQtCbf(area.compID, prevCbf, useISP && isLuma(area.compID));
-#endif
   const CtxSet& ctxSet = Ctx::QtCbf[area.compID];
 
   unsigned  cbf = 0;
-#if BDPCM_VVC
   if ((area.compID == COMP_Y && cu.bdpcmMode)|| (area.compID != COMP_Y  && cu.bdpcmModeChroma))
-#else
-  if (area.compID == COMP_Y && cs.getCU(area.pos(), ChannelType(area.compID), TREE_L)->bdpcmMode)
-#endif
   {
-#if BDPCM_VVC
     ctxId = (area.compID != COMP_Cr) ? 1 : 2;
     cbf = m_BinDecoder.decodeBin(ctxSet(ctxId));
-#else
-    cbf = m_BinDecoder.decodeBin( ctxSet( 1 ) );
-#endif
   }
   else
   {
@@ -2226,9 +2190,6 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
 {
   const UnitArea&         area = partitioner.currArea();
   const unsigned          trDepth = partitioner.currTrDepth;
-#if !BDPCM_VVC
-  CodingStructure&  cs = *tu.cs;
-#endif
   CodingUnit&       cu = *tu.cu;
   ChromaCbfs        chromaCbfs;
   chromaCbfs.Cb = chromaCbfs.Cr = false;
@@ -2241,20 +2202,12 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
     const int cbfDepth = chromaCbfISP ? trDepth - 1 : trDepth;
     if (!(cu.sbtInfo && tu.noResidual))
     {
-#if BDPCM_VVC
       chromaCbfs.Cb = cbf_comp(cu, area.blocks[COMP_Cb], cbfDepth);
-#else
-      chromaCbfs.Cb = cbf_comp(cs, area.blocks[COMP_Cb], cbfDepth);
-#endif
     }
 
     if (!(cu.sbtInfo && tu.noResidual))
     {
-#if BDPCM_VVC
       chromaCbfs.Cr = cbf_comp(cu, area.blocks[COMP_Cr], cbfDepth, chromaCbfs.Cb);
-#else
-        chromaCbfs.Cr = cbf_comp(cs, area.blocks[COMP_Cr], cbfDepth, chromaCbfs.Cb);
-#endif
     }
   }
   else if (CU::isSepTree(cu))
@@ -2304,11 +2257,7 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
           previousCbf = TU::getPrevTuCbfAtDepth(tu, COMP_Y, trDepth);
         }
       }
-#if BDPCM_VVC
       bool cbfY = lastCbfIsInferred ? true : cbf_comp(cu, tu.Y(), trDepth, previousCbf, cu.ispMode);
-#else
-      bool cbfY = lastCbfIsInferred ? true : cbf_comp(cs, tu.Y(), trDepth, previousCbf, cu.ispMode);
-#endif
       TU::setCbfAtDepth(tu, COMP_Y, trDepth, (cbfY ? 1 : 0));
     }
   }
@@ -2439,11 +2388,7 @@ void CABACReader::residual_coding( TransformUnit& tu, ComponentID compID, CUCtx&
   // parse transform skip
   ts_flag            ( tu, compID );
 
-#if BDPCM_VVC
   if ( tu.mtsIdx[compID] == MTS_SKIP)
-#else
-  if( isLuma( compID ) && ( tu.mtsIdx[compID] == MTS_SKIP ) )
-#endif
   {
     residual_codingTS( tu, compID );
     return;

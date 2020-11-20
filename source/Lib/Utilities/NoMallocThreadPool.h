@@ -413,15 +413,9 @@ public:
 
     while( true )
     {
-#if ADD_TASK_THREAD_SAFE
-      std::unique_lock<std::mutex> l(m_nextFillSlotMutex);
-#endif
       CHECKD( !m_nextFillSlot.isValid(), "Next fill slot iterator should always be valid" );
       const auto startIt = m_nextFillSlot;
 
-#if ADD_TASK_THREAD_SAFE
-      l.unlock();
-#endif
 
       bool first = true;
       for( auto it = startIt; it != startIt || first; it.incWrap() )
@@ -449,17 +443,11 @@ public:
           t.barriers   = std::move( barriers );
           t.state      = WAITING;
 
-#if ADD_TASK_THREAD_SAFE
-          l.lock();
-#endif
           m_nextFillSlot.incWrap();
           return true;
         }
       }
 
-#if ADD_TASK_THREAD_SAFE
-      l.lock();
-#endif
       m_nextFillSlot = m_tasks.grow();
     }
     return false;
@@ -482,9 +470,6 @@ private:
   std::vector<std::thread> m_threads;
   ChunkedTaskQueue         m_tasks;
   TaskIterator             m_nextFillSlot = m_tasks.begin();
-#if ADD_TASK_THREAD_SAFE
-  std::mutex               m_nextFillSlotMutex;
-#endif
   std::mutex               m_idleMutex;
   std::atomic_uint         m_waitingThreads{ 0 };
 #if ENABLE_VALGRIND_CODE

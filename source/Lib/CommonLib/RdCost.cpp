@@ -239,13 +239,11 @@ Distortion RdCost::getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitD
   }
   else
   {
-#if ISP_VVC
     if( ( org.width == 1 ) )
     {
       dist = xGetSSE( dp );
     }
     else
-#endif
     {
       const int base = (bitDepth > 10) ? 1 : 0;
       dist = m_afpDistortFunc[base][eDFunc + Log2(org.width)](dp);
