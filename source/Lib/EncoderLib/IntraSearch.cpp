@@ -982,13 +982,11 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
 #endif
     if (partitioner.chType != CH_C)
     {
-      testBDPCM = testBDPCM && cu.ispMode == 0 /*&& cu.firstTU->mtsIdx[COMP_Y] == 0*/ && cu.lfnstIdx == 0;///???
-#if BDPCM_VVC==2
+      testBDPCM = testBDPCM && cu.ispMode == 0  && cu.lfnstIdx == 0;
       if (cu.firstTU->mtsIdx[COMP_Y] != MTS_SKIP)
       {
         testBDPCM = false;
       }
-#endif
     }
     for (int mode_cur = uiMinMode; mode_cur < ((int)uiMaxMode + (2 * int(testBDPCM))); mode_cur++)
 #else
@@ -1000,12 +998,10 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit &cu, Partitioner &partitioner
       if (mode_cur >= (int)uiMaxMode)
       {
         uiMode = mode_cur - (int)uiMaxMode ? -1 : -2;
-#if BDPCM_VVC == 2
         if ((uiMode == -1) && (saveCS.tus[0]->mtsIdx[COMP_Cb] != MTS_SKIP) && (saveCS.tus[0]->mtsIdx[COMP_Cr] != MTS_SKIP))
         {
           continue;
         }
-#endif
       }
       int chromaIntraMode;
       if (uiMode < 0)
@@ -1766,14 +1762,6 @@ void IntraSearch::xIntraCodingLumaQT( CodingStructure& cs, Partitioner& partitio
 #if DETECT_SC
   tsAllowed &= cs.picture->useSC;
 #endif
-#if CHANGE_SIZE
-  if (tsAllowed && sps.BDPCM)
-  {
-    int size = sps.log2MaxTransformSkipBlockSize - DIF_SIZE;
-    SizeType transformSkipMaxSize = 1 << size;
-    tsAllowed &= cu.blocks[COMP_Y].width <= transformSkipMaxSize && cu.blocks[COMP_Y].height <= transformSkipMaxSize;
-  }
-#endif
   if (tsAllowed)
   {
     EndMTS += 1;
@@ -2486,7 +2474,7 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
         double     singleCostTmp = 0;
 #if TS_CHROMA
 #if BDPCM_VVC
-        bool tsAllowed = TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx /*&& !cu.bdpcmModeChroma*/;
+        bool tsAllowed = TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx && !cu.bdpcmModeChroma;
 #else
         bool tsAllowed = TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx;
 #endif
@@ -2741,12 +2729,6 @@ void IntraSearch::xIntraChromaCodingQT( CodingStructure &cs, Partitioner& partit
         {
           jointCbfMasksToTest = m_pcTrQuant->selectICTCandidates(currTU, orgResiCb, orgResiCr);
         }
-#if 0//BDPCM_VVC
-        if (jointCbfMasksToTest.size() && currTU.cu->bdpcmModeChroma)
-        {
-          //CHECK(!checkTSOnly || checkDCTOnly, "bdpcm only allows transform skip");
-        }
-#endif
         for (int cbfMask : jointCbfMasksToTest)
         {
 #if !TS_CHROMA

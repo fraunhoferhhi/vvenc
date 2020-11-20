@@ -2013,6 +2013,9 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "TSLog2MaxSize:%d ",         m_TSsize );
   msg( VERBOSE, "useChromaTS:%d ",           m_useChromaTS );
 #endif
+#if 1//BDPCM_VVC                                
+  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
+#endif
 
   msg( VERBOSE, "\nFAST TOOL CFG: " );
   msg( VERBOSE, "LCTUFast:%d ",              m_useFastLCTU );
