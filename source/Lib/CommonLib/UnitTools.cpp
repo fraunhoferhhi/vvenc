@@ -3287,7 +3287,7 @@ bool CU::isMTSAllowed(const CodingUnit &cu, const ComponentID compID)
   mtsAllowed &= cuWidth <= maxSize && cuHeight <= maxSize;
   mtsAllowed &= !cu.ispMode;
   mtsAllowed &= !cu.sbtInfo;
-  mtsAllowed &= !(cu.bdpcmMode && cuWidth <= tsMaxSize && cuHeight <= tsMaxSize);
+  mtsAllowed &= !(cu.bdpcmM[CH_L] && cuWidth <= tsMaxSize && cuHeight <= tsMaxSize);
   return mtsAllowed;
 }
 
@@ -3326,8 +3326,7 @@ bool TU::isTSAllowed(const TransformUnit &tu, const ComponentID compID)
   bool tsAllowed = tu.cs->sps->transformSkip;
   tsAllowed &= ( !tu.cu->ispMode || !isLuma(compID) );
   SizeType transformSkipMaxSize = 1 << maxSize;
-  tsAllowed &= !(tu.cu->bdpcmMode && isLuma(compID));
-  tsAllowed &= !(tu.cu->bdpcmModeChroma && isChroma(compID));
+  tsAllowed &= !(tu.cu->bdpcmM[toChannelType(compID)]);
   tsAllowed &= tu.blocks[compID].width <= transformSkipMaxSize && tu.blocks[compID].height <= transformSkipMaxSize;
   tsAllowed &= !tu.cu->sbtInfo;
 

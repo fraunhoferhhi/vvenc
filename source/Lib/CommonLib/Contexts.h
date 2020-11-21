@@ -223,7 +223,7 @@ public:
   static const CtxSet   AffineFlag;
   static const CtxSet   AffineType;
   static const CtxSet   Mvd;
-  static const CtxSet   BDPCMMode;
+  static const CtxSet   bdpcmMode;
   static const CtxSet   QtRootCbf;
   static const CtxSet   ACTFlag;
   static const CtxSet   QtCbf           [3];    // [ channel ]

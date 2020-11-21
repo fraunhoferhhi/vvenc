@@ -805,21 +805,21 @@ void CABACWriter::bdpcm_mode( const CodingUnit& cu, const ComponentID compID )
   if( !cu.cs->sps->BDPCM) return;
   if( !CU::bdpcmAllowed( cu, compID ) ) return;
 
-  int bdpcmMode = isLuma(compID) ? cu.bdpcmMode : cu.bdpcmModeChroma;
+  int bdpcmMode = cu.bdpcmM[toChannelType(compID)];
 
   unsigned ctxId = isLuma(compID) ? 0 : 2; 
-  m_BinEncoder.encodeBin(bdpcmMode > 0 ? 1 : 0, Ctx::BDPCMMode(ctxId));
+  m_BinEncoder.encodeBin(bdpcmMode > 0 ? 1 : 0, Ctx::bdpcmMode(ctxId));
   if (bdpcmMode)
   {
-    m_BinEncoder.encodeBin(bdpcmMode > 1 ? 1 : 0, Ctx::BDPCMMode(ctxId+1));
+    m_BinEncoder.encodeBin(bdpcmMode > 1 ? 1 : 0, Ctx::bdpcmMode(ctxId+1));
   }
   if (isLuma(compID))
   {
-    DTRACE(g_trace_ctx, D_SYNTAX, "bdpcm_mode(%d) x=%d, y=%d, w=%d, h=%d, bdpcm=%d\n", CH_L, cu.lumaPos().x, cu.lumaPos().y, cu.lwidth(), cu.lheight(), cu.bdpcmMode);
+    DTRACE(g_trace_ctx, D_SYNTAX, "bdpcm_mode(%d) x=%d, y=%d, w=%d, h=%d, bdpcm=%d\n", CH_L, cu.lumaPos().x, cu.lumaPos().y, cu.lwidth(), cu.lheight(), cu.bdpcmM[CH_L]);
   }
   else
   {
-    DTRACE(g_trace_ctx, D_SYNTAX, "bdpcm_mode(%d) x=%d, y=%d, w=%d, h=%d, bdpcm=%d\n", CH_C, cu.chromaPos().x, cu.chromaPos().y, cu.chromaSize().width, cu.chromaSize().height, cu.bdpcmModeChroma);
+    DTRACE(g_trace_ctx, D_SYNTAX, "bdpcm_mode(%d) x=%d, y=%d, w=%d, h=%d, bdpcm=%d\n", CH_C, cu.chromaPos().x, cu.chromaPos().y, cu.chromaSize().width, cu.chromaSize().height, cu.bdpcmM[CH_C]);
   }
 }
 
@@ -932,7 +932,7 @@ void CABACWriter::xWriteTruncBinCode(uint32_t symbol, uint32_t maxSymbol)
 
 void CABACWriter::extend_ref_line(const CodingUnit& cu)
 {
-  if ( !cu.Y().valid() || cu.predMode != MODE_INTRA || !isLuma(cu.chType) || cu.bdpcmMode )
+  if ( !cu.Y().valid() || cu.predMode != MODE_INTRA || !isLuma(cu.chType) || cu.bdpcmM[CH_L] )
   {
     return;
   }
@@ -965,10 +965,10 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
     return;
   }
 
-  if( cu.bdpcmMode )
+  if( cu.bdpcmM[CH_L] )
   {
     //th ?
-    //cu.intraDir[0] = cu.bdpcmMode == 2? VER_IDX : HOR_IDX;
+    //cu.intraDir[0] = cu.bdpcmM[CH_L] == 2? VER_IDX : HOR_IDX;
     return;
   }
 
@@ -1063,7 +1063,7 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu, const unsigned *mpmLst )
 {
 
-  if( cu.bdpcmMode ) return;
+  if( cu.bdpcmM[CH_L] ) return;
   mip_flag(cu);
   if (cu.mipFlag)
   {
@@ -1153,7 +1153,7 @@ void CABACWriter::intra_chroma_pred_modes( const CodingUnit& cu )
   {
     return;
   }
-  if( cu.bdpcmModeChroma )
+  if( cu.bdpcmM[CH_C] )
   {
     return;
   }
@@ -1961,7 +1961,7 @@ void CABACWriter::cbf_comp( const CodingUnit& cu, bool cbf, const CompArea& area
 {
   const CtxSet&   ctxSet  = Ctx::QtCbf[ area.compID ];
   unsigned  ctxId;
-  if( ( area.compID == COMP_Y && cu.bdpcmMode ) || ( area.compID != COMP_Y && cu.bdpcmModeChroma ) )
+  if( cu.bdpcmM[toChannelType(area.compID)] )
   {
     ctxId = (area.compID != COMP_Cr) ? 1 : 2;
     m_BinEncoder.encodeBin(cbf, ctxSet(ctxId));
@@ -2401,7 +2401,7 @@ void CABACWriter::mts_idx( const CodingUnit& cu, CUCtx* cuCtx )
 
 void CABACWriter::isp_mode( const CodingUnit& cu )
 {
-  if( !CU::isIntra( cu ) || !isLuma( cu.chType ) || cu.multiRefIdx || !cu.cs->sps->ISP || cu.bdpcmMode || !CU::canUseISP( cu, getFirstComponentOfChannel( cu.chType ) )  || cu.colorTransform)
+  if( !CU::isIntra( cu ) || !isLuma( cu.chType ) || cu.multiRefIdx || !cu.cs->sps->ISP || cu.bdpcmM[CH_L] || !CU::canUseISP( cu, getFirstComponentOfChannel( cu.chType ) )  || cu.colorTransform)
   {
     CHECK( cu.ispMode != NOT_INTRA_SUBPARTITIONS, "cu.ispMode != 0" );
     return;
@@ -2679,7 +2679,7 @@ void CABACWriter::residual_codingTS( const TransformUnit& tu, ComponentID compID
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_codingTS() etype=%d pos=(%d,%d) size=%dx%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height );
 
   // init coeff coding context
-  CoeffCodingContext  cctx    ( tu, compID, false, isLuma(compID) ? tu.cu->bdpcmMode : tu.cu->bdpcmModeChroma);
+  CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)]);
   const TCoeff*       coeff   = tu.getCoeffs( compID ).buf;
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
   cctx.setNumCtxBins(maxCtxBins);

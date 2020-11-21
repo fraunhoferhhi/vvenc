@@ -1347,8 +1347,6 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
             }
           } // for loop-iter
         }
-        cu.refIdxBi[0] = iRefIdxBi[0];
-        cu.refIdxBi[1] = iRefIdxBi[1];
 
         // SMVD
         if( cs.slice->biDirPred && trySmvd )

@@ -655,7 +655,7 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
     TU::setCbfAtDepth( tu, compID, tu.depth, uiAbsSum > 0 );
     return;
   }
-  if ((tu.cu->bdpcmMode && isLuma(compID)) || (!isLuma(compID) && tu.cu->bdpcmModeChroma))
+  if (tu.cu->bdpcmM[toChannelType(compID)])
   {
     tu.mtsIdx[compID] = MTS_SKIP;
   }

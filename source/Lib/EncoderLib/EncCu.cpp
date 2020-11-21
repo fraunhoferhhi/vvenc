@@ -2240,7 +2240,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   cu.mmvdSkip  = false;
   cu.skip      = false;
   cu.mipFlag   = false;
-  cu.bdpcmMode = 0;
+  cu.bdpcmM[CH_L] = 0;
 
   cu.initPuData();
   cu.mergeFlag        = true;
@@ -2574,7 +2574,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       cu.mmvdSkip         = false;
       cu.skip             = false;
       cu.mipFlag          = false;
-      cu.bdpcmMode        = 0;
+      cu.bdpcmM[CH_L]        = 0;
       cu.initPuData();
       cu.mergeFlag        = true;
       cu.regularMergeFlag = false;

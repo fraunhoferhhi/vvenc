@@ -346,7 +346,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
 {
   const ComponentID    compID       = compId;
   const ChannelType    channelType  = toChannelType( compID );
-  const uint32_t       uiDirMode = isLuma(compID) && cu.bdpcmMode ? BDPCM_IDX : !isLuma(compID) && cu.bdpcmModeChroma ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
+  const uint32_t       uiDirMode = cu.bdpcmM[channelType] ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
 
   CHECK( Log2(piPred.width) < 2 && cu.cs->pcv->noChroma2x2, "Size not allowed" );
   CHECK( Log2(piPred.width) > 7, "Size not allowed" );
@@ -362,7 +362,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   {
     case(PLANAR_IDX): xPredIntraPlanar(piPred, srcBuf); break;
     case(DC_IDX):     xPredIntraDc    ( piPred, srcBuf ); break;
-    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, isLuma(compID) ? cu.bdpcmMode : cu.bdpcmModeChroma, clpRng); break;
+    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, isLuma(compID) ? cu.bdpcmM[CH_L] : cu.bdpcmM[CH_C], clpRng); break;
     default:          xPredIntraAng   ( piPred, srcBuf, channelType, clpRng); break;
   }
 
@@ -460,7 +460,7 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
     )
   {
   }
-  else if ((isLuma(chType) && cu.bdpcmMode) || (!isLuma(chType) && cu.bdpcmModeChroma))
+  else if (cu.bdpcmM[chType])
   {
     m_ipaParam.refFilterFlag = false;
   }

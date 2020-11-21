@@ -363,9 +363,7 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
   int8_t            imvNumCand;
   uint8_t           smvdMode;
   uint8_t           ispMode;
-  int               bdpcmMode;
-  int               bdpcmModeChroma;
-  int               refIdxBi[2];
+  uint8_t           bdpcmM[MAX_NUM_CH];
   uint32_t          tileIdx;
 
   // needed for fast imv mode decisions

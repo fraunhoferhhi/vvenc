@@ -314,7 +314,7 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
     {
       if( useTransformSkip )
       {
-        if((isLuma(compID) && tu.cu->bdpcmMode) || (isChroma(compID) && tu.cu->bdpcmModeChroma))
+        if(tu.cu->bdpcmM[toChannelType(compID)])
         {
           forwardRDPCM( tu, compID, pSrc, uiAbsSum, cQP, ctx );
         }

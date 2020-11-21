@@ -1257,7 +1257,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     
     if( cuPcIsIntra )
     {
-      chrmBS  = ( MODE_INTRA == cuPc.predMode && cuPc.bdpcmModeChroma ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmModeChroma ) ? 0 : 2;
+      chrmBS  = ( MODE_INTRA == cuPc.predMode && cuPc.bdpcmM[CH_C] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_C] ) ? 0 : 2;
     }
   }
 
@@ -1271,7 +1271,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   {
     const int edgeIdx = ( perpPos<edgeDir>( localPos ) - perpPos<edgeDir>( cuPos ) ) / 4;
 
-    int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmMode ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmMode ) ? 0 : 2;
+    int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmM[CH_L] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_L] ) ? 0 : 2;
 
     if( cuQ.ispMode && edgeIdx )
     {

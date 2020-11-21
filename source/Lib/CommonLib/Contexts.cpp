@@ -449,7 +449,7 @@ const CtxSet ContextSetCfg::Mvd = ContextSetCfg::addCtxSet
   {   9,   5, },
 });
 
-const CtxSet ContextSetCfg::BDPCMMode = ContextSetCfg::addCtxSet
+const CtxSet ContextSetCfg::bdpcmMode = ContextSetCfg::addCtxSet
 ({
   {  19,  21,   0,  28, },
   {  40,  36,   0,  13, },
