@@ -552,10 +552,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   int   NumBDPCMCand  = (cs.picture->useSC && sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType))) ? 2 : 0;
   int   bestbdpcmMode = 0;
   int   bestISP       = 0;
+  int   bestMrl       = 0;
+  bool  bestMip       = 0;
   int   EndMode       = (int)RdModeList.size();
   bool  useISPlfnst   = testISP && sps.LFNST;
   bool  noLFNST_ts    = false;
-  double bestCostIsp[2] = { MAX_DOUBLE };
+  double bestCostIsp[2] = { MAX_DOUBLE, MAX_DOUBLE };
 
   for (int mode_cur = 0; mode_cur < EndMode + NumBDPCMCand; mode_cur++)
   {
@@ -644,6 +646,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
         bestPUMode    = testMode;
         bestLfnstIdx  = csBest->cus[0]->lfnstIdx;
         bestISP       = csBest->cus[0]->ispMode;
+        bestMip       = csBest->cus[0]->mipFlag;
+        bestMrl       = csBest->cus[0]->multiRefIdx;
         bestbdpcmMode = cu.bdpcmM[CH_L];
         m_ispTestedModes[bestLfnstIdx].bestSplitSoFar = ISPType(bestISP);
         if (csBest->cost < bestCost)
@@ -687,9 +691,9 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     cu.lfnstIdx           = bestLfnstIdx;
     cu.mipTransposedFlag  = bestPUMode.mipTrFlg;
     cu.intraDir[CH_L]     = bestPUMode.modeId;
-    cu.bdpcmM[CH_L]          = bestbdpcmMode;
-    cu.mipFlag            = bestPUMode.mipFlg;
-    cu.multiRefIdx        = bestPUMode.mRefId;
+    cu.bdpcmM[CH_L]       = bestbdpcmMode;
+    cu.mipFlag            = bestMip;
+    cu.multiRefIdx        = bestMrl;
   }
   else
   {
@@ -870,7 +874,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
     uint32_t numbdpcmModes = (cs.picture->useSC && CU::bdpcmAllowed(cu, COMP_Cb) && 
                              ((partitioner.chType == CH_C) || (cu.ispMode == 0  && cu.lfnstIdx == 0 && cu.firstTU->mtsIdx[COMP_Y] == MTS_SKIP) )) ? 2 : 0;
 
-    for (uint32_t mode_cur = uiMinMode; mode_cur < (uiMaxMode + numbdpcmModes); mode_cur++)
+    for (int mode_cur = uiMinMode; mode_cur < (int)(uiMaxMode + numbdpcmModes); mode_cur++)
     {
       int mode = mode_cur;
       if (mode_cur >= uiMaxMode)

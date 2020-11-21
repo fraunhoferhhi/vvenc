@@ -362,7 +362,7 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   {
     case(PLANAR_IDX): xPredIntraPlanar(piPred, srcBuf); break;
     case(DC_IDX):     xPredIntraDc    ( piPred, srcBuf ); break;
-    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, isLuma(compID) ? cu.bdpcmM[CH_L] : cu.bdpcmM[CH_C], clpRng); break;
+    case(BDPCM_IDX):  xPredIntraBDPCM ( piPred, srcBuf, cu.bdpcmM[channelType], clpRng); break;
     default:          xPredIntraAng   ( piPred, srcBuf, channelType, clpRng); break;
   }
 

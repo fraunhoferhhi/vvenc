@@ -808,10 +808,10 @@ void CABACWriter::bdpcm_mode( const CodingUnit& cu, const ComponentID compID )
   int bdpcmMode = cu.bdpcmM[toChannelType(compID)];
 
   unsigned ctxId = isLuma(compID) ? 0 : 2; 
-  m_BinEncoder.encodeBin(bdpcmMode > 0 ? 1 : 0, Ctx::bdpcmMode(ctxId));
+  m_BinEncoder.encodeBin(bdpcmMode > 0 ? 1 : 0, Ctx::BDPCMMode(ctxId));
   if (bdpcmMode)
   {
-    m_BinEncoder.encodeBin(bdpcmMode > 1 ? 1 : 0, Ctx::bdpcmMode(ctxId+1));
+    m_BinEncoder.encodeBin(bdpcmMode > 1 ? 1 : 0, Ctx::BDPCMMode(ctxId+1));
   }
   if (isLuma(compID))
   {
@@ -960,15 +960,8 @@ void CABACWriter::extend_ref_line(const CodingUnit& cu)
 
 void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 {
-  if( !cu.Y().valid() )
+  if( !cu.Y().valid() || cu.bdpcmM[CH_L] )
   {
-    return;
-  }
-
-  if( cu.bdpcmM[CH_L] )
-  {
-    //th ?
-    //cu.intraDir[0] = cu.bdpcmM[CH_L] == 2? VER_IDX : HOR_IDX;
     return;
   }
 
@@ -1062,8 +1055,11 @@ void CABACWriter::intra_luma_pred_modes( const CodingUnit& cu )
 
 void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu, const unsigned *mpmLst )
 {
+  if( cu.bdpcmM[CH_L] ) 
+  {
+    return;
+  }
 
-  if( cu.bdpcmM[CH_L] ) return;
   mip_flag(cu);
   if (cu.mipFlag)
   {
@@ -1149,11 +1145,7 @@ void CABACWriter::intra_luma_pred_mode( const CodingUnit& cu, const unsigned *mp
 
 void CABACWriter::intra_chroma_pred_modes( const CodingUnit& cu )
 {
-  if( cu.chromaFormat == CHROMA_400 || ( CU::isSepTree(cu) && cu.chType == CH_L ) )
-  {
-    return;
-  }
-  if( cu.bdpcmM[CH_C] )
+  if( cu.chromaFormat == CHROMA_400 || ( CU::isSepTree(cu) && cu.chType == CH_L ) || cu.bdpcmM[CH_C] )
   {
     return;
   }

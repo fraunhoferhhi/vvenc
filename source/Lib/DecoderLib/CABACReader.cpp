@@ -1079,10 +1079,10 @@ void CABACReader::bdpcm_mode( CodingUnit& cu, const ComponentID compID )
   }
 
   unsigned ctxId = isLuma( compID ) ? 0 : 2;
-  int bdpcmMode = m_BinDecoder.decodeBin( Ctx::bdpcmMode(ctxId) );
+  int bdpcmMode = m_BinDecoder.decodeBin( Ctx::BDPCMMode(ctxId) );
   if (bdpcmMode)
   {
-    bdpcmMode += m_BinDecoder.decodeBin( Ctx::bdpcmMode(ctxId+1) );
+    bdpcmMode += m_BinDecoder.decodeBin( Ctx::BDPCMMode(ctxId+1) );
   }
 
   cu.bdpcmM[toChannelType(compID)] = bdpcmMode;
