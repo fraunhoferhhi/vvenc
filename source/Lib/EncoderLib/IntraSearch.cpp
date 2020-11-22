@@ -2787,7 +2787,7 @@ double IntraSearch::xTestISP(CodingStructure& cs, Partitioner& subTuPartitioner,
     splitCbfLuma |= TU::getCbfAtDepth( *cs.getTU(subTuPartitioner.currArea().lumaPos(), subTuPartitioner.chType, subTuCounter - 1), 
                                        COMP_Y, subTuPartitioner.currTrDepth);
     int nSubPartitions = m_ispTestedModes[cu.lfnstIdx].numTotalParts[cu.ispMode - 1];
-    bool doStop = (m_pcEncCfg->m_ISP == 1) || (subTuCounter >= nSubPartitions);
+    bool doStop = (m_pcEncCfg->m_ISP != 1) || (subTuCounter < nSubPartitions);
     if (doStop)
     {
       if (singleCostTmpSUM > bestCostForISP)
