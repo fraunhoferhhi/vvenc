@@ -44,7 +44,7 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/BitStream.h"
 #include <ostream>
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/Nal.h"
 
 //! \ingroup EncoderLib
 //! \{

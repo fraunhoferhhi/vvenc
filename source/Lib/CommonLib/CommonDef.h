@@ -58,7 +58,7 @@ vvc@hhi.fraunhofer.de
 #pragma warning( disable : 4800 )
 #endif // _MSC_VER > 1000
 
-#include "../../../include/vvenc/Basics.h"
+#include "vvenc/Basics.h"
 
 #define __IN_COMMONDEF_H__
 #include "TypeDef.h"

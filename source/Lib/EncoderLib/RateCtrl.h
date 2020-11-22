@@ -50,7 +50,7 @@ vvc@hhi.fraunhofer.de
 
 #include "CommonLib/CommonDef.h"
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 
 #include <vector>
 #include <algorithm>

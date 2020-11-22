@@ -55,7 +55,7 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/Reshape.h"
 #include <math.h>
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 
 //! \ingroup EncoderLib
 //! \{

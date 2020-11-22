@@ -49,8 +49,8 @@ vvc@hhi.fraunhofer.de
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
 #include <mutex>
-#include "../../../include/vvenc/EncCfg.h"
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/EncCfg.h"
+#include "vvenc/Nal.h"
 
 //! \ingroup EncoderLib
 //! \{

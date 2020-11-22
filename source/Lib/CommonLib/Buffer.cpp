@@ -51,7 +51,7 @@ vvc@hhi.fraunhofer.de
 #include "Unit.h"
 #include "Slice.h"
 #include "InterpolationFilter.h"
-#include "../../../include/vvenc/Basics.h"
+#include "vvenc/Basics.h"
 
 //! \ingroup CommonLib
 //! \{

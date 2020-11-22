@@ -52,7 +52,7 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/TimeProfiler.h"
 #include <algorithm>
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 #include "Utilities/NoMallocThreadPool.h"
 
 

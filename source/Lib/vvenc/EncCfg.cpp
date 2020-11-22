@@ -45,7 +45,7 @@ vvc@hhi.fraunhofer.de
     \brief    encoder configuration class
 */
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"

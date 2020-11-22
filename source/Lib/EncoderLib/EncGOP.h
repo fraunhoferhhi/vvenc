@@ -60,7 +60,7 @@ vvc@hhi.fraunhofer.de
 #include <list>
 #include <stdlib.h>
 #include <atomic>
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/Nal.h"
 
 #include "Utilities/NoMallocThreadPool.h"
 #include <mutex>

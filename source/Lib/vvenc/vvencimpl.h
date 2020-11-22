@@ -50,9 +50,9 @@ vvc@hhi.fraunhofer.de
 #pragma once
 
 #include <chrono>
-#include "../../../include/vvenc/EncCfg.h"
-#include "../../../include/vvenc/EncoderIf.h"
-#include "../../../include/vvenc/vvenc.h"
+#include "vvenc/EncCfg.h"
+#include "vvenc/EncoderIf.h"
+#include "vvenc/vvenc.h"
 
 namespace vvenc {
 

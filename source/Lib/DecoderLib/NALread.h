@@ -46,7 +46,7 @@ vvc@hhi.fraunhofer.de
 
 #pragma once
 
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/Nal.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/BitStream.h"
 

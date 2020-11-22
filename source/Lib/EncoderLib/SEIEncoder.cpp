@@ -43,7 +43,7 @@ vvc@hhi.fraunhofer.de
 
 #include "SEIEncoder.h"
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/SEI.h"
 #include "CommonLib/PicYuvMD5.h"

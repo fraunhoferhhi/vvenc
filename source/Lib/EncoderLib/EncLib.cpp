@@ -47,7 +47,7 @@ vvc@hhi.fraunhofer.de
 
 #include "EncLib.h"
 
-#include "../../../include/vvenc/EncoderIf.h"
+#include "vvenc/EncoderIf.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
