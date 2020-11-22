@@ -2766,31 +2766,28 @@ double IntraSearch::xTestISP(CodingStructure& cs, Partitioner& subTuPartitioner,
       break;
     }
 
+    if (m_pcRdCost->calcRdCost(singleTmpFracBitsSUM, singleDistTmpLumaSUM + singleDistTmpLuma) > bestCostForISP)
     {
-      if (m_pcRdCost->calcRdCost(singleTmpFracBitsSUM, singleDistTmpLumaSUM + singleDistTmpLuma) > bestCostForISP)
-      {
-        earlySkipISP = true;
-      }
-      else
-      {
-        m_ispTestedModes[0].IspType = ispType;
-        m_ispTestedModes[0].subTuCounter = subTuCounter;
-        singleTmpFracBits = xGetIntraFracBitsQT(cs, subTuPartitioner, true, &cuCtx);
-      }
-      singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
+      earlySkipISP = true;
     }
+    else
+    {
+      m_ispTestedModes[0].IspType = ispType;
+      m_ispTestedModes[0].subTuCounter = subTuCounter;
+      singleTmpFracBits = xGetIntraFracBitsQT(cs, subTuPartitioner, true, &cuCtx);
+    }
+    singleCostTmp = m_pcRdCost->calcRdCost(singleTmpFracBits, singleDistTmpLuma);
 
-    singleCostTmpSUM += singleCostTmp;
+    singleCostTmpSUM     += singleCostTmp;
     singleDistTmpLumaSUM += singleDistTmpLuma;
     singleTmpFracBitsSUM += singleTmpFracBits;
 
     subTuCounter++;
 
-    splitCbfLuma |= TU::getCbfAtDepth(
-      *cs.getTU(subTuPartitioner.currArea().lumaPos(), subTuPartitioner.chType, subTuCounter - 1), COMP_Y,
-      subTuPartitioner.currTrDepth);
+    splitCbfLuma |= TU::getCbfAtDepth( *cs.getTU(subTuPartitioner.currArea().lumaPos(), subTuPartitioner.chType, subTuCounter - 1), 
+                                       COMP_Y, subTuPartitioner.currTrDepth);
     int nSubPartitions = m_ispTestedModes[cu.lfnstIdx].numTotalParts[cu.ispMode - 1];
-    int doStop = (m_pcEncCfg->m_ISP == 1) ? (subTuCounter < nSubPartitions) ? true : false : true;
+    bool doStop = (m_pcEncCfg->m_ISP == 1) || (subTuCounter >= nSubPartitions);
     if (doStop)
     {
       if (singleCostTmpSUM > bestCostForISP)

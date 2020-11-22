@@ -1331,14 +1331,13 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
     {
       // JEM assumes only perfect reconstructions can from now on beat the inter mode
       m_modeCtrl.comprCUCtx->interHad = 0;
-      return;// th new continue;
+      return;
     }
   }
-  bool NSTOP_CHECK = true;
+
   if( tempCS->area.chromaFormat != CHROMA_400 && ( partitioner.chType == CH_C || !CU::isSepTree(cu) ) )
   {
-    bool useIntraSubPartitions = false;
-    useIntraSubPartitions = cu.ispMode != NOT_INTRA_SUBPARTITIONS;
+    bool useIntraSubPartitions = cu.ispMode != NOT_INTRA_SUBPARTITIONS;
     Partitioner subTuPartitioner = partitioner;
     if ((m_pcEncCfg->m_ISP >= 3) && (!partitioner.isSepTree(*tempCS) && useIntraSubPartitions))
     {
@@ -1349,49 +1348,48 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
       maxCostAllowedForChroma);
     if ((m_pcEncCfg->m_ISP >= 3) && useIntraSubPartitions && !cu.ispMode)
     {
-      NSTOP_CHECK = false;
+      return;
     }
   }
-  if (NSTOP_CHECK)
+
+  cu.rootCbf = false;
+
+  for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
   {
-    cu.rootCbf = false;
-
-    for (uint32_t t = 0; t < getNumberValidTBlocks(*cu.cs->pcv); t++)
-    {
-      cu.rootCbf |= cu.firstTU->cbf[t] != 0;
-    }
-
-    // Get total bits for current mode: encode CU
-    m_CABACEstimator->resetBits();
-
-    if ((!cu.cs->slice->isIntra() || cu.cs->slice->sps->IBC) && cu.Y().valid())
-    {
-      m_CABACEstimator->cu_skip_flag(cu);
-    }
-    m_CABACEstimator->pred_mode(cu);
-    m_CABACEstimator->cu_pred_data(cu);
-
-    // Encode Coefficients
-    CUCtx cuCtx;
-    cuCtx.isDQPCoded = true;
-    cuCtx.isChromaQpAdjCoded = true;
-    m_CABACEstimator->cu_residual(cu, partitioner, cuCtx);
-
-    tempCS->fracBits = m_CABACEstimator->getEstFracBits();
-    tempCS->cost = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
-
-    xEncodeDontSplit(*tempCS, partitioner);
-
-    xCheckDQP(*tempCS, partitioner);
-
-    if (m_pcEncCfg->m_EDO)
-    {
-      xCalDebCost(*tempCS, partitioner);
-    }
-
-    DTRACE_MODE_COST(*tempCS, m_cRdCost.getLambda(true));
-    xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO);
+    cu.rootCbf |= cu.firstTU->cbf[t] != 0;
   }
+
+  // Get total bits for current mode: encode CU
+  m_CABACEstimator->resetBits();
+
+  if ((!cu.cs->slice->isIntra() || cu.cs->slice->sps->IBC) && cu.Y().valid())
+  {
+    m_CABACEstimator->cu_skip_flag(cu);
+  }
+  m_CABACEstimator->pred_mode(cu);
+  m_CABACEstimator->cu_pred_data(cu);
+
+  // Encode Coefficients
+  CUCtx cuCtx;
+  cuCtx.isDQPCoded = true;
+  cuCtx.isChromaQpAdjCoded = true;
+  m_CABACEstimator->cu_residual(cu, partitioner, cuCtx);
+
+  tempCS->fracBits = m_CABACEstimator->getEstFracBits();
+  tempCS->cost = m_cRdCost.calcRdCost(tempCS->fracBits, tempCS->dist);
+
+  xEncodeDontSplit(*tempCS, partitioner);
+
+  xCheckDQP(*tempCS, partitioner);
+
+  if (m_pcEncCfg->m_EDO)
+  {
+    xCalDebCost(*tempCS, partitioner);
+  }
+
+  DTRACE_MODE_COST(*tempCS, m_cRdCost.getLambda(true));
+  xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO);
+
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
 }
