@@ -309,6 +309,11 @@ void fastForwardDCT2_B4(const TCoeff *src, TCoeff *dst, int shift, int line, int
 */
 void fastInverseDCT2_B4( const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum )
 {
+#if 0
+  const TMatrixCoeff *iT = g_trCoreDCT2P4[0];
+
+  _fastInverseMM<4>( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum, iT );
+#else
   int j;
   int E[2], O[2];
   int add = 1 << ( shift - 1 );
@@ -353,6 +358,7 @@ void fastInverseDCT2_B4( const TCoeff *src, TCoeff *dst, int shift, int line, in
   {
     memset( dst, 0, ( iSkipLine << 2 ) * sizeof( TCoeff ) );
   }
+#endif
 }
 
 
@@ -491,6 +497,11 @@ void fastForwardDCT2_B8( const TCoeff *src, TCoeff *dst, int shift, int line, in
 */
 void fastInverseDCT2_B8(const TCoeff *src, TCoeff *dst, int shift, int line, int iSkipLine, int iSkipLine2, const TCoeff outputMinimum, const TCoeff outputMaximum)
 {
+#if 0
+  const TMatrixCoeff *iT = g_trCoreDCT2P8[0];
+
+  _fastInverseMM<8>( src, dst, shift, line, iSkipLine, iSkipLine2, outputMinimum, outputMaximum, iT );
+#else
   int j, k;
   int E[4], O[4];
   int EE[2], EO[2];
@@ -544,6 +555,7 @@ void fastInverseDCT2_B8(const TCoeff *src, TCoeff *dst, int shift, int line, int
   {
     memset( dst, 0, ( iSkipLine << 3 ) * sizeof( TCoeff ) );
   }
+#endif
 }
 
 

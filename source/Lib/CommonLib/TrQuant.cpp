@@ -618,7 +618,7 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
 void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
   PelBuf& pResidual,
   const TransformUnit& tu,
-  const ComponentID& compID)
+  const ComponentID compID)
 {
   const CompArea& area = tu.blocks[compID];
   const int width = area.width;
@@ -690,10 +690,10 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
 }
 
-void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID& compID)
+void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID compID)
 {
   CodingStructure &cs     = *tu.cs;
-  const CompArea& rect = tu.blocks[compID];
+  const CompArea& rect    = tu.blocks[compID];
   const uint32_t   width  = rect.width;
   const uint32_t   height = rect.height;
 
@@ -984,8 +984,9 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
       }
       else
+      {
         intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
-
+      }
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;
       bool      tu4x4Flag     = (width == 4 && height == 4);

@@ -2440,7 +2440,7 @@ void CABACReader::residual_coding( TransformUnit& tu, ComponentID compID, CUCtx&
 
 void CABACReader::ts_flag( TransformUnit& tu, ComponentID compID )
 {
-  int tsFlag = tu.cu->bdpcmM[toChannelType(compID)] ? 1 : tu.mtsIdx[compID] == MTS_SKIP ? 1 : 0;
+  int tsFlag = (tu.cu->bdpcmM[toChannelType(compID)] || tu.mtsIdx[compID] == MTS_SKIP) ? 1 : 0;
   int ctxIdx = isLuma(compID) ? 0 : 1;
 
   if( TU::isTSAllowed ( tu, compID ) )

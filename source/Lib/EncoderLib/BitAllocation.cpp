@@ -65,8 +65,13 @@ static inline int apprI3Log2 (const double d) // rounded 3*log2(d)
 static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bitDepth)
 {
   if (bitDepth > 16 || avgLumaValue >= (1u << bitDepth)) return 0;
+#if 0
+  // mapping for peak luminance of ca. 3*400 = 1200 nits
+  return (2 - int ((9 * uint64_t (avgLumaValue * avgLumaValue)) >> uint64_t (2 * bitDepth)));
+#else
   // mapping for peak luminance of ca. 2*400 =  800 nits
   return (1 - int ((6 * uint64_t (avgLumaValue * avgLumaValue)) >> uint64_t (2 * bitDepth)));
+#endif
 }
 
 static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
