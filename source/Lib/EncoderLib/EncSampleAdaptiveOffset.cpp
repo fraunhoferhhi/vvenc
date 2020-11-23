@@ -54,7 +54,7 @@ vvc@hhi.fraunhofer.de
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 
 //! \ingroup EncoderLib
 //! \{

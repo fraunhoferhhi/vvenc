@@ -272,13 +272,11 @@ void TrQuant::invTransformNxN( TransformUnit& tu, const ComponentID compID, PelB
     {
       xInvLfnst(tu, compID);
     }
-#if TS_VVC
     if (tu.mtsIdx[compID] == MTS_SKIP)
     {
       xITransformSkip(tempCoeff, pResi, tu, compID);
     }
     else
-#endif
     {
       xIT(tu, compID, tempCoeff, pResi);
     }
@@ -376,7 +374,6 @@ std::vector<int> TrQuant::selectICTCandidates( const TransformUnit& tu, CompStor
 // ------------------------------------------------------------------------------------------------
 void TrQuant::xSetTrTypes( const TransformUnit& tu, const ComponentID compID, const int width, const int height, int &trTypeHor, int &trTypeVer )
 {
-#if ISP_VVC
   const bool isISP = CU::isIntra(*tu.cu) && tu.cu->ispMode && isLuma(compID);
   if (isISP && tu.cu->lfnstIdx)
   {
@@ -387,9 +384,6 @@ void TrQuant::xSetTrTypes( const TransformUnit& tu, const ComponentID compID, co
     return;
   }
   if (CU::isIntra(*tu.cu) && isLuma(compID) && ((tu.cs->sps->getUseImplicitMTS() && tu.cu->lfnstIdx == 0 && tu.cu->mipFlag == 0) || tu.cu->ispMode))
-#else
-  if( tu.cs->sps->getUseImplicitMTS() && CU::isIntra(*tu.cu) && isLuma(compID) && tu.cu->lfnstIdx == 0 && tu.cu->mipFlag == 0 )
-#endif 
   {
     if (width >= 4 && width <= 16)
       trTypeHor = DST7;
@@ -508,7 +502,6 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   CHECK( shift_1st < 0, "Negative shift" );
   CHECK( shift_2nd < 0, "Negative shift" );
 
-#if ISP_VVC
   if (width > 1 && height > 1)
   {
     fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
@@ -525,10 +518,6 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
     CHECKD((transformHeightIndex < 0), "There is a problem with the height.");
     fastFwdTrans[trTypeVer][transformHeightIndex](block, dstCoeff.buf, shift, 1, 0, skipHeight);
   }
-#else
-  fastFwdTrans[trTypeHor][transformWidthIndex ](block,        tmp, shift_1st, height,        0, skipWidth);
-  fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
-#endif
 }
 
 
@@ -555,7 +544,6 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   int skipWidth  = ( trTypeHor != DCT2 && width  == 32 ) ? 16 : width  > JVET_C0024_ZERO_OUT_TH ? width  - JVET_C0024_ZERO_OUT_TH : 0;
   int skipHeight = ( trTypeVer != DCT2 && height == 32 ) ? 16 : height > JVET_C0024_ZERO_OUT_TH ? height - JVET_C0024_ZERO_OUT_TH : 0;
 
-#if ISP_VVC   // LFNST
   if (tu.cs->sps->LFNST && tu.cu->lfnstIdx)
   {
     if ((width == 4 && height > 4) || (width > 4 && height == 4))
@@ -569,7 +557,6 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
       skipHeight = height - 8;
     }
   }
-#endif
 
   const int      shift_1st              =   TRANSFORM_MATRIX_SHIFT + 1 + COM16_C806_TRANS_PREC; // 1 has been added to shift_1st at the expense of shift_2nd
   const int      shift_2nd              = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth + COM16_C806_TRANS_PREC;
@@ -577,14 +564,11 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   CHECK( shift_2nd < 0, "Negative shift" );
   TCoeff *block = m_blk;
   TCoeff *tmp   = m_tmp;
-#if ISP_VVC
   if (width > 1 && height > 1)   // 2-D transform
-#endif
   {
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
     fastInvTrans[trTypeHor][transformWidthIndex](tmp, block, shift_2nd, height, 0, skipWidth, clipMinimum, clipMaximum);
   }
-#if ISP_VVC
   else if (width == 1)   // 1-D vertical transform
   {
     int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
@@ -599,7 +583,6 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
     CHECK((transformWidthIndex < 0), "There is a problem with the width.");
     fastInvTrans[trTypeHor][transformWidthIndex](pCoeff.buf, block, shift + 1, 1, 0, skipWidth, clipMinimum, clipMaximum);
   }
-#endif
 
 #if ENABLE_SIMD_TRAFO
   if( width & 3 )
@@ -630,13 +613,12 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
 #endif //ENABLE_SIMD_TRAFO
 }
 
-#if TS_VVC
 /** Wrapper function between HM interface and core NxN transform skipping
  */
 void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
   PelBuf& pResidual,
   const TransformUnit& tu,
-  const ComponentID& compID)
+  const ComponentID compID)
 {
   const CompArea& area = tu.blocks[compID];
   const int width = area.width;
@@ -650,7 +632,6 @@ void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
     }
   }
 }
-#endif
 
 void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx)
 {
@@ -674,11 +655,7 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
     TU::setCbfAtDepth( tu, compID, tu.depth, uiAbsSum > 0 );
     return;
   }
-#if BDPCM_VVC
-  if ((tu.cu->bdpcmMode && isLuma(compID)) || (!isLuma(compID) && tu.cu->bdpcmModeChroma))
-#else
-  if( tu.cu->bdpcmMode && isLuma(compID) )
-#endif
+  if (tu.cu->bdpcmM[toChannelType(compID)])
   {
     tu.mtsIdx[compID] = MTS_SKIP;
   }
@@ -690,13 +667,11 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   if (!loadTr)
   {
     DTRACE_PEL_BUF( D_RESIDUALS, resiBuf, tu, tu.cu->predMode, compID );
-#if TS_VVC
     if (tu.mtsIdx[compID] == MTS_SKIP)
     {
       xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
     }
     else
-#endif
     {
       xT(tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight);
     }
@@ -715,18 +690,10 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
 }
 
-#if TS_CHROMA
-void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID& compID)
-#else
-void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand)
-#endif
+void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID compID)
 {
   CodingStructure &cs     = *tu.cs;
-#if TS_CHROMA
-  const CompArea& rect = tu.blocks[compID];
-#else
-  const CompArea & rect   = tu.blocks[COMP_Y];
-#endif
+  const CompArea& rect    = tu.blocks[compID];
   const uint32_t   width  = rect.width;
   const uint32_t   height = rect.height;
 
@@ -739,13 +706,8 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   const double                  facBB[] = { 1.2, 1.3, 1.3, 1.4, 1.5 };
   while (it != trModes->end())
   {
-#if TS_CHROMA
     tu.mtsIdx[compID] = it->first;
     CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[compID]], rect);
-#else
-    tu.mtsIdx[COMP_Y] = it->first;
-    CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[COMP_Y]], rect);
-#endif
     if (tu.noResidual)
     {
       int sumAbs = 0;
@@ -753,7 +715,6 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
       it++;
       continue;
     }
-#if TS_CHROMA
     if (tu.mtsIdx[compID] == MTS_SKIP)
     {
       xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
@@ -762,18 +723,6 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     {
       xT(tu, compID, resiBuf, tempCoeff, width, height);
     }
-#else
-#if TS_VVC
-    if (tu.mtsIdx[COMP_Y] == MTS_SKIP)
-    {
-      xTransformSkip(tu, COMP_Y, resiBuf, tempCoeff.buf);
-    }
-    else
-#endif
-    {
-      xT(tu, COMP_Y, resiBuf, tempCoeff, width, height);
-    }
-#endif
 
     int sumAbs = 0;
     for (int pos = 0; pos < width * height; pos++)
@@ -782,32 +731,16 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     }
 
     double scaleSAD = 1.0;
-#if TS_CHROMA
     if (tu.mtsIdx[compID] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
-#else
-    if (tu.mtsIdx[COMP_Y] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
-#endif
     {
       scaleSAD = 1.0 / 1.414213562;   // compensate for not scaling transform skip coefficients by 1/sqrt(2)
     }
-#if TS_VVC
-#if TS_CHROMA
     if (tu.mtsIdx[compID] == MTS_SKIP)
     {
       int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(compID)));
       scaleSAD *= pow(2, trShift);
     }
-#else
-    if (tu.mtsIdx[COMP_Y] == MTS_SKIP)
-    {
-      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(COMP_Y)));
-      scaleSAD *= pow(2, trShift);
-    }
-#endif
     trCosts.push_back(TrCost(int(std::min<double>(sumAbs * scaleSAD, std::numeric_limits<int>::max())), pos++));
-#else
-    trCosts.push_back(TrCost(int(sumAbs * scaleSAD), pos++));
-#endif
     it++;
   }
 
@@ -939,16 +872,12 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
 
     if (lfnstIdx < 3)
     {
-#if ISP_VVC
       if (tu.cu->ispMode && isLuma(compID))
       {
         intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
       }
       else
         intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
-#else
-      intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
-#endif
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;
       bool      tu4x4Flag     = (width == 4 && height == 4);
@@ -1050,17 +979,14 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
 
     if (lfnstIdx < 3)
     {
-#if ISP_VVC
       if (tu.cu->ispMode && isLuma(compID))
       {
         intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
       }
       else
+      {
         intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
-#else
-      intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
-#endif
-
+      }
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;
       bool      tu4x4Flag     = (width == 4 && height == 4);
@@ -1134,7 +1060,6 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   }
 }
 
-#if TS_VVC
 void TrQuant::xTransformSkip(const TransformUnit& tu, const ComponentID& compID, const CPelBuf& resi, TCoeff* psCoeff)
 {
   const CompArea& rect = tu.blocks[compID];
@@ -1149,7 +1074,6 @@ void TrQuant::xTransformSkip(const TransformUnit& tu, const ComponentID& compID,
     }
   }
 }
-#endif
 } // namespace vvenc
 
 //! \}

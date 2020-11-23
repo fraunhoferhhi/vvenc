@@ -292,9 +292,7 @@ void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, c
 
 void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& cs )
 {
-#if ISP_VVC
   if ((split != TU_1D_HORZ_SPLIT) && (split != TU_1D_VERT_SPLIT))
-#endif
   {
     CHECKD(!canSplit(split, cs), "Trying to apply a prohibited split!");
   }
@@ -339,14 +337,12 @@ void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& c
   case SBT_HOR_QUAD_POS1_SPLIT:
     PartitionerImpl::getSbtTuTiling( back.parts, area, cs, split );
     break;
-#if ISP_VVC
   case TU_1D_HORZ_SPLIT:
   case TU_1D_VERT_SPLIT:
   {
     PartitionerImpl::getTUIntraSubPartitions(back.parts, area, cs, split, TREE_D);
     break;
   }
-#endif
   default:
     THROW( "Unknown split mode" );
     break;
@@ -358,11 +354,7 @@ void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& c
   m_currArea = m_partStack.back().parts.front();
 #endif
 
-#if ISP_VVC
   if ((split == TU_MAX_TR_SPLIT) || (split == TU_1D_HORZ_SPLIT) || (split == TU_1D_VERT_SPLIT))
-#else
-  if( split == TU_MAX_TR_SPLIT )
-#endif
   {
     currTrDepth++;
   }
@@ -546,7 +538,6 @@ bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
   return true;
 }
 
-#if ISP_VVC
 bool Partitioner::canSplitISP(const PartSplit split, const CodingStructure& cs, CodingUnit& cu)
 {
   // const PartSplit implicitSplit = getImplicitSplit(cs);
@@ -570,7 +561,6 @@ bool Partitioner::canSplitISP(const PartSplit split, const CodingStructure& cs, 
   default: THROW("Unknown 1-D split mode"); break;
   }
 }
-#endif
 
 bool Partitioner::isSplitImplicit( const PartSplit split, const CodingStructure &cs )
 {
@@ -673,13 +663,11 @@ void Partitioner::exitCurrSplit()
     CHECK( currTrDepth == 0, "TR depth is '0', although a TU split was performed" );
     currTrDepth--;
   }
-#if ISP_VVC
   else if ((currSplit == TU_1D_HORZ_SPLIT) || (currSplit == TU_1D_VERT_SPLIT))
   {
     CHECK(currTrDepth == 0, "TR depth is '0', although a TU split was performed");
     currTrDepth--;
   }
-#endif
   else
   {
     CHECK( currTrDepth > 0, "RQT found with QTBT partitioner" );

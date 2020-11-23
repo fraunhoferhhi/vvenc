@@ -111,11 +111,9 @@ private:
 protected:
   ChromaFormat          m_currChromaFormat;
 
-#if ISP_VVC
   int                   m_topRefLength;
   int                   m_leftRefLength;
   void setReferenceArrayLengths(const CompArea& area);
-#endif
 
 private:
   static bool isIntegerSlope      ( const int absAng) { return (0 == (absAng & 0x1F)); }
@@ -126,9 +124,7 @@ private:
   void xPredIntraDc               ( PelBuf& pDst, const CPelBuf& pSrc );
   void xPredIntraAng              ( PelBuf& pDst, const CPelBuf& pSrc, const ChannelType channelType, const ClpRng& clpRng);
   Pel  xGetPredValDc              ( const CPelBuf& pSrc, const Size& dstSize );
-#if BDPCM_VVC
   void xPredIntraBDPCM            ( PelBuf& pDst, const CPelBuf& pSrc, const uint32_t dirMode, const ClpRng& clpRng );
-#endif
 
   void xFillReferenceSamples      ( const CPelBuf& recoBuf,      Pel* refBufUnfiltered, const CompArea& area, const CodingUnit &cu );
   void xFilterReferenceSamples    ( const Pel* refBufUnfiltered, Pel* refBufFiltered, const CompArea& area, const SPS &sps, int multiRefIdx, int predStride = 0 );
@@ -165,9 +161,7 @@ public:
   void loadLMLumaRecPels      ( const CodingUnit& cu, const CompArea& chromaArea );
   /// set parameters from CU data for accessing intra data
   void initIntraPatternChType ( const CodingUnit &cu, const CompArea& area, const bool forceRefFilterFlag = false); // use forceRefFilterFlag to get both filtered and unfiltered buffers
-#if ISP_VVC
   void initIntraPatternChTypeISP( const CodingUnit& cu, const CompArea& area, PelBuf& piReco, const bool forceRefFilterFlag = false );
-#endif
 
   // Matrix-based intra prediction
   void initIntraMip           ( const CodingUnit& cu);

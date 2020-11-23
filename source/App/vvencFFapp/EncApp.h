@@ -48,8 +48,8 @@ vvc@hhi.fraunhofer.de
 #include <ostream>
 #include <cstdarg>
 
-#include "../../../include/vvenc/EncoderIf.h"
-#include "../../../include/vvenc/FileIO.h"
+#include "vvenc/EncoderIf.h"
+#include "vvenc/FileIO.h"
 #include "../vvencFFapp/EncAppCfg.h"
 
 //! \ingroup EncoderApp

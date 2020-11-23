@@ -49,8 +49,8 @@ vvc@hhi.fraunhofer.de
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
 #include <mutex>
-#include "../../../include/vvenc/EncCfg.h"
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/EncCfg.h"
+#include "vvenc/Nal.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -124,9 +124,7 @@ private:
   void     xInitRPL            ( SPS &sps ) const;
   void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
-#if DETECT_SC
   void     xDetectScreenC      ( Picture& pic , PelUnitBuf yuvOrgBuf, int useTS);
-#endif
 };
 
 } // namespace vvenc

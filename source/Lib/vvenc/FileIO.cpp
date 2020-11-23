@@ -45,7 +45,7 @@ vvc@hhi.fraunhofer.de
     \brief    file I/O class (header)
 */
 
-#include "../../../include/vvenc/FileIO.h"
+#include "vvenc/FileIO.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Unit.h"
@@ -53,7 +53,7 @@ vvc@hhi.fraunhofer.de
 #include "EncoderLib/NALwrite.h"
 
 #include <iostream>
-#include "../../../include/vvenc/EncoderIf.h"
+#include "vvenc/EncoderIf.h"
 
 //! \ingroup Interface
 //! \{

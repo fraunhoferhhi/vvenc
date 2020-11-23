@@ -45,7 +45,7 @@ vvc@hhi.fraunhofer.de
 
 #pragma once
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/Unit.h"
 

@@ -72,9 +72,7 @@ enum PictureType
   PIC_SAO_TEMP,
   NUM_PIC_TYPES,
   PIC_ORIGINAL_LOCAL,
-#if ISP_VVC
   PIC_ORIGINAL_RSP_REC,
-#endif
 };
 
 // ---------------------------------------------------------------------------
@@ -281,10 +279,8 @@ public:
          PelBuf       getRspOrgBuf(const CompArea& blk)         { return getBuf(blk,  PIC_ORIGINAL_RSP); }
   const CPelBuf       getRspOrgBuf(const CompArea& blk)   const { return getBuf(blk,  PIC_ORIGINAL_RSP); }
 
-#if ISP_VVC
          PelBuf        getRspRecoBuf(const CompArea &blk)         { return getBuf(blk, PIC_ORIGINAL_RSP_REC); }
   const CPelBuf        getRspRecoBuf(const CompArea &blk)   const { return getBuf(blk, PIC_ORIGINAL_RSP_REC); }
-#endif
 
          PelUnitBuf&  getRecoBufRef()                           { return m_reco; }
          PelBuf&      getRspRecoBuf()                           { return m_rspreco.Y(); }

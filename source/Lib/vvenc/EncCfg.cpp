@@ -45,7 +45,7 @@ vvc@hhi.fraunhofer.de
     \brief    encoder configuration class
 */
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
@@ -114,25 +114,6 @@ bool EncCfg::initCfgParameter()
 
   m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  MCTF_RANGE );
   m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, MCTF_RANGE );
-#if NOT_USED
-  if( !m_tileUniformSpacingFlag && m_numTileColumnsMinus1 > 0 )
-  {
-    CONFIRM_PARAMETER_OR_RETURN( m_tileColumnWidth.size() != m_numTileColumnsMinus1, "Error: The number of columns minus 1 does not match size of tile column array." );
-  }
-  else
-  {
-    m_tileColumnWidth.clear();
-  }
-
-  if( !m_tileUniformSpacingFlag && m_numTileRowsMinus1 > 0 )
-  {
-    CONFIRM_PARAMETER_OR_RETURN( m_tileRowHeight.size() != m_numTileRowsMinus1, "Error: The number of rows minus 1 does not match size of tile row array." );
-  }
-  else
-  {
-    m_tileRowHeight.clear();
-  }
-#endif
   /* rules for input, output and internal bitdepths as per help text */
   if (m_MSBExtendedBitDepth[CH_L  ] == 0)
   {
@@ -220,96 +201,6 @@ bool EncCfg::initCfgParameter()
   }
 
   m_sliceId.resize(1,0);
-#if NOT_USED
-  m_topLeftBrickIdx.clear();
-  m_bottomRightBrickIdx.clear();
-
-  bool singleTileInPicFlag = (m_numTileRowsMinus1 == 0 && m_numTileColumnsMinus1 == 0);
-
-  if (!singleTileInPicFlag)
-  {
-    //if (!m_singleBrickPerSliceFlag && m_rectSliceFlag)
-    if (/*m_sliceMode != 0 && m_sliceMode != 4 && */m_rectSliceFlag)
-    {
-      int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
-
-      CONFIRM_PARAMETER_OR_RETURN( m_rectSliceBoundary.size() > numSlicesInPic * 2, "Error: The number of slice indices (RectSlicesBoundaryInPic) is greater than the NumSlicesInPicMinus1." );
-      CONFIRM_PARAMETER_OR_RETURN( m_rectSliceBoundary.size() < numSlicesInPic * 2, "Error: The number of slice indices (RectSlicesBoundaryInPic) is less than the NumSlicesInPicMinus1." );
-
-      m_topLeftBrickIdx.resize(numSlicesInPic);
-      m_bottomRightBrickIdx.resize(numSlicesInPic);
-      for (uint32_t i = 0; i < numSlicesInPic; ++i)
-      {
-        m_topLeftBrickIdx[i] = m_rectSliceBoundary[i * 2];
-        m_bottomRightBrickIdx[i] = m_rectSliceBoundary[i * 2 + 1];
-      }
-      //Validating the correctness of rectangular slice structure
-      int **brickToSlice = (int **)malloc(sizeof(int *) * (m_numTileRowsMinus1 + 1));
-      for (int i = 0; i <= m_numTileRowsMinus1; i++)
-      {
-        brickToSlice[i] = (int *)malloc(sizeof(int) * (m_numTileColumnsMinus1 + 1));
-        memset(brickToSlice[i], -1, sizeof(int) * ((m_numTileColumnsMinus1 + 1)));
-      }
-
-      //Check overlap case
-      for (int sliceIdx = 0; sliceIdx < numSlicesInPic; sliceIdx++)
-      {
-        int sliceStartRow = m_topLeftBrickIdx[sliceIdx] / (m_numTileColumnsMinus1 + 1);
-        int sliceEndRow   = m_bottomRightBrickIdx[sliceIdx] / (m_numTileColumnsMinus1 + 1);
-        int sliceStartCol = m_topLeftBrickIdx[sliceIdx] % (m_numTileColumnsMinus1 + 1);
-        int sliceEndCol   = m_bottomRightBrickIdx[sliceIdx] % (m_numTileColumnsMinus1 + 1);
-        for (int i = 0; i <= m_numTileRowsMinus1; i++)
-        {
-          for (int j = 0; j <= m_numTileColumnsMinus1; j++)
-          {
-            if (i >= sliceStartRow && i <= sliceEndRow && j >= sliceStartCol && j <= sliceEndCol)
-            {
-              CONFIRM_PARAMETER_OR_RETURN( brickToSlice[i][j] != -1, "Error: Values given in RectSlicesBoundaryInPic have conflict! Rectangular slice shall not have overlapped tile(s)" );
-              brickToSlice[i][j] = sliceIdx;
-            }
-          }
-        }
-      }
-      //Check gap case
-      for (int i = 0; i <= m_numTileRowsMinus1; i++)
-      {
-        for (int j = 0; j <= m_numTileColumnsMinus1; j++)
-        {
-          CONFIRM_PARAMETER_OR_RETURN( brickToSlice[i][j] == -1, "Error: Values given in RectSlicesBoundaryInPic have conflict! Rectangular slice shall not have gap" );
-        }
-      }
-
-      for (int i = 0; i <= m_numTileRowsMinus1; i++)
-      {
-        free(brickToSlice[i]);
-        brickToSlice[i] = 0;
-      }
-      free(brickToSlice);
-      brickToSlice = 0;
-    }      // (!m_singleBrickPerSliceFlag && m_rectSliceFlag)
-  }        // !singleTileInPicFlag
-  if (m_rectSliceFlag && m_signalledSliceIdFlag)
-  {
-    int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
-
-    CONFIRM_PARAMETER_OR_RETURN( m_signalledSliceId.size() > numSlicesInPic, "Error: The number of Slice Ids are greater than the m_signalledTileGroupIdLengthMinus1." );
-    CONFIRM_PARAMETER_OR_RETURN( m_signalledSliceId.size() < numSlicesInPic, "Error: The number of Slice Ids are less than the m_signalledTileGroupIdLengthMinus1." );
-    m_sliceId.resize(numSlicesInPic);
-    for (uint32_t i = 0; i < m_signalledSliceId.size(); ++i)
-    {
-      m_sliceId[i] = m_signalledSliceId[i];
-    }
-  }
-  else if (m_rectSliceFlag)
-  {
-    int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
-    m_sliceId.resize(numSlicesInPic);
-    for (uint32_t i = 0; i < numSlicesInPic; ++i)
-    {
-      m_sliceId[i] = i;
-    }
-  }
-#endif
 
   for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
   {
@@ -521,16 +412,10 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
   confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
   confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
-#if ISP_VVC
   confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
-#endif
-#if TS_VVC
   confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
   confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
-#endif
-#if BDPCM_VVC
   confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
-#endif
 
   if( m_alf )
   {
@@ -625,10 +510,6 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
-#if NOT_USED
-  bool tileFlag = (m_numTileColumnsMinus1 > 0 || m_numTileRowsMinus1 > 0 );
-  confirmParameter( tileFlag && m_entropyCodingSyncEnabled, "Tiles and entropy-coding-sync (Wavefronts) can not be applied together, except in the High Throughput Intra 4:4:4 16 profile");
-#endif
   confirmParameter( m_SourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_SourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -1423,36 +1304,6 @@ bool EncCfg::initCfgParameter()
     m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
-#if NOT_USED
-  int   iWidthInCU  = ( m_SourceWidth%m_CTUSize )  ? m_SourceWidth/m_CTUSize  + 1 : m_SourceWidth/m_CTUSize;
-  int   iHeightInCU = ( m_SourceHeight%m_CTUSize ) ? m_SourceHeight/m_CTUSize + 1 : m_SourceHeight/m_CTUSize;
-  uint32_t  uiCummulativeColumnWidth = 0;
-  uint32_t  uiCummulativeRowHeight   = 0;
-
-  //check the column relative parameters
-  confirmParameter( m_numTileColumnsMinus1 >= (1<<(LOG2_MAX_NUM_COLUMNS_MINUS1+1)), "The number of columns is larger than the maximum allowed number of columns." );
-  confirmParameter( m_numTileColumnsMinus1 >= iWidthInCU,                           "The current picture can not have so many columns." );
-  if( m_numTileColumnsMinus1 && !m_tileUniformSpacingFlag )
-  {
-    for( int i=0; i<m_numTileColumnsMinus1; i++ )
-    {
-      uiCummulativeColumnWidth += m_tileColumnWidth[i];
-    }
-    confirmParameter( uiCummulativeColumnWidth >= iWidthInCU, "The width of the column is too large." );
-  }
-
-  //check the row relative parameters
-  confirmParameter( m_numTileRowsMinus1 >= (1<<(LOG2_MAX_NUM_ROWS_MINUS1+1)), "The number of rows is larger than the maximum allowed number of rows." );
-  confirmParameter( m_numTileRowsMinus1 >= iHeightInCU,                       "The current picture can not have so many rows." );
-  if( m_numTileRowsMinus1 && !m_tileUniformSpacingFlag )
-  {
-    for(int i=0; i<m_numTileRowsMinus1; i++)
-    {
-      uiCummulativeRowHeight += m_tileRowHeight[i];
-    }
-    confirmParameter( uiCummulativeRowHeight >= iHeightInCU, "The height of the row is too large." );
-  }
-#endif
   confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
 
   if( m_MCTF && m_QP < 17 )
@@ -1526,13 +1377,6 @@ bool EncCfg::initCfgParameter()
       m_numRPLList1++;
   }
 
-#if NOT_USED
-  int tilesCount = ( m_numTileRowsMinus1 + 1 ) * ( m_numTileColumnsMinus1 + 1 );
-  if ( tilesCount == 1 )
-  {
-    m_bLFCrossTileBoundaryFlag = true;
-  }
-#endif
   m_PROF &= bool(m_Affine);
   if (m_Affine > 1)
   {
@@ -1815,9 +1659,7 @@ int EncCfg::initPreset( int preset )
       m_TS                        = 1;
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
-#if BDPCM_VVC
       m_useBDPCM                  = 1;
-#endif
       break;
 
     default:
@@ -1938,9 +1780,6 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "ECU:%d ",                   m_bUseEarlyCU );
   msg( VERBOSE, "FDM:%d ",                   m_useFastDecisionForMerge );
   msg( VERBOSE, "ESD:%d ",                   m_useEarlySkipDetection );
-#if NOT_USED                               
-  msg( VERBOSE, "Tiles:%dx%d ",              m_numTileColumnsMinus1 + 1, m_numTileRowsMinus1 + 1 );
-#endif
   msg( VERBOSE, "CIP:%d ",                   m_bUseConstrainedIntraPred );
   msg( VERBOSE, "SAO:%d ",                   m_bUseSAO ? 1 : 0 );
   msg( VERBOSE, "ALF:%d ",                   m_alf ? 1 : 0 );
@@ -2008,17 +1847,11 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "LFNST:%d ",                 m_LFNST );
   msg( VERBOSE, "MTS:%d ",                   m_MTS );
   msg( VERBOSE, "MTSIntraCand:%d ",          m_MTSIntraMaxCand );
-#if 1// ISP_VVC                              
   msg( VERBOSE, "ISP:%d ",                   m_ISP );
-#endif
-#if 1//TS_VVC                                
   msg( VERBOSE, "TS:%d ",                    m_TS );
   msg( VERBOSE, "TSLog2MaxSize:%d ",         m_TSsize );
   msg( VERBOSE, "useChromaTS:%d ",           m_useChromaTS );
-#endif
-#if 1//BDPCM_VVC                                
   msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
-#endif
 
   msg( VERBOSE, "\nFAST TOOL CFG: " );
   msg( VERBOSE, "LCTUFast:%d ",              m_useFastLCTU );
