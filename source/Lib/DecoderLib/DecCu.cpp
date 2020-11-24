@@ -142,18 +142,13 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
         CodingStructure &cs     = *tu.cs;
   const CompArea& area          = tu.blocks[compID];
   const ChannelType chType      = toChannelType( compID );
-#if ISP_VVC
   PelBuf piPred                 = tu.cu->ispMode && isLuma( compID ) ? cs.getPredBuf( area ) : m_PredBuffer.getCompactBuf( area );
-#else
-  PelBuf piPred                 = m_PredBuffer.getCompactBuf( area );
-#endif
   const CodingUnit& cu          = *tu.cu;
   const uint32_t uiChFinalMode  = CU::getFinalIntraMode( cu, chType );
   PelBuf pReco                  = cs.getRecoBuf( area );
 
   //===== init availability pattern =====
   CompArea areaPredReg(COMP_Y, tu.chromaFormat, area);
-#if ISP_VVC
   bool predRegDiffFromTB = isLuma( compID ) && CU::isPredRegDiffFromTB( *tu.cu );
   bool firstTBInPredReg  = isLuma( compID ) && CU::isFirstTBInPredReg ( *tu.cu, area );
 
@@ -173,7 +168,6 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
     }
   }
   else
-#endif
   {
     m_pcIntraPred->initIntraPatternChType( *tu.cu, area );
   }

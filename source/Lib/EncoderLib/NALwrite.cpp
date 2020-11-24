@@ -46,7 +46,7 @@ vvc@hhi.fraunhofer.de
 #include <vector>
 #include <algorithm>
 #include <ostream>
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/Nal.h"
 
 //! \ingroup EncoderLib
 //! \{

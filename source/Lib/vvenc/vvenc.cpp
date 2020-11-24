@@ -48,7 +48,7 @@ vvc@hhi.fraunhofer.de
   \date    08/08/2020
 */
 
-#include "../../../include/vvenc/vvenc.h"
+#include "vvenc/vvenc.h"
 #include "vvencimpl.h"
 
 namespace vvenc {

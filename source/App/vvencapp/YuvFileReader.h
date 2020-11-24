@@ -115,11 +115,14 @@ public:
     }
 
     // delete buffer if any
-    delete [] m_psBuffer;
-    m_psBuffer = NULL;
+    if( m_psBuffer )
+    {
+      delete [] m_psBuffer;
+      m_psBuffer = nullptr;
+    }
 
     // allocate some conversion memory in case we need some
-    if( iFileBitDepth != iDestBitDepth )
+    if( ! ( iFileBitDepth == iDestBitDepth && iDestBitDepth > 8 ) )
     {
       m_psBuffer = new short[iWidth + 16];
     }
@@ -149,7 +152,7 @@ public:
   {
     if( !m_bInitialized ){ assert( m_bInitialized ); return -1; }
 
-    const int iSizeFactor     = (m_iDestBitDepth>8) ? 2 : 1;
+    const int iSizeFactor     = 2;
     const int iAlignmentGuard =16;
     rcPicBuffer.m_iBitDepth = m_iDestBitDepth;
     rcPicBuffer.m_iWidth    = m_iWidth;
@@ -233,7 +236,7 @@ private:
     const int iCHeight = m_iHeight>>1;
     const int iCStride = rcPicBuffer.m_iStride>>1;
     assert( rcPicBuffer.m_iBitDepth == m_iDestBitDepth );
-    
+
     rcPicBuffer.m_iWidth = m_iWidth;
     rcPicBuffer.m_iHeight = m_iHeight;
 
@@ -250,21 +253,38 @@ private:
   {
     if( m_iFileBitDepth == m_iDestBitDepth )
     {
-      const int iFactor = 1 + !!(m_iFileBitDepth > 8);
-      if( iStride == iWidth )
+      if( m_iFileBitDepth > 8 )
       {
-        const int iReadSize = iWidth * iHeight * iFactor;
-        m_cIS.read( (char*)pvBuffer, iReadSize);
+        const int iFactor = 2;
+        if( iStride == iWidth )
+        {
+          const int iReadSize = iWidth * iHeight * iFactor;
+          m_cIS.read( (char*)pvBuffer, iReadSize);
+        }
+        else
+        {
+          char* pc = (char*)pvBuffer;
+          const int iReadSize = iFactor * iWidth;
+          const int iLineOffset = iStride * iFactor; 
+          for( int y = 0; y < iHeight; y++)
+          {
+            m_cIS.read( pc, iReadSize );
+            pc += iLineOffset;
+          }
+        }
       }
       else
       {
-        char* pc = (char*)pvBuffer;
-        const int iReadSize = iFactor * iWidth;
-        const int iLineOffset = iStride * iFactor; 
+        short* ps = (short*)pvBuffer;
+        unsigned char* pucTemp = (unsigned char*) m_psBuffer;
         for( int y = 0; y < iHeight; y++)
         {
-          m_cIS.read( pc, iReadSize );
-          pc += iLineOffset;
+          m_cIS.read( (char*)pucTemp, iWidth );
+          for( int x = 0; x < iWidth; x++)
+          {
+            ps[x] = pucTemp[x];
+          }
+          ps += iStride;
         }
       }
     }
@@ -287,16 +307,16 @@ private:
     {
       const int iShift = m_iFileBitDepth - 8;
       const short sAdd = 1<<(iShift-1);
-      unsigned char* puc = (unsigned char*)pvBuffer;
+      short* ps = (short*)pvBuffer;
       short* psTemp = m_psBuffer;
       for( int y = 0; y < iHeight; y++)
       {
         m_cIS.read( (char*)psTemp, 2*iWidth );
         for( int x = 0; x < iWidth; x++)
         {
-          puc[x] = (psTemp[x] + sAdd) >> iShift;
+          ps[x] = (psTemp[x] + sAdd) >> iShift;
         }
-        puc += iStride;
+        ps += iStride;
       }
     }
     else if( m_iDestBitDepth > m_iFileBitDepth )

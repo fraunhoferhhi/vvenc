@@ -45,7 +45,7 @@ vvc@hhi.fraunhofer.de
     \brief    encoder lib interface
 */
 
-#include "../../../include/vvenc/EncoderIf.h"
+#include "vvenc/EncoderIf.h"
 
 #include "EncoderLib/EncLib.h"
 #include "CommonLib/CommonDef.h"

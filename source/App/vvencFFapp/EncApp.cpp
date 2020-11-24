@@ -54,7 +54,7 @@ vvc@hhi.fraunhofer.de
 #include <fcntl.h>
 #include <iomanip>
 
-#include "../../../include/vvenc/Nal.h"
+#include "vvenc/Nal.h"
 #include "../vvencFFapp/ParseArg.h"
 
 using namespace std;
