@@ -2384,44 +2384,75 @@ int64_t RateCtrl::getTotalBitsInFirstPass()
 
 void RateCtrl::detectNewScene()
 {
-  double meanFeatureValue = 0.0;
-  double newSceneDetectionTH = 0.075;
-  int counter = 0;
+  double meanFeatureValueInter = 0.0;
+  double meanFeatureValueIntra = 0.0;
+  double newSceneDetectionTH = 0.1;
+  double newSceneDetectionTHIntra = 0.075;
+  int pocOfLastSceneChange[ 2 ] = { 0, 0 };
+  int counter[ 2 ] = { 0, 0 };
   int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
-  double* gopFeature = new double[ 2 + pocOfLastCompleteGop / encRCSeq->gopSize ]();
+  int pocOfLastCompleteIp = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->intraPeriod ) * encRCSeq->intraPeriod );
+  std::vector<double> gopFeature( 2 + pocOfLastCompleteGop / encRCSeq->gopSize );
+  std::vector<double> gopFeatureIntra( 1 + pocOfLastCompleteIp / encRCSeq->intraPeriod );
 
   // collect the GOP features which will be used to detect scene changes
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
-    if ( !it->isIntra && it->tempLayer == 0 )
+    if ( it->tempLayer == 0 )
     {
-      gopFeature[ counter ] = it->yPsnr / log( it->numBits );
-      meanFeatureValue += gopFeature[ counter ];
-      counter++;
+      if ( !it->isIntra )
+      {
+        gopFeature[ counter[ 0 ] ] = it->yPsnr / log( it->numBits );
+        meanFeatureValueInter += gopFeature[ counter[ 0 ] ];
+        counter[ 0 ]++;
+      }
+      else
+      {
+        gopFeatureIntra[ counter[ 1 ] ] = it->yPsnr / log( it->numBits );
+        meanFeatureValueIntra += gopFeatureIntra[ counter[ 1 ] ];
+        counter[ 1 ]++;
+      }
     }
   }
-  meanFeatureValue /= counter;
+  meanFeatureValueInter /= counter[ 0 ];
+  meanFeatureValueIntra /= counter[ 1 ];
 
-  counter = 0;
+  counter[ 0 ] = 0;
+  counter[ 1 ] = 0;
   // iterate through the first pass frame data to detect scene changes
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
-    if ( !it->isIntra && it->tempLayer == 0 )
+    if ( it->tempLayer == 0 )
     {
-      gopFeature[ counter ] /= meanFeatureValue; // normalize GOP feature values
-      if ( counter > 0 )
+      if ( !it->isIntra )
       {
-        if ( abs( gopFeature[ counter ] - gopFeature[ counter - 1 ] ) > newSceneDetectionTH ) // detect scene cut
+        gopFeature[ counter[ 0 ] ] /= meanFeatureValueInter; // normalize GOP feature values
+        if ( counter[ 0 ] > 0 )
         {
-          it->isNewScene = true;
+          if ( abs( gopFeature[ counter[ 0 ] ] - gopFeature[ counter[ 0 ] - 1 ] ) > newSceneDetectionTH && it->poc - encRCSeq->gopSize > pocOfLastSceneChange[ 1 ] ) // detect scene cut
+          {
+            it->isNewScene = true;
+            pocOfLastSceneChange[ 0 ] = it->poc;
+          }
         }
+        counter[ 0 ]++;
       }
-      counter++;
+      else
+      {
+        gopFeatureIntra[ counter[ 1 ] ] /= meanFeatureValueIntra; // normalize GOP feature values
+        if ( counter[ 1 ] > 0 )
+        {
+          if ( abs( gopFeatureIntra[ counter[ 1 ] ] - gopFeatureIntra[ counter[ 1 ] - 1 ] ) > newSceneDetectionTHIntra && it->poc - encRCSeq->intraPeriod > pocOfLastSceneChange[ 0 ] ) // detect scene cut
+          {
+            it->isNewScene = true;
+            pocOfLastSceneChange[ 1 ] = it->poc;
+          }
+        }
+        counter[ 1 ]++;
+      }
     }
   }
-
-  delete[] gopFeature;
 }
 
 void RateCtrl::processGops()
@@ -2429,8 +2460,8 @@ void RateCtrl::processGops()
   int iterationCounter = 0;
   double actualBitrateAfterScaling = -1.0;
   int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
-  int* gopBits = new int[ 2 + pocOfLastCompleteGop / encRCSeq->gopSize ](); // +2 for the first I frame (GOP) and a potential last incomplete GOP
-  double *scaledBits = new double[ int( m_listRCFirstPassStats.size() ) ]();
+  std::vector<int> gopBits( 2 + pocOfLastCompleteGop / encRCSeq->gopSize ); // +2 for the first I frame (GOP) and a potential last incomplete GOP
+  std::vector<double> scaledBits( int( m_listRCFirstPassStats.size() ) );
 
   // count total bits in every GOP
   std::list<TRCPassStats>::iterator it;
@@ -2467,12 +2498,9 @@ void RateCtrl::processGops()
     }
     it->targetBits = int( it->frameInGopRatio * it->gopBitsVsBitrate * encRCSeq->targetRate + 0.5 );
   }
-
-  delete[] gopBits;
-  delete[] scaledBits;
 }
 
-void RateCtrl::scaleGops( double *scaledBits, int *gopBits, double &actualBitrateAfterScaling )
+void RateCtrl::scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling )
 {
   int64_t totalBitsInFirstPass = getTotalBitsInFirstPass();
   double averageBitrateFirstPass = double( totalBitsInFirstPass ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
@@ -2544,9 +2572,9 @@ void RateCtrl::scaleGops( double *scaledBits, int *gopBits, double &actualBitrat
 
 void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocRange, double *alphaEstimate )
 {
-  int* bitsData = new int[ numTempLevels ]();
-  int* qpData = new int[ numTempLevels ]();
-  int* counter = new int[ numTempLevels ]();
+  std::vector<int> bitsData( numTempLevels );
+  std::vector<int> qpData( numTempLevels );
+  std::vector<int> counter( numTempLevels );
   int iterationCounter = 0;
 
   // collect the first pass TL data for the specified POC range
@@ -2604,10 +2632,6 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
       alphaEstimate[ i ] = 0.0;
     }
   }
-
-  delete[] bitsData;
-  delete[] qpData;
-  delete[] counter;
 }
 
 void RateCtrl::addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer )
