@@ -2500,7 +2500,7 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::scaleGops( std::vector<double> scaledBits, std::vector<int> gopBits, double &actualBitrateAfterScaling )
+void RateCtrl::scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling )
 {
   int64_t totalBitsInFirstPass = getTotalBitsInFirstPass();
   double averageBitrateFirstPass = double( totalBitsInFirstPass ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;

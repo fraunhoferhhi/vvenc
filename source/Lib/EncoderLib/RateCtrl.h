@@ -271,7 +271,7 @@ namespace vvenc {
     void processFirstPassData();
     void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
     void processGops();
-    void scaleGops( std::vector<double> scaledBits, std::vector<int> gopBits, double &actualBitrateAfterScaling );
+    void scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling );
     int64_t getTotalBitsInFirstPass();
     void detectNewScene();
 
