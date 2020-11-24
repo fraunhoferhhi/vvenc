@@ -345,10 +345,10 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   int iRet= VVENC_OK;
 
-  bool bMarginReq = false;
+  bool bMarginReq          = false;
   int iAddMargin           = bMarginReq ? 16: -1;
   const int iMaxCUSizeLog2 = 7;
-  const int iBitDepth = 10;
+  const int iBitDepth      = 10;
 
   int iMaxCUSizeLog2Buffer = bMarginReq ? iMaxCUSizeLog2 : 0;
   const BufferDimensions bd( m_cVVEncParameter.m_iWidth, m_cVVEncParameter.m_iHeight, iBitDepth, iMaxCUSizeLog2Buffer, iAddMargin);
@@ -356,7 +356,7 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
   rcPicBuffer.m_iWidth    = m_cVVEncParameter.m_iWidth;
   rcPicBuffer.m_iHeight   = m_cVVEncParameter.m_iHeight;
   rcPicBuffer.m_iStride   = bd.iStride;
-  const int iBufSize = bd.iSizeFactor * bd.iLumaSize * 3 / 2 + 3*bd.iAlignmentGuard;
+  const int iBufSize      = bd.iSizeFactor * bd.iLumaSize * 3 / 2 + 3*bd.iAlignmentGuard;
 
   rcPicBuffer.m_pucDeletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
   if( NULL == rcPicBuffer.m_pucDeletePicBuffer )
