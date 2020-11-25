@@ -370,9 +370,6 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
-  AccessUnit localAu;
-  AccessUnit* outAu = ( m_cRateCtrl.rcIsFinalPass ) ? &au :  &localAu;
-
   // clear output access unit
   au.clearAu();
 
