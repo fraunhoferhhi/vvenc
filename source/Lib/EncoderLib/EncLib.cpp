@@ -370,15 +370,8 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
-  AccessUnit localAu;
-  AccessUnit* outAu = ( m_cRateCtrl.rcIsFinalPass ) ? &au :  &localAu;
-
   // clear output access unit
-  outAu->m_bCtsValid = false;
-  outAu->m_bDtsValid = false;
-  outAu->m_bRAP      = false;
-  outAu->m_cInfo     = "";
-  outAu->m_iStatus   = 0;
+  au.clearAu();
 
   // setup picture and store original yuv
   Picture* pic = nullptr;
@@ -459,15 +452,15 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
         iDiffFrames = ( m_numPicsCoded - iNext );
       }
 
-      outAu->m_uiCts     = encList[0]->cts;
-      outAu->m_bCtsValid = encList[0]->ctsValid;
+      au.m_uiCts     = encList[0]->cts;
+      au.m_bCtsValid = encList[0]->ctsValid;
 
-      outAu->m_uiDts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + outAu->m_uiCts;
-      outAu->m_bDtsValid = true;
+      au.m_uiDts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
+      au.m_bDtsValid = true;
     }
 
     // encode picture with current poc
-    m_cGOPEncoder->encodePicture( encList, m_cListPic, *outAu, false );
+    m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
     m_numPicsInQueue -= 1;
     m_numPicsCoded   += 1;
     // output reconstructed yuv
@@ -476,9 +469,15 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
   isQueueEmpty = ( m_numPicsInQueue <= 0 );
 
-  if ( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
+  if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
   {
     m_cRateCtrl.destroyRCGOP();
+  }
+
+  // reset output access unit, if not final pass
+  if( !m_cRateCtrl.rcIsFinalPass )
+  {
+    au.clearAu();
   }
 }
 

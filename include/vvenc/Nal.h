@@ -156,24 +156,47 @@ struct VVENC_DECL NALUnitEBSP : public NALUnit
 class VVENC_DECL AccessUnit : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
 {
 public:
+  AccessUnit()
+  {
+    clearAu();
+  }
+
   ~AccessUnit()
   {
+    clearAu();
+  }
+
+  void clearAu()
+  {
+    m_uiCts          = 0;
+    m_uiDts          = 0;
+    m_uiPOC          = 0;
+    m_eSliceType     = NUMBER_OF_SLICE_TYPES;
+    m_iTemporalLayer = 0;
+    m_iStatus        = 0;
+    m_bCtsValid      = false;
+    m_bDtsValid      = false;
+    m_bRAP           = false;
+    m_bRefPic        = false;
+    m_cInfo.clear();
+
     for (AccessUnit::iterator it = this->begin(); it != this->end(); it++)
     {
       delete *it;
     }
+    std::list<NALUnitEBSP*>::clear();
   }
 
-  uint64_t        m_uiCts          = 0;                      ///< composition time stamp
-  uint64_t        m_uiDts          = 0;                      ///< decoding time stamp
-  uint64_t        m_uiPOC          = 0;                      ///< picture order count
-  SliceType       m_eSliceType     = NUMBER_OF_SLICE_TYPES;  ///< slice type (I/P/B) */
-  int             m_iTemporalLayer = 0;                      ///< temporal layer
-  int             m_iStatus        = 0;
-  bool            m_bCtsValid      = false;                  ///< composition time stamp valid flag
-  bool            m_bDtsValid      = false;                  ///< decoding time stamp valid flag
-  bool            m_bRAP           = false;                  ///< random access point flag
-  bool            m_bRefPic        = false;                  ///< reference picture
+  uint64_t        m_uiCts;                                   ///< composition time stamp
+  uint64_t        m_uiDts;                                   ///< decoding time stamp
+  uint64_t        m_uiPOC;                                   ///< picture order count
+  SliceType       m_eSliceType;                              ///< slice type (I/P/B) */
+  int             m_iTemporalLayer;                          ///< temporal layer
+  int             m_iStatus;
+  bool            m_bCtsValid;                               ///< composition time stamp valid flag
+  bool            m_bDtsValid;                               ///< decoding time stamp valid flag
+  bool            m_bRAP;                                    ///< random access point flag
+  bool            m_bRefPic;                                 ///< reference picture
   std::string     m_cInfo;
 };
 
