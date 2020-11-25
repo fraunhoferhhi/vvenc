@@ -427,8 +427,10 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
 
 
-  confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode");
+  confirmParameter( m_RCRateControlMode < 0 || m_RCRateControlMode > 3, "Invalid rate control mode" );
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2, "Only one pass or two pass encoding supported" );
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
   confirmParameter(!((m_level==Level::LEVEL1) 
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
@@ -540,7 +542,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
   confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
-  
+
   confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
   confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
   confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
@@ -1408,7 +1410,7 @@ void EncCfg::setCfgParameter( const EncCfg& encCfg )
   *this = encCfg;
 }
 
-int EncCfg::initPreset( int preset )
+int EncCfg::initPreset( PresetMode preset )
 {
   m_qpInValsCb.clear();
   m_qpInValsCb.push_back( 17 );
@@ -1422,14 +1424,10 @@ int EncCfg::initPreset( int preset )
   m_qpOutValsCb.push_back( 39 );
 
   // basic settings
-  //m_maxTempLayer                  = 5;
-  //m_numRPLList0                   = 20;
-  //m_numRPLList1                   = 20;
   m_intraQPOffset                 = -3;
   m_lambdaFromQPEnable            = true;
   m_MaxCodingDepth                = 5;
   m_log2DiffMaxMinCodingBlockSize = 5;
-
   m_bUseASR                       = true;
   m_bUseHADME                     = true;
   m_useRDOQTS                     = true;
@@ -1504,7 +1502,7 @@ int EncCfg::initPreset( int preset )
 
   switch( preset )
   {
-    case 0:
+    case PresetMode::FIRSTPASS:
       // Q44B11
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 32;
@@ -1523,7 +1521,26 @@ int EncCfg::initPreset( int preset )
       m_TMVPModeId                = 1;
       break;
 
-    case 1:
+    case PresetMode::FASTER:
+      // Q44B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 32;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+
+      m_DMVR                      = 1;
+      m_LMChroma                  = 1;
+      m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
+      break;
+
+    case PresetMode::FAST:
       // Q43B11
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 16;
@@ -1545,7 +1562,7 @@ int EncCfg::initPreset( int preset )
       m_TMVPModeId                = 1;
       break;
 
-    case 2:
+    case PresetMode::MEDIUM:
       // Q44B21
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 8;
@@ -1580,7 +1597,7 @@ int EncCfg::initPreset( int preset )
       m_TMVPModeId                = 1;
       break;
 
-    case 3:
+    case PresetMode::SLOW:
       // Q44B32
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 8;
@@ -1620,7 +1637,7 @@ int EncCfg::initPreset( int preset )
       m_contentBasedFastQtbt      = 0;
       break;
 
-    case 255:
+    case PresetMode::TOOLTEST:
       // Q44B21
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 8;
@@ -1871,6 +1888,7 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "RateControl:%d ",           m_RCRateControlMode );
   if ( m_RCRateControlMode )
   {
+    msg( VERBOSE, "Passes:%d ",              m_RCNumPasses );
     msg( VERBOSE, "TargetBitrate:%d ",       m_RCTargetBitrate );
     msg( VERBOSE, "KeepHierarchicalBit:%d ", m_RCKeepHierarchicalBit );
     msg( VERBOSE, "RCLCUSeparateModel:%d ",  m_RCUseLCUSeparateModel );

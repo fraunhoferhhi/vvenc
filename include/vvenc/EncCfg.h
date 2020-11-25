@@ -127,11 +127,9 @@ public:
   bool confirmParameter( bool bflag, const char* message );
   bool initCfgParameter();
   void setCfgParameter( const EncCfg& encCfg );
-  int  initPreset( int iQuality );
+  int  initPreset( PresetMode preset );
   virtual void printCfg() const;
 };
-
-
 
 
 } // namespace vvenc

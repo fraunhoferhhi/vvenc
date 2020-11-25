@@ -71,6 +71,7 @@ public:
   virtual ~VVEncImpl();
 
   int init( const VVEncParameter& rcVVEncParameter );
+  int initPass( int pass );
   int uninit();
 
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
@@ -105,10 +106,6 @@ private:
   int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
   int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
-
-  static void msgApp( int level, const char* fmt, ... );
-  static void msgFnc( int level, const char* fmt, va_list args );
-  static void msgFncDummy( int level, const char* fmt, va_list args );
 
 public:
   bool                                                        m_bInitialized         = false;

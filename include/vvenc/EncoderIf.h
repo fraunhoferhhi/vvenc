@@ -68,7 +68,7 @@ protected:
   virtual ~YUVWriterIf() {}
 
 public:
-  virtual void outputYuv( const YUVBuffer& yuvOutBuf )
+  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
   {
   }
 };
@@ -85,10 +85,11 @@ class VVENC_DECL EncoderIf
 
     ~EncoderIf();
 
-    void  createEncoderLib ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf = nullptr );
-    void  destroyEncoderLib();
-    void  encodePicture    ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
-    void  printSummary     ();
+    void  initEncoderLib  ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf = nullptr );
+    void  initPass        ( int pass = 0 );
+    void  encodePicture   ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
+    void  uninitEncoderLib();
+    void  printSummary    ();
 };
 
 // ====================================================================================================================

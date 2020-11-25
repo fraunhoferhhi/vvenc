@@ -56,13 +56,13 @@ vvc@hhi.fraunhofer.de
 
 #include "vvenc/Nal.h"
 #include "vvenc/version.h"
+#include "CommonLib/CommonDef.h"
 
 
 namespace vvenc {
 
 std::string VVEncImpl::m_cTmpErrorString;
 std::string VVEncImpl::m_sPresetAsStr;
-int g_LogLevel = LL_ERROR;
 
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
@@ -83,20 +83,10 @@ int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
-  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
-  setMsgFnc( &msgFnc );
-
-  std::stringstream cssCap;
-
   vvenc::EncCfg cEncCfg;
   if( 0 != xInitLibCfg( rcVVEncParameter, cEncCfg ) )
   {
     return VVENC_ERR_INITIALIZE;
-  }
-
-  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
-  {
-    setMsgFnc( &msgFncDummy );
   }
 
   return VVENC_OK;
@@ -108,9 +98,6 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
-
-  g_LogLevel = (int)rcVVEncParameter.m_eLogLevel;
-  setMsgFnc( &msgFnc );
 
   std::stringstream cssCap;
 //  cssCap << NVM_ONOS;
@@ -143,16 +130,21 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
     return VVENC_ERR_INITIALIZE;
   }
 
-  if( rcVVEncParameter.m_eLogLevel != LL_DEBUG_PLUS_INTERNAL_LOGS )
-  {
-    setMsgFnc( &msgFncDummy );
-  }
+  // initialize the encoder
+  m_cEncoderIf.initEncoderLib( m_cEncCfg );
 
-  // create the encoder
-  m_cEncoderIf.createEncoderLib( m_cEncCfg );
-
-  m_bFlushed     = false;
   m_bInitialized = true;
+  m_bFlushed     = false;
+  return VVENC_OK;
+}
+
+int VVEncImpl::initPass( int pass )
+{
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+
+  m_cEncoderIf.initPass( pass );
+
+  m_bFlushed = false;
   return VVENC_OK;
 }
 
@@ -160,20 +152,20 @@ int VVEncImpl::uninit()
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
-  setMsgFnc( &msgFnc );
   m_cEncoderIf.printSummary();
-  m_cEncoderIf.destroyEncoderLib();
+  m_cEncoderIf.uninitEncoderLib();
 
   m_bInitialized = false;
+  m_bFlushed     = false;
   return VVENC_OK;
 }
 
 
 int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_bInitialized )             { return VVENC_ERR_INITIALIZE; }
+  if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
-  if ( m_bFlushed )                 { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
+  if( m_bFlushed )                     { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
@@ -292,7 +284,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 
 int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
 
   YUVBuffer cYUVBuffer;
@@ -459,7 +451,7 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
 
   std::stringstream css;
   vvenc::EncCfg cEncCfg;
-  if( 0 != cEncCfg.initPreset( iQuality ))
+  if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
   {
     css << "undefined preset " << iQuality;
   }
@@ -553,8 +545,10 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
+  ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
+  ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
 
-  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DEBUG_PLUS_INTERNAL_LOGS,      "^log level range 0 - 7" );
+  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DETAILS,                       "log message level range 0 - 6" );
 
   ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
@@ -589,6 +583,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   if(  rcVVEncParameter.m_iTargetBitRate )
   {
     rcEncCfg.m_RCRateControlMode     = 2;
+    rcEncCfg.m_RCNumPasses           = rcVVEncParameter.m_iNumPasses;
     rcEncCfg.m_RCTargetBitrate       = rcVVEncParameter.m_iTargetBitRate;
     rcEncCfg.m_RCKeepHierarchicalBit = 2;
     rcEncCfg.m_RCUseLCUSeparateModel = 1;
@@ -676,7 +671,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   rcEncCfg.m_rewriteParamSets        = true;
   rcEncCfg.m_internChromaFormat      = vvenc::CHROMA_420;
 
-  if( 0 != rcEncCfg.initPreset( rcVVEncParameter.m_iQuality  ) )
+  if( 0 != rcEncCfg.initPreset( (PresetMode)rcVVEncParameter.m_iQuality  ) )
   {
     std::stringstream css;
     css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 3.";
@@ -854,27 +849,6 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
   }
 
   return 0;
-}
-
-void VVEncImpl::msgApp( int level, const char* fmt, ... )
-{
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( level, fmt, args );
-    va_end( args );
-}
-
-void VVEncImpl::msgFnc( int level, const char* fmt, va_list args )
-{
-  if ( g_LogLevel >= level )
-  {
-    vfprintf( level == 1 ? stderr : stdout, fmt, args );
-  }
-}
-
-void VVEncImpl::msgFncDummy( int level, const char* fmt, va_list args )
-{
-  // just a dummy to prevent the lib to print stuff to stdout
 }
 
 } // namespace

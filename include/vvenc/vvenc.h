@@ -52,7 +52,6 @@ vvc@hhi.fraunhofer.de
 #include "stdint.h"
 #include <string>
 #include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
 
 namespace vvenc {
 
@@ -332,6 +331,7 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iQuality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow
   int m_iPerceptualQPA        = 2;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
   int m_iTargetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
+  int m_iNumPasses            = 1;      ///< number of rate control passes                          (default: 1) 
   int m_iInputBitDepth        = 8;      ///< input bit-depth                                        (default: 8)
   int m_iInternalBitDepth     = 10;     ///< internal bit-depth                                     (default: 10)
   VvcProfile m_eProfile       = VVC_PROFILE_MAIN_10; ///< vvc profile                               (default: main_10)
@@ -380,6 +380,11 @@ public:
   */
    int init( const VVEncParameter& rcVVEncParameter );
 
+  /**
+    This method initializes the encoder instance in dependency to the encoder pass.
+  */
+   int initPass( int pass );
+
    /**
     This method resets the encoder instance.
     This method clears the encoder and releases all internally allocated memory.
@@ -389,7 +394,6 @@ public:
     \pre        None
   */
    int uninit();
-
 
    bool isInitialized();
 
@@ -458,7 +462,7 @@ public:
      This method reconfigures the encoder instance.
      This method is used to change encoder settings during the encoding process when the encoder was already initialized.
      Some parameter changes might require an internal encoder restart, especially when previously used parameter sets VPS, SPS or PPS
-     become invalid after the parameter change. If changes are limited to TargetBitRate, QP or LogLevel changes then the encoder continues encoding
+     become invalid after the parameter change. If changes are limited to TargetBitRate or QP changes then the encoder continues encoding
      without interruption, using the new parameters. Some parameters e.g. NumTheads are not reconfigurable - in this case the encoder returns an Error.
      The method fails if the encoder is not initialized or if the assigned parameter set given in VVCEncoderParameter struct
      does not pass the consistency and parameter check.

@@ -52,6 +52,7 @@ vvc@hhi.fraunhofer.de
 #include <string>
 #include <fstream>
 #include <cstring>
+#include <vector>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -219,8 +220,8 @@ int testLibParameterRanges()
   testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255} );
   testParamList( "Level",               vvencParams.m_eLevel,                     vvencParams, {-1,0,15,31,256,}, true );
 
-//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, { 0,1,2,3,4,5,6,7} );
-//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, {-1,8,9}, true );
+//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, { 0,1,2,3,4,5,6} );
+//  testParamList( "LogLevel",            vvencParams.m_eLogLevel,                  vvencParams, {-1,7,8}, true );
 
   testParamList( "Profile",             vvencParams.m_eProfile,                   vvencParams, { 1,3,9} );
   testParamList( "Profile",             vvencParams.m_eProfile,                   vvencParams, {-1,0,2,4,5,6,7,8,10}, true );
@@ -251,6 +252,13 @@ int testLibParameterRanges()
 
   testParamList( "TargetBitRate",       vvencParams.m_iTargetBitRate,             vvencParams, { 0,1000000,20000000} );
   testParamList( "TargetBitRate",       vvencParams.m_iTargetBitRate,             vvencParams, { -1,100000001}, true );
+
+  vvencParams.m_iTargetBitRate = 1;
+  testParamList( "NumPasses",           vvencParams.m_iNumPasses,                 vvencParams, { 1,2} );
+  testParamList( "NumPasses",           vvencParams.m_iNumPasses,                 vvencParams, { -1,0,3}, true );
+  vvencParams.m_iTargetBitRate = 0;
+  testParamList( "NumPasses",           vvencParams.m_iNumPasses,                 vvencParams, { 1} );
+  testParamList( "NumPasses",           vvencParams.m_iNumPasses,                 vvencParams, { 0,2}, true );
 
   testParamList( "InputBitDepth",       vvencParams.m_iInputBitDepth,             vvencParams, { 8,10} );
   testParamList( "InputBitDepth",       vvencParams.m_iInputBitDepth,             vvencParams, { 0,1,7,9,11}, true );
@@ -317,7 +325,7 @@ int callingOrderInitNoUninit()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
+  if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
@@ -357,7 +365,7 @@ int callingOrderRegular()
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
+  if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
@@ -381,13 +389,47 @@ int callingOrderRegular()
   return 0;
 }
 
+int callingOrderRegularInitPass()
+{
+  vvenc::VVEnc cVVEnc;
+  vvenc::VVEncParameter vvencParams;  
+  fillEncoderParameters( vvencParams );
+  if( 0 != cVVEnc.init( vvencParams ) )
+  {
+    return -1;
+  }
+  vvenc::VvcAccessUnit cAU;
+  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+
+  vvenc::InputPicture cInputPic;
+  if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
+  {
+    return -1;
+  }
+  fillInputPic( cInputPic );
+  if( 0 != cVVEnc.initPass( 0 ) )
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.uninit())
+  {
+    return -1;
+  }
+  return 0;
+}
+
 int testLibCallingOrder()
 {
-  testfunc( "callingOrderInvalidUninit",  &callingOrderInvalidUninit, true );
-  testfunc( "callingOrderInitNoUninit",   &callingOrderInitNoUninit ); // not calling uninit seems to be valid
-  testfunc( "callingOrderInitTwice",      &callingOrderInitTwice,     true );
-  testfunc( "callingOrderNoInit",         &callingOrderNoInit,        true );
-  testfunc( "callingOrderRegular",        &callingOrderRegular,       false );
+  testfunc( "callingOrderInvalidUninit",   &callingOrderInvalidUninit,   true  );
+  testfunc( "callingOrderInitNoUninit",    &callingOrderInitNoUninit           ); // not calling uninit seems to be valid
+  testfunc( "callingOrderInitTwice",       &callingOrderInitTwice,       true  );
+  testfunc( "callingOrderNoInit",          &callingOrderNoInit,          true  );
+  testfunc( "callingOrderRegular",         &callingOrderRegular,         false );
+  testfunc( "callingOrderRegularInitPass", &callingOrderRegularInitPass, false );
   return 0;
 }
 

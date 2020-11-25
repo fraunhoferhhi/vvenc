@@ -93,7 +93,7 @@ bool EncApp::parseCfg( int argc, char* argv[] )
       return false;
     }
   }
-  catch ( VVCEncoderFFApp::df::program_options_lite::ParseFailure &e )
+  catch( VVCEncoderFFApp::df::program_options_lite::ParseFailure &e )
   {
     msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
@@ -118,11 +118,13 @@ void EncApp::encode()
     return;
   }
 
-  if ( ! openFileIO() )
+  if( ! openFileIO() )
+  {
     return;
+  }
 
-  // create encoder lib
-  m_cEncoderIf.createEncoderLib( m_cEncAppCfg, this );
+  // initialize encoder lib
+  m_cEncoderIf.initEncoderLib( m_cEncAppCfg, this );
 
   printChromaFormat();
 
@@ -130,61 +132,82 @@ void EncApp::encode()
   YUVBufferStorage yuvInBuf( m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_SourceWidth, m_cEncAppCfg.m_SourceHeight );
 
   // main loop
-  int  framesRcvd = 0;
-  int iTempRate = m_cEncAppCfg.m_FrameRate;
-  int iTempScale = 1;
+  int tempRate   = m_cEncAppCfg.m_FrameRate;
+  int tempScale  = 1;
   switch( m_cEncAppCfg.m_FrameRate )
   {
-  case 23: iTempRate = 24000; iTempScale = 1001; break;
-  case 29: iTempRate = 30000; iTempScale = 1001; break;
-  case 59: iTempRate = 60000; iTempScale = 1001; break;
-  default: break;
+    case 23: tempRate = 24000; tempScale = 1001; break;
+    case 29: tempRate = 30000; tempScale = 1001; break;
+    case 59: tempRate = 60000; tempScale = 1001; break;
+    default: break;
   }
 
-  bool inputDone  = false;
-  bool encDone    = false;
-  while ( ! inputDone || ! encDone )
+  int framesRcvd = 0;
+  for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
   {
-    // check for more input pictures
-    inputDone = ( m_cEncAppCfg.m_framesToBeEncoded > 0 && framesRcvd >= ( m_cEncAppCfg.m_framesToBeEncoded + m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) ) || m_yuvInputFile.isEof();
-
-    // read input YUV
-    if ( ! inputDone )
+    // open input YUV
+    m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth, m_cEncAppCfg.m_MSBExtendedBitDepth, m_cEncAppCfg.m_internalBitDepth );
+    const int skipFrames = m_cEncAppCfg.m_FrameSkip - m_cEncAppCfg.m_MCTFNumLeadFrames;
+    if( skipFrames > 0 )
     {
-      inputDone = ! m_yuvInputFile.readYuvBuf( yuvInBuf, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_aiPad, m_cEncAppCfg.m_bClipInputVideoToRec709Range );
-      if ( ! inputDone )
-      {
-        if( m_cEncAppCfg.m_FrameRate > 0 )
-        {
-          yuvInBuf.cts = framesRcvd * m_cEncAppCfg.m_TicksPerSecond * iTempScale / iTempRate;
-          yuvInBuf.ctsValid = true;
-        }
+      m_yuvInputFile.skipYuvFrames( skipFrames, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
+    }
 
-        framesRcvd += 1;
+    // initialize encoder pass
+    m_cEncoderIf.initPass( pass );
+
+    // loop over input YUV data
+    bool inputDone  = false;
+    bool encDone    = false;
+         framesRcvd = 0;
+    while( ! inputDone || ! encDone )
+    {
+      // check for more input pictures
+      inputDone = ( m_cEncAppCfg.m_framesToBeEncoded > 0
+          && framesRcvd >= ( m_cEncAppCfg.m_framesToBeEncoded + m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) )
+        || m_yuvInputFile.isEof();
+
+      // read input YUV
+      if( ! inputDone )
+      {
+        inputDone = ! m_yuvInputFile.readYuvBuf( yuvInBuf, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_aiPad, m_cEncAppCfg.m_bClipInputVideoToRec709Range );
+        if( ! inputDone )
+        {
+          if( m_cEncAppCfg.m_FrameRate > 0 )
+          {
+            yuvInBuf.cts      = framesRcvd * m_cEncAppCfg.m_TicksPerSecond * tempScale / tempRate;
+            yuvInBuf.ctsValid = true;
+          }
+
+          framesRcvd += 1;
+        }
+      }
+
+      // encode picture
+      AccessUnit au;
+      m_cEncoderIf.encodePicture( inputDone, yuvInBuf, au, encDone );
+
+      // write out encoded access units
+      if( au.size() )
+      {
+        outputAU( au );
+      }
+
+      // temporally skip frames
+      if( ! inputDone && m_cEncAppCfg.m_temporalSubsampleRatio > 1 )
+      {
+        m_yuvInputFile.skipYuvFrames( m_cEncAppCfg.m_temporalSubsampleRatio - 1, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
       }
     }
 
-    // encode picture
-    AccessUnit au;
-    m_cEncoderIf.encodePicture( inputDone, yuvInBuf, au, encDone );
-
-    // write out encoded access units
-    if ( au.size() )
-    {
-      outputAU( au );
-    }
-
-    // temporally skip frames
-    if ( ! inputDone && m_cEncAppCfg.m_temporalSubsampleRatio > 1 )
-    {
-      m_yuvInputFile.skipYuvFrames( m_cEncAppCfg.m_temporalSubsampleRatio - 1, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
-    }
+    // close input YUV
+    m_yuvInputFile.close();
   }
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );
 
-  // destroy encoder lib
-  m_cEncoderIf.destroyEncoderLib();
+  // cleanup encoder lib
+  m_cEncoderIf.uninitEncoderLib();
 
   closeFileIO();
 }
@@ -210,25 +233,17 @@ void EncApp::outputYuv( const YUVBuffer& yuvOutBuf )
 
 bool EncApp::openFileIO()
 {
-  // input YUV
-  m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth, m_cEncAppCfg.m_MSBExtendedBitDepth, m_cEncAppCfg.m_internalBitDepth );
-  const int skipFrames = m_cEncAppCfg.m_FrameSkip - m_cEncAppCfg.m_MCTFNumLeadFrames;
-  if ( skipFrames > 0 )
-  {
-    m_yuvInputFile.skipYuvFrames( skipFrames, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
-  }
-
   // output YUV
-  if ( ! m_cEncAppCfg.m_reconFileName.empty() )
+  if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    if ( m_cEncAppCfg.m_packedYUVMode && ( ( m_cEncAppCfg.m_outputBitDepth[ CH_L ] != 10 && m_cEncAppCfg.m_outputBitDepth[ CH_L ] != 12 )
-        || ( ( ( m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ] ) & ( 1 + ( m_cEncAppCfg.m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) ) )
+    if( m_cEncAppCfg.m_packedYUVMode && ( ( m_cEncAppCfg.m_outputBitDepth[ CH_L ] != 10 && m_cEncAppCfg.m_outputBitDepth[ CH_L ] != 12 )
+          || ( ( ( m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ] ) & ( 1 + ( m_cEncAppCfg.m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) ) )
     {
       msgApp( ERROR, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
       return false;
     }
-    if ( m_cEncAppCfg.m_packedYUVMode && ( m_cEncAppCfg.m_internChromaFormat != CHROMA_400 ) && ( ( m_cEncAppCfg.m_outputBitDepth[ CH_C ] != 10 && m_cEncAppCfg.m_outputBitDepth[ CH_C ] != 12 )
-        || ( ( getWidthOfComponent( m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], 1 ) & ( 1 + ( m_cEncAppCfg.m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
+    if( m_cEncAppCfg.m_packedYUVMode && ( m_cEncAppCfg.m_internChromaFormat != CHROMA_400 ) && ( ( m_cEncAppCfg.m_outputBitDepth[ CH_C ] != 10 && m_cEncAppCfg.m_outputBitDepth[ CH_C ] != 12 )
+          || ( ( getWidthOfComponent( m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], 1 ) & ( 1 + ( m_cEncAppCfg.m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
     {
       msgApp( ERROR, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
       return false;
@@ -239,7 +254,7 @@ bool EncApp::openFileIO()
 
   // output bitstream
   m_bitstream.open( m_cEncAppCfg.m_bitstreamFileName.c_str(), fstream::binary | fstream::out );
-  if ( ! m_bitstream )
+  if( ! m_bitstream )
   {
     msgApp( ERROR, "Failed to open bitstream file %s for writing\n", m_cEncAppCfg.m_bitstreamFileName.c_str() );
     return false;
@@ -260,28 +275,28 @@ void EncApp::rateStatsAccum(const AccessUnit& au, const std::vector<uint32_t>& a
   AccessUnit::const_iterator it_au = au.begin();
   vector<uint32_t>::const_iterator it_stats = annexBsizes.begin();
 
-  for (; it_au != au.end(); it_au++, it_stats++)
+  for( ; it_au != au.end(); it_au++, it_stats++ )
   {
-    switch ((*it_au)->m_nalUnitType)
+    switch( (*it_au)->m_nalUnitType )
     {
-    case NAL_UNIT_CODED_SLICE_TRAIL:
-    case NAL_UNIT_CODED_SLICE_STSA:
-    case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
-    case NAL_UNIT_CODED_SLICE_IDR_N_LP:
-    case NAL_UNIT_CODED_SLICE_CRA:
-    case NAL_UNIT_CODED_SLICE_GDR:
-    case NAL_UNIT_CODED_SLICE_RADL:
-    case NAL_UNIT_CODED_SLICE_RASL:
-    case NAL_UNIT_DCI:
-    case NAL_UNIT_VPS:
-    case NAL_UNIT_SPS:
-    case NAL_UNIT_PPS:
-    case NAL_UNIT_PREFIX_APS:
-    case NAL_UNIT_SUFFIX_APS:
-      m_essentialBytes += *it_stats;
-      break;
-    default:
-      break;
+      case NAL_UNIT_CODED_SLICE_TRAIL:
+      case NAL_UNIT_CODED_SLICE_STSA:
+      case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+      case NAL_UNIT_CODED_SLICE_IDR_N_LP:
+      case NAL_UNIT_CODED_SLICE_CRA:
+      case NAL_UNIT_CODED_SLICE_GDR:
+      case NAL_UNIT_CODED_SLICE_RADL:
+      case NAL_UNIT_CODED_SLICE_RASL:
+      case NAL_UNIT_DCI:
+      case NAL_UNIT_VPS:
+      case NAL_UNIT_SPS:
+      case NAL_UNIT_PPS:
+      case NAL_UNIT_PREFIX_APS:
+      case NAL_UNIT_SUFFIX_APS:
+        m_essentialBytes += *it_stats;
+        break;
+      default:
+        break;
     }
 
     m_totalBytes += *it_stats;
@@ -294,7 +309,7 @@ void EncApp::printRateSummary( int framesRcvd )
 
   double time = (double) framesRcvd / m_cEncAppCfg.m_FrameRate * m_cEncAppCfg.m_temporalSubsampleRatio;
   msgApp( DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
-  if (m_cEncAppCfg.m_summaryVerboseness > 0)
+  if( m_cEncAppCfg.m_summaryVerboseness > 0 )
   {
     msgApp( DETAILS, "Bytes for SPS/PPS/APS/Slice (Incl. Annex B): %u (%.3f kbps)\n", m_essentialBytes, 0.008 * m_essentialBytes / time );
   }
@@ -302,32 +317,30 @@ void EncApp::printRateSummary( int framesRcvd )
 
 void EncApp::printChromaFormat()
 {
-  if ( m_cEncAppCfg.m_verbosity >= DETAILS )
+  if( m_cEncAppCfg.m_verbosity >= DETAILS )
   {
     std::stringstream ssOut;
     ssOut << std::setw(43) << "Input ChromaFormat = ";
-    switch ( m_cEncAppCfg.m_inputFileChromaFormat )
+    switch( m_cEncAppCfg.m_inputFileChromaFormat )
     {
-    case CHROMA_400:  ssOut << "  YUV 400"; break;
-    case CHROMA_420:  ssOut << "  420"; break;
-    case CHROMA_422:  ssOut << "  422"; break;
-    case CHROMA_444:  ssOut << "  444"; break;
-    default:
-      msgApp( ERROR, "invalid chroma format" );
-      return;
+      case CHROMA_400:  ssOut << "  YUV 400"; break;
+      case CHROMA_420:  ssOut << "  420"; break;
+      case CHROMA_422:  ssOut << "  422"; break;
+      case CHROMA_444:  ssOut << "  444"; break;
+      default:          msgApp( ERROR, "invalid chroma format" );
+                        return;
     }
     ssOut << std::endl;
 
     ssOut << std::setw(43) << "Output (intern) ChromaFormat = ";
-    switch ( m_cEncAppCfg.m_internChromaFormat )
+    switch( m_cEncAppCfg.m_internChromaFormat )
     {
-    case CHROMA_400:  ssOut << "  400"; break;
-    case CHROMA_420:  ssOut << "  420"; break;
-    case CHROMA_422:  ssOut << "  422"; break;
-    case CHROMA_444:  ssOut << "  444"; break;
-    default:
-      msgApp( ERROR, "invalid chroma format" );
-      return;
+      case CHROMA_400:  ssOut << "  400"; break;
+      case CHROMA_420:  ssOut << "  420"; break;
+      case CHROMA_422:  ssOut << "  422"; break;
+      case CHROMA_444:  ssOut << "  444"; break;
+      default:          msgApp( ERROR, "invalid chroma format" );
+                        return;
     }
     msgApp( DETAILS, "%s\n", ssOut.str().c_str() );
   }

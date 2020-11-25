@@ -65,30 +65,40 @@ namespace vvenc {
 // ====================================================================================================================
 
 EncLib::EncLib()
-  : m_numPicsRcvd   ( 0 )
-  , m_numPicsInQueue( 0 )
-  , m_numPicsCoded  ( 0 )
-  , m_pocEncode     ( -1 )
-  , m_pocRecOut     ( 0 )
+  : m_cGOPEncoder   ( nullptr )
   , m_yuvWriterIf   ( nullptr )
- , m_threadPool     ( nullptr )
+  , m_threadPool    ( nullptr )
   , m_spsMap        ( MAX_NUM_SPS )
   , m_ppsMap        ( MAX_NUM_PPS )
-  , m_GOPSizeLog2   ( -1 )
-  , m_TicksPerFrameMul4 ( 0 )
 {
+  xResetLib();
 }
 
 EncLib::~EncLib()
 {
 }
 
-void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
+void EncLib::xResetLib()
+{
+  m_numPicsRcvd       = 0;
+  m_numPicsInQueue    = 0;
+  m_numPicsCoded      = 0;
+  m_pocEncode         = -1;
+  m_pocRecOut         = 0;
+  m_GOPSizeLog2       = -1;
+  m_TicksPerFrameMul4 = 0;
+}
+
+void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 {
   // copy config parameter
   const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
+  m_cBckCfg.setCfgParameter( encCfg );
 
   m_yuvWriterIf = yuvWriterIf;
+
+  // initialize first pass
+  initPass( 0 );
 
 #if ENABLE_TRACING
   g_trace_ctx = tracing_init( m_cEncCfg.m_traceFile, m_cEncCfg.m_traceRule );
@@ -99,74 +109,6 @@ void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
     msg( INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
   }
 #endif
-
-  // setup parameter sets
-  const int dciId = m_cEncCfg.m_decodingParameterSetEnabled ? 1 : 0;
-  SPS& sps0       = *( m_spsMap.allocatePS(0) ); // NOTE: implementations that use more than 1 SPS need to be aware of activation issues.
-  PPS& pps0       = *( m_ppsMap.allocatePS(0) );
-
-  xInitSPS( sps0 );
-  sps0.dciId = m_cDCI.dciId;
-  xInitVPS( m_cVPS );
-  xInitDCI( m_cDCI, sps0, dciId );
-  xInitPPS( pps0, sps0 );
-  xInitRPL( sps0 );
-  xInitHrdParameters( sps0 );
-
-  if( encCfg.m_numWppThreads > 0 )
-  {
-    const int maxCntEnc = ( encCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, encCfg.m_numWppThreads) : 1;
-    m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
-  }
-
-  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
-               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
-               m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
-               m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
-
-  m_cGOPEncoder.init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_cEncHRD, m_threadPool );
-
-  m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
-  m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
-  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
-  {
-    const int poc = m_cEncCfg.m_GOPList[ i ].m_POC % m_cEncCfg.m_GOPSize;
-    CHECK( m_cEncCfg.m_GOPList[ i ].m_POC > m_cEncCfg.m_GOPSize, "error: poc greater than gop size" );
-    CHECK( m_pocToGopId[ poc ] != -1, "error: multiple entries in gop list map to same poc modulo gop size" );
-    m_pocToGopId[ poc ] = i;
-    const int nextGopNum = ( i + 1 ) / m_cEncCfg.m_GOPSize;
-    const int nextGopId  = ( i + 1 ) % m_cEncCfg.m_GOPSize;
-    const int nextPoc    = nextGopNum * m_cEncCfg.m_GOPSize + m_cEncCfg.m_GOPList[ nextGopId ].m_POC;
-    m_nextPocOffset[ poc ] = nextPoc - m_cEncCfg.m_GOPList[ i ].m_POC;
-  }
-  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
-  {
-    CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
-  }
-
-  if ( encCfg.m_RCRateControlMode )
-  {
-    m_cRateCtrl.init( encCfg.m_RCRateControlMode, encCfg.m_framesToBeEncoded, encCfg.m_RCTargetBitrate, (int)( (double)encCfg.m_FrameRate / encCfg.m_temporalSubsampleRatio + 0.5 ), encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_SourceWidth, encCfg.m_SourceHeight,
-      encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_internalBitDepth[ CH_L ], encCfg.m_RCKeepHierarchicalBit, encCfg.m_RCUseLCUSeparateModel, encCfg.m_GOPList );
-  }
-
-  int iOffset = -1;
-  while((1<<(++iOffset)) < m_cEncCfg.m_GOPSize);
-  m_GOPSizeLog2 = iOffset;
-
-  if( m_cEncCfg.m_FrameRate )
-  {
-    int iTempRate = m_cEncCfg.m_FrameRate;
-    int iTempScale = 1;
-    switch( m_cEncCfg.m_FrameRate )
-    {
-    case 23: iTempRate = 24000; iTempScale = 1001; break;
-    case 29: iTempRate = 30000; iTempScale = 1001; break;
-    case 59: iTempRate = 60000; iTempScale = 1001; break;
-    default: break;
-    }
-    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
-  }
 
 #if ENABLE_TIME_PROFILING
   if( g_timeProfiler == nullptr )
@@ -189,10 +131,16 @@ void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 #endif
 }
 
-void EncLib::destroy()
+void EncLib::uninitEncoderLib()
 {
-  m_MCTF.uninit();
-  m_cRateCtrl.destroy();
+  xUninitLib();
+
+#if ENABLE_TRACING
+  if ( g_trace_ctx )
+  {
+    tracing_uninit( g_trace_ctx );
+  }
+#endif
 
 #if ENABLE_CU_MODE_COUNTERS
   std::cout << std::endl;
@@ -263,23 +211,155 @@ void EncLib::destroy()
     g_timeProfiler = nullptr;
   }
 #endif
+}
 
-  if ( m_threadPool )
+void EncLib::initPass( int pass )
+{
+  xUninitLib();
+
+  // set rate control pass
+  m_cRateCtrl.setRCPass( pass, m_cEncCfg.m_RCNumPasses - 1 );
+
+  // modify encoder config based on rate control pass
+  if( m_cEncCfg.m_RCNumPasses > 1 )
+  {
+    xSetRCEncCfg( pass );
+  }
+
+  // setup parameter sets
+  const int dciId = m_cEncCfg.m_decodingParameterSetEnabled ? 1 : 0;
+  SPS& sps0       = *( m_spsMap.allocatePS( 0 ) ); // NOTE: implementations that use more than 1 SPS need to be aware of activation issues.
+  PPS& pps0       = *( m_ppsMap.allocatePS( 0 ) );
+
+  xInitSPS( sps0 );
+  sps0.dciId = m_cDCI.dciId;
+  xInitVPS( m_cVPS );
+  xInitDCI( m_cDCI, sps0, dciId );
+  xInitPPS( pps0, sps0 );
+  xInitRPL( sps0 );
+  xInitHrdParameters( sps0 );
+
+  // thread pool
+  if( m_cEncCfg.m_numWppThreads > 0 )
+  {
+    const int maxCntEnc = ( m_cEncCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, m_cEncCfg.m_numWppThreads) : 1;
+    m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
+  }
+
+  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
+               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
+               m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
+               m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
+
+  CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
+  m_cGOPEncoder = new EncGOP;
+  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_cEncHRD, m_threadPool );
+
+  m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
+  m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
+  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
+  {
+    const int poc = m_cEncCfg.m_GOPList[ i ].m_POC % m_cEncCfg.m_GOPSize;
+    CHECK( m_cEncCfg.m_GOPList[ i ].m_POC > m_cEncCfg.m_GOPSize, "error: poc greater than gop size" );
+    CHECK( m_pocToGopId[ poc ] != -1, "error: multiple entries in gop list map to same poc modulo gop size" );
+    m_pocToGopId[ poc ] = i;
+    const int nextGopNum = ( i + 1 ) / m_cEncCfg.m_GOPSize;
+    const int nextGopId  = ( i + 1 ) % m_cEncCfg.m_GOPSize;
+    const int nextPoc    = nextGopNum * m_cEncCfg.m_GOPSize + m_cEncCfg.m_GOPList[ nextGopId ].m_POC;
+    m_nextPocOffset[ poc ] = nextPoc - m_cEncCfg.m_GOPList[ i ].m_POC;
+  }
+  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
+  {
+    CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
+  }
+
+  if ( m_cEncCfg.m_RCRateControlMode )
+  {
+    m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight,
+      m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
+
+    if ( pass == 1 )
+    {
+      m_cRateCtrl.processFirstPassData();
+      // update first pass data
+      m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
+    }
+  }
+
+  int iOffset = -1;
+  while((1<<(++iOffset)) < m_cEncCfg.m_GOPSize);
+  m_GOPSizeLog2 = iOffset;
+
+  if( m_cEncCfg.m_FrameRate )
+  {
+    int iTempRate = m_cEncCfg.m_FrameRate;
+    int iTempScale = 1;
+    switch( m_cEncCfg.m_FrameRate )
+    {
+    case 23: iTempRate = 24000; iTempScale = 1001; break;
+    case 29: iTempRate = 30000; iTempScale = 1001; break;
+    case 59: iTempRate = 60000; iTempScale = 1001; break;
+    default: break;
+    }
+    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
+  }
+}
+
+void EncLib::xUninitLib()
+{
+
+  // internal picture buffer
+  xDeletePicBuffer();
+
+  // sub modules
+  m_cRateCtrl.destroy();
+  m_nextPocOffset.clear();
+  m_pocToGopId.clear();
+  if( m_cGOPEncoder )
+  {
+    delete m_cGOPEncoder;
+    m_cGOPEncoder = nullptr;
+  }
+  m_MCTF.uninit();
+
+  // thread pool
+  if( m_threadPool )
   {
     m_threadPool->shutdown( true );
     delete m_threadPool;
     m_threadPool = nullptr;
   }
 
-  // internal picture buffer
-  xDeletePicBuffer();
+  // cleanup parameter sets
+  m_spsMap.clearMap();
+  m_ppsMap.clearMap();
 
-#if ENABLE_TRACING
-  if ( g_trace_ctx )
+  // reset internal data
+  xResetLib();
+}
+
+void EncLib::xSetRCEncCfg( int pass )
+{
+  // restore encoder configuration for second rate control passes
+  const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
+
+  // set encoder config for rate control first pass
+  if( ! m_cRateCtrl.rcIsFinalPass )
   {
-    tracing_uninit( g_trace_ctx );
+    // preserve MCTF settings
+    const int mctf = m_cBckCfg.m_MCTF;
+
+    m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
+
+    // use fixQP encoding in first pass
+    m_cBckCfg.m_RCRateControlMode = 0;
+    m_cBckCfg.m_QP                = 32;
+
+    // restore MCTF
+    m_cBckCfg.m_MCTF              = mctf;
+
+    std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
   }
-#endif
 }
 
 // ====================================================================================================================
@@ -291,11 +371,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
   // clear output access unit
-  au.m_bCtsValid = false;
-  au.m_bDtsValid = false;
-  au.m_bRAP      = false;
-  au.m_cInfo     = "";
-  au.m_iStatus   = 0;
+  au.clearAu();
 
   // setup picture and store original yuv
   Picture* pic = nullptr;
@@ -379,13 +455,12 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
       au.m_uiCts     = encList[0]->cts;
       au.m_bCtsValid = encList[0]->ctsValid;
 
-      au.m_uiDts = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
+      au.m_uiDts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
       au.m_bDtsValid = true;
-      //assert(  (int64_t)au.m_uiDts < 0 || au.m_uiCts >= au.m_uiDts );
     }
 
     // encode picture with current poc
-    m_cGOPEncoder.encodePicture( encList, m_cListPic, au, false );
+    m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
     m_numPicsInQueue -= 1;
     m_numPicsCoded   += 1;
     // output reconstructed yuv
@@ -394,15 +469,21 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
   isQueueEmpty = ( m_numPicsInQueue <= 0 );
 
-  if ( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
+  if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
   {
     m_cRateCtrl.destroyRCGOP();
+  }
+
+  // reset output access unit, if not final pass
+  if( !m_cRateCtrl.rcIsFinalPass )
+  {
+    au.clearAu();
   }
 }
 
 void  EncLib::printSummary()
 {
-  m_cGOPEncoder.printOutSummary( m_numPicsCoded, m_cEncCfg.m_printMSEBasedSequencePSNR, m_cEncCfg.m_printSequenceMSE, m_cEncCfg.m_printHexPsnr, m_spsMap.getFirstPS()->bitDepths );
+  m_cGOPEncoder->printOutSummary( m_numPicsCoded, m_cEncCfg.m_printMSEBasedSequencePSNR, m_cEncCfg.m_printSequenceMSE, m_cEncCfg.m_printHexPsnr, m_spsMap.getFirstPS()->bitDepths );
 }
 
 // ====================================================================================================================
@@ -558,6 +639,8 @@ void EncLib::xDeletePicBuffer()
     delete pic;
     pic = nullptr;
   }
+
+  m_cListPic.clear();
 }
 
 Picture* EncLib::xGetPictureBuffer( int poc )
@@ -1126,17 +1209,17 @@ void EncLib::xOutputRecYuv()
 {
   Slice::sortPicList( m_cListPic );
 
-  for ( const auto& picItr : m_cListPic )
+  for( const auto& picItr : m_cListPic )
   {
-    if ( picItr->poc < m_pocRecOut )
+    if( picItr->poc < m_pocRecOut )
       continue;
-    if ( ! picItr->isReconstructed || picItr->poc != m_pocRecOut )
+    if( ! picItr->isReconstructed || picItr->poc != m_pocRecOut )
       return;
-    const PPS& pps = *(picItr->cs->pps);
-    YUVBuffer yuvBuffer;
-    setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
-    if ( m_yuvWriterIf )
+    if( m_cRateCtrl.rcIsFinalPass && m_yuvWriterIf )
     {
+      const PPS& pps = *(picItr->cs->pps);
+      YUVBuffer yuvBuffer;
+      setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
       m_yuvWriterIf->outputYuv( yuvBuffer );
     }
     m_pocRecOut = picItr->poc + 1;

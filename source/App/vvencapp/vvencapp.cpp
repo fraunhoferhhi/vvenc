@@ -60,10 +60,37 @@ vvc@hhi.fraunhofer.de
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
+#include "vvenc/EncoderIf.h"
 
 #include "BinFileWriter.h"
 #include "CmdLineParser.h"
 #include "YuvFileReader.h"
+
+int g_verbosity = vvenc::LL_VERBOSE;
+
+void msgFnc( int level, const char* fmt, va_list args )
+{
+  if ( g_verbosity >= level )
+  {
+    vfprintf( level == 1 ? stderr : stdout, fmt, args );
+  }
+}
+
+void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage, int code, const std::string cErr )
+{
+  std::cout << cAppname  << " [error]: " << cMessage << ", ";
+  switch( code )
+  {
+    case vvenc::VVENC_ERR_CPU :       std::cout << "SSE 4.1 cpu support required."; break;
+    case vvenc::VVENC_ERR_PARAMETER : std::cout << "invalid parameter."; break;
+    default :                         std::cout << "error " << code; break;
+  };
+  if( !cErr.empty() )
+  {
+    std::cout << " - " << cErr;
+  }
+  std::cout << std::endl;
+}
 
 int main( int argc, char* argv[] )
 {
@@ -122,6 +149,9 @@ int main( int argc, char* argv[] )
 
   int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile );
 
+  vvenc::setMsgFnc( &msgFnc );
+  g_verbosity = cVVEncParameter.m_eLogLevel;
+
   if( iRet != 0 )
   {
     if( iRet == 2 || iRet == 3 )
@@ -172,34 +202,13 @@ int main( int argc, char* argv[] )
   iRet = cVVEnc.init( cVVEncParameter );
   if( 0 != iRet )
   {
-    std::cout << cAppname  << " [error]: cannot init encoder, ";
-    switch( iRet )
-    {
-    case vvenc::VVENC_ERR_CPU :       std::cout << "SSE 4.1 cpu support required."; break;
-    case vvenc::VVENC_ERR_PARAMETER : std::cout << "invalid parameter."; break;
-    default : std::cout << "error " << iRet; break;
-    };
-    std::string cErr = cVVEnc.getLastError();
-    if ( !cErr.empty() )
-    {
-        std::cout << " - " << cErr;
-    }
-
-    std::cout << std::endl;
-    return -1;
+    printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
+    return iRet;
   }
 
   if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
   {
     std::cout << "VVEnc info: " << cVVEnc.getEncoderInfo() << std::endl;
-  }
-
-  // open the input file
-  vvcutilities::YuvFileReader cYuvFileReader;
-  if( 0 != cYuvFileReader.open( cInputFile.c_str(), cVVEncParameter.m_iInputBitDepth, cVVEncParameter.m_iInternalBitDepth, cVVEncParameter.m_iWidth, cVVEncParameter.m_iHeight ) )
-  {
-    std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
-    return -1;
   }
 
   // open output file
@@ -213,7 +222,6 @@ int main( int argc, char* argv[] )
     }
   }
 
-
   // --- allocate memory for output packets
   vvenc::VvcAccessUnit cAccessUnit;
   cAccessUnit.m_iBufSize  = cVVEncParameter.m_iWidth * cVVEncParameter.m_iHeight;
@@ -221,19 +229,17 @@ int main( int argc, char* argv[] )
 
   vvenc::InputPicture cInputPicture;
   iRet = cVVEnc.getPreferredBuffer( cInputPicture.m_cPicBuffer );
-  if( iRet )
+  if( 0 != iRet )
   {
-    std::cout << cAppname  << " [error]: Encoder failed to get preferredBuffer " << std::endl;
+    printVVEncErrorMsg( cAppname, "failed to get preferred buffer", iRet, cVVEnc.getLastError() );
     return iRet;
   }
   const unsigned char* pucDeletePicBuffer = cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer;
   cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer = NULL;
 
+  // --- start timer
   std::chrono::steady_clock::time_point cTPStart;
   std::chrono::steady_clock::time_point cTPEnd;
-  unsigned int uiFrames = 0;
-  unsigned int uiFramesTmp = 0;
-
   cVVEnc.clockStartTime();
   cTPStart = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -242,116 +248,129 @@ int main( int argc, char* argv[] )
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
-  const int64_t iFrameSkip = std::max<int64_t>( cVVEncParameter.m_iFrameSkip - cVVEnc.getNumLeadFrames(), 0 );
-  const int64_t iMaxFrames = cVVEncParameter.m_iMaxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
-  int64_t       iSeqNumber = 0;
-  bool          bEof       = false;
-  while( !bEof )
+  unsigned int uiFrames = 0;
+
+  for( int pass = 0; pass < cVVEncParameter.m_iNumPasses; pass++ )
   {
-    iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
-    if( iRet )
+    // initialize the encoder pass
+    iRet = cVVEnc.initPass( pass );
+    if( 0 != iRet )
     {
-      if( cVVEncParameter.m_eLogLevel > vvenc::LL_ERROR && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
-      {
-        std::cout << "EOF reached" << std::endl;
-      }
-      bEof = true;
+      printVVEncErrorMsg( cAppname, "cannot init encoder", iRet, cVVEnc.getLastError() );
+      return iRet;
     }
 
-    if( !bEof && iSeqNumber >= iFrameSkip )
+    // open the input file
+    vvcutilities::YuvFileReader cYuvFileReader;
+    if( 0 != cYuvFileReader.open( cInputFile.c_str(), cVVEncParameter.m_iInputBitDepth, cVVEncParameter.m_iInternalBitDepth, cVVEncParameter.m_iWidth, cVVEncParameter.m_iHeight ) )
     {
-      // set sequence number and cts
-      cInputPicture.m_cPicBuffer.m_uiSequenceNumber = iSeqNumber;
-      cInputPicture.m_cPicBuffer.m_uiCts            = iSeqNumber * cVVEncParameter.m_iTicksPerSecond * cVVEncParameter.m_iTemporalScale / cVVEncParameter.m_iTemporalRate;
-      cInputPicture.m_cPicBuffer.m_bCtsValid        = true;
+      std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
+      return -1;
+    }
 
-      //std::cout << "process picture " << cInputPicture.m_cPicBuffer.m_uiSequenceNumber << " cts " << cInputPicture.m_cPicBuffer.m_uiCts << std::endl;
-      // call encode
-      iRet = cVVEnc.encode( &cInputPicture, cAccessUnit );
+    const int64_t iFrameSkip  = std::max<int64_t>( cVVEncParameter.m_iFrameSkip - cVVEnc.getNumLeadFrames(), 0 );
+    const int64_t iMaxFrames  = cVVEncParameter.m_iMaxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
+    int64_t       iSeqNumber  = 0;
+    bool          bEof        = false;
+    unsigned int  uiFramesTmp = 0;
+    uiFrames    = 0;
 
-      // check success
-      if( iRet != 0 )
+    while( !bEof )
+    {
+      iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
+      if( iRet )
       {
-        std::string cErr = cVVEnc.getLastError();
-        std::cout << cAppname  << " [error]: encoding failed (" << iRet << "): " << cErr << std::endl;
-        break;
+        if( cVVEncParameter.m_eLogLevel > vvenc::LL_ERROR && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
+        {
+          std::cout << "EOF reached" << std::endl;
+        }
+        bEof = true;
       }
 
-      if( 0 != cAccessUnit.m_iUsedSize  )
+      if( !bEof && iSeqNumber >= iFrameSkip )
       {
-        if( cBinFileWriter.isOpen())
+        // set sequence number and cts
+        cInputPicture.m_cPicBuffer.m_uiSequenceNumber = iSeqNumber;
+        cInputPicture.m_cPicBuffer.m_uiCts            = iSeqNumber * cVVEncParameter.m_iTicksPerSecond * cVVEncParameter.m_iTemporalScale / cVVEncParameter.m_iTemporalRate;
+        cInputPicture.m_cPicBuffer.m_bCtsValid        = true;
+
+        //std::cout << "process picture " << cInputPicture.m_cPicBuffer.m_uiSequenceNumber << " cts " << cInputPicture.m_cPicBuffer.m_uiCts << std::endl;
+        // call encode
+        iRet = cVVEnc.encode( &cInputPicture, cAccessUnit );
+        if( 0 != iRet )
         {
-          // write output
-          cBinFileWriter.writeAU( cAccessUnit );
+          printVVEncErrorMsg( cAppname, "encoding failed", iRet, cVVEnc.getLastError() );
+          return iRet;
         }
 
-        if( ! cAccessUnit.m_cInfo.empty() ) // print debug info
+        if( 0 != cAccessUnit.m_iUsedSize  )
         {
-          printf( "%s\n", cAccessUnit.m_cInfo.c_str() );
-        }
-        uiFrames++;
-        uiFramesTmp++;
-
-        if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE)
-        {
-          cTPEnd = std::chrono::steady_clock::now();
-          double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
-          if( dTimeMs > 1000.0 )
+          if( cBinFileWriter.isOpen())
           {
-            if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
-            std::cout <<  "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
-            cTPStart = std::chrono::steady_clock::now();
-            uiFramesTmp = 0;
+            // write output
+            cBinFileWriter.writeAU( cAccessUnit );
+          }
+
+          uiFrames++;
+          uiFramesTmp++;
+
+          if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE)
+          {
+            cTPEnd = std::chrono::steady_clock::now();
+            double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
+            if( dTimeMs > 1000.0 )
+            {
+              if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
+              std::cout <<  "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
+              cTPStart = std::chrono::steady_clock::now();
+              uiFramesTmp = 0;
+            }
           }
         }
       }
-    }
-    iSeqNumber++;
+      iSeqNumber++;
 
-    if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) ){ break; }
-  }
-
-  // flush the encoder
-  while( true )
-  {
-    iRet = cVVEnc.flush( cAccessUnit );
-    if( iRet != 0 )
-    {
-      std::string cErr = cVVEnc.getLastError();
-      std::cout << cAppname  << " [error]: encoding failed (" << iRet << "): " << cErr << std::endl;
-      break;
+      if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) ){ break; }
     }
 
-    if( 0 == cAccessUnit.m_iUsedSize  )
+    // flush the encoder
+    while( true )
     {
-      break;
-    }
-
-    if( ! cAccessUnit.m_cInfo.empty() ) // print debug info
-    {
-      printf( "%s\n", cAccessUnit.m_cInfo.c_str() );
-    }
-
-    uiFrames++;
-
-    if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
-    {
-      cTPEnd = std::chrono::steady_clock::now();
-      double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
-      if( dTimeMs > 1000.0 )
+      iRet = cVVEnc.flush( cAccessUnit );
+      if( 0 != iRet )
       {
-        if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
-        std::cout << "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
-        cTPStart = std::chrono::steady_clock::now();
-        uiFramesTmp = 0;
+        printVVEncErrorMsg( cAppname, "flush encoder failed", iRet, cVVEnc.getLastError() );
+        return iRet;
+      }
+
+      if( 0 == cAccessUnit.m_iUsedSize  )
+      {
+        break;
+      }
+
+      uiFrames++;
+
+      if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
+      {
+        cTPEnd = std::chrono::steady_clock::now();
+        double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
+        if( dTimeMs > 1000.0 )
+        {
+          if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
+          std::cout << "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
+          cTPStart = std::chrono::steady_clock::now();
+          uiFramesTmp = 0;
+        }
+      }
+
+      if( cBinFileWriter.isOpen() )
+      {
+        // write output
+        cBinFileWriter.writeAU( cAccessUnit );
       }
     }
 
-    if( cBinFileWriter.isOpen() )
-    {
-      // write output
-      cBinFileWriter.writeAU( cAccessUnit );
-    }
+    cYuvFileReader.close();
   }
 
   cVVEnc.clockEndTime();
@@ -360,7 +379,6 @@ int main( int argc, char* argv[] )
   delete[] cAccessUnit.m_pucBuffer;
   delete[] pucDeletePicBuffer;
 
-  cYuvFileReader.close();
   if( cBinFileWriter.isOpen())
   {
     cBinFileWriter.close();
@@ -368,7 +386,11 @@ int main( int argc, char* argv[] )
 
   // un-initialize the encoder
   iRet = cVVEnc.uninit();
-  if( 0 != iRet )  { std::cout << cAppname  << " [error]: cannot uninit encoder (" << iRet << ")" << std::endl;  return iRet;  }
+  if( 0 != iRet )
+  {
+    printVVEncErrorMsg( cAppname, "destroyencoder failed", iRet, cVVEnc.getLastError() );
+    return iRet;
+  }
 
   if( 0 == uiFrames )
   {
@@ -387,6 +409,6 @@ int main( int argc, char* argv[] )
     std::cout << "Total Time: " << dTimeSec << " sec. Fps(avg): " << dFps << " encoded Frames " << uiFrames << std::endl;
   }
 
-
   return 0;
 }
+

@@ -320,32 +320,23 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToFunc<F>& toE
   return os;
 }
 
-enum  MyPreset
+void setPresets( EncCfg* cfg, int preset )
 {
- NONE      = -1,
- FASTER    = 0,
- FAST      = 1,
- MEDIUM    = 2,
- SLOW      = 3,
- TOOLTEST  = 255,
-};
-
-void setPresets( EncCfg* cfg, int preset)
-{
-  cfg->initPreset( preset );
+  cfg->initPreset( (PresetMode)preset );
 }
 
 // ====================================================================================================================
 // string <-> enum fixed mappings
 // ====================================================================================================================
-const std::vector<SVPair<MyPreset>> PresetToEnumMap =
+const std::vector<SVPair<PresetMode>> PresetToEnumMap =
 {
-  { "none",                        MyPreset::NONE },
-  { "faster",                      MyPreset::FASTER },
-  { "fast",                        MyPreset::FAST },
-  { "medium",                      MyPreset::MEDIUM },
-  { "slow",                        MyPreset::SLOW },
-  { "tooltest",                    MyPreset::TOOLTEST },
+  { "none",      PresetMode::NONE },
+  { "faster",    PresetMode::FASTER },
+  { "fast",      PresetMode::FAST },
+  { "medium",    PresetMode::MEDIUM },
+  { "slow",      PresetMode::SLOW },
+  { "firstpass", PresetMode::FIRSTPASS },
+  { "tooltest",  PresetMode::TOOLTEST },
 };
 
 
@@ -524,7 +515,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
-  IStreamToFunc<MyPreset>      toPreset                     ( setPresets, this, &PresetToEnumMap,MyPreset::MEDIUM);
+  IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
   IStreamToRefVec<double>      toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
 
@@ -765,6 +756,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("Geo",                                             m_Geo,                                            "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                  "Maximum number of geometric partitioning mode candidates")
   ("RateControl",                                     m_RCRateControlMode,                              "Rate control: enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)" )
+  ("NumPasses",                                       m_RCNumPasses,                                    "Rate control: number of passes; 1: one-pass rate control; 2: two-pass rate control" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
   ("KeepHierarchicalBit",                             m_RCKeepHierarchicalBit,                          "Rate control: (0:equal bit allocation, 1:fixed ratio bit allocation, 2:adaptive ratio bit allocation" )
   ("RCLCUSeparateModel",                              m_RCUseLCUSeparateModel,                          "Rate control: use CTU level separate R-lambda model" )
