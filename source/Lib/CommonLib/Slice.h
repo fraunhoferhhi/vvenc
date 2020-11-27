@@ -1343,12 +1343,7 @@ public:
 
   ~ParameterSetMap()
   {
-    for (typename std::map<int,MapData<T> >::iterator i = m_paramsetMap.begin(); i!= m_paramsetMap.end(); i++)
-    {
-      delete (*i).second.pNaluData;
-      delete (*i).second.parameterSet;
-    }
-    delete m_lastActiveParameterSet; m_lastActiveParameterSet = NULL;
+    clearMap();
   }
 
   T *allocatePS( const int psId )
@@ -1366,7 +1361,14 @@ public:
 
   void clearMap()
   {
+    for( typename std::map<int,MapData<T> >::iterator i = m_paramsetMap.begin(); i != m_paramsetMap.end(); i++ )
+    {
+      delete (*i).second.pNaluData;
+      delete (*i).second.parameterSet;
+    }
+    delete m_lastActiveParameterSet; m_lastActiveParameterSet = nullptr;
     m_paramsetMap.clear();
+    m_activePsId.clear();
   }
 
   void storePS( int psId, T *ps )
