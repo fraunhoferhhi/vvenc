@@ -579,10 +579,12 @@ void InterPredInterpolation::init()
     for( uint32_t i = 0; i < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL; i++ )
     {
       m_filteredBlockTmp[i][c] = ( Pel* ) xMalloc( Pel, ( extWidth + 4 ) * ( extHeight + 7 + 4 ) );
+      VALGRIND_MEMCLEAR( m_filteredBlockTmp[i][c], sizeof( Pel ) * (extWidth + 4) * (extHeight + 7 + 4) );
 
       for( uint32_t j = 0; j < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS_SIGNAL; j++ )
       {
         m_filteredBlock[i][j][c] = ( Pel* ) xMalloc( Pel, extWidth * extHeight );
+        VALGRIND_MEMCLEAR( m_filteredBlock[i][j][c], sizeof( Pel ) * extWidth * extHeight );
       }
     }
   }
@@ -591,6 +593,11 @@ void InterPredInterpolation::init()
   m_gradY0 = (Pel*)xMalloc(Pel, BDOF_TEMP_BUFFER_SIZE);
   m_gradX1 = (Pel*)xMalloc(Pel, BDOF_TEMP_BUFFER_SIZE);
   m_gradY1 = (Pel*)xMalloc(Pel, BDOF_TEMP_BUFFER_SIZE);
+
+  VALGRIND_MEMCLEAR( m_gradX0, sizeof( Pel ) * BDOF_TEMP_BUFFER_SIZE );
+  VALGRIND_MEMCLEAR( m_gradY0, sizeof( Pel ) * BDOF_TEMP_BUFFER_SIZE );
+  VALGRIND_MEMCLEAR( m_gradX1, sizeof( Pel ) * BDOF_TEMP_BUFFER_SIZE );
+  VALGRIND_MEMCLEAR( m_gradY1, sizeof( Pel ) * BDOF_TEMP_BUFFER_SIZE );
 
   m_if.initInterpolationFilter( true );
 
@@ -606,6 +613,7 @@ void InterPredInterpolation::init()
   {
     const int MVBUFFER_SIZE = MAX_CU_SIZE / MIN_PU_SIZE;
     m_storedMv = new Mv[MVBUFFER_SIZE*MVBUFFER_SIZE];
+    VALGRIND_MEMCLEAR( m_storedMv, sizeof( Mv ) * MVBUFFER_SIZE * MVBUFFER_SIZE );
   }
 }
 
