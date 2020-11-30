@@ -56,8 +56,10 @@ static const int    RC_MAX_PIC_LIST_SIZE =                            64;
 static const int    RC_ITERATION_NUM =                                20;
 static const int    RC_LCU_SMOOTH_WINDOW_SIZE =                        4;
 static const int    RC_LAMBDA_PREC =                             1000000;
-static const int    RC_GOP_ID_QP_OFFSET[ 6 ] =      { 0, 0, 0, 3, 1, 1 };
-static const int    RC_GOP_ID_QP_OFFSET_GRC[ 6 ] =  { 0, 3, 0, 3, 1, 1 };
+static const int    RC_GOP_ID_QP_OFFSET[ 6 ] =           { 0, 0, 0, 3, 1, 1 };
+static const int    RC_GOP_ID_QP_OFFSET_GOP32[ 7 ] =     { 0, 0, 0, 0, 3, 1, 1 };
+static const int    RC_GOP_ID_QP_OFFSET_GRC[ 6 ] =       { 0, 3, 0, 3, 1, 1 };
+static const int    RC_GOP_ID_QP_OFFSET_GRC_GOP32[ 7 ] = { 0, 0, 3, 0, 3, 1, 1 };
 static const double RC_WEIGHT_PIC_TARGET_BIT_IN_GOP =                0.9;
 static const double RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER =             1.0 - RC_WEIGHT_PIC_TARGET_BIT_IN_GOP;
 static const double RC_WEIGHT_HISTORY_LAMBDA =                       0.5;
@@ -1030,7 +1032,8 @@ void EncRCPic::clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, do
 
   if ( frameLevel > 2 )
   {
-    lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( RC_GOP_ID_QP_OFFSET[ frameLevel ] ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
+    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
+    lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
   }
 
   if ( lastPicLambda > 0.0 )
@@ -1110,7 +1113,8 @@ void EncRCPic::clipLambdaGopRc( std::list<EncRCPic*>& listPreviousPictures, doub
 
   if ( ( encRCSeq->framesCoded < encRCSeq->intraPeriod && frameLevel > 1 ) || ( encRCSeq->framesCoded >= encRCSeq->intraPeriod && frameLevel > 0 ) )
   {
-    lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( RC_GOP_ID_QP_OFFSET_GRC[ frameLevel ] ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
+    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GRC_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET_GRC[ frameLevel ];
+    lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
   }
 
   if ( lastPicLambda > 0.0 )
@@ -1208,13 +1212,14 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
   // prevent frames from higher TLs to have lower lambda values than frames at lower TLs
   if ( frameLevel > 2 )
   {
+    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
     if ( encRCSeq->bitUsageRatio > 1.0 )
     {
-      lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( RC_GOP_ID_QP_OFFSET[ frameLevel ] ) / 3.0 ), lastPrevTLLambda * pow( 2.0, (double)( RC_GOP_ID_QP_OFFSET[ frameLevel ] ) / 3.0 ), lambda );
+      lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), lambda );
     }
     else
     {
-      lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( RC_GOP_ID_QP_OFFSET[ frameLevel ] ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
+      lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
     }
   }
 
@@ -1359,7 +1364,8 @@ void EncRCPic::clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( frameLevel > 2 )
   {
-    QP = Clip3( lastPrevTLQP + RC_GOP_ID_QP_OFFSET[ frameLevel ], MAX_QP, QP );
+    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
+    QP = Clip3( lastPrevTLQP + tlQpOffset, MAX_QP, QP );
   }
 
   if ( lastPicQP > RC_INVALID_QP_VALUE )
@@ -1426,7 +1432,8 @@ void EncRCPic::clipQpGopRc( std::list<EncRCPic*>& listPreviousPictures, int &QP 
 
   if ( ( encRCSeq->framesCoded < encRCSeq->intraPeriod && frameLevel > 1 ) || ( encRCSeq->framesCoded >= encRCSeq->intraPeriod && frameLevel > 0 ) )
   {
-    QP = Clip3( lastPrevTLQP + RC_GOP_ID_QP_OFFSET_GRC[ frameLevel ], MAX_QP, QP );
+    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GRC_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET_GRC[ frameLevel ];
+    QP = Clip3( lastPrevTLQP + tlQpOffset, MAX_QP, QP );
   }
 
   if ( lastPicQP > RC_INVALID_QP_VALUE )
@@ -1506,13 +1513,14 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( frameLevel > 2 ) // in any case frame level has to be GREATER than 1
   {
+    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
     if ( encRCSeq->bitUsageRatio > 1.0 )
     {
-      QP = Clip3( lastPrevTLQP + RC_GOP_ID_QP_OFFSET[ frameLevel ], lastPrevTLQP + RC_GOP_ID_QP_OFFSET[ frameLevel ], QP );
+      QP = Clip3( lastPrevTLQP + tlQpOffset, lastPrevTLQP + tlQpOffset, QP );
     }
     else
     {
-      QP = Clip3( lastPrevTLQP + RC_GOP_ID_QP_OFFSET[ frameLevel ], MAX_QP, QP );
+      QP = Clip3( lastPrevTLQP + tlQpOffset, MAX_QP, QP );
     }
   }
 
