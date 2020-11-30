@@ -589,6 +589,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     rcEncCfg.m_RCUseLCUSeparateModel = 1;
     rcEncCfg.m_RCInitialQP           = 0;
     rcEncCfg.m_RCForceIntraQP        = 0;
+    rcEncCfg.m_usePerceptQPA         = rcVVEncParameter.m_iNumPasses == 2 ? ( rcVVEncParameter.m_iPerceptualQPA > 0 ? rcVVEncParameter.m_iPerceptualQPA - ( ( rcVVEncParameter.m_iPerceptualQPA ^ 1 ) & 1 ) : 0 ) : rcVVEncParameter.m_iPerceptualQPA;
   }
   else
   {

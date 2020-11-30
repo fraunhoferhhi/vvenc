@@ -358,6 +358,11 @@ void EncLib::xSetRCEncCfg( int pass )
     // restore MCTF
     m_cBckCfg.m_MCTF              = mctf;
 
+    // configure QPA in the first pass
+    m_cBckCfg.m_usePerceptQPA                  = 2;
+    m_cBckCfg.m_sliceChromaQpOffsetPeriodicity = 1;
+    m_cBckCfg.m_usePerceptQPATempFiltISlice    = 0;
+
     std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
