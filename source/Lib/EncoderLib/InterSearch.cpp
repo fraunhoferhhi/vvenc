@@ -1731,10 +1731,6 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
     m_skipPROF = false;
     m_encOnly  = false;
-    if (BcwIdx == BCW_DEFAULT || !m_affineMotion.affine4ParaAvail || !m_affineMotion.affine6ParaAvail)
-    {
-      m_affineMotion.hevcCost[cu.imv] = uiHevcCost;
-    }
     //  MC
     PelUnitBuf predBuf = cu.cs->getPredBuf(cu);
     motionCompensation( cu, predBuf, REF_PIC_LIST_X );
@@ -4528,10 +4524,6 @@ void InterSearch::resetSavedAffineMotion()
 
     m_affineMotion.affine4ParaRefIdx[i] = -1;
     m_affineMotion.affine6ParaRefIdx[i] = -1;
-  }
-  for (int i = 0; i < 3; i++)
-  {
-    m_affineMotion.hevcCost[i] = MAX_DISTORTION;
   }
   m_affineMotion.affine4ParaAvail = false;
   m_affineMotion.affine6ParaAvail = false;

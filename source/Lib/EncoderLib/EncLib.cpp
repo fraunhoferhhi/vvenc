@@ -593,7 +593,7 @@ void EncLib::xInitPicture( Picture& pic, int picNum, const PPS& pps, const SPS& 
     pic.cs->picHeader = nullptr;
   }
 
-  pic.finalInit( vps, sps, pps, *picHeader, m_shrdUnitCache, mutex, nullptr, nullptr );
+  pic.finalInit( vps, sps, pps, picHeader, m_shrdUnitCache, mutex, nullptr, nullptr );
 
   pic.vps = &vps;
   pic.dci = &dci;

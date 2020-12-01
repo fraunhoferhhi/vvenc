@@ -1698,7 +1698,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[ CH_L ],  dfunc);
 
-      bool sameMV[ MRG_MAX_NUM_CANDS ] = { false };
+      bool sameMV[ MRG_MAX_NUM_CANDS ] = { false, };
       if (m_pcEncCfg->m_useFastMrg == 2)
       {
         for (int m = 0; m < mergeCtx.numValidMergeCand - 1; m++)
@@ -2310,7 +2310,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
     return;
   }
 
-  bool sameMV[MRG_MAX_NUM_CANDS] = { false };
+  bool sameMV[MRG_MAX_NUM_CANDS] = { false, };
   if (m_pcEncCfg->m_Geo > 1)
   {
     for (int m = 0; m < maxNumMergeCandidates; m++)
@@ -3469,7 +3469,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
       const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[CH_L], dfunc);
 
-      bool sameMV[5] = { false };
+      bool sameMV[MRG_MAX_NUM_CANDS+1] = { false, };
       if (m_pcEncCfg->m_Affine > 1)
       {
         for (int m = 0; m < affineMergeCtx.numValidMergeCand; m++)
@@ -3478,17 +3478,14 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
           {
             sameMV[m] = m!=0;
           }
-          else
+          else if (sameMV[m + 1] == false)
           {
-            if (sameMV[m + 1] == false)
+            for (int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++)
             {
-              for (int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++)
+              if( (affineMergeCtx.mvFieldNeighbours[(m << 1) + 0]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 0]->mv)
+                  && (affineMergeCtx.mvFieldNeighbours[(m << 1) + 1]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 1]->mv))
               {
-                if( (affineMergeCtx.mvFieldNeighbours[(m << 1) + 0]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 0]->mv)
-                 && (affineMergeCtx.mvFieldNeighbours[(m << 1) + 1]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 1]->mv))
-                {
-                  sameMV[n] = true;
-                }
+                sameMV[n] = true;
               }
             }
           }
@@ -3629,7 +3626,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
 
       if (sortedListBuf)
       {
-        tempCS->getPredBuf().copyFrom(*sortedListBuf, true, false);   // Copy Luma Only
+        tempCS->getPredBuf().Y().copyFrom( sortedListBuf->Y() );   // Copy Luma Only
         cu.mcControl = 4;
         m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf(), REF_PIC_LIST_X);
       }

@@ -242,7 +242,7 @@ const CPelBuf     Picture::getOrigBufPrev (const CompArea &blk, const bool minus
 const CPelUnitBuf Picture::getOrigBufPrev (const bool minus2)   const { return (m_bufsOrigPrev[minus2 ? 1 : 0] ? *m_bufsOrigPrev[minus2 ? 1 : 0] : PelUnitBuf()); }
 const CPelBuf     Picture::getOrigBufPrev (const ComponentID compID, const bool minus2) const { return (m_bufsOrigPrev[minus2 ? 1 : 0] ? m_bufsOrigPrev[minus2 ? 1 : 0]->getBuf (compID) : PelBuf()); }
 
-void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHeader& picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps )
+void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps )
 {
   for( auto &sei : SEIs )
   {
@@ -278,7 +278,7 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   cs->refCS     = cs;
   cs->slice     = nullptr;  // the slices for this picture have not been set at this point. update cs->slice after swapSliceObject()
   cs->pps       = &pps;
-  cs->picHeader = &picHeader;
+  cs->picHeader = picHeader;
   if ( alfAps )
   {
     memcpy(cs->alfAps, alfAps, sizeof(cs->alfAps));
