@@ -3626,7 +3626,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
 
       if (sortedListBuf)
       {
-        tempCS->getPredBuf().copyFrom(*sortedListBuf, true);   // Copy Luma Only
+        tempCS->getPredBuf().Y().copyFrom( sortedListBuf->Y() );   // Copy Luma Only
         cu.mcControl = 4;
         m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf(), REF_PIC_LIST_X);
       }

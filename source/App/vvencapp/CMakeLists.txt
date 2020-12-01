@@ -9,7 +9,7 @@ file( GLOB INC_FILES "*.h" )
 
 # get address sanitizer libs for gcc
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
-  if( USE_ADDRESS_SANITIZER )
+  if( VVENC_USE_ADDRESS_SANITIZER )
     set( ADDITIONAL_LIBS asan )
   endif()
 endif()
