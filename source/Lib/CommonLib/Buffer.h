@@ -735,9 +735,8 @@ void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other)
 
   for(size_t i = 0; i < bufs.size(); i++)
   {
-    if( bufs[ i ].buf == nullptr || other.bufs[ i ].buf == nullptr )
-      continue;
-    bufs[i].copyFrom( other.bufs[i] );
+    if( bufs[ i ].buf != nullptr && other.bufs[ i ].buf != nullptr )
+      bufs[i].copyFrom( other.bufs[i] );
   }
 }
 
