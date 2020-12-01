@@ -1818,7 +1818,14 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
   int numOfSkipPixel = 0;
   for (int LCUIdx = 0; LCUIdx < numberOfLCU; LCUIdx++)
   {
-    numOfSkipPixel += int( encRCSeq->lcuParam[ frameLevel ][ LCUIdx ].skipRatio * lcu[ LCUIdx ].numberOfPixel );
+    if ( encRCSeq->useLCUSeparateModel )
+    {
+      numOfSkipPixel += int( encRCSeq->lcuParam[ frameLevel ][ LCUIdx ].skipRatio * lcu[ LCUIdx ].numberOfPixel );
+    }
+    else
+    {
+      numOfSkipPixel += int( encRCSeq->picParam[ frameLevel ].skipRatio * lcu[ LCUIdx ].numberOfPixel );
+    }
   }
   skipRatio = (double)numOfSkipPixel / (double)numberOfPixel;
 
