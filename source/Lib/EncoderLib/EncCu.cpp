@@ -2006,6 +2006,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       }
     }
   }
+  uiNumMrgSATDCand = uiNumMrgSATDCand > int(RdModeList.size()) ? int(RdModeList.size()) : uiNumMrgSATDCand;
 
   uint32_t iteration = (encTestMode.lossless) ? 1 : 2;
 
@@ -3640,7 +3641,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
 
       xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, uiNoResidualPass, (uiNoResidualPass == 0 ? &candHasNoResidual[uiMergeCand] : NULL));
 
-      if (m_pcEncCfg->m_useFastDecisionForMerge && !bestIsSkip)
+      if (m_pcEncCfg->m_useFastDecisionForMerge && !bestIsSkip && !bestCS->cus.empty())
       {
         bestIsSkip = bestCS->getCU(partitioner.chType, partitioner.treeType)->rootCbf == 0;
       }
