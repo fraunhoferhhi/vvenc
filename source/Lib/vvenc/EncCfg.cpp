@@ -479,7 +479,7 @@ bool EncCfg::initCfgParameter()
     msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
     msg(WARNING, "***************************************************************************\n");
   }
-  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_SourceWidth <= 2048) && (m_SourceHeight <= 1280) && (m_usePerceptQPA <= 4))
+  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_SourceWidth <= 2048) && (m_SourceHeight <= 1280) && (m_usePerceptQPA <= 4) && m_RCNumPasses != 2)
   {
     m_cuQpDeltaSubdiv = 2;
   }
