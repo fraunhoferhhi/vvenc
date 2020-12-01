@@ -427,7 +427,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
 
 
-  confirmParameter( m_RCRateControlMode > 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
+  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
   confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   confirmParameter( m_RCNumPasses == 2 && m_usePerceptQPATempFiltISlice == true, "QPA temporal filtering of I slice not supported with 2-pass rate control" );
@@ -479,7 +479,7 @@ bool EncCfg::initCfgParameter()
     msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
     msg(WARNING, "***************************************************************************\n");
   }
-  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_SourceWidth <= 2048) && (m_SourceHeight <= 1280) && (m_usePerceptQPA <= 4) && m_RCNumPasses != 2)
+  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_SourceWidth <= 2048) && (m_SourceHeight <= 1280) && (m_usePerceptQPA <= 4))
   {
     m_cuQpDeltaSubdiv = 2;
   }

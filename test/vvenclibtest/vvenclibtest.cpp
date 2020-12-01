@@ -190,7 +190,7 @@ int testParamList( const std::string& w, T& testParam, vvenc::VVEncParameter& vv
   const int numFails = g_numFails;
   const T savedTestParam = testParam;
 
-  for ( auto &testVal : testValues )
+  for( auto testVal : testValues )
   {
     testParam = (T)testVal;
     try

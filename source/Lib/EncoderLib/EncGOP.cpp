@@ -302,7 +302,7 @@ void EncGOP::init( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtr
   }
   if (encCfg.m_usePerceptQPA)
   {
-    m_globalCtuQpVector.resize( pps.useDQP && encCfg.m_RCNumPasses != 2 && encCfg.m_usePerceptQPATempFiltISlice ? pps.picWidthInCtu * pps.picHeightInCtu + 1 : 1 );
+    m_globalCtuQpVector.resize( pps.useDQP && encCfg.m_usePerceptQPATempFiltISlice ? pps.picWidthInCtu * pps.picHeightInCtu + 1 : 1 );
   }
 }
 
