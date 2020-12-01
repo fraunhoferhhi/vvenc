@@ -151,7 +151,7 @@ struct Picture : public UnitArea
   void destroyTempBuffers();
 
   void extendPicBorder();
-  void finalInit( const VPS& vps, const SPS& sps, const PPS& pps, PicHeader& picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps );
+  void finalInit( const VPS& vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps );
 
   int  getPOC()                               const { return poc; }
   Pel* getOrigin( const PictureType& type, const ComponentID compID ) const;

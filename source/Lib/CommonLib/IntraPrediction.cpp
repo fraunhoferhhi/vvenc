@@ -1170,8 +1170,6 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
 
   int iRecStride2       = iRecStride << logSubHeightC;
 
-  const CodingUnit& lumaCU = isChroma( cu.chType ) ? *cu.cs->picture->cs->getCU( lumaArea.pos(), CH_L, TREE_D ) : cu;
-
   const CompArea& area = isChroma( cu.chType ) ? chromaArea : lumaArea;
 
   const uint32_t uiTuWidth  = area.width;
@@ -1204,25 +1202,24 @@ void IntraPrediction::loadLMLumaRecPels(const CodingUnit& cu, const CompArea& ch
   bool  bNeighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1];
   memset(bNeighborFlags, 0, totalUnits);
   bool aboveIsAvailable, leftIsAvailable;
-  const CodingUnit& chromaCU = isChroma( cu.chType ) ? cu : lumaCU;
   const ChannelType areaCh = toChannelType( area.compID );
 
-  int availlableUnit = isLeftAvailable(chromaCU, areaCh, area.pos(), iLeftUnits, unitHeight, (bNeighborFlags + iLeftUnits + leftBelowUnits - 1));
+  int availlableUnit = isLeftAvailable(cu, areaCh, area.pos(), iLeftUnits, unitHeight, (bNeighborFlags + iLeftUnits + leftBelowUnits - 1));
 
   leftIsAvailable = availlableUnit == iTUHeightInUnits;
 
-  availlableUnit = isAboveAvailable(chromaCU, areaCh, area.pos(), iAboveUnits, unitWidth, (bNeighborFlags + iLeftUnits + leftBelowUnits + 1));
+  availlableUnit = isAboveAvailable(cu, areaCh, area.pos(), iAboveUnits, unitWidth, (bNeighborFlags + iLeftUnits + leftBelowUnits + 1));
 
   aboveIsAvailable = availlableUnit == iTUWidthInUnits;
 
   if (leftIsAvailable)   // if left is not available, then the below left is not available
   {
-    avaiLeftBelowUnits = isBelowLeftAvailable(chromaCU, areaCh, area.bottomLeftComp(area.compID), leftBelowUnits, unitHeight, (bNeighborFlags + leftBelowUnits - 1));
+    avaiLeftBelowUnits = isBelowLeftAvailable(cu, areaCh, area.bottomLeftComp(area.compID), leftBelowUnits, unitHeight, (bNeighborFlags + leftBelowUnits - 1));
   }
 
   if (aboveIsAvailable)   // if above is not available, then  the above right is not available.
   {
-    avaiAboveRightUnits = isAboveRightAvailable(chromaCU, areaCh, area.topRightComp(area.compID), aboveRightUnits, unitWidth, (bNeighborFlags + iLeftUnits + leftBelowUnits + iAboveUnits + 1));
+    avaiAboveRightUnits = isAboveRightAvailable(cu, areaCh, area.topRightComp(area.compID), aboveRightUnits, unitWidth, (bNeighborFlags + iLeftUnits + leftBelowUnits + iAboveUnits + 1));
   }
 
   Pel*       pDst  = nullptr;

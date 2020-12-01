@@ -207,8 +207,6 @@ typedef struct
   Mv acMvAffine6Para[2][3];
   int16_t affine4ParaRefIdx[2];
   int16_t affine6ParaRefIdx[2];
-  Distortion hevcCost[3];
-  Distortion affineCost[3];
   bool affine4ParaAvail;
   bool affine6ParaAvail;
 } EncAffineMotion;

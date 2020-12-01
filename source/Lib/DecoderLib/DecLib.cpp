@@ -1003,7 +1003,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     m_apcSlicePilot->pps = pps;
     m_apcSlicePilot->picHeader = &m_picHeader;
     m_apcSlicePilot->applyReferencePictureListBasedMarking(m_cListPic, m_apcSlicePilot->rpl[0], m_apcSlicePilot->rpl[1], layerId, *pps);
-    m_pic->finalInit(*vps, *sps, *pps, m_picHeader, m_unitCache, nullptr, apss, lmcsAPS);
+    m_pic->finalInit(*vps, *sps, *pps, &m_picHeader, m_unitCache, nullptr, apss, lmcsAPS);
 
     m_pic->createTempBuffers( m_pic->cs->pps->pcv->maxCUSize );
     m_pic->cs->createCoeffs();
