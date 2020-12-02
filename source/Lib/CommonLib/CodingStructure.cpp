@@ -375,7 +375,7 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
   tu->next   = nullptr;
   tu->prev   = nullptr;
   tu->cs     = this;
-  tu->cu     = m_isTuEnc ? cus[0] : cu;
+  tu->cu     = cu;
   tu->chType = chType;
 
   TransformUnit *prevTU = m_numTUs > 0 ? tus.back() : nullptr;
