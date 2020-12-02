@@ -251,8 +251,8 @@ int testLibParameterRanges()
   testParamList( "Qp",                  vvencParams.m_iQp,                        vvencParams, { 0,1,2,3,4,51} );
   testParamList( "Qp",                  vvencParams.m_iQp,                        vvencParams, { -1,52}, true );
 
-  testParamList( "Quality",             vvencParams.m_iQuality,                   vvencParams, { 0,1,2,3} );
-  testParamList( "Quality",             vvencParams.m_iQuality,                   vvencParams, { -1,4}, true );
+  testParamList( "Quality",             vvencParams.m_iQuality,                   vvencParams, { 0,1,2,3, 4} );
+  testParamList( "Quality",             vvencParams.m_iQuality,                   vvencParams, { -1,5}, true );
 
   testParamList( "TargetBitRate",       vvencParams.m_iTargetBitRate,             vvencParams, { 0,1000000,20000000} );
   testParamList( "TargetBitRate",       vvencParams.m_iTargetBitRate,             vvencParams, { -1,100000001}, true );

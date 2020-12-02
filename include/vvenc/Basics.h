@@ -246,6 +246,7 @@ enum PresetMode
  FAST      = 1,
  MEDIUM    = 2,
  SLOW      = 3,
+ SLOWER    = 4,
  FIRSTPASS = 254,
  TOOLTEST  = 255,
 };

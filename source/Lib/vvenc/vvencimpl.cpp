@@ -547,7 +547,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_eProfile != VVC_PROFILE_MAIN_10 && rcSrc.m_eProfile != VVC_PROFILE_MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != VVC_PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 3) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 3  (0: faster, 1: fast, 2: medium, 3: slow)" );
+  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 4) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 4  (0: faster, 1: fast, 2: medium, 3: slow, 4: slower)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
   ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
@@ -678,7 +678,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   if( 0 != rcEncCfg.initPreset( (PresetMode)rcVVEncParameter.m_iQuality  ) )
   {
     std::stringstream css;
-    css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 3.";
+    css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 4.";
     m_cErrorString  = css.str();
     return VVENC_ERR_PARAMETER;
   }
