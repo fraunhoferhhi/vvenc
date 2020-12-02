@@ -1563,7 +1563,9 @@ SPS::SPS()
   ::memset(ltRefPicPocLsbSps, 0, sizeof(ltRefPicPocLsbSps));
   ::memset(usedByCurrPicLtSPS, 0, sizeof(usedByCurrPicLtSPS));
   ::memset(ppsValidFlag, 0, sizeof(ppsValidFlag));
+  GCC_WARNING_DISABLE_class_memaccess
   ::memset(scalingWindowSizeInPPS, 0, sizeof(scalingWindowSizeInPPS));
+  GCC_WARNING_RESET
 
 
   for( int i = 0; i < MAX_NUM_SUB_PICS; i++ )
