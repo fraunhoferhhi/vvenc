@@ -1037,17 +1037,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
   uint32_t     uiLastModeTemp = 0;
   Distortion   uiAffineCost = MAX_DISTORTION;
   Distortion   uiHevcCost = MAX_DISTORTION;
-  bool checkAffine = (cu.imv == 0); /*|| cu.slice->getSPS()->getAffineAmvrEnabledFlag()) && cu.imv != IMV_HPEL;*/
-
-  bool checkNonAffine = cu.imv == 0 || cu.imv == IMV_HPEL || (cu.slice->sps->AMVR &&
-                                            cu.imv <= (cu.slice->sps->AMVR ? IMV_4PEL : 0));
-  CodingUnit *bestCU = m_modeCtrl->comprCUCtx->bestCS != nullptr ? m_modeCtrl->comprCUCtx->bestCU : nullptr;
-  bool trySmvd = (bestCU != nullptr && cu.imv == 2 && checkAffine) ? (!bestCU->mergeFlag && !bestCU->affine) : true;
-  if (cu.imv && bestCU != nullptr && checkAffine)
-  {
-    checkAffine = !(bestCU->mergeFlag || !bestCU->affine);
-  }
-
+  bool checkAffine = (cu.imv == 0);
   if (cu.cs->bestParent != nullptr && cu.cs->bestParent->getCU(CH_L,TREE_D) != nullptr && cu.cs->bestParent->getCU(CH_L,TREE_D)->affine == false)
   {
     m_skipPROF = true;
@@ -1088,8 +1078,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
     m_pcRdCost->selectMotionLambda();
 
     unsigned imvShift = cu.imv == IMV_HPEL ? 1 : (cu.imv << 1);
-    if ( checkNonAffine )
-    {
+
       //  Uni-directional prediction
       for ( int iRefList = 0; iRefList < iNumPredDir; iRefList++ )
       {
@@ -1353,7 +1342,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         }
 
         // SMVD
-        if( cs.slice->biDirPred && trySmvd )
+        if( cs.slice->biDirPred )
         {
           double th1 = 1.02;
           bool testSME = true;
@@ -1578,7 +1567,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         cu.BcwIdx = BCW_DEFAULT; // Reset to default for the Non-NormalMC modes.
       }
       uiHevcCost = (uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1]) ? uiCostBi : ((uiCost[0] <= uiCost[1]) ? uiCost[0] : uiCost[1]);
-    }
+
     if( cu.interDir == 3 && !cu.mergeFlag )
     {
       if (BcwIdx != BCW_DEFAULT)
@@ -1589,8 +1578,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
     if (m_pcEncCfg->m_Affine > 1)
     {
-      checkAffine &= bestCU->affine;
-      if (bestCU->slice->TLayer > 3)
+      checkAffine &= m_modeCtrl->comprCUCtx->bestCU->affine;
+      if (cu.slice->TLayer > 3)
       {
         checkAffine = false;
       }
