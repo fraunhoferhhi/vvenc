@@ -74,7 +74,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 int main(int argc, char* argv[])
 {
-  vvenc::setMsgFnc( &msgFnc );
+  vvenc::registerMsgCbf( msgFnc );
 
   std::string simdOpt;
   VVCEncoderFFApp::df::program_options_lite::Options opts;

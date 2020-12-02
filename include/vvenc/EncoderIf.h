@@ -50,6 +50,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <string>
+#include <functional>
 #include "vvenc/vvencDecl.h"
 #include "vvenc/Basics.h"
 
@@ -98,11 +99,11 @@ class VVENC_DECL EncoderIf
 
 // ====================================================================================================================
 
-void        VVENC_DECL setMsgFnc( MsgFnc msgFnc );                               ///< set message output function for encoder lib. if not set, no messages will be printed.
-std::string VVENC_DECL setSIMDExtension( const std::string& simdId );            ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-bool        VVENC_DECL isTracingEnabled();                                       ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-std::string VVENC_DECL getCompileInfoString();                                   ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-void        VVENC_DECL decodeBitstream( const std::string& FileName);            ///< decode bitstream with limited build in decoder
+void        VVENC_DECL registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
+std::string VVENC_DECL setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+bool        VVENC_DECL isTracingEnabled();                                                          ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+std::string VVENC_DECL getCompileInfoString();                                                      ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+void        VVENC_DECL decodeBitstream( const std::string& FileName);                               ///< decode bitstream with limited build in decoder
 
 } // namespace vvenc
 

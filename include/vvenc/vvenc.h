@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include <functional>
 #include "stdint.h"
 #include <string>
 #include "vvenc/vvencDecl.h"
@@ -518,6 +519,13 @@ public:
      \retval[ ]  std::string enabled encoding parameter as string
    */
    static const char* getPresetParamsAsStr( int iQuality );
+
+   /**
+     This method registers a log message callback function to the encoder library. 
+     If no such function has been registered, the library will omit all messages.
+     \param      Log message callback function.
+   */
+   static void registerMsgCbf( std::function<void( int, const char*, va_list )> msgCbf );
 
 private:
    VVEncImpl*  m_pcVVEncImpl;

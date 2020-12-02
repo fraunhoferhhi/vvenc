@@ -64,7 +64,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
-#include "vvenc/EncoderIf.h"
 
 #include "BinFileWriter.h"
 #include "CmdLineParser.h"
@@ -153,7 +152,7 @@ int main( int argc, char* argv[] )
 
   int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile );
 
-  vvenc::setMsgFnc( &msgFnc );
+  vvenc::VVEnc::registerMsgCbf( msgFnc );
   g_verbosity = cVVEncParameter.m_eLogLevel;
 
   if( iRet != 0 )
