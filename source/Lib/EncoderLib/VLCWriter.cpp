@@ -608,19 +608,22 @@ void HLSWriter::codeGeneralHrdparameters(const GeneralHrdParams * hrd)
   WRITE_CODE(hrd->timeScale, 32,                        "time_scale");
   WRITE_FLAG(hrd->generalNalHrdParamsPresent,           "general_nal_hrd_parameters_present_flag");
   WRITE_FLAG(hrd->generalVclHrdParamsPresent,           "general_vcl_hrd_parameters_present_flag");
-  WRITE_FLAG(hrd->generalSamePicTimingInAllOlsFlag,     "general_same_pic_timing_in_all_ols_flag");
-  WRITE_FLAG(hrd->generalDecodingUnitHrdParamsPresent,  "general_decoding_unit_hrd_params_present_flag");
-  if (hrd->generalDecodingUnitHrdParamsPresent)
+  if( hrd->generalNalHrdParamsPresent || hrd->generalVclHrdParamsPresent )
   {
-    WRITE_CODE(hrd->tickDivisorMinus2, 8,               "tick_divisor_minus2");
+    WRITE_FLAG(hrd->generalSamePicTimingInAllOlsFlag,     "general_same_pic_timing_in_all_ols_flag");
+    WRITE_FLAG(hrd->generalDecodingUnitHrdParamsPresent,  "general_decoding_unit_hrd_params_present_flag");
+    if (hrd->generalDecodingUnitHrdParamsPresent)
+    {
+      WRITE_CODE(hrd->tickDivisorMinus2, 8,               "tick_divisor_minus2");
+    }
+    WRITE_CODE(hrd->bitRateScale, 4,                      "bit_rate_scale");
+    WRITE_CODE(hrd->cpbSizeScale, 4,                      "cpb_size_scale");
+    if (hrd->generalDecodingUnitHrdParamsPresent)
+    {
+      WRITE_CODE(hrd->cpbSizeDuScale, 4,                  "cpb_size_du_scale");
+    }
+    WRITE_UVLC(hrd->hrdCpbCntMinus1,                      "hrd_cpb_cnt_minus1");
   }
-  WRITE_CODE(hrd->bitRateScale, 4,                      "bit_rate_scale");
-  WRITE_CODE(hrd->cpbSizeScale, 4,                      "cpb_size_scale");
-  if (hrd->generalDecodingUnitHrdParamsPresent)
-  {
-    WRITE_CODE(hrd->cpbSizeDuScale, 4,                  "cpb_size_du_scale");
-  }
-  WRITE_UVLC(hrd->hrdCpbCntMinus1,                      "hrd_cpb_cnt_minus1");
 }
 
 void HLSWriter::codeOlsHrdParameters(const GeneralHrdParams * generalHrd, const OlsHrdParams *olsHrd, const uint32_t firstSubLayer, const uint32_t maxNumSubLayersMinus1)
@@ -638,7 +641,7 @@ void HLSWriter::codeOlsHrdParameters(const GeneralHrdParams * generalHrd, const 
     {
       WRITE_UVLC(hrd->elementDurationInTcMinus1,  "elemental_duration_in_tc_minus1");
     }
-    else if (generalHrd->hrdCpbCntMinus1 == 0)
+    else if ( (generalHrd->generalNalHrdParamsPresent || generalHrd->generalVclHrdParamsPresent) &&generalHrd->hrdCpbCntMinus1 == 0)
     {
       WRITE_FLAG(hrd->lowDelayHrdFlag,            "low_delay_hrd_flag");
     }
@@ -1120,15 +1123,19 @@ void HLSWriter::codeVPS(const VPS* pcVPS)
       WRITE_FLAG(pcVPS->independentLayer[i],            "vps_independent_layer_flag");
       if (!pcVPS->independentLayer[i])
       {
+        bool presentFlag = false;
         for (int j = 0; j < i; j++)
         {
-          WRITE_FLAG(pcVPS->directRefLayer[i][j],       "vps_direct_dependency_flag");
+          presentFlag |= ((pcVPS->maxTidIlRefPicsPlus1[i][j] != MAX_TLAYER) && pcVPS->directRefLayer[i][j]);
         }
-        bool presentFlag = ( pcVPS->maxTidIlRefPicsPlus1[i] != 7 );
-        WRITE_FLAG(presentFlag,                         "vps_max_tid_ref_present_flag[ i ]");
-        if (presentFlag)
+        WRITE_FLAG(presentFlag, "max_tid_ref_present_flag[ i ]");
+        for (int j = 0; j < i; j++)
         {
-          WRITE_CODE(pcVPS->maxTidIlRefPicsPlus1[i], 3, "vps_max_tid_il_ref_pics_plus1[ i ]");
+          WRITE_FLAG(pcVPS->directRefLayer[i][j], "vps_direct_ref_layer_flag");
+          if (presentFlag && pcVPS->directRefLayer[i][j])
+          {
+            WRITE_CODE(pcVPS->maxTidIlRefPicsPlus1[i][j], 3, "max_tid_il_ref_pics_plus1[ i ][ j ]");
+          }
         }
       }
     }
@@ -1603,7 +1610,7 @@ void HLSWriter::codePictureHeader( const PicHeader* picHeader, bool writeRbspTra
 
     if ((pps->weightPred || pps->weightedBiPred) && pps->wpInfoInPh )
     {
-      xCodePredWeightTable(picHeader, sps);
+      xCodePredWeightTable(picHeader, pps, sps);
     }
    }
 
@@ -2320,7 +2327,7 @@ void HLSWriter::xCodePredWeightTable( const Slice* slice )
 }
 
 
-void HLSWriter::xCodePredWeightTable( const PicHeader *picHeader, const SPS *sps )
+void HLSWriter::xCodePredWeightTable( const PicHeader *picHeader, const PPS *pps, const SPS *sps )
 {
   WPScalingParam  *wp;
   const ChromaFormat  format                = sps->chromaFormatIdc;
@@ -2394,10 +2401,14 @@ void HLSWriter::xCodePredWeightTable( const PicHeader *picHeader, const SPS *sps
         }
       }
     }
-    if (iNumRef == 0)
+    if (iNumRef == 0 )
     {
-      numLxWeights         = picHeader->numL1Weights;
-      if (picHeader->pRPL[1]->getNumRefEntries() > 0)
+      numLxWeights = picHeader->numL1Weights;
+      if (pps->weightedBiPred == 0) 
+      {
+        numLxWeights = 0;
+      }
+      else if (picHeader->pRPL[1]->getNumRefEntries() > 0)
       {
         WRITE_UVLC(numLxWeights, "num_l1_weights");
       }

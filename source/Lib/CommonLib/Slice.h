@@ -184,7 +184,7 @@ struct ConstraintInfo
 
 
   ConstraintInfo()
-    : gciPresent                                  ( false )
+    : gciPresent                                      ( false )
     , noRprConstraintFlag                             ( false )
     , noResChangeInClvsConstraintFlag                 ( false )
     , oneTilePerPicConstraintFlag                     ( false )
@@ -459,7 +459,7 @@ struct VPS
   uint32_t              vpsCfgPredDirection[MAX_VPS_SUBLAYERS];
   bool                  independentLayer[MAX_VPS_LAYERS];
   bool                  directRefLayer[MAX_VPS_LAYERS][MAX_VPS_LAYERS];
-  uint8_t               maxTidIlRefPicsPlus1[MAX_VPS_LAYERS];
+  uint8_t               maxTidIlRefPicsPlus1[MAX_VPS_LAYERS][MAX_VPS_LAYERS];
   bool                  eachLayerIsAnOls;
   uint32_t              olsModeIdc;
   uint32_t              numOutputLayerSets;

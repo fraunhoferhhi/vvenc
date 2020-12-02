@@ -236,7 +236,9 @@ void SEIWriter::xWriteSEIDecodedPictureHash(const SEIDecodedPictureHash& sei)
 
   if (traceString != 0) //use of this variable is needed to avoid a compiler error with G++ 4.6.1
   {
-    WRITE_CODE(sei.method, 8, "dph_hash_type");
+    WRITE_CODE(sei.method, 8, "dph_sei_hash_type");
+    WRITE_CODE(sei.singleCompFlag, 1, "dph_sei_single_component_flag");
+    WRITE_CODE(0, 7, "dph_sei_reserved_zero_7bits");
     for(uint32_t i=0; i<uint32_t(sei.pictureHash.hash.size()); i++)
     {
       WRITE_CODE(sei.pictureHash.hash[i], 8, traceString);
@@ -482,7 +484,7 @@ void SEIWriter::xWriteSEIFrameFieldInfo(const SEIFrameFieldInfo& sei)
     {
       WRITE_FLAG( sei.topFieldFirstFlag ? 1 : 0,            "ffi_display_fields_from_frame_flag" );
     }
-    WRITE_UVLC( sei.displayElementalPeriodsMinus1,          "ffi_display_elemental_periods_minus1" );
+    WRITE_CODE( sei.displayElementalPeriodsMinus1, 8,       "ffi_display_elemental_periods_minus1" );
   }
   WRITE_CODE( sei.sourceScanType, 2,                        "ffi_source_scan_type" );
   WRITE_FLAG( sei.duplicateFlag ? 1 : 0,                    "ffi_duplicate_flag" );
@@ -513,7 +515,7 @@ void SEIWriter::xWriteSEIScalableNesting(OutputBitstream& bs, const SEIScalableN
     if (!sei.snAllLayersFlag)
     {
       WRITE_UVLC(sei.snNumLayersMinus1, "sn_num_layers");
-      for (uint32_t i = 0; i <= sei.snNumLayersMinus1; i++)
+      for (uint32_t i = 1; i <= sei.snNumLayersMinus1; i++)
       {
         WRITE_CODE(sei.snLayerId[i], 6, "sn_layer_id");
       }

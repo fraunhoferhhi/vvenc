@@ -199,7 +199,9 @@ void SEIEncoder::initDecodedPictureHashSEI( SEIDecodedPictureHash& dphSei, const
 {
   CHECK(!(m_isInitialized), "Unspecified error");
 
-  dphSei.method = m_pcEncCfg->m_decodedPictureHashSEIType;
+  dphSei.method         = m_pcEncCfg->m_decodedPictureHashSEIType;
+  dphSei.singleCompFlag = m_pcEncCfg->m_internChromaFormat == 0;
+
   switch (m_pcEncCfg->m_decodedPictureHashSEIType)
   {
     case HASHTYPE_MD5:

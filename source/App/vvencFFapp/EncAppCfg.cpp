@@ -370,6 +370,7 @@ const std::vector<SVPair<Level::Name>> LevelToEnumMap =
   { "6",                       Level::LEVEL6   },
   { "6.1",                     Level::LEVEL6_1 },
   { "6.2",                     Level::LEVEL6_2 },
+  { "6.3",                     Level::LEVEL6_3 },
 };
 
 const std::vector<SVPair<Level::Tier>> TierToEnumMap =

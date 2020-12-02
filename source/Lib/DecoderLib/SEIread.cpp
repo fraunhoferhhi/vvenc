@@ -440,8 +440,14 @@ void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, uint32_t
   output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
 
   uint32_t val;
-  sei_read_code( pDecodedMessageOutputStream, 8, val, "hash_type");
+  sei_read_code( pDecodedMessageOutputStream, 8, val, "dpb_sei_hash_type");
   sei.method = static_cast<HashType>(val); bytesRead++;
+  sei_read_code( pDecodedMessageOutputStream, 1, val, "dph_sei_single_component_flag");
+  sei.singleCompFlag = val;
+  sei_read_code( pDecodedMessageOutputStream, 7, val, "dph_sei_reserved_zero_7bits");
+  bytesRead++;
+  uint32_t expectedSize = ( sei.singleCompFlag ? 1 : 3 ) * (sei.method == 0 ? 16 : (sei.method == 1 ? 2 : 4));
+  CHECK ((payloadSize - bytesRead) != expectedSize, "The size of the decoded picture hash does not match the expected size.");
 
   const char *traceString="\0";
   switch (sei.method)
@@ -523,7 +529,8 @@ void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const NalUnitT
     if (!sei.snAllLayersFlag)
     {
       sei_read_uvlc(decodedMessageOutputStream, symbol, "sn_num_layers_minus1"); sei.snNumLayersMinus1 = symbol;
-      for (uint32_t i = 0; i <= sei.snNumLayersMinus1; i++)
+      sei.snLayerId[0] = nuhLayerId;
+      for (uint32_t i = 1; i <= sei.snNumLayersMinus1; i++)
       {
         sei_read_code(decodedMessageOutputStream, 6, symbol, "sn_layer_id[i]"); sei.snLayerId[i] = symbol;
       }
@@ -1012,10 +1019,8 @@ void SEIReader::xParseSEIFrameFieldinfo(SEIFrameFieldInfo& sei, const SEIPicture
       sei_read_flag( pDecodedMessageOutputStream, symbol,  "ffi_display_fields_from_frame_flag" );
       sei.topFieldFirstFlag = symbol;
     }
-    sei_read_uvlc( pDecodedMessageOutputStream, symbol,    "ffi_display_elemental_periods_minus1" );
+    sei_read_code( pDecodedMessageOutputStream, 8, symbol,    "ffi_display_elemental_periods_minus1" );
     sei.displayElementalPeriodsMinus1 = symbol;
-    if( pt.ptDisplayElementalPeriodsMinus1 != sei.displayElementalPeriodsMinus1 )
-      msg( WARNING, "Warning: ffi_display_elemental_periods_minus1 is different in picture timing and frame field information SEI messages!");
   }
   sei_read_code( pDecodedMessageOutputStream, 2, symbol,   "ffi_source_scan_type" );
   sei.sourceScanType = symbol;

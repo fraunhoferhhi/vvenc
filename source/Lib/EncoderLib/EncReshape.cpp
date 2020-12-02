@@ -224,7 +224,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
         {
           for (bx = x1; bx <= x2; bx++)
           {
-            tempSq = pWinY[bx] * pWinY[bx];
+            tempSq =  (int64_t)pWinY[bx] *  (int64_t)pWinY[bx];
             leftSum += pWinY[bx];
             leftSumSq += tempSq;
             leftColSum[bx] += pWinY[bx];
@@ -251,7 +251,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
           for (bx = x1; bx <= x2; bx++)
           {
             topRowSum[y + winLens] += pWinY[bx];
-            topRowSumSq[y + winLens] += pWinY[bx] * pWinY[bx];
+            topRowSumSq[y + winLens] +=  (int64_t)pWinY[bx] *  (int64_t)pWinY[bx];
           }
           topSum += topRowSum[y + winLens];
           topSumSq += topRowSumSq[y + winLens];
@@ -270,7 +270,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
           for (bx = x1; bx <= x2; bx++)
           {
             leftColSum[bx] += pWinY[bx];
-            leftColSumSq[bx] += pWinY[bx] * pWinY[bx];
+            leftColSumSq[bx] +=  (int64_t)pWinY[bx] *  (int64_t)pWinY[bx];
           }
           pWinY += stride;
         }
@@ -291,7 +291,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
             for (by = y1; by <= y2; by++)
             {
               leftColSum[x + winLens] += pWinY[x + winLens];
-              leftColSumSq[x + winLens] += pWinY[x + winLens] * pWinY[x + winLens];
+              leftColSumSq[x + winLens] +=  (int64_t)pWinY[x + winLens] *  (int64_t)pWinY[x + winLens];
               pWinY += stride;
             }
           }
@@ -304,14 +304,14 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
               pWinY = &picY.buf[0];
               pWinY += winLens * stride;
               leftColSum[x + winLens] += pWinY[x + winLens];
-              leftColSumSq[x + winLens] += pWinY[x + winLens] * pWinY[x + winLens];
+              leftColSumSq[x + winLens] +=  (int64_t)pWinY[x + winLens] *  (int64_t)pWinY[x + winLens];
             }
             if (y > winLens)
             {
               pWinY = &picY.buf[0];
               pWinY -= (winLens + 1) * stride;
               leftColSum[x + winLens] -= pWinY[x + winLens];
-              leftColSumSq[x + winLens] -= pWinY[x + winLens] * pWinY[x + winLens];
+              leftColSumSq[x + winLens] -=  (int64_t)pWinY[x + winLens] *  (int64_t)pWinY[x + winLens];
             }
           }
           topColSum[x + winLens] = leftColSum[x + winLens];
@@ -391,7 +391,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
     for (int x = 0; x < width; x++)
     {
       avgY += picY.buf[x];
-      varY += picY.buf[x] * picY.buf[x];
+      varY += (double)picY.buf[x] * (double)picY.buf[x];
     }
     picY.buf += stride;
   }
@@ -401,8 +401,8 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
     {
       avgU += picU.buf[x];
       avgV += picV.buf[x];
-      varU += picU.buf[x] * picU.buf[x];
-      varV += picV.buf[x] * picV.buf[x];
+      varU += (int64_t)picU.buf[x] * (int64_t)picU.buf[x];
+      varV += (int64_t)picV.buf[x] * (int64_t)picV.buf[x];
     }
     picU.buf += strideC;
     picV.buf += strideC;

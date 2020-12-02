@@ -437,7 +437,7 @@ bool EncCfg::initCfgParameter()
     || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
     || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
     || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
-    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2)
+    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
     || (m_level==Level::LEVEL15_5)), "invalid level selected");
   confirmParameter(!((m_levelTier==Level::Tier::MAIN) || (m_levelTier==Level::Tier::HIGH)), "invalid tier selected");
 
@@ -1725,6 +1725,7 @@ static inline std::string getLevelStr( int level )
     case Level::LEVEL6    : cT = "6";       break;
     case Level::LEVEL6_1  : cT = "6.1";     break;
     case Level::LEVEL6_2  : cT = "6.2";     break;
+    case Level::LEVEL6_3  : cT = "6.3";     break;
     case Level::LEVEL15_5 : cT = "15.5";    break;
     default               : cT = "unknown"; break;
   }
