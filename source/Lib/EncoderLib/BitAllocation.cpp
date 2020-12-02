@@ -382,7 +382,9 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const EncCfg* en
         savedLumaQP = averageAdaptedLumaQP;
       } // savedLumaQP < 0
 
+      GCC_WARNING_DISABLE_maybe_uninitialized   // probably spurious warning, when building with -fsanitize=undefined: "error: ‘encCfg.33’ may be used uninitialized in this function"
       const int lumaChromaMappingDQP = (savedLumaQP - slice->sps->chromaQpMappingTable.getMappedChromaQpValue (compID, savedLumaQP)) >> (encCfg->m_QP >= MAX_QP_PERCEPT_QPA ? 1 : 0);
+      GCC_WARNING_RESET
 
       optChromaQPOffset[comp-1] = std::min (3 + lumaChromaMappingDQP, adaptChromaQPOffset + lumaChromaMappingDQP);
     } // isChroma (compID)
