@@ -1578,9 +1578,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
     if (m_pcEncCfg->m_Affine > 1)
     {
-      CodingUnit* bestCU = m_modeCtrl->comprCUCtx->bestCS != nullptr ? m_modeCtrl->comprCUCtx->bestCU : nullptr;
-      checkAffine &= bestCU->affine;
-      if (bestCU->slice->TLayer > 3)
+      checkAffine &= m_modeCtrl->comprCUCtx->bestCU->affine;
+      if (cu.slice->TLayer > 3)
       {
         checkAffine = false;
       }

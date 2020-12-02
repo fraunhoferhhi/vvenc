@@ -2006,7 +2006,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       }
     }
   }
-  uiNumMrgSATDCand = uiNumMrgSATDCand > int(RdModeList.size()) ? int(RdModeList.size()) : uiNumMrgSATDCand;
+  uiNumMrgSATDCand = std::min(int(uiNumMrgSATDCand), int(RdModeList.size()));
 
   uint32_t iteration = (encTestMode.lossless) ? 1 : 2;
 
