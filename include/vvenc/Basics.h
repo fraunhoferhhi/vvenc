@@ -69,11 +69,6 @@ static const int MAX_NUM_CQP_MAPPING_TABLES      =  3; ///< Maximum number of ch
 static const int MAX_NUM_ALF_ALTERNATIVES_CHROMA =  8;
 static const int MCTF_RANGE                      =  2; ///< max number of frames used for MCTF filtering in forward / backward direction
 
-
-// ====================================================================================================================
-
-typedef void (*MsgFnc) ( int level, const char* fmt, va_list args );
-
 // ====================================================================================================================
 
 enum MsgLevel

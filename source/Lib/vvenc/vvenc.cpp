@@ -57,8 +57,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-//const char *sMsg = "Not initialized";
-
 VVEnc::VVEnc()
 {
   m_pcVVEncImpl = new VVEncImpl;
@@ -196,7 +194,10 @@ const char* VVEnc::getPresetParamsAsStr( int iQuality )
   return VVEncImpl::getPresetParamsAsStr(iQuality);
 }
 
-
+void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
+{
+  vvenc::registerMsgCbf( msgFnc );
+}
 
 } // namespace
 

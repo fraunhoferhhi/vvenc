@@ -113,7 +113,7 @@ void EncoderIf::printSummary()
 
 // ====================================================================================================================
 
-void setMsgFnc( MsgFnc msgFnc )
+void registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
 {
   g_msgFnc = msgFnc;
 }
