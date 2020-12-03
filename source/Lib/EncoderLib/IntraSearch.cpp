@@ -761,15 +761,8 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
         cs.addTU( CS::getArea( cs, partitioner.currArea(), partitioner.chType, partitioner.treeType ), partitioner.chType, &cu );
     }
 
-    std::vector<TransformUnit*> orgTUs;
-    if (lumaUsesISP)
-    {
-      CodingUnit& auxCU = saveCS.addCU(cu, partitioner.chType);
-      auxCU.ispMode = cu.ispMode;
-      saveCS.sps = cu.cs->sps;
-    }
-
     // create a store for the TUs
+    std::vector<TransformUnit*> orgTUs;
     for( const auto &ptu : cs.tus )
     {
       // for split TUs in HEVC, add the TUs without Chroma parts for correct setting of Cbfs
@@ -778,10 +771,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
         saveCS.addTU( *ptu, partitioner.chType, nullptr );
         orgTUs.push_back( ptu );
       }
-    }
-    if (lumaUsesISP)
-    {
-      saveCS.clearCUs();
     }
 
     // SATD pre-selecting.
