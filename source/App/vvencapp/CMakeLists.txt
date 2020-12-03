@@ -7,6 +7,13 @@ file( GLOB SRC_FILES "*.cpp" )
 # get include files
 file( GLOB INC_FILES "*.h" )
 
+# get address sanitizer libs for gcc
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+  if( VVENC_USE_ADDRESS_SANITIZER )
+    set( ADDITIONAL_LIBS asan )
+  endif()
+endif()
+
 # set resource file for MSVC compilers
 if( MSVC )
   set( RESOURCE_FILE ${EXE_NAME}.rc )
