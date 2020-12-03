@@ -810,8 +810,6 @@ struct SPS
   bool              interLayerPresent;
 
   uint32_t          log2ParallelMergeLevelMinus2; // th fix this
-  bool              ppsValidFlag[64];
-  Size              scalingWindowSizeInPPS[64];
   uint32_t          maxNumMergeCand;
   uint32_t          maxNumAffineMergeCand;
   uint32_t          maxNumIBCMergeCand;
