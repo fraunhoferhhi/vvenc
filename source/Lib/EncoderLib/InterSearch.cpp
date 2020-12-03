@@ -1365,12 +1365,6 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
             aacAMVPInfo[ tarRefList ][ refIdxTar ].numCand = 1;
           }
 
-#if defined( __GNUC__ ) && __GNUC__ == 10
-          // probably a bug in gcc-10 static analyzer: It thinks the indices are -1 and therefore triggers -Werror=array-bounds
-          CHECKD( refIdxCur == -1, "negative array index" );
-          CHECKD( refIdxTar == -1, "negative array index" );
-#endif
-
           MvField cCurMvField, cTarMvField;
           Distortion costStart = MAX_DISTORTION;
           for ( int i = 0; i < aacAMVPInfo[curRefList][refIdxCur].numCand; i++ )
