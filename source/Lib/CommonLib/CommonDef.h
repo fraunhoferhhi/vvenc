@@ -89,10 +89,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
                                                  _Pragma("GCC diagnostic ignored \"-Wmaybe-uninitialized\"");
 # define GCC_WARNING_DISABLE_class_memaccess     _Pragma("GCC diagnostic push"); \
                                                  _Pragma("GCC diagnostic ignored \"-Wclass-memaccess\"");
+# define GCC_WARNING_DISABLE_array_bounds        _Pragma("GCC diagnostic push"); \
+                                                 _Pragma("GCC diagnostic ignored \"-Warray-bounds\"");
 # define GCC_WARNING_RESET                       _Pragma("GCC diagnostic pop");
 #else
 # define GCC_WARNING_DISABLE_maybe_uninitialized
 # define GCC_WARNING_DISABLE_class_memaccess
+# define GCC_WARNING_DISABLE_array_bounds
 # define GCC_WARNING_RESET
 #endif
 
