@@ -1464,6 +1464,7 @@ int EncCfg::initPreset( PresetMode preset )
   m_Affine                        = 0;
   m_alf                           = 0;
   m_allowDisFracMMVD              = 0;
+  m_useBDPCM                      = 0;
   m_BDOF                          = 0;
   m_ccalf                         = 0;
   m_useChromaTS                   = 0;
@@ -1518,11 +1519,13 @@ int EncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
+      m_useBDPCM                  = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::FASTER:
@@ -1537,11 +1540,13 @@ int EncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
+      m_useBDPCM                  = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::FAST:
@@ -1558,12 +1563,14 @@ int EncCfg::initPreset( PresetMode preset )
 
       m_alf                       = 1;
       m_ccalf                     = 1;
+      m_useBDPCM                  = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MCTF                      = 2;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::MEDIUM:
@@ -1578,6 +1585,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1599,6 +1607,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_SbTMVP                    = 1;
       m_SMVD                      = 3;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::SLOW:
@@ -1613,6 +1622,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1637,8 +1647,61 @@ int EncCfg::initPreset( PresetMode preset )
       m_SBT                       = 1;
       m_SMVD                      = 3;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
 
       m_contentBasedFastQtbt      = 0;
+      break;
+
+    case PresetMode::SLOWER:
+
+      m_motionEstimationSearchMethod = 1;
+
+      // Q44B33
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 3;
+      m_maxMTTDepthI              = 3;
+      m_maxMTTDepthIChroma        = 3;
+
+      m_Affine                    = 1;
+      m_alf                       = 1;
+      m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_CIIP                      = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
+      m_Geo                       = 1;
+      m_AMVRspeed                 = 1;
+      m_ISP                       = 1;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 1;
+      m_MRL                       = 1;
+      m_MTS                       = 1;
+      m_MTSImplicit               = 0;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 1;
+      m_SMVD                      = 1;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      m_useNonLinearAlfChroma     = 1;
+      m_useNonLinearAlfLuma       = 1;
+
+      m_qtbttSpeedUp              = 0;
+      m_contentBasedFastQtbt      = 0;
+      m_useFastMrg                = 1;
+      m_useFastMIP                = 0;
+      m_fastSubPel                = 0;
       break;
 
     case PresetMode::TOOLTEST:
@@ -1653,6 +1716,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1680,7 +1744,6 @@ int EncCfg::initPreset( PresetMode preset )
       m_TS                        = 1;
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
-      m_useBDPCM                  = 1;
       break;
 
     default:

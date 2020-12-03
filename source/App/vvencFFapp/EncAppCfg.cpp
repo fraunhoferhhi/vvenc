@@ -339,6 +339,7 @@ const std::vector<SVPair<PresetMode>> PresetToEnumMap =
   { "fast",      PresetMode::FAST },
   { "medium",    PresetMode::MEDIUM },
   { "slow",      PresetMode::SLOW },
+  { "slower",    PresetMode::SLOWER },
   { "firstpass", PresetMode::FIRSTPASS },
   { "tooltest",  PresetMode::TOOLTEST },
 };
@@ -578,11 +579,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
-  
+
   ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
   ("Size,-s",                                         toSourceSize,                                     "Input resolution (WidthxHeight)")
   ("Threads,-t",                                      m_numWppThreads,                                  "Number of threads")
-  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow)")
+  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
     ;
 
   po::setDefaults( opts );

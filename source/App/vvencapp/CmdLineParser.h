@@ -371,6 +371,10 @@ public:
           {
             rcParams.m_iQuality = 255;
           }
+          else if( "slower" == cPreset)
+          {
+            rcParams.m_iQuality = 4;
+          }
           else if( "slow" == cPreset)
           {
             rcParams.m_iQuality = 3;
