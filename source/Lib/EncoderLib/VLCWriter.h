@@ -140,7 +140,7 @@ public:
 private:
   void dpb_parameters           ( int maxSubLayersMinus1, bool subLayerInfoFlag, const SPS *pcSPS);
   void xCodeRefPicList          ( const ReferencePictureList* rpl, bool isLongTermPresent, uint32_t ltLsbBitsCount, const bool isForbiddenZeroDeltaPoc, int rplIdx );
-  void xCodePredWeightTable     ( const PicHeader *picHeader, const SPS *sps );
+  void xCodePredWeightTable     ( const PicHeader *picHeader, const PPS *pps, const SPS *sps );
   void xCodePredWeightTable     ( const Slice* slice );
 };
 

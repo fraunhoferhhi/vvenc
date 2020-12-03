@@ -173,6 +173,7 @@ enum VvcLevel
   VVC_LEVEL_6   = 96,
   VVC_LEVEL_6_1 = 99,
   VVC_LEVEL_6_2 = 102,
+  VVC_LEVEL_6_3 = 105,
   VVC_LEVEL_15_5 = 255,
 };
 

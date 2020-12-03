@@ -160,7 +160,7 @@ public:
   void  parseRemainingBytes   ( bool noTrailingBytesExpected );
 
   void  parsePredWeightTable  ( Slice* pcSlice, const SPS *sps );
-  void  parsePredWeightTable  ( PicHeader* picHeader, const SPS *sps );
+  void  parsePredWeightTable  ( PicHeader* picHeader, const PPS *pps, const SPS *sps );
   void  parseExtraPHBitsStruct( SPS *sps, int numBytes );
   void  parseExtraSHBitsStruct( SPS *sps, int numBytes );
  

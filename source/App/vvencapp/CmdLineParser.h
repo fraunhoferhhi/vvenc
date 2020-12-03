@@ -562,6 +562,10 @@ public:
           {
             rcParams.m_eLevel = vvenc::VVC_LEVEL_6_2;
           }
+          else if( "6.3" == cLevel )
+          {
+            rcParams.m_eLevel = vvenc::VVC_LEVEL_6_3;
+          }
           else if( "15.5" == cLevel )
           {
             rcParams.m_eLevel = vvenc::VVC_LEVEL_15_5;

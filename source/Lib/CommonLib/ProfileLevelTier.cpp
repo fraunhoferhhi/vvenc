@@ -83,6 +83,7 @@ static const LevelTierFeatures mainLevelTierInfo[] =
     { Level::LEVEL6  , 35651584, {    80000,   240000 },      600,      440,       20, 1069547520ULL, {   60000,   240000 }, { 8, 4} },
     { Level::LEVEL6_1, 35651584, {   120000,   480000 },      600,      440,       20, 2139095040ULL, {  120000,   480000 }, { 8, 4} },
     { Level::LEVEL6_2, 35651584, {   180000,   800000 },      600,      440,       20, 4278190080ULL, {  240000,   800000 }, { 8, 4} },
+    { Level::LEVEL6_3, 80216064, {   240000,   800000 },     1000,      990,       30, 4812963840ULL, {  320000,   800000 }, { 8, 4} },
     { Level::LEVEL15_5, MAX_UINT,{ MAX_UINT, MAX_UINT }, MAX_UINT, MAX_UINT, MAX_UINT, MAX_CNFUINT64, {MAX_UINT, MAX_UINT }, { 0, 0} },
     { Level::NONE    }
 };

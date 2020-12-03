@@ -101,10 +101,10 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   //       properties, which are only valid in CTC.
   //       Still copying this setting from HM for consistency, improvements welcome
   bool isRandomAccess  = m_pcEncCfg->m_IntraPeriod > 0;
-  if( isRandomAccess )
+  if( isRandomAccess && m_pcEncCfg->m_IntraPeriod < 256)
   {
-    bpSei.cpbRemovalDelayLength = 6;                        // 32 = 2^5 (plus 1)
-    bpSei.dpbOutputDelayLength =  6;                        // 32 + 3 = 2^6
+    bpSei.cpbRemovalDelayLength =                                                           // 6  // 32 = 2^5 (plus 1)
+    bpSei.dpbOutputDelayLength  =  ceilLog2( m_pcEncCfg->m_IntraPeriod)+1;                      // 6  // 32 + 3 = 2^6
   }
   else
   {
@@ -203,7 +203,9 @@ void SEIEncoder::initDecodedPictureHashSEI( SEIDecodedPictureHash& dphSei, const
 {
   CHECK(!(m_isInitialized), "Unspecified error");
 
-  dphSei.method = m_pcEncCfg->m_decodedPictureHashSEIType;
+  dphSei.method         = m_pcEncCfg->m_decodedPictureHashSEIType;
+  dphSei.singleCompFlag = m_pcEncCfg->m_internChromaFormat == 0;
+
   switch (m_pcEncCfg->m_decodedPictureHashSEIType)
   {
     case HASHTYPE_MD5:

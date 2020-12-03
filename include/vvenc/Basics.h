@@ -129,6 +129,7 @@ namespace Level
     LEVEL6   = 96,
     LEVEL6_1 = 99,
     LEVEL6_2 = 102,
+    LEVEL6_3 = 105,
     LEVEL15_5 = 255,
   };
 }

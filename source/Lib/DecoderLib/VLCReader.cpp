@@ -855,23 +855,24 @@ void HLSyntaxReader::parseGeneralHrdParameters(GeneralHrdParams *hrd)
   READ_CODE( 32, symbol, "time_scale");                                 hrd->timeScale = symbol;
   READ_FLAG( symbol, "general_nal_hrd_parameters_present_flag");        hrd->generalNalHrdParamsPresent = (symbol == 1);
   READ_FLAG( symbol, "general_vcl_hrd_parameters_present_flag");        hrd->generalVclHrdParamsPresent = (symbol == 1);
-  CHECK((hrd->generalNalHrdParamsPresent == 0) && (hrd->generalVclHrdParamsPresent == 0), "general_nal_hrd_params_present_flag and general_vcl_hrd_params_present_flag in each general_hrd_parameters( ) syntax structure shall not be both equal to 0.");
-  READ_FLAG( symbol, "general_same_pic_timing_in_all_ols_flag");        hrd->generalSamePicTimingInAllOlsFlag = (symbol == 1);
-  READ_FLAG( symbol, "general_decoding_unit_hrd_params_present_flag");  hrd->generalDecodingUnitHrdParamsPresent = (symbol == 1);
-  if (hrd->generalDecodingUnitHrdParamsPresent)
+  if(  hrd->generalNalHrdParamsPresent || hrd->generalVclHrdParamsPresent )
   {
-    READ_CODE( 8, symbol, "tick_divisor_minus2");                       hrd->tickDivisorMinus2 = symbol;
-  }
-  READ_CODE( 4, symbol, "bit_rate_scale");                              hrd->bitRateScale = symbol;
-  READ_CODE( 4, symbol, "cpb_size_scale");                              hrd->cpbSizeScale = symbol;
-  if (hrd->generalDecodingUnitHrdParamsPresent)
-  {
-    READ_CODE( 4, symbol, "cpb_size_du_scale");                         hrd->cpbSizeDuScale = symbol;
-  }
-  READ_UVLC( symbol, "hrd_cpb_cnt_minus1");                             hrd->hrdCpbCntMinus1 = symbol;
-  CHECK(symbol > 31,"The value of hrd_cpb_cnt_minus1 shall be in the range of 0 to 31, inclusive");
+    READ_FLAG( symbol, "general_same_pic_timing_in_all_ols_flag");        hrd->generalSamePicTimingInAllOlsFlag = (symbol == 1);
+    READ_FLAG( symbol, "general_decoding_unit_hrd_params_present_flag");  hrd->generalDecodingUnitHrdParamsPresent = (symbol == 1);
+    if (hrd->generalDecodingUnitHrdParamsPresent)
+    {
+      READ_CODE( 8, symbol, "tick_divisor_minus2");                       hrd->tickDivisorMinus2 = symbol;
+    }
+    READ_CODE( 4, symbol, "bit_rate_scale");                              hrd->bitRateScale = symbol;
+    READ_CODE( 4, symbol, "cpb_size_scale");                              hrd->cpbSizeScale = symbol;
+    if (hrd->generalDecodingUnitHrdParamsPresent)
+    {
+      READ_CODE( 4, symbol, "cpb_size_du_scale");                         hrd->cpbSizeDuScale = symbol;
+    }
+    READ_UVLC( symbol, "hrd_cpb_cnt_minus1");                             hrd->hrdCpbCntMinus1 = symbol;
+    CHECK(symbol > 31,"The value of hrd_cpb_cnt_minus1 shall be in the range of 0 to 31, inclusive");
 }
-
+}
 void HLSyntaxReader::parseOlsHrdParameters(GeneralHrdParams * generalHrd, OlsHrdParams *olsHrd, uint32_t firstSubLayer, uint32_t maxNumSubLayersMinus1)
 {
   uint32_t  symbol;
@@ -895,7 +896,7 @@ void HLSyntaxReader::parseOlsHrdParameters(GeneralHrdParams * generalHrd, OlsHrd
     {
       READ_UVLC( symbol, "elemental_duration_in_tc_minus1");   hrd->elementDurationInTcMinus1 = symbol;
     }
-    else if(generalHrd->hrdCpbCntMinus1 == 0)
+    else if((generalHrd->generalNalHrdParamsPresent || generalHrd->generalVclHrdParamsPresent) &&generalHrd->hrdCpbCntMinus1 == 0)
     {
       READ_FLAG( symbol, "low_delay_hrd_flag");                hrd->lowDelayHrdFlag = (symbol == 1);
     }
@@ -950,9 +951,9 @@ void HLSyntaxReader::dpb_parameters(int maxSubLayersMinus1, bool subLayerInfoFla
   uint32_t code;
   for (int i = (subLayerInfoFlag ? 0 : maxSubLayersMinus1); i <= maxSubLayersMinus1; i++)
   {
-    READ_UVLC(pcSPS->maxDecPicBuffering[i], "max_dec_pic_buffering_minus1[i]");
-    READ_UVLC(code,      "max_num_reorder_pics[i]"); pcSPS->numReorderPics[i] = code;
-    READ_UVLC(pcSPS->maxLatencyIncreasePlus1[i], "max_latency_increase_plus1[i]");
+    READ_UVLC(pcSPS->maxDecPicBuffering[i], "dpb_max_dec_pic_buffering_minus1[i]");
+    READ_UVLC(code,      "dpb_max_num_reorder_pics[i]"); pcSPS->numReorderPics[i] = code;
+    READ_UVLC(pcSPS->maxLatencyIncreasePlus1[i], "dpb_max_latency_increase_plus1[i]");
   }
 }
  
@@ -1546,29 +1547,29 @@ void HLSyntaxReader::parseVPS(VPS* pcVPS)
       READ_FLAG(uiCode, "vps_independent_layer_flag");     pcVPS->independentLayer[i] = uiCode;
       if (!pcVPS->independentLayer[i])
       {
+        READ_FLAG(uiCode, "max_tid_ref_present_flag[ i ]");
+        bool presentFlag = uiCode;
         uint16_t sumUiCode = 0;
         for (int j = 0, k = 0; j < i; j++)
         {
-          READ_FLAG(uiCode, "vps_direct_dependency_flag"); pcVPS->directRefLayer[i][j] = uiCode;
-          if( uiCode )
+          READ_FLAG(uiCode, "vps_direct_ref_layer_flag"); pcVPS->directRefLayer[i][j] = uiCode;
+          if (uiCode)
           {
-
             pcVPS->interLayerRefIdx[i][j] = k;
             pcVPS->directRefLayerIdx[i][k++] = j;
             sumUiCode++;
           }
+          if (presentFlag && pcVPS->directRefLayer[i][j])
+          {
+            READ_CODE(3, uiCode, "max_tid_il_ref_pics_plus1[ i ][ j ]");
+            pcVPS->maxTidIlRefPicsPlus1[i][j] = uiCode;
+          }
+          else
+          {
+            pcVPS->maxTidIlRefPicsPlus1[i][j]= 7;
+          }
         }
         CHECK(sumUiCode == 0, "There has to be at least one value of j such that the value of vps_direct_dependency_flag[ i ][ j ] is equal to 1,when vps_independent_layer_flag[ i ] is equal to 0 ");
-        READ_FLAG(uiCode, "vps_max_tid_ref_present_flag[ i ]");
-        if (uiCode)
-        {
-          READ_CODE(3, uiCode, "vps_max_tid_il_ref_pics_plus1[ i ]");
-          pcVPS->maxTidIlRefPicsPlus1[i]= uiCode;
-        }
-        else
-        {
-          pcVPS->maxTidIlRefPicsPlus1[i] = 7;
-        }
       }
     }
   }
@@ -2220,7 +2221,7 @@ void HLSyntaxReader::parsePictureHeader( PicHeader* picHeader, ParameterSetManag
 
     if( (pps->weightPred || pps->weightedBiPred) && pps->wpInfoInPh )
     {
-      parsePredWeightTable(picHeader, sps);
+      parsePredWeightTable(picHeader, pps, sps);
     }
   }
   // inherit constraint values from SPS
@@ -3503,7 +3504,7 @@ void HLSyntaxReader::parsePredWeightTable( Slice* slice, const SPS *sps )
   CHECK(uiTotalSignalledWeightFlags>24, "Too many weight flag signalled");
 }
 
-void HLSyntaxReader::parsePredWeightTable( PicHeader* picHeader, const SPS *sps )
+void HLSyntaxReader::parsePredWeightTable( PicHeader* picHeader, const PPS *pps, const SPS *sps )
 {
   WPScalingParam *wp;
   const ChromaFormat    chFmt        = sps->chromaFormatIdc;
@@ -3634,7 +3635,7 @@ void HLSyntaxReader::parsePredWeightTable( PicHeader* picHeader, const SPS *sps 
 
     if (numRef == 0)
     {
-      if (picHeader->pRPL[1]->getNumRefEntries() > 0)
+      if (pps->weightedBiPred && picHeader->pRPL[1]->getNumRefEntries() > 0)
       {
         READ_UVLC(numLxWeights, "num_l1_weights");
       }
