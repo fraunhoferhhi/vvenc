@@ -80,77 +80,78 @@ public:
           "\n"
           " File input Options\n"
           "\n"
-          "\t [--input,-i <str>        ] : raw yuv input file\n"
-          "\t [--size,-s  <intxint>    ] : specify input resolution (width x height) ["<< rcParams.m_iWidth << "x" << rcParams.m_iHeight <<"]\n"
-          "\t [--format,-c  <str>      ] : set input format (yuv420, yuv420_10) [yuv420]\n"
-          "\t [--framerate,-r  <int>   ] : temporal rate (framerate) e.g. 25,29,30,50,59,60 ["<< rcParams.m_iTemporalRate/rcParams.m_iTemporalScale <<"]\n"
-          "\t [--tickspersec   <int>   ] : ticks per second e.g. 90000 for dts generation [1..27000000]\n";
+          "\t [--input,-i <str>          ] : raw yuv input file\n"
+          "\t [--size,-s  <intxint>      ] : specify input resolution (width x height) ["<< rcParams.m_iWidth << "x" << rcParams.m_iHeight <<"]\n"
+          "\t [--format,-c  <str>        ] : set input format (yuv420, yuv420_10) [yuv420]\n"
+          "\t [--framerate,-r  <int>     ] : temporal rate (framerate) e.g. 25,29,30,50,59,60 ["<< rcParams.m_iTemporalRate/rcParams.m_iTemporalScale <<"]\n"
+          "\t [--tickspersec   <int>     ] : ticks per second e.g. 90000 for dts generation [1..27000000]\n";
       if ( bFullHelp )
       {
         std::cout <<
-          "\t                              29.97 fps = 30000/1001 Hz = 29\n"
-          "\t                              59.94 fps = 60000/1001 Hz = 59\n";
+          "\t                                29.97 fps = 30000/1001 Hz = 29\n"
+          "\t                                59.94 fps = 60000/1001 Hz = 59\n";
       }
       std::cout <<
-          "\t [--frames,-f <int>       ] : max. frames to encode (default: -1 all frames)\n"
-          "\t [--frameskip <int>       ] : number of frames to encode skip (default: 0 off)\n";
+          "\t [--frames,-f <int>         ] : max. frames to encode (default: -1 all frames)\n"
+          "\t [--frameskip <int>         ] : number of frames to encode skip (default: 0 off)\n";
       if ( bFullHelp )
       {
         std::cout <<
-          "\t [--segment <str>         ] : when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
-          "\t              first         : first segment\n"
-          "\t              mid           : all segments between first and last segment\n"
-          "\t              last          : last segment\n";
+          "\t [--segment <str>           ] : when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
+          "\t              first           : first segment\n"
+          "\t              mid             : all segments between first and last segment\n"
+          "\t              last            : last segment\n";
       }
       std::cout <<
           "\n"
           " Bitstream output options\n"
           "\n"
-          "\t [--output,-o  <str>      ] : bitstream output file (default: not set)\n"
+          "\t [--output,-o  <str>        ] : bitstream output file (default: not set)\n"
           "\n"
           " Encoder Options\n"
           "\n"
-          "\t [--preset      <str>     ] : select preset for specific encoding setting ( faster, fast, medium, slow ) default: [" << rcPreset << "]\n";
+          "\t [--preset      <str>       ] : select preset for specific encoding setting ( faster, fast, medium, slow ) default: [" << rcPreset << "]\n";
       if ( bFullHelp )
       {
         std::cout <<
-          "\t              faster        : best speed      : quality=0 :\n"
-          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(0) << "\n\n"
-          "\t              fast          : fast mode       : quality=1 :\n"
-          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n"
-          "\t              medium        : default quality : quality=2 :\n"
-          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n"
-          "\t              slow          : best quality    : quality=3 :\n"
-          "\t                              " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
+          "\t              faster          : best speed      : quality=0 :\n"
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(0) << "\n\n"
+          "\t              fast            : fast mode       : quality=1 :\n"
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n"
+          "\t              medium          : default quality : quality=2 :\n"
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n"
+          "\t              slow            : best quality    : quality=3 :\n"
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
       }
       std::cout <<
-          "\t [--bitrate,-b  <int>     ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
-          "\t [--passes,-p   <int>     ] : number of rate control passes (1 or 2) default: [" << rcParams.m_iNumPasses << "]\n"
-          "\t [--qp,-q <int>           ] : quantization parameter, QP (0-51) default: [" << rcParams.m_iQp << "]\n"
-          "\t [--qpa   <int>           ] : perceptual QP adaptation to improve visual coding quality (0: off, on for 1: SDR (WPSNR), 2: SDR (XPSNR),\n\t\t\t\t      3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.m_iPerceptualQPA << "]\n"
-          "\t [--threads,-t  <int>     ] : number of threads (1-n) default: [size <= HD: " << rcParams.m_iThreadCount << ", UHD: 6]\n"
+          "\t [--bitrate,-b  <int>       ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
+          "\t [--passes,-p   <int>       ] : number of rate control passes (1,2) default: [" << rcParams.m_iNumPasses << "]\n"
+          "\t [--qp,-q <int>             ] : quantization parameter, QP (0-51) default: [" << rcParams.m_iQp << "]\n"
+          "\t [--qpa   <int>             ] : perceptual QP adaptation to improve visual coding quality (0: off, on for 1: SDR (WPSNR), 2: SDR (XPSNR),\n"
+          "\t                                3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.m_iPerceptualQPA << "]\n"
+          "\t [--threads,-t  <int>       ] : number of threads (1-n) default: [" << rcParams.m_iThreadCount << ": size <= HD: 4, UHD: 6]\n"
           "\n"
-          "\t [--gopsize,-g  <int>     ] : GOP size of temporal structure (16) [" <<  rcParams.m_iGopSize << "]\n"
-          "\t [--refreshtype,-rt <str> ] : intra refresh type (idr,cra)\n"
-          "\t [--refreshsec,-rs <int>  ] : Intra period/refresh in seconds [" <<  rcParams.m_iIDRPeriodSec << "]\n"
-          "\t [--intraperiod,-ip <int> ] : Intra period in frames (0: use intra period in seconds (intraperiods), else: n*gopsize [" <<  rcParams.m_iIDRPeriod << "]\n";
+          "\t [--gopsize,-g  <int>       ] : GOP size of temporal structure (16,32) [" <<  rcParams.m_iGopSize << "]\n"
+          "\t [--refreshtype,-rt <str>   ] : intra refresh type (idr,cra)\n"
+          "\t [--refreshsec,-rs <int>    ] : Intra period/refresh in seconds [" <<  rcParams.m_iIDRPeriodSec << "]\n"
+          "\t [--intraperiod,-ip <int>   ] : Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize) [" <<  rcParams.m_iIDRPeriod << "]\n";
       if ( bFullHelp )
       {
         std::cout <<
-          "\t [--internal-bitdepth <int> ] : internal bitdepth [" <<  rcParams.m_iInternalBitDepth << "]\n";
+          "\t [--internal-bitdepth <int> ] : internal bitdepth (8,10) [" <<  rcParams.m_iInternalBitDepth << "]\n";
       }
 
       std::cout <<
           "\n"
-          "\t [--profile      <str>    ] : select profile ( main10, main10_stillpic) default: [" << rcProfile << "]\n"
-          "\t [--level        <str>    ] : select level ( 1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2, 15.5 ) default: [" << rcLevel << "]\n"
-          "\t [--tier         <str>    ] : select tier ( main, high ) default: [" << rcTier << "]\n"
+          "\t [--profile      <str>      ] : select profile (main10, main10_stillpic) default: [" << rcProfile << "]\n"
+          "\t [--level        <str>      ] : select level (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3 15.5) default: [" << rcLevel << "]\n"
+          "\t [--tier         <str>      ] : select tier (main, high) default: [" << rcTier << "]\n"
           "\n"
           " General Options\n"
           "\n"
-          "\t [--verbosity,-v  <int>   ] : verbosity level (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) default: [" << (int)rcParams.m_eLogLevel << "]\n"
-          "\t [--help,-h               ] : show basic help\n"
-          "\t [--fullhelp              ] : show full help\n"
+          "\t [--verbosity,-v  <int>     ] : verbosity level (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) default: [" << (int)rcParams.m_eLogLevel << "]\n"
+          "\t [--help,-h                 ] : show basic help\n"
+          "\t [--fullhelp                ] : show full help\n"
           "\n" ;
       std::cout << std::endl;
   }
