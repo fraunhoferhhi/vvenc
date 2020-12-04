@@ -560,7 +560,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
     m_cListPic.push_back( pic );
   }
 
-  pic->isMctfFiltered    = false;
+  pic->isMctfProcessed   = false;
   pic->isInitDone        = false;
   pic->isReconstructed   = false;
   pic->isBorderExtended  = false;
@@ -669,7 +669,7 @@ void EncLib::xCreateCodingOrder( int start, int max, int numInQueue, bool flush,
   while ( poc < max )
   {
     Picture* pic = xGetPictureBuffer( poc );
-    if ( m_cEncCfg.m_MCTF && ! pic->isMctfFiltered )
+    if ( m_cEncCfg.m_MCTF && ! pic->isMctfProcessed )
     {
       break;
     }

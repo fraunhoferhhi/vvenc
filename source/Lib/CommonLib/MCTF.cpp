@@ -424,7 +424,7 @@ void MCTF::filter( Picture* pic )
     bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
   }
 
-  fltrPic->isMctfFiltered = true;
+  fltrPic->isMctfProcessed = true;
 }
 
 // ====================================================================================================================
