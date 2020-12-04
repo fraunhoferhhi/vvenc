@@ -212,7 +212,7 @@ public:
   BlkStat                       picBlkStat;
   std::vector<OutputBitstream>  sliceDataStreams;
 
-  bool                          isMctfFiltered;
+  bool                          isMctfProcessed;
   bool                          isInitDone;
   bool                          isReconstructed;
   bool                          isBorderExtended;
