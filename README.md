@@ -37,20 +37,20 @@ The encoder project includes two encoder executables, a standard encoder (vvenca
 ## How to use the standard encoder?
 The standard encoder (**vvencapp**) can be used in one of four predefined presets. Each preset represents a different tradeoff between encoder runtime and video quality. In the slowest preset, the encoder reaches the highest compression gain, whilst in the fastest preset the runtime is significantly decreased. A list of the main encoder command line parameters is shown in the following table.
 
-| OPTION            | DEFAULT                          | DESCRIPTION                                                                                        |
-|-------------------|----------------------------------|----------------------------------------------------------------------------------------------------|
-| --help,-h         | -                                | Show basic help                                                                                    |
-| --input,-i <str>       | -                                | Raw yuv input file                                                                                 |
-| --size,-s <wxh>        | 1920x1080                        | Input file resolution (width x height)                                                             |
+| OPTION                 | DEFAULT                          | DESCRIPTION                                                                                          |
+|------------------------|----------------------------------|------------------------------------------------------------------------------------------------------|
+| --help,-h              | -                                | Show basic help                                                                                      |
+| --input,-i <str>       | -                                | Raw yuv input file                                                                                   |
+| --size,-s <wxh>        | 1920x1080                        | Input file resolution (width x height)                                                               |
 | --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. Also recommended for perceptual QP adaptation modes 2 and 4 (see `--qpa` option below). |
-| --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                         |
-| --output,-o <str>      | not set                          | Bit-stream output file                                                                             |
-| --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow)                           |
-| --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                     |
+| --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
+| --output,-o <str>      | not set                          | Bit-stream output file                                                                               |
+| --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow)                             |
+| --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                       |
 | --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
 | --qpa <int>            | 2                                | Perceptual QP adaptation (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
-| --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                             |
-| --threads ,-t <int>    | size<=HD: 4 <br> else : 6 | Number of threads (1-N)                                                                            |
+| --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
+| --threads ,-t <int>    | size<=HD: 4 <br> else : 6        | Number of threads (1-N)                                                                              |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels, the following call will encode the input file with the medium speedup preset:
 
@@ -59,13 +59,13 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 ## How to use the full featured expert mode encoder?
 The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM) reference software configuration scheme. Most of the parameters have been kept similar to VTM, but for some parameters, additional modes are available. Furthermore, not supported options have been removed. The following example configuration files for the expert mode encoder can be found in the cfg sub-directory:
 
-| CONFIGURATION FILE                                                                                   | DESCRIPTION                                                                                                                                                                        |
-|------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| sequence.cfg                                                                                         | Sequence specific configuration parameters. Must be always adapted to the input sequence.                                                                                           |
-| randomaccess_faster.cfg<br>randomaccess_fast.cfg<br>randomaccess_medium.cfg<br>randomaccess_slow.cfg | Random access configuration for different presets. Each configuration file corresponds to one of the 4 preset modes.                                                               |
-| qpa.cfg                                                                                              | Perceptually optimized QPA configuration file.                                                                                                                                     |
-| gop32.cfg                                                                                            | Experimental. Additional GOP size 32 configuration, replacing the default GOP size 16 configuration. Must be given at the command line after the random access configuration file. |
-| frc.cfg                                                                                              | Frame level rate control configuration, overriding default fix QP setup. Note: Currently incompatible with GOP 32.                                                                 |
+| CONFIGURATION FILE                                                                                   | DESCRIPTION                                                                                                             |
+|------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| sequence.cfg                                                                                         | Sequence specific configuration parameters. Must be always adapted to the input sequence.                               |
+| randomaccess_faster.cfg<br>randomaccess_fast.cfg<br>randomaccess_medium.cfg<br>randomaccess_slow.cfg | Random access configuration for different presets. Each configuration file corresponds to one of the 4 preset modes.    |
+| qpa.cfg                                                                                              | Perceptually optimized QPA configuration file.                                                                          |
+| frc.cfg                                                                                              | Frame level single pass rate control configuration, overriding default fix QP setup.                                    |
+| rc2p.cfg                                                                                             | Frame level two pass rate control configuration, overriding default fix QP setup.                                       |
 
 **Example usage:** In order to start your first experiments with the expert mode encoder, adapt the sequence.cfg configuration file to your input YUV source file and use the following command:
 
