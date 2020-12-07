@@ -128,7 +128,8 @@ public:
   {
   }
 
-  bool confirmParameter( bool bflag, const char* message );
+  bool checkExperimental( bool bflag, const char* message );
+  bool confirmParameter ( bool bflag, const char* message );
   bool initCfgParameter();
   void setCfgParameter( const EncCfg& encCfg );
   int  initPreset( PresetMode preset );

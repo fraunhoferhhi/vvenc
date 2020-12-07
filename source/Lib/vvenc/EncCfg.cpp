@@ -70,6 +70,15 @@ bool EncCfg::confirmParameter( bool bflag, const char* message )
   return true;
 }
 
+bool EncCfg::checkExperimental( bool bflag, const char* message )
+{
+  if( !bflag )
+    return false;
+
+  msg( WARNING, "Warning: Setting experimental: %s\n\n", message );
+  return true;
+}
+
 bool EncCfg::initCfgParameter()
 {
 #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
@@ -486,7 +495,7 @@ bool EncCfg::initCfgParameter()
   {
     m_cuQpDeltaSubdiv = 2;
   }
-  if ((m_usePerceptQPA == 2 || m_usePerceptQPA == 4) && (m_internChromaFormat != CHROMA_400) && (m_sliceChromaQpOffsetPeriodicity == 0))
+  if (m_usePerceptQPA >= 1 && m_internChromaFormat != CHROMA_400 && m_sliceChromaQpOffsetPeriodicity == 0)
   {
     m_sliceChromaQpOffsetPeriodicity = 1;
   }
@@ -1406,6 +1415,9 @@ bool EncCfg::initCfgParameter()
     }
   }
 
+  /// Experimental settings
+  checkExperimental( m_RCRateControlMode != 0 && m_RCNumPasses == 2 && m_usePerceptQPA != 0, "2-pass rate control with perceptually optimized QP-adaptation is experimental!" );
+
   return( m_confirmFailed );
 }
 
@@ -1853,18 +1865,8 @@ void EncCfg::printCfg() const
   msg( DETAILS, "Cost function:                         : %s\n",           getCostFunctionStr( m_costMode ).c_str() );
   msg( DETAILS, "\n");
 
-  msg( VERBOSE, "TOOL CFG: ");
+  msg( VERBOSE, "CODING TOOL CFG: ");
   msg( VERBOSE, "IBD:%d ",                   ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])));
-  msg( VERBOSE, "HAD:%d ",                   m_bUseHADME );
-  msg( VERBOSE, "RDQ:%d ",                   m_RDOQ );
-  msg( VERBOSE, "RDQTS:%d ",                 m_useRDOQTS );
-  msg( VERBOSE, "ASR:%d ",                   m_bUseASR );
-  msg( VERBOSE, "MinSearchWindow:%d ",       m_minSearchWindow );
-  msg( VERBOSE, "RestrictMESampling:%d ",    m_bRestrictMESampling );
-  msg( VERBOSE, "FEN:%d ",                   m_fastInterSearchMode );
-  msg( VERBOSE, "ECU:%d ",                   m_bUseEarlyCU );
-  msg( VERBOSE, "FDM:%d ",                   m_useFastDecisionForMerge );
-  msg( VERBOSE, "ESD:%d ",                   m_useEarlySkipDetection );
   msg( VERBOSE, "CIP:%d ",                   m_bUseConstrainedIntraPred );
   msg( VERBOSE, "SAO:%d ",                   m_bUseSAO ? 1 : 0 );
   msg( VERBOSE, "ALF:%d ",                   m_alf ? 1 : 0 );
@@ -1876,9 +1878,9 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
 
   const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_SourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
-  msg( VERBOSE, "WaveFrontSynchro:%d ",      m_entropyCodingSyncEnabled ? 1 : 0 );
-  msg( VERBOSE, "WaveFrontSubstreams:%d ",   iWaveFrontSubstreams );
-  msg( VERBOSE, "TMVPMode:%d ",              m_TMVPModeId );
+  msg( VERBOSE, "WPP:%d ",      m_entropyCodingSyncEnabled ? 1 : 0 );
+  msg( VERBOSE, "WPP-Substreams:%d ",   iWaveFrontSubstreams );
+  msg( VERBOSE, "TMVP:%d ",                  m_TMVPModeId );
 
   msg( VERBOSE, "DQ:%d ",                    m_DepQuantEnabled );
   if( m_DepQuantEnabled )
@@ -1888,21 +1890,18 @@ void EncCfg::printCfg() const
     else
       msg( VERBOSE, "(Thr: %d) ",            m_dqThresholdVal >> 1 );
   }
-  msg( VERBOSE, "SignBitHidingFlag:%d ",     m_SignDataHidingEnabled);
-  msg( VERBOSE, "Perceptual QPA:%d ",        m_usePerceptQPA );
-
-  msg( VERBOSE, "\nNEXT TOOL CFG: " );
-  msg( VERBOSE, "DualITree:%d ",             m_dualITree );
-  msg( VERBOSE, "BIO:%d ",                   m_BDOF );
+  msg( VERBOSE, "SDH:%d ",                   m_SignDataHidingEnabled);
+  msg( VERBOSE, "CST:%d ",                   m_dualITree );
+  msg( VERBOSE, "BDOF:%d ",                  m_BDOF );
   msg( VERBOSE, "DMVR:%d ",                  m_DMVR );
   msg( VERBOSE, "MTSImplicit:%d ",           m_MTSImplicit );
   msg( VERBOSE, "SBT:%d ",                   m_SBT );
-  msg( VERBOSE, "JointCbCr:%d ",             m_JointCbCrMode );
+  msg( VERBOSE, "JCbCr:%d ",                 m_JointCbCrMode );
   msg( VERBOSE, "CabacInitPresent:%d ",      m_cabacInitPresent );
-  msg( VERBOSE, "AMVRspeed:%d ",             m_AMVRspeed );
+  msg( VERBOSE, "AMVR:%d ",                  m_AMVRspeed );
   msg( VERBOSE, "SMVD:%d ",                  m_SMVD );
 
-  msg( VERBOSE, "Reshape:%d ",               m_lumaReshapeEnable );
+  msg( VERBOSE, "LMCS:%d ",                  m_lumaReshapeEnable );
   if( m_lumaReshapeEnable )
   {
     msg( VERBOSE, "(Signal:%s ",             m_reshapeSignalType == 0 ? "SDR" : (m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ") );
@@ -1915,30 +1914,53 @@ void EncCfg::printCfg() const
   }
   msg( VERBOSE, "CIIP:%d ",                  m_CIIP );
   msg( VERBOSE, "MIP:%d ",                   m_MIP );
-  msg( VERBOSE, "EncDbOpt:%d ",              m_EDO );
+  msg( VERBOSE, "AFFINE:%d ",                m_Affine );
+  if( m_Affine )
+  {
+    msg( VERBOSE, "(PROF:%d, ",              m_PROF );
+    msg( VERBOSE, "Type:%d)",                m_AffineType );
+  }
+  msg( VERBOSE, "MMVD:%d ",                  m_MMVD );
+  if( m_MMVD )
+    msg( VERBOSE, "DisFracMMVD:%d ",         m_allowDisFracMMVD) ;
+  msg( VERBOSE, "SbTMVP:%d ",                m_SbTMVP );
+  msg( VERBOSE, "GPM:%d ",                   m_Geo );
+  msg( VERBOSE, "LFNST:%d ",                 m_LFNST );
+  msg( VERBOSE, "MTS:%d ",                   m_MTS );
+  if( m_MTS )
+  {
+    msg( VERBOSE, "(IntraCand:%d)",          m_MTSIntraMaxCand );
+  }
+  msg( VERBOSE, "ISP:%d ",                   m_ISP );
+  msg( VERBOSE, "TS:%d ",                    m_TS );
+  if( m_TS )
+  {
+    msg( VERBOSE, "TSLog2MaxSize:%d ",       m_TSsize );
+    msg( VERBOSE, "useChromaTS:%d ",         m_useChromaTS );
+  }
+  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
+  
+  msg( VERBOSE, "\nENC. ALG. CFG: " );
+  msg( VERBOSE, "QPA:%d ",                   m_usePerceptQPA );
+  msg( VERBOSE, "HAD:%d ",                   m_bUseHADME );
+  msg( VERBOSE, "RDQ:%d ",                   m_RDOQ );
+  msg( VERBOSE, "RDQTS:%d ",                 m_useRDOQTS );
+  msg( VERBOSE, "ASR:%d ",                   m_bUseASR );
+  msg( VERBOSE, "MinSearchWindow:%d ",       m_minSearchWindow );
+  msg( VERBOSE, "RestrictMESampling:%d ",    m_bRestrictMESampling );
+  msg( VERBOSE, "EDO:%d ",                   m_EDO );
   msg( VERBOSE, "MCTF:%d ",                  m_MCTF );
   if( m_MCTF )
   {
     msg( VERBOSE, "[L:%d, T:%d] ",           m_MCTFNumLeadFrames, m_MCTFNumTrailFrames );
   }
-  msg( VERBOSE, "Affine:%d ",                m_Affine );
-  msg( VERBOSE, "Affine_Prof:%d ",           m_PROF );
-  msg( VERBOSE, "Affine_Type:%d ",           m_AffineType );
-  msg( VERBOSE, "MMVD:%d ",                  m_MMVD );
-  msg( VERBOSE, "DisFracMMVD:%d ",           m_allowDisFracMMVD) ;
-  msg( VERBOSE, "FastSearch:%d ",            m_motionEstimationSearchMethod );
-  msg( VERBOSE, "SbTMVP:%d ",                m_SbTMVP );
-  msg( VERBOSE, "Geo:%d ",                   m_Geo );
-  msg( VERBOSE, "LFNST:%d ",                 m_LFNST );
-  msg( VERBOSE, "MTS:%d ",                   m_MTS );
-  msg( VERBOSE, "MTSIntraCand:%d ",          m_MTSIntraMaxCand );
-  msg( VERBOSE, "ISP:%d ",                   m_ISP );
-  msg( VERBOSE, "TS:%d ",                    m_TS );
-  msg( VERBOSE, "TSLog2MaxSize:%d ",         m_TSsize );
-  msg( VERBOSE, "useChromaTS:%d ",           m_useChromaTS );
-  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
 
   msg( VERBOSE, "\nFAST TOOL CFG: " );
+  msg( VERBOSE, "ECU:%d ",                   m_bUseEarlyCU );
+  msg( VERBOSE, "FEN:%d ",                   m_fastInterSearchMode );
+  msg( VERBOSE, "FDM:%d ",                   m_useFastDecisionForMerge );
+  msg( VERBOSE, "ESD:%d ",                   m_useEarlySkipDetection );
+  msg( VERBOSE, "FastSearch:%d ",            m_motionEstimationSearchMethod );
   msg( VERBOSE, "LCTUFast:%d ",              m_useFastLCTU );
   msg( VERBOSE, "FastMrg:%d ",               m_useFastMrg );
   msg( VERBOSE, "PBIntraFast:%d ",           m_usePbIntraFast );
@@ -1953,6 +1975,7 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "FastSubPel:%d ",            m_fastSubPel );
   msg( VERBOSE, "QtbttExtraFast:%d ",        m_qtbttSpeedUp );
 
+  msg( VERBOSE, "\nRATE CONTROL CFG: " );
   msg( VERBOSE, "RateControl:%d ",           m_RCRateControlMode );
   if ( m_RCRateControlMode )
   {
