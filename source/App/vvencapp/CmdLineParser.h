@@ -110,7 +110,7 @@ public:
           "\n"
           " Encoder Options\n"
           "\n"
-          "\t [--preset      <str>       ] : select preset for specific encoding setting ( faster, fast, medium, slow ) default: [" << rcPreset << "]\n";
+          "\t [--preset      <str>       ] : select preset for specific encoding setting ( faster, fast, medium, slow, slower ) default: [" << rcPreset << "]\n";
       if ( bFullHelp )
       {
         std::cout <<
@@ -120,8 +120,10 @@ public:
           "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n"
           "\t              medium          : default quality : quality=2 :\n"
           "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n"
-          "\t              slow            : best quality    : quality=3 :\n"
-          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
+          "\t              slow            : better quality  : quality=3 :\n"
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n"
+          "\t              slower          : best quality    : quality=4 :\n"
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(4) << "\n\n";
       }
       std::cout <<
           "\t [--bitrate,-b  <int>       ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
@@ -394,7 +396,7 @@ public:
           }
           else
           {
-            std::cerr << "wrong preset!   use: --preset faster, fast, medium, slow" << std::endl;
+            std::cerr << "wrong preset!   use: --preset faster, fast, medium, slow, slower" << std::endl;
             return -1;
           }
         }

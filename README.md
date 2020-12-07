@@ -45,7 +45,7 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 | --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. Also recommended for perceptual QP adaptation modes 2 and 4 (see `--qpa` option below). |
 | --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
 | --output,-o <str>      | not set                          | Bit-stream output file                                                                               |
-| --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow)                             |
+| --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow, slower)                     |
 | --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                       |
 | --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
 | --qpa <int>            | 2                                | Perceptual QP adaptation (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
@@ -59,13 +59,13 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 ## How to use the full featured expert mode encoder?
 The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM) reference software configuration scheme. Most of the parameters have been kept similar to VTM, but for some parameters, additional modes are available. Furthermore, not supported options have been removed. The following example configuration files for the expert mode encoder can be found in the cfg sub-directory:
 
-| CONFIGURATION FILE                                                                                   | DESCRIPTION                                                                                                             |
-|------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
-| sequence.cfg                                                                                         | Sequence specific configuration parameters. Must be always adapted to the input sequence.                               |
-| randomaccess_faster.cfg<br>randomaccess_fast.cfg<br>randomaccess_medium.cfg<br>randomaccess_slow.cfg | Random access configuration for different presets. Each configuration file corresponds to one of the 4 preset modes.    |
-| qpa.cfg                                                                                              | Perceptually optimized QPA configuration file.                                                                          |
-| frc.cfg                                                                                              | Frame level single pass rate control configuration, overriding default fix QP setup.                                    |
-| rc2p.cfg                                                                                             | Frame level two pass rate control configuration, overriding default fix QP setup.                                       |
+| CONFIGURATION FILE                                                                                                              | DESCRIPTION                                                                                                             |
+|---------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| sequence.cfg                                                                                                                    | Sequence specific configuration parameters. Must be always adapted to the input sequence.                               |
+| randomaccess_faster.cfg<br>randomaccess_fast.cfg<br>randomaccess_medium.cfg<br>randomaccess_slow.cfg<br>randomaccess_slower.cfg | Random access configuration for different presets. Each configuration file corresponds to one of the 5 preset modes.    |
+| qpa.cfg                                                                                                                         | Perceptually optimized QPA configuration file.                                                                          |
+| frc.cfg                                                                                                                         | Frame level single pass rate control configuration, overriding default fix QP setup.                                    |
+| rc2p.cfg                                                                                                                        | Frame level two pass rate control configuration, overriding default fix QP setup.                                       |
 
 **Example usage:** In order to start your first experiments with the expert mode encoder, adapt the sequence.cfg configuration file to your input YUV source file and use the following command:
 
