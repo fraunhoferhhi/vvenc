@@ -1,13 +1,45 @@
 /////////////////////////////////////////
-tag 0.1.1.0
+tag 0.2.0.0
 
+* new license
+ - switched to modified 3-clause BSD
+
+* bugfixes:
+ - access unit delimiter (AUD) generation
+ - DPH-SEI syntax
+
+* new features:
+ - ISP
+ - TS (with automatic screen-content detection)
+ - BDPCM
+ - 2-pass rate control
+ - 1-pass rate control with GOP32
+
+* libvvenc:
+ - added "slower" preset
+ - redefined the presets according to current pareto-set
+ - removed PredictionUnit type
+ - various memory reductions (Rom.cpp, scaling list memory)
+ - verious optimizations (SIMD for MCTF, forward transformation, single column IF; memory accesses for DMVR)
+ - changed MCTF algorithm to do intermediate rounding between hor/ver filtering
+ 
 * vvencapp:
- - new parameter --refreshsec,-rs to define the intra refresh rate in seconds depending on the given frame rate.
-                 Internally, the refresh rate in seconds is translated into the frames where the refresh is set.
- - changed parameter: --intraperiod,-ip is 0 per default because --refreshsec is used for that purpose instead.
-                      In case of a value greater than 0, intraperiod overwrites refreshsec.
- - changed parameter: Abbreviation -q is now supported in addition to --qp.
- - fullhelp changed: all internal encoding parameters are now shown as strings when --fullhelp is called.
+ - new parameter      --refreshsec,-rs to define the intra refresh rate in seconds depending on the given frame rate.
+                       Internally, the refresh rate in seconds is translated into the frames where the refresh is set.
+                      --internal-bitdepth to define the internal bit-depth used in bitstream (default: 10).
+                      --passes to control number of passes for rate-control
+                      --segment to control chunkwise encoding configuration
+ - changed parameter  --intraperiod,-ip is 0 per default because --refreshsec is used for that purpose instead.
+                       In case of a value greater than 0, intraperiod overwrites refreshsec.
+                       Abbreviation -q is now supported in addition to --qp.
+                      --gopsize default changed to 32
+ - fullhelp changed    All internal encoding parameters are now shown as strings when --fullhelp is called.
+ 
+* build system:
+ - using GnuInstallDirs
+ - added basic tests
+ - versioning using CMake
+ - added support for address sanitizer
 
 /////////////////////////////////////////
 tag 0.1.0.1
