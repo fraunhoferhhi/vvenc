@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     EncCfg.cpp
@@ -438,7 +442,7 @@ bool EncCfg::initCfgParameter()
     || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
     || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
     || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
-    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2)
+    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
     || (m_level==Level::LEVEL15_5)), "invalid level selected");
   confirmParameter(!((m_levelTier==Level::Tier::MAIN) || (m_levelTier==Level::Tier::HIGH)), "invalid tier selected");
 
@@ -1461,6 +1465,7 @@ int EncCfg::initPreset( PresetMode preset )
   m_Affine                        = 0;
   m_alf                           = 0;
   m_allowDisFracMMVD              = 0;
+  m_useBDPCM                      = 0;
   m_BDOF                          = 0;
   m_ccalf                         = 0;
   m_useChromaTS                   = 0;
@@ -1515,11 +1520,13 @@ int EncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
+      m_useBDPCM                  = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::FASTER:
@@ -1534,11 +1541,13 @@ int EncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
+      m_useBDPCM                  = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::FAST:
@@ -1555,12 +1564,14 @@ int EncCfg::initPreset( PresetMode preset )
 
       m_alf                       = 1;
       m_ccalf                     = 1;
+      m_useBDPCM                  = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MCTF                      = 2;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::MEDIUM:
@@ -1575,6 +1586,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1596,6 +1608,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_SbTMVP                    = 1;
       m_SMVD                      = 3;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
       break;
 
     case PresetMode::SLOW:
@@ -1610,6 +1623,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1634,8 +1648,61 @@ int EncCfg::initPreset( PresetMode preset )
       m_SBT                       = 1;
       m_SMVD                      = 3;
       m_TMVPModeId                = 1;
+      m_TS                        = 2;
 
       m_contentBasedFastQtbt      = 0;
+      break;
+
+    case PresetMode::SLOWER:
+
+      m_motionEstimationSearchMethod = 1;
+
+      // Q44B33
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 3;
+      m_maxMTTDepthI              = 3;
+      m_maxMTTDepthIChroma        = 3;
+
+      m_Affine                    = 1;
+      m_alf                       = 1;
+      m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_CIIP                      = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
+      m_Geo                       = 1;
+      m_AMVRspeed                 = 1;
+      m_ISP                       = 1;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 1;
+      m_MRL                       = 1;
+      m_MTS                       = 1;
+      m_MTSImplicit               = 0;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 1;
+      m_SMVD                      = 1;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      m_useNonLinearAlfChroma     = 1;
+      m_useNonLinearAlfLuma       = 1;
+
+      m_qtbttSpeedUp              = 0;
+      m_contentBasedFastQtbt      = 0;
+      m_useFastMrg                = 1;
+      m_useFastMIP                = 0;
+      m_fastSubPel                = 0;
       break;
 
     case PresetMode::TOOLTEST:
@@ -1650,6 +1717,7 @@ int EncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1677,7 +1745,6 @@ int EncCfg::initPreset( PresetMode preset )
       m_TS                        = 1;
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
-      m_useBDPCM                  = 1;
       break;
 
     default:
@@ -1726,6 +1793,7 @@ static inline std::string getLevelStr( int level )
     case Level::LEVEL6    : cT = "6";       break;
     case Level::LEVEL6_1  : cT = "6.1";     break;
     case Level::LEVEL6_2  : cT = "6.2";     break;
+    case Level::LEVEL6_3  : cT = "6.3";     break;
     case Level::LEVEL15_5 : cT = "15.5";    break;
     default               : cT = "unknown"; break;
   }
