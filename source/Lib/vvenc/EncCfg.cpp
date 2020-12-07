@@ -1878,8 +1878,8 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
 
   const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_SourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
-  msg( VERBOSE, "WPP:%d ",      m_entropyCodingSyncEnabled ? 1 : 0 );
-  msg( VERBOSE, "WPP-Substreams:%d ",   iWaveFrontSubstreams );
+  msg( VERBOSE, "WPP:%d ",                   m_entropyCodingSyncEnabled ? 1 : 0 );
+  msg( VERBOSE, "WPP-Substreams:%d ",        iWaveFrontSubstreams );
   msg( VERBOSE, "TMVP:%d ",                  m_TMVPModeId );
 
   msg( VERBOSE, "DQ:%d ",                    m_DepQuantEnabled );
