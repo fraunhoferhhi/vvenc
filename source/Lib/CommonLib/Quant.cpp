@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     Quant.cpp
@@ -129,10 +133,46 @@ QpParam::QpParam(const TransformUnit& tu, const ComponentID &compID, const bool 
 // ====================================================================================================================
 // Quant class member functions
 // ====================================================================================================================
+static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoeff*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
+{
+  const int inputMinimum = -(inputMaximum+1);
+  const TCoeff transformMinimum = -(transformMaximum+1);
+  if (rightShift>0)
+  {
+    const Intermediate_Int iAdd = (Intermediate_Int) 1 << (rightShift - 1);
+    for( int y = 0, n = 0; y <= maxY; y++)
+    {
+      for( int x = 0; x <= maxX; x++, n++ )
+      {
+        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[x + y * piQCfStride]));
+        Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale + iAdd) >> rightShift;
+        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+      }
+    }
+  }
+  else  // rightshift <0
+  {
+    int leftShift = -rightShift;
+    for( int y = 0, n = 0; y <= maxY; y++)
+    {
+      for( int x = 0; x <= maxX; x++, n++ )
+      {
+        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[x + y * piQCfStride]));
+        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) << leftShift;
+        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+      }
+    }
+  }
+}
 
 Quant::Quant( const Quant* other ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
 {
   xInitScalingList( other );
+  DeQuant=DeQuantCore;
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
+  initQuantX86();
+#endif
+
 }
 
 Quant::~Quant()
@@ -153,8 +193,7 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffBuf& ds
 
   const TCoeff* coef = &coeffs.buf[0];
   TCoeff* dst = &dstBuf.buf[0];
-
-  if( tu.cu->bdpcmMode == 1 )
+  if ( tu.cu->bdpcmM[toChannelType(compID)] == 1)
   {
     for( int y = 0; y < hgt; y++ )
     {
@@ -193,8 +232,7 @@ void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
   CoeffBuf       coeffs = tu.getCoeffs(compID);
 
   TCoeff* coef = &coeffs.buf[0];
-
-  if( tu.cu->bdpcmMode == 1 )
+  if (tu.cu->bdpcmM[toChannelType(compID)] == 1)
   {
     for( int y = 0; y < hgt; y++ )
     {
@@ -359,30 +397,33 @@ void Quant::dequant(const TransformUnit& tu,
                        const ComponentID compID,
                        const QpParam&    cQP)
 {
-  const SPS            *sps               = tu.cs->sps;
-  const CompArea       &area              = tu.blocks[compID];
-  const uint32_t       uiWidth            = area.width;
-  const uint32_t       uiHeight           = area.height;
-        TCoeff   *const piCoef            = dstCoeff.buf;
-  const uint32_t       numSamplesInBlock  = uiWidth * uiHeight;
-  const int             maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
-  const TCoeff          transformMinimum   = -(1 << maxLog2TrDynamicRange);
-  const TCoeff          transformMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
-  const bool            isTransformSkip    = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
-  const bool            isLfnstApplied     = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
-  const bool            enableScalingLists = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
-  const int             scalingListType    = getScalingListType(tu.cu->predMode, compID);
-  const int             channelBitDepth    = sps->bitDepths[toChannelType(compID)];
+  const SPS       *sps                  = tu.cs->sps;
+  const CompArea  &area                 = tu.blocks[compID];
+  const uint32_t  uiWidth               = area.width;
+  const uint32_t  uiHeight              = area.height;
+  TCoeff *const   piCoef                = dstCoeff.buf;
+  size_t          piStride;
+  const uint32_t  numSamplesInBlock     = uiWidth * uiHeight;
+  const int       maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const TCoeff    transformMinimum      = -(1 << maxLog2TrDynamicRange);
+  const TCoeff    transformMaximum      =  (1 << maxLog2TrDynamicRange) - 1;
+  const bool      isTransformSkip       = tu.mtsIdx[compID] == MTS_SKIP;
+  const bool      isLfnstApplied        = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
+  const bool      enableScalingLists    = getUseScalingList(uiWidth, uiHeight, isTransformSkip, isLfnstApplied);
+  const int       scalingListType       = getScalingListType(tu.cu->predMode, compID);
+  const int       channelBitDepth       = sps->bitDepths[toChannelType(compID)];
 
   const TCoeff          *coef;
-  if( tu.cu->bdpcmMode && isLuma(compID) )
+  if (tu.cu->bdpcmM[toChannelType(compID)])
   {
     invResDPCM( tu, compID, dstCoeff );
     coef = piCoef;
+    piStride=dstCoeff.stride;
   }
   else
   {
     coef = tu.getCoeffs(compID).buf;
+    piStride=tu.getCoeffs(compID).stride;
   }
   const TCoeff          *const piQCoef = coef;
   CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
@@ -396,7 +437,7 @@ void Quant::dequant(const TransformUnit& tu,
   const int QP_per = cQP.per(isTransformSkip);
   const int QP_rem = cQP.rem(isTransformSkip);
 
-  const int  rightShift = (IQUANT_SHIFT - (iTransformShift + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+  const int  rightShift = (IQUANT_SHIFT - ((isTransformSkip ? 0 : iTransformShift) + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
 
   if(enableScalingLists)
   {
@@ -416,24 +457,20 @@ void Quant::dequant(const TransformUnit& tu,
     if(rightShift > 0)
     {
       const Intermediate_Int iAdd = (Intermediate_Int) 1 << (rightShift - 1);
-
       for( int n = 0; n < numSamplesInBlock; n++ )
       {
         const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
         const Intermediate_Int iCoeffQ   = ((Intermediate_Int(clipQCoef) * piDequantCoef[n]) + iAdd ) >> rightShift;
-
         piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
       }
     }
     else
     {
       const int leftShift = -rightShift;
-
       for( int n = 0; n < numSamplesInBlock; n++ )
       {
         const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
         const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * piDequantCoef[n]) << leftShift;
-
         piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
       }
     }
@@ -442,38 +479,12 @@ void Quant::dequant(const TransformUnit& tu,
   {
     const int scale     = g_invQuantScales[needSqrtAdjustment?1:0][QP_rem];
     const int scaleBits = ( IQUANT_SHIFT + 1 );
-
     //from the dequantisation equation:
     //iCoeffQ                         = Intermediate_Int((int64_t(clipQCoef) * scale + iAdd) >> rightShift);
     //(sizeof(Intermediate_Int) * 8)  =                    inputBitDepth   + scaleBits      - rightShift
     const uint32_t             targetInputBitDepth = std::min<uint32_t>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
-    const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
     const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
-
-    if (rightShift > 0)
-    {
-      const Intermediate_Int iAdd = (Intermediate_Int) 1 << (rightShift - 1);
-
-      for( int n = 0; n < numSamplesInBlock; n++ )
-      {
-        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
-        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale + iAdd) >> rightShift;
-
-        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
-      }
-    }
-    else
-    {
-      const int leftShift = -rightShift;
-
-      for( int n = 0; n < numSamplesInBlock; n++ )
-      {
-        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
-        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) << leftShift;
-
-        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
-      }
-    }
+    DeQuant(uiWidth-1,uiHeight-1,scale,piQCoef,piStride,piCoef,rightShift,inputMaximum,transformMaximum);
   }
 }
 
@@ -607,7 +618,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
   const CCoeffBuf& piCoef   = pSrc;
         CoeffBuf   piQCoef  = tu.getCoeffs(compID);
 
-  const bool useTransformSkip      = tu.mtsIdx[compID]==MTS_SKIP && isLuma(compID);
+  const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
 
   {
@@ -623,7 +634,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     const uint32_t uiLog2TrHeight = Log2(uiHeight);
     int *piQuantCoeff             = getQuantCoeff(scalingListType, cQP.rem(useTransformSkip), uiLog2TrWidth, uiLog2TrHeight);
 
-    const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+    const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
     const bool enableScalingLists = getUseScalingList(uiWidth, uiHeight, useTransformSkip, isLfnstApplied);
 
     // for blocks that where width*height != 4^N, the effective scaling applied during transformation cannot be
@@ -638,8 +649,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
       iTransformShift = std::max<int>(0, iTransformShift);
     }
 
-
-    const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + iTransformShift;
+    const int iQBits = QUANT_SHIFT + cQP.per(useTransformSkip) + (useTransformSkip ? 0 : iTransformShift);
     // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
 
     const int64_t iAdd = int64_t(tu.cs->slice->isIRAP() ? 171 : 85) << int64_t(iQBits - 9);
@@ -663,8 +673,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 
       piQCoef.buf[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
     } // for n
-    
-    if( tu.cu->bdpcmMode && isLuma(compID) )
+    if (tu.cu->bdpcmM[toChannelType(compID)])
     {
       fwdResDPCM( tu, compID );
     }
@@ -699,7 +708,7 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
 
   const CCoeffBuf piCoef    = pSrc;
 
-  const bool useTransformSkip      = tu.mtsIdx[compID] == MTS_SKIP && isLuma(compID);
+  const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
 
   int scalingListType = getScalingListType(tu.cu->predMode, compID);
@@ -709,7 +718,7 @@ bool Quant::xNeedRDOQ(TransformUnit& tu, const ComponentID compID, const CCoeffB
   const uint32_t uiLog2TrHeight = Log2(uiHeight);
   int *piQuantCoeff             = getQuantCoeff(scalingListType, cQP.rem(useTransformSkip), uiLog2TrWidth, uiLog2TrHeight);
 
-  const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+  const bool isLfnstApplied     = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
   const bool enableScalingLists = getUseScalingList(uiWidth, uiHeight, (useTransformSkip != 0), isLfnstApplied);
 
   /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be

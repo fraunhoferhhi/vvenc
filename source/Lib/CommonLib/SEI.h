@@ -1,48 +1,51 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 #pragma once
 
 #include "CommonDef.h"
-#include "libmd5/MD5.h"
 
 #include <list>
 #include <vector>
@@ -63,37 +66,29 @@ public:
   {
     BUFFERING_PERIOD                     = 0,
     PICTURE_TIMING                       = 1,
-    PAN_SCAN_RECT                        = 2,
     FILLER_PAYLOAD                       = 3,
     USER_DATA_REGISTERED_ITU_T_T35       = 4,
     USER_DATA_UNREGISTERED               = 5,
-    RECOVERY_POINT                       = 6,
-    SCENE_INFO                           = 9,
-    FULL_FRAME_SNAPSHOT                  = 15,
-    PROGRESSIVE_REFINEMENT_SEGMENT_START = 16,
-    PROGRESSIVE_REFINEMENT_SEGMENT_END   = 17,
     FILM_GRAIN_CHARACTERISTICS           = 19,
-    POST_FILTER_HINT                     = 22,
-    TONE_MAPPING_INFO                    = 23,
     FRAME_PACKING                        = 45,
-    DISPLAY_ORIENTATION                  = 47,
-    GREEN_METADATA                       = 56,
-    SOP_DESCRIPTION                      = 128,
-    ACTIVE_PARAMETER_SETS                = 129,
+    PARAMETER_SETS_INCLUSION_INDICATION  = 129,
     DECODING_UNIT_INFO                   = 130,
-    TEMPORAL_LEVEL0_INDEX                = 131,
     DECODED_PICTURE_HASH                 = 132,
     SCALABLE_NESTING                     = 133,
-    REGION_REFRESH_INFO                  = 134,
-    NO_DISPLAY                           = 135,
-    TIME_CODE                            = 136,
     MASTERING_DISPLAY_COLOUR_VOLUME      = 137,
-    SEGM_RECT_FRAME_PACKING              = 138,
-    TEMP_MOTION_CONSTRAINED_TILE_SETS    = 139,
-    CHROMA_RESAMPLING_FILTER_HINT        = 140,
-    KNEE_FUNCTION_INFO                   = 141,
-    COLOUR_REMAPPING_INFO                = 142,
-    ALTERNATIVE_TRANSFER_CHARACTERISTICS = 182,
+    DEPENDENT_RAP_INDICATION             = 145,
+    EQUIRECTANGULAR_PROJECTION           = 150,
+    SPHERE_ROTATION                      = 154,
+    REGION_WISE_PACKING                  = 155,
+    OMNI_VIEWPORT                        = 156,
+    GENERALIZED_CUBEMAP_PROJECTION       = 153,
+    FRAME_FIELD_INFO                     = 168,
+    SUBPICTURE_LEVEL_INFO                = 203,
+    SAMPLE_ASPECT_RATIO_INFO             = 204,
+    CONTENT_LIGHT_LEVEL_INFO             = 144,
+    ALTERNATIVE_TRANSFER_CHARACTERISTICS = 147,
+    AMBIENT_VIEWING_ENVIRONMENT          = 148,
+    CONTENT_COLOUR_VOLUME                = 149,
   };
 
   SEI() {}
@@ -102,6 +97,140 @@ public:
   static const char *getSEIMessageString(SEI::PayloadType payloadType);
 
   virtual PayloadType payloadType() const = 0;
+};
+
+struct SEIMasteringDisplay
+{
+  bool        colourVolumeSEIEnabled;
+  uint32_t    maxLuminance;
+  uint32_t    minLuminance;
+  uint16_t    primaries[3][2];
+  uint16_t    whitePoint[2];
+};
+
+
+class SEIEquirectangularProjection : public SEI
+{
+public:
+  PayloadType payloadType() const { return EQUIRECTANGULAR_PROJECTION; }
+
+  SEIEquirectangularProjection()  {}
+  virtual ~SEIEquirectangularProjection() {}
+
+  bool    erpCancelFlag;
+  bool    erpPersistenceFlag;
+  bool    erpGuardBandFlag;
+  uint8_t erpGuardBandType;
+  uint8_t erpLeftGuardBandWidth;
+  uint8_t erpRightGuardBandWidth;
+};
+
+class SEISphereRotation : public SEI
+{
+public:
+  PayloadType payloadType() const { return SPHERE_ROTATION; }
+
+  SEISphereRotation()  {}
+  virtual ~SEISphereRotation() {}
+
+  bool  sphereRotationCancelFlag;
+  bool  sphereRotationPersistenceFlag;
+  int   sphereRotationYaw;
+  int   sphereRotationPitch;
+  int   sphereRotationRoll;
+};
+
+class SEIOmniViewport : public SEI
+{
+public:
+  PayloadType payloadType() const { return OMNI_VIEWPORT; }
+
+  SEIOmniViewport() {}
+  virtual ~SEIOmniViewport() {}
+
+  struct OmniViewport
+  {
+    int      azimuthCentre;
+    int      elevationCentre;
+    int      tiltCentre;
+    uint32_t horRange;
+    uint32_t verRange;
+  };
+
+  uint32_t omniViewportId;
+  bool     omniViewportCancelFlag;
+  bool     omniViewportPersistenceFlag;
+  uint8_t  omniViewportCntMinus1;
+  std::vector<OmniViewport> omniViewportRegions;
+};
+
+class SEIRegionWisePacking : public SEI
+{
+public:
+  PayloadType payloadType() const { return REGION_WISE_PACKING; }
+  SEIRegionWisePacking() {}
+  virtual ~SEIRegionWisePacking() {}
+  bool                  rwpCancelFlag;
+  bool                  rwpPersistenceFlag;
+  bool                  constituentPictureMatchingFlag;
+  int                   numPackedRegions;
+  int                   projPictureWidth;
+  int                   projPictureHeight;
+  int                   packedPictureWidth;
+  int                   packedPictureHeight;
+  std::vector<uint8_t>  rwpTransformType;
+  std::vector<bool>     rwpGuardBandFlag;
+  std::vector<uint32_t> projRegionWidth;
+  std::vector<uint32_t> projRegionHeight;
+  std::vector<uint32_t> rwpProjRegionTop;
+  std::vector<uint32_t> projRegionLeft;
+  std::vector<uint16_t> packedRegionWidth;
+  std::vector<uint16_t> packedRegionHeight;
+  std::vector<uint16_t> packedRegionTop;
+  std::vector<uint16_t> packedRegionLeft;
+  std::vector<uint8_t>  rwpLeftGuardBandWidth;
+  std::vector<uint8_t>  rwpRightGuardBandWidth;
+  std::vector<uint8_t>  rwpTopGuardBandHeight;
+  std::vector<uint8_t>  rwpBottomGuardBandHeight;
+  std::vector<bool>     rwpGuardBandNotUsedForPredFlag;
+  std::vector<uint8_t>  rwpGuardBandType;
+};
+
+class SEIGeneralizedCubemapProjection : public SEI
+{
+public:
+  PayloadType payloadType() const { return GENERALIZED_CUBEMAP_PROJECTION; }
+
+  SEIGeneralizedCubemapProjection()  {}
+  virtual ~SEIGeneralizedCubemapProjection() {}
+
+  bool                 gcmpCancelFlag;
+  bool                 gcmpPersistenceFlag;
+  uint8_t              gcmpPackingType;
+  uint8_t              gcmpMappingFunctionType;
+  std::vector<uint8_t> gcmpFaceIndex;
+  std::vector<uint8_t> gcmpFaceRotation;
+  std::vector<uint8_t> gcmpFunctionCoeffU;
+  std::vector<bool>    gcmpFunctionUAffectedByVFlag;
+  std::vector<uint8_t> gcmpFunctionCoeffV;
+  std::vector<bool>    gcmpFunctionVAffectedByUFlag;
+  bool                 gcmpGuardBandFlag;
+  uint8_t              gcmpGuardBandType;
+  bool                 gcmpGuardBandBoundaryExteriorFlag;
+  uint8_t              gcmpGuardBandSamplesMinus1;
+};
+
+class SEISampleAspectRatioInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return SAMPLE_ASPECT_RATIO_INFO; }
+  SEISampleAspectRatioInfo() {}
+  virtual ~SEISampleAspectRatioInfo() {}
+  bool                  sariCancelFlag;
+  bool                  sariPersistenceFlag;
+  int                   sariAspectRatioIdc;
+  int                   sariSarWidth;
+  int                   sariSarHeight;
 };
 
 static const uint32_t ISO_IEC_11578_LEN=16;
@@ -120,9 +249,9 @@ public:
     delete userData;
   }
 
-  uint8_t uuid_iso_iec_11578[ISO_IEC_11578_LEN];
+  uint8_t   uuid_iso_iec_11578[ISO_IEC_11578_LEN];
   uint32_t  userDataLength;
-  uint8_t *userData;
+  uint8_t*  userData;
 };
 
 class SEIDecodedPictureHash : public SEI
@@ -133,87 +262,127 @@ public:
   SEIDecodedPictureHash() {}
   virtual ~SEIDecodedPictureHash() {}
 
-  HashType method;
-
-  PictureHash m_pictureHash;
+  HashType    method;
+  bool        singleCompFlag;
+  PictureHash pictureHash;
 };
 
-class SEIActiveParameterSets : public SEI
+class SEIDependentRAPIndication : public SEI
 {
 public:
-  PayloadType payloadType() const { return ACTIVE_PARAMETER_SETS; }
+  PayloadType payloadType() const { return DEPENDENT_RAP_INDICATION; }
+  SEIDependentRAPIndication() { }
 
-  SEIActiveParameterSets()
-    : m_selfContainedCvsFlag(false)
-    , m_noParameterSetUpdateFlag (false)
-    , numSpsIdsMinus1        (0)
-  {}
-  virtual ~SEIActiveParameterSets() {}
-
-  bool m_selfContainedCvsFlag;
-  bool m_noParameterSetUpdateFlag;
-  int numSpsIdsMinus1;
-  std::vector<int> activeSeqParameterSetId;
+  virtual ~SEIDependentRAPIndication() { }
 };
+
 
 class SEIBufferingPeriod : public SEI
 {
 public:
   PayloadType payloadType() const { return BUFFERING_PERIOD; }
-  void copyTo (SEIBufferingPeriod& target);
 
   SEIBufferingPeriod()
-  : m_bpSeqParameterSetId (0)
-  , m_rapCpbParamsPresent (false)
-  , m_cpbDelayOffset      (0)
-  , m_dpbDelayOffset      (0)
+    : bpNalCpbParamsPresent (false)
+    , bpVclCpbParamsPresent (false)
+    , initialCpbRemovalDelayLength (0)
+    , cpbRemovalDelayLength (0)
+    , dpbOutputDelayLength (0)
+    , bpCpbCnt(0)
+    , duCpbRemovalDelayIncrementLength (0)
+    , dpbOutputDelayDuLength (0)
+    , cpbRemovalDelayDeltasPresent (false)
+    , numCpbRemovalDelayDeltas (0)
+    , bpMaxSubLayers (0)
+    , bpDecodingUnitHrdParamsPresent (false)
+    , decodingUnitCpbParamsInPicTimingSeiFlag (false)
+    , decodingUnitDpbDuParamsInPicTimingSeiFlag(false)
+    , sublayerInitialCpbRemovalDelayPresent(false)
+    , additionalConcatenationInfoPresent (false)
+    , maxInitialRemovalDelayForConcatenation (0)
+    , sublayerDpbOutputOffsetsPresent (false)
+    , altCpbParamsPresent (false)
+    , useAltCpbParamsFlag (false)
   {
-    ::memset(m_initialCpbRemovalDelay, 0, sizeof(m_initialCpbRemovalDelay));
-    ::memset(m_initialCpbRemovalDelayOffset, 0, sizeof(m_initialCpbRemovalDelayOffset));
-    ::memset(m_initialAltCpbRemovalDelay, 0, sizeof(m_initialAltCpbRemovalDelay));
-    ::memset(m_initialAltCpbRemovalDelayOffset, 0, sizeof(m_initialAltCpbRemovalDelayOffset));
+    ::memset( initialCpbRemovalDelay,  0, sizeof(initialCpbRemovalDelay));
+    ::memset( initialCpbRemovalOffset, 0, sizeof(initialCpbRemovalOffset));
+    ::memset( cpbRemovalDelayDelta,    0, sizeof(cpbRemovalDelayDelta));
+    ::memset( dpbOutputTidOffset,      0, sizeof(dpbOutputTidOffset));
   }
   virtual ~SEIBufferingPeriod() {}
 
-  uint32_t m_bpSeqParameterSetId;
-  bool m_rapCpbParamsPresent;
-  uint32_t m_cpbDelayOffset;
-  uint32_t m_dpbDelayOffset;
-  uint32_t m_initialCpbRemovalDelay         [MAX_CPB_CNT][2];
-  uint32_t m_initialCpbRemovalDelayOffset   [MAX_CPB_CNT][2];
-  uint32_t m_initialAltCpbRemovalDelay      [MAX_CPB_CNT][2];
-  uint32_t m_initialAltCpbRemovalDelayOffset[MAX_CPB_CNT][2];
-  bool m_concatenationFlag;
-  uint32_t m_auCpbRemovalDelayDelta;
+  bool      bpNalCpbParamsPresent;
+  bool      bpVclCpbParamsPresent;
+  uint32_t  initialCpbRemovalDelayLength;
+  uint32_t  cpbRemovalDelayLength;
+  uint32_t  dpbOutputDelayLength;
+  int       bpCpbCnt;
+  uint32_t  duCpbRemovalDelayIncrementLength;
+  uint32_t  dpbOutputDelayDuLength;
+  uint32_t  initialCpbRemovalDelay         [MAX_TLAYER][MAX_CPB_CNT][2];
+  uint32_t  initialCpbRemovalOffset        [MAX_TLAYER][MAX_CPB_CNT][2];
+  bool      concatenationFlag;
+  uint32_t  auCpbRemovalDelayDelta;
+  bool      cpbRemovalDelayDeltasPresent;
+  int       numCpbRemovalDelayDeltas;
+  int       bpMaxSubLayers;
+  uint32_t  cpbRemovalDelayDelta    [15];
+  bool      bpDecodingUnitHrdParamsPresent;
+  bool      decodingUnitCpbParamsInPicTimingSeiFlag;
+  bool      decodingUnitDpbDuParamsInPicTimingSeiFlag;
+  bool      sublayerInitialCpbRemovalDelayPresent;
+  bool      additionalConcatenationInfoPresent;
+  uint32_t  maxInitialRemovalDelayForConcatenation;
+  bool      sublayerDpbOutputOffsetsPresent;
+  uint32_t  dpbOutputTidOffset      [MAX_TLAYER];
+  bool      altCpbParamsPresent;
+  bool      useAltCpbParamsFlag;
 };
+
 class SEIPictureTiming : public SEI
 {
 public:
   PayloadType payloadType() const { return PICTURE_TIMING; }
-  void copyTo (SEIPictureTiming& target);
 
   SEIPictureTiming()
-  : m_picStruct               (0)
-  , m_sourceScanType          (0)
-  , m_duplicateFlag           (false)
-  , m_picDpbOutputDuDelay     (0)
-  {}
-  virtual ~SEIPictureTiming()
+  : picDpbOutputDelay (0)
+  , picDpbOutputDuDelay (0)
+  , numDecodingUnitsMinus1 (0)
+  , duCommonCpbRemovalDelayFlag (false)
+  , cpbAltTimingInfoPresent (false)
+  , ptDisplayElementalPeriodsMinus1(0)
+  , delayForConcatenationEnsureFlag(false)
   {
+    ::memset(ptSubLayerDelaysPresent,     0, sizeof(ptSubLayerDelaysPresent));
+    ::memset(duCommonCpbRemovalDelayMinus1,   0, sizeof(duCommonCpbRemovalDelayMinus1));
+    ::memset(cpbRemovalDelayDeltaEnabledFlag, 0, sizeof(cpbRemovalDelayDeltaEnabledFlag));
+    ::memset(cpbRemovalDelayDeltaIdx,         0, sizeof(cpbRemovalDelayDeltaIdx));
+    ::memset(auCpbRemovalDelay,               0, sizeof(auCpbRemovalDelay));
   }
+  virtual ~SEIPictureTiming() {}
 
-  uint32_t  m_picStruct;
-  uint32_t  m_sourceScanType;
-  bool  m_duplicateFlag;
-
-  uint32_t  m_auCpbRemovalDelay;
-  uint32_t  m_picDpbOutputDelay;
-  uint32_t  m_picDpbOutputDuDelay;
-  uint32_t  m_numDecodingUnitsMinus1;
-  bool  m_duCommonCpbRemovalDelayFlag;
-  uint32_t  m_duCommonCpbRemovalDelayMinus1;
-  std::vector<uint32_t> m_numNalusInDuMinus1;
-  std::vector<uint32_t> m_duCpbRemovalDelayMinus1;
+  bool                                ptSubLayerDelaysPresent[MAX_TLAYER];
+  bool                                cpbRemovalDelayDeltaEnabledFlag[MAX_TLAYER];
+  uint32_t                            cpbRemovalDelayDeltaIdx[MAX_TLAYER];
+  uint32_t                            auCpbRemovalDelay[MAX_TLAYER];
+  uint32_t                            picDpbOutputDelay;
+  uint32_t                            picDpbOutputDuDelay;
+  uint32_t                            numDecodingUnitsMinus1;
+  bool                                duCommonCpbRemovalDelayFlag;
+  uint32_t                            duCommonCpbRemovalDelayMinus1[MAX_TLAYER];
+  std::vector<uint32_t>               numNalusInDuMinus1;
+  std::vector<uint32_t>               duCpbRemovalDelayMinus1;
+  bool                                cpbAltTimingInfoPresent;
+  std::vector<std::vector<uint32_t>>  nalCpbAltInitialRemovalDelayDelta;
+  std::vector<std::vector<uint32_t>>  nalCpbAltInitialRemovalOffsetDelta;
+  std::vector<uint32_t>               nalCpbDelayOffset;
+  std::vector<uint32_t>               nalDpbDelayOffset;
+  std::vector<std::vector<uint32_t>>  vclCpbAltInitialRemovalDelayDelta;
+  std::vector<std::vector<uint32_t>>  vclCpbAltInitialRemovalOffsetDelta;
+  std::vector<uint32_t>               vclCpbDelayOffset;
+  std::vector<uint32_t>               vclDpbDelayOffset;
+  int                                 ptDisplayElementalPeriodsMinus1;
+  bool                                delayForConcatenationEnsureFlag; 
 };
 
 class SEIDecodingUnitInfo : public SEI
@@ -222,30 +391,49 @@ public:
   PayloadType payloadType() const { return DECODING_UNIT_INFO; }
 
   SEIDecodingUnitInfo()
-    : m_decodingUnitIdx(0)
-    , m_duSptCpbRemovalDelay(0)
-    , m_dpbOutputDuDelayPresent(false)
-    , m_picSptDpbOutputDuDelay(0)
+    : decodingUnitIdx(0)
+    , dpbOutputDuDelayPresent(false)
+    , picSptDpbOutputDuDelay(0)
   {}
   virtual ~SEIDecodingUnitInfo() {}
-  int m_decodingUnitIdx;
-  int m_duSptCpbRemovalDelay;
-  bool m_dpbOutputDuDelayPresent;
-  int m_picSptDpbOutputDuDelay;
+
+  int   decodingUnitIdx;
+  int   duSptCpbRemovalDelayIncrement[MAX_TLAYER];
+  bool  duiSubLayerDelaysPresent[MAX_TLAYER];
+  bool  dpbOutputDuDelayPresent;
+  int   picSptDpbOutputDuDelay;
 };
 
-class SEIRecoveryPoint : public SEI
+
+class SEIFrameFieldInfo : public SEI
 {
 public:
-  PayloadType payloadType() const { return RECOVERY_POINT; }
+  PayloadType payloadType() const { return FRAME_FIELD_INFO; }
 
-  SEIRecoveryPoint() {}
-  virtual ~SEIRecoveryPoint() {}
+  SEIFrameFieldInfo()
+    : fieldPicFlag(false)
+    , bottomFieldFlag (false)
+    , pairingIndicatedFlag (false)
+    , pairedWithNextFieldFlag(false)
+    , displayFieldsFromFrameFlag(false)
+    , topFieldFirstFlag(false)
+    , duplicateFlag(false)
+    , displayElementalPeriodsMinus1(0)
+    , sourceScanType(0)
+  {}
+  virtual ~SEIFrameFieldInfo() {}
 
-  int  m_recoveryPocCnt;
-  bool m_exactMatchingFlag;
-  bool m_brokenLinkFlag;
+  bool fieldPicFlag;
+  bool bottomFieldFlag;
+  bool pairingIndicatedFlag;
+  bool pairedWithNextFieldFlag;
+  bool displayFieldsFromFrameFlag;
+  bool topFieldFirstFlag;
+  bool duplicateFlag;
+  int  displayElementalPeriodsMinus1;
+  int  sourceScanType;
 };
+
 
 class SEIFramePacking : public SEI
 {
@@ -255,228 +443,34 @@ public:
   SEIFramePacking() {}
   virtual ~SEIFramePacking() {}
 
-  int  m_arrangementId;
-  bool m_arrangementCancelFlag;
-  int  m_arrangementType;
-  bool m_quincunxSamplingFlag;
-  int  m_contentInterpretationType;
-  bool m_spatialFlippingFlag;
-  bool m_frame0FlippedFlag;
-  bool m_fieldViewsFlag;
-  bool m_currentFrameIsFrame0Flag;
-  bool m_frame0SelfContainedFlag;
-  bool m_frame1SelfContainedFlag;
-  int  m_frame0GridPositionX;
-  int  m_frame0GridPositionY;
-  int  m_frame1GridPositionX;
-  int  m_frame1GridPositionY;
-  int  m_arrangementReservedByte;
-  bool m_arrangementPersistenceFlag;
-  bool m_upsampledAspectRatio;
+  bool arrangementCancelFlag;
+  bool quincunxSamplingFlag;
+  bool spatialFlippingFlag;
+  bool frame0FlippedFlag;
+  bool fieldViewsFlag;
+  bool currentFrameIsFrame0Flag;
+  bool frame0SelfContainedFlag;
+  bool frame1SelfContainedFlag;
+  bool arrangementPersistenceFlag;
+  bool upsampledAspectRatio;
+  int  arrangementId;
+  int  arrangementType;
+  int  contentInterpretationType;
+  int  frame0GridPositionX;
+  int  frame0GridPositionY;
+  int  frame1GridPositionX;
+  int  frame1GridPositionY;
+  int  arrangementReservedByte;
 };
 
-class SEISegmentedRectFramePacking : public SEI
+class SEIParameterSetsInclusionIndication : public SEI
 {
 public:
-  PayloadType payloadType() const { return SEGM_RECT_FRAME_PACKING; }
+  PayloadType payloadType() const { return PARAMETER_SETS_INCLUSION_INDICATION; }
+  SEIParameterSetsInclusionIndication() {}
+  virtual ~SEIParameterSetsInclusionIndication() {}
 
-  SEISegmentedRectFramePacking() {}
-  virtual ~SEISegmentedRectFramePacking() {}
-
-  bool m_arrangementCancelFlag;
-  int  m_contentInterpretationType;
-  bool m_arrangementPersistenceFlag;
-};
-
-class SEIDisplayOrientation : public SEI
-{
-public:
-  PayloadType payloadType() const { return DISPLAY_ORIENTATION; }
-
-  SEIDisplayOrientation()
-    : cancelFlag(true)
-    , persistenceFlag(0)
-    , extensionFlag(false)
-    {}
-  virtual ~SEIDisplayOrientation() {}
-
-  bool cancelFlag;
-  bool horFlip;
-  bool verFlip;
-
-  uint32_t anticlockwiseRotation;
-  bool persistenceFlag;
-  bool extensionFlag;
-};
-
-class SEITemporalLevel0Index : public SEI
-{
-public:
-  PayloadType payloadType() const { return TEMPORAL_LEVEL0_INDEX; }
-
-  SEITemporalLevel0Index()
-    : tl0Idx(0)
-    , rapIdx(0)
-    {}
-  virtual ~SEITemporalLevel0Index() {}
-
-  uint32_t tl0Idx;
-  uint32_t rapIdx;
-};
-
-class SEIGradualDecodingRefreshInfo : public SEI
-{
-public:
-  PayloadType payloadType() const { return REGION_REFRESH_INFO; }
-
-  SEIGradualDecodingRefreshInfo()
-    : m_gdrForegroundFlag(0)
-  {}
-  virtual ~SEIGradualDecodingRefreshInfo() {}
-
-  bool m_gdrForegroundFlag;
-};
-
-class SEINoDisplay : public SEI
-{
-public:
-  PayloadType payloadType() const { return NO_DISPLAY; }
-
-  SEINoDisplay()
-    : m_noDisplay(false)
-  {}
-  virtual ~SEINoDisplay() {}
-
-  bool m_noDisplay;
-};
-
-class SEISOPDescription : public SEI
-{
-public:
-  PayloadType payloadType() const { return SOP_DESCRIPTION; }
-
-  SEISOPDescription() {}
-  virtual ~SEISOPDescription() {}
-
-  uint32_t m_sopSeqParameterSetId;
-  uint32_t m_numPicsInSopMinus1;
-
-  uint32_t m_sopDescVclNaluType[MAX_NUM_PICS_IN_SOP];
-  uint32_t m_sopDescTemporalId[MAX_NUM_PICS_IN_SOP];
-  uint32_t m_sopDescStRpsIdx[MAX_NUM_PICS_IN_SOP];
-  int m_sopDescPocDelta[MAX_NUM_PICS_IN_SOP];
-};
-
-class SEIToneMappingInfo : public SEI
-{
-public:
-  PayloadType payloadType() const { return TONE_MAPPING_INFO; }
-  SEIToneMappingInfo() {}
-  virtual ~SEIToneMappingInfo() {}
-
-  int    m_toneMapId;
-  bool   m_toneMapCancelFlag;
-  bool   m_toneMapPersistenceFlag;
-  int    m_codedDataBitDepth;
-  int    m_targetBitDepth;
-  int    m_modelId;
-  int    m_minValue;
-  int    m_maxValue;
-  int    m_sigmoidMidpoint;
-  int    m_sigmoidWidth;
-  std::vector<int> m_startOfCodedInterval;
-  int    m_numPivots;
-  std::vector<int> m_codedPivotValue;
-  std::vector<int> m_targetPivotValue;
-  int    m_cameraIsoSpeedIdc;
-  int    m_cameraIsoSpeedValue;
-  int    m_exposureIndexIdc;
-  int    m_exposureIndexValue;
-  bool   m_exposureCompensationValueSignFlag;
-  int    m_exposureCompensationValueNumerator;
-  int    m_exposureCompensationValueDenomIdc;
-  int    m_refScreenLuminanceWhite;
-  int    m_extendedRangeWhiteLevel;
-  int    m_nominalBlackLevelLumaCodeValue;
-  int    m_nominalWhiteLevelLumaCodeValue;
-  int    m_extendedWhiteLevelLumaCodeValue;
-};
-
-class SEIKneeFunctionInfo : public SEI
-{
-public:
-  PayloadType payloadType() const { return KNEE_FUNCTION_INFO; }
-  SEIKneeFunctionInfo() {}
-  virtual ~SEIKneeFunctionInfo() {}
-
-  int   m_kneeId;
-  bool  m_kneeCancelFlag;
-  bool  m_kneePersistenceFlag;
-  int   m_kneeInputDrange;
-  int   m_kneeInputDispLuminance;
-  int   m_kneeOutputDrange;
-  int   m_kneeOutputDispLuminance;
-  int   m_kneeNumKneePointsMinus1;
-  std::vector<int> m_kneeInputKneePoint;
-  std::vector<int> m_kneeOutputKneePoint;
-};
-
-class SEIColourRemappingInfo : public SEI
-{
-public:
-
-  struct CRIlut
-  {
-    int codedValue;
-    int targetValue;
-    bool operator < (const CRIlut& a) const
-    {
-      return codedValue < a.codedValue;
-    }
-  };
-
-  PayloadType payloadType() const { return COLOUR_REMAPPING_INFO; }
-  SEIColourRemappingInfo() {}
-  ~SEIColourRemappingInfo() {}
-
-  void copyFrom( const SEIColourRemappingInfo &seiCriInput)
-  {
-    (*this) = seiCriInput;
-  }
-
-  uint32_t                m_colourRemapId;
-  bool                m_colourRemapCancelFlag;
-  bool                m_colourRemapPersistenceFlag;
-  bool                m_colourRemapVideoSignalInfoPresent;
-  bool                m_colourRemapFullRangeFlag;
-  int                 m_colourRemapPrimaries;
-  int                 m_colourRemapTransferFunction;
-  int                 m_colourRemapMatrixCoefficients;
-  int                 m_colourRemapInputBitDepth;
-  int                 m_colourRemapBitDepth;
-  int                 m_preLutNumValMinus1[3];
-  std::vector<CRIlut> m_preLut[3];
-  bool                m_colourRemapMatrixPresent;
-  int                 m_log2MatrixDenom;
-  int                 m_colourRemapCoeffs[3][3];
-  int                 m_postLutNumValMinus1[3];
-  std::vector<CRIlut> m_postLut[3];
-};
-
-class SEIChromaResamplingFilterHint : public SEI
-{
-public:
-  PayloadType payloadType() const {return CHROMA_RESAMPLING_FILTER_HINT;}
-  SEIChromaResamplingFilterHint() {}
-  virtual ~SEIChromaResamplingFilterHint() {}
-
-  int                            m_verChromaFilterIdc;
-  int                            m_horChromaFilterIdc;
-  bool                           m_verFilteringFieldProcessingFlag;
-  int                            m_targetFormatIdc;
-  bool                           m_perfectReconstructionFlag;
-  std::vector<std::vector<int> > m_verFilterCoeff;
-  std::vector<std::vector<int> > m_horFilterCoeff;
+  int selfContainedClvsFlag;
 };
 
 class SEIMasteringDisplayColourVolume : public SEI
@@ -486,13 +480,13 @@ public:
     SEIMasteringDisplayColourVolume() {}
     virtual ~SEIMasteringDisplayColourVolume(){}
 
-//    SEIMasteringDisplay values;
+    SEIMasteringDisplay values;
 };
 
 typedef std::list<SEI*> SEIMessages;
 
 /// output a selection of SEI messages by payload type. Ownership stays in original message list.
-SEIMessages getSeisByType(SEIMessages &seiList, SEI::PayloadType seiType);
+SEIMessages getSeisByType(const SEIMessages &seiList, SEI::PayloadType seiType);
 
 /// remove a selection of SEI messages by payload type from the original list and return them in a new list.
 SEIMessages extractSeisByType(SEIMessages &seiList, SEI::PayloadType seiType);
@@ -505,125 +499,171 @@ class SEIScalableNesting : public SEI
 public:
   PayloadType payloadType() const { return SCALABLE_NESTING; }
 
-  SEIScalableNesting() {}
+  SEIScalableNesting()
+  : snOlsFlag (false)
+  , snSubpicFlag (false)
+  , snNumOlssMinus1 (0)
+  , snAllLayersFlag (false)
+  , snNumLayersMinus1 (0)
+  , snNumSubpics (1)
+  , snSubpicIdLen (0)
+  , snNumSEIs(0)
+  {}
 
   virtual ~SEIScalableNesting()
   {
-    deleteSEIs(m_nestedSEIs);
+    deleteSEIs(nestedSEIs);
   }
 
-  bool  m_bitStreamSubsetFlag;
-  bool  m_nestingOpFlag;
-  bool  m_defaultOpFlag;                             //value valid if m_nestingOpFlag != 0
-  uint32_t  m_nestingNumOpsMinus1;                       // -"-
-  uint32_t  m_nestingMaxTemporalIdPlus1[MAX_TLAYER];     // -"-
-  uint32_t  m_nestingOpIdx[MAX_NESTING_NUM_OPS];         // -"-
+  bool                  snOlsFlag;
+  bool                  snSubpicFlag;
+  uint32_t              snNumOlssMinus1;
+  uint32_t              snOlsIdxDeltaMinus1[MAX_NESTING_NUM_LAYER];
+  uint32_t              snOlsIdx[MAX_NESTING_NUM_LAYER];
+  bool                  snAllLayersFlag;                      //value valid if m_nestingOlsFlag == 0
+  uint32_t              snNumLayersMinus1;                    //value valid if m_nestingOlsFlag == 0 and m_nestingAllLayersFlag == 0
+  uint8_t               snLayerId[MAX_NESTING_NUM_LAYER];     //value valid if m_nestingOlsFlag == 0 and m_nestingAllLayersFlag == 0. This can e.g. be a static array of 64 uint8_t values
+  uint32_t              snNumSubpics;
+  uint8_t               snSubpicIdLen;
+  std::vector<uint16_t> snSubpicId;
+  uint32_t              snNumSEIs;
 
-  bool  m_allLayersFlag;                             //value valid if m_nestingOpFlag == 0
-  uint32_t  m_nestingNoOpMaxTemporalIdPlus1;             //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0
-  uint32_t  m_nestingNumLayersMinus1;                    //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0
-  uint8_t m_nestingLayerId[MAX_NESTING_NUM_LAYER];     //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0. This can e.g. be a static array of 64 uint8_t values
-
-  SEIMessages m_nestedSEIs;
+  SEIMessages           nestedSEIs;
 };
-
-class SEITimeCode : public SEI
-{
-public:
-  PayloadType payloadType() const { return TIME_CODE; }
-  SEITimeCode() {}
-  virtual ~SEITimeCode(){}
-
-  uint32_t numClockTs;
-};
-
-//definition according to P1005_v1;
-class SEITempMotionConstrainedTileSets: public SEI
-{
-  struct TileSetData
-  {
-    protected:
-      std::vector<int> m_top_left_tile_index;  //[tileSetIdx][tileIdx];
-      std::vector<int> m_bottom_right_tile_index;
-
-    public:
-      int     m_mcts_id;
-      bool    m_display_tile_set_flag;
-      bool    m_exact_sample_value_match_flag;
-      bool    m_mcts_tier_level_idc_present_flag;
-      bool    m_mcts_tier_flag;
-      int     m_mcts_level_idc;
-
-      void setNumberOfTileRects(const int number)
-      {
-        m_top_left_tile_index    .resize(number);
-        m_bottom_right_tile_index.resize(number);
-      }
-
-      int  getNumberOfTileRects() const
-      {
-        CHECK(m_top_left_tile_index.size() != m_bottom_right_tile_index.size(), "Inconsistent tile arrangement");
-        return int(m_top_left_tile_index.size());
-      }
-
-            int& topLeftTileIndex    (const int tileRectIndex)       { return m_top_left_tile_index    [tileRectIndex]; }
-            int& bottomRightTileIndex(const int tileRectIndex)       { return m_bottom_right_tile_index[tileRectIndex]; }
-      const int& topLeftTileIndex    (const int tileRectIndex) const { return m_top_left_tile_index    [tileRectIndex]; }
-      const int& bottomRightTileIndex(const int tileRectIndex) const { return m_bottom_right_tile_index[tileRectIndex]; }
-  };
-
-protected:
-  std::vector<TileSetData> m_tile_set_data;
-
-public:
-
-  bool    m_mc_all_tiles_exact_sample_value_match_flag;
-  bool    m_each_tile_one_tile_set_flag;
-  bool    m_limited_tile_set_display_flag;
-  bool    m_max_mcs_tier_level_idc_present_flag;
-  bool    m_max_mcts_tier_flag;
-  int     m_max_mcts_level_idc;
-
-  PayloadType payloadType() const { return TEMP_MOTION_CONSTRAINED_TILE_SETS; }
-
-  void setNumberOfTileSets(const int number)       { m_tile_set_data.resize(number);     }
-  int  getNumberOfTileSets()                 const { return int(m_tile_set_data.size()); }
-
-        TileSetData &tileSetData (const int index)       { return m_tile_set_data[index]; }
-  const TileSetData &tileSetData (const int index) const { return m_tile_set_data[index]; }
-
-};
-
-#if ENABLE_TRACING
-void xTraceSEIHeader();
-void xTraceSEIMessageType( SEI::PayloadType payloadType );
-#endif
 
 class SEIAlternativeTransferCharacteristics : public SEI
 {
 public:
   PayloadType payloadType() const { return ALTERNATIVE_TRANSFER_CHARACTERISTICS; }
 
-  SEIAlternativeTransferCharacteristics() : m_preferredTransferCharacteristics(18)
+  SEIAlternativeTransferCharacteristics() : preferredTransferCharacteristics(18)
   { }
 
   virtual ~SEIAlternativeTransferCharacteristics() {}
 
-  uint32_t m_preferredTransferCharacteristics;
+  uint32_t preferredTransferCharacteristics;
 };
 
-class SEIGreenMetadataInfo : public SEI
+class SEIUserDataRegistered : public SEI
 {
 public:
-    PayloadType payloadType() const { return GREEN_METADATA; }
-    SEIGreenMetadataInfo() {}
+  PayloadType payloadType() const { return USER_DATA_REGISTERED_ITU_T_T35; }
 
-    virtual ~SEIGreenMetadataInfo() {}
+  SEIUserDataRegistered() {}
+  virtual ~SEIUserDataRegistered() {}
 
-    uint32_t m_greenMetadataType;
-    uint32_t m_xsdMetricType;
-    uint32_t m_xsdMetricValue;
+  uint16_t              ituCountryCode;
+  std::vector<uint8_t>  userData;
 };
+
+class SEIFilmGrainCharacteristics : public SEI
+{
+public:
+  PayloadType payloadType() const { return FILM_GRAIN_CHARACTERISTICS; }
+
+  SEIFilmGrainCharacteristics() {}
+  virtual ~SEIFilmGrainCharacteristics() {}
+
+  bool      filmGrainCharacteristicsCancelFlag;
+  uint8_t   filmGrainModelId;
+  bool      separateColourDescriptionPresent;
+  uint8_t   filmGrainBitDepthLumaMinus8;
+  uint8_t   filmGrainBitDepthChromaMinus8;
+  bool      filmGrainFullRangeFlag;
+  uint8_t   filmGrainColourPrimaries;
+  uint8_t   filmGrainTransferCharacteristics;
+  uint8_t   filmGrainMatrixCoeffs;
+  uint8_t   blendingModeId;
+  uint8_t   log2ScaleFactor;
+
+  struct CompModelIntensityValues
+  {
+    uint8_t intensityIntervalLowerBound;
+    uint8_t intensityIntervalUpperBound;
+    std::vector<int> compModelValue;
+  };
+
+  struct CompModel
+  {
+    bool     presentFlag;
+    uint8_t  numModelValues;
+    std::vector<CompModelIntensityValues> intensityValues;
+  };
+
+  CompModel compModel[MAX_NUM_COMP];
+  bool      filmGrainCharacteristicsPersistenceFlag;
+};
+
+class SEIContentLightLevelInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return CONTENT_LIGHT_LEVEL_INFO; }
+  SEIContentLightLevelInfo() { }
+
+  virtual ~SEIContentLightLevelInfo() { }
+
+  uint32_t maxContentLightLevel;
+  uint32_t maxPicAverageLightLevel;
+};
+
+class SEIAmbientViewingEnvironment : public SEI
+{
+public:
+  PayloadType payloadType() const { return AMBIENT_VIEWING_ENVIRONMENT; }
+  SEIAmbientViewingEnvironment() { }
+
+  virtual ~SEIAmbientViewingEnvironment() { }
+
+  uint32_t ambientIlluminance;
+  uint16_t ambientLightX;
+  uint16_t ambientLightY;
+};
+
+class SEIContentColourVolume : public SEI
+{
+public:
+  PayloadType payloadType() const { return CONTENT_COLOUR_VOLUME; }
+  SEIContentColourVolume() {}
+  virtual ~SEIContentColourVolume() {}
+
+  bool      ccvCancelFlag;
+  bool      ccvPersistenceFlag;
+  bool      ccvPrimariesPresent;
+  bool      ccvMinLuminanceValuePresent;
+  bool      ccvMaxLuminanceValuePresent;
+  bool      ccvAvgLuminanceValuePresent;
+  int       ccvPrimariesX[MAX_NUM_COMP];
+  int       ccvPrimariesY[MAX_NUM_COMP];
+  uint32_t  ccvMinLuminanceValue;
+  uint32_t  ccvMaxLuminanceValue;
+  uint32_t  ccvAvgLuminanceValue;
+};
+
+class SEISubpicureLevelInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return SUBPICTURE_LEVEL_INFO; }
+  SEISubpicureLevelInfo()
+  : numRefLevels(0)
+  , explicitFractionPresent (false)
+  , cbrConstraintFlag (false)
+  , numSubpics(0)
+  , sliMaxSublayers(1)
+  , sliSublayerInfoPresent(false)
+  {}
+  virtual ~SEISubpicureLevelInfo() {}
+
+  int                                         numRefLevels;
+  bool                                        explicitFractionPresent;
+  bool                                        cbrConstraintFlag;
+  int                                         numSubpics;
+  int                                         sliMaxSublayers;
+  bool                                        sliSublayerInfoPresent;
+  std::vector<std::vector<int>>               nonSubpicLayersFraction;
+  std::vector<std::vector<Level::Name>>       refLevelIdc;
+  std::vector<std::vector<std::vector<int>>>  refLevelFraction;
+};
+
 
 } // namespace vvenc
 

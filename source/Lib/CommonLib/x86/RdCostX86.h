@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 /** \file     RdCostX86.cpp
     \brief    RD cost computation class, SIMD version
 */
@@ -372,20 +376,27 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
       // Do for width that multiple of 16
       __m256i vone   = _mm256_set1_epi16( 1 );
       __m256i vsum32 = _mm256_setzero_si256();
+
       for( int iY = 0; iY < iRows; iY+=iSubStep )
       {
-        __m256i vsum16 = _mm256_setzero_si256();
-        for( int iX = 0; iX < iWidth; iX+=16 )
+        __m256i vsrc1  = _mm256_loadu_si256( ( __m256i* )( pSrc1 ) );
+        __m256i vsrc2  = _mm256_loadu_si256( ( __m256i* )( pSrc2 ) );
+        __m256i vsum16 = _mm256_abs_epi16( _mm256_sub_epi16( vsrc1, vsrc2 ) );
+
+        for( int iX = 16; iX < iWidth; iX+=16 )
         {
-          __m256i vsrc1 = _mm256_loadu_si256( ( __m256i* )( &pSrc1[iX] ) );
-          __m256i vsrc2 = _mm256_loadu_si256( ( __m256i* )( &pSrc2[iX] ) );
+          vsrc1  = _mm256_loadu_si256( ( __m256i* )( &pSrc1[iX] ) );
+          vsrc2  = _mm256_loadu_si256( ( __m256i* )( &pSrc2[iX] ) );
           vsum16 = _mm256_add_epi16( vsum16, _mm256_abs_epi16( _mm256_sub_epi16( vsrc1, vsrc2 ) ) );
         }
+
         __m256i vsumtemp = _mm256_madd_epi16( vsum16, vone );
         vsum32 = _mm256_add_epi32( vsum32, vsumtemp );
+
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
       }
+
       vsum32 = _mm256_hadd_epi32( vsum32, vone );
       vsum32 = _mm256_hadd_epi32( vsum32, vone );
       uiSum =  _mm_cvtsi128_si32( _mm256_castsi256_si128( vsum32 ) ) + _mm_cvtsi128_si32( _mm256_extracti128_si256( vsum32, 1 ) );
@@ -394,19 +405,36 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
 #endif
     {
       // For width that multiple of 8
-      __m128i vone = _mm_set1_epi16( 1 );
+      __m128i vone   = _mm_set1_epi16( 1 );
       __m128i vsum32 = _mm_setzero_si128();
+
       for( int iY = 0; iY < iRows; iY+=iSubStep )
       {
-        __m128i vsum16 = _mm_setzero_si128();
-        for( int iX = 0; iX < iWidth; iX+=8 )
+        __m128i vsrc1  = _mm_loadu_si128( ( const __m128i* )( pSrc1 ) );
+        __m128i vsrc2  = _mm_loadu_si128( ( const __m128i* )( pSrc2 ) );
+        __m128i vsum16 = _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) );
+
+        if( iWidth >= 16 )
         {
-          __m128i vsrc1 = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX] ) );
-          __m128i vsrc2 = _mm_lddqu_si128( ( const __m128i* )( &pSrc2[iX] ) );
+          vsrc1  = _mm_loadu_si128( ( const __m128i* )( &pSrc1[8] ) );
+          vsrc2  = _mm_loadu_si128( ( const __m128i* )( &pSrc2[8] ) );
           vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+
+          for( int iX = 16; iX < iWidth; iX += 16 )
+          {
+            vsrc1  = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX] ) );
+            vsrc2  = _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX] ) );
+            vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+            
+            vsrc1  = _mm_loadu_si128( ( const __m128i* )( &pSrc1[iX + 8] ) );
+            vsrc2  = _mm_loadu_si128( ( const __m128i* )( &pSrc2[iX + 8] ) );
+            vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+          }
         }
+
         __m128i vsumtemp = _mm_madd_epi16( vsum16, vone );
         vsum32 = _mm_add_epi32( vsum32, vsumtemp );
+
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
       }
@@ -509,122 +537,189 @@ static uint32_t xCalcHAD4x4_SSE( const Torg *piOrg, const Tcur *piCur, const int
 //working up to 12-bit
 static uint32_t xCalcHAD8x8_SSE( const Torg *piOrg, const Tcur *piCur, const int iStrideOrg, const int iStrideCur, const int iBitDepth )
 {
-  __m128i m1[8][2], m2[8][2];
+  __m128i m1[2][8], m2[2][8];
+
+  CHECK( iBitDepth > 10, "Only bit-depths of up to 10 bits supported!" );
 
   for( int k = 0; k < 8; k++ )
   {
     __m128i r0 = ( sizeof( Torg ) > 1 ) ? ( _mm_loadu_si128( ( __m128i* )piOrg ) ) : ( _mm_unpacklo_epi8( _mm_loadl_epi64( ( const __m128i* )piOrg ), _mm_setzero_si128() ) );
     __m128i r1 = ( sizeof( Tcur ) > 1 ) ? ( _mm_lddqu_si128( ( __m128i* )piCur ) ) : ( _mm_unpacklo_epi8( _mm_loadl_epi64( ( const __m128i* )piCur ), _mm_setzero_si128() ) ); // th  _mm_loadu_si128( (__m128i*)piCur )
-    m2[k][0] = _mm_sub_epi16( r0, r1 );
-    m2[k][1] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[k][0], 8 ) );
-    m2[k][0] = _mm_cvtepi16_epi32( m2[k][0] );
+    m2[0][k] = _mm_sub_epi16( r0, r1 ); // 11bit
+    //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
+    //m2[0][k] = _mm_cvtepi16_epi32( m2[0][k] );
     piCur += iStrideCur;
     piOrg += iStrideOrg;
   }
 
+#if 0
   for( int i = 0; i < 2; i++ )
   {
     //horizontal
-    m1[0][i] = _mm_add_epi32( m2[0][i], m2[4][i] );
-    m1[1][i] = _mm_add_epi32( m2[1][i], m2[5][i] );
-    m1[2][i] = _mm_add_epi32( m2[2][i], m2[6][i] );
-    m1[3][i] = _mm_add_epi32( m2[3][i], m2[7][i] );
-    m1[4][i] = _mm_sub_epi32( m2[0][i], m2[4][i] );
-    m1[5][i] = _mm_sub_epi32( m2[1][i], m2[5][i] );
-    m1[6][i] = _mm_sub_epi32( m2[2][i], m2[6][i] );
-    m1[7][i] = _mm_sub_epi32( m2[3][i], m2[7][i] );
+    m1[i][0] = _mm_add_epi32( m2[i][0], m2[i][4] );
+    m1[i][1] = _mm_add_epi32( m2[i][1], m2[i][5] );
+    m1[i][2] = _mm_add_epi32( m2[i][2], m2[i][6] );
+    m1[i][3] = _mm_add_epi32( m2[i][3], m2[i][7] );
+    m1[i][4] = _mm_sub_epi32( m2[i][0], m2[i][4] );
+    m1[i][5] = _mm_sub_epi32( m2[i][1], m2[i][5] );
+    m1[i][6] = _mm_sub_epi32( m2[i][2], m2[i][6] );
+    m1[i][7] = _mm_sub_epi32( m2[i][3], m2[i][7] );
 
-    m2[0][i] = _mm_add_epi32( m1[0][i], m1[2][i] );
-    m2[1][i] = _mm_add_epi32( m1[1][i], m1[3][i] );
-    m2[2][i] = _mm_sub_epi32( m1[0][i], m1[2][i] );
-    m2[3][i] = _mm_sub_epi32( m1[1][i], m1[3][i] );
-    m2[4][i] = _mm_add_epi32( m1[4][i], m1[6][i] );
-    m2[5][i] = _mm_add_epi32( m1[5][i], m1[7][i] );
-    m2[6][i] = _mm_sub_epi32( m1[4][i], m1[6][i] );
-    m2[7][i] = _mm_sub_epi32( m1[5][i], m1[7][i] );
+    m2[i][0] = _mm_add_epi32( m1[i][0], m1[i][2] );
+    m2[i][1] = _mm_add_epi32( m1[i][1], m1[i][3] );
+    m2[i][2] = _mm_sub_epi32( m1[i][0], m1[i][2] );
+    m2[i][3] = _mm_sub_epi32( m1[i][1], m1[i][3] );
+    m2[i][4] = _mm_add_epi32( m1[i][4], m1[i][6] );
+    m2[i][5] = _mm_add_epi32( m1[i][5], m1[i][7] );
+    m2[i][6] = _mm_sub_epi32( m1[i][4], m1[i][6] );
+    m2[i][7] = _mm_sub_epi32( m1[i][5], m1[i][7] );
 
-    m1[0][i] = _mm_add_epi32( m2[0][i], m2[1][i] );
-    m1[1][i] = _mm_sub_epi32( m2[0][i], m2[1][i] );
-    m1[2][i] = _mm_add_epi32( m2[2][i], m2[3][i] );
-    m1[3][i] = _mm_sub_epi32( m2[2][i], m2[3][i] );
-    m1[4][i] = _mm_add_epi32( m2[4][i], m2[5][i] );
-    m1[5][i] = _mm_sub_epi32( m2[4][i], m2[5][i] );
-    m1[6][i] = _mm_add_epi32( m2[6][i], m2[7][i] );
-    m1[7][i] = _mm_sub_epi32( m2[6][i], m2[7][i] );
+    m1[i][0] = _mm_add_epi32( m2[i][0], m2[i][1] );
+    m1[i][1] = _mm_sub_epi32( m2[i][0], m2[i][1] );
+    m1[i][2] = _mm_add_epi32( m2[i][2], m2[i][3] );
+    m1[i][3] = _mm_sub_epi32( m2[i][2], m2[i][3] );
+    m1[i][4] = _mm_add_epi32( m2[i][4], m2[i][5] );
+    m1[i][5] = _mm_sub_epi32( m2[i][4], m2[i][5] );
+    m1[i][6] = _mm_add_epi32( m2[i][6], m2[i][7] );
+    m1[i][7] = _mm_sub_epi32( m2[i][6], m2[i][7] );
 
-    m2[0][i] = _mm_unpacklo_epi32( m1[0][i], m1[1][i] );
-    m2[1][i] = _mm_unpacklo_epi32( m1[2][i], m1[3][i] );
-    m2[2][i] = _mm_unpackhi_epi32( m1[0][i], m1[1][i] );
-    m2[3][i] = _mm_unpackhi_epi32( m1[2][i], m1[3][i] );
-    m2[4][i] = _mm_unpacklo_epi32( m1[4][i], m1[5][i] );
-    m2[5][i] = _mm_unpacklo_epi32( m1[6][i], m1[7][i] );
-    m2[6][i] = _mm_unpackhi_epi32( m1[4][i], m1[5][i] );
-    m2[7][i] = _mm_unpackhi_epi32( m1[6][i], m1[7][i] );
+    m2[i][0] = _mm_unpacklo_epi32( m1[i][0], m1[i][1] );
+    m2[i][1] = _mm_unpacklo_epi32( m1[i][2], m1[i][3] );
+    m2[i][2] = _mm_unpackhi_epi32( m1[i][0], m1[i][1] );
+    m2[i][3] = _mm_unpackhi_epi32( m1[i][2], m1[i][3] );
+    m2[i][4] = _mm_unpacklo_epi32( m1[i][4], m1[i][5] );
+    m2[i][5] = _mm_unpacklo_epi32( m1[i][6], m1[i][7] );
+    m2[i][6] = _mm_unpackhi_epi32( m1[i][4], m1[i][5] );
+    m2[i][7] = _mm_unpackhi_epi32( m1[i][6], m1[i][7] );
 
-    m1[0][i] = _mm_unpacklo_epi64( m2[0][i], m2[1][i] );
-    m1[1][i] = _mm_unpackhi_epi64( m2[0][i], m2[1][i] );
-    m1[2][i] = _mm_unpacklo_epi64( m2[2][i], m2[3][i] );
-    m1[3][i] = _mm_unpackhi_epi64( m2[2][i], m2[3][i] );
-    m1[4][i] = _mm_unpacklo_epi64( m2[4][i], m2[5][i] );
-    m1[5][i] = _mm_unpackhi_epi64( m2[4][i], m2[5][i] );
-    m1[6][i] = _mm_unpacklo_epi64( m2[6][i], m2[7][i] );
-    m1[7][i] = _mm_unpackhi_epi64( m2[6][i], m2[7][i] );
+    m1[i][0] = _mm_unpacklo_epi64( m2[i][0], m2[i][1] );
+    m1[i][1] = _mm_unpackhi_epi64( m2[i][0], m2[i][1] );
+    m1[i][2] = _mm_unpacklo_epi64( m2[i][2], m2[i][3] );
+    m1[i][3] = _mm_unpackhi_epi64( m2[i][2], m2[i][3] );
+    m1[i][4] = _mm_unpacklo_epi64( m2[i][4], m2[i][5] );
+    m1[i][5] = _mm_unpackhi_epi64( m2[i][4], m2[i][5] );
+    m1[i][6] = _mm_unpacklo_epi64( m2[i][6], m2[i][7] );
+    m1[i][7] = _mm_unpackhi_epi64( m2[i][6], m2[i][7] );
   }
+#else
+  //horizontal
+  m1[0][0] = _mm_add_epi16( m2[0][0], m2[0][4] );
+  m1[0][1] = _mm_add_epi16( m2[0][1], m2[0][5] );
+  m1[0][2] = _mm_add_epi16( m2[0][2], m2[0][6] );
+  m1[0][3] = _mm_add_epi16( m2[0][3], m2[0][7] );
+  m1[0][4] = _mm_sub_epi16( m2[0][0], m2[0][4] );
+  m1[0][5] = _mm_sub_epi16( m2[0][1], m2[0][5] );
+  m1[0][6] = _mm_sub_epi16( m2[0][2], m2[0][6] );
+  m1[0][7] = _mm_sub_epi16( m2[0][3], m2[0][7] ); // 12 bit
 
-  __m128i n1[8][2];
-  __m128i n2[8][2];
+  m2[0][0] = _mm_add_epi16( m1[0][0], m1[0][2] );
+  m2[0][1] = _mm_add_epi16( m1[0][1], m1[0][3] );
+  m2[0][2] = _mm_sub_epi16( m1[0][0], m1[0][2] );
+  m2[0][3] = _mm_sub_epi16( m1[0][1], m1[0][3] );
+  m2[0][4] = _mm_add_epi16( m1[0][4], m1[0][6] );
+  m2[0][5] = _mm_add_epi16( m1[0][5], m1[0][7] );
+  m2[0][6] = _mm_sub_epi16( m1[0][4], m1[0][6] );
+  m2[0][7] = _mm_sub_epi16( m1[0][5], m1[0][7] ); // 13 bit
+
+  m1[0][0] = _mm_add_epi16( m2[0][0], m2[0][1] );
+  m1[0][1] = _mm_sub_epi16( m2[0][0], m2[0][1] );
+  m1[0][2] = _mm_add_epi16( m2[0][2], m2[0][3] );
+  m1[0][3] = _mm_sub_epi16( m2[0][2], m2[0][3] );
+  m1[0][4] = _mm_add_epi16( m2[0][4], m2[0][5] );
+  m1[0][5] = _mm_sub_epi16( m2[0][4], m2[0][5] );
+  m1[0][6] = _mm_add_epi16( m2[0][6], m2[0][7] );
+  m1[0][7] = _mm_sub_epi16( m2[0][6], m2[0][7] ); // 14 bit
+
+  m2[0][0] = _mm_unpacklo_epi16( m1[0][0], m1[0][1] );
+  m2[0][1] = _mm_unpacklo_epi16( m1[0][2], m1[0][3] );
+  m2[0][2] = _mm_unpackhi_epi16( m1[0][0], m1[0][1] );
+  m2[0][3] = _mm_unpackhi_epi16( m1[0][2], m1[0][3] );
+  m2[0][4] = _mm_unpacklo_epi16( m1[0][4], m1[0][5] );
+  m2[0][5] = _mm_unpacklo_epi16( m1[0][6], m1[0][7] );
+  m2[0][6] = _mm_unpackhi_epi16( m1[0][4], m1[0][5] );
+  m2[0][7] = _mm_unpackhi_epi16( m1[0][6], m1[0][7] );
+
+  m1[0][0] = _mm_unpacklo_epi32( m2[0][0], m2[0][1] );
+  m1[0][1] = _mm_unpackhi_epi32( m2[0][0], m2[0][1] );
+  m1[0][2] = _mm_unpacklo_epi32( m2[0][2], m2[0][3] );
+  m1[0][3] = _mm_unpackhi_epi32( m2[0][2], m2[0][3] );
+  m1[0][4] = _mm_unpacklo_epi32( m2[0][4], m2[0][5] );
+  m1[0][5] = _mm_unpackhi_epi32( m2[0][4], m2[0][5] );
+  m1[0][6] = _mm_unpacklo_epi32( m2[0][6], m2[0][7] );
+  m1[0][7] = _mm_unpackhi_epi32( m2[0][6], m2[0][7] );
+  
+  m1[1][0] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][0], 8 ) );
+  m1[0][0] = _mm_cvtepi16_epi32(                 m1[0][0]      );
+  m1[1][1] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][1], 8 ) );
+  m1[0][1] = _mm_cvtepi16_epi32(                 m1[0][1]      );
+  m1[1][2] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][2], 8 ) );
+  m1[0][2] = _mm_cvtepi16_epi32(                 m1[0][2]      );
+  m1[1][3] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][3], 8 ) );
+  m1[0][3] = _mm_cvtepi16_epi32(                 m1[0][3]      );
+  m1[1][4] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][4], 8 ) );
+  m1[0][4] = _mm_cvtepi16_epi32(                 m1[0][4]      );
+  m1[1][5] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][5], 8 ) );
+  m1[0][5] = _mm_cvtepi16_epi32(                 m1[0][5]      );
+  m1[1][6] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][6], 8 ) );
+  m1[0][6] = _mm_cvtepi16_epi32(                 m1[0][6]      );
+  m1[1][7] = _mm_cvtepi16_epi32( _mm_srli_si128( m1[0][7], 8 ) );
+  m1[0][7] = _mm_cvtepi16_epi32(                 m1[0][7]      );
+#endif
+
+  __m128i n1[2][8];
+  __m128i n2[2][8];
 
   for( int i = 0; i < 8; i++ )
   {
     int ii = i % 4;
     int ij = i >> 2;
 
-    n2[i][0] = m1[ii    ][ij];
-    n2[i][1] = m1[ii + 4][ij];
+    n2[0][i] = m1[ij][ii    ];
+    n2[1][i] = m1[ij][ii + 4];
   }
 
   for( int i = 0; i < 2; i++ )
   {
-    n1[0][i] = _mm_add_epi32( n2[0][i], n2[4][i] );
-    n1[1][i] = _mm_add_epi32( n2[1][i], n2[5][i] );
-    n1[2][i] = _mm_add_epi32( n2[2][i], n2[6][i] );
-    n1[3][i] = _mm_add_epi32( n2[3][i], n2[7][i] );
-    n1[4][i] = _mm_sub_epi32( n2[0][i], n2[4][i] );
-    n1[5][i] = _mm_sub_epi32( n2[1][i], n2[5][i] );
-    n1[6][i] = _mm_sub_epi32( n2[2][i], n2[6][i] );
-    n1[7][i] = _mm_sub_epi32( n2[3][i], n2[7][i] );
+    n1[i][0] = _mm_add_epi32( n2[i][0], n2[i][4] );
+    n1[i][1] = _mm_add_epi32( n2[i][1], n2[i][5] );
+    n1[i][2] = _mm_add_epi32( n2[i][2], n2[i][6] );
+    n1[i][3] = _mm_add_epi32( n2[i][3], n2[i][7] );
+    n1[i][4] = _mm_sub_epi32( n2[i][0], n2[i][4] );
+    n1[i][5] = _mm_sub_epi32( n2[i][1], n2[i][5] );
+    n1[i][6] = _mm_sub_epi32( n2[i][2], n2[i][6] );
+    n1[i][7] = _mm_sub_epi32( n2[i][3], n2[i][7] );
 
-    n2[0][i] = _mm_add_epi32( n1[0][i], n1[2][i] );
-    n2[1][i] = _mm_add_epi32( n1[1][i], n1[3][i] );
-    n2[2][i] = _mm_sub_epi32( n1[0][i], n1[2][i] );
-    n2[3][i] = _mm_sub_epi32( n1[1][i], n1[3][i] );
-    n2[4][i] = _mm_add_epi32( n1[4][i], n1[6][i] );
-    n2[5][i] = _mm_add_epi32( n1[5][i], n1[7][i] );
-    n2[6][i] = _mm_sub_epi32( n1[4][i], n1[6][i] );
-    n2[7][i] = _mm_sub_epi32( n1[5][i], n1[7][i] );
+    n2[i][0] = _mm_add_epi32( n1[i][0], n1[i][2] );
+    n2[i][1] = _mm_add_epi32( n1[i][1], n1[i][3] );
+    n2[i][2] = _mm_sub_epi32( n1[i][0], n1[i][2] );
+    n2[i][3] = _mm_sub_epi32( n1[i][1], n1[i][3] );
+    n2[i][4] = _mm_add_epi32( n1[i][4], n1[i][6] );
+    n2[i][5] = _mm_add_epi32( n1[i][5], n1[i][7] );
+    n2[i][6] = _mm_sub_epi32( n1[i][4], n1[i][6] );
+    n2[i][7] = _mm_sub_epi32( n1[i][5], n1[i][7] );
 
-    n1[0][i] = _mm_abs_epi32( _mm_add_epi32( n2[0][i], n2[1][i] ) );
-    n1[1][i] = _mm_abs_epi32( _mm_sub_epi32( n2[0][i], n2[1][i] ) );
-    n1[2][i] = _mm_abs_epi32( _mm_add_epi32( n2[2][i], n2[3][i] ) );
-    n1[3][i] = _mm_abs_epi32( _mm_sub_epi32( n2[2][i], n2[3][i] ) );
-    n1[4][i] = _mm_abs_epi32( _mm_add_epi32( n2[4][i], n2[5][i] ) );
-    n1[5][i] = _mm_abs_epi32( _mm_sub_epi32( n2[4][i], n2[5][i] ) );
-    n1[6][i] = _mm_abs_epi32( _mm_add_epi32( n2[6][i], n2[7][i] ) );
-    n1[7][i] = _mm_abs_epi32( _mm_sub_epi32( n2[6][i], n2[7][i] ) );
+    n1[i][0] = _mm_abs_epi32( _mm_add_epi32( n2[i][0], n2[i][1] ) );
+    n1[i][1] = _mm_abs_epi32( _mm_sub_epi32( n2[i][0], n2[i][1] ) );
+    n1[i][2] = _mm_abs_epi32( _mm_add_epi32( n2[i][2], n2[i][3] ) );
+    n1[i][3] = _mm_abs_epi32( _mm_sub_epi32( n2[i][2], n2[i][3] ) );
+    n1[i][4] = _mm_abs_epi32( _mm_add_epi32( n2[i][4], n2[i][5] ) );
+    n1[i][5] = _mm_abs_epi32( _mm_sub_epi32( n2[i][4], n2[i][5] ) );
+    n1[i][6] = _mm_abs_epi32( _mm_add_epi32( n2[i][6], n2[i][7] ) );
+    n1[i][7] = _mm_abs_epi32( _mm_sub_epi32( n2[i][6], n2[i][7] ) );
   }
   for( int i = 0; i < 8; i++ )
   {
-    m1[i][0] = _mm_add_epi32( n1[i][0], n1[i][1] );
+    m1[0][i] = _mm_add_epi32( n1[0][i], n1[1][i] );
   }
 
-  m1[0][0] = _mm_add_epi32( m1[0][0], m1[1][0] );
-  m1[2][0] = _mm_add_epi32( m1[2][0], m1[3][0] );
-  m1[4][0] = _mm_add_epi32( m1[4][0], m1[5][0] );
-  m1[6][0] = _mm_add_epi32( m1[6][0], m1[7][0] );
+  m1[0][0] = _mm_add_epi32( m1[0][0], m1[0][1] );
+  m1[0][2] = _mm_add_epi32( m1[0][2], m1[0][3] );
+  m1[0][4] = _mm_add_epi32( m1[0][4], m1[0][5] );
+  m1[0][6] = _mm_add_epi32( m1[0][6], m1[0][7] );
 
-  m1[0][0] = _mm_add_epi32( m1[0][0], m1[2][0] );
-  m1[4][0] = _mm_add_epi32( m1[4][0], m1[6][0] );
-  __m128i iSum = _mm_add_epi32( m1[0][0], m1[4][0] );
+  m1[0][0] = _mm_add_epi32( m1[0][0], m1[0][2] );
+  m1[0][4] = _mm_add_epi32( m1[0][4], m1[0][6] );
+  __m128i iSum = _mm_add_epi32( m1[0][0], m1[0][4] );
 
   iSum = _mm_hadd_epi32( iSum, iSum );
   iSum = _mm_hadd_epi32( iSum, iSum );
@@ -1325,21 +1420,22 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
   const int iLoops = 2;
   __m256i m1[2][8], m2[2][8];
 
+  CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
+
   for( int l = 0; l < iLoops; l++ )
   {
+    for( int k = 0; k < 8; k++ )
     {
-      for( int k = 0; k < 8; k++ )
-      {
-        __m256i r0 = _mm256_lddqu_si256( ( __m256i* ) piOrg );
-        __m256i r1 = _mm256_lddqu_si256( ( __m256i* ) piCur );
-        m2[0][k] = _mm256_sub_epi16( r0, r1 );
-        m2[1][k] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m2[0][k], 1 ) );
-        m2[0][k] = _mm256_cvtepi16_epi32( _mm256_castsi256_si128( m2[0][k] ) );
-        piCur += iStrideCur;
-        piOrg += iStrideOrg;
-      }
+      __m256i r0 = _mm256_loadu_si256( ( __m256i* ) piOrg );
+      __m256i r1 = _mm256_loadu_si256( ( __m256i* ) piCur );
+      m2[0][k] = _mm256_sub_epi16( r0, r1 ); // 11 bit
+      //m2[1][k] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m2[0][k], 1 ) );
+      //m2[0][k] = _mm256_cvtepi16_epi32( _mm256_castsi256_si128( m2[0][k] ) );
+      piCur += iStrideCur;
+      piOrg += iStrideOrg;
     }
 
+#if 0
     constexpr int perm_unpacklo_epi128 = ( 0 << 0 ) + ( 2 << 4 );
     constexpr int perm_unpackhi_epi128 = ( 1 << 0 ) + ( 3 << 4 );
 
@@ -1419,6 +1515,82 @@ static uint32_t xCalcHAD16x16_AVX2( const Torg *piOrg, const Tcur *piCur, const 
     m1[1][5] = _mm256_permute2x128_si256( m2[0][5], m2[1][5], perm_unpackhi_epi128 );
     m1[1][6] = _mm256_permute2x128_si256( m2[0][6], m2[1][6], perm_unpackhi_epi128 );
     m1[1][7] = _mm256_permute2x128_si256( m2[0][7], m2[1][7], perm_unpackhi_epi128 );
+#else
+    m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][4] );
+    m1[0][1] = _mm256_add_epi16( m2[0][1], m2[0][5] );
+    m1[0][2] = _mm256_add_epi16( m2[0][2], m2[0][6] );
+    m1[0][3] = _mm256_add_epi16( m2[0][3], m2[0][7] );
+    m1[0][4] = _mm256_sub_epi16( m2[0][0], m2[0][4] );
+    m1[0][5] = _mm256_sub_epi16( m2[0][1], m2[0][5] );
+    m1[0][6] = _mm256_sub_epi16( m2[0][2], m2[0][6] );
+    m1[0][7] = _mm256_sub_epi16( m2[0][3], m2[0][7] ); // 12 bit
+
+    m2[0][0] = _mm256_add_epi16( m1[0][0], m1[0][2] );
+    m2[0][1] = _mm256_add_epi16( m1[0][1], m1[0][3] );
+    m2[0][2] = _mm256_sub_epi16( m1[0][0], m1[0][2] );
+    m2[0][3] = _mm256_sub_epi16( m1[0][1], m1[0][3] );
+    m2[0][4] = _mm256_add_epi16( m1[0][4], m1[0][6] );
+    m2[0][5] = _mm256_add_epi16( m1[0][5], m1[0][7] );
+    m2[0][6] = _mm256_sub_epi16( m1[0][4], m1[0][6] );
+    m2[0][7] = _mm256_sub_epi16( m1[0][5], m1[0][7] ); // 13 bit
+
+    m1[0][0] = _mm256_add_epi16( m2[0][0], m2[0][1] );
+    m1[0][1] = _mm256_sub_epi16( m2[0][0], m2[0][1] );
+    m1[0][2] = _mm256_add_epi16( m2[0][2], m2[0][3] );
+    m1[0][3] = _mm256_sub_epi16( m2[0][2], m2[0][3] );
+    m1[0][4] = _mm256_add_epi16( m2[0][4], m2[0][5] );
+    m1[0][5] = _mm256_sub_epi16( m2[0][4], m2[0][5] );
+    m1[0][6] = _mm256_add_epi16( m2[0][6], m2[0][7] );
+    m1[0][7] = _mm256_sub_epi16( m2[0][6], m2[0][7] ); // 14 bit
+
+    // transpose
+    // 8x8
+    m2[0][0] = _mm256_unpacklo_epi16( m1[0][0], m1[0][1] );
+    m2[0][1] = _mm256_unpacklo_epi16( m1[0][2], m1[0][3] );
+    m2[0][2] = _mm256_unpacklo_epi16( m1[0][4], m1[0][5] );
+    m2[0][3] = _mm256_unpacklo_epi16( m1[0][6], m1[0][7] );
+    m2[0][4] = _mm256_unpackhi_epi16( m1[0][0], m1[0][1] );
+    m2[0][5] = _mm256_unpackhi_epi16( m1[0][2], m1[0][3] );
+    m2[0][6] = _mm256_unpackhi_epi16( m1[0][4], m1[0][5] );
+    m2[0][7] = _mm256_unpackhi_epi16( m1[0][6], m1[0][7] );
+
+    m1[0][0] = _mm256_unpacklo_epi32( m2[0][0], m2[0][1] );
+    m1[0][1] = _mm256_unpackhi_epi32( m2[0][0], m2[0][1] );
+    m1[0][2] = _mm256_unpacklo_epi32( m2[0][2], m2[0][3] );
+    m1[0][3] = _mm256_unpackhi_epi32( m2[0][2], m2[0][3] );
+    m1[0][4] = _mm256_unpacklo_epi32( m2[0][4], m2[0][5] );
+    m1[0][5] = _mm256_unpackhi_epi32( m2[0][4], m2[0][5] );
+    m1[0][6] = _mm256_unpacklo_epi32( m2[0][6], m2[0][7] );
+    m1[0][7] = _mm256_unpackhi_epi32( m2[0][6], m2[0][7] );
+
+    m2[0][0] = _mm256_unpacklo_epi64( m1[0][0], m1[0][2] );
+    m2[0][1] = _mm256_unpackhi_epi64( m1[0][0], m1[0][2] );
+    m2[0][2] = _mm256_unpacklo_epi64( m1[0][1], m1[0][3] );
+    m2[0][3] = _mm256_unpackhi_epi64( m1[0][1], m1[0][3] );
+    m2[0][4] = _mm256_unpacklo_epi64( m1[0][4], m1[0][6] );
+    m2[0][5] = _mm256_unpackhi_epi64( m1[0][4], m1[0][6] );
+    m2[0][6] = _mm256_unpacklo_epi64( m1[0][5], m1[0][7] );
+    m2[0][7] = _mm256_unpackhi_epi64( m1[0][5], m1[0][7] );
+
+    __m256i vzero = _mm256_setzero_si256();
+    __m256i vtmp;
+
+#define UNPACKX(x)                                        \
+    vtmp = _mm256_cmpgt_epi16( vzero, m2[0][x] );         \
+    m1[0][x] = _mm256_unpacklo_epi16( m2[0][x], vtmp );   \
+    m1[1][x] = _mm256_unpackhi_epi16( m2[0][x], vtmp );
+
+    UNPACKX( 0 );
+    UNPACKX( 1 );
+    UNPACKX( 2 );
+    UNPACKX( 3 );
+    UNPACKX( 4 );
+    UNPACKX( 5 );
+    UNPACKX( 6 );
+    UNPACKX( 7 );
+
+#undef UNPACKX
+#endif
 
     for( int i = 0; i < 2; i++ )
     {
@@ -1498,21 +1670,22 @@ static uint32_t xCalcHAD16x8_AVX2( const Torg *piOrg, const Tcur *piCur, const i
 #ifdef USE_AVX2
   __m256i m1[16], m2[16];
 
+  CHECK( iBitDepth > 10, "Only bitdepths up to 10 supported!" );
+
   {
+    for( int k = 0; k < 8; k++ )
     {
-      for( int k = 0; k < 8; k++ )
-      {
-        __m256i r0 = _mm256_lddqu_si256( (__m256i*)piOrg );
-        __m256i r1 = _mm256_lddqu_si256( (__m256i*)piCur );
-        m1[k]   = _mm256_sub_epi16( r0, r1 );
-        m1[k+8] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m1[k], 1 ) );
-        m1[k]   = _mm256_cvtepi16_epi32( _mm256_castsi256_si128  ( m1[k]    ) );
-        piCur += iStrideCur;
-        piOrg += iStrideOrg;
-      }
+      __m256i r0 = _mm256_lddqu_si256( (__m256i*)piOrg );
+      __m256i r1 = _mm256_lddqu_si256( (__m256i*)piCur );
+      m1[k]   = _mm256_sub_epi16( r0, r1 ); // 11 bit
+      //m1[k+8] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m1[k], 1 ) );
+      //m1[k]   = _mm256_cvtepi16_epi32( _mm256_castsi256_si128  ( m1[k]    ) );
+      piCur += iStrideCur;
+      piOrg += iStrideOrg;
     }
 
     // vertical, first 8x8
+#if 0
     m2[0] = _mm256_add_epi32( m1[0], m1[4] );
     m2[1] = _mm256_add_epi32( m1[1], m1[5] );
     m2[2] = _mm256_add_epi32( m1[2], m1[6] );
@@ -1625,6 +1798,67 @@ static uint32_t xCalcHAD16x8_AVX2( const Torg *piOrg, const Tcur *piCur, const i
     m1[8+5] = _mm256_permute2x128_si256( m2[8+4], m2[8+6], perm_unpackhi_epi128 );
     m1[8+6] = _mm256_permute2x128_si256( m2[8+5], m2[8+7], perm_unpacklo_epi128 );
     m1[8+7] = _mm256_permute2x128_si256( m2[8+5], m2[8+7], perm_unpackhi_epi128 );
+#else
+    m2[0] = _mm256_add_epi16( m1[0], m1[4] );
+    m2[1] = _mm256_add_epi16( m1[1], m1[5] );
+    m2[2] = _mm256_add_epi16( m1[2], m1[6] );
+    m2[3] = _mm256_add_epi16( m1[3], m1[7] );
+    m2[4] = _mm256_sub_epi16( m1[0], m1[4] );
+    m2[5] = _mm256_sub_epi16( m1[1], m1[5] );
+    m2[6] = _mm256_sub_epi16( m1[2], m1[6] );
+    m2[7] = _mm256_sub_epi16( m1[3], m1[7] ); // 12 bit
+
+    m1[0] = _mm256_add_epi16( m2[0], m2[2] );
+    m1[1] = _mm256_add_epi16( m2[1], m2[3] );
+    m1[2] = _mm256_sub_epi16( m2[0], m2[2] );
+    m1[3] = _mm256_sub_epi16( m2[1], m2[3] );
+    m1[4] = _mm256_add_epi16( m2[4], m2[6] );
+    m1[5] = _mm256_add_epi16( m2[5], m2[7] );
+    m1[6] = _mm256_sub_epi16( m2[4], m2[6] );
+    m1[7] = _mm256_sub_epi16( m2[5], m2[7] ); // 13 bit
+
+    m2[0] = _mm256_add_epi16( m1[0], m1[1] );
+    m2[1] = _mm256_sub_epi16( m1[0], m1[1] );
+    m2[2] = _mm256_add_epi16( m1[2], m1[3] );
+    m2[3] = _mm256_sub_epi16( m1[2], m1[3] );
+    m2[4] = _mm256_add_epi16( m1[4], m1[5] );
+    m2[5] = _mm256_sub_epi16( m1[4], m1[5] );
+    m2[6] = _mm256_add_epi16( m1[6], m1[7] );
+    m2[7] = _mm256_sub_epi16( m1[6], m1[7] ); // 14 bit
+
+    m1[0] = _mm256_unpacklo_epi16( m2[0], m2[1] );
+    m1[1] = _mm256_unpacklo_epi16( m2[2], m2[3] );
+    m1[2] = _mm256_unpacklo_epi16( m2[4], m2[5] );
+    m1[3] = _mm256_unpacklo_epi16( m2[6], m2[7] );
+    m1[4] = _mm256_unpackhi_epi16( m2[0], m2[1] );
+    m1[5] = _mm256_unpackhi_epi16( m2[2], m2[3] );
+    m1[6] = _mm256_unpackhi_epi16( m2[4], m2[5] );
+    m1[7] = _mm256_unpackhi_epi16( m2[6], m2[7] );
+
+    m2[0] = _mm256_unpacklo_epi32( m1[0], m1[1] );
+    m2[1] = _mm256_unpackhi_epi32( m1[0], m1[1] );
+    m2[2] = _mm256_unpacklo_epi32( m1[2], m1[3] );
+    m2[3] = _mm256_unpackhi_epi32( m1[2], m1[3] );
+    m2[4] = _mm256_unpacklo_epi32( m1[4], m1[5] );
+    m2[5] = _mm256_unpackhi_epi32( m1[4], m1[5] );
+    m2[6] = _mm256_unpacklo_epi32( m1[6], m1[7] );
+    m2[7] = _mm256_unpackhi_epi32( m1[6], m1[7] );
+
+    m1[0] = _mm256_unpacklo_epi64( m2[0], m2[2] );
+    m1[1] = _mm256_unpackhi_epi64( m2[0], m2[2] );
+    m1[2] = _mm256_unpacklo_epi64( m2[1], m2[3] );
+    m1[3] = _mm256_unpackhi_epi64( m2[1], m2[3] );
+    m1[4] = _mm256_unpacklo_epi64( m2[4], m2[6] );
+    m1[5] = _mm256_unpackhi_epi64( m2[4], m2[6] );
+    m1[6] = _mm256_unpacklo_epi64( m2[5], m2[7] );
+    m1[7] = _mm256_unpackhi_epi64( m2[5], m2[7] );
+    
+    for( int k = 0; k < 8; k++ )
+    {
+      m1[k+8] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m1[k], 1 ) );
+      m1[k]   = _mm256_cvtepi16_epi32( _mm256_castsi256_si128  ( m1[k]    ) );
+    }
+#endif
 
     // horizontal
     {

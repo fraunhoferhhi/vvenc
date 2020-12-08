@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     EncGOP.cpp
@@ -51,9 +55,10 @@ vvc@hhi.fraunhofer.de
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "CommonLib/MD5.h"
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
-#include "libmd5/MD5.h"
+#include "EncHRD.h"
 
 #include <list>
 
@@ -131,7 +136,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
     {
       if( cfg.m_forceDecodeBitstream1 )
       {
-        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, apsMap, false ) ) )
+        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, false ) ) )
         {
           decPic = ffwdDecoder.bDecode1stPart;
         }
@@ -139,7 +144,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
       else
       {
         // update decode decision
-        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, apsMap, false, cfg.m_switchPOC ) ) ) )
+        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, false, cfg.m_switchPOC ) ) ) )
         {
           decPic = ffwdDecoder.bDecode1stPart;
           return;
@@ -147,7 +152,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
         else if( pic->getPOC() )
         {
           // reset decoder if used and not required any further
-          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, apsMap );
+          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, &apsMap );
         }
       }
     }
@@ -172,7 +177,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Pict
       expectedPoc = pic->getPOC() - iRestartIntraPOC;
       slice0.copySliceInfo( pic->slices[ 0 ], false );
     }
-    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, apsMap, true )) ))
+    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, &apsMap, true )) ))
     {
       decPic = bDecode2ndPart;
       if ( cfg.m_bs2ModPOCAndType )
@@ -239,6 +244,8 @@ EncGOP::EncGOP()
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( NAL_UNIT_CODED_SLICE_IDR_N_LP )
   , m_pcEncCfg           ( nullptr )
+  , m_pcRateCtrl         ( nullptr )
+  , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
   , m_numPicEncoder      ( 0 )
   , m_gopThreadPool      ( nullptr )
@@ -252,10 +259,10 @@ EncGOP::EncGOP()
 
 EncGOP::~EncGOP()
 {
-  if( ! m_pcEncCfg->m_decodeBitstreams[ 0 ].empty() || ! m_pcEncCfg->m_decodeBitstreams[ 1 ].empty() )
+  if( m_pcEncCfg && (! m_pcEncCfg->m_decodeBitstreams[ 0 ].empty() || ! m_pcEncCfg->m_decodeBitstreams[ 1 ].empty()) )
   {
     // reset potential decoder resources
-    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, m_gopApsMap );
+    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap );
   }
 
   for ( auto& picEncoder : m_picEncoderList )
@@ -275,12 +282,14 @@ EncGOP::~EncGOP()
 }
 
 
-void EncGOP::init( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool )
+void EncGOP::init( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;
+  m_pcEncHRD = &encHrd;
 
-  m_seiEncoder.init( encCfg );
+
+  m_seiEncoder.init( encCfg, encHrd );
   m_Reshaper.init  ( encCfg );
 
   const int maxEncoder = ( encCfg.m_frameParallel && encCfg.m_numFppThreads > 1 ) ? encCfg.m_numFppThreads : 1;
@@ -428,6 +437,7 @@ void EncGOP::encodePicture( std::vector<Picture*> encList, PicList& picList, Acc
   if ( pic->writePic )
   {
     xWritePicture( *pic, au, isEncodeLtRef );
+    xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
   }
 
   xUpdateAfterPicRC( pic );
@@ -1200,6 +1210,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
   }
 
   m_actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
+  xWriteLeadingSEIs( pic, au );
   m_actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
 
   pic.encTime.stopTimer();
@@ -1207,7 +1218,6 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
   std::string digestStr;
   xWriteTrailingSEIs( pic, au, digestStr );
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
-  xSyncAlfAps( pic, m_gopApsMap, pic.picApsMap );
 }
 
 
@@ -1231,7 +1241,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
   }
 
   bool IrapOrGdrAu = slice->picHeader->gdrPic || (slice->isIRAP() && !slice->pps->mixedNaluTypesInPic);
-  if ((( slice->vps->maxLayers > 1 && IrapOrGdrAu) || m_pcEncCfg->m_AccessUnitDelimiter) && slice->nuhLayerId )
+  if ((( slice->vps->maxLayers > 1 && IrapOrGdrAu) || m_pcEncCfg->m_AccessUnitDelimiter) && !slice->nuhLayerId )
   {
     xWriteAccessUnitDelimiter( accessUnit, slice, IrapOrGdrAu, hlsWriter );
   }
@@ -1248,7 +1258,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
     const bool doAPS             = aps && apsMap.getChangedFlag( apsMapIdx );
     if ( doAPS )
     {
-      aps->chromaPresentFlag = slice->sps->chromaFormatIdc != CHROMA_400;
+      aps->chromaPresent = slice->sps->chromaFormatIdc != CHROMA_400;
       aps->temporalId = slice->TLayer;
       actualTotalBits += xWriteAPS( accessUnit, aps, hlsWriter, NAL_UNIT_PREFIX_APS );
       apsMap.clearChangedFlag( apsMapIdx );
@@ -1284,7 +1294,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
 
       if ( writeAps )
       {
-        aps->chromaPresentFlag = slice->sps->chromaFormatIdc != CHROMA_400;
+        aps->chromaPresent = slice->sps->chromaFormatIdc != CHROMA_400;
         aps->temporalId = slice->TLayer;
         actualTotalBits += xWriteAPS( accessUnit, aps, hlsWriter, NAL_UNIT_PREFIX_APS );
         apsMap.clearChangedFlag( apsMapIdx );
@@ -1331,6 +1341,47 @@ int EncGOP::xWritePictureSlices( Picture& pic, AccessUnit& accessUnit, HLSWriter
   return numBytes * 8;
 }
 
+void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnit& accessUnit )
+{
+  const Slice* slice = pic.slices[ 0 ];
+  SEIMessages leadingSeiMessages;
+
+  bool bpPresentInAU = false;
+
+  if((m_pcEncCfg->m_bufferingPeriodSEIEnabled) && (slice->isIRAP() || slice->nalUnitType == NAL_UNIT_CODED_SLICE_GDR) &&
+    slice->nuhLayerId==slice->vps->layerId[0] && (slice->sps->hrdParametersPresent))
+  {
+    SEIBufferingPeriod *bufferingPeriodSEI = new SEIBufferingPeriod();
+    bool noLeadingPictures = ( (slice->nalUnitType!= NAL_UNIT_CODED_SLICE_IDR_W_RADL) && (slice->nalUnitType!= NAL_UNIT_CODED_SLICE_CRA) );
+    m_seiEncoder.initBufferingPeriodSEI(*bufferingPeriodSEI, noLeadingPictures);
+    m_pcEncHRD->bufferingPeriodSEI = *bufferingPeriodSEI; 
+    m_pcEncHRD->bufferingPeriodInitialized = true;
+    
+    leadingSeiMessages.push_back(bufferingPeriodSEI);
+    bpPresentInAU = true;
+  }
+
+//  if (m_pcEncCfg->m_dependentRAPIndicationSEIEnabled && slice->isDRAP )
+//  {
+//    SEIDependentRAPIndication *dependentRAPIndicationSEI = new SEIDependentRAPIndication();
+//    m_seiEncoder.initDrapSEI( dependentRAPIndicationSEI );
+//    leadingSeiMessages.push_back(dependentRAPIndicationSEI);
+//  }
+
+  if( m_pcEncCfg->m_pictureTimingSEIEnabled && m_pcEncCfg->m_bufferingPeriodSEIEnabled )
+  {
+    SEIMessages nestedSeiMessages;
+    SEIMessages duInfoSeiMessages;
+    uint32_t numDU = 1;
+    m_seiEncoder.initPictureTimingSEI( leadingSeiMessages, nestedSeiMessages, duInfoSeiMessages, slice, numDU, bpPresentInAU );
+  }
+
+  // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
+  AccessUnit::iterator pos = accessUnit.end();
+  xWriteSEISeparately( NAL_UNIT_PREFIX_SEI, leadingSeiMessages, accessUnit, pos, slice->TLayer, slice->sps );
+
+  deleteSEIs( leadingSeiMessages );
+}
 
 void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnit& accessUnit, std::string& digestStr )
 {
@@ -1341,7 +1392,7 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnit& accessUnit, std
   {
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
-    m_seiEncoder.initDecodedPictureHashSEI( decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
+    m_seiEncoder.initDecodedPictureHashSEI( *decodedPictureHashSei, recoBuf, digestStr, slice->sps->bitDepths );
     trailingSeiMessages.push_back( decodedPictureHashSei );
   }
 
@@ -1424,7 +1475,7 @@ void EncGOP::xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUn
     return;
   }
   OutputNALUnit nalu(naluType, temporalId);
-  m_seiWriter.writeSEImessages(nalu.m_Bitstream, seiMessages, sps, false);
+  m_seiWriter.writeSEImessages(nalu.m_Bitstream, seiMessages, *m_pcEncHRD, false, temporalId);
   auPos = accessUnit.insert(auPos, new NALUnitEBSP(nalu));
   auPos++;
 }
@@ -1441,7 +1492,7 @@ void EncGOP::xWriteSEISeparately (NalUnitType naluType, SEIMessages& seiMessages
     SEIMessages tmpMessages;
     tmpMessages.push_back(*sei);
     OutputNALUnit nalu(naluType, temporalId);
-    m_seiWriter.writeSEImessages(nalu.m_Bitstream, tmpMessages, sps, false);
+    m_seiWriter.writeSEImessages(nalu.m_Bitstream, tmpMessages, *m_pcEncHRD, false, temporalId);
     auPos = accessUnit.insert(auPos, new NALUnitEBSP(nalu));
     auPos++;
   }
@@ -1544,8 +1595,16 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
       {
         bits = 200;
       }
-      m_pcRateCtrl->encRCPic->targetBits = bits;
-      m_pcRateCtrl->encRCPic->bitsLeft = bits;
+
+      if ( m_pcEncCfg->m_RCNumPasses == 2 )
+      {
+        m_pcRateCtrl->encRCPic->bitsLeft = m_pcRateCtrl->encRCPic->targetBits;
+      }
+      else
+      {
+        m_pcRateCtrl->encRCPic->targetBits = bits;
+        m_pcRateCtrl->encRCPic->bitsLeft = bits;
+      }
     }
 
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
@@ -1664,6 +1723,8 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     }
   }
 
+  m_pcRateCtrl->addRCPassStats( slice->poc, slice->sliceQp, numRBSPBytes * 8, dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr], slice->isIntra(), slice->TLayer );
+
   const uint32_t uibits = numRBSPBytes * 8;
 
   //===== add PSNR =====
@@ -1700,63 +1761,77 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   if( m_pcEncCfg->m_verbosity >= NOTICE )
   {
-    std::string cInfo = print("POC %4d TId: %1d ( %c-SLICE, QP %d ) %10d bits",
-        slice->poc,
-        slice->TLayer,
-        c,
-        slice->sliceQp,
-        uibits );
-
-    std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
-
-    accessUnit.m_cInfo.append( cInfo );
-    accessUnit.m_cInfo.append( cPSNR );
-
-    msg( NOTICE, cInfo.c_str() );
-    msg( NOTICE, cPSNR.c_str() );
-
-
-    if ( m_pcEncCfg->m_printHexPsnr )
+    if( ! m_pcRateCtrl->rcIsFinalPass )
     {
-      uint64_t xPsnr[MAX_NUM_COMP];
-      for (int i = 0; i < MAX_NUM_COMP; i++)
+      std::string cInfo = print("RC pass %d/%d, analyze poc %d",
+          m_pcRateCtrl->rcPass + 1,
+          m_pcRateCtrl->rcMaxPass + 1,
+          slice->poc );
+
+          accessUnit.m_cInfo.append( cInfo );
+
+          msg( NOTICE, cInfo.c_str() );
+    }
+    else
+    {
+      std::string cInfo = print("POC %4d TId: %1d ( %c-SLICE, QP %d ) %10d bits",
+          slice->poc,
+          slice->TLayer,
+          c,
+          slice->sliceQp,
+          uibits );
+
+      std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+
+      accessUnit.m_cInfo.append( cInfo );
+      accessUnit.m_cInfo.append( cPSNR );
+
+      msg( NOTICE, cInfo.c_str() );
+      msg( NOTICE, cPSNR.c_str() );
+
+
+      if ( m_pcEncCfg->m_printHexPsnr )
       {
-        std::copy(reinterpret_cast<uint8_t *>(&dPSNR[i]),
-                  reinterpret_cast<uint8_t *>(&dPSNR[i]) + sizeof(dPSNR[i]),
-                  reinterpret_cast<uint8_t *>(&xPsnr[i]));
+        uint64_t xPsnr[MAX_NUM_COMP];
+        for (int i = 0; i < MAX_NUM_COMP; i++)
+        {
+          std::copy(reinterpret_cast<uint8_t *>(&dPSNR[i]),
+              reinterpret_cast<uint8_t *>(&dPSNR[i]) + sizeof(dPSNR[i]),
+              reinterpret_cast<uint8_t *>(&xPsnr[i]));
+        }
+
+        std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+
+        accessUnit.m_cInfo.append( cPSNRHex );
+        msg(NOTICE, cPSNRHex.c_str() );
       }
 
-      std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
-
-      accessUnit.m_cInfo.append( cPSNRHex );
-      msg(NOTICE, cPSNRHex.c_str() );
-    }
-
-    if( printFrameMSE )
-    {
-      std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
-      accessUnit.m_cInfo.append( cFrameMSE );
-      msg(NOTICE, cFrameMSE.c_str() );
-    }
-
-    std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
-    accessUnit.m_cInfo.append( cEncTime );
-    msg(NOTICE, cEncTime.c_str() );
-
-    std::string cRefPics;
-    for( int iRefList = 0; iRefList < 2; iRefList++ )
-    {
-      std::string tmp = print(" [L%d ", iRefList);
-      cRefPics.append( tmp );
-      for( int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++ )
+      if( printFrameMSE )
       {
-        tmp = print("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
+        std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
+        accessUnit.m_cInfo.append( cFrameMSE );
+        msg(NOTICE, cFrameMSE.c_str() );
+      }
+
+      std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
+      accessUnit.m_cInfo.append( cEncTime );
+      msg(NOTICE, cEncTime.c_str() );
+
+      std::string cRefPics;
+      for( int iRefList = 0; iRefList < 2; iRefList++ )
+      {
+        std::string tmp = print(" [L%d ", iRefList);
         cRefPics.append( tmp );
+        for( int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++ )
+        {
+          tmp = print("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
+          cRefPics.append( tmp );
+        }
+        cRefPics.append( "]" );
       }
-      cRefPics.append( "]" );
+      accessUnit.m_cInfo.append( cRefPics );
+      msg(NOTICE, cRefPics.c_str() );
     }
-    accessUnit.m_cInfo.append( cRefPics );
-    msg(NOTICE, cRefPics.c_str() );
   }
 }
 
@@ -1808,31 +1883,34 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnit& accessUnit, cons
   double PSNR_Y;
   xCalculateAddPSNR( &pic, pic.getRecoBuf(), accessUnit, printFrameMSE, &PSNR_Y, isEncodeLtRef );
 
-  std::string modeName;
-  switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
+  if( m_pcRateCtrl->rcIsFinalPass )
   {
-    case HASHTYPE_MD5:
-      modeName = "MD5";
-      break;
-    case HASHTYPE_CRC:
-      modeName = "CRC";
-      break;
-    case HASHTYPE_CHECKSUM:
-      modeName = "Checksum";
-      break;
-    default:
-      break;
-  }
-
-  if ( modeName.length() )
-  {
-    if ( digestStr.empty() )
+    std::string modeName;
+    switch ( m_pcEncCfg->m_decodedPictureHashSEIType )
     {
-      msg( NOTICE, " [%s:%s]", modeName.c_str(), "?" );
+      case HASHTYPE_MD5:
+        modeName = "MD5";
+        break;
+      case HASHTYPE_CRC:
+        modeName = "CRC";
+        break;
+      case HASHTYPE_CHECKSUM:
+        modeName = "Checksum";
+        break;
+      default:
+        break;
     }
-    else
+
+    if ( modeName.length() )
     {
-      msg( NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
+      if ( digestStr.empty() )
+      {
+        msg( NOTICE, " [%s:%s]", modeName.c_str(), "?" );
+      }
+      else
+      {
+        msg( NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
+      }
     }
   }
 

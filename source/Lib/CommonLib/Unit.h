@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 /** \file     Unit.h
  *  \brief    defines unit as a set of blocks and basic unit types (coding, prediction, transform)
  */
@@ -284,10 +288,51 @@ struct UnitAreaRelative : public UnitArea
 namespace vvenc {
 
 struct TransformUnit;
-struct PredictionUnit;
 class  CodingStructure;
 
-struct CodingUnit : public UnitArea
+
+// ---------------------------------------------------------------------------
+// prediction unit
+// ---------------------------------------------------------------------------
+
+struct IntraPredictionData
+{
+  uint8_t  intraDir[MAX_NUM_CH];
+  uint8_t  multiRefIdx;
+  bool     mipTransposedFlag;
+};
+
+struct InterPredictionData
+{
+  InterPredictionData() : mvdL0SubPu(nullptr) {}
+
+  bool        mergeFlag;
+  bool        regularMergeFlag;
+  bool        ciip;
+  bool        mvRefine;
+  bool        mmvdMergeFlag;
+  uint8_t     mergeIdx;
+  uint8_t     geoSplitDir;
+  uint8_t     geoMergeIdx0;
+  uint8_t     geoMergeIdx1;
+  uint8_t     interDir;
+  uint8_t     mcControl; // mmvd(bio), luma/chroma
+  uint32_t    mmvdMergeIdx;
+  MergeType   mergeType;
+  Mv*         mvdL0SubPu;
+
+  uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
+  uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
+  Mv          mvd     [NUM_REF_PIC_LIST_01];
+  Mv          mv      [NUM_REF_PIC_LIST_01];
+  int16_t     refIdx  [NUM_REF_PIC_LIST_01];
+  Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
+  Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
+};
+
+
+
+struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPredictionData
 {
   CodingStructure*  cs;
   Slice*            slice;
@@ -308,108 +353,36 @@ struct CodingUnit : public UnitArea
   ModeTypeSeries    modeTypeSeries;
   bool              skip;
   bool              mmvdSkip;
-  bool              affine;
-  int               affineType;
   bool              colorTransform;
   bool              geo;
-  int               bdpcmMode;
-  int               bdpcmModeChroma;
-  uint8_t           imv;
   bool              rootCbf;
-  uint8_t           sbtInfo;
-  uint32_t          tileIdx;
-  uint8_t           mtsFlag;
-  uint32_t          lfnstIdx;
-  uint8_t           BcwIdx;
-  int               refIdxBi[2];
   bool              mipFlag;
-
-  // needed for fast imv mode decisions
+  bool              affine;
+  uint8_t           affineType;
+  uint8_t           imv;
+  uint8_t           sbtInfo;
+  uint8_t           mtsFlag;
+  uint8_t           lfnstIdx;
+  uint8_t           BcwIdx;
   int8_t            imvNumCand;
   uint8_t           smvdMode;
   uint8_t           ispMode;
+  uint8_t           bdpcmM[MAX_NUM_CH];
+  uint32_t          tileIdx;
 
-  CodingUnit() : chType( CH_L ) { }
+  // needed for fast imv mode decisions
+
+  CodingUnit() : chType( CH_L ) {}
   CodingUnit(const UnitArea& unit);
   CodingUnit(const ChromaFormat _chromaFormat, const Area& area);
 
-  CodingUnit& operator=( const CodingUnit& other );
-
   void initData();
+  void initPuData();
 
-  unsigned    idx;
-  CodingUnit *next;
-
-  PredictionUnit *pu;
-
-  TransformUnit *firstTU;
-  TransformUnit *lastTU;
-
-  uint8_t     checkAllowedSbt()     const;
-  bool        checkCCLMAllowed()    const;
-  bool        isSepTree()           const;
-  bool        isLocalSepTree()      const;
-  bool        isConsInter()         const { return modeType == MODE_TYPE_INTER; }
-  bool        isConsIntra()         const { return modeType == MODE_TYPE_INTRA; }
-};
-
-// ---------------------------------------------------------------------------
-// prediction unit
-// ---------------------------------------------------------------------------
-
-struct IntraPredictionData
-{
-  uint32_t  intraDir[MAX_NUM_CH];
-  int       multiRefIdx;
-  bool      mipTransposedFlag;
-};
-
-struct InterPredictionData
-{
-  InterPredictionData() : mvdL0SubPu(mvdL0SubPuBuffer) {}
-  bool        mergeFlag;
-  bool        regularMergeFlag;
-  bool        ciip;
-  bool        mvRefine;
-  uint8_t     mergeIdx;
-  uint8_t     geoSplitDir;
-  uint8_t     geoMergeIdx0;
-  uint8_t     geoMergeIdx1;
-  uint32_t    mmvdMergeIdx;
-  bool        mmvdMergeFlag;
-  uint8_t     interDir;
-  uint8_t     mcControl; // mmvd(bio), luma/chroma
-
-  uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
-  uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
-  Mv          mvd     [NUM_REF_PIC_LIST_01];
-  Mv          mv      [NUM_REF_PIC_LIST_01];
-  int16_t     refIdx  [NUM_REF_PIC_LIST_01];
-  MergeType   mergeType;
-  Mv*         mvdL0SubPu;
-  Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
-  Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
-  Mv          mvdL0SubPuBuffer[MAX_NUM_SUBCU_DMVR];
-};
-
-struct PredictionUnit : public UnitArea, public IntraPredictionData, public InterPredictionData
-{
-  CodingUnit*      cu;
-  CodingStructure* cs;
-  ChannelType      chType;
-
-  unsigned        idx;
-
-  // constructors
-  PredictionUnit  (): chType( CH_L ) { }
-  PredictionUnit  ( const UnitArea& unit);
-  PredictionUnit  ( const ChromaFormat _chromaFormat, const Area& area);
-
-  void initData   ();
-
-  PredictionUnit& operator= ( const PredictionUnit& other);
-  PredictionUnit& operator= ( const MotionInfo& mi);
-
+  CodingUnit& operator= ( const CodingUnit& other );
+  CodingUnit& operator= ( const InterPredictionData& other);
+  CodingUnit& operator= ( const IntraPredictionData& other);
+  CodingUnit& operator= ( const MotionInfo& mi);
 
   // for accessing motion information, which can have higher resolution than PUs (should always be used, when accessing neighboring motion information)
   const MotionInfo& getMotionInfo () const;
@@ -417,6 +390,12 @@ struct PredictionUnit : public UnitArea, public IntraPredictionData, public Inte
   MotionBuf         getMotionBuf  ();
   CMotionBuf        getMotionBuf  () const;
 
+
+  unsigned       idx;
+  CodingUnit*    next;
+
+  TransformUnit* firstTU;
+  TransformUnit* lastTU;
 };
 
 // ---------------------------------------------------------------------------
@@ -445,7 +424,7 @@ struct TransformUnit : public UnitArea
   TransformUnit                           ( const UnitArea& unit);
   TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area);
   void          initData                  ();
-  void          init                      ( TCoeff **coeffs, Pel** pcmbuf, bool** runType);
+  void          init                      ( TCoeff **coeffs);
 
   TransformUnit& operator=                ( const TransformUnit& other);
   void          copyComponentFrom         ( const TransformUnit& other, const ComponentID compID);
@@ -456,7 +435,7 @@ struct TransformUnit : public UnitArea
 const CCoeffBuf getCoeffs                 ( ComponentID id) const { return CCoeffBuf(m_coeffs[id], blocks[id]); }
 
 private:
-  TCoeff *m_coeffs[ MAX_NUM_TBLOCKS ];
+  TCoeff* m_coeffs[ MAX_NUM_TBLOCKS ];
 };
 
 // ---------------------------------------------------------------------------

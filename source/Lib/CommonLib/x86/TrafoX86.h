@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 /** \file     TrafoX86.h
     \brief    SIMD averaging.
 */
@@ -344,6 +348,25 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
+        
+        __m256i vsrcarr[2][4];
+          
+        for( int k = 0; k < trSize; k += 16 )
+        {
+          __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[k + 0] );
+          __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[k + 8] );
+          __m256i vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
+          vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+          vsrcarr[0][k >> 4] = vsrc;
+          
+          vsrc0 = _mm256_load_si256( ( const __m256i* ) &src[k + 0 + trSize] );
+          vsrc1 = _mm256_load_si256( ( const __m256i* ) &src[k + 8 + trSize] );
+          vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
+          vsrc  = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+
+          vsrcarr[1][k >> 4] = vsrc;
+        }
 
         for( int j = 0; j < cutoff; j += 4 )
         {
@@ -363,28 +386,25 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
 #if 0
 #if defined( _MSC_VER ) && _MSC_VER > 1900
-            __m256i vit0  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m256i vit1  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m256i vit2  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m256i vit3  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m256i vit0  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 0 * trSize] );
+            __m256i vit1  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 1 * trSize] );
+            __m256i vit2  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 2 * trSize] );
+            __m256i vit3  = _mm256_stream_load_si256( ( const __m256i* ) &itPtr[k + 3 * trSize] );
 #else
-            __m256i vit0  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m256i vit1  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m256i vit2  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m256i vit3  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m256i vit0  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 0 * trSize] );
+            __m256i vit1  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 1 * trSize] );
+            __m256i vit2  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 2 * trSize] );
+            __m256i vit3  = _mm256_stream_load_si256( (       __m256i* ) &itPtr[k + 3 * trSize] );
 #endif
 #else
-            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m256i vit0  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 0 * trSize] );
+            __m256i vit1  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 1 * trSize] );
+            __m256i vit2  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 2 * trSize] );
+            __m256i vit3  = _mm256_load_si256( ( const __m256i* ) &itPtr[k + 3 * trSize] );
 #endif
-            // first source line
-            __m256i vsrc0 = _mm256_load_si256( ( const __m256i* ) &src  [k + 0] );
-            __m256i vsrc1 = _mm256_load_si256( ( const __m256i* ) &src  [k + 8] );
 
-            __m256i vsrc  = _mm256_packs_epi32( vsrc0, vsrc1 );
-            vsrc = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+            // first source line
+            __m256i vsrc  = vsrcarr[0][k >> 4];
 
             __m256i
             vtmp   = _mm256_madd_epi16( vit0,   vsrc );
@@ -398,13 +418,8 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
           
             vtmp   = _mm256_madd_epi16( vit3,   vsrc );
             vsum03 = _mm256_add_epi32 ( vsum03, vtmp );
-          
-            // second source line
-            vsrc0  = _mm256_load_si256( ( const __m256i* ) &src[k + 0 + trSize] );
-            vsrc1  = _mm256_load_si256( ( const __m256i* ) &src[k + 8 + trSize] );
-
-            vsrc   = _mm256_packs_epi32( vsrc0, vsrc1 );
-            vsrc   = _mm256_permute4x64_epi64( vsrc, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
+     
+            vsrc  = vsrcarr[1][k >> 4];
           
             vtmp   = _mm256_madd_epi16( vit0,   vsrc );
             vsum10 = _mm256_add_epi32 ( vsum10, vtmp );
@@ -470,6 +485,27 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
+        
+#if USE_AVX2
+        __m128i vsrcarr[2][1];
+#else
+        __m128i vsrcarr[2][8];
+#endif
+          
+        for( int k = 0; k < trSize; k += 8 )
+        {
+          __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0] );
+          __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4] );
+          __m128i vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+
+          vsrcarr[0][k >> 3] = vsrc;
+          
+          vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0 + trSize] );
+          vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4 + trSize] );
+          vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+
+          vsrcarr[1][k >> 3] = vsrc;
+        }
 
         for( int j = 0; j < cutoff; j += 4 )
         {
@@ -489,27 +525,25 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
   #if 0
   #if defined( _MSC_VER ) && _MSC_VER > 1900
-            __m128i vit0  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m128i vit1  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m128i vit2  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m128i vit3  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m128i vit0  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 0 * trSize] );
+            __m128i vit1  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 1 * trSize] );
+            __m128i vit2  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 2 * trSize] );
+            __m128i vit3  = _mm_stream_load_si128( ( const __m128i* ) &itPtr[k + 3 * trSize] );
   #else
-            __m128i vit0  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m128i vit1  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m128i vit2  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m128i vit3  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m128i vit0  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 0 * trSize] );
+            __m128i vit1  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 1 * trSize] );
+            __m128i vit2  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 2 * trSize] );
+            __m128i vit3  = _mm_stream_load_si128( (       __m128i* ) &itPtr[k + 3 * trSize] );
   #endif
   #else
-            __m128i vit0  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 0 * trSize] );
-            __m128i vit1  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 1 * trSize] );
-            __m128i vit2  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 2 * trSize] );
-            __m128i vit3  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 + 3 * trSize] );
+            __m128i vit0  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 0 * trSize] );
+            __m128i vit1  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 1 * trSize] );
+            __m128i vit2  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 2 * trSize] );
+            __m128i vit3  = _mm_load_si128( ( const __m128i* ) &itPtr[k + 3 * trSize] );
   #endif
-            // first source line
-            __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src  [k + 0] );
-            __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src  [k + 4] );
-
-            __m128i vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+            
+            // fist source line
+            __m128i vsrc  = vsrcarr[0][k >> 3];
 
             __m128i
             vtmp   = _mm_madd_epi16( vit0,   vsrc );
@@ -525,10 +559,7 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
             vsum03 = _mm_add_epi32 ( vsum03, vtmp );
           
             // second source line
-            vsrc0 = _mm_load_si128( ( const __m128i* ) &src[k + 0 + trSize] );
-            vsrc1 = _mm_load_si128( ( const __m128i* ) &src[k + 4 + trSize] );
-
-            vsrc  = _mm_packs_epi32( vsrc0, vsrc1 );
+            vsrc   = vsrcarr[1][k >> 3];
           
             vtmp   = _mm_madd_epi16( vit0,   vsrc );
             vsum10 = _mm_add_epi32 ( vsum10, vtmp );

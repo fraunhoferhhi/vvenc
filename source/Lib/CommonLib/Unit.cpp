@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     Unit.cpp
@@ -248,8 +252,8 @@ const UnitArea UnitArea::singleChan(const ChannelType chType) const
 // coding unit method definitions
 // ---------------------------------------------------------------------------
 
-CodingUnit::CodingUnit(const UnitArea& unit)                                : UnitArea(unit),                 cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), pu(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); }
-CodingUnit::CodingUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), pu(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); }
+CodingUnit::CodingUnit(const UnitArea& unit)                                : UnitArea(unit),                 cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); }
+CodingUnit::CodingUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cs(nullptr), slice(nullptr), chType( CH_L ), next(nullptr), firstTU(nullptr), lastTU(nullptr) { initData(); initPuData(); }
 
 CodingUnit& CodingUnit::operator=( const CodingUnit& other )
 {
@@ -267,8 +271,8 @@ CodingUnit& CodingUnit::operator=( const CodingUnit& other )
   colorTransform    = other.colorTransform;
   geo               = other.geo;
   geo               = other.geo;
-  bdpcmMode         = other.bdpcmMode;
-  bdpcmModeChroma   = other.bdpcmModeChroma;
+  bdpcmM[CH_L]      = other.bdpcmM[CH_L];
+  bdpcmM[CH_C]      = other.bdpcmM[CH_C];
   qp                = other.qp;
   chromaQpAdj       = other.chromaQpAdj;
   rootCbf           = other.rootCbf;
@@ -279,8 +283,6 @@ CodingUnit& CodingUnit::operator=( const CodingUnit& other )
   imv               = other.imv;
   imvNumCand        = other.imvNumCand;
   BcwIdx            = other.BcwIdx;
-  refIdxBi[0]       = other.refIdxBi[0];
-  refIdxBi[1]       = other.refIdxBi[1];
 
   smvdMode          = other.smvdMode;
   ispMode           = other.ispMode;
@@ -289,6 +291,12 @@ CodingUnit& CodingUnit::operator=( const CodingUnit& other )
   treeType          = other.treeType;
   modeType          = other.modeType;
   modeTypeSeries    = other.modeTypeSeries;
+
+  const IntraPredictionData& ipd = other;
+  *this = ipd;
+
+  const InterPredictionData& tpd = other;
+  *this = tpd;
   return *this;
 }
 
@@ -306,8 +314,8 @@ void CodingUnit::initData()
   affineType        = 0;
   colorTransform    = false;
   geo               = false;
-  bdpcmMode         = 0;
-  bdpcmModeChroma   = 0;
+  bdpcmM[CH_L]      = 0;
+  bdpcmM[CH_C]      = 0;
   qp                = 0;
   chromaQpAdj       = 0;
   rootCbf           = true;
@@ -318,8 +326,6 @@ void CodingUnit::initData()
   imv               = 0;
   imvNumCand        = 0;
   BcwIdx            = BCW_DEFAULT;
-  refIdxBi[0]       = -1;
-  refIdxBi[1]       = -1;
   smvdMode          = 0;
   ispMode           = 0;
   mipFlag           = false;
@@ -330,151 +336,44 @@ void CodingUnit::initData()
 }
 
 
-bool CodingUnit::isSepTree() const
-{
-  return treeType != TREE_D || CS::isDualITree( *cs );
-}
-
-bool CodingUnit::isLocalSepTree() const
-{
-  return treeType != TREE_D && !CS::isDualITree(*cs);
-}
-
-bool CodingUnit::checkCCLMAllowed() const
-{
-  bool allowCCLM = false;
-
-  if( !CS::isDualITree( *cs ) ) //single tree I slice or non-I slice (Note: judging chType is no longer equivalent to checking dual-tree I slice since the local dual-tree is introduced)
-  {
-    allowCCLM = true;
-  }
-  else if( slice->sps->CTUSize <= 32 ) //dual tree, CTUsize < 64
-  {
-    allowCCLM = true;
-  }
-  else //dual tree, CTU size 64 or 128
-  {
-    int depthFor64x64Node = slice->sps->CTUSize == 128 ? 1 : 0;
-    const PartSplit cuSplitTypeDepth1 = CU::getSplitAtDepth( *this, depthFor64x64Node );
-    const PartSplit cuSplitTypeDepth2 = CU::getSplitAtDepth( *this, depthFor64x64Node + 1 );
-
-    //allow CCLM if 64x64 chroma tree node uses QT split or HBT+VBT split combination
-    if( cuSplitTypeDepth1 == CU_QUAD_SPLIT || (cuSplitTypeDepth1 == CU_HORZ_SPLIT && cuSplitTypeDepth2 == CU_VERT_SPLIT) )
-    {
-      if( chromaFormat == CHROMA_420 )
-      {
-        CHECK( !(blocks[COMP_Cb].width <= 16 && blocks[COMP_Cb].height <= 16), "chroma cu size shall be <= 16x16 for YUV420 format" );
-      }
-      allowCCLM = true;
-    }
-    //allow CCLM if 64x64 chroma tree node uses NS (No Split) and becomes a chroma CU containing 32x32 chroma blocks
-    else if( cuSplitTypeDepth1 == CU_DONT_SPLIT )
-    {
-      if( chromaFormat == CHROMA_420 )
-      {
-        CHECK( !(blocks[COMP_Cb].width == 32 && blocks[COMP_Cb].height == 32), "chroma cu size shall be 32x32 for YUV420 format" );
-      }
-      allowCCLM = true;
-    }
-    //allow CCLM if 64x32 chroma tree node uses NS and becomes a chroma CU containing 32x16 chroma blocks
-    else if( cuSplitTypeDepth1 == CU_HORZ_SPLIT && cuSplitTypeDepth2 == CU_DONT_SPLIT )
-    {
-      if( chromaFormat == CHROMA_420 )
-      {
-        CHECK( !(blocks[COMP_Cb].width == 32 && blocks[COMP_Cb].height == 16), "chroma cu size shall be 32x16 for YUV420 format" );
-      }
-      allowCCLM = true;
-    }
-
-    //further check luma conditions
-    if( allowCCLM )
-    {
-      //disallow CCLM if luma 64x64 block uses BT or TT or NS with ISP
-      const Position lumaRefPos( chromaPos().x << getComponentScaleX( COMP_Cb, chromaFormat ), chromaPos().y << getComponentScaleY( COMP_Cb, chromaFormat ) );
-      const CodingUnit* colLumaCu = cs->refCS->getCU( lumaRefPos, CH_L, TREE_D );
-
-      if( colLumaCu->lwidth() < 64 || colLumaCu->lheight() < 64 ) //further split at 64x64 luma node
-      {
-        const PartSplit cuSplitTypeDepth1Luma = CU::getSplitAtDepth( *colLumaCu, depthFor64x64Node );
-        CHECK( !(cuSplitTypeDepth1Luma >= CU_QUAD_SPLIT && cuSplitTypeDepth1Luma <= CU_TRIV_SPLIT), "split mode shall be BT, TT or QT" );
-        if( cuSplitTypeDepth1Luma != CU_QUAD_SPLIT )
-        {
-          allowCCLM = false;
-        }
-      }
-      else if( colLumaCu->lwidth() == 64 && colLumaCu->lheight() == 64 && colLumaCu->ispMode ) //not split at 64x64 luma node and use ISP mode
-      {
-        allowCCLM = false;
-      }
-    }
-  }
-
-  return allowCCLM;
-}
-
-uint8_t CodingUnit::checkAllowedSbt() const
-{
-  if( !slice->sps->SBT || predMode != MODE_INTER || pu->ciip)
-  {
-    return 0;
-  }
-
-  const int cuWidth  = lwidth();
-  const int cuHeight = lheight();
-
-  //parameter
-  const int maxSbtCUSize = cs->sps->getMaxTbSize();
-
-  //check on size
-  if( cuWidth > maxSbtCUSize || cuHeight > maxSbtCUSize )
-  {
-    return 0;
-  }
-
-  const int minSbtCUSize  = 1 << ( MIN_CU_LOG2 + 1 );
-  const int minQuadCUSize = 1 << ( MIN_CU_LOG2 + 2 );
-
-  uint8_t sbtAllowed = 0;
-  if( cuWidth  >= minSbtCUSize )  sbtAllowed += 1 << SBT_VER_HALF;
-  if( cuHeight >= minSbtCUSize )  sbtAllowed += 1 << SBT_HOR_HALF;
-  if( cuWidth  >= minQuadCUSize ) sbtAllowed += 1 << SBT_VER_QUAD;
-  if( cuHeight >= minQuadCUSize ) sbtAllowed += 1 << SBT_HOR_QUAD;
-
-  return sbtAllowed;
-}
 
 
 // ---------------------------------------------------------------------------
 // prediction unit method definitions
 // ---------------------------------------------------------------------------
 
-PredictionUnit::PredictionUnit(const UnitArea& unit)                                : UnitArea(unit)                , cu(nullptr), cs(nullptr), chType( CH_L ) { initData(); }
-PredictionUnit::PredictionUnit(const ChromaFormat _chromaFormat, const Area& _area) : UnitArea(_chromaFormat, _area), cu(nullptr), cs(nullptr), chType( CH_L ) { initData(); }
-
-void PredictionUnit::initData()
+void CodingUnit::initPuData()
 {
   // intra data - need this default initialization for PCM
   intraDir[0]       = DC_IDX;
   intraDir[1]       = PLANAR_IDX;
-  mipTransposedFlag = false;
   multiRefIdx       = 0;
+  mipTransposedFlag = false;
 
   // inter data
   mergeFlag         = false;
   regularMergeFlag  = false;
+  ciip              = false;
+  mvRefine          = false;
+  mmvdMergeFlag     = false;
   mergeIdx          = MAX_UCHAR;
   geoSplitDir       = MAX_UCHAR;
   geoMergeIdx0      = MAX_UCHAR;
   geoMergeIdx1      = MAX_UCHAR;
-  mmvdMergeFlag     = false;
-  mmvdMergeIdx      = MAX_UINT;
-  interDir          = MAX_UCHAR;
-  mergeType         = MRG_TYPE_DEFAULT_N;
-  mvRefine          = false;
 
-  for (uint32_t i = 0; i < MAX_NUM_SUBCU_DMVR; i++)
+  mcControl         = 0;
+
+  interDir          = MAX_UCHAR;
+  mmvdMergeIdx      = MAX_UINT;
+  mergeType         = MRG_TYPE_DEFAULT_N;
+
+  if( mvdL0SubPu )
   {
-    mvdL0SubPu[i].setZero();
+    int maxDmvrMvds = std::max<int>( 1, lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, lheight() >> DMVR_SUBCU_SIZE_LOG2 );
+    for (uint32_t i = 0; i < maxDmvrMvds; i++)
+    {
+      mvdL0SubPu[i].setZero();
+    }
   }
 
   for (uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++)
@@ -482,8 +381,8 @@ void PredictionUnit::initData()
     mvpIdx[i] = MAX_UCHAR;
     mvpNum[i] = MAX_UCHAR;
     refIdx[i] = -1;
-    mv[i]     .setZero();
     mvd[i]    .setZero();
+    mv[i]     .setZero();
     for( uint32_t j = 0; j < 3; j++ )
     {
       mvdAffi[i][j].setZero();
@@ -493,12 +392,9 @@ void PredictionUnit::initData()
       mvAffi[i][j].setZero();
     }
   }
-
-  mcControl = 0;
-  ciip      = false;
 }
 
-PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
+CodingUnit& CodingUnit::operator=( const IntraPredictionData& other )
 {
   for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
   {
@@ -506,6 +402,11 @@ PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
   }
   mipTransposedFlag = other.mipTransposedFlag;
   multiRefIdx       = other.multiRefIdx;
+  return *this;
+}
+
+CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
+{
   mergeFlag         = other.mergeFlag;
   regularMergeFlag  = other.regularMergeFlag;
   mergeIdx          = other.mergeIdx;
@@ -518,12 +419,11 @@ PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
   mergeType         = other.mergeType;
   mvRefine          = other.mvRefine;
 
-  if( other.mergeFlag )
+  if( other.mergeFlag && mvdL0SubPu )
   {
-    for (uint32_t i = 0; i < MAX_NUM_SUBCU_DMVR; i++)
-    {
-      mvdL0SubPu[i] = other.mvdL0SubPu[i];
-    }
+    const int maxDmvrMvds = std::max<int>( 1, lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, lheight() >> DMVR_SUBCU_SIZE_LOG2 );
+    
+    memcpy( mvdL0SubPu, other.mvdL0SubPu, sizeof( Mv ) * maxDmvrMvds );
   }
 
   for (uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++)
@@ -546,7 +446,7 @@ PredictionUnit& PredictionUnit::operator=( const PredictionUnit& other )
   return *this;
 }
 
-PredictionUnit& PredictionUnit::operator=( const MotionInfo& mi )
+CodingUnit& CodingUnit::operator=( const MotionInfo& mi )
 {
   interDir = mi.interDir;
 
@@ -559,23 +459,23 @@ PredictionUnit& PredictionUnit::operator=( const MotionInfo& mi )
   return *this;
 }
 
-const MotionInfo& PredictionUnit::getMotionInfo() const
+const MotionInfo& CodingUnit::getMotionInfo() const
 {
   return cs->getMotionInfo( lumaPos() );
 }
 
-const MotionInfo& PredictionUnit::getMotionInfo( const Position& pos ) const
+const MotionInfo& CodingUnit::getMotionInfo( const Position& pos ) const
 {
   CHECKD( !Y().contains( pos ), "Trying to access motion info outsied of PU" );
   return cs->getMotionInfo( pos );
 }
 
-MotionBuf PredictionUnit::getMotionBuf()
+MotionBuf CodingUnit::getMotionBuf()
 {
   return cs->getMotionBuf( *this );
 }
 
-CMotionBuf PredictionUnit::getMotionBuf() const
+CMotionBuf CodingUnit::getMotionBuf() const
 {
   return cs->getMotionBuf( *this );
 }
@@ -619,7 +519,7 @@ void TransformUnit::initData()
   chromaAdj   = 0;
 }
 
-void TransformUnit::init(TCoeff** coeffs, Pel** pcmbuf, bool** runType)
+void TransformUnit::init(TCoeff** coeffs)
 {
   uint32_t numBlocks = getNumberValidTBlocks(*cs->pcv);
 

@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     EncLib.cpp
@@ -47,7 +51,7 @@ vvc@hhi.fraunhofer.de
 
 #include "EncLib.h"
 
-#include "../../../include/vvenc/EncoderIf.h"
+#include "vvenc/EncoderIf.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
@@ -65,30 +69,40 @@ namespace vvenc {
 // ====================================================================================================================
 
 EncLib::EncLib()
-  : m_numPicsRcvd   ( 0 )
-  , m_numPicsInQueue( 0 )
-  , m_numPicsCoded  ( 0 )
-  , m_pocEncode     ( -1 )
-  , m_pocRecOut     ( 0 )
+  : m_cGOPEncoder   ( nullptr )
   , m_yuvWriterIf   ( nullptr )
- , m_threadPool     ( nullptr )
+  , m_threadPool    ( nullptr )
   , m_spsMap        ( MAX_NUM_SPS )
   , m_ppsMap        ( MAX_NUM_PPS )
-  , m_GOPSizeLog2   ( -1 )
-  , m_TicksPerFrameMul4 ( 0 )
 {
+  xResetLib();
 }
 
 EncLib::~EncLib()
 {
 }
 
-void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
+void EncLib::xResetLib()
+{
+  m_numPicsRcvd       = 0;
+  m_numPicsInQueue    = 0;
+  m_numPicsCoded      = 0;
+  m_pocEncode         = -1;
+  m_pocRecOut         = 0;
+  m_GOPSizeLog2       = -1;
+  m_TicksPerFrameMul4 = 0;
+}
+
+void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 {
   // copy config parameter
   const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
+  m_cBckCfg.setCfgParameter( encCfg );
 
   m_yuvWriterIf = yuvWriterIf;
+
+  // initialize first pass
+  initPass( 0 );
 
 #if ENABLE_TRACING
   g_trace_ctx = tracing_init( m_cEncCfg.m_traceFile, m_cEncCfg.m_traceRule );
@@ -99,73 +113,6 @@ void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
     msg( INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
   }
 #endif
-
-  // setup parameter sets
-  const int dciId = m_cEncCfg.m_decodingParameterSetEnabled ? 1 : 0;
-  SPS& sps0       = *( m_spsMap.allocatePS(0) ); // NOTE: implementations that use more than 1 SPS need to be aware of activation issues.
-  PPS& pps0       = *( m_ppsMap.allocatePS(0) );
-
-  xInitSPS( sps0 );
-  sps0.dciId = m_cDCI.dciId;
-  xInitVPS( m_cVPS );
-  xInitDCI( m_cDCI, sps0, dciId );
-  xInitPPS( pps0, sps0 );
-  xInitRPL( sps0 );
-
-  if ( encCfg.m_numWppThreads > 0 )
-  {
-    const int maxCntEnc = ( encCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, encCfg.m_numWppThreads) : 1;
-    m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
-  }
-
-  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
-               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
-               m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
-               m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
-
-  m_cGOPEncoder.init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_threadPool );
-
-  m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
-  m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
-  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
-  {
-    const int poc = m_cEncCfg.m_GOPList[ i ].m_POC % m_cEncCfg.m_GOPSize;
-    CHECK( m_cEncCfg.m_GOPList[ i ].m_POC > m_cEncCfg.m_GOPSize, "error: poc greater than gop size" );
-    CHECK( m_pocToGopId[ poc ] != -1, "error: multiple entries in gop list map to same poc modulo gop size" );
-    m_pocToGopId[ poc ] = i;
-    const int nextGopNum = ( i + 1 ) / m_cEncCfg.m_GOPSize;
-    const int nextGopId  = ( i + 1 ) % m_cEncCfg.m_GOPSize;
-    const int nextPoc    = nextGopNum * m_cEncCfg.m_GOPSize + m_cEncCfg.m_GOPList[ nextGopId ].m_POC;
-    m_nextPocOffset[ poc ] = nextPoc - m_cEncCfg.m_GOPList[ i ].m_POC;
-  }
-  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
-  {
-    CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
-  }
-
-  if ( encCfg.m_RCRateControlMode )
-  {
-    m_cRateCtrl.init( encCfg.m_RCRateControlMode, encCfg.m_framesToBeEncoded, encCfg.m_RCTargetBitrate, (int)( (double)encCfg.m_FrameRate / encCfg.m_temporalSubsampleRatio + 0.5 ), encCfg.m_IntraPeriod, encCfg.m_GOPSize, encCfg.m_SourceWidth, encCfg.m_SourceHeight,
-      encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_internalBitDepth[ CH_L ], encCfg.m_RCKeepHierarchicalBit, encCfg.m_RCUseLCUSeparateModel, encCfg.m_GOPList );
-  }
-
-  int iOffset = -1;
-  while((1<<(++iOffset)) < m_cEncCfg.m_GOPSize);
-  m_GOPSizeLog2 = iOffset;
-
-  if( m_cEncCfg.m_FrameRate )
-  {
-    int iTempRate = m_cEncCfg.m_FrameRate;
-    int iTempScale = 1;
-    switch( m_cEncCfg.m_FrameRate )
-    {
-    case 23: iTempRate = 24000; iTempScale = 1001; break;
-    case 29: iTempRate = 30000; iTempScale = 1001; break;
-    case 59: iTempRate = 60000; iTempScale = 1001; break;
-    default: break;
-    }
-    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
-  }
 
 #if ENABLE_TIME_PROFILING
   if( g_timeProfiler == nullptr )
@@ -188,10 +135,16 @@ void EncLib::init( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 #endif
 }
 
-void EncLib::destroy()
+void EncLib::uninitEncoderLib()
 {
-  m_MCTF.uninit();
-  m_cRateCtrl.destroy();
+  xUninitLib();
+
+#if ENABLE_TRACING
+  if ( g_trace_ctx )
+  {
+    tracing_uninit( g_trace_ctx );
+  }
+#endif
 
 #if ENABLE_CU_MODE_COUNTERS
   std::cout << std::endl;
@@ -262,23 +215,160 @@ void EncLib::destroy()
     g_timeProfiler = nullptr;
   }
 #endif
+}
 
-  if ( m_threadPool )
+void EncLib::initPass( int pass )
+{
+  xUninitLib();
+
+  // set rate control pass
+  m_cRateCtrl.setRCPass( pass, m_cEncCfg.m_RCNumPasses - 1 );
+
+  // modify encoder config based on rate control pass
+  if( m_cEncCfg.m_RCNumPasses > 1 )
+  {
+    xSetRCEncCfg( pass );
+  }
+
+  // setup parameter sets
+  const int dciId = m_cEncCfg.m_decodingParameterSetEnabled ? 1 : 0;
+  SPS& sps0       = *( m_spsMap.allocatePS( 0 ) ); // NOTE: implementations that use more than 1 SPS need to be aware of activation issues.
+  PPS& pps0       = *( m_ppsMap.allocatePS( 0 ) );
+
+  xInitSPS( sps0 );
+  sps0.dciId = m_cDCI.dciId;
+  xInitVPS( m_cVPS );
+  xInitDCI( m_cDCI, sps0, dciId );
+  xInitPPS( pps0, sps0 );
+  xInitRPL( sps0 );
+  xInitHrdParameters( sps0 );
+
+  // thread pool
+  if( m_cEncCfg.m_numWppThreads > 0 )
+  {
+    const int maxCntEnc = ( m_cEncCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, m_cEncCfg.m_numWppThreads) : 1;
+    m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
+  }
+
+  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
+               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
+               m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
+               m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
+
+  CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
+  m_cGOPEncoder = new EncGOP;
+  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_cEncHRD, m_threadPool );
+
+  m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
+  m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
+  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
+  {
+    const int poc = m_cEncCfg.m_GOPList[ i ].m_POC % m_cEncCfg.m_GOPSize;
+    CHECK( m_cEncCfg.m_GOPList[ i ].m_POC > m_cEncCfg.m_GOPSize, "error: poc greater than gop size" );
+    CHECK( m_pocToGopId[ poc ] != -1, "error: multiple entries in gop list map to same poc modulo gop size" );
+    m_pocToGopId[ poc ] = i;
+    const int nextGopNum = ( i + 1 ) / m_cEncCfg.m_GOPSize;
+    const int nextGopId  = ( i + 1 ) % m_cEncCfg.m_GOPSize;
+    const int nextPoc    = nextGopNum * m_cEncCfg.m_GOPSize + m_cEncCfg.m_GOPList[ nextGopId ].m_POC;
+    m_nextPocOffset[ poc ] = nextPoc - m_cEncCfg.m_GOPList[ i ].m_POC;
+  }
+  for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
+  {
+    CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
+  }
+
+  if ( m_cEncCfg.m_RCRateControlMode )
+  {
+    m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight,
+      m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
+
+    if ( pass == 1 )
+    {
+      m_cRateCtrl.processFirstPassData();
+      // update first pass data
+      m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
+    }
+  }
+
+  int iOffset = -1;
+  while((1<<(++iOffset)) < m_cEncCfg.m_GOPSize);
+  m_GOPSizeLog2 = iOffset;
+
+  if( m_cEncCfg.m_FrameRate )
+  {
+    int iTempRate = m_cEncCfg.m_FrameRate;
+    int iTempScale = 1;
+    switch( m_cEncCfg.m_FrameRate )
+    {
+    case 23: iTempRate = 24000; iTempScale = 1001; break;
+    case 29: iTempRate = 30000; iTempScale = 1001; break;
+    case 59: iTempRate = 60000; iTempScale = 1001; break;
+    default: break;
+    }
+    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
+  }
+}
+
+void EncLib::xUninitLib()
+{
+
+  // internal picture buffer
+  xDeletePicBuffer();
+
+  // sub modules
+  m_cRateCtrl.destroy();
+  m_nextPocOffset.clear();
+  m_pocToGopId.clear();
+  if( m_cGOPEncoder )
+  {
+    delete m_cGOPEncoder;
+    m_cGOPEncoder = nullptr;
+  }
+  m_MCTF.uninit();
+
+  // thread pool
+  if( m_threadPool )
   {
     m_threadPool->shutdown( true );
     delete m_threadPool;
     m_threadPool = nullptr;
   }
 
-  // internal picture buffer
-  xDeletePicBuffer();
+  // cleanup parameter sets
+  m_spsMap.clearMap();
+  m_ppsMap.clearMap();
 
-#if ENABLE_TRACING
-  if ( g_trace_ctx )
+  // reset internal data
+  xResetLib();
+}
+
+void EncLib::xSetRCEncCfg( int pass )
+{
+  // restore encoder configuration for second rate control passes
+  const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
+
+  // set encoder config for rate control first pass
+  if( ! m_cRateCtrl.rcIsFinalPass )
   {
-    tracing_uninit( g_trace_ctx );
+    // preserve MCTF settings
+    const int mctf = m_cBckCfg.m_MCTF;
+
+    m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
+
+    // use fixQP encoding in first pass
+    m_cBckCfg.m_RCRateControlMode = 0;
+    m_cBckCfg.m_QP                = 32;
+
+    // restore MCTF
+    m_cBckCfg.m_MCTF              = mctf;
+
+    // configure QPA in the first pass
+    m_cBckCfg.m_usePerceptQPA                  = 0; // disable QPA in the first pass
+    m_cBckCfg.m_sliceChromaQpOffsetPeriodicity = 0;
+    m_cBckCfg.m_usePerceptQPATempFiltISlice    = 0;
+
+    std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
   }
-#endif
 }
 
 // ====================================================================================================================
@@ -290,11 +380,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
   // clear output access unit
-  au.m_bCtsValid = false;
-  au.m_bDtsValid = false;
-  au.m_bRAP      = false;
-  au.m_cInfo     = "";
-  au.m_iStatus   = 0;
+  au.clearAu();
 
   // setup picture and store original yuv
   Picture* pic = nullptr;
@@ -329,6 +415,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
 
+      xDetectScreenC(*pic, yuvOrgBuf, m_cEncCfg.m_TS );
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
@@ -377,17 +464,12 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
       au.m_uiCts     = encList[0]->cts;
       au.m_bCtsValid = encList[0]->ctsValid;
 
-      au.m_uiDts = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
+      au.m_uiDts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
       au.m_bDtsValid = true;
-      //assert(  (int64_t)au.m_uiDts < 0 || au.m_uiCts >= au.m_uiDts );
-    }
-    else
-    {
-      assert(0);
     }
 
     // encode picture with current poc
-    m_cGOPEncoder.encodePicture( encList, m_cListPic, au, false );
+    m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
     m_numPicsInQueue -= 1;
     m_numPicsCoded   += 1;
     // output reconstructed yuv
@@ -396,15 +478,21 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
   isQueueEmpty = ( m_numPicsInQueue <= 0 );
 
-  if ( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
+  if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
   {
     m_cRateCtrl.destroyRCGOP();
+  }
+
+  // reset output access unit, if not final pass
+  if( !m_cRateCtrl.rcIsFinalPass )
+  {
+    au.clearAu();
   }
 }
 
 void  EncLib::printSummary()
 {
-  m_cGOPEncoder.printOutSummary( m_numPicsCoded, m_cEncCfg.m_printMSEBasedSequencePSNR, m_cEncCfg.m_printSequenceMSE, m_cEncCfg.m_printHexPsnr, m_spsMap.getFirstPS()->bitDepths );
+  m_cGOPEncoder->printOutSummary( m_numPicsCoded, m_cEncCfg.m_printMSEBasedSequencePSNR, m_cEncCfg.m_printSequenceMSE, m_cEncCfg.m_printHexPsnr, m_spsMap.getFirstPS()->bitDepths );
 }
 
 // ====================================================================================================================
@@ -477,7 +565,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
     m_cListPic.push_back( pic );
   }
 
-  pic->isMctfFiltered    = false;
+  pic->isMctfProcessed   = false;
   pic->isInitDone        = false;
   pic->isReconstructed   = false;
   pic->isBorderExtended  = false;
@@ -510,7 +598,7 @@ void EncLib::xInitPicture( Picture& pic, int picNum, const PPS& pps, const SPS& 
     pic.cs->picHeader = nullptr;
   }
 
-  pic.finalInit( vps, sps, pps, *picHeader, m_shrdUnitCache, mutex, nullptr, nullptr );
+  pic.finalInit( vps, sps, pps, picHeader, m_shrdUnitCache, mutex, nullptr, nullptr );
 
   pic.vps = &vps;
   pic.dci = &dci;
@@ -560,6 +648,8 @@ void EncLib::xDeletePicBuffer()
     delete pic;
     pic = nullptr;
   }
+
+  m_cListPic.clear();
 }
 
 Picture* EncLib::xGetPictureBuffer( int poc )
@@ -584,7 +674,7 @@ void EncLib::xCreateCodingOrder( int start, int max, int numInQueue, bool flush,
   while ( poc < max )
   {
     Picture* pic = xGetPictureBuffer( poc );
-    if ( m_cEncCfg.m_MCTF && ! pic->isMctfFiltered )
+    if ( m_cEncCfg.m_MCTF && ! pic->isMctfProcessed )
     {
       break;
     }
@@ -649,7 +739,6 @@ void EncLib::xInitDCI(DCI &dci, const SPS &sps, const int dciId) const
   // The SPS must have already been set up.
   // set the DPS profile information.
   dci.dciId                 = dciId;
-  dci.maxSubLayersMinus1    = sps.maxTLayers - 1;
 
   dci.profileTierLevel.resize(1);
   // copy profile level tier info
@@ -714,8 +803,8 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noCiipConstraintFlag                         = m_cEncCfg.m_CIIP == 0;
   ci.noGeoConstraintFlag                          = m_cEncCfg.m_Geo == 0;
   ci.noLadfConstraintFlag                         = true;
-  ci.noTransformSkipConstraintFlag                = true;
-  ci.noBDPCMConstraintFlag                        = true;
+  ci.noTransformSkipConstraintFlag                = m_cEncCfg.m_TS == 0;
+  ci.noBDPCMConstraintFlag                        = m_cEncCfg.m_useBDPCM==0;
   ci.noJointCbCrConstraintFlag                    = ! m_cEncCfg.m_JointCbCrMode;
   ci.noMrlConstraintFlag                          = ! m_cEncCfg.m_MRL;
   ci.noIspConstraintFlag                          = true;
@@ -755,6 +844,7 @@ void EncLib::xInitSPS(SPS &sps) const
 
   sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_SourceWidth;
   sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_SourceHeight;
+  sps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
   sps.chromaFormatIdc               = m_cEncCfg.m_internChromaFormat;
   sps.CTUSize                       = m_cEncCfg.m_CTUSize;
   sps.maxMTTDepth[0]                = m_cEncCfg.m_maxMTTDepthI;
@@ -806,6 +896,10 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.depQuantEnabled               = m_cEncCfg.m_DepQuantEnabled;
   sps.signDataHidingEnabled         = m_cEncCfg.m_SignDataHidingEnabled;
   sps.MTSIntra                      = m_cEncCfg.m_MTS ;
+  sps.ISP                           = m_cEncCfg.m_ISP;
+  sps.transformSkip                 = m_cEncCfg.m_TS;
+  sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
+  sps.BDPCM                         = m_cEncCfg.m_useBDPCM;
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {
@@ -828,7 +922,7 @@ void EncLib::xInitSPS(SPS &sps) const
   for (int i = 0; i < std::min(sps.maxTLayers, (uint32_t) MAX_TLAYER); i++ )
   {
     sps.maxDecPicBuffering[i]       = m_cEncCfg.m_maxDecPicBuffering[i];
-    sps.numReorderPics[i]           = m_cEncCfg.m_numReorderPics[i];
+    sps.numReorderPics[i]           = m_cEncCfg.m_maxNumReorderPics[i];
   }
 
   sps.vuiParametersPresent          = m_cEncCfg.m_vuiParametersPresent;
@@ -853,6 +947,8 @@ void EncLib::xInitSPS(SPS &sps) const
     vui.videoFullRangeFlag            = m_cEncCfg.m_videoFullRangeFlag;
   }
 
+  sps.hrdParametersPresent            = m_cEncCfg.m_hrdParametersPresent;
+
   sps.numLongTermRefPicSPS            = NUM_LONG_TERM_REF_PIC_SPS;
   CHECK(!(NUM_LONG_TERM_REF_PIC_SPS <= MAX_NUM_LONG_TERM_REF_PICS), "Unspecified error");
   for (int k = 0; k < NUM_LONG_TERM_REF_PIC_SPS; k++)
@@ -876,13 +972,19 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
     bUseDQP = false;
   }
 
-
   // pps ID already initialised.
   pps.spsId                         = sps.spsId;
   pps.jointCbCrQpOffsetPresent      = m_cEncCfg.m_JointCbCrMode;
   pps.picWidthInLumaSamples         = m_cEncCfg.m_SourceWidth;
   pps.picHeightInLumaSamples        = m_cEncCfg.m_SourceHeight;
-  pps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
+  if( pps.picWidthInLumaSamples == sps.maxPicWidthInLumaSamples && pps.picHeightInLumaSamples == sps.maxPicHeightInLumaSamples )
+  {
+    pps.conformanceWindow           = sps.conformanceWindow;
+  }
+  else
+  {
+    pps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
+  }
 
   pps.picWidthInCtu                 = (pps.picWidthInLumaSamples + (sps.CTUSize-1)) / sps.CTUSize;
   pps.picHeightInCtu                = (pps.picHeightInLumaSamples + (sps.CTUSize-1)) / sps.CTUSize;
@@ -982,9 +1084,9 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   if( chromaArrayType != CHROMA_400  )
   {
     bool chromaQPOffsetNotZero = ( pps.chromaQpOffset[COMP_Cb] != 0 || pps.chromaQpOffset[COMP_Cr] != 0 || pps.jointCbCrQpOffsetPresent || pps.sliceChromaQpFlag || pps.chromaQpOffsetListLen );
-    bool chromaDbfOffsetNotAsLuma = ( pps.deblockingFilterBetaOffsetDiv2[COMP_Cb] != pps.deblockingFilterBetaOffsetDiv2[COMP_Y] 
+    bool chromaDbfOffsetNotAsLuma = ( pps.deblockingFilterBetaOffsetDiv2[COMP_Cb] != pps.deblockingFilterBetaOffsetDiv2[COMP_Y]
                                    || pps.deblockingFilterBetaOffsetDiv2[COMP_Cr] != pps.deblockingFilterBetaOffsetDiv2[COMP_Y]
-                                   || pps.deblockingFilterTcOffsetDiv2[COMP_Cb] != pps.deblockingFilterTcOffsetDiv2[COMP_Y]  
+                                   || pps.deblockingFilterTcOffsetDiv2[COMP_Cb] != pps.deblockingFilterTcOffsetDiv2[COMP_Y]
                                    || pps.deblockingFilterTcOffsetDiv2[COMP_Cr] != pps.deblockingFilterTcOffsetDiv2[COMP_Y]);
     pps.usePPSChromaTool = chromaQPOffsetNotZero || chromaDbfOffsetNotAsLuma;
   }
@@ -1079,7 +1181,7 @@ void EncLib::xInitRPL(SPS &sps) const
       }
     }
   }
-    
+
   sps.allRplEntriesHasSameSign = isAllEntriesinRPLHasSameSignFlag;
 
   bool isRpl1CopiedFromRpl0 = true;
@@ -1116,21 +1218,105 @@ void EncLib::xOutputRecYuv()
 {
   Slice::sortPicList( m_cListPic );
 
-  for ( const auto& picItr : m_cListPic )
+  for( const auto& picItr : m_cListPic )
   {
-    if ( picItr->poc < m_pocRecOut )
+    if( picItr->poc < m_pocRecOut )
       continue;
-    if ( ! picItr->isReconstructed || picItr->poc != m_pocRecOut )
+    if( ! picItr->isReconstructed || picItr->poc != m_pocRecOut )
       return;
-    const PPS& pps = *(picItr->cs->pps);
-    YUVBuffer yuvBuffer;
-    setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
-    if ( m_yuvWriterIf )
+    if( m_cRateCtrl.rcIsFinalPass && m_yuvWriterIf )
     {
+      const PPS& pps = *(picItr->cs->pps);
+      YUVBuffer yuvBuffer;
+      setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
       m_yuvWriterIf->outputYuv( yuvBuffer );
     }
     m_pocRecOut = picItr->poc + 1;
     picItr->isNeededForOutput = false;
+  }
+}
+
+void EncLib::xInitHrdParameters(SPS &sps)
+{
+  m_cEncHRD.initHRDParameters( m_cEncCfg, sps );
+
+  sps.generalHrdParams = m_cEncHRD.generalHrdParams;
+
+  for(int i = 0; i < MAX_TLAYER; i++)
+  {
+    sps.olsHrdParams[i] = m_cEncHRD.olsHrdParams[i];
+  }
+}
+
+void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
+{
+  if (useTS < 2)
+  {
+    pic.useSC = useTS;
+  }
+  else
+  {
+    int K_SC = 5;
+    int SIZE_BL = 4;
+    int TH_SC = 6;
+    const Pel* piSrc = yuvOrgBuf.Y().buf;
+    uint32_t   uiStride = yuvOrgBuf.Y().stride;
+    uint32_t   uiWidth = yuvOrgBuf.Y().width;
+    uint32_t   uiHeight = yuvOrgBuf.Y().height;
+    unsigned   i, j;
+    int size = SIZE_BL;
+    std::vector<int> Vall;
+    for (j = 0; j < uiHeight;)
+    {
+      for (i = 0; i < uiWidth;)
+      {
+        int sum = 0;
+        int Mit = 0;
+        int V = 0;
+        int h = i;
+        int w = j;
+        for (h = j; (h < j + size) && (h < uiHeight); h++)
+        {
+          for (w = i; (w < i + size) && (w < uiWidth); w++)
+          {
+            sum += int(piSrc[h * uiStride + w]);
+          }
+        }
+        int sizeEnd = ((h - j) * (w - i));
+        Mit = sum / sizeEnd;
+        for (h = j; (h < j + size) && (h < uiHeight); h++)
+        {
+          for (w = i; (w < i + size) && (w < uiWidth); w++)
+          {
+            V += abs(Mit - int(piSrc[h * uiStride + w]));
+          }
+        }
+        // Variance in Block (SIZE_BL*SIZE_BL)
+        V = V / sizeEnd;
+        Vall.push_back(V);
+        i += size;
+      }
+      j += size;
+    }
+    int s = 0;
+    for (auto it = Vall.begin(); it != Vall.end(); ++it)
+    {
+      if (*it < TH_SC)
+      {
+        s++;
+      }
+    }
+    if (s > (Vall.size() / K_SC))
+    {
+      pic.useSC = true;
+     //  printf(" s= %d  all= %d SSC\n", s, int(Vall.size() / K_SC));
+    }
+    else
+    {
+      pic.useSC = false;
+      // printf(" s= %d  all= %d NC\n", s, int(Vall.size() / K_SC));
+    }
+    Vall.clear();
   }
 }
 

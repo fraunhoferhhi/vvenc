@@ -1,21 +1,15 @@
-# VVEncInstall
-
-if( BUILD_SHARED_LIBS )
-  set( CONFIG_POSTFIX shared )
-else()
-  set( CONFIG_POSTFIX static )
-endif()
+# vvencInstall
 
 # set destination directories
-set( RUNTIME_DEST bin/$<LOWER_CASE:$<CONFIG>>-${CONFIG_POSTFIX} )
-set( LIBRARY_DEST lib/$<LOWER_CASE:$<CONFIG>>-${CONFIG_POSTFIX} )
-set( ARCHIVE_DEST lib/$<LOWER_CASE:$<CONFIG>>-${CONFIG_POSTFIX} )
+set( RUNTIME_DEST ${CMAKE_INSTALL_BINDIR} )
+set( LIBRARY_DEST ${CMAKE_INSTALL_LIBDIR} )
+set( ARCHIVE_DEST ${CMAKE_INSTALL_LIBDIR} )
 
 # install targets
 macro( install_targets config_ )
   string( TOLOWER ${config_} config_lc_ )
   install( TARGETS             vvenc vvencapp vvencFFapp
-           EXPORT              VVEncTargets-${config_lc_} 
+           EXPORT              vvencTargets-${config_lc_} 
            CONFIGURATIONS      ${config_}
            RUNTIME DESTINATION ${RUNTIME_DEST}
            LIBRARY DESTINATION ${LIBRARY_DEST}
@@ -49,10 +43,11 @@ macro( install_exe_pdb exe_ )
 endmacro( install_exe_pdb )
 
 # set interface include directories
-target_include_directories( vvenc  SYSTEM INTERFACE $<INSTALL_INTERFACE:include> )
+target_include_directories( vvenc  SYSTEM INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> )
 
 # install headers
-install( DIRECTORY include/vvenc  DESTINATION include )
+install( FILES     ${CMAKE_BINARY_DIR}/vvenc/version.h  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vvenc )
+install( DIRECTORY include/vvenc                        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} )
 
 # install targets
 install_targets( Release )
@@ -65,12 +60,19 @@ install_exe_pdb( vvencapp )
 install_exe_pdb( vvencFFapp )
 
 # configure version file
-configure_file( cmake/install/VVEncConfigVersion.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/VVEncConfigVersion.cmake @ONLY )
+configure_file( cmake/install/vvencConfigVersion.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/vvencConfigVersion.cmake @ONLY )
 # install cmake releated files
-install( FILES cmake/install/VVEncConfig.cmake                       DESTINATION lib/cmake/VVEnc )
-install( FILES ${CMAKE_CURRENT_BINARY_DIR}/VVEncConfigVersion.cmake  DESTINATION lib/cmake/VVEnc )
+install( FILES cmake/install/vvencConfig.cmake                       DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
+install( FILES ${CMAKE_CURRENT_BINARY_DIR}/vvencConfigVersion.cmake  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
+
+# set config postfix
+if( BUILD_SHARED_LIBS )
+  set( CONFIG_POSTFIX shared )
+else()
+  set( CONFIG_POSTFIX static )
+endif()
 
 # create target cmake files
-install( EXPORT VVEncTargets-release        NAMESPACE vvenc:: FILE VVEncTargets.cmake CONFIGURATIONS Release        DESTINATION lib/cmake/VVEnc/${CONFIG_POSTFIX} )
-install( EXPORT VVEncTargets-debug          NAMESPACE vvenc:: FILE VVEncTargets.cmake CONFIGURATIONS Debug          DESTINATION lib/cmake/VVEnc/${CONFIG_POSTFIX} )
-install( EXPORT VVEncTargets-relwithdebinfo NAMESPACE vvenc:: FILE VVEncTargets.cmake CONFIGURATIONS RelWithDebInfo DESTINATION lib/cmake/VVEnc/${CONFIG_POSTFIX} )
+install( EXPORT vvencTargets-release        NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Release        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
+install( EXPORT vvencTargets-debug          NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS Debug          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )
+install( EXPORT vvencTargets-relwithdebinfo NAMESPACE vvenc:: FILE vvencTargets-${CONFIG_POSTFIX}.cmake CONFIGURATIONS RelWithDebInfo DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vvenc )

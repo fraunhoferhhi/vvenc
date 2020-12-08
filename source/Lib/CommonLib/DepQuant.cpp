@@ -1,50 +1,54 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
 
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 #include "DepQuant.h"
 #include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
+#include "CommonDefX86.h"
 
 #include <bitset>
 
@@ -149,9 +153,9 @@ namespace DQIntern
     void  xUninitScanArrays ();
   private:
     bool          m_scansInitialized;
-    NbInfoSbb*    m_scanId2NbInfoSbbArray[ MAX_CU_SIZE_IDX ][ MAX_CU_SIZE_IDX ];
-    NbInfoOut*    m_scanId2NbInfoOutArray[ MAX_CU_SIZE_IDX ][ MAX_CU_SIZE_IDX ];
-    TUParameters* m_tuParameters         [ MAX_CU_SIZE_IDX ][ MAX_CU_SIZE_IDX ][ MAX_NUM_CH ];
+    NbInfoSbb*    m_scanId2NbInfoSbbArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
+    NbInfoOut*    m_scanId2NbInfoOutArray[ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ];
+    TUParameters* m_tuParameters         [ MAX_TU_SIZE_IDX ][ MAX_TU_SIZE_IDX ][ MAX_NUM_CH ];
   };
 
   void Rom::xInitScanArrays()
@@ -167,9 +171,9 @@ namespace DQIntern
     uint32_t raster2id[ MAX_CU_SIZE * MAX_CU_SIZE ];
     ::memset(raster2id, 0, sizeof(raster2id));
 
-    for( int hd = 0; hd < MAX_CU_SIZE_IDX; hd++ )
+    for( int hd = 0; hd < MAX_TU_SIZE_IDX; hd++ )
     {
-      for( int vd = 0; vd < MAX_CU_SIZE_IDX; vd++ )
+      for( int vd = 0; vd < MAX_TU_SIZE_IDX; vd++ )
       {
         if( (hd == 0 && vd <= 1) || (hd <= 1 && vd == 0) )
         {
@@ -312,9 +316,9 @@ namespace DQIntern
     {
       return;
     }
-    for( int hd = 0; hd < MAX_CU_SIZE_IDX; hd++ )
+    for( int hd = 0; hd < MAX_TU_SIZE_IDX; hd++ )
     {
-      for( int vd = 0; vd < MAX_CU_SIZE_IDX; vd++ )
+      for( int vd = 0; vd < MAX_TU_SIZE_IDX; vd++ )
       {
         NbInfoSbb*& sId2NbSbb = m_scanId2NbInfoSbbArray[hd][vd];
         NbInfoOut*& sId2NbOut = m_scanId2NbInfoOutArray[hd][vd];
@@ -1465,7 +1469,6 @@ namespace DQIntern
     }
   }
 
-
   void DepQuant::quant( TransformUnit& tu, const CCoeffBuf& srcCoeff, const ComponentID compID, const QpParam& cQP, const double lambda, const Ctx& ctx, TCoeff& absSum, bool enableScalingLists, int* quantCoeff )
   {
     CHECKD( tu.cs->sps->spsRExt.extendedPrecisionProcessing, "ext precision is not supported" );
@@ -1500,7 +1503,7 @@ namespace DQIntern
     }
     zeroOutforThres = zeroOut || ( 32 < tuPars.m_height || 32 < tuPars.m_width );
     //===== find first test position =====
-    int firstTestPos = numCoeff - 1;
+    int firstTestPos = std::min<int>( tuPars.m_width, JVET_C0024_ZERO_OUT_TH ) * std::min<int>( tuPars.m_height, JVET_C0024_ZERO_OUT_TH ) - 1;
     if( lfnstIdx > 0 && tu.mtsIdx[compID] != MTS_SKIP && width >= 4 && height >= 4 )
     {
       firstTestPos = ( ( width == 4 && height == 4 ) || ( width == 8 && height == 8 ) )  ? 7 : 15 ;
@@ -1524,8 +1527,62 @@ namespace DQIntern
     }
     else
     {
-      const TCoeff defaultTh  = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
+      const TCoeff defaultTh = TCoeff( thres / ( defaultQuantisationCoefficient << 2 ) );
 
+#if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
+      // if more than one 4x4 coding subblock is available, use SIMD to find first subblock with coefficient larger than threshold
+      if( firstTestPos >= 16 && tuPars.m_log2SbbWidth == 2 && tuPars.m_log2SbbHeight == 2 && read_x86_extension_flags() > SCALAR )
+      {
+        const int sbbSize = tuPars.m_sbbSize;
+        // move the pointer to the beginning of the current subblock
+        firstTestPos -= ( sbbSize - 1 );
+
+        const __m128i xdfTh = _mm_set1_epi32( defaultTh );
+
+        // for each subblock
+        for( ; firstTestPos >= 0; firstTestPos -= sbbSize )
+        {
+          // skip zeroed out blocks
+          // for 64-point transformation the coding order takes care of that
+          if( zeroOutforThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth || tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) )
+          {
+            continue;
+          }
+
+          // read first line of the subblock and check for coefficients larger than the threshold
+          // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of tuPars.m_width
+          int pos = tuPars.m_scanId2BlkPos[firstTestPos].idx;
+          __m128i xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          __m128i xdf = _mm_cmpgt_epi32( xl0, xdfTh );
+
+          // same for the next line in the subblock
+          pos += tuPars.m_width;
+          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+
+          // and the third line
+          pos += tuPars.m_width;
+          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+
+          // and the last line
+          pos += tuPars.m_width;
+          xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &tCoeff[pos] ) );
+          xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
+
+          // if any of the 16 comparisons were true, break, because this subblock contains a coefficient larger than threshold
+          if( !_mm_testz_si128( xdf, xdf ) ) break;
+        }
+
+        if( firstTestPos >= 0 )
+        {
+          // if a coefficient was found, advance the pointer to the end of the current subblock
+          // for the subsequent coefficient-wise refinement (C-impl after endif)
+          firstTestPos += sbbSize - 1;
+        }
+      }
+
+#endif
       for( ; firstTestPos >= 0; firstTestPos-- )
       {
         if( zeroOutforThres && ( tuPars.m_scanId2BlkPos[firstTestPos].x >= zeroOutWidth || tuPars.m_scanId2BlkPos[firstTestPos].y >= zeroOutHeight ) ) continue;
@@ -1547,16 +1604,15 @@ namespace DQIntern
       m_allStates[k].init();
     }
     m_startState.init();
-
-
-    int effectWidth = std::min(32, effWidth);
-    int effectHeight = std::min(32, effHeight);
+    
+    int effectWidth  = std::min( 32, effWidth );
+    int effectHeight = std::min( 32, effHeight );
     for (int k = 0; k < 12; k++)
     {
-      m_allStates[k].effWidth = effectWidth;
+      m_allStates[k].effWidth  = effectWidth;
       m_allStates[k].effHeight = effectHeight;
     }
-    m_startState.effWidth = effectWidth;
+    m_startState.effWidth  = effectWidth;
     m_startState.effHeight = effectHeight;
 
     //===== populate trellis =====
@@ -1631,7 +1687,7 @@ void DepQuant::quant( TransformUnit& tu, const ComponentID compID, const CCoeffB
     CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
     const uint32_t    log2TrWidth     = Log2(width);
     const uint32_t    log2TrHeight    = Log2(height);
-    const bool isLfnstApplied         = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+    const bool isLfnstApplied         = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
     const bool enableScalingLists     = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
     static_cast<DQIntern::DepQuant*>(p)->quant( tu, pSrc, compID, cQP, Quant::m_dLambda, ctx, uiAbsSum, enableScalingLists, Quant::getQuantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
   }
@@ -1655,7 +1711,7 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
     CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
     const uint32_t    log2TrWidth    = Log2(width);
     const uint32_t    log2TrHeight   = Log2(height);
-    const bool isLfnstApplied        = tu.cu->lfnstIdx > 0 && (tu.cu->isSepTree() ? true : isLuma(compID));
+    const bool isLfnstApplied        = tu.cu->lfnstIdx > 0 && (CU::isSepTree(*tu.cu) ? true : isLuma(compID));
     const bool enableScalingLists    = getUseScalingList(width, height, (tu.mtsIdx[compID] == MTS_SKIP), isLfnstApplied);
     static_cast<DQIntern::DepQuant*>(p)->dequant( tu, dstCoeff, compID, cQP, enableScalingLists, Quant::getDequantCoeff(scalingListType, qpRem, log2TrWidth, log2TrHeight) );
   }
