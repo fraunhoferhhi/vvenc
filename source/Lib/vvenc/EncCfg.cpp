@@ -1,51 +1,55 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     EncCfg.cpp
     \brief    encoder configuration class
 */
 
-#include "../../../include/vvenc/EncCfg.h"
+#include "vvenc/EncCfg.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
@@ -61,8 +65,17 @@ bool EncCfg::confirmParameter( bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
-  msg( ERROR, "Error: %s\n", message );
+  msg( ERROR, "Parameter Check Error: %s\n", message );
   m_confirmFailed = true;
+  return true;
+}
+
+bool EncCfg::checkExperimental( bool bflag, const char* message )
+{
+  if( !bflag )
+    return false;
+
+  msg( WARNING, "Warning: Setting experimental: %s\n\n", message );
   return true;
 }
 
@@ -114,25 +127,6 @@ bool EncCfg::initCfgParameter()
 
   m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  MCTF_RANGE );
   m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, MCTF_RANGE );
-
-  if( !m_tileUniformSpacingFlag && m_numTileColumnsMinus1 > 0 )
-  {
-    CONFIRM_PARAMETER_OR_RETURN( m_tileColumnWidth.size() != m_numTileColumnsMinus1, "Error: The number of columns minus 1 does not match size of tile column array." );
-  }
-  else
-  {
-    m_tileColumnWidth.clear();
-  }
-
-  if( !m_tileUniformSpacingFlag && m_numTileRowsMinus1 > 0 )
-  {
-    CONFIRM_PARAMETER_OR_RETURN( m_tileRowHeight.size() != m_numTileRowsMinus1, "Error: The number of rows minus 1 does not match size of tile row array." );
-  }
-  else
-  {
-    m_tileRowHeight.clear();
-  }
-
   /* rules for input, output and internal bitdepths as per help text */
   if (m_MSBExtendedBitDepth[CH_L  ] == 0)
   {
@@ -219,96 +213,7 @@ bool EncCfg::initCfgParameter()
     }
   }
 
-  m_topLeftBrickIdx.clear();
-  m_bottomRightBrickIdx.clear();
-  m_sliceId.clear();
-
-  bool singleTileInPicFlag = (m_numTileRowsMinus1 == 0 && m_numTileColumnsMinus1 == 0);
-
-  if (!singleTileInPicFlag)
-  {
-    //if (!m_singleBrickPerSliceFlag && m_rectSliceFlag)
-    if (/*m_sliceMode != 0 && m_sliceMode != 4 && */m_rectSliceFlag)
-    {
-      int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
-
-      CONFIRM_PARAMETER_OR_RETURN( m_rectSliceBoundary.size() > numSlicesInPic * 2, "Error: The number of slice indices (RectSlicesBoundaryInPic) is greater than the NumSlicesInPicMinus1." );
-      CONFIRM_PARAMETER_OR_RETURN( m_rectSliceBoundary.size() < numSlicesInPic * 2, "Error: The number of slice indices (RectSlicesBoundaryInPic) is less than the NumSlicesInPicMinus1." );
-
-      m_topLeftBrickIdx.resize(numSlicesInPic);
-      m_bottomRightBrickIdx.resize(numSlicesInPic);
-      for (uint32_t i = 0; i < numSlicesInPic; ++i)
-      {
-        m_topLeftBrickIdx[i] = m_rectSliceBoundary[i * 2];
-        m_bottomRightBrickIdx[i] = m_rectSliceBoundary[i * 2 + 1];
-      }
-      //Validating the correctness of rectangular slice structure
-      int **brickToSlice = (int **)malloc(sizeof(int *) * (m_numTileRowsMinus1 + 1));
-      for (int i = 0; i <= m_numTileRowsMinus1; i++)
-      {
-        brickToSlice[i] = (int *)malloc(sizeof(int) * (m_numTileColumnsMinus1 + 1));
-        memset(brickToSlice[i], -1, sizeof(int) * ((m_numTileColumnsMinus1 + 1)));
-      }
-
-      //Check overlap case
-      for (int sliceIdx = 0; sliceIdx < numSlicesInPic; sliceIdx++)
-      {
-        int sliceStartRow = m_topLeftBrickIdx[sliceIdx] / (m_numTileColumnsMinus1 + 1);
-        int sliceEndRow   = m_bottomRightBrickIdx[sliceIdx] / (m_numTileColumnsMinus1 + 1);
-        int sliceStartCol = m_topLeftBrickIdx[sliceIdx] % (m_numTileColumnsMinus1 + 1);
-        int sliceEndCol   = m_bottomRightBrickIdx[sliceIdx] % (m_numTileColumnsMinus1 + 1);
-        for (int i = 0; i <= m_numTileRowsMinus1; i++)
-        {
-          for (int j = 0; j <= m_numTileColumnsMinus1; j++)
-          {
-            if (i >= sliceStartRow && i <= sliceEndRow && j >= sliceStartCol && j <= sliceEndCol)
-            {
-              CONFIRM_PARAMETER_OR_RETURN( brickToSlice[i][j] != -1, "Error: Values given in RectSlicesBoundaryInPic have conflict! Rectangular slice shall not have overlapped tile(s)" );
-              brickToSlice[i][j] = sliceIdx;
-            }
-          }
-        }
-      }
-      //Check gap case
-      for (int i = 0; i <= m_numTileRowsMinus1; i++)
-      {
-        for (int j = 0; j <= m_numTileColumnsMinus1; j++)
-        {
-          CONFIRM_PARAMETER_OR_RETURN( brickToSlice[i][j] == -1, "Error: Values given in RectSlicesBoundaryInPic have conflict! Rectangular slice shall not have gap" );
-        }
-      }
-
-      for (int i = 0; i <= m_numTileRowsMinus1; i++)
-      {
-        free(brickToSlice[i]);
-        brickToSlice[i] = 0;
-      }
-      free(brickToSlice);
-      brickToSlice = 0;
-    }      // (!m_singleBrickPerSliceFlag && m_rectSliceFlag)
-  }        // !singleTileInPicFlag
-
-  if (m_rectSliceFlag && m_signalledSliceIdFlag)
-  {
-    int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
-
-    CONFIRM_PARAMETER_OR_RETURN( m_signalledSliceId.size() > numSlicesInPic, "Error: The number of Slice Ids are greater than the m_signalledTileGroupIdLengthMinus1." );
-    CONFIRM_PARAMETER_OR_RETURN( m_signalledSliceId.size() < numSlicesInPic, "Error: The number of Slice Ids are less than the m_signalledTileGroupIdLengthMinus1." );
-    m_sliceId.resize(numSlicesInPic);
-    for (uint32_t i = 0; i < m_signalledSliceId.size(); ++i)
-    {
-      m_sliceId[i] = m_signalledSliceId[i];
-    }
-  }
-  else if (m_rectSliceFlag)
-  {
-    int numSlicesInPic = m_numSlicesInPicMinus1 + 1;
-    m_sliceId.resize(numSlicesInPic);
-    for (uint32_t i = 0; i < numSlicesInPic; ++i)
-    {
-      m_sliceId[i] = i;
-    }
-  }
+  m_sliceId.resize(1,0);
 
   for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
   {
@@ -473,6 +378,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
   confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+  confirmParameter( m_DecodingRefreshType !=1,                                                  "Decoding Refresh Type CRA currently supported only" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
   {
@@ -494,39 +400,66 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_ensureWppBitEqual<0 || m_ensureWppBitEqual>1, "WppBitEqual out of range");
   confirmParameter( m_numWppThreads && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
 
-  if (!m_lumaReshapeEnable)
-  {
-    m_reshapeSignalType = RESHAPE_SIGNAL_NULL;
-//    m_intraCMD = 0;
-  }
-  if (m_lumaReshapeEnable && m_reshapeSignalType == RESHAPE_SIGNAL_PQ)
-  {
-//    m_intraCMD = 1;
-  }
-  else if (m_lumaReshapeEnable && (m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_reshapeSignalType == RESHAPE_SIGNAL_HLG))
-  {
-//    m_intraCMD = 0;
-  }
-  else
-  {
-    m_lumaReshapeEnable = false;
-  }
   if (m_lumaReshapeEnable)
   {
-    confirmParameter(m_updateCtrl < 0, "Min. LMCS Update Control is 0");
-    confirmParameter(m_updateCtrl > 2, "Max. LMCS Update Control is 2");
-    confirmParameter(m_adpOption < 0, "Min. LMCS Adaptation Option is 0");
-    confirmParameter(m_adpOption > 4, "Max. LMCS Adaptation Option is 4");
-    confirmParameter(m_initialCW < 0, "Min. Initial Total Codeword is 0");
-    confirmParameter(m_initialCW > 1023, "Max. Initial Total Codeword is 1023");
+    confirmParameter( m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
+    confirmParameter(m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
+    confirmParameter(m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
+    confirmParameter(m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
+    confirmParameter(m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
+    confirmParameter(m_initialCW < 0,     "Min. Initial Total Codeword is 0");
+    confirmParameter(m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
+    confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
+    confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
     if (m_updateCtrl > 0 && m_adpOption > 2) { m_adpOption -= 2; }
   }
-  confirmParameter( m_EDO && m_bLoopFilterDisable, "no EDO support with LoopFilter disabled" );
+  confirmParameter( m_EDO && m_bLoopFilterDisable,          "no EDO support with LoopFilter disabled" );
+  confirmParameter( m_EDO < 0 || m_EDO > 2,                 "EDO out of range [0..2]" );
+  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,   "TMVPMode out of range [0..2]" );
+  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,     "AMVR/IMV out of range [0..7]" );
+  confirmParameter( m_Affine < 0 || m_Affine > 2,           "Affine out of range [0..2]" );
+  confirmParameter( m_MMVD < 0 || m_MMVD > 4,               "MMVD out of range [0..4]" );
+  confirmParameter( m_SMVD < 0 || m_SMVD > 3,               "SMVD out of range [0..3]" );
+  confirmParameter( m_Geo  < 0 || m_Geo  > 3,               "Geo out of range [0..3]" );
+  confirmParameter( m_CIIP < 0 || m_CIIP > 3,               "CIIP out of range [0..3]" );
+  confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
+  confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
+  confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
+  confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
+  confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
 
-  confirmParameter( m_chromaCbQpOffset < -12,   "Min. Chroma Cb QP Offset is -12" );
-  confirmParameter( m_chromaCbQpOffset >  12,   "Max. Chroma Cb QP Offset is  12" );
-  confirmParameter( m_chromaCrQpOffset < -12,   "Min. Chroma Cr QP Offset is -12" );
-  confirmParameter( m_chromaCrQpOffset >  12,   "Max. Chroma Cr QP Offset is  12" );
+  if( m_alf )
+  {
+    confirmParameter( m_maxNumAlfAlternativesChroma < 1 || m_maxNumAlfAlternativesChroma > MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
+  }
+
+  confirmParameter( m_useFastMrg < 0 || m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
+  confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
+  confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
+
+
+  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
+  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses == 2 && m_usePerceptQPATempFiltISlice == true, "QPA temporal filtering of I slice not supported with 2-pass rate control" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2, "Only one pass or two pass encoding supported" );
+  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
+  confirmParameter(!((m_level==Level::LEVEL1) 
+    || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
+    || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
+    || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
+    || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
+    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
+    || (m_level==Level::LEVEL15_5)), "invalid level selected");
+  confirmParameter(!((m_levelTier==Level::Tier::MAIN) || (m_levelTier==Level::Tier::HIGH)), "invalid tier selected");
+
+
+  confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
+  confirmParameter( m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );
+  confirmParameter( m_chromaCrQpOffset < -12,           "Min. Chroma Cr QP Offset is -12" );
+  confirmParameter( m_chromaCrQpOffset >  12,           "Max. Chroma Cr QP Offset is  12" );
   confirmParameter( m_chromaCbQpOffsetDualTree < -12,   "Min. Chroma Cb QP Offset for dual tree is -12" );
   confirmParameter( m_chromaCbQpOffsetDualTree >  12,   "Max. Chroma Cb QP Offset for dual tree is  12" );
   confirmParameter( m_chromaCrQpOffsetDualTree < -12,   "Min. Chroma Cr QP Offset for dual tree is -12" );
@@ -563,7 +496,7 @@ bool EncCfg::initCfgParameter()
   {
     m_cuQpDeltaSubdiv = 2;
   }
-  if ((m_usePerceptQPA == 2 || m_usePerceptQPA == 4) && (m_internChromaFormat != CHROMA_400) && (m_sliceChromaQpOffsetPeriodicity == 0))
+  if (m_usePerceptQPA >= 1 && m_internChromaFormat != CHROMA_400 && m_sliceChromaQpOffsetPeriodicity == 0)
   {
     m_sliceChromaQpOffsetPeriodicity = 1;
   }
@@ -593,9 +526,6 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
-  bool tileFlag = (m_numTileColumnsMinus1 > 0 || m_numTileRowsMinus1 > 0 );
-  confirmParameter( tileFlag && m_entropyCodingSyncEnabled, "Tiles and entropy-coding-sync (Wavefronts) can not be applied together, except in the High Throughput Intra 4:4:4 16 profile");
-
   confirmParameter( m_SourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_SourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -614,6 +544,22 @@ bool EncCfg::initCfgParameter()
 #if ENABLE_TRACING
   confirmParameter( m_frameParallel && ( m_numFppThreads != 0 && m_numFppThreads != 1 ) && ! m_traceFile.empty(), "Tracing and frame parallel encoding not supported" );
 #endif
+  confirmParameter(((m_SourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_SourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
+
+
+  confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
+  confirmParameter( m_maxNumMergeCand > MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
+  confirmParameter( m_maxNumGeoCand > GEO_MAX_NUM_UNI_CANDS,            "MaxNumGeoCand must be no more than GEO_MAX_NUM_UNI_CANDS." );
+  confirmParameter( m_maxNumGeoCand > m_maxNumMergeCand,                "MaxNumGeoCand must be no more than MaxNumMergeCand." );
+  confirmParameter( 0 < m_maxNumGeoCand && m_maxNumGeoCand < 2,         "MaxNumGeoCand must be no less than 2 unless MaxNumGeoCand is 0." );
+  confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
+  confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
+
+
+  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = m_CTUSize;
@@ -765,16 +711,16 @@ bool EncCfg::initCfgParameter()
         m_GOPList[i].m_numRefPics[0] = 2;
         m_GOPList[i].m_numRefPics[1] = 2;
       }
-      m_GOPList[0].m_POC  = 32;   m_GOPList[0].m_temporalId  = 0;
-      m_GOPList[1].m_POC  = 16;   m_GOPList[1].m_temporalId  = 1;
-      m_GOPList[2].m_POC  =  8;   m_GOPList[2].m_temporalId  = 2;
-      m_GOPList[3].m_POC  =  4;   m_GOPList[3].m_temporalId  = 3;
-      m_GOPList[4].m_POC  =  2;   m_GOPList[4].m_temporalId  = 4;
-      m_GOPList[5].m_POC  =  1;   m_GOPList[5].m_temporalId  = 5;
-      m_GOPList[6].m_POC  =  3;   m_GOPList[6].m_temporalId  = 5;
-      m_GOPList[7].m_POC  =  6;   m_GOPList[7].m_temporalId  = 4;
-      m_GOPList[8].m_POC  =  5;   m_GOPList[8].m_temporalId  = 5;
-      m_GOPList[9].m_POC  =  7;   m_GOPList[9].m_temporalId  = 5;
+      m_GOPList[ 0].m_POC = 32;   m_GOPList[0].m_temporalId  = 0;
+      m_GOPList[ 1].m_POC = 16;   m_GOPList[1].m_temporalId  = 1;
+      m_GOPList[ 2].m_POC =  8;   m_GOPList[2].m_temporalId  = 2;
+      m_GOPList[ 3].m_POC =  4;   m_GOPList[3].m_temporalId  = 3;
+      m_GOPList[ 4].m_POC =  2;   m_GOPList[4].m_temporalId  = 4;
+      m_GOPList[ 5].m_POC =  1;   m_GOPList[5].m_temporalId  = 5;
+      m_GOPList[ 6].m_POC =  3;   m_GOPList[6].m_temporalId  = 5;
+      m_GOPList[ 7].m_POC =  6;   m_GOPList[7].m_temporalId  = 4;
+      m_GOPList[ 8].m_POC =  5;   m_GOPList[8].m_temporalId  = 5;
+      m_GOPList[ 9].m_POC =  7;   m_GOPList[9].m_temporalId  = 5;
       m_GOPList[10].m_POC = 12;   m_GOPList[10].m_temporalId = 3;
       m_GOPList[11].m_POC = 10;   m_GOPList[11].m_temporalId = 4;
       m_GOPList[12].m_POC =  9;   m_GOPList[12].m_temporalId = 5;
@@ -782,29 +728,45 @@ bool EncCfg::initCfgParameter()
       m_GOPList[14].m_POC = 14;   m_GOPList[14].m_temporalId = 4;
       m_GOPList[15].m_POC = 13;   m_GOPList[15].m_temporalId = 5;
 
-      m_GOPList[16].m_POC  = 15;  m_GOPList[16].m_temporalId  = 5;
-      m_GOPList[17].m_POC  = 24;  m_GOPList[17].m_temporalId  = 2;
-      m_GOPList[18].m_POC  = 20;  m_GOPList[18].m_temporalId  = 3;
-      m_GOPList[19].m_POC  = 18;  m_GOPList[19].m_temporalId  = 4;
-      m_GOPList[20].m_POC  = 17;  m_GOPList[20].m_temporalId  = 5;
-      m_GOPList[21].m_POC  = 19;  m_GOPList[21].m_temporalId  = 5;
-      m_GOPList[22].m_POC  = 22;  m_GOPList[22].m_temporalId  = 4;
-      m_GOPList[23].m_POC  = 21;  m_GOPList[23].m_temporalId  = 5;
-      m_GOPList[24].m_POC  = 23;  m_GOPList[24].m_temporalId  = 5;
-      m_GOPList[25].m_POC  = 28;  m_GOPList[25].m_temporalId  = 3;
-      m_GOPList[26].m_POC  = 26;  m_GOPList[26].m_temporalId = 4;
-      m_GOPList[27].m_POC  = 25;  m_GOPList[27].m_temporalId = 5;
-      m_GOPList[28].m_POC  = 27;  m_GOPList[28].m_temporalId = 5;
-      m_GOPList[29].m_POC  = 30;  m_GOPList[29].m_temporalId = 4;
-      m_GOPList[30].m_POC  = 29;  m_GOPList[30].m_temporalId = 5;
-      m_GOPList[31].m_POC  = 31;  m_GOPList[31].m_temporalId = 5;
+      m_GOPList[16].m_POC = 15;   m_GOPList[16].m_temporalId = 5;
+      m_GOPList[17].m_POC = 24;   m_GOPList[17].m_temporalId = 2;
+      m_GOPList[18].m_POC = 20;   m_GOPList[18].m_temporalId = 3;
+      m_GOPList[19].m_POC = 18;   m_GOPList[19].m_temporalId = 4;
+      m_GOPList[20].m_POC = 17;   m_GOPList[20].m_temporalId = 5;
+      m_GOPList[21].m_POC = 19;   m_GOPList[21].m_temporalId = 5;
+      m_GOPList[22].m_POC = 22;   m_GOPList[22].m_temporalId = 4;
+      m_GOPList[23].m_POC = 21;   m_GOPList[23].m_temporalId = 5;
+      m_GOPList[24].m_POC = 23;   m_GOPList[24].m_temporalId = 5;
+      m_GOPList[25].m_POC = 28;   m_GOPList[25].m_temporalId = 3;
+      m_GOPList[26].m_POC = 26;   m_GOPList[26].m_temporalId = 4;
+      m_GOPList[27].m_POC = 25;   m_GOPList[27].m_temporalId = 5;
+      m_GOPList[28].m_POC = 27;   m_GOPList[28].m_temporalId = 5;
+      m_GOPList[29].m_POC = 30;   m_GOPList[29].m_temporalId = 4;
+      m_GOPList[30].m_POC = 29;   m_GOPList[30].m_temporalId = 5;
+      m_GOPList[31].m_POC = 31;   m_GOPList[31].m_temporalId = 5;
 
-      m_GOPList[0].m_numRefPics[0]  = 3;
-      m_GOPList[9].m_numRefPics[0]  = 3;
+      m_GOPList[ 0].m_numRefPics[0] = 3;
+      m_GOPList[ 1].m_numRefPics[0] = 2;
+      m_GOPList[ 2].m_numRefPics[0] = 2;
+      m_GOPList[ 3].m_numRefPics[0] = 2;
+      m_GOPList[ 4].m_numRefPics[0] = 2;
+      m_GOPList[ 5].m_numRefPics[0] = 2;
+      m_GOPList[ 6].m_numRefPics[0] = 2;
+      m_GOPList[ 7].m_numRefPics[0] = 2;
+      m_GOPList[ 8].m_numRefPics[0] = 2;
+      m_GOPList[ 9].m_numRefPics[0] = 3;
+      m_GOPList[10].m_numRefPics[0] = 2;
+      m_GOPList[11].m_numRefPics[0] = 2;
+      m_GOPList[12].m_numRefPics[0] = 2;
       m_GOPList[13].m_numRefPics[0] = 3;
       m_GOPList[14].m_numRefPics[0] = 3;
       m_GOPList[15].m_numRefPics[0] = 3;
+
       m_GOPList[16].m_numRefPics[0] = 4;
+      m_GOPList[17].m_numRefPics[0] = 2;
+      m_GOPList[18].m_numRefPics[0] = 2;
+      m_GOPList[19].m_numRefPics[0] = 2;
+      m_GOPList[20].m_numRefPics[0] = 2;
       m_GOPList[21].m_numRefPics[0] = 3;
       m_GOPList[22].m_numRefPics[0] = 3;
       m_GOPList[23].m_numRefPics[0] = 3;
@@ -817,35 +779,35 @@ bool EncCfg::initCfgParameter()
       m_GOPList[30].m_numRefPics[0] = 3;
       m_GOPList[31].m_numRefPics[0] = 4;
 
-      m_GOPList[0].m_deltaRefPics[0][0]  = 32; m_GOPList[0].m_deltaRefPics[0][1]  = 48; m_GOPList[0].m_deltaRefPics[0][2]  = 64;
-      m_GOPList[1].m_deltaRefPics[0][0]  = 16; m_GOPList[1].m_deltaRefPics[0][1]  = 32;
-      m_GOPList[2].m_deltaRefPics[0][0]  =  8; m_GOPList[2].m_deltaRefPics[0][1]  = 24;
-      m_GOPList[3].m_deltaRefPics[0][0]  =  4; m_GOPList[3].m_deltaRefPics[0][1]  = 20;
+      m_GOPList[ 0].m_deltaRefPics[0][0] = 32; m_GOPList[ 0].m_deltaRefPics[0][1] = 64; m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
+      m_GOPList[ 1].m_deltaRefPics[0][0] = 16; m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
+      m_GOPList[ 2].m_deltaRefPics[0][0] =  8; m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
+      m_GOPList[ 3].m_deltaRefPics[0][0] =  4; m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
 
-      m_GOPList[4].m_deltaRefPics[0][0]  =  2; m_GOPList[4].m_deltaRefPics[0][1]  = 18;
-      m_GOPList[5].m_deltaRefPics[0][0]  =  1; m_GOPList[5].m_deltaRefPics[0][1]  = -1;
-      m_GOPList[6].m_deltaRefPics[0][0]  =  1; m_GOPList[6].m_deltaRefPics[0][1]  = 3;
-      m_GOPList[7].m_deltaRefPics[0][0]  =  2; m_GOPList[7].m_deltaRefPics[0][1]  = 6;
+      m_GOPList[ 4].m_deltaRefPics[0][0] =  2; m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
+      m_GOPList[ 5].m_deltaRefPics[0][0] =  1; m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
+      m_GOPList[ 6].m_deltaRefPics[0][0] =  1; m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
+      m_GOPList[ 7].m_deltaRefPics[0][0] =  2; m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
 
-      m_GOPList[8].m_deltaRefPics[0][0]  =  1; m_GOPList[8].m_deltaRefPics[0][1]  = 5;
-      m_GOPList[9].m_deltaRefPics[0][0]  =  1; m_GOPList[9].m_deltaRefPics[0][1]  = 3;  m_GOPList[9].m_deltaRefPics[0][2]  = 7;
+      m_GOPList[ 8].m_deltaRefPics[0][0] =  1; m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
+      m_GOPList[ 9].m_deltaRefPics[0][0] =  1; m_GOPList[ 9].m_deltaRefPics[0][1] =  3; m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
       m_GOPList[10].m_deltaRefPics[0][0] =  4; m_GOPList[10].m_deltaRefPics[0][1] = 12;
       m_GOPList[11].m_deltaRefPics[0][0] =  2; m_GOPList[11].m_deltaRefPics[0][1] = 10;
 
-      m_GOPList[12].m_deltaRefPics[0][0] =  1; m_GOPList[12].m_deltaRefPics[0][1] = 9;
-      m_GOPList[13].m_deltaRefPics[0][0] =  1; m_GOPList[13].m_deltaRefPics[0][1] = 3; m_GOPList[13].m_deltaRefPics[0][2]  = 11;
-      m_GOPList[14].m_deltaRefPics[0][0] =  2; m_GOPList[14].m_deltaRefPics[0][1] = 6; m_GOPList[14].m_deltaRefPics[0][2]  = 14;
-      m_GOPList[15].m_deltaRefPics[0][0] =  1; m_GOPList[15].m_deltaRefPics[0][1] = 5; m_GOPList[15].m_deltaRefPics[0][2]  = 13;
+      m_GOPList[12].m_deltaRefPics[0][0] =  1; m_GOPList[12].m_deltaRefPics[0][1] =  9;
+      m_GOPList[13].m_deltaRefPics[0][0] =  1; m_GOPList[13].m_deltaRefPics[0][1] =  3; m_GOPList[13].m_deltaRefPics[0][2] = 11;
+      m_GOPList[14].m_deltaRefPics[0][0] =  2; m_GOPList[14].m_deltaRefPics[0][1] =  6; m_GOPList[14].m_deltaRefPics[0][2] = 14;
+      m_GOPList[15].m_deltaRefPics[0][0] =  1; m_GOPList[15].m_deltaRefPics[0][1] =  5; m_GOPList[15].m_deltaRefPics[0][2] = 13;
 
-      m_GOPList[16].m_deltaRefPics[0][0] =  1; m_GOPList[16].m_deltaRefPics[0][1] = 3;  m_GOPList[16].m_deltaRefPics[0][2] = 7; m_GOPList[16].m_deltaRefPics[0][3] = 15;
+      m_GOPList[16].m_deltaRefPics[0][0] =  1; m_GOPList[16].m_deltaRefPics[0][1] =  3; m_GOPList[16].m_deltaRefPics[0][2] =  7; m_GOPList[16].m_deltaRefPics[0][3] = 15;
       m_GOPList[17].m_deltaRefPics[0][0] =  8; m_GOPList[17].m_deltaRefPics[0][1] = 24;
       m_GOPList[18].m_deltaRefPics[0][0] =  4; m_GOPList[18].m_deltaRefPics[0][1] = 20;
       m_GOPList[19].m_deltaRefPics[0][0] =  2; m_GOPList[19].m_deltaRefPics[0][1] = 18;
 
       m_GOPList[20].m_deltaRefPics[0][0] =  1; m_GOPList[20].m_deltaRefPics[0][1] = 17;
-      m_GOPList[21].m_deltaRefPics[0][0] =  1; m_GOPList[21].m_deltaRefPics[0][1] = 3; m_GOPList[21].m_deltaRefPics[0][2]  = 19;
-      m_GOPList[22].m_deltaRefPics[0][0] =  2; m_GOPList[22].m_deltaRefPics[0][1] = 6; m_GOPList[22].m_deltaRefPics[0][2]  = 22;
-      m_GOPList[23].m_deltaRefPics[0][0] =  1; m_GOPList[23].m_deltaRefPics[0][1] = 5; m_GOPList[23].m_deltaRefPics[0][2]  = 21;
+      m_GOPList[21].m_deltaRefPics[0][0] =  1; m_GOPList[21].m_deltaRefPics[0][1] =  3; m_GOPList[21].m_deltaRefPics[0][2] = 19;
+      m_GOPList[22].m_deltaRefPics[0][0] =  2; m_GOPList[22].m_deltaRefPics[0][1] =  6; m_GOPList[22].m_deltaRefPics[0][2] = 22;
+      m_GOPList[23].m_deltaRefPics[0][0] =  1; m_GOPList[23].m_deltaRefPics[0][1] =  5; m_GOPList[23].m_deltaRefPics[0][2] = 21;
 
       m_GOPList[24].m_deltaRefPics[0][0] =  1; m_GOPList[24].m_deltaRefPics[0][1] =  3; m_GOPList[24].m_deltaRefPics[0][2] =  7; m_GOPList[24].m_deltaRefPics[0][3] = 23;
       m_GOPList[25].m_deltaRefPics[0][0] =  4; m_GOPList[25].m_deltaRefPics[0][1] = 12; m_GOPList[25].m_deltaRefPics[0][2] = 28;
@@ -857,68 +819,79 @@ bool EncCfg::initCfgParameter()
       m_GOPList[30].m_deltaRefPics[0][0] =  1; m_GOPList[30].m_deltaRefPics[0][1] = 13; m_GOPList[30].m_deltaRefPics[0][2] = 29;
       m_GOPList[31].m_deltaRefPics[0][0] =  1; m_GOPList[31].m_deltaRefPics[0][1] =  3; m_GOPList[31].m_deltaRefPics[0][2] = 15; m_GOPList[31].m_deltaRefPics[0][3] = 31;
 
-      m_GOPList[3].m_numRefPics[1]  = 3;
-      m_GOPList[4].m_numRefPics[1]  = 4;
-      m_GOPList[5].m_numRefPics[1]  = 5;
-      m_GOPList[6].m_numRefPics[1]  = 4;
-      m_GOPList[7].m_numRefPics[1]  = 3;
-
-      m_GOPList[8].m_numRefPics[1]  = 4;
-      m_GOPList[9].m_numRefPics[1]  = 3;
+      m_GOPList[ 0].m_numRefPics[1] = 2;
+      m_GOPList[ 1].m_numRefPics[1] = 2;
+      m_GOPList[ 2].m_numRefPics[1] = 2;
+      m_GOPList[ 3].m_numRefPics[1] = 3;
+      m_GOPList[ 4].m_numRefPics[1] = 4;
+      m_GOPList[ 5].m_numRefPics[1] = 5;
+      m_GOPList[ 6].m_numRefPics[1] = 4;
+      m_GOPList[ 7].m_numRefPics[1] = 3;
+      m_GOPList[ 8].m_numRefPics[1] = 4;
+      m_GOPList[ 9].m_numRefPics[1] = 3;
       m_GOPList[10].m_numRefPics[1] = 2;
       m_GOPList[11].m_numRefPics[1] = 3;
-
       m_GOPList[12].m_numRefPics[1] = 4;
       m_GOPList[13].m_numRefPics[1] = 3;
+      m_GOPList[14].m_numRefPics[1] = 2;
       m_GOPList[15].m_numRefPics[1] = 3;
 
+      m_GOPList[16].m_numRefPics[1] = 2;
+      m_GOPList[17].m_numRefPics[1] = 2;
+      m_GOPList[18].m_numRefPics[1] = 2;
       m_GOPList[19].m_numRefPics[1] = 3;
-
       m_GOPList[20].m_numRefPics[1] = 4;
       m_GOPList[21].m_numRefPics[1] = 3;
+      m_GOPList[22].m_numRefPics[1] = 2;
       m_GOPList[23].m_numRefPics[1] = 3;
-
+      m_GOPList[24].m_numRefPics[1] = 2;
+      m_GOPList[25].m_numRefPics[1] = 2;
+      m_GOPList[26].m_numRefPics[1] = 2;
       m_GOPList[27].m_numRefPics[1] = 3;
+      m_GOPList[28].m_numRefPics[1] = 2;
+      m_GOPList[29].m_numRefPics[1] = 2;
+      m_GOPList[30].m_numRefPics[1] = 2;
+      m_GOPList[31].m_numRefPics[1] = 2;
 
-      m_GOPList[0].m_deltaRefPics[1][0] =  32; m_GOPList[0].m_deltaRefPics[1][1] =  48;
-      m_GOPList[1].m_deltaRefPics[1][0] = -16; m_GOPList[1].m_deltaRefPics[1][1] =  16;
-      m_GOPList[2].m_deltaRefPics[1][0] =  -8; m_GOPList[2].m_deltaRefPics[1][1] = -24;
-      m_GOPList[3].m_deltaRefPics[1][0] =  -4; m_GOPList[3].m_deltaRefPics[1][1] = -12; m_GOPList[3].m_deltaRefPics[1][2] = -28;
+      m_GOPList[ 0].m_deltaRefPics[1][0] =  32; m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
+      m_GOPList[ 1].m_deltaRefPics[1][0] = -16; m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
+      m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
+      m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; m_GOPList[ 3].m_deltaRefPics[1][1] = -12; m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
 
-      m_GOPList[4].m_deltaRefPics[1][0] = -2; m_GOPList[4].m_deltaRefPics[1][1] = -4; m_GOPList[4].m_deltaRefPics[1][2] = -14;  m_GOPList[4].m_deltaRefPics[1][3] = -30;
-      m_GOPList[5].m_deltaRefPics[1][0] = -1; m_GOPList[5].m_deltaRefPics[1][1] = -3; m_GOPList[5].m_deltaRefPics[1][2] = -7; m_GOPList[5].m_deltaRefPics[1][3] = -15; m_GOPList[5].m_deltaRefPics[1][4] = -31;
-      m_GOPList[6].m_deltaRefPics[1][0] = -1; m_GOPList[6].m_deltaRefPics[1][1] = -5; m_GOPList[6].m_deltaRefPics[1][2] = -13; m_GOPList[6].m_deltaRefPics[1][3] = -29;
-      m_GOPList[7].m_deltaRefPics[1][0] = -2; m_GOPList[7].m_deltaRefPics[1][1] = -10; m_GOPList[7].m_deltaRefPics[1][2] = -26;
+      m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; m_GOPList[ 4].m_deltaRefPics[1][2] = -14; m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
+      m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; m_GOPList[ 5].m_deltaRefPics[1][3] = -15; m_GOPList[5].m_deltaRefPics[1][4] = -31;
+      m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; m_GOPList[ 6].m_deltaRefPics[1][2] = -13; m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
+      m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; m_GOPList[ 7].m_deltaRefPics[1][1] = -10; m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
 
-      m_GOPList[8].m_deltaRefPics[1][0]  = -1; m_GOPList[8].m_deltaRefPics[1][1]  = -3; m_GOPList[8].m_deltaRefPics[1][2]  = -11; m_GOPList[8].m_deltaRefPics[1][3]  = -27;
-      m_GOPList[9].m_deltaRefPics[1][0]  = -1; m_GOPList[9].m_deltaRefPics[1][1]  = -9; m_GOPList[9].m_deltaRefPics[1][2]  = -25;
-      m_GOPList[10].m_deltaRefPics[1][0] = -4; m_GOPList[10].m_deltaRefPics[1][1] = -20;
-      m_GOPList[11].m_deltaRefPics[1][0] = -2; m_GOPList[11].m_deltaRefPics[1][1] = -6; m_GOPList[11].m_deltaRefPics[1][2]  = -22;
+      m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; m_GOPList[ 8].m_deltaRefPics[1][2] = -11; m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
+      m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
+      m_GOPList[10].m_deltaRefPics[1][0] =  -4; m_GOPList[10].m_deltaRefPics[1][1] = -20;
+      m_GOPList[11].m_deltaRefPics[1][0] =  -2; m_GOPList[11].m_deltaRefPics[1][1] =  -6; m_GOPList[11].m_deltaRefPics[1][2] = -22;
 
-      m_GOPList[12].m_deltaRefPics[1][0] = -1; m_GOPList[12].m_deltaRefPics[1][1] = -3; m_GOPList[12].m_deltaRefPics[1][2] = -7; m_GOPList[12].m_deltaRefPics[1][3] = -23;
-      m_GOPList[13].m_deltaRefPics[1][0] = -1; m_GOPList[13].m_deltaRefPics[1][1] = -5; m_GOPList[13].m_deltaRefPics[1][2] = -21;
-      m_GOPList[14].m_deltaRefPics[1][0] = -2; m_GOPList[14].m_deltaRefPics[1][1] = -18;
-      m_GOPList[15].m_deltaRefPics[1][0] = -1; m_GOPList[15].m_deltaRefPics[1][1] = -3; m_GOPList[15].m_deltaRefPics[1][2] = -19;
+      m_GOPList[12].m_deltaRefPics[1][0] =  -1; m_GOPList[12].m_deltaRefPics[1][1] =  -3; m_GOPList[12].m_deltaRefPics[1][2] =  -7; m_GOPList[12].m_deltaRefPics[1][3] = -23;
+      m_GOPList[13].m_deltaRefPics[1][0] =  -1; m_GOPList[13].m_deltaRefPics[1][1] =  -5; m_GOPList[13].m_deltaRefPics[1][2] = -21;
+      m_GOPList[14].m_deltaRefPics[1][0] =  -2; m_GOPList[14].m_deltaRefPics[1][1] = -18;
+      m_GOPList[15].m_deltaRefPics[1][0] =  -1; m_GOPList[15].m_deltaRefPics[1][1] =  -3; m_GOPList[15].m_deltaRefPics[1][2] = -19;
 
-      m_GOPList[16].m_deltaRefPics[1][0] = -1; m_GOPList[16].m_deltaRefPics[1][1]  =  -17;
-      m_GOPList[17].m_deltaRefPics[1][0] = -8; m_GOPList[17].m_deltaRefPics[1][1]  =   8;
-      m_GOPList[18].m_deltaRefPics[1][0] = -4; m_GOPList[18].m_deltaRefPics[1][1]  = -12;
-      m_GOPList[19].m_deltaRefPics[1][0] = -2; m_GOPList[19].m_deltaRefPics[1][1]  =  -6; m_GOPList[19].m_deltaRefPics[1][2]  = -14;
+      m_GOPList[16].m_deltaRefPics[1][0] =  -1; m_GOPList[16].m_deltaRefPics[1][1] = -17;
+      m_GOPList[17].m_deltaRefPics[1][0] =  -8; m_GOPList[17].m_deltaRefPics[1][1] =   8;
+      m_GOPList[18].m_deltaRefPics[1][0] =  -4; m_GOPList[18].m_deltaRefPics[1][1] = -12;
+      m_GOPList[19].m_deltaRefPics[1][0] =  -2; m_GOPList[19].m_deltaRefPics[1][1] =  -6; m_GOPList[19].m_deltaRefPics[1][2] = -14;
 
-      m_GOPList[20].m_deltaRefPics[1][0] = -1; m_GOPList[20].m_deltaRefPics[1][1]  =  -3; m_GOPList[20].m_deltaRefPics[1][2]  =  -7;  m_GOPList[20].m_deltaRefPics[1][3]  = -15;
-      m_GOPList[21].m_deltaRefPics[1][0] = -1; m_GOPList[21].m_deltaRefPics[1][1]  =  -5; m_GOPList[21].m_deltaRefPics[1][2]  = -13;
-      m_GOPList[22].m_deltaRefPics[1][0] = -2; m_GOPList[22].m_deltaRefPics[1][1]  =  -10;
-      m_GOPList[23].m_deltaRefPics[1][0] = -1; m_GOPList[23].m_deltaRefPics[1][1]  =  -3; m_GOPList[23].m_deltaRefPics[1][2]  = -11;
+      m_GOPList[20].m_deltaRefPics[1][0] =  -1; m_GOPList[20].m_deltaRefPics[1][1] =  -3; m_GOPList[20].m_deltaRefPics[1][2] =  -7; m_GOPList[20].m_deltaRefPics[1][3] = -15;
+      m_GOPList[21].m_deltaRefPics[1][0] =  -1; m_GOPList[21].m_deltaRefPics[1][1] =  -5; m_GOPList[21].m_deltaRefPics[1][2] = -13;
+      m_GOPList[22].m_deltaRefPics[1][0] =  -2; m_GOPList[22].m_deltaRefPics[1][1] = -10;
+      m_GOPList[23].m_deltaRefPics[1][0] =  -1; m_GOPList[23].m_deltaRefPics[1][1] =  -3; m_GOPList[23].m_deltaRefPics[1][2] = -11;
 
-      m_GOPList[24].m_deltaRefPics[1][0] = -1; m_GOPList[24].m_deltaRefPics[1][1]  =  -9;
-      m_GOPList[25].m_deltaRefPics[1][0] = -4; m_GOPList[25].m_deltaRefPics[1][1]  =   4;
-      m_GOPList[26].m_deltaRefPics[1][0] = -2; m_GOPList[26].m_deltaRefPics[1][1] =  -6;
-      m_GOPList[27].m_deltaRefPics[1][0] = -1; m_GOPList[27].m_deltaRefPics[1][1] =  -3; m_GOPList[27].m_deltaRefPics[1][2]  = -7;
+      m_GOPList[24].m_deltaRefPics[1][0] =  -1; m_GOPList[24].m_deltaRefPics[1][1] =  -9;
+      m_GOPList[25].m_deltaRefPics[1][0] =  -4; m_GOPList[25].m_deltaRefPics[1][1] =   4;
+      m_GOPList[26].m_deltaRefPics[1][0] =  -2; m_GOPList[26].m_deltaRefPics[1][1] =  -6;
+      m_GOPList[27].m_deltaRefPics[1][0] =  -1; m_GOPList[27].m_deltaRefPics[1][1] =  -3; m_GOPList[27].m_deltaRefPics[1][2] = -7;
 
-      m_GOPList[28].m_deltaRefPics[1][0] = -1; m_GOPList[28].m_deltaRefPics[1][1] =  -5;
-      m_GOPList[29].m_deltaRefPics[1][0] = -2; m_GOPList[29].m_deltaRefPics[1][1] =   2;
-      m_GOPList[30].m_deltaRefPics[1][0] = -1; m_GOPList[30].m_deltaRefPics[1][1] =  -3;
-      m_GOPList[31].m_deltaRefPics[1][0] = -1; m_GOPList[31].m_deltaRefPics[1][1] =   1;
+      m_GOPList[28].m_deltaRefPics[1][0] =  -1; m_GOPList[28].m_deltaRefPics[1][1] =  -5;
+      m_GOPList[29].m_deltaRefPics[1][0] =  -2; m_GOPList[29].m_deltaRefPics[1][1] =   2;
+      m_GOPList[30].m_deltaRefPics[1][0] =  -1; m_GOPList[30].m_deltaRefPics[1][1] =  -3;
+      m_GOPList[31].m_deltaRefPics[1][0] =  -1; m_GOPList[31].m_deltaRefPics[1][1] =   1;
 
       for( int i = 0; i < 32; i++ )
       {
@@ -932,8 +905,8 @@ bool EncCfg::initCfgParameter()
                 m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
                 m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
                 break;
-        case 2: m_GOPList[i].m_QPOffset   = 1;
-                m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
+        case 2: m_GOPList[i].m_QPOffset   = 0;
+                m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
                 m_GOPList[i].m_QPOffsetModelScale  =  0.2353;
                 break;
         case 3: m_GOPList[i].m_QPOffset   = 3;
@@ -1280,7 +1253,7 @@ bool EncCfg::initCfgParameter()
   }
   for(int i=0; i<MAX_TLAYER; i++)
   {
-    m_numReorderPics[i] = 0;
+    m_maxNumReorderPics[i] = 0;
     m_maxDecPicBuffering[i] = 1;
   }
   for(int i=0; i<m_GOPSize; i++)
@@ -1316,23 +1289,23 @@ bool EncCfg::initCfgParameter()
         numReorder++;
       }
     }
-    if(numReorder > m_numReorderPics[m_GOPList[i].m_temporalId])
+    if(numReorder > m_maxNumReorderPics[m_GOPList[i].m_temporalId])
     {
-      m_numReorderPics[m_GOPList[i].m_temporalId] = numReorder;
+      m_maxNumReorderPics[m_GOPList[i].m_temporalId] = numReorder;
     }
   }
 
   for(int i=0; i<MAX_TLAYER-1; i++)
   {
     // a lower layer can not have higher value of m_numReorderPics than a higher layer
-    if(m_numReorderPics[i+1] < m_numReorderPics[i])
+    if(m_maxNumReorderPics[i+1] < m_maxNumReorderPics[i])
     {
-      m_numReorderPics[i+1] = m_numReorderPics[i];
+      m_maxNumReorderPics[i+1] = m_maxNumReorderPics[i];
     }
     // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] - 1, inclusive
-    if(m_numReorderPics[i] > m_maxDecPicBuffering[i] - 1)
+    if(m_maxNumReorderPics[i] > m_maxDecPicBuffering[i] - 1)
     {
-      m_maxDecPicBuffering[i] = m_numReorderPics[i] + 1;
+      m_maxDecPicBuffering[i] = m_maxNumReorderPics[i] + 1;
     }
     // a lower layer can not have higher value of m_uiMaxDecPicBuffering than a higher layer
     if(m_maxDecPicBuffering[i+1] < m_maxDecPicBuffering[i])
@@ -1342,38 +1315,9 @@ bool EncCfg::initCfgParameter()
   }
 
   // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] -  1, inclusive
-  if(m_numReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
+  if(m_maxNumReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
   {
-    m_maxDecPicBuffering[MAX_TLAYER-1] = m_numReorderPics[MAX_TLAYER-1] + 1;
-  }
-
-  int   iWidthInCU  = ( m_SourceWidth%m_CTUSize )  ? m_SourceWidth/m_CTUSize  + 1 : m_SourceWidth/m_CTUSize;
-  int   iHeightInCU = ( m_SourceHeight%m_CTUSize ) ? m_SourceHeight/m_CTUSize + 1 : m_SourceHeight/m_CTUSize;
-  uint32_t  uiCummulativeColumnWidth = 0;
-  uint32_t  uiCummulativeRowHeight   = 0;
-
-  //check the column relative parameters
-  confirmParameter( m_numTileColumnsMinus1 >= (1<<(LOG2_MAX_NUM_COLUMNS_MINUS1+1)), "The number of columns is larger than the maximum allowed number of columns." );
-  confirmParameter( m_numTileColumnsMinus1 >= iWidthInCU,                           "The current picture can not have so many columns." );
-  if( m_numTileColumnsMinus1 && !m_tileUniformSpacingFlag )
-  {
-    for( int i=0; i<m_numTileColumnsMinus1; i++ )
-    {
-      uiCummulativeColumnWidth += m_tileColumnWidth[i];
-    }
-    confirmParameter( uiCummulativeColumnWidth >= iWidthInCU, "The width of the column is too large." );
-  }
-
-  //check the row relative parameters
-  confirmParameter( m_numTileRowsMinus1 >= (1<<(LOG2_MAX_NUM_ROWS_MINUS1+1)), "The number of rows is larger than the maximum allowed number of rows." );
-  confirmParameter( m_numTileRowsMinus1 >= iHeightInCU,                       "The current picture can not have so many rows." );
-  if( m_numTileRowsMinus1 && !m_tileUniformSpacingFlag )
-  {
-    for(int i=0; i<m_numTileRowsMinus1; i++)
-    {
-      uiCummulativeRowHeight += m_tileRowHeight[i];
-    }
-    confirmParameter( uiCummulativeRowHeight >= iHeightInCU, "The height of the row is too large." );
+    m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
   confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
@@ -1449,12 +1393,6 @@ bool EncCfg::initCfgParameter()
       m_numRPLList1++;
   }
 
-  int tilesCount = ( m_numTileRowsMinus1 + 1 ) * ( m_numTileColumnsMinus1 + 1 );
-  if ( tilesCount == 1 )
-  {
-    m_bLFCrossTileBoundaryFlag = true;
-  }
-
   m_PROF &= bool(m_Affine);
   if (m_Affine > 1)
   {
@@ -1478,12 +1416,586 @@ bool EncCfg::initCfgParameter()
     }
   }
 
+  /// Experimental settings
+  checkExperimental( m_RCRateControlMode != 0 && m_RCNumPasses == 2 && m_usePerceptQPA != 0, "2-pass rate control with perceptually optimized QP-adaptation is experimental!" );
+
   return( m_confirmFailed );
 }
 
 void EncCfg::setCfgParameter( const EncCfg& encCfg )
 {
   *this = encCfg;
+}
+
+int EncCfg::initPreset( PresetMode preset )
+{
+  m_qpInValsCb.clear();
+  m_qpInValsCb.push_back( 17 );
+  m_qpInValsCb.push_back( 22 );
+  m_qpInValsCb.push_back( 34 );
+  m_qpInValsCb.push_back( 42 );
+  m_qpOutValsCb.clear();
+  m_qpOutValsCb.push_back( 17 );
+  m_qpOutValsCb.push_back( 23 );
+  m_qpOutValsCb.push_back( 35 );
+  m_qpOutValsCb.push_back( 39 );
+
+  // basic settings
+  m_intraQPOffset                 = -3;
+  m_lambdaFromQPEnable            = true;
+  m_MaxCodingDepth                = 5;
+  m_log2DiffMaxMinCodingBlockSize = 5;
+  m_bUseASR                       = true;
+  m_bUseHADME                     = true;
+  m_useRDOQTS                     = true;
+  m_useSelectiveRDOQ              = false;
+  m_cabacInitPresent              = true;
+  m_fastQtBtEnc                   = true;
+  m_fastInterSearchMode           = 1;
+  m_motionEstimationSearchMethod  = 4;
+  m_SearchRange                   = 384;
+  m_minSearchWindow               = 96;
+  m_maxNumMergeCand               = 6;
+  m_TSsize                        = 3;
+  m_reshapeSignalType             = 0;
+  m_updateCtrl                    = 0;
+  m_LMCSOffset                    = 6;
+  m_RDOQ                          = 1;
+  m_SignDataHidingEnabled         = 0;
+  m_useFastLCTU                   = 1;
+
+  // partitioning
+  m_dualITree                     = 1;
+  m_MinQT[ 0 ]                    = 8;
+  m_MinQT[ 1 ]                    = 8;
+  m_MinQT[ 2 ]                    = 4;
+  m_maxMTTDepth                   = 1;
+  m_maxMTTDepthI                  = 2;
+  m_maxMTTDepthIChroma            = 2;
+
+  // disable tools
+  m_Affine                        = 0;
+  m_alf                           = 0;
+  m_allowDisFracMMVD              = 0;
+  m_useBDPCM                      = 0;
+  m_BDOF                          = 0;
+  m_ccalf                         = 0;
+  m_useChromaTS                   = 0;
+  m_CIIP                          = 0;
+  m_DepQuantEnabled               = 0;
+  m_DMVR                          = 0;
+  m_EDO                           = 0;
+  m_Geo                           = 0;
+  m_AMVRspeed                     = 0;
+  m_ISP                           = 0;
+  m_JointCbCrMode                 = 0;
+  m_LFNST                         = 0;
+  m_LMChroma                      = 0;
+  m_lumaReshapeEnable             = 0;
+  m_MCTF                          = 0;
+  m_MIP                           = 0;
+  m_MMVD                          = 0;
+  m_MRL                           = 0;
+  m_MTS                           = 0;
+  m_MTSImplicit                   = 0;
+  m_PROF                          = 0;
+  m_bUseSAO                       = 0;
+  m_SbTMVP                        = 0;
+  m_SBT                           = 0;
+  m_SMVD                          = 0;
+  m_TMVPModeId                    = 0;
+  m_TS                            = 0;
+  m_useNonLinearAlfChroma         = 0;
+  m_useNonLinearAlfLuma           = 0;
+
+  // enable speedups
+  m_qtbttSpeedUp                  = 1;
+  m_contentBasedFastQtbt          = 1;
+  m_usePbIntraFast                = 1;
+  m_useFastMrg                    = 2;
+  m_useAMaxBT                     = 1;
+  m_useFastMIP                    = 4;
+  m_fastLocalDualTreeMode         = 1;
+  m_fastSubPel                    = 1;
+
+  switch( preset )
+  {
+    case PresetMode::FIRSTPASS:
+      // Q44B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 32;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+
+      m_useBDPCM                  = 1;
+      m_DMVR                      = 1;
+      m_LMChroma                  = 1;
+      m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      break;
+
+    case PresetMode::FASTER:
+      // Q44B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 32;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+
+      m_useBDPCM                  = 1;
+      m_DMVR                      = 1;
+      m_LMChroma                  = 1;
+      m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      break;
+
+    case PresetMode::FAST:
+      // Q43B11
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 16;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 1;
+      m_maxMTTDepthIChroma        = 1;
+
+      m_RDOQ                      = 2;
+      m_SignDataHidingEnabled     = 1;
+
+      m_alf                       = 1;
+      m_ccalf                     = 1;
+      m_useBDPCM                  = 1;
+      m_DMVR                      = 1;
+      m_LMChroma                  = 1;
+      m_MCTF                      = 2;
+      m_MTSImplicit               = 1;
+      m_bUseSAO                   = 1;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      break;
+
+    case PresetMode::MEDIUM:
+      // Q44B21
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 2;
+      m_maxMTTDepthIChroma        = 2;
+
+      m_Affine                    = 2;
+      m_alf                       = 1;
+      m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
+      m_Geo                       = 3;
+      m_AMVRspeed                 = 5;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 3;
+      m_MRL                       = 1;
+      m_MTSImplicit               = 1;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SMVD                      = 3;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      break;
+
+    case PresetMode::SLOW:
+      // Q44B32
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 2;
+      m_maxMTTDepthI              = 3;
+      m_maxMTTDepthIChroma        = 3;
+
+      m_Affine                    = 2;
+      m_alf                       = 1;
+      m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_CIIP                      = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
+      m_Geo                       = 1;
+      m_AMVRspeed                 = 1;
+      m_ISP                       = 3;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 3;
+      m_MRL                       = 1;
+      m_MTSImplicit               = 1;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 1;
+      m_SMVD                      = 3;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+
+      m_contentBasedFastQtbt      = 0;
+      break;
+
+    case PresetMode::SLOWER:
+
+      m_motionEstimationSearchMethod = 1;
+
+      // Q44B33
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 3;
+      m_maxMTTDepthI              = 3;
+      m_maxMTTDepthIChroma        = 3;
+
+      m_Affine                    = 1;
+      m_alf                       = 1;
+      m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_CIIP                      = 1;
+      m_DMVR                      = 1;
+      m_EDO                       = 2;
+      m_Geo                       = 1;
+      m_AMVRspeed                 = 1;
+      m_ISP                       = 1;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 1;
+      m_MRL                       = 1;
+      m_MTS                       = 1;
+      m_MTSImplicit               = 0;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 1;
+      m_SMVD                      = 1;
+      m_TMVPModeId                = 1;
+      m_TS                        = 2;
+      m_useNonLinearAlfChroma     = 1;
+      m_useNonLinearAlfLuma       = 1;
+
+      m_qtbttSpeedUp              = 0;
+      m_contentBasedFastQtbt      = 0;
+      m_useFastMrg                = 1;
+      m_useFastMIP                = 0;
+      m_fastSubPel                = 0;
+      break;
+
+    case PresetMode::TOOLTEST:
+      // Q44B21
+      m_MinQT[ 0 ]                = 8;
+      m_MinQT[ 1 ]                = 8;
+      m_MinQT[ 2 ]                = 4;
+      m_maxMTTDepth               = 1;
+      m_maxMTTDepthI              = 2;
+      m_maxMTTDepthIChroma        = 2;
+
+      m_Affine                    = 2;
+      m_alf                       = 1;
+      m_allowDisFracMMVD          = 1;
+      m_useBDPCM                  = 1;
+      m_BDOF                      = 1;
+      m_ccalf                     = 1;
+      m_DepQuantEnabled           = 1;
+      m_CIIP                      = 3;
+      m_DMVR                      = 1;
+      m_EDO                       = 1;
+      m_Geo                       = 2;
+      m_AMVRspeed                 = 3;
+      m_ISP                       = 2;
+      m_JointCbCrMode             = 1;
+      m_LFNST                     = 1;
+      m_LMChroma                  = 1;
+      m_lumaReshapeEnable         = 1;
+      m_MCTF                      = 2;
+      m_MIP                       = 1;
+      m_MMVD                      = 2;
+      m_MRL                       = 1;
+      m_MTS                       = 1;
+      m_PROF                      = 1;
+      m_bUseSAO                   = 1;
+      m_SbTMVP                    = 1;
+      m_SBT                       = 2;
+      m_SMVD                      = 3;
+      m_TMVPModeId                = 1;
+      m_TS                        = 1;
+      m_useNonLinearAlfChroma     = 1;
+      m_useNonLinearAlfLuma       = 1;
+      break;
+
+    default:
+      return -1;
+  }
+
+  return 0;
+}
+
+static inline std::string getProfileStr( int profile )
+{
+  std::string cT;
+  switch( profile )
+  {
+    case Profile::NONE                                 : cT = "none"; break;
+    case Profile::MAIN_10                              : cT = "main_10"; break;
+    case Profile::MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
+    case Profile::MAIN_10_444                          : cT = "main_10_444"; break;
+    case Profile::MAIN_10_444_STILL_PICTURE            : cT = "main_10_444_still_picture"; break;
+    case Profile::MULTILAYER_MAIN_10                   : cT = "multilayer_main_10"; break;
+    case Profile::MULTILAYER_MAIN_10_STILL_PICTURE     : cT = "multilayer_main_10_still_picture"; break;
+    case Profile::MULTILAYER_MAIN_10_444               : cT = "multilayer_main_10_444"; break;
+    case Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE : cT = "multilayer_main_10_444_still_picture"; break;
+    case Profile::AUTO                                 : cT = "auto"; break;
+    default                                            : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getLevelStr( int level )
+{
+  std::string cT;
+  switch( level )
+  {
+    case Level::NONE      : cT = "none";    break;
+    case Level::LEVEL1    : cT = "1";       break;
+    case Level::LEVEL2    : cT = "2";       break;
+    case Level::LEVEL2_1  : cT = "2.1";     break;
+    case Level::LEVEL3    : cT = "3";       break;
+    case Level::LEVEL3_1  : cT = "3.1";     break;
+    case Level::LEVEL4    : cT = "4";       break;
+    case Level::LEVEL4_1  : cT = "4.1";     break;
+    case Level::LEVEL5    : cT = "5";       break;
+    case Level::LEVEL5_1  : cT = "5.1";     break;
+    case Level::LEVEL5_2  : cT = "5.2";     break;
+    case Level::LEVEL6    : cT = "6";       break;
+    case Level::LEVEL6_1  : cT = "6.1";     break;
+    case Level::LEVEL6_2  : cT = "6.2";     break;
+    case Level::LEVEL6_3  : cT = "6.3";     break;
+    case Level::LEVEL15_5 : cT = "15.5";    break;
+    default               : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getCostFunctionStr( int cost )
+{
+  std::string cT;
+  switch( cost )
+  {
+    case COST_STANDARD_LOSSY               : cT = "Lossy coding"; break;
+    case COST_SEQUENCE_LEVEL_LOSSLESS      : cT = "Sequence level lossless coding"; break;
+    case COST_LOSSLESS_CODING              : cT = "Lossless coding"; break;
+    case COST_MIXED_LOSSLESS_LOSSY_CODING  : cT = "Mixed lossless lossy coding"; break;
+    default                                : cT = "Unknown"; break;
+  }
+  return cT;
+}
+
+void EncCfg::printCfg() const
+{
+  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_SourceWidth - m_confWinLeft - m_confWinRight, m_SourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_SourceWidth, m_SourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Sequence PSNR output                   : %s\n",           m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" );
+  msg( DETAILS, "Hexadecimal PSNR output                : %s\n",           m_printHexPsnr ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Sequence MSE output                    : %s\n",           m_printSequenceMSE ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Frame MSE output                       : %s\n",           m_printFrameMSE ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Cabac-zero-word-padding                : %s\n",           m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" );
+  msg( DETAILS, "Frame/Field                            : Frame based coding\n" );
+  if ( m_framesToBeEncoded > 0 )
+    msg( DETAILS, "Frame index                            : %d frames\n",  m_framesToBeEncoded );
+  else
+    msg( DETAILS, "Frame index                            : all frames\n" );
+  msg( DETAILS, "Profile                                : %s\n",           getProfileStr( m_profile ).c_str() );
+  msg( DETAILS, "Level                                  : %s\n",           getLevelStr( m_level ).c_str() );
+  msg( DETAILS, "CU size / total-depth                  : %d / %d\n",      m_CTUSize, m_MaxCodingDepth );
+  msg( DETAILS, "Max TB size                            : %d\n",           1 << m_log2MaxTbSize );
+  msg( DETAILS, "Motion search range                    : %d\n",           m_SearchRange );
+  msg( DETAILS, "Intra period                           : %d\n",           m_IntraPeriod );
+  msg( DETAILS, "Decoding refresh type                  : %d\n",           m_DecodingRefreshType );
+  msg( DETAILS, "QP                                     : %d\n",           m_QP);
+  msg( DETAILS, "Percept QPA                            : %d\n",           m_usePerceptQPA );
+  msg( DETAILS, "Max dQP signaling subdiv               : %d\n",           m_cuQpDeltaSubdiv);
+  msg( DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n",      m_chromaCbQpOffset, m_chromaCbQpOffsetDualTree );
+  msg( DETAILS, "Cr QP Offset (dual tree)               : %d (%d)\n",      m_chromaCrQpOffset, m_chromaCrQpOffsetDualTree );
+  msg( DETAILS, "GOP size                               : %d\n",           m_GOPSize );
+  msg( DETAILS, "Input queue size                       : %d\n",           m_InputQueueSize );
+  msg( DETAILS, "Input bit depth                        : (Y:%d, C:%d)\n", m_inputBitDepth[ CH_L ], m_inputBitDepth[ CH_C ] );
+  msg( DETAILS, "MSB-extended bit depth                 : (Y:%d, C:%d)\n", m_MSBExtendedBitDepth[ CH_L ], m_MSBExtendedBitDepth[ CH_C ] );
+  msg( DETAILS, "Internal bit depth                     : (Y:%d, C:%d)\n", m_internalBitDepth[ CH_L ], m_internalBitDepth[ CH_C ] );
+  msg( DETAILS, "cu_chroma_qp_offset_subdiv             : %d\n",           m_cuChromaQpOffsetSubdiv );
+  if (m_bUseSAO)
+  {
+    msg( DETAILS, "log2_sao_offset_scale_luma             : %d\n",         m_log2SaoOffsetScale[ CH_L ] );
+    msg( DETAILS, "log2_sao_offset_scale_chroma           : %d\n",         m_log2SaoOffsetScale[ CH_C ] );
+  }
+  msg( DETAILS, "Cost function:                         : %s\n",           getCostFunctionStr( m_costMode ).c_str() );
+  msg( DETAILS, "\n");
+
+  msg( VERBOSE, "CODING TOOL CFG: ");
+  msg( VERBOSE, "IBD:%d ",                   ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])));
+  msg( VERBOSE, "CIP:%d ",                   m_bUseConstrainedIntraPred );
+  msg( VERBOSE, "SAO:%d ",                   m_bUseSAO ? 1 : 0 );
+  msg( VERBOSE, "ALF:%d ",                   m_alf ? 1 : 0 );
+  if( m_alf )
+  {
+    msg( VERBOSE, "(NonLinLuma:%d ",         m_useNonLinearAlfLuma );
+    msg( VERBOSE, "NonLinChr:%d) ",          m_useNonLinearAlfChroma );
+  }
+  msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
+
+  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_SourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
+  msg( VERBOSE, "WPP:%d ",                   m_entropyCodingSyncEnabled ? 1 : 0 );
+  msg( VERBOSE, "WPP-Substreams:%d ",        iWaveFrontSubstreams );
+  msg( VERBOSE, "TMVP:%d ",                  m_TMVPModeId );
+
+  msg( VERBOSE, "DQ:%d ",                    m_DepQuantEnabled );
+  if( m_DepQuantEnabled )
+  {
+    if( m_dqThresholdVal & 1 )
+      msg( VERBOSE, "(Thr: %d.5) ",          m_dqThresholdVal >> 1 );
+    else
+      msg( VERBOSE, "(Thr: %d) ",            m_dqThresholdVal >> 1 );
+  }
+  msg( VERBOSE, "SDH:%d ",                   m_SignDataHidingEnabled);
+  msg( VERBOSE, "CST:%d ",                   m_dualITree );
+  msg( VERBOSE, "BDOF:%d ",                  m_BDOF );
+  msg( VERBOSE, "DMVR:%d ",                  m_DMVR );
+  msg( VERBOSE, "MTSImplicit:%d ",           m_MTSImplicit );
+  msg( VERBOSE, "SBT:%d ",                   m_SBT );
+  msg( VERBOSE, "JCbCr:%d ",                 m_JointCbCrMode );
+  msg( VERBOSE, "CabacInitPresent:%d ",      m_cabacInitPresent );
+  msg( VERBOSE, "AMVR:%d ",                  m_AMVRspeed );
+  msg( VERBOSE, "SMVD:%d ",                  m_SMVD );
+
+  msg( VERBOSE, "LMCS:%d ",                  m_lumaReshapeEnable );
+  if( m_lumaReshapeEnable )
+  {
+    msg( VERBOSE, "(Signal:%s ",             m_reshapeSignalType == 0 ? "SDR" : (m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ") );
+    msg( VERBOSE, "Opt:%d",                  m_adpOption );
+    if( m_adpOption > 0 )
+    {
+      msg( VERBOSE, " CW:%d",                m_initialCW );
+    }
+    msg( VERBOSE, ") " );
+  }
+  msg( VERBOSE, "CIIP:%d ",                  m_CIIP );
+  msg( VERBOSE, "MIP:%d ",                   m_MIP );
+  msg( VERBOSE, "AFFINE:%d ",                m_Affine );
+  if( m_Affine )
+  {
+    msg( VERBOSE, "(PROF:%d, ",              m_PROF );
+    msg( VERBOSE, "Type:%d)",                m_AffineType );
+  }
+  msg( VERBOSE, "MMVD:%d ",                  m_MMVD );
+  if( m_MMVD )
+    msg( VERBOSE, "DisFracMMVD:%d ",         m_allowDisFracMMVD) ;
+  msg( VERBOSE, "SbTMVP:%d ",                m_SbTMVP );
+  msg( VERBOSE, "GPM:%d ",                   m_Geo );
+  msg( VERBOSE, "LFNST:%d ",                 m_LFNST );
+  msg( VERBOSE, "MTS:%d ",                   m_MTS );
+  if( m_MTS )
+  {
+    msg( VERBOSE, "(IntraCand:%d)",          m_MTSIntraMaxCand );
+  }
+  msg( VERBOSE, "ISP:%d ",                   m_ISP );
+  msg( VERBOSE, "TS:%d ",                    m_TS );
+  if( m_TS )
+  {
+    msg( VERBOSE, "TSLog2MaxSize:%d ",       m_TSsize );
+    msg( VERBOSE, "useChromaTS:%d ",         m_useChromaTS );
+  }
+  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
+  
+  msg( VERBOSE, "\nENC. ALG. CFG: " );
+  msg( VERBOSE, "QPA:%d ",                   m_usePerceptQPA );
+  msg( VERBOSE, "HAD:%d ",                   m_bUseHADME );
+  msg( VERBOSE, "RDQ:%d ",                   m_RDOQ );
+  msg( VERBOSE, "RDQTS:%d ",                 m_useRDOQTS );
+  msg( VERBOSE, "ASR:%d ",                   m_bUseASR );
+  msg( VERBOSE, "MinSearchWindow:%d ",       m_minSearchWindow );
+  msg( VERBOSE, "RestrictMESampling:%d ",    m_bRestrictMESampling );
+  msg( VERBOSE, "EDO:%d ",                   m_EDO );
+  msg( VERBOSE, "MCTF:%d ",                  m_MCTF );
+  if( m_MCTF )
+  {
+    msg( VERBOSE, "[L:%d, T:%d] ",           m_MCTFNumLeadFrames, m_MCTFNumTrailFrames );
+  }
+
+  msg( VERBOSE, "\nFAST TOOL CFG: " );
+  msg( VERBOSE, "ECU:%d ",                   m_bUseEarlyCU );
+  msg( VERBOSE, "FEN:%d ",                   m_fastInterSearchMode );
+  msg( VERBOSE, "FDM:%d ",                   m_useFastDecisionForMerge );
+  msg( VERBOSE, "ESD:%d ",                   m_useEarlySkipDetection );
+  msg( VERBOSE, "FastSearch:%d ",            m_motionEstimationSearchMethod );
+  msg( VERBOSE, "LCTUFast:%d ",              m_useFastLCTU );
+  msg( VERBOSE, "FastMrg:%d ",               m_useFastMrg );
+  msg( VERBOSE, "PBIntraFast:%d ",           m_usePbIntraFast );
+  msg( VERBOSE, "AMaxBT:%d ",                m_useAMaxBT );
+  msg( VERBOSE, "FastQtBtEnc:%d ",           m_fastQtBtEnc );
+  msg( VERBOSE, "ContentBasedFastQtbt:%d ",  m_contentBasedFastQtbt );
+  if( m_MIP )
+  {
+    msg( VERBOSE, "FastMIP:%d ",             m_useFastMIP );
+  }
+  msg( VERBOSE, "FastLocalDualTree:%d ",     m_fastLocalDualTreeMode );
+  msg( VERBOSE, "FastSubPel:%d ",            m_fastSubPel );
+  msg( VERBOSE, "QtbttExtraFast:%d ",        m_qtbttSpeedUp );
+
+  msg( VERBOSE, "\nRATE CONTROL CFG: " );
+  msg( VERBOSE, "RateControl:%d ",           m_RCRateControlMode );
+  if ( m_RCRateControlMode )
+  {
+    msg( VERBOSE, "Passes:%d ",              m_RCNumPasses );
+    msg( VERBOSE, "TargetBitrate:%d ",       m_RCTargetBitrate );
+    msg( VERBOSE, "KeepHierarchicalBit:%d ", m_RCKeepHierarchicalBit );
+    msg( VERBOSE, "RCLCUSeparateModel:%d ",  m_RCUseLCUSeparateModel );
+    msg( VERBOSE, "InitialQP:%d ",           m_RCInitialQP );
+    msg( VERBOSE, "RCForceIntraQP:%d ",      m_RCForceIntraQP );
+  }
+
+  msg( VERBOSE, "\nPARALLEL PROCESSING CFG: " );
+  msg( VERBOSE, "FPP:%d ",                   m_frameParallel );
+  msg( VERBOSE, "NumFppThreads:%d ",         m_numFppThreads );
+  msg( VERBOSE, "FppBitEqual:%d ",           m_ensureFppBitEqual );
+  msg( VERBOSE, "WPP:%d ",                   m_numWppThreads );
+  msg( VERBOSE, "WppBitEqual:%d ",           m_ensureWppBitEqual );
+  msg( VERBOSE, "WF:%d",                     m_entropyCodingSyncEnabled );
+  msg( VERBOSE, "\n" );
 }
 
 } // namespace vvenc

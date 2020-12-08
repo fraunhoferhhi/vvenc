@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 /** \file     YuvX86.cpp
     \brief    SIMD averaging.
 */
@@ -1534,213 +1538,6 @@ void transposeNxN_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride )
 #endif
 }
 
-template< X86_VEXT vext >
-void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng)
-{
-  CHECKD( width != 4 || height != 4, "block width error!");
-
-  const int dILimit = 1 << std::max<int>(clpRng.bd + 1, 13);
-
-#if USE_AVX2
-  __m256i mm_dmvx, mm_dmvy, mm_gradx, mm_grady, mm_dI, mm_dI0, mm_src;
-  __m256i mm_offset = _mm256_set1_epi16( offset );
-  __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-  __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
-  __m256i mm_dimin  = _mm256_set1_epi32( -dILimit );
-  __m256i mm_dimax  = _mm256_set1_epi32( dILimit - 1 );
-
-  const int *vX0 = dMvX, *vY0 = dMvY;
-  const Pel *gX0 = gradX, *gY0 = gradY;
-
-  // first two rows
-  mm_dmvx = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) vX0 ) ), _mm_loadu_si128( ( const __m128i * )( vX0 + dMvStride ) ), 1 );
-  mm_dmvy = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) vY0 ) ), _mm_loadu_si128( ( const __m128i * )( vY0 + dMvStride ) ), 1 );
-
-  mm_dmvx = _mm256_packs_epi32( mm_dmvx, _mm256_setzero_si256() );
-  mm_dmvy = _mm256_packs_epi32( mm_dmvy, _mm256_setzero_si256() );
-
-  mm_gradx = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadl_epi64( ( __m128i* )gX0 ) ), _mm_loadl_epi64( ( __m128i* )( gX0 + gradStride ) ), 1 );
-  mm_grady = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadl_epi64( ( __m128i* )gY0 ) ), _mm_loadl_epi64( ( __m128i* )( gY0 + gradStride ) ), 1 );
-  
-  mm_dI0   = _mm256_madd_epi16( _mm256_unpacklo_epi16( mm_dmvx, mm_dmvy ), _mm256_unpacklo_epi16( mm_gradx, mm_grady ) );
-  mm_dI0   = _mm256_min_epi32( mm_dimax, _mm256_max_epi32( mm_dimin, mm_dI0 ) );
-
-  // next two rows
-  vX0 += ( dMvStride << 1 ); vY0 += ( dMvStride << 1 ); gX0 += ( gradStride << 1 ); gY0 += ( gradStride << 1 );
-  
-  mm_dmvx = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) vX0 ) ), _mm_loadu_si128( ( const __m128i * )( vX0 + dMvStride ) ), 1 );
-  mm_dmvy = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) vY0 ) ), _mm_loadu_si128( ( const __m128i * )( vY0 + dMvStride ) ), 1 );
-
-  mm_dmvx = _mm256_packs_epi32( mm_dmvx, _mm256_setzero_si256() );
-  mm_dmvy = _mm256_packs_epi32( mm_dmvy, _mm256_setzero_si256() );
-
-  mm_gradx = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadl_epi64( ( __m128i* )gX0 ) ), _mm_loadl_epi64( ( __m128i* )( gX0 + gradStride ) ), 1 );
-  mm_grady = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_loadl_epi64( ( __m128i* )gY0 ) ), _mm_loadl_epi64( ( __m128i* )( gY0 + gradStride ) ), 1 );
-  
-  mm_dI    = _mm256_madd_epi16( _mm256_unpacklo_epi16( mm_dmvx, mm_dmvy ), _mm256_unpacklo_epi16( mm_gradx, mm_grady ) );
-  mm_dI    = _mm256_min_epi32( mm_dimax, _mm256_max_epi32( mm_dimin, mm_dI ) );
-
-  // combine four rows
-  mm_dI = _mm256_packs_epi32( mm_dI0, mm_dI );
-  const Pel* src0 = srcPel + srcStride;
-  mm_src = _mm256_inserti128_si256(
-    _mm256_castsi128_si256(_mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)srcPel), _mm_loadl_epi64((const __m128i *)(srcPel + (srcStride << 1))))),
-    _mm_unpacklo_epi64(_mm_loadl_epi64((const __m128i *)src0), _mm_loadl_epi64((const __m128i *)(src0 + (srcStride << 1)))),
-    1
-  );
-  mm_dI = _mm256_add_epi16(mm_dI, mm_src);
-  if (!bi)
-  {
-    mm_dI = _mm256_srai_epi16(_mm256_adds_epi16(mm_dI, mm_offset), shiftNum);
-    mm_dI = _mm256_min_epi16(vibdimax, _mm256_max_epi16(vibdimin, mm_dI));
-  }
-
-  // store final results
-  __m128i dITmp = _mm256_extractf128_si256(mm_dI, 1);
-  Pel* dst0 = dstPel;
-  _mm_storel_epi64((__m128i *)dst0, _mm256_castsi256_si128(mm_dI));
-  dst0 += dstStride; _mm_storel_epi64((__m128i *)dst0, dITmp);
-  dst0 += dstStride; _mm_storel_epi64((__m128i *)dst0, _mm_unpackhi_epi64(_mm256_castsi256_si128(mm_dI), _mm256_castsi256_si128(mm_dI)));
-  dst0 += dstStride; _mm_storel_epi64((__m128i *)dst0, _mm_unpackhi_epi64(dITmp, dITmp));
-#else
-  __m128i mm_dmvx, mm_dmvy, mm_gradx, mm_grady, mm_dI, mm_dI0;
-  __m128i mm_offset = _mm_set1_epi16( offset );
-  __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-  __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
-  __m128i mm_dimin  = _mm_set1_epi32( -dILimit );
-  __m128i mm_dimax  = _mm_set1_epi32( dILimit - 1 );
-
-  for( int h = 0; h < height; h += 2 )
-  {
-    const int* vX = dMvX;
-    const int* vY = dMvY;
-    const Pel* gX = gradX;
-    const Pel* gY = gradY;
-    const Pel* src = srcPel;
-    Pel*       dst = dstPel;
-
-    // first row
-    mm_dmvx  = _mm_packs_epi32( _mm_loadu_si128( ( const __m128i * ) vX ), _mm_setzero_si128() );
-    mm_dmvy  = _mm_packs_epi32( _mm_loadu_si128( ( const __m128i * ) vY ), _mm_setzero_si128() );
-    mm_gradx = _mm_loadl_epi64( ( __m128i* ) gX );
-    mm_grady = _mm_loadl_epi64( ( __m128i* ) gY );
-    mm_dI0   = _mm_madd_epi16 ( _mm_unpacklo_epi16( mm_dmvx, mm_dmvy ), _mm_unpacklo_epi16( mm_gradx, mm_grady ) );
-    mm_dI0   = _mm_min_epi32  ( mm_dimax, _mm_max_epi32( mm_dimin, mm_dI0 ) );
-
-    // second row
-    mm_dmvx  = _mm_packs_epi32( _mm_loadu_si128( ( const __m128i * ) ( vX + dMvStride ) ), _mm_setzero_si128() );
-    mm_dmvy  = _mm_packs_epi32( _mm_loadu_si128( ( const __m128i * ) ( vY + dMvStride ) ), _mm_setzero_si128() );
-    mm_gradx = _mm_loadl_epi64( ( __m128i* ) ( gX + gradStride ) );
-    mm_grady = _mm_loadl_epi64( ( __m128i* ) ( gY + gradStride ) );
-    mm_dI    = _mm_madd_epi16 ( _mm_unpacklo_epi16( mm_dmvx, mm_dmvy ), _mm_unpacklo_epi16( mm_gradx, mm_grady ) );
-    mm_dI    = _mm_min_epi32  ( mm_dimax, _mm_max_epi32( mm_dimin, mm_dI ) );
-
-    // combine both rows
-    mm_dI = _mm_packs_epi32( mm_dI0, mm_dI );
-    mm_dI = _mm_add_epi16  ( _mm_unpacklo_epi64( _mm_loadl_epi64( ( const __m128i * )src ), _mm_loadl_epi64( ( const __m128i * )( src + srcStride ) ) ), mm_dI );
-    if (!bi)
-    {
-      mm_dI = _mm_srai_epi16(_mm_adds_epi16(mm_dI, mm_offset), shiftNum);
-      mm_dI = _mm_min_epi16(vibdimax, _mm_max_epi16(vibdimin, mm_dI));
-    }
-
-    _mm_storel_epi64( ( __m128i * )  dst,                                   mm_dI );
-    _mm_storel_epi64( ( __m128i * )( dst + dstStride ), _mm_unpackhi_epi64( mm_dI, mm_dI ) );
-
-    dMvX   += (dMvStride  << 1);
-    dMvY   += (dMvStride  << 1);
-    gradX  += (gradStride << 1);
-    gradY  += (gradStride << 1);
-    srcPel += (srcStride  << 1);
-    dstPel += (dstStride  << 1);
-  }
-#endif
-}
-
-template< X86_VEXT vext, bool PAD = true>
-void gradFilter_SSE(const Pel* src, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth) //exist in InterPredX86
-{
-  const Pel* srcTmp = src + srcStride + 1;
-  Pel* gradXTmp = gradX + gradStride + 1;
-  Pel* gradYTmp = gradY + gradStride + 1;
-
-  int widthInside = width - 2 * BDOF_EXTEND_SIZE;
-  int heightInside = height - 2 * BDOF_EXTEND_SIZE;
-  int shift1 = std::max<int>(6, bitDepth - 6);
-  __m128i mmShift1 = _mm_cvtsi32_si128(shift1);
-  assert((widthInside & 3) == 0);
-
-  if ((widthInside & 7) == 0)
-  {
-    for (int y = 0; y < heightInside; y++)
-    {
-      int x = 0;
-      for (; x < widthInside; x += 8)
-      {
-        __m128i mmPixTop = _mm_sra_epi16(_mm_loadu_si128((__m128i*) (srcTmp + x - srcStride)), mmShift1);
-        __m128i mmPixBottom = _mm_sra_epi16(_mm_loadu_si128((__m128i*) (srcTmp + x + srcStride)), mmShift1);
-        __m128i mmPixLeft = _mm_sra_epi16(_mm_loadu_si128((__m128i*) (srcTmp + x - 1)), mmShift1);
-        __m128i mmPixRight = _mm_sra_epi16(_mm_loadu_si128((__m128i*) (srcTmp + x + 1)), mmShift1);
-
-        __m128i mmGradVer = _mm_sub_epi16(mmPixBottom, mmPixTop);
-        __m128i mmGradHor = _mm_sub_epi16(mmPixRight, mmPixLeft);
-
-        _mm_storeu_si128((__m128i *) (gradYTmp + x), mmGradVer);
-        _mm_storeu_si128((__m128i *) (gradXTmp + x), mmGradHor);
-      }
-      gradXTmp += gradStride;
-      gradYTmp += gradStride;
-      srcTmp += srcStride;
-    }
-  }
-  else
-  {
-    __m128i mmPixTop = _mm_sra_epi16(_mm_unpacklo_epi64(_mm_loadl_epi64((__m128i*) (srcTmp - srcStride)), _mm_loadl_epi64((__m128i*) (srcTmp))), mmShift1);
-    for (int y = 0; y < heightInside; y += 2)
-    {
-      __m128i mmPixBottom = _mm_sra_epi16(_mm_unpacklo_epi64(_mm_loadl_epi64((__m128i*) (srcTmp + srcStride)), _mm_loadl_epi64((__m128i*) (srcTmp + (srcStride << 1)))), mmShift1);
-      __m128i mmPixLeft = _mm_sra_epi16(_mm_unpacklo_epi64(_mm_loadl_epi64((__m128i*) (srcTmp - 1)), _mm_loadl_epi64((__m128i*) (srcTmp - 1 + srcStride))), mmShift1);
-      __m128i mmPixRight = _mm_sra_epi16(_mm_unpacklo_epi64(_mm_loadl_epi64((__m128i*) (srcTmp + 1)), _mm_loadl_epi64((__m128i*) (srcTmp + 1 + srcStride))), mmShift1);
-
-      __m128i mmGradVer = _mm_sub_epi16(mmPixBottom, mmPixTop);
-      __m128i mmGradHor = _mm_sub_epi16(mmPixRight, mmPixLeft);
-
-      _mm_storel_epi64((__m128i *) gradYTmp, mmGradVer);
-      _mm_storel_epi64((__m128i *) (gradYTmp + gradStride), _mm_unpackhi_epi64(mmGradVer, mmGradHor));
-      _mm_storel_epi64((__m128i *) gradXTmp, mmGradHor);
-      _mm_storel_epi64((__m128i *) (gradXTmp + gradStride), _mm_unpackhi_epi64(mmGradHor, mmGradVer));
-
-      mmPixTop = mmPixBottom;
-      gradXTmp += gradStride << 1;
-      gradYTmp += gradStride << 1;
-      srcTmp += srcStride << 1;
-    }
-  }
-
-  if (PAD)
-  {
-    gradXTmp = gradX + gradStride + 1;
-    gradYTmp = gradY + gradStride + 1;
-    for (int y = 0; y < heightInside; y++)
-    {
-      gradXTmp[-1] = gradXTmp[0];
-      gradXTmp[widthInside] = gradXTmp[widthInside - 1];
-      gradXTmp += gradStride;
-
-      gradYTmp[-1] = gradYTmp[0];
-      gradYTmp[widthInside] = gradYTmp[widthInside - 1];
-      gradYTmp += gradStride;
-    }
-
-    gradXTmp = gradX + gradStride;
-    gradYTmp = gradY + gradStride;
-    ::memcpy(gradXTmp - gradStride, gradXTmp, sizeof(Pel)*(width));
-    ::memcpy(gradXTmp + heightInside*gradStride, gradXTmp + (heightInside - 1)*gradStride, sizeof(Pel)*(width));
-    ::memcpy(gradYTmp - gradStride, gradYTmp, sizeof(Pel)*(width));
-    ::memcpy(gradYTmp + heightInside*gradStride, gradYTmp + (heightInside - 1)*gradStride, sizeof(Pel)*(width));
-  }
-}
-
 template<X86_VEXT vext>
 void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
 {
@@ -1885,8 +1682,6 @@ void PelBufferOps::_initPelBufOpsX86()
 
   transpose4x4   = transposeNxN_SSE<vext, 4>;
   transpose8x8   = transposeNxN_SSE<vext, 8>;
-  profGradFilter = gradFilter_SSE<vext, false>; 
-  applyPROF      = applyPROF_SSE<vext>;
   roundIntVector = roundIntVector_SIMD<vext>;
 
   mipMatrixMul_4_4 = mipMatrixMul_SSE<vext, 4, 4>;

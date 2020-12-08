@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     LoopFilter.cpp
@@ -808,13 +812,11 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
   
 
   static constexpr int subBlockSize = 8;
-  const PredictionUnit& currPU  = *cu.pu;
-  const Area& areaPu            = area;
   LFCUParam stLFCUParam         { xGetLoopfilterParam( cu ) };
   const UnitScale scaling       = cu.cs->getScaling( UnitScale::LF_PARAM_MAP, cu.chType );
   // for SUBPU ATMVP and Affine, more PU deblocking needs to be found, for ISP the chroma block will be deferred to the last luma block,
   // so the processing order is different. For all other cases the boundary strenght can be directly obtained in the TU loop.
-  const bool refineBs     = ( currPU.mergeFlag && currPU.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine || cu.ispMode;
+  const bool refineBs     = ( cu.mergeFlag && cu.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine || cu.ispMode;
 
   const int maskBlkX = ~( ( 1 << scaling.posx ) - 1 );
   const int maskBlkY = ~( ( 1 << scaling.posy ) - 1 );
@@ -840,11 +842,11 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
 
   if( !refineBs ) return;
 
-  if( ( currPU.mergeFlag && currPU.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine )
+  if( ( cu.mergeFlag && cu.mergeType == MRG_TYPE_SUBPU_ATMVP ) || cu.affine )
   {
     CHECK( cu.chType != CH_L, "This path is only valid for single tree blocks!" );
 
-    for( int off = subBlockSize; off < areaPu.width; off += subBlockSize )
+    for( int off = subBlockSize; off < area.width; off += subBlockSize )
     {
       const Area mvBlockV( cu.Y().x + off, cu.Y().y, subBlockSize, cu.Y().height );
       verEdgeFilter = true;
@@ -861,7 +863,7 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
 
     xSetMaxFilterLengthPQForCodingSubBlocks<EDGE_VER>( cu );
 
-    for( int off = subBlockSize; off < areaPu.height; off += subBlockSize )
+    for( int off = subBlockSize; off < area.height; off += subBlockSize )
     {
       const Area mvBlockH( cu.Y().x, cu.Y().y + off, cu.Y().width, subBlockSize );
       horEdgeFilter = true;
@@ -1259,7 +1261,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     
     if( cuPcIsIntra )
     {
-      chrmBS  = ( MODE_INTRA == cuPc.predMode && cuPc.bdpcmModeChroma ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmModeChroma ) ? 0 : 2;
+      chrmBS  = ( MODE_INTRA == cuPc.predMode && cuPc.bdpcmM[CH_C] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_C] ) ? 0 : 2;
     }
   }
 
@@ -1273,7 +1275,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   {
     const int edgeIdx = ( perpPos<edgeDir>( localPos ) - perpPos<edgeDir>( cuPos ) ) / 4;
 
-    int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmMode ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmMode ) ? 0 : 2;
+    int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmM[CH_L] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_L] ) ? 0 : 2;
 
     if( cuQ.ispMode && edgeIdx )
     {
@@ -1291,7 +1293,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     lfp.bs |= ( BsSet( chrmBS, COMP_Cb ) + BsSet( chrmBS, COMP_Cr ) );
   }
 
-  if( ( lfp.bs & bsMask ) && ( cuP.pu->ciip || cuQ.pu->ciip ) )
+  if( ( lfp.bs & bsMask ) && ( cuP.ciip || cuQ.ciip ) )
   {
     lfp.bs |= ( BsSet( 2, COMP_Y ) + BsSet( 2, COMP_Cb ) + BsSet( 2, COMP_Cr ) ) & bsMask;
 
@@ -1315,7 +1317,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     return;
   }
 
-  if( cuP.pu->ciip || cuQ.pu->ciip )
+  if( cuP.ciip || cuQ.ciip )
   {
     lfp.bs |= 1 & bsMask;
 

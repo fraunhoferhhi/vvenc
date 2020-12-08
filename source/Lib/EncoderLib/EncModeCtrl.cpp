@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     EncModeCtrl.cpp
@@ -230,9 +234,7 @@ void SaveLoadEncInfoSbt::resetSaveloadSbt( int maxSbtSize )
   }
 }
 
-static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, const Partitioner &partitioner
-                            , const PredictionUnit &pu, int picW, int picH
-                           )
+static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, const Partitioner &partitioner, int picW, int picH )
 {
   if( cu.chType != partitioner.chType )
   {
@@ -274,6 +276,11 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   {
     for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
     {
+      int dmvrSize = 0;
+      if( hIdx >= 1 && wIdx >= 1 && (wIdx+hIdx) >= 3 )
+      {
+        dmvrSize = (1 << std::max(0,(wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2))) * (1 << std::max(0,(hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2)));
+      }
       for( unsigned x = 0; x < numPos; x++ )
       {
         for( unsigned y = 0; y < numPos; y++ )
@@ -281,13 +288,16 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
           if(( x + (1<<(wIdx) ) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
            &&( y + (1<<(hIdx) ) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) ))
           {
-            m_bestEncInfo[wIdx][hIdx][x][y] = new BestEncodingInfo;
+            m_bestEncInfo[wIdx][hIdx][x][y] = new BestEncodingInfo(dmvrSize);
 
             const UnitArea area( chFmt, Area( 0, 0, 1<<(wIdx+2), 1<<(hIdx+2) ) );
 
-            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->cu ) CodingUnit    ( area );
-            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->pu ) PredictionUnit( area );
+            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->cu ) CodingUnit   ( area );
             new ( &m_bestEncInfo[wIdx][hIdx][x][y]->tu ) TransformUnit( area );
+            if( dmvrSize )
+            {
+              m_bestEncInfo[wIdx][hIdx][x][y]->cu.mvdL0SubPu = &m_bestEncInfo[wIdx][hIdx][x][y]->dmvrMvdBuffer[0]; 
+            }
 
             m_bestEncInfo[wIdx][hIdx][x][y]->poc      = -1;
             m_bestEncInfo[wIdx][hIdx][x][y]->testMode = EncTestMode();
@@ -328,15 +338,6 @@ void BestEncInfoCache::destroy()
   delete[] m_pCoeff;
   m_pCoeff = nullptr;
 
-  delete[] m_pPcmBuf;
-  m_pPcmBuf = nullptr;
-
-  if (m_runType != nullptr)
-  {
-    delete[] m_runType;
-    m_runType = nullptr;
-  }
-
   m_pcv = nullptr;
 }
 
@@ -373,12 +374,8 @@ void BestEncInfoCache::init( const Slice &slice )
   }
 
   m_pCoeff  = new TCoeff[numCoeff];
-  m_pPcmBuf = new Pel   [numCoeff];
-  m_runType   = new bool[numCoeff];
 
   TCoeff *coeffPtr = m_pCoeff;
-  Pel    *pcmPtr   = m_pPcmBuf;
-  bool   *runTypePtr   = m_runType;
 
   m_dummyCS.pcv = m_pcv;
 
@@ -393,20 +390,16 @@ void BestEncInfoCache::init( const Slice &slice )
           if( m_bestEncInfo[wIdx][hIdx][x][y] )
           {
             TCoeff *coeff[MAX_NUM_TBLOCKS] = { 0, };
-            Pel    *pcmbf[MAX_NUM_TBLOCKS] = { 0, };
-            bool   *runType[MAX_NUM_TBLOCKS]   = { 0, };
 
             const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
 
             for( int i = 0; i < area.blocks.size(); i++ )
             {
               coeff[i] = coeffPtr; coeffPtr += area.blocks[i].area();
-              pcmbf[i] =   pcmPtr;   pcmPtr += area.blocks[i].area();
-              runType[i] = runTypePtr;     runTypePtr += area.blocks[i].area();
             }
 
             m_bestEncInfo[wIdx][hIdx][x][y]->tu.cs = &m_dummyCS;
-            m_bestEncInfo[wIdx][hIdx][x][y]->tu.init(coeff, pcmbf, runType);
+            m_bestEncInfo[wIdx][hIdx][x][y]->tu.init(coeff);
           }
         }
       }
@@ -416,7 +409,7 @@ void BestEncInfoCache::init( const Slice &slice )
 
 bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& partitioner )
 {
-  if( cs.cus.size() != 1 || cs.tus.size() != 1 || cs.pus.size() != 1 )
+  if( cs.cus.size() != 1 || cs.tus.size() != 1 || partitioner.maxBTD <= 1 )
   {
     return false;
   }
@@ -428,10 +421,8 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& 
 
   encInfo.poc            =  cs.picture->poc;
   encInfo.cu.repositionTo( *cs.cus.front() );
-  encInfo.pu.repositionTo( *cs.pus.front() );
   encInfo.tu.repositionTo( *cs.tus.front() );
   encInfo.cu             = *cs.cus.front();
-  encInfo.pu             = *cs.pus.front();
   for( auto &blk : cs.tus.front()->blocks )
   {
     if( blk.valid() ) encInfo.tu.copyComponentFrom( *cs.tus.front(), blk.compID );
@@ -445,10 +436,11 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& 
 
 bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partitioner& partitioner, int qp )
 {
-  if( partitioner.treeType == TREE_C )
+  if( partitioner.treeType == TREE_C || partitioner.maxBTD <= 1 )
   {
     return false; //if save & load is allowed for chroma CUs, we should check whether luma info (pred, recon, etc) is the same, which is quite complex
   }
+
   unsigned idx1, idx2, idx3, idx4;
   getAreaIdxNew( cs.area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
 
@@ -460,9 +452,9 @@ bool BestEncInfoCache::isReusingCuValid( const CodingStructure& cs, const Partit
   }
   if( encInfo.cu.qp != qp )
     return false;
-  if( cs.picture->poc != encInfo.poc || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) || !isTheSameNbHood( encInfo.cu, cs, partitioner
-    , encInfo.pu, (cs.picture->Y().width), (cs.picture->Y().height)
-)
+  if( cs.picture->poc != encInfo.poc 
+    || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) 
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
     || CU::isIBC(encInfo.cu)
     || partitioner.currQgEnable() || cs.currQP[partitioner.chType] != encInfo.cu.qp
     )
@@ -482,9 +474,9 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 
   BestEncodingInfo& encInfo = *m_bestEncInfo[idx1][idx2][idx3][idx4];
 
-  if( cs.picture->poc != encInfo.poc || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) || !isTheSameNbHood( encInfo.cu, cs, partitioner
-    , encInfo.pu, (cs.picture->Y().width), (cs.picture->Y().height)
-    )
+  if( cs.picture->poc != encInfo.poc 
+    || CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ) != CS::getArea( cs, encInfo.cu, partitioner.chType, partitioner.treeType ) 
+    || !isTheSameNbHood( encInfo.cu, cs, partitioner, (cs.picture->Y().width), (cs.picture->Y().height))
     || partitioner.currQgEnable() || cs.currQP[partitioner.chType] != encInfo.cu.qp
     )
   {
@@ -495,15 +487,15 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
   CodingUnit     &cu = cs.addCU( ua, partitioner.chType );
   cu.treeType = partitioner.treeType;
   cu.modeType = partitioner.modeType;
-  PredictionUnit &pu = cs.addPU( ua, partitioner.chType, &cu );
+  cu.initPuData();
   TransformUnit  &tu = cs.addTU( ua, partitioner.chType, &cu );
 
   cu          .repositionTo( encInfo.cu );
-  pu          .repositionTo( encInfo.pu );
+  cu          .repositionTo( encInfo.cu );
   tu          .repositionTo( encInfo.tu );
 
   cu          = encInfo.cu;
-  pu          = encInfo.pu;
+  cu          = encInfo.cu;
   for( auto &blk : tu.blocks )
   {
     if( blk.valid() ) tu.copyComponentFrom( encInfo.tu, blk.compID );
@@ -562,6 +554,12 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   {
     m_skipThresholdE0023FastEnc = SKIP_DEPTH;
   }
+  if( ! slice.isIntra() && ( slice.sps->SBT || slice.sps->MTSInter ) )
+  {
+    int maxSLSize = slice.sps->SBT ? (1 << slice.sps->log2MaxTbSize) : MTS_INTER_MAX_CU_SIZE;
+    resetSaveloadSbt( maxSLSize );
+  }
+
 }
 
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )
@@ -595,6 +593,44 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.isReusingCu    = isReusingCuValid( cs, partitioner, cs.baseQP );
   cuECtx.didHorzSplit   = partitioner.canSplit( CU_HORZ_SPLIT, cs );
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
+  
+
+  if( m_pcEncCfg->m_contentBasedFastQtbt )
+  {
+    const CompArea& currArea = partitioner.currArea().Y();
+    int cuHeight  = currArea.height;
+    int cuWidth   = currArea.width;
+
+    const bool condIntraInter = m_pcEncCfg->m_IntraPeriod == 1 ? ( partitioner.currBtDepth == 0 ) : ( cuHeight > 32 && cuWidth > 32 );
+
+    if( cuWidth == cuHeight && condIntraInter )
+    {
+      const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
+
+      Intermediate_Int horVal = 0;
+      Intermediate_Int verVal = 0;
+      Intermediate_Int dupVal = 0;
+      Intermediate_Int dowVal = 0;
+
+      unsigned j, k;
+      
+      for( k = 0; k < cuHeight - 1; k++ )
+      {
+        for( j = 0; j < cuWidth - 1; j++ )
+        {
+          horVal += abs( bufCurrArea.at( j + 1, k     ) - bufCurrArea.at( j, k ) );
+          verVal += abs( bufCurrArea.at( j    , k + 1 ) - bufCurrArea.at( j, k ) );
+          dowVal += abs( bufCurrArea.at( j + 1, k )     - bufCurrArea.at( j, k + 1 ) );
+          dupVal += abs( bufCurrArea.at( j + 1, k + 1 ) - bufCurrArea.at( j, k ) );
+        }
+      }
+
+      cuECtx.grad_horVal = (double)horVal;
+      cuECtx.grad_verVal = (double)verVal;
+      cuECtx.grad_dowVal = (double)dowVal;
+      cuECtx.grad_dupVal = (double)dupVal;
+    }
+  }
 }
 
 void EncModeCtrl::finishCULevel( Partitioner &partitioner )
@@ -680,32 +716,14 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
     if( cuWidth == cuHeight && condIntraInter && split != CU_QUAD_SPLIT )
     {
-      const CPelBuf bufCurrArea = cs.getOrgBuf( partitioner.currArea().block( COMP_Y ) );
+      const double th1 = m_pcEncCfg->m_IntraPeriod == 1 ?  1.2              :  1.0;
+      const double th2 = m_pcEncCfg->m_IntraPeriod == 1 ? (1.2 / sqrt( 2 )) : (1.0 / sqrt( 2 ));
 
-      double horVal = 0;
-      double verVal = 0;
-      double dupVal = 0;
-      double dowVal = 0;
-
-      const double th = m_pcEncCfg->m_IntraPeriod == 1 ? 1.2 : 1.0;
-
-      unsigned j, k;
-
-      for( j = 0; j < cuWidth - 1; j++ )
-      {
-        for( k = 0; k < cuHeight - 1; k++ )
-        {
-          horVal += abs( bufCurrArea.at( j + 1, k     ) - bufCurrArea.at( j, k ) );
-          verVal += abs( bufCurrArea.at( j    , k + 1 ) - bufCurrArea.at( j, k ) );
-          dowVal += abs( bufCurrArea.at( j + 1, k )     - bufCurrArea.at( j, k + 1 ) );
-          dupVal += abs( bufCurrArea.at( j + 1, k + 1 ) - bufCurrArea.at( j, k ) );
-        }
-      }
-      if( horVal > th * verVal && sqrt( 2 ) * horVal > th * dowVal && sqrt( 2 ) * horVal > th * dupVal && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
+      if( cuECtx.grad_horVal > th1 * cuECtx.grad_verVal && cuECtx.grad_horVal > th2 * cuECtx.grad_dowVal && cuECtx.grad_horVal > th2 * cuECtx.grad_dupVal && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
       {
         return false;
       }
-      if( th * dupVal < sqrt( 2 ) * verVal && th * dowVal < sqrt( 2 ) * verVal && th * horVal < verVal && ( split == CU_VERT_SPLIT || split == CU_TRIV_SPLIT ) )
+      if( th2 * cuECtx.grad_dupVal < cuECtx.grad_verVal && th2 * cuECtx.grad_dowVal < cuECtx.grad_verVal && th1 * cuECtx.grad_horVal < cuECtx.grad_verVal && ( split == CU_VERT_SPLIT || split == CU_TRIV_SPLIT ) )
       {
         return false;
       }
@@ -870,7 +888,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 
   if( encTestmode.type == ETM_INTRA )
   {
-    if( lumaArea.width > 64 || lumaArea.height > 64)
+    // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
+    // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
+    if( lumaArea.width > cs.sps->getMaxTbSize() || lumaArea.height > cs.sps->getMaxTbSize() )
     {
       return false;
     }
@@ -892,7 +912,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     }
     else
     if( !( slice.isIRAP() || /*bestModeType == ETM_INTRA || */!cuECtx.bestTU ||
-      ((!m_pcEncCfg->m_bDisableIntraPUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
+      ((!m_pcEncCfg->m_bDisableIntraCUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
                                          ( cuECtx.bestTU->cbf[0] != 0 ) ||
            ( ( numComp > COMP_Cb ) && cuECtx.bestTU->cbf[1] != 0 ) ||
            ( ( numComp > COMP_Cr ) && cuECtx.bestTU->cbf[2] != 0 )  // avoid very complex intra if it is unlikely

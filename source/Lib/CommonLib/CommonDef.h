@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 /** \file     CommonDef.h
     \brief    Defines version information, constants and small in-line functions
 */
@@ -50,6 +54,7 @@ vvc@hhi.fraunhofer.de
 #include <iomanip>
 #include <limits>
 #include <stdarg.h>
+#include <functional>
 
 #if _MSC_VER > 1000
 // disable "signed and unsigned mismatch"
@@ -58,7 +63,7 @@ vvc@hhi.fraunhofer.de
 #pragma warning( disable : 4800 )
 #endif // _MSC_VER > 1000
 
-#include "../../../include/vvenc/Basics.h"
+#include "vvenc/Basics.h"
 
 #define __IN_COMMONDEF_H__
 #include "TypeDef.h"
@@ -84,10 +89,13 @@ vvc@hhi.fraunhofer.de
                                                  _Pragma("GCC diagnostic ignored \"-Wmaybe-uninitialized\"");
 # define GCC_WARNING_DISABLE_class_memaccess     _Pragma("GCC diagnostic push"); \
                                                  _Pragma("GCC diagnostic ignored \"-Wclass-memaccess\"");
+# define GCC_WARNING_DISABLE_array_bounds        _Pragma("GCC diagnostic push"); \
+                                                 _Pragma("GCC diagnostic ignored \"-Warray-bounds\"");
 # define GCC_WARNING_RESET                       _Pragma("GCC diagnostic pop");
 #else
 # define GCC_WARNING_DISABLE_maybe_uninitialized
 # define GCC_WARNING_DISABLE_class_memaccess
+# define GCC_WARNING_DISABLE_array_bounds
 # define GCC_WARNING_RESET
 #endif
 
@@ -364,8 +372,10 @@ static const int RExt__PREDICTION_WEIGHTING_ANALYSIS_DC_PRECISION = 0; ///< Addi
 
 static const int MAX_TIMECODE_SEI_SETS =                            3; ///< Maximum number of time sets
 
+
 static const int MAX_CU_DEPTH =                                     7; ///< log2(CTUSize)
 static const int MAX_CU_SIZE_IDX =                                  MAX_CU_DEPTH + 1; ///< 1+log2(CTUSize)
+static const int MAX_TU_SIZE_IDX =                                  MAX_TB_LOG2_SIZEY + 1; ///< 1+log2(MaxTuSize)
 static const int MAX_CU_SIZE =                                      1<<MAX_CU_DEPTH;
 static const int MIN_CU_LOG2 =                                      2;
 static const int MIN_PU_SIZE =                                      4;
@@ -534,7 +544,6 @@ static const double PLT_CHROMA_WEIGHTING =                      0.8;
 static const int PLT_ENCBITDEPTH = 8;
 static const int PLT_FAST_RATIO = 100;
 
-static const int MCTF_RANGE           = 2;
 static const int MCTF_PADDING         = 128;
 static const int MCTF_ADD_QUEUE_DELAY = 2 * MCTF_RANGE + 1;
 
@@ -588,7 +597,7 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
-extern MsgFnc g_msgFnc;
+extern std::function<void( int, const char*, va_list )> g_msgFnc;
 
 inline void msg( int level, const char* fmt, ... )
 {
@@ -598,7 +607,7 @@ inline void msg( int level, const char* fmt, ... )
     std::unique_lock<std::mutex> _lock( _msgMutex );
     va_list args;
     va_start( args, fmt );
-    (*g_msgFnc)( level, fmt, args );
+    g_msgFnc( level, fmt, args );
     va_end( args );
   }
 }

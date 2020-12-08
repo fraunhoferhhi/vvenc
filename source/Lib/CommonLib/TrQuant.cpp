@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     TrQuant.cpp
@@ -272,7 +276,14 @@ void TrQuant::invTransformNxN( TransformUnit& tu, const ComponentID compID, PelB
     {
       xInvLfnst(tu, compID);
     }
-    xIT( tu, compID, tempCoeff, pResi );
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xITransformSkip(tempCoeff, pResi, tu, compID);
+    }
+    else
+    {
+      xIT(tu, compID, tempCoeff, pResi);
+    }
   }
 
   //DTRACE_BLOCK_COEFF(tu.getCoeffs(compID), tu, tu.cu->predMode, compID);
@@ -367,7 +378,16 @@ std::vector<int> TrQuant::selectICTCandidates( const TransformUnit& tu, CompStor
 // ------------------------------------------------------------------------------------------------
 void TrQuant::xSetTrTypes( const TransformUnit& tu, const ComponentID compID, const int width, const int height, int &trTypeHor, int &trTypeVer )
 {
-  if( tu.cs->sps->getUseImplicitMTS() && CU::isIntra(*tu.cu) && isLuma(compID) && tu.cu->lfnstIdx == 0 && tu.cu->mipFlag == 0 )
+  const bool isISP = CU::isIntra(*tu.cu) && tu.cu->ispMode && isLuma(compID);
+  if (isISP && tu.cu->lfnstIdx)
+  {
+    return;
+  }
+  if (!tu.cs->sps->MTS)
+  {
+    return;
+  }
+  if (CU::isIntra(*tu.cu) && isLuma(compID) && ((tu.cs->sps->getUseImplicitMTS() && tu.cu->lfnstIdx == 0 && tu.cu->mipFlag == 0) || tu.cu->ispMode))
   {
     if (width >= 4 && width <= 16)
       trTypeHor = DST7;
@@ -486,8 +506,22 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   CHECK( shift_1st < 0, "Negative shift" );
   CHECK( shift_2nd < 0, "Negative shift" );
 
-  fastFwdTrans[trTypeHor][transformWidthIndex ](block,        tmp, shift_1st, height,        0, skipWidth);
-  fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
+  if (width > 1 && height > 1)
+  {
+    fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
+    fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
+  }
+  else if (height == 1)   // 1-D horizontal transform
+  {
+    fastFwdTrans[trTypeHor][transformWidthIndex](block, dstCoeff.buf, shift_1st, 1, 0, skipWidth);
+  }
+  else   // if (iWidth == 1) //1-D vertical transform
+  {
+    int shift = ((floorLog2(height)) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    CHECK(shift < 0, "Negative shift");
+    CHECKD((transformHeightIndex < 0), "There is a problem with the height.");
+    fastFwdTrans[trTypeVer][transformHeightIndex](block, dstCoeff.buf, shift, 1, 0, skipHeight);
+  }
 }
 
 
@@ -514,15 +548,46 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
   int skipWidth  = ( trTypeHor != DCT2 && width  == 32 ) ? 16 : width  > JVET_C0024_ZERO_OUT_TH ? width  - JVET_C0024_ZERO_OUT_TH : 0;
   int skipHeight = ( trTypeVer != DCT2 && height == 32 ) ? 16 : height > JVET_C0024_ZERO_OUT_TH ? height - JVET_C0024_ZERO_OUT_TH : 0;
 
+  if (tu.cs->sps->LFNST && tu.cu->lfnstIdx)
+  {
+    if ((width == 4 && height > 4) || (width > 4 && height == 4))
+    {
+      skipWidth = width - 4;
+      skipHeight = height - 4;
+    }
+    else if ((width >= 8 && height >= 8))
+    {
+      skipWidth = width - 8;
+      skipHeight = height - 8;
+    }
+  }
+
   const int      shift_1st              =   TRANSFORM_MATRIX_SHIFT + 1 + COM16_C806_TRANS_PREC; // 1 has been added to shift_1st at the expense of shift_2nd
   const int      shift_2nd              = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth + COM16_C806_TRANS_PREC;
   CHECK( shift_1st < 0, "Negative shift" );
   CHECK( shift_2nd < 0, "Negative shift" );
   TCoeff *block = m_blk;
   TCoeff *tmp   = m_tmp;
-  fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
-  fastInvTrans[trTypeHor][transformWidthIndex] (tmp,      block, shift_2nd, height,         0, skipWidth, clipMinimum, clipMaximum);
-  
+  if (width > 1 && height > 1)   // 2-D transform
+  {
+    fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
+    fastInvTrans[trTypeHor][transformWidthIndex](tmp, block, shift_2nd, height, 0, skipWidth, clipMinimum, clipMaximum);
+  }
+  else if (width == 1)   // 1-D vertical transform
+  {
+    int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
+    CHECK(shift < 0, "Negative shift");
+    CHECK((transformHeightIndex < 0), "There is a problem with the height.");
+    fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, block, shift + 1, 1, 0, skipHeight, clipMinimum, clipMaximum);
+  }
+  else   // if(iHeight == 1) //1-D horizontal transform
+  {
+    const int shift = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth + COM16_C806_TRANS_PREC;
+    CHECK(shift < 0, "Negative shift");
+    CHECK((transformWidthIndex < 0), "There is a problem with the width.");
+    fastInvTrans[trTypeHor][transformWidthIndex](pCoeff.buf, block, shift + 1, 1, 0, skipWidth, clipMinimum, clipMaximum);
+  }
+
 #if ENABLE_SIMD_TRAFO
   if( width & 3 )
 #endif //ENABLE_SIMD_TRAFO
@@ -552,6 +617,25 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
 #endif //ENABLE_SIMD_TRAFO
 }
 
+/** Wrapper function between HM interface and core NxN transform skipping
+ */
+void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
+  PelBuf& pResidual,
+  const TransformUnit& tu,
+  const ComponentID compID)
+{
+  const CompArea& area = tu.blocks[compID];
+  const int width = area.width;
+  const int height = area.height;
+
+  for (uint32_t y = 0; y < height; y++)
+  {
+    for (uint32_t x = 0; x < width; x++)
+    {
+      pResidual.at(x, y) = Pel(pCoeff.at(x, y));
+    }
+  }
+}
 
 void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx)
 {
@@ -575,8 +659,7 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
     TU::setCbfAtDepth( tu, compID, tu.depth, uiAbsSum > 0 );
     return;
   }
-
-  if( tu.cu->bdpcmMode && isLuma(compID) )
+  if (tu.cu->bdpcmM[toChannelType(compID)])
   {
     tu.mtsIdx[compID] = MTS_SKIP;
   }
@@ -588,7 +671,14 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   if (!loadTr)
   {
     DTRACE_PEL_BUF( D_RESIDUALS, resiBuf, tu, tu.cu->predMode, compID );
-    xT( tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight );
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
+    }
+    else
+    {
+      xT(tu, compID, resiBuf, tempCoeff, uiWidth, uiHeight);
+    }
   }
   if (cs.sps->LFNST)
   {
@@ -604,11 +694,10 @@ void TrQuant::transformNxN(TransformUnit &tu, const ComponentID compID, const Qp
   TU::setCbfAtDepth (tu, compID, tu.depth, uiAbsSum > 0);
 }
 
-
-void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand)
+void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, const ComponentID compID)
 {
   CodingStructure &cs     = *tu.cs;
-  const CompArea & rect   = tu.blocks[COMP_Y];
+  const CompArea& rect    = tu.blocks[compID];
   const uint32_t   width  = rect.width;
   const uint32_t   height = rect.height;
 
@@ -621,8 +710,8 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   const double                  facBB[] = { 1.2, 1.3, 1.3, 1.4, 1.5 };
   while (it != trModes->end())
   {
-    tu.mtsIdx[COMP_Y] = it->first;
-    CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[COMP_Y]], rect);
+    tu.mtsIdx[compID] = it->first;
+    CoeffBuf tempCoeff(m_mtsCoeffs[tu.mtsIdx[compID]], rect);
     if (tu.noResidual)
     {
       int sumAbs = 0;
@@ -630,8 +719,14 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
       it++;
       continue;
     }
-
-    xT(tu, COMP_Y, resiBuf, tempCoeff, width, height);
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      xTransformSkip(tu, compID, resiBuf, tempCoeff.buf);
+    }
+    else
+    {
+      xT(tu, compID, resiBuf, tempCoeff, width, height);
+    }
 
     int sumAbs = 0;
     for (int pos = 0; pos < width * height; pos++)
@@ -640,12 +735,16 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
     }
 
     double scaleSAD = 1.0;
-    if (tu.mtsIdx[COMP_Y] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
+    if (tu.mtsIdx[compID] == MTS_SKIP && ((floorLog2(width) + floorLog2(height)) & 1) == 1)
     {
       scaleSAD = 1.0 / 1.414213562;   // compensate for not scaling transform skip coefficients by 1/sqrt(2)
     }
-
-    trCosts.push_back(TrCost(int(sumAbs * scaleSAD), pos++));
+    if (tu.mtsIdx[compID] == MTS_SKIP)
+    {
+      int trShift = getTransformShift(tu.cu->slice->sps->bitDepths[CH_L], rect.size(), tu.cu->slice->sps->getMaxLog2TrDynamicRange(toChannelType(compID)));
+      scaleSAD *= pow(2, trShift);
+    }
+    trCosts.push_back(TrCost(int(std::min<double>(sumAbs * scaleSAD, std::numeric_limits<int>::max())), pos++));
     it++;
   }
 
@@ -755,21 +854,21 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
   const uint32_t  width    = area.width;
   const uint32_t  height   = area.height;
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
-  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
+  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const PredictionUnit* pu = tu.cs->getPU(area.pos(), toChannelType(compID));
+    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
         : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width), Log2(area.height));
-    uint32_t intraMode = PU::getFinalIntraMode(*pu, toChannelType(compID));
+    uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
-    if (PU::isLMCMode( pu->intraDir[toChannelType(compID)]))
+    if (CU::isLMCMode( cu.intraDir[toChannelType(compID)]))
     {
-      intraMode = PU::getCoLocatedIntraLumaMode(*pu);
+      intraMode = CU::getCoLocatedIntraLumaMode(cu);
     }
-    if (PU::isMIP(*pu, toChannelType(compID)))
+    if (CU::isMIP(cu, toChannelType(compID)))
     {
       intraMode = PLANAR_IDX;
     }
@@ -777,7 +876,12 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
 
     if (lfnstIdx < 3)
     {
-      intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
+      if (tu.cu->ispMode && isLuma(compID))
+      {
+        intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
+      }
+      else
+        intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;
       bool      tu4x4Flag     = (width == 4 && height == 4);
@@ -855,9 +959,9 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   const uint32_t  width    = area.width;
   const uint32_t  height   = area.height;
   const uint32_t  lfnstIdx = tu.cu->lfnstIdx;
-  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (tu.cu->isSepTree() ? true : isLuma(compID)))
+  if (lfnstIdx && tu.mtsIdx[compID] != MTS_SKIP && (CU::isSepTree(*tu.cu) ? true : isLuma(compID)))
   {
-    const PredictionUnit* pu = tu.cs->getPU(area.pos(), toChannelType(compID));
+    const CodingUnit& cu = *tu.cs->getCU(area.pos(), toChannelType(compID), TREE_D);
     const bool         whge3 = width >= 8 && height >= 8;
     const ScanElement *scan =
       whge3
@@ -865,13 +969,13 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         : g_scanOrderRom.getScanOrder(
           SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width),
           Log2(area.height));   
-    uint32_t intraMode = PU::getFinalIntraMode(*pu, toChannelType(compID));
+    uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
-    if (PU::isLMCMode(pu->intraDir[toChannelType(compID)]))
+    if (CU::isLMCMode(cu.intraDir[toChannelType(compID)]))
     {
-      intraMode = PU::getCoLocatedIntraLumaMode(*pu);
+      intraMode = CU::getCoLocatedIntraLumaMode(cu);
     }
-    if (PU::isMIP(*pu, toChannelType(compID)))
+    if (CU::isMIP(cu, toChannelType(compID)))
     {
       intraMode = PLANAR_IDX;
     }
@@ -879,8 +983,14 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
 
     if (lfnstIdx < 3)
     {
-      intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
-
+      if (tu.cu->ispMode && isLuma(compID))
+      {
+        intraMode = xGetLFNSTIntraMode(tu.cu->blocks[compID], intraMode);
+      }
+      else
+      {
+        intraMode = xGetLFNSTIntraMode(tu.blocks[compID], intraMode);
+      }
       bool      transposeFlag = xGetTransposeFlag(intraMode);
       const int sbSize        = whge3 ? 8 : 4;
       bool      tu4x4Flag     = (width == 4 && height == 4);
@@ -954,6 +1064,20 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
   }
 }
 
+void TrQuant::xTransformSkip(const TransformUnit& tu, const ComponentID& compID, const CPelBuf& resi, TCoeff* psCoeff)
+{
+  const CompArea& rect = tu.blocks[compID];
+  const uint32_t width = rect.width;
+  const uint32_t height = rect.height;
+
+  for (uint32_t y = 0, coefficientIndex = 0; y < height; y++)
+  {
+    for (uint32_t x = 0; x < width; x++, coefficientIndex++)
+    {
+      psCoeff[coefficientIndex] = TCoeff(resi.at(x, y));
+    }
+  }
+}
 } // namespace vvenc
 
 //! \}

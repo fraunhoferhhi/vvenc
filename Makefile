@@ -30,9 +30,25 @@ ifneq ($(verbose),)
 CONFIG_OPTIONS += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
 
+ifneq ($(enable-tracing),)
+CONFIG_OPTIONS += -DVVENC_ENABLE_TRACING=$(enable-tracing)
+endif
+
+ifneq ($(address-sanitizer),)
+CONFIG_OPTIONS += -DVVENC_USE_ADDRESS_SANITIZER=$(address-sanitizer)
+endif
+
+ifneq ($(enable-build-type-postfix),)
+CONFIG_OPTIONS += -DVVENC_ENABLE_BUILD_TYPE_POSTFIX=ON
+endif
+
+ifneq ($(install-prefix),)
+CONFIG_OPTIONS += -DCMAKE_INSTALL_PREFIX=$(install-prefix)
+endif
+
 ifeq ($(j),)
 # Query cmake for the number of cores
-NUM_JOBS := $(shell cmake -P cmake/modules/VVEncNumCores.cmake)
+NUM_JOBS := $(shell cmake -P cmake/modules/vvencNumCores.cmake)
 NUM_JOBS := $(lastword $(NUM_JOBS))
 else
 NUM_JOBS := $(j)
@@ -194,10 +210,13 @@ configure: configure-static configure-shared
 
 install-static: $(foreach t,$(DEFAULT_BUILD_TARGETS_STATIC),install-$(t))
 install-shared: $(foreach t,$(DEFAULT_BUILD_TARGETS_SHARED),install-$(t))
-install: install-static install-shared
+install-all: install-static install-shared
+
+# default distribution target
+install: install-release-shared
 
 clean:
-	$(RM) -rf build
+	$(RM) -rf build bin lib
 
 realclean: clean
 	$(RM) -rf install
@@ -227,6 +246,17 @@ install-rs: install-release-shared
 install-ds: install-debug-shared
 install-p: install-relwithdebinfo
 install-ps: install-relwithdebinfo-shared
+
+
+ifeq ($(CMAKE_MCONFIG),)
+TEST_TARGET := test
+else
+TEST_TARGET := RUN_TESTS
+endif
+
+# test target
+test: release
+	cmake $(BUILD_OPTIONS-release) --target $(TEST_TARGET) $(BUILD_TOOL_OPTIONS)
 
 #
 # project specific targets

@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 /** \file     Slice.h
     \brief    slice header and SPS class (header)
 */
@@ -50,6 +54,7 @@ vvc@hhi.fraunhofer.de
 #include "AlfParameters.h"
 #include "Common.h"
 #include "MotionInfo.h"
+#include "HRD.h"
 
 #include <cstring>
 #include <list>
@@ -112,7 +117,7 @@ typedef std::vector<ReferencePictureList> RPLList;
 
 struct ConstraintInfo
 {
-  bool      gciPresentFlag;
+  bool      gciPresent;
   bool      noRprConstraintFlag;
   bool      noResChangeInClvsConstraintFlag;
   bool      oneTilePerPicConstraintFlag;
@@ -183,7 +188,7 @@ struct ConstraintInfo
 
 
   ConstraintInfo()
-    : gciPresentFlag                                  ( false )
+    : gciPresent                                      ( false )
     , noRprConstraintFlag                             ( false )
     , noResChangeInClvsConstraintFlag                 ( false )
     , oneTilePerPicConstraintFlag                     ( false )
@@ -441,10 +446,9 @@ struct SubPic
 struct DCI
 {
   uint32_t   dciId;
-  uint32_t   maxSubLayersMinus1;
   std::vector<ProfileTierLevel> profileTierLevel;
 
-  DCI() : dciId(0), maxSubLayersMinus1 (0) {};
+  DCI() : dciId(0) {}
 };
 
 struct VPS
@@ -453,12 +457,13 @@ struct VPS
   uint32_t              maxLayers;
   uint32_t              maxSubLayers;
   uint32_t              layerId[MAX_VPS_LAYERS];
+  bool                  defaultPtlDpbHrdMaxTidFlag;
   bool                  allLayersSameNumSubLayers;
   bool                  allIndependentLayers;
   uint32_t              vpsCfgPredDirection[MAX_VPS_SUBLAYERS];
   bool                  independentLayer[MAX_VPS_LAYERS];
   bool                  directRefLayer[MAX_VPS_LAYERS][MAX_VPS_LAYERS];
-  uint8_t               maxTidIlRefPicsPlus1[MAX_VPS_LAYERS];
+  uint8_t               maxTidIlRefPicsPlus1[MAX_VPS_LAYERS][MAX_VPS_LAYERS];
   bool                  eachLayerIsAnOls;
   uint32_t              olsModeIdc;
   uint32_t              numOutputLayerSets;
@@ -475,11 +480,17 @@ struct VPS
   uint32_t              interLayerRefIdx[MAX_VPS_LAYERS][MAX_VPS_LAYERS];
   bool                  extension;
 
-  bool                  generalHrdParamsPresentFlag;
-
+  bool                  generalHrdParamsPresent;
+  bool                  sublayerCpbParamsPresent;
+  uint32_t              numOlsHrdParamsMinus1;
+  uint32_t              hrdMaxTid[MAX_NUM_OLSS];
+  uint32_t              olsHrdIdx[MAX_NUM_OLSS];
+  GeneralHrdParams      generalHrdParams;
+  OlsHrdParams          olsHrdParams[MAX_TLAYER];
   std::vector<Size>             olsDpbPicSize;
   std::vector<int>              olsDpbParamsIdx;
   std::vector<std::vector<int>> outputLayerIdInOls;
+  std::vector<std::vector<int>> numSubLayersInLayerInOLS;
 
   std::vector<int>              olsDpbChromaFormatIdc;
   std::vector<int>              olsDpbBitDepthMinus8;
@@ -502,6 +513,7 @@ struct VPS
   : vpsId                       ( 0 )
   , maxLayers                   ( 0 )
   , maxSubLayers                ( 0 )
+  , defaultPtlDpbHrdMaxTidFlag  ( false )
   , allLayersSameNumSubLayers   ( false )
   , allIndependentLayers        ( false )
   , eachLayerIsAnOls            ( false )
@@ -751,8 +763,9 @@ struct SPS
 
 
   bool              hrdParametersPresent;
-//  GeneralHrdParams m_generalHrdParams;
-//  OlsHrdParams     m_olsHrdParams[MAX_TLAYER];
+  bool              subLayerParametersPresent;
+  GeneralHrdParams  generalHrdParams;
+  OlsHrdParams      olsHrdParams[MAX_TLAYER];
   bool              fieldSeqFlag;
   bool              vuiParametersPresent;
   VUI               vuiParameters;
@@ -797,8 +810,6 @@ struct SPS
   bool              interLayerPresent;
 
   uint32_t          log2ParallelMergeLevelMinus2; // th fix this
-  bool              ppsValidFlag[64];
-  Size              scalingWindowSizeInPPS[64];
   uint32_t          maxNumMergeCand;
   uint32_t          maxNumAffineMergeCand;
   uint32_t          maxNumIBCMergeCand;
@@ -949,8 +960,8 @@ public:
 
 
   uint32_t               getTileIdx( const Position& pos ) const                          { return 0; } //tbd
-  SubPic                 getSubPicFromPos(const Position& pos)  const;
-  SubPic                 getSubPicFromCU (const CodingUnit& cu) const;
+  const SubPic&          getSubPicFromPos(const Position& pos)  const;
+  const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
 
   void resetTileSliceInfo();
   void initTiles();
@@ -968,8 +979,8 @@ struct APS
   LmcsParam              lmcsParam;
   CcAlfFilterParam       ccAlfParam;
   bool                   hasPrefixNalUnitType;
-  bool                   chromaPresentFlag;
-  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresentFlag( false )
+  bool                   chromaPresent;
+  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresent( false )
   { }
 };
 
@@ -1122,7 +1133,7 @@ struct PicHeader
     deblockingFilterBetaOffsetDiv2[COMP_Cr]       = 0;
     deblockingFilterTcOffsetDiv2[COMP_Cr]         = 0;
     lmcsEnabled                                   = 0;
-    lmcsApsId                                     = -1;
+    lmcsApsId                                     = 0;
     lmcsAps                                       = nullptr;
     lmcsChromaResidualScale                       = 0;
     explicitScalingListEnabled                    = 0;
@@ -1334,12 +1345,7 @@ public:
 
   ~ParameterSetMap()
   {
-    for (typename std::map<int,MapData<T> >::iterator i = m_paramsetMap.begin(); i!= m_paramsetMap.end(); i++)
-    {
-      delete (*i).second.pNaluData;
-      delete (*i).second.parameterSet;
-    }
-    delete m_lastActiveParameterSet; m_lastActiveParameterSet = NULL;
+    clearMap();
   }
 
   T *allocatePS( const int psId )
@@ -1357,7 +1363,14 @@ public:
 
   void clearMap()
   {
+    for( typename std::map<int,MapData<T> >::iterator i = m_paramsetMap.begin(); i != m_paramsetMap.end(); i++ )
+    {
+      delete (*i).second.pNaluData;
+      delete (*i).second.parameterSet;
+    }
+    delete m_lastActiveParameterSet; m_lastActiveParameterSet = nullptr;
     m_paramsetMap.clear();
+    m_activePsId.clear();
   }
 
   void storePS( int psId, T *ps )
@@ -1494,6 +1507,7 @@ public:
   bool           getAPSChangedFlag(int apsId, int apsType) const             { return m_apsMap.getChangedFlag((apsId << NUM_APS_TYPE_LEN) + apsType); }
   void           clearAPSChangedFlag(int apsId, int apsType)                 { m_apsMap.clearChangedFlag((apsId << NUM_APS_TYPE_LEN) + apsType); }
   bool           activateAPS(int apsId, int apsType);
+  const VPS*     getActiveVPS()const                                         { return m_vpsMap.getPS(m_activeVPSId); };
   const SPS*     getActiveSPS()const                                         { return m_spsMap.getPS(m_activeSPSId); };
   const DCI*     getActiveDCI()const                                         { return m_dciMap.getPS(m_activeDCIId); };
 

@@ -1,44 +1,48 @@
 /* -----------------------------------------------------------------------------
-Software Copyright License for the Fraunhofer Software Library VVenc
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
 
-(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. 
-
-1.    INTRODUCTION
-
-The Fraunhofer Software Library VVenc (“Fraunhofer Versatile Video Encoding Library”) is software that implements (parts of) the Versatile Video Coding Standard - ITU-T H.266 | MPEG-I - Part 3 (ISO/IEC 23090-3) and related technology. 
-The standard contains Fraunhofer patents as well as third-party patents. Patent licenses from third party standard patent right holders may be required for using the Fraunhofer Versatile Video Encoding Library. It is in your responsibility to obtain those if necessary. 
-
-The Fraunhofer Versatile Video Encoding Library which mean any source code provided by Fraunhofer are made available under this software copyright license. 
-It is based on the official ITU/ISO/IEC VVC Test Model (VTM) reference software whose copyright holders are indicated in the copyright notices of its source files. The VVC Test Model (VTM) reference software is licensed under the 3-Clause BSD License and therefore not subject of this software copyright license.
-
-2.    COPYRIGHT LICENSE
-
-Internal use of the Fraunhofer Versatile Video Encoding Library, in source and binary forms, with or without modification, is permitted without payment of copyright license fees for non-commercial purposes of evaluation, testing and academic research. 
-
-No right or license, express or implied, is granted to any part of the Fraunhofer Versatile Video Encoding Library except and solely to the extent as expressly set forth herein. Any commercial use or exploitation of the Fraunhofer Versatile Video Encoding Library and/or any modifications thereto under this license are prohibited.
-
-For any other use of the Fraunhofer Versatile Video Encoding Library than permitted by this software copyright license You need another license from Fraunhofer. In such case please contact Fraunhofer under the CONTACT INFORMATION below.
-
-3.    LIMITED PATENT LICENSE
-
-As mentioned under 1. Fraunhofer patents are implemented by the Fraunhofer Versatile Video Encoding Library. If You use the Fraunhofer Versatile Video Encoding Library in Germany, the use of those Fraunhofer patents for purposes of testing, evaluating and research and development is permitted within the statutory limitations of German patent law. However, if You use the Fraunhofer Versatile Video Encoding Library in a country where the use for research and development purposes is not permitted without a license, you must obtain an appropriate license from Fraunhofer. It is Your responsibility to check the legal requirements for any use of applicable patents.    
-
-Fraunhofer provides no warranty of patent non-infringement with respect to the Fraunhofer Versatile Video Encoding Library.
-
-
-4.    DISCLAIMER
-
-The Fraunhofer Versatile Video Encoding Library is provided by Fraunhofer "AS IS" and WITHOUT ANY EXPRESS OR IMPLIED WARRANTIES, including but not limited to the implied warranties fitness for a particular purpose. IN NO EVENT SHALL FRAUNHOFER BE LIABLE for any direct, indirect, incidental, special, exemplary, or consequential damages, including but not limited to procurement of substitute goods or services; loss of use, data, or profits, or business interruption, however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence), arising in any way out of the use of the Fraunhofer Versatile Video Encoding Library, even if advised of the possibility of such damage.
-
-5.    CONTACT INFORMATION
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
-Attention: Video Coding & Analytics Department
 Einsteinufer 37
 10587 Berlin, Germany
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
------------------------------------------------------------------------------ */
+
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
 
 
 /** \file     Buffer.cpp
@@ -51,7 +55,7 @@ vvc@hhi.fraunhofer.de
 #include "Unit.h"
 #include "Slice.h"
 #include "InterpolationFilter.h"
-#include "../../../include/vvenc/Basics.h"
+#include "vvenc/Basics.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -87,13 +91,13 @@ void mipMatrixMulCore( Pel* res, const Pel* input, const uint8_t* weight, const 
   Pel buffer[ outputSize*outputSize];
 
   int sum = 0;
-  for( int i = 0; i < inputSize; i++ ) 
-  { 
-    sum += input[i]; 
+  for( int i = 0; i < inputSize; i++ )
+  {
+    sum += input[i];
   }
   const int offset = (1 << (MIP_SHIFT_MATRIX - 1)) - MIP_OFFSET_MATRIX * sum + (inputOffset << MIP_SHIFT_MATRIX);
   CHECK( inputSize != 4 * (inputSize >> 2), "Error, input size not divisible by four" );
- 
+
   Pel* mat = transpose ? buffer : res;
   unsigned posRes = 0;
   for( unsigned n = 0; n < outputSize*outputSize; n++ )
@@ -123,76 +127,6 @@ void mipMatrixMulCore( Pel* res, const Pel* input, const uint8_t* weight, const 
         res[j * outputSize + i] = buffer[i * outputSize + j];
       }
     }
-  }
-}
-
-template<bool PAD = true>
-void gradFilterCore(const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth)
-{
-  const Pel* srcTmp = pSrc + srcStride + 1;
-  Pel* gradXTmp = gradX + gradStride + 1;
-  Pel* gradYTmp = gradY + gradStride + 1;
-  int  shift1 = std::max<int>(6, (bitDepth - 6));
-
-  for (int y = 0; y < (height - 2 * BDOF_EXTEND_SIZE); y++)
-  {
-    for (int x = 0; x < (width - 2 * BDOF_EXTEND_SIZE); x++)
-    {
-      gradYTmp[x] = (srcTmp[x + srcStride] >> shift1) - (srcTmp[x - srcStride] >> shift1);
-      gradXTmp[x] = (srcTmp[x + 1] >> shift1) - (srcTmp[x - 1] >> shift1);
-    }
-    gradXTmp += gradStride;
-    gradYTmp += gradStride;
-    srcTmp += srcStride;
-  }
-
-  if (PAD)
-  {
-    gradXTmp = gradX + gradStride + 1;
-    gradYTmp = gradY + gradStride + 1;
-    for (int y = 0; y < (height - 2 * BDOF_EXTEND_SIZE); y++)
-    {
-      gradXTmp[-1] = gradXTmp[0];
-      gradXTmp[width - 2 * BDOF_EXTEND_SIZE] = gradXTmp[width - 2 * BDOF_EXTEND_SIZE - 1];
-      gradXTmp += gradStride;
-
-      gradYTmp[-1] = gradYTmp[0];
-      gradYTmp[width - 2 * BDOF_EXTEND_SIZE] = gradYTmp[width - 2 * BDOF_EXTEND_SIZE - 1];
-      gradYTmp += gradStride;
-    }
-
-    gradXTmp = gradX + gradStride;
-    gradYTmp = gradY + gradStride;
-    ::memcpy(gradXTmp - gradStride, gradXTmp, sizeof(Pel)*(width));
-    ::memcpy(gradXTmp + (height - 2 * BDOF_EXTEND_SIZE)*gradStride, gradXTmp + (height - 2 * BDOF_EXTEND_SIZE - 1)*gradStride, sizeof(Pel)*(width));
-    ::memcpy(gradYTmp - gradStride, gradYTmp, sizeof(Pel)*(width));
-    ::memcpy(gradYTmp + (height - 2 * BDOF_EXTEND_SIZE)*gradStride, gradYTmp + (height - 2 * BDOF_EXTEND_SIZE - 1)*gradStride, sizeof(Pel)*(width));
-  }
-}
-
-
-void applyPROFCore(Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng)
-{
-  int idx = 0;
-  const int dILimit = 1 << std::max<int>(clpRng.bd + 1, 13);
-  for (int h = 0; h < height; h++)
-  {
-    for (int w = 0; w < width; w++)
-    {
-      int32_t dI = dMvX[idx] * gradX[w] + dMvY[idx] * gradY[w];
-      dI = Clip3(-dILimit, dILimit - 1, dI);
-      dst[w] = src[w] + dI;
-      if (!bi)
-      {
-        dst[w] = (dst[w] + offset) >> shiftNum;
-        dst[w] = ClipPel(dst[w], clpRng);
-      }
-      idx++;
-    }
-    gradX += gradStride;
-    gradY += gradStride;
-    dst += dstStride;
-    src += srcStride;
   }
 }
 
@@ -244,7 +178,7 @@ void reconstructCore( const T* src1, int src1Stride, const T* src2, int src2Stri
 template<typename T>
 void recoCore( const T* src1, const T* src2, T* dest, int numSamples, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2) 
+  for( int n = 0; n < numSamples; n+=2)
   {
     dest[n]   = ClipPel( src1[n]   + src2[n], clpRng );
     dest[n+1] = ClipPel( src1[n+1] + src2[n+1], clpRng );
@@ -254,7 +188,7 @@ void recoCore( const T* src1, const T* src2, T* dest, int numSamples, const ClpR
 template<typename T>
 void copyClipCore( const T* src, Pel* dst, int numSamples, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2) 
+  for( int n = 0; n < numSamples; n+=2)
   {
     dst[n]   = ClipPel( src[n]   , clpRng );
     dst[n+1] = ClipPel( src[n+1] , clpRng );
@@ -264,7 +198,7 @@ void copyClipCore( const T* src, Pel* dst, int numSamples, const ClpRng& clpRng 
 template< typename T >
 void addAvgCore( const T* src1, const T* src2, T* dest, int numSamples, unsigned rshift, int offset, const ClpRng& clpRng )
 {
-  for( int n = 0; n < numSamples; n+=2) 
+  for( int n = 0; n < numSamples; n+=2)
   {
     dest[n]   = ClipPel( rightShiftU( ( src1[n]   + src2[n]   + offset ), rshift ), clpRng );
     dest[n+1] = ClipPel( rightShiftU( ( src1[n+1] + src2[n+1] + offset ), rshift ), clpRng );
@@ -428,8 +362,6 @@ PelBufferOps::PelBufferOps()
 
   transpose4x4      = transposeNxNCore<Pel,4>;
   transpose8x8      = transposeNxNCore<Pel,8>;
-  profGradFilter    = gradFilterCore <false>;
-  applyPROF         = applyPROFCore;
   mipMatrixMul_4_4  = mipMatrixMulCore<4,4>;
   mipMatrixMul_8_4  = mipMatrixMulCore<8,4>;
   mipMatrixMul_8_8  = mipMatrixMulCore<8,8>;
@@ -559,7 +491,7 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   {
     g_pelBufOP.addAvg16(src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, clpRng);
   }
-  else if( width > 2 && height > 2 && width == destStride ) 
+  else if( width > 2 && height > 2 && width == destStride )
   {
     g_pelBufOP.addAvg16(src0, src1Stride<<2, src2, src2Stride<<2, dest, destStride<<2, width<<2, height>>2, shiftNum, offset, clpRng);
   }
@@ -643,7 +575,7 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   {
     g_pelBufOP.reco4( src1, src1Stride, src2, src2Stride, dest, destStride, width, height, clpRng );
   }
-  else
+  else if( ( width & 1 ) == 0 )
   {
     for( int y = 0; y < height; y++ )
     {
@@ -652,7 +584,20 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
       src1 += src1Stride;
       src2 += src2Stride;
       dest += destStride;
-    }                                                         \
+    }                        
+  }
+  else
+  {
+    CHECKD( width != 1, "Expecting width to be '1'!" );
+
+    for( int y = 0; y < height; y++ )
+    {
+      dest[0] = ClipPel( src1[0] + src2[0], clpRng );
+
+      src1 += src1Stride;
+      src2 += src2Stride;
+      dest += destStride;
+    }
   }
 }
 
@@ -691,7 +636,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
         dst[1] = ( Pel ) ClipPel( rightShiftU( scale * src[1], shift ) + offset, clpRng );
         src += stride;
         dst += stride;
-      } 
+      }
     }
     else
     {
@@ -701,7 +646,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
         dst[1] = ( Pel ) ( rightShiftU( scale * src[1], shift ) + offset );
         src += stride;
         dst += stride;
-      } 
+      }
     }
   }
 }
@@ -969,9 +914,6 @@ const CPelBuf PelStorage::getBuf( const ComponentID CompID ) const
 PelBuf PelStorage::getBuf( const CompArea& blk )
 {
   const PelBuf& r = bufs[blk.compID];
-
-  CHECKD( rsAddr( blk.bottomRight(), r.stride ) >= ( ( r.height - 1 ) * r.stride + r.width ), "Trying to access a buf outside of bound!" );
-
   return PelBuf( r.buf + rsAddr( blk, r.stride ), r.stride, blk );
 }
 
@@ -1061,8 +1003,6 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
 {
   const ChromaFormat chFmt = pelUnitBuf.chromaFormat;
   const int numComp        = getNumberValidComponents( chFmt );
-  const Window  zeroWindow;
-  const Window* cw = confWindow && confWindow->enabledFlag ? confWindow : &zeroWindow;
   for ( int i = 0; i < numComp; i++ )
   {
     const ComponentID compId = ComponentID( i );
@@ -1071,9 +1011,9 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
     const int sy             = getComponentScaleY( compId, chFmt );
     YUVPlane& yuvPlane       = yuvBuffer.yuvPlanes[ i ];
     CHECK( yuvPlane.planeBuf != nullptr, "yuvBuffer already in use" );
-    yuvPlane.planeBuf        = area.bufAt( cw->winLeftOffset >> sx, cw->winTopOffset >> sy );
-    yuvPlane.width           = ( ( area.width  << sx ) - ( cw->winLeftOffset + cw->winRightOffset  ) ) >> sx;
-    yuvPlane.height          = ( ( area.height << sy ) - ( cw->winTopOffset  + cw->winBottomOffset ) ) >> sy;
+    yuvPlane.planeBuf        = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
+    yuvPlane.width           = ( ( area.width  << sx ) - ( confWindow->winLeftOffset + confWindow->winRightOffset  ) ) >> sx;
+    yuvPlane.height          = ( ( area.height << sy ) - ( confWindow->winTopOffset  + confWindow->winBottomOffset ) ) >> sy;
     yuvPlane.stride          = area.stride;
   }
 }
