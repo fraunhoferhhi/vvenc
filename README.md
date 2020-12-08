@@ -48,6 +48,7 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 | --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow, slower)                     |
 | --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                       |
 | --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
+| --passes,-p <int>      | 1                                | Set number of rate control passes (1: one-pass rate control, 2: two-pass rate control).              |
 | --qpa <int>            | 2                                | Perceptual QP adaptation (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
 | --threads ,-t <int>    | size<=HD: 4 <br> else : 6        | Number of threads (1-N)                                                                              |
