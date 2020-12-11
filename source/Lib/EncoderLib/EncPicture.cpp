@@ -90,6 +90,11 @@ void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, 
   // compress picture
   if ( pic.encPic )
   {
+    pic.createTempBuffers( pic.cs->pcv->maxCUSize );
+    pic.cs->createCoeffs();
+    pic.cs->createTempBuffers( true );
+    pic.cs->initStructData();
+
     xInitPicEncoder ( pic );
     gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
     xCompressPicture( pic );
@@ -113,9 +118,10 @@ void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, 
     pic.picBlkStat.storeBlkSize( pic );
   }
   // cleanup
-  pic.destroyTempBuffers();
-  pic.cs->destroyCoeffs();
   pic.cs->releaseIntermediateData();
+  pic.cs->destroyTempBuffers();
+  pic.cs->destroyCoeffs();
+  pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
 

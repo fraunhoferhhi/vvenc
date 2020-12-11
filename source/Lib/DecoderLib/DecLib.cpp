@@ -156,6 +156,11 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
               {
                 if( pic->poc == poc && (!bDecodeUntilPocFound || expectedPoc == poc ) )
                 {
+                  pcEncPic->createTempBuffers( pic->cs->pcv->maxCUSize );
+                  pcEncPic->cs->createCoeffs();
+                  pcEncPic->cs->createTempBuffers( true );
+                  pcEncPic->cs->initStructData();
+
                   CHECK( pcEncPic->slices.size() == 0, "at least one slice should be available" );
 
                   CHECK( expectedPoc != poc, "mismatch in POC - check encoder configuration" );
@@ -669,9 +674,10 @@ void DecLib::finishPicture(int& poc, PicList*& rpcListPic, MsgLevel msgl )
   m_maxDecSubPicIdx = 0;
   m_maxDecSliceAddrInSubPic = -1;
 
-  m_pic->destroyTempBuffers();
-  m_pic->cs->destroyCoeffs();
   m_pic->cs->releaseIntermediateData();
+  m_pic->cs->destroyTempBuffers();
+  m_pic->cs->destroyCoeffs();
+  m_pic->destroyTempBuffers();
   m_pic->cs->picHeader->initPicHeader();
 }
 
@@ -1007,6 +1013,8 @@ void DecLib::xActivateParameterSets( const int layerId)
 
     m_pic->createTempBuffers( m_pic->cs->pps->pcv->maxCUSize );
     m_pic->cs->createCoeffs();
+    m_pic->cs->createTempBuffers( true );
+    m_pic->cs->initStructData();
 
     m_pic->allocateNewSlice();
     // make the slice-pilot a real slice, and set up the slice-pilot for the next slice
