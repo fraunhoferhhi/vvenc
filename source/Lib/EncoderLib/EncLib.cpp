@@ -603,9 +603,6 @@ void EncLib::xInitPicture( Picture& pic, int picNum, const PPS& pps, const SPS& 
   pic.vps = &vps;
   pic.dci = &dci;
 
-  pic.createTempBuffers( pic.cs->pps->pcv->maxCUSize );
-  pic.cs->createCoeffs();
-
   // filter data initialization
   const uint32_t numberOfCtusInFrame = pic.cs->pcv->sizeInCtus;
 

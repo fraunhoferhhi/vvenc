@@ -176,6 +176,8 @@ public:
   void clearCUs();
   const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 
+  void createTempBuffers( const bool isTopLayer );
+  void destroyTempBuffers();
 private:
   void createInternals(const UnitArea& _unit, const bool isTopLayer);
 

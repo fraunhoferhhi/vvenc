@@ -122,24 +122,10 @@ void CodingStructure::destroy()
 
   destroyCoeffs();
 
-  for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
-  {
-    delete[] m_cuPtr[ i ];
-    m_cuPtr[ i ] = nullptr;
-
-    delete[] m_tuPtr[ i ];
-    m_tuPtr[ i ] = nullptr;
-  }
-
-  for( int i = 0; i < NUM_EDGE_DIR; i++ )
-  {
-    xFree( m_lfParam[ i ] );
-    m_lfParam[ i ] = nullptr;
-  }
-
   delete[] m_motionBuf;
   m_motionBuf = nullptr;
 
+  destroyTempBuffers();
 
   if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
 
@@ -650,30 +636,8 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   parent  = nullptr;
   refCS   = nullptr;
 
-  unsigned numCh = getNumberValidChannels(area.chromaFormat);
-
-  for (unsigned i = 0; i < numCh; i++)
-  {
-    Size allocArea = area.blocks[i].size();
-    m_mapSize[i] = unitScale[i].scale(allocArea);
-
-    unsigned _area = unitScale[i].scale( area.blocks[i].size() ).area();
-
-    m_cuPtr[i]    = _area > 0 ? new CodingUnit*    [_area] : nullptr;
-    m_tuPtr[i]    = _area > 0 ? new TransformUnit* [_area] : nullptr;
-  }
-
-  for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
-  {
-    m_lfParam[i] = ( isTopLayer && m_mapSize[0].area() > 0 ) ? ( LoopFilterParam* ) xMalloc( LoopFilterParam, m_mapSize[0].area() ) : nullptr;
-  }
-
-  numCh = getNumberValidComponents(area.chromaFormat);
-
-  for (unsigned i = 0; i < numCh; i++)
-  {
-    m_offsets[i] = 0;
-  }
+  unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
+  m_motionBuf = new MotionInfo[_lumaAreaScaled];
 
   if( isTopLayer )
   {
@@ -682,15 +646,54 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   else
   {
     createCoeffs();
+    createTempBuffers( false );
+    initStructData();
+  }
+}
+
+void CodingStructure::createTempBuffers( const bool isTopLayer )
+{
+  unsigned numCh = getNumberValidChannels( area.chromaFormat );
+
+  for( unsigned i = 0; i < numCh; i++ )
+  {
+    Size allocArea  = area.blocks[i].size();
+    m_mapSize[i]    = unitScale[i].scale(allocArea);
+
+    unsigned _area  = unitScale[i].scale( area.blocks[i].size() ).area();
+
+    m_cuPtr[i]      = _area > 0 ? new CodingUnit*    [_area] : nullptr;
+    m_tuPtr[i]      = _area > 0 ? new TransformUnit* [_area] : nullptr;
   }
 
-  unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
-  m_motionBuf       = new MotionInfo[_lumaAreaScaled];
+  for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
+  {
+    m_lfParam[i] = ( isTopLayer && m_mapSize[0].area() > 0 ) ? ( LoopFilterParam* ) xMalloc( LoopFilterParam, m_mapSize[0].area() ) : nullptr;
+  }
 
   unsigned _maxNumDmvrMvs = ( area.lwidth() >> 3 ) * ( area.lheight() >> 3 );
   m_dmvrMvCache.resize( _maxNumDmvrMvs );
+}
 
-  initStructData();
+void CodingStructure::destroyTempBuffers()
+{
+  for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
+  {
+    delete[] m_cuPtr[i];
+    m_cuPtr[i] = nullptr;
+
+    delete[] m_tuPtr[i];
+    m_tuPtr[i] = nullptr;
+  }
+
+  for( int i = 0; i < NUM_EDGE_DIR; i++ )
+  {
+    xFree( m_lfParam[i] );
+    m_lfParam[i] = nullptr;
+  }
+
+  // swap the contents of the vector so that memory released
+  std::vector<Mv>().swap( m_dmvrMvCache );
 }
 
 void CodingStructure::addMiToLut(static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> &lut, const HPMVInfo &mi)
@@ -738,6 +741,11 @@ void CodingStructure::createCoeffs()
     unsigned _area = area.blocks[i].area();
 
     m_coeffs[i] = _area > 0 ? ( TCoeff* ) xMalloc( TCoeff, _area ) : nullptr;
+  }
+
+  for( unsigned i = 0; i < numComp; i++ )
+  {
+    m_offsets[i] = 0;
   }
 }
 
