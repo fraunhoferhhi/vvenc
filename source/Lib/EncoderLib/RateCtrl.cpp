@@ -316,6 +316,7 @@ void EncRCSeq::getTargetBitsFromFirstPass( int numPicCoded, int &targetBits, dou
     {
       targetBits = it->targetBits;
       gopVsBitrateRatio = it->gopBitsVsBitrate;
+      frameVsGopRatio = it->frameInGopRatio;
       isNewScene = it->isNewScene;
       for ( int i = 0; i < numOfLevels; i++ )
       {

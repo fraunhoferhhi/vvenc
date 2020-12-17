@@ -268,6 +268,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
+    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == 2 ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
@@ -275,6 +276,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     slice->pic->picInitialQP = iQP;
 
     if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_CtuTaskRsrc[ 0 ]->m_encCu.getQpPtr(),
+                                                     rcIsFirstPassOf2,
                                                      startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_usePerceptQPA > 2)) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
