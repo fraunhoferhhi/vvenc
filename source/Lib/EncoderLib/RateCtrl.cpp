@@ -304,7 +304,7 @@ void EncRCSeq::updateAfterPic ( int bits )
   framesLeft--;
 }
 
-void EncRCSeq::getTargetBitsFromFirstPass( int numPicCoded, int &targetBits, double &gopVsBitrateRatio, bool &isNewScene, double alpha[] )
+void EncRCSeq::getTargetBitsFromFirstPass( int numPicCoded, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, double alpha[] )
 {
   int picCounter = 0;
   int numOfLevels = int( log( gopSize ) / log( 2 ) + 0.5 ) + 2;
@@ -720,17 +720,11 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
   if ( encRcSeq->twoPass )
   {
     double gopVsBitrateRatio = 1.0;
+    double frameVsGopRatio = 1.0;
     int tmpTargetBits = 0;
     double alpha[ 7 ] = { 0.0 };
-    encRcSeq->getTargetBitsFromFirstPass( encRcSeq->framesCoded, tmpTargetBits, gopVsBitrateRatio, isNewScene, alpha );
-    if ( currPicPosition == 0 || encRCSeq->framesLeft < encRcSeq->gopSize )
-    {
-      targetBits = int( ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * gopVsBitrateRatio + tmpTargetBits ); // calculate the difference of under/overspent bits and adjust the current target bits based on the gop ratio only for the first frame in the gop
-    }
-    else
-    {
-      targetBits = tmpTargetBits;
-    }
+    encRcSeq->getTargetBitsFromFirstPass( encRcSeq->framesCoded, tmpTargetBits, gopVsBitrateRatio, frameVsGopRatio, isNewScene, alpha );
+    targetBits = int( ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * gopVsBitrateRatio * frameVsGopRatio + tmpTargetBits ); // calculate the difference of under/overspent bits and adjust the current target bits based on the gop and frame ratio for every frame
 
     if ( encRcSeq->bitsUsed > 0 )
     {
