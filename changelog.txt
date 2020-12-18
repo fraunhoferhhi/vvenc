@@ -1,4 +1,14 @@
 /////////////////////////////////////////
+tag 0.2.1.0
+
+* bugfixes:
+- fix 2-pass rate control when perceptual QPA is enabled
+
+* libvvenc:
+- decrease memory consumption
+- improve rate control
+
+/////////////////////////////////////////
 tag 0.2.0.0
 
 * new license
