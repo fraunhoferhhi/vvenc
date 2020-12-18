@@ -2,11 +2,11 @@
 tag 0.2.1.0
 
 * bugfixes:
-- fix 2-pass rate control when perceptual QPA is enabled
+ - fix 2-pass rate control when perceptual QPA is enabled
 
 * libvvenc:
-- decrease memory consumption
-- improve rate control
+ - decrease memory consumption
+ - improve rate control
 
 /////////////////////////////////////////
 tag 0.2.0.0
@@ -32,7 +32,7 @@ tag 0.2.0.0
  - various memory reductions (Rom.cpp, scaling list memory)
  - verious optimizations (SIMD for MCTF, forward transformation, single column IF; memory accesses for DMVR)
  - changed MCTF algorithm to do intermediate rounding between hor/ver filtering
- 
+
 * vvencapp:
  - new parameter      --refreshsec,-rs to define the intra refresh rate in seconds depending on the given frame rate.
                        Internally, the refresh rate in seconds is translated into the frames where the refresh is set.
