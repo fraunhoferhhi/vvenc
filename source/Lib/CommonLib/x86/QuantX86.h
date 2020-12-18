@@ -204,7 +204,7 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
     {
       for( int y = 0; y <= maxY; y++)
       {
-        __m128i v_level = _mm_loadu_si128( ( __m128i const * )&piQCoef[y * piQCfStride]  );
+        __m128i v_level = maxX == 1 ? _mm_loadl_epi64( (__m128i const*) & piQCoef[y * piQCfStride] ) : _mm_loadu_si128( (__m128i const*) & piQCoef[y * piQCfStride] );
         v_level = _mm_packs_epi32 (v_level,v_level);
         v_level = _mm_and_si128(v_level,vlevmask);
         v_level = _mm_max_epi16 (v_level, v_min);
@@ -218,7 +218,10 @@ static void DeQuantCoreSIMD(const int maxX,const int maxY,const int scale,const 
 
         v_level = _mm_max_epi32 (v_level, v_Tmin);
         v_level = _mm_min_epi32 (v_level, v_Tmax);
-        _mm_storeu_si128(( __m128i * )(piCoef+y*width ), v_level );
+        if( maxX == 1 )
+          _mm_storel_epi64( (__m128i*)(piCoef + y * width), v_level );
+        else
+          _mm_storeu_si128( (__m128i*)(piCoef + y * width), v_level );
       }
     }
     else
