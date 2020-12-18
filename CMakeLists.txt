@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
 endif()
 
 # project name
-project( vvenc VERSION 0.2.0.0 )
+project( vvenc VERSION 0.2.0.1 )
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # enable sse4.1 build for all source files for gcc and clang
