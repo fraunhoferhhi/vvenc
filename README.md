@@ -72,6 +72,13 @@ The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](
 
     vvencFFapp -c randomaccess_medium.cfg -c sequence.cfg
 
+# Contributing
+
+Feel free to contribute. To do so:
+
+* Fork the current-most state of the master branch
+* Apply the desired changes
+* Create a pull-request to the upstream repository
 
 # License
 
