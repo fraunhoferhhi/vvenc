@@ -362,11 +362,6 @@ void EncLib::xSetRCEncCfg( int pass )
     // restore MCTF
     m_cBckCfg.m_MCTF              = mctf;
 
-    // configure QPA in the first pass
-    m_cBckCfg.m_usePerceptQPA                  = 0; // disable QPA in the first pass
-    m_cBckCfg.m_sliceChromaQpOffsetPeriodicity = 0;
-    m_cBckCfg.m_usePerceptQPATempFiltISlice    = 0;
-
     std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
@@ -602,9 +597,6 @@ void EncLib::xInitPicture( Picture& pic, int picNum, const PPS& pps, const SPS& 
 
   pic.vps = &vps;
   pic.dci = &dci;
-
-  pic.createTempBuffers( pic.cs->pps->pcv->maxCUSize );
-  pic.cs->createCoeffs();
 
   // filter data initialization
   const uint32_t numberOfCtusInFrame = pic.cs->pcv->sizeInCtus;
