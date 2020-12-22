@@ -1,6 +1,9 @@
 /////////////////////////////////////////
 tag 0.2.1.0
 
+* bugfixes:
+ - ISP fix: erroneous placed sanity check
+
 * libvvenc:
  - decrease memory consumption
  - harmonize 2-pass rate control and perceptual QPA
