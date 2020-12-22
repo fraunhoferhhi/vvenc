@@ -65,7 +65,7 @@ namespace vvenc {
                                  std::vector<int>& ctuPumpRedQP,
                                  int optChromaQPOffset[2], const bool isHDR = false);
     int applyQPAdaptationLuma   (const Slice* slice, const EncCfg* encCfg, const int savedQP, const double lambda,
-                                 std::vector<int>& ctuPumpRedQP,
+                                 std::vector<int>& ctuPumpRedQP, const bool forceFrameWiseQPA,
                                  const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, const bool isHDR = false);
     int applyQPAdaptationSubCtu (const Slice* slice, const EncCfg* encCfg, const Area& lumaArea, const bool isHDR = false);
     int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,

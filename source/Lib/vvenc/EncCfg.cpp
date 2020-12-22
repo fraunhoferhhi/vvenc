@@ -1417,7 +1417,7 @@ bool EncCfg::initCfgParameter()
   }
 
   /// Experimental settings
-  checkExperimental( m_RCRateControlMode != 0 && m_RCNumPasses == 2 && m_usePerceptQPA != 0, "2-pass rate control with perceptually optimized QP-adaptation is experimental!" );
+  // checkExperimental( experimental combination of parameters, "Description!" );
 
   return( m_confirmFailed );
 }

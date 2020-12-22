@@ -122,7 +122,7 @@ namespace vvenc {
     void setQpInGOP( int gopId, int gopQp, int &qp );
     bool isQpResetRequired( int gopId );
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
-    void getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, bool &isNewScene, double alpha[] );
+    void getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, double alpha[] );
 
   public:
     int             rcMode;

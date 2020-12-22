@@ -187,7 +187,6 @@ void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _ma
   margin            =  _margin;
   const Area a      = Area( Position(), size );
   m_bufs[ PIC_RECONSTRUCTION ].create( _chromaFormat, a, _maxCUSize, _margin, MEMORY_ALIGN_DEF_SIZE );
-  m_bufs[ PIC_SAO_TEMP ].create( _chromaFormat, a, _maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
 
   if( _decoder )
   {
@@ -230,11 +229,17 @@ void Picture::destroy()
 
 void Picture::createTempBuffers( unsigned _maxCUSize )
 {
+  CHECK( !cs, "Coding structure is required a this point!" );
+
+  m_bufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
+
   if( cs ) cs->rebindPicBufs();
 }
 
 void Picture::destroyTempBuffers()
 {
+  m_bufs[PIC_SAO_TEMP].destroy();
+
   if( cs ) cs->rebindPicBufs();
 }
 
@@ -262,7 +267,6 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
 
   if( cs )
   {
-    cs->initStructData();
     CHECK( cs->sps != &sps, "picture initialization error: sps changed" );
     CHECK( cs->vps != &_vps, "picture initialization error: vps changed" );
   }
