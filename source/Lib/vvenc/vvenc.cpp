@@ -88,10 +88,6 @@ int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
   if( m_pcVVEncImpl->m_bInitialized )       { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
   if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
-  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string simdOpt;
-  vvenc::setSIMDExtension( simdOpt );
-
   return m_pcVVEncImpl->init( rcVVEncParameter );
 }
 

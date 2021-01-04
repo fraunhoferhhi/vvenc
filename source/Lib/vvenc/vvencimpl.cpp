@@ -65,9 +65,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-std::string VVEncImpl::m_cTmpErrorString;
-std::string VVEncImpl::m_sPresetAsStr;
-
+char VVEncImpl::m_cErrCodeAsStrArr[256];
+char VVEncImpl::m_sPresetAsStrArr[256];
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
 
@@ -100,34 +99,18 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
+  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
+  std::string simdOpt;
+  std::string curSimd = vvenc::setSIMDExtension( simdOpt );
+
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
   std::stringstream cssCap;
-//  cssCap << NVM_ONOS;
-//
-//  char *tmp = nullptr;
-//  int iRet = asprintf(&tmp, NVM_COMPILEDBY);
-//  if( 0 == iRet ) cssCap << tmp;
-//  free(tmp);
-//
-//  iRet = asprintf(&tmp, NVM_BITS);
-//  if( 0 == iRet ) cssCap << tmp;
-//  free(tmp);
-//
-//#if ENABLE_SIMD_OPT
-//  std::string cSIMD;
-//  cssCap << "SIMD=" << read_x86_extension( cSIMD ) << " ";
-//#else
-//  cssCap << "SIMD=NONE ";
-//#endif
-//
-//#if ENABLE_TRACING
-//  cssCap << "[ENABLE_TRACING] ";
-//#endif
+  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  m_sEncoderCapabilities = cssCap.str();
 
   m_cVVEncParameter = rcVVEncParameter;
-  m_sEncoderCapabilities = cssCap.str();
 
   if( 0 != xInitLibCfg( rcVVEncParameter, m_cEncCfg ) )
   {
@@ -398,20 +381,26 @@ const char* VVEncImpl::getEncoderInfo()
 
 const char* VVEncImpl::getErrorMsg( int nRet )
 {
+  for ( unsigned long i=0; i<sizeof(m_cErrCodeAsStrArr); i++)
+        m_cErrCodeAsStrArr[i] = 0;
+
+  std::string cErr;
   switch( nRet )
   {
-  case VVENC_OK :                  m_cTmpErrorString = "expected behavior"; break;
-  case VVENC_ERR_UNSPECIFIED:      m_cTmpErrorString = "unspecified malfunction"; break;
-  case VVENC_ERR_INITIALIZE:       m_cTmpErrorString = "decoder not initialized or tried to initialize multiple times"; break;
-  case VVENC_ERR_ALLOCATE:         m_cTmpErrorString = "internal allocation error"; break;
-  case VVENC_NOT_ENOUGH_MEM:       m_cTmpErrorString = "allocated memory to small to receive encoded data"; break;
-  case VVENC_ERR_PARAMETER:        m_cTmpErrorString = "inconsistent or invalid parameters"; break;
-  case VVENC_ERR_NOT_SUPPORTED:    m_cTmpErrorString = "unsupported request"; break;
-  case VVENC_ERR_RESTART_REQUIRED: m_cTmpErrorString = "decoder requires restart"; break;
-  case VVENC_ERR_CPU:              m_cTmpErrorString = "unsupported CPU - SSE 4.1 needed!"; break;
-  default:                         m_cTmpErrorString = "unknown ret code"; break;
+  case VVENC_OK :                  cErr = "expected behavior"; break;
+  case VVENC_ERR_UNSPECIFIED:      cErr = "unspecified malfunction"; break;
+  case VVENC_ERR_INITIALIZE:       cErr = "encoder not initialized or tried to initialize multiple times"; break;
+  case VVENC_ERR_ALLOCATE:         cErr = "internal allocation error"; break;
+  case VVENC_NOT_ENOUGH_MEM:       cErr = "allocated memory to small to receive encoded data"; break;
+  case VVENC_ERR_PARAMETER:        cErr = "inconsistent or invalid parameters"; break;
+  case VVENC_ERR_NOT_SUPPORTED:    cErr = "unsupported request"; break;
+  case VVENC_ERR_RESTART_REQUIRED: cErr = "encoder requires restart"; break;
+  case VVENC_ERR_CPU:              cErr = "unsupported CPU - SSE 4.1 needed!"; break;
+  default:                         cErr = "unknown ret code"; break;
   }
-  return m_cTmpErrorString.c_str();
+
+  strcpy(m_cErrCodeAsStrArr, cErr.c_str());
+  return m_cErrCodeAsStrArr;
 }
 
 int VVEncImpl::setAndRetErrorMsg( int iRet )
@@ -451,8 +440,6 @@ double VVEncImpl::clockGetTimeDiffMs()
 
 const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
 {
-  m_sPresetAsStr.clear();
-
   std::stringstream css;
   vvenc::EncCfg cEncCfg;
   if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
@@ -506,9 +493,11 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
 
+  for ( unsigned long i=0; i<sizeof(m_sPresetAsStrArr); i++)
+        m_sPresetAsStrArr[i] = 0;
+  strcpy(m_sPresetAsStrArr, css.str().c_str());
 
-  m_sPresetAsStr = css.str();
-  return m_sPresetAsStr.c_str();
+  return m_sPresetAsStrArr;
 }
 
 
