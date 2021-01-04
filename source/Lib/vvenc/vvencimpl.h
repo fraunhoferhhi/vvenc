@@ -77,6 +77,8 @@ public:
   int initPass( int pass );
   int uninit();
 
+  bool isInitialized();
+
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
   int flush( VvcAccessUnit& rcVvcAccessUnit );
 
@@ -86,14 +88,15 @@ public:
 
   int setAndRetErrorMsg( int Ret );
 
-  int getNumLeadFrames();
-  int getNumTrailFrames();
+  int getNumLeadFrames() const;
+  int getNumTrailFrames() const;
 
-  std::string getEncoderInfo();
+  std::string getEncoderInfo() const;
+
+  std::string getLastError() const;
 
   static std::string getErrorMsg( int nRet );
   static std::string getVersionNumber();
-
   static std::string getPresetParamsAsStr( int iQuality );
 
 private:
@@ -106,7 +109,7 @@ private:
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
   int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
 
-public:
+private:
   bool                                                        m_bInitialized         = false;
   bool                                                        m_bFlushed             = false;
 

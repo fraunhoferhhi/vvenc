@@ -143,6 +143,11 @@ int VVEncImpl::uninit()
   return VVENC_OK;
 }
 
+bool VVEncImpl::isInitialized()
+{
+  return m_bInitialized;
+}
+
 
 int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
@@ -368,12 +373,17 @@ std::string VVEncImpl::getVersionNumber()
   return cVersion;
 }
 
-std::string VVEncImpl::getEncoderInfo()
+std::string VVEncImpl::getEncoderInfo() const
 {
   std::string cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
   cEncoderInfo += " ";
   cEncoderInfo += m_sEncoderCapabilities;
   return cEncoderInfo;
+}
+
+std::string VVEncImpl::getLastError() const
+{
+  return m_cErrorString;
 }
 
 std::string VVEncImpl::getErrorMsg( int nRet )
@@ -406,12 +416,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
   return iRet;
 }
 
-int VVEncImpl::getNumLeadFrames()
+int VVEncImpl::getNumLeadFrames() const
 {
   return m_cEncCfg.m_MCTFNumLeadFrames;
 }
 
-int VVEncImpl::getNumTrailFrames()
+int VVEncImpl::getNumTrailFrames() const
 {
   return m_cEncCfg.m_MCTFNumTrailFrames;
 }

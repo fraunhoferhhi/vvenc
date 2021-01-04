@@ -67,7 +67,7 @@ VVEnc::~VVEnc()
 {
   if( NULL != m_pcVVEncImpl )
   {
-    if( m_pcVVEncImpl->m_bInitialized )
+    if( m_pcVVEncImpl->isInitialized() )
     {
       uninit();
     }
@@ -85,7 +85,7 @@ int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
 
 int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
 {
-  if( m_pcVVEncImpl->m_bInitialized )       { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
   if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
   return m_pcVVEncImpl->init( rcVVEncParameter );
@@ -93,47 +93,47 @@ int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
 
 int VVEnc::initPass( int pass )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
   return m_pcVVEncImpl->initPass( pass );
 }
 
 int VVEnc::uninit()
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
   return m_pcVVEncImpl->uninit( );
 }
 
 bool VVEnc::isInitialized()
 {
-  return m_pcVVEncImpl->m_bInitialized;
+  return m_pcVVEncImpl->isInitialized();
 }
 
 int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
 }
 
 int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->flush( rcVvcAccessUnit ) );
 }
 
 int VVEnc::getPreferredBuffer( PicBuffer &rcPicBuffer )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getPreferredBuffer( rcPicBuffer ) );
 }
 
 int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 {
-  if( !m_pcVVEncImpl->m_bInitialized )
+  if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
@@ -147,7 +147,7 @@ std::string VVEnc::getEncoderInfo() const
 
 std::string VVEnc::getLastError() const
 {
-  return m_pcVVEncImpl->m_cErrorString.c_str();
+  return m_pcVVEncImpl->getLastError();
 }
 
 int VVEnc::getNumLeadFrames() const
