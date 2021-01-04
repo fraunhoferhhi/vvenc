@@ -124,7 +124,7 @@ public:
   std::string                                                 m_cErrorString;
   std::string                                                 m_sEncoderCapabilities;
   static char                                                 m_cErrCodeAsStrArr[256];
-  static char                                                 m_sPresetAsStrArr[256];
+  static char                                                 m_sPresetAsStrArr[8][256];
 
   std::chrono::steady_clock::time_point                       m_cTPStart;
   std::chrono::steady_clock::time_point                       m_cTPEnd;

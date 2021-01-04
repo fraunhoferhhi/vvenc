@@ -66,7 +66,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 char VVEncImpl::m_cErrCodeAsStrArr[256];
-char VVEncImpl::m_sPresetAsStrArr[256];
+char VVEncImpl::m_sPresetAsStrArr[8][256];
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
 
@@ -445,7 +445,12 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
   {
     css << "undefined preset " << iQuality;
+    for ( unsigned long i=0; i<sizeof(m_sPresetAsStrArr[0]); i++)
+          m_sPresetAsStrArr[0][i] = 0;
+    strcpy(m_sPresetAsStrArr[0], css.str().c_str());
+    return m_sPresetAsStrArr[0];
   }
+
 // tools
   if( cEncCfg.m_RDOQ )           { css << "RDOQ " << cEncCfg.m_RDOQ << " ";}
   if( cEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
@@ -493,11 +498,22 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
 
-  for ( unsigned long i=0; i<sizeof(m_sPresetAsStrArr); i++)
-        m_sPresetAsStrArr[i] = 0;
-  strcpy(m_sPresetAsStrArr, css.str().c_str());
+  int idx=iQuality;
+  if( iQuality > (PresetMode)SLOWER)
+  {
+    switch( (PresetMode)iQuality )
+    {
+      case PresetMode::FIRSTPASS: idx = (PresetMode)SLOWER+1; break;
+      case PresetMode::TOOLTEST:  idx = (PresetMode)SLOWER+2; break;
+      default:                    idx = (PresetMode)SLOWER+3; break;
+    }
+  }
 
-  return m_sPresetAsStrArr;
+  for ( unsigned long i=0; i<sizeof(m_sPresetAsStrArr[idx]); i++)
+        m_sPresetAsStrArr[idx][i] = 0;
+  strcpy(m_sPresetAsStrArr[idx], css.str().c_str());
+
+  return m_sPresetAsStrArr[idx];
 }
 
 
