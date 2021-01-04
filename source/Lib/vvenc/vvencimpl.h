@@ -53,7 +53,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <chrono>
 #include "vvenc/EncCfg.h"
 #include "vvenc/EncoderIf.h"
 #include "vvenc/vvenc.h"
@@ -85,21 +84,17 @@ public:
   int getConfig( VVEncParameter& rcVVEncParameter );
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
 
-  void clockStartTime();
-  void clockEndTime();
-  double clockGetTimeDiffMs();
-
   int setAndRetErrorMsg( int Ret );
 
   int getNumLeadFrames();
   int getNumTrailFrames();
 
-  const char* getEncoderInfo();
+  std::string getEncoderInfo();
 
-  static const char* getErrorMsg( int nRet );
-  static const char* getVersionNumber();
+  static std::string getErrorMsg( int nRet );
+  static std::string getVersionNumber();
 
-  static const char* getPresetParamsAsStr( int iQuality );
+  static std::string getPresetParamsAsStr( int iQuality );
 
 private:
 
@@ -120,14 +115,8 @@ public:
   VVEncParameter                                              m_cVVEncParameter;
   vvenc::EncCfg                                               m_cEncCfg;
 
-  std::string                                                 m_sEncoderInfo;
   std::string                                                 m_cErrorString;
   std::string                                                 m_sEncoderCapabilities;
-  static char                                                 m_cErrCodeAsStrArr[256];
-  static char                                                 m_sPresetAsStrArr[8][256];
-
-  std::chrono::steady_clock::time_point                       m_cTPStart;
-  std::chrono::steady_clock::time_point                       m_cTPEnd;
 };
 
 

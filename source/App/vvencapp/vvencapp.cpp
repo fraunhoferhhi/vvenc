@@ -241,10 +241,14 @@ int main( int argc, char* argv[] )
   cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer = NULL;
 
   // --- start timer
+  std::chrono::steady_clock::time_point cTPStartRun;
+  std::chrono::steady_clock::time_point cTPEndRun;
+
   std::chrono::steady_clock::time_point cTPStart;
   std::chrono::steady_clock::time_point cTPEnd;
-  cVVEnc.clockStartTime();
+  cTPStartRun = std::chrono::steady_clock::now();
   cTPStart = std::chrono::steady_clock::now();
+
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
   if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
   {
@@ -376,8 +380,8 @@ int main( int argc, char* argv[] )
     cYuvFileReader.close();
   }
 
-  cVVEnc.clockEndTime();
-  double dTimeSec = cVVEnc.clockGetTimeDiffMs() / 1000;
+  cTPEndRun = std::chrono::steady_clock::now();
+  double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEndRun)-(cTPStartRun)).count() / 1000;
 
   delete[] cAccessUnit.m_pucBuffer;
   delete[] pucDeletePicBuffer;

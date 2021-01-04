@@ -131,21 +131,6 @@ int VVEnc::getPreferredBuffer( PicBuffer &rcPicBuffer )
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getPreferredBuffer( rcPicBuffer ) );
 }
 
-void VVEnc::clockStartTime()
-{
-  m_pcVVEncImpl->clockStartTime();
-}
-
-void VVEnc::clockEndTime()
-{
-  m_pcVVEncImpl->clockEndTime();
-}
-
-double VVEnc::clockGetTimeDiffMs()
-{
-  return m_pcVVEncImpl->clockGetTimeDiffMs();
-}
-
 int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 {
   if( !m_pcVVEncImpl->m_bInitialized )
@@ -155,12 +140,12 @@ int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 }
 
 
-const char* VVEnc::getEncoderInfo() const
+std::string VVEnc::getEncoderInfo() const
 {
   return m_pcVVEncImpl->getEncoderInfo();
 }
 
-const char* VVEnc::getLastError() const
+std::string VVEnc::getLastError() const
 {
   return m_pcVVEncImpl->m_cErrorString.c_str();
 }
@@ -175,17 +160,17 @@ int VVEnc::getNumTrailFrames() const
   return m_pcVVEncImpl->getNumTrailFrames();
 }
 
-const char* VVEnc::getVersionNumber()
+std::string VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();
 }
 
-const char* VVEnc::getErrorMsg( int nRet )
+std::string VVEnc::getErrorMsg( int nRet )
 {
   return VVEncImpl::getErrorMsg(nRet);
 }
 
-const char* VVEnc::getPresetParamsAsStr( int iQuality )
+std::string VVEnc::getPresetParamsAsStr( int iQuality )
 {
   return VVEncImpl::getPresetParamsAsStr(iQuality);
 }

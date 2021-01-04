@@ -65,11 +65,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-char VVEncImpl::m_cErrCodeAsStrArr[256];
-char VVEncImpl::m_sPresetAsStrArr[8][256];
-
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
-
 
 VVEncImpl::VVEncImpl()
 {
@@ -366,24 +362,22 @@ int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter )
 }
 
 
-const char* VVEncImpl::getVersionNumber()
+std::string VVEncImpl::getVersionNumber()
 {
-  return VVENC_VERSION;
+  std::string cVersion = VVENC_VERSION;
+  return cVersion;
 }
 
-const char* VVEncImpl::getEncoderInfo()
+std::string VVEncImpl::getEncoderInfo()
 {
-    m_sEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
-    m_sEncoderInfo += " ";
-    m_sEncoderInfo += m_sEncoderCapabilities;
-    return m_sEncoderInfo.c_str();
+  std::string cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
+  cEncoderInfo += " ";
+  cEncoderInfo += m_sEncoderCapabilities;
+  return cEncoderInfo;
 }
 
-const char* VVEncImpl::getErrorMsg( int nRet )
+std::string VVEncImpl::getErrorMsg( int nRet )
 {
-  for ( unsigned long i=0; i<sizeof(m_cErrCodeAsStrArr); i++)
-        m_cErrCodeAsStrArr[i] = 0;
-
   std::string cErr;
   switch( nRet )
   {
@@ -399,8 +393,7 @@ const char* VVEncImpl::getErrorMsg( int nRet )
   default:                         cErr = "unknown ret code"; break;
   }
 
-  strcpy(m_cErrCodeAsStrArr, cErr.c_str());
-  return m_cErrCodeAsStrArr;
+  return cErr;
 }
 
 int VVEncImpl::setAndRetErrorMsg( int iRet )
@@ -423,32 +416,14 @@ int VVEncImpl::getNumTrailFrames()
   return m_cEncCfg.m_MCTFNumTrailFrames;
 }
 
-void VVEncImpl::clockStartTime()
-{
-  m_cTPStart = std::chrono::steady_clock::now();
-}
-
-void VVEncImpl::clockEndTime()
-{
-  m_cTPEnd = std::chrono::steady_clock::now();
-}
-
-double VVEncImpl::clockGetTimeDiffMs()
-{
-  return (double)(std::chrono::duration_cast<std::chrono::milliseconds>((m_cTPEnd)-(m_cTPStart)).count());
-}
-
-const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
+std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
 {
   std::stringstream css;
   vvenc::EncCfg cEncCfg;
   if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
   {
     css << "undefined preset " << iQuality;
-    for ( unsigned long i=0; i<sizeof(m_sPresetAsStrArr[0]); i++)
-          m_sPresetAsStrArr[0][i] = 0;
-    strcpy(m_sPresetAsStrArr[0], css.str().c_str());
-    return m_sPresetAsStrArr[0];
+    return css.str();
   }
 
 // tools
@@ -498,22 +473,7 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
 
-  int idx=iQuality;
-  if( iQuality > (PresetMode)SLOWER)
-  {
-    switch( (PresetMode)iQuality )
-    {
-      case PresetMode::FIRSTPASS: idx = (PresetMode)SLOWER+1; break;
-      case PresetMode::TOOLTEST:  idx = (PresetMode)SLOWER+2; break;
-      default:                    idx = (PresetMode)SLOWER+3; break;
-    }
-  }
-
-  for ( unsigned long i=0; i<sizeof(m_sPresetAsStrArr[idx]); i++)
-        m_sPresetAsStrArr[idx][i] = 0;
-  strcpy(m_sPresetAsStrArr[idx], css.str().c_str());
-
-  return m_sPresetAsStrArr[idx];
+  return css.str();
 }
 
 

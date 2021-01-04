@@ -440,22 +440,6 @@ public:
    int getPreferredBuffer( PicBuffer &rcPicBuffer );
 
    /**
-     This method sets a encoder start timer.
-   */
-   void clockStartTime();
-
-   /**
-     This method sets a encoder finish timer.
-   */
-   void clockEndTime();
-
-   /**
-     This method return the clock difference of end and start time.
-     \retval     double clock time difference in milli seconds
-   */
-   double clockGetTimeDiffMs();
-
-   /**
      This method fetches the current encoder configuration.
      The method fails if the encoder is not initialized.
      \param[in]  rcVVCEncoderParameter reference to an VVCEncoderParameter struct that returns the current encoder setup.
@@ -491,10 +475,9 @@ public:
      \param      None
      \retval     std::string empty string for no error assigned
    */
-   const char* getLastError() const;
+   std::string getLastError() const;
 
-
-   const char* getEncoderInfo() const;
+   std::string getEncoderInfo() const;
 
    int getNumLeadFrames() const;
 
@@ -505,21 +488,21 @@ public:
      \param      None
      \retval     std::string returns the version number
    */
-   static const char* getVersionNumber();
+   static std::string getVersionNumber();
 
    /**
      This static function returns a string according to the passed parameter nRet.
      \param[in]  nRet return value code to translate
      \retval[ ]  std::string empty string for no error
    */
-   static const char* getErrorMsg( int nRet );
+   static std::string getErrorMsg( int nRet );
 
    /**
      This static function returns a string according to the passed parameter iQuality.
      \param[in]  iQuality Quality (preset) as integer
      \retval[ ]  std::string enabled encoding parameter as string
    */
-   static const char* getPresetParamsAsStr( int iQuality );
+   static std::string getPresetParamsAsStr( int iQuality );
 
    /**
      This method registers a log message callback function to the encoder library. 
