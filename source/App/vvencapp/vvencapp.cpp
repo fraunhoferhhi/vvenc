@@ -258,7 +258,7 @@ int main( int argc, char* argv[] )
 
   unsigned int uiFrames = 0;
 
-  for( int pass = 0; pass < cVVEncParameter.m_iNumPasses+5; pass++ )
+  for( int pass = 0; pass < cVVEncParameter.m_iNumPasses; pass++ )
   {
     // initialize the encoder pass
     iRet = cVVEnc.initPass( pass );
