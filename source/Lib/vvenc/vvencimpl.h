@@ -77,13 +77,13 @@ public:
   int initPass( int pass );
   int uninit();
 
-  bool isInitialized();
+  bool isInitialized() const;
 
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
   int flush( VvcAccessUnit& rcVvcAccessUnit );
 
-  int getPreferredBuffer( PicBuffer &rcPicBuffer );
-  int getConfig( VVEncParameter& rcVVEncParameter );
+  int getPreferredBuffer( PicBuffer &rcPicBuffer ) const;
+  int getConfig( VVEncParameter& rcVVEncParameter ) const;
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
 
   int setAndRetErrorMsg( int Ret );
@@ -101,7 +101,7 @@ public:
 
 private:
 
-  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString );
+  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString ) const;
 
   int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
 

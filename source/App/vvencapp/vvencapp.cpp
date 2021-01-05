@@ -84,9 +84,10 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
   std::cout << cAppname  << " [error]: " << cMessage << ", ";
   switch( code )
   {
-    case vvenc::VVENC_ERR_CPU :       std::cout << "SSE 4.1 cpu support required."; break;
-    case vvenc::VVENC_ERR_PARAMETER : std::cout << "invalid parameter."; break;
-    default :                         std::cout << "error " << code; break;
+    case vvenc::VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required."; break;
+    case vvenc::VVENC_ERR_PARAMETER :     std::cout << "invalid parameter."; break;
+    case vvenc::VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request."; break;
+    default :                             std::cout << "error " << code; break;
   };
   if( !cErr.empty() )
   {
@@ -257,7 +258,7 @@ int main( int argc, char* argv[] )
 
   unsigned int uiFrames = 0;
 
-  for( int pass = 0; pass < cVVEncParameter.m_iNumPasses; pass++ )
+  for( int pass = 0; pass < cVVEncParameter.m_iNumPasses+5; pass++ )
   {
     // initialize the encoder pass
     iRet = cVVEnc.initPass( pass );

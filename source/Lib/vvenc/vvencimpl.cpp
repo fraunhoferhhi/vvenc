@@ -124,6 +124,13 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 int VVEncImpl::initPass( int pass )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( pass > 1 )
+  {
+    std::stringstream css;
+    css << "initPass(" << pass << ") no support for pass " << pass << ". use 0 (first pass) and 1 (second pass)";
+    m_cErrorString = css.str();
+    return VVENC_ERR_NOT_SUPPORTED;
+  }
 
   m_cEncoderIf.initPass( pass );
 
@@ -143,7 +150,7 @@ int VVEncImpl::uninit()
   return VVENC_OK;
 }
 
-bool VVEncImpl::isInitialized()
+bool VVEncImpl::isInitialized() const
 {
   return m_bInitialized;
 }
@@ -320,7 +327,7 @@ struct BufferDimensions
   int iAlignmentGuard;
 };
 
-int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
+int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   int iRet= VVENC_OK;
@@ -358,7 +365,7 @@ int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
   return iRet;
 }
 
-int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter )
+int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -488,7 +495,7 @@ std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
 
 
 /* converting sdk params to internal (wrapper) params*/
-int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString )
+int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString ) const
 {
   // check src params
   ROTPARAMS( rcSrc.m_iQp < 0 || rcSrc.m_iQp > 51,                                           "qp must be between 0 - 51."  );
