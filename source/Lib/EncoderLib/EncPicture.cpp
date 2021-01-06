@@ -72,12 +72,12 @@ static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 // ---------------------------------------------------------------------------------------------------------------------
 
 void EncPicture::init( const EncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                       const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool )
+                       const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP )
 {
   m_pcEncCfg = &encCfg;
 
   m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
-  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool );
+  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, encPicPP );
 }
 
 
@@ -103,8 +103,43 @@ void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, 
   {
     xSkipCompressPicture( pic, shrdApsMap );
   }
+  
+  ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
+}
 
-  if( pic.writePic)
+void EncPicture::finalizePicture( Picture& pic )
+{
+  CodingStructure& cs = *(pic.cs);
+  Slice* slice        = pic.slices[0];
+  // ALF
+  if( slice->sps->alfEnabled && pic.encPic )
+  {
+#ifdef TRACE_ENABLE_ITT
+    std::stringstream ss;
+    ss << "ALF_post_" << slice->poc;
+    __itt_string_handle* itt_handle_post = __itt_string_handle_create( ss.str().c_str() );
+#endif
+    ITT_TASKSTART( itt_domain_ALF_post, itt_handle_post );
+
+    if( m_pcEncCfg->m_ccalf )
+    {
+      m_ALF.performCCALF( pic, cs );
+    }
+    ITT_TASKEND( itt_domain_ALF_post, itt_handle_post );
+    pic.picApsMap.setApsIdStart( m_ALF.getApsIdStart() );
+
+    cs.slice->ccAlfFilterParam      = m_ALF.getCcAlfFilterParam();
+    cs.slice->ccAlfFilterControl[0] = m_ALF.getCcAlfControlIdc(COMP_Cb);
+    cs.slice->ccAlfFilterControl[1] = m_ALF.getCcAlfControlIdc(COMP_Cr);
+
+    DTRACE( g_trace_ctx, D_CRC, "ALF" );
+    DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.getRecoBuf() );
+    DTRACE_PIC_COMP( D_REC_CB_LUMA_ALF,   cs, cs.getRecoBuf(), COMP_Y  );
+    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cb );
+    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
+  }
+
+  if( pic.writePic )
   {
     // write picture
     xWriteSliceData( pic );
@@ -124,12 +159,8 @@ void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, 
   pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
-
-  gopEncoder.finishEncPicture( this, pic );
-
-  ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
+  pic.isReconstructed = true;
 }
-
 
 void EncPicture::xInitPicEncoder( Picture& pic )
 {
@@ -202,29 +233,6 @@ void EncPicture::xCompressPicture( Picture& pic )
   pic.cs->slice = slice;
 
   m_SliceEncoder.compressSlice( &pic );
-
-  CodingStructure& cs = *(pic.cs);
-
-  // ALF
-  if( slice->sps->alfEnabled )
-  {
-    ITT_TASKSTART( itt_domain_ALF_post, itt_handle_post );
-    if( m_pcEncCfg->m_ccalf )
-    {
-      m_ALF.performCCALF( pic, cs );
-    }
-    ITT_TASKEND( itt_domain_ALF_post, itt_handle_post );
-
-    cs.slice->ccAlfFilterParam      = m_ALF.getCcAlfFilterParam();
-    cs.slice->ccAlfFilterControl[0] = m_ALF.getCcAlfControlIdc(COMP_Cb);
-    cs.slice->ccAlfFilterControl[1] = m_ALF.getCcAlfControlIdc(COMP_Cr);
-
-    DTRACE( g_trace_ctx, D_CRC, "ALF" );
-    DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.getRecoBuf() );
-    DTRACE_PIC_COMP( D_REC_CB_LUMA_ALF,   cs, cs.getRecoBuf(), COMP_Y  );
-    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cb );
-    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
-  }
 }
 
 void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
@@ -250,7 +258,7 @@ void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdA
       m_ALF.setApsIdStart( ALF_CTB_MAX_NUM_APS );
 
       ParameterSetMap<APS>* apsMap = &pic.picApsMap;
-      apsMap->clear();
+      apsMap->clearActive();
 
       for( int apsId = 0; apsId < ALF_CTB_MAX_NUM_APS; apsId++ )
       {

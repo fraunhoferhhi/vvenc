@@ -82,6 +82,13 @@ set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/relw
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/bin/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
 
 
+# enable or disable Intel Vtune ITT Tracing
+if( CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" )
+    set( VVCEncoderLib_ENABLE_ITT ON CACHE BOOL "Enable Intel Runtime Support for Profiling" )
+else()
+    set( VVCEncoderLib_ENABLE_ITT OFF CACHE BOOL "Enable Intel Runtime Support for Profiling" )
+endif()
+
 # set default CMAKE_BUILD_TYPE to Release if not set
 if( NOT CMAKE_BUILD_TYPE )
   set( CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE )
@@ -135,6 +142,36 @@ endif()
 
 if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
+endif()
+
+if( VVCEncoderLib_ENABLE_ITT )
+  if( MSVC )
+    set( ITT_PATH "c:/Program Files (x86)/IntelSWTools/VTune Amplifier/" CACHE STRING "Path to the installation directory of Intel VTunes" )
+  elseif( APPLE )
+    message( WARNING "Not yet supported on Mac OS X" )
+  elseif( UNIX OR MINGW )
+    set( ITT_PATH "/opt/intel/vtune_amplifier" CACHE STRING "Path to the installation directory of Intel VTunes" )
+  endif()
+
+  if( EXISTS ${ITT_PATH} )
+    set( LIB_NAME INTEL_ITT )
+    add_library( ${LIB_NAME} STATIC IMPORTED GLOBAL )
+    if( MSVC )
+      set_target_properties( ${LIB_NAME} PROPERTIES IMPORTED_LOCATION        ${ITT_PATH}/lib64/libittnotify.lib )
+    elseif( APPLE )
+      # not supported
+    elseif( UNIX OR MINGW )
+      set_target_properties( ${LIB_NAME} PROPERTIES IMPORTED_LOCATION        ${ITT_PATH}/lib64/libittnotify.a )
+      set_target_properties( ${LIB_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES dl )
+    endif()
+
+    # set include directory. relative paths do not work.
+    set_target_properties( ${LIB_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ITT_PATH}/include )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTRACE_ENABLE_ITT" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTRACE_ENABLE_ITT" )
+  else()
+    message( WARNING "ITT_PATH ${ITT_PATH} not found, ignoring option VVCEncoderLib_ENABLE_ITT" )
+  endif()
 endif()
 
 # set address sanitizer compiler arguments

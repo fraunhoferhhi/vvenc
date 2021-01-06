@@ -102,6 +102,19 @@ struct FFwdDecoder
   {}
 };
 
+class EncGOP;
+class EncPicturePP : public EncPicture
+{
+public:
+  EncPicturePP() : m_isRunning( false ) {}
+  bool     m_isRunning;
+  Picture* m_pic;
+  EncGOP*  m_encGOP;
+
+  void start( EncGOP* encGOP, Picture* pic );
+  void finish();
+};
+
 // ====================================================================================================================
 
 class EncGOP
@@ -132,12 +145,11 @@ private:
   EncHRD*                   m_pcEncHRD;
   ParameterSetMap<APS>      m_gopApsMap;
 
-  std::vector<EncPicture*>  m_picEncoderList;
-  std::list<Picture*>       m_encodePics;
-  std::atomic_int           m_numPicEncoder;
+  std::vector<EncPicturePP*>  m_picEncoderList;
+  std::list<Picture*>       m_gopEncListInput;
+  std::list<Picture*>       m_gopEncListToProcess;
+  std::list<Picture*>       m_gopEncListInFlight;
   NoMallocThreadPool*       m_gopThreadPool;
-  std::mutex                m_gopEncMutex;
-  std::condition_variable   m_gopEncCond;
   std::vector<int>          m_globalCtuQpVector;
 
   double                    m_lambda;
@@ -146,20 +158,22 @@ private:
   int                       m_estimatedBits;
 
 public:
+  std::mutex                m_gopEncMutex;
+  std::condition_variable   m_gopEncCond;
+  std::list<Picture*>       m_gopEncListOutput;
+
+public:
   EncGOP();
   virtual ~EncGOP();
 
   void init               ( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
-  void encodePicture      ( std::vector<Picture*> encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef );
-  void finishEncPicture   ( EncPicture* picEncoder, Picture& pic );
+  void encodeGOP          ( const std::vector<Picture*>& encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef, bool flush );
+  void encodePicture      ( const std::vector<Picture*>& encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
   void picInitRateControl ( int gopId, Picture& pic, Slice* slice );
-
-  EncPicture* getPicEncoder( int idx )
-  {
-    CHECK( idx > m_picEncoderList.size() || m_picEncoderList[ idx] == nullptr, "error: array index out of bounds" );
-    return m_picEncoderList[ idx ];
-  }
+  ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
+  const ParameterSetMap<APS>& getSharedApsMap() const { return m_gopApsMap; }
+  bool                        anyFramesInOutputQueue() { return !m_gopEncListOutput.empty(); }
 
 private:
   void xUpdateRasInit                 ( Slice* slice );
@@ -168,7 +182,7 @@ private:
   int  xGetSliceDepth                 ( int poc ) const;
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, PicList& picList, int gopId ) const;
 
-  void xInitPicsICO                   ( std::vector<Picture*> encList, PicList& picList, bool isEncodeLtRef );
+  void xInitPicsICO                   ( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef );
   void xInitFirstSlice                ( Picture& pic, PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
@@ -196,6 +210,10 @@ private:
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnit&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnit& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
+  void xWaitForFinishedPic            ();
+  EncPicturePP* xGetNextFreePicEncoder();
+  bool xFinalizePicsPP                ();
+  bool xIsPlaceForNextNewPicture      ( PicList& picList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

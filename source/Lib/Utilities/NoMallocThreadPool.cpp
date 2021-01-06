@@ -242,15 +242,14 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
 bool NoMallocThreadPool::processTask( int threadId, NoMallocThreadPool::Slot& task )
 {
   const bool success = task.func( threadId, task.param );
+#if ENABLE_VALGRIND_CODE
+  MutexLock lock( m_extraMutex );
+#endif
   if( !success )
   {
     task.state = WAITING;
     return false;
   }
-
-#if ENABLE_VALGRIND_CODE
-  MutexLock lock( m_extraMutex );
-#endif
 
   if( task.done != nullptr )
   {

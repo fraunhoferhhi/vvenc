@@ -92,10 +92,8 @@ struct AlfCovariance
   {
   }
 
-  void reset( int num_bins = -1 )
+  void reset()
   {
-    if ( num_bins > 0 )
-      numBins = num_bins;
     pixAcc = 0;
     std::memset( y, 0, sizeof( y ) );
     std::memset( E, 0, sizeof( E ) );
@@ -114,6 +112,7 @@ struct AlfCovariance
 #if ENABLE_TRACING
   void trace()
   {
+    DTRACE( g_trace_ctx, D_ALF, "E\n");
     for( int b0 = 0; b0 < numBins; b0++ )
     {
       for( int b1 = 0; b1 < numBins; b1++ )
@@ -130,7 +129,7 @@ struct AlfCovariance
       }
       DTRACE( g_trace_ctx, D_ALF, "\n" );
     }
-    DTRACE( g_trace_ctx, D_ALF, "\n" );
+    DTRACE( g_trace_ctx, D_ALF, "y\n");
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -328,9 +327,6 @@ private:
   int                    m_reuseApsId[2];
   bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
-#if ALF_CTU_PAR_TRACING
-  std::stringstream*     m_traceStreams;
-#endif
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
@@ -348,6 +344,8 @@ public:
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
   void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
+  void alfReconstructor             ( CodingStructure& cs );
+  void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
   void resetFrameStats              ();
 
 private:

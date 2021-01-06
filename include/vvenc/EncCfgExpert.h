@@ -462,6 +462,7 @@ public:
   unsigned            m_maxNumAlfAlternativesChroma;
   bool                m_ccalf;
   int                 m_ccalfQpThreshold;
+  bool                m_alfTempPred;                                    ///> Indicates using of temporal filter data prediction through APS
   int                 m_MCTF;
   bool                m_MCTFFutureReference;
   int                 m_MCTFNumLeadFrames;
@@ -473,6 +474,7 @@ public:
   bool                m_qtbttSpeedUp;
 
   int                 m_fastLocalDualTreeMode;
+  int                 m_maxParallelFrames;
   bool                m_frameParallel;
   int                 m_numFppThreads;
   bool                m_ensureFppBitEqual;
@@ -717,6 +719,7 @@ public:
       , m_maxNumAlfAlternativesChroma                 ( MAX_NUM_ALF_ALTERNATIVES_CHROMA )
       , m_ccalf                                       ( false )
       , m_ccalfQpThreshold                            ( 37 )
+      , m_alfTempPred                                 ( true )
 
       , m_MCTF                                        ( 0 )
       , m_MCTFFutureReference                         ( true )
@@ -727,8 +730,9 @@ public:
       , m_qtbttSpeedUp                                ( false )
 
       , m_fastLocalDualTreeMode                       ( 0 )
+      , m_maxParallelFrames                           ( 0 )
       , m_frameParallel                               ( false )
-      , m_numFppThreads                               ( -1 )
+      , m_numFppThreads                               ( 0 )
       , m_ensureFppBitEqual                           ( false )
       , m_picPartitionFlag                            ( false )
   {

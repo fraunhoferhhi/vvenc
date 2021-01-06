@@ -218,6 +218,8 @@ public:
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
+  bool                          isEncPicturePPFinished;
+  bool                          isFinished;
   bool                          isLongTerm;
   bool                          encPic;
   bool                          writePic;
@@ -289,8 +291,10 @@ public:
   }
 };
 
-int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
+typedef Picture PicPP;
 
+int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
+inline bool isPicInUse( Picture* pic ) { return !( pic->isFinished && !pic->isNeededForOutput && !pic->isReferenced && pic->refCounter <= 0 ); }
 
 typedef std::list<Picture*> PicList;
 
