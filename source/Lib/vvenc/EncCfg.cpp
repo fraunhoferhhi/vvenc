@@ -551,6 +551,7 @@ bool EncCfg::initCfgParameter()
     confirmParameter( m_useAMaxBT,             "FPP bit-equal mode: AMaxBT is not supported (must be disabled)" );
     confirmParameter( m_cabacInitPresent,      "FPP bit-equal mode: CabacInitPresent is not supported (must be disabled)" );
     confirmParameter( m_saoEncodingRate > 0.0, "FPP bit-equal mode: SaoEncodingRate is not supported (must be disabled)" );
+    confirmParameter( m_alfTempPred,           "FPP bit-equal mode: ALFTempPred is not supported (must be disabled)" );
 #if ENABLE_TRACING
     confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
