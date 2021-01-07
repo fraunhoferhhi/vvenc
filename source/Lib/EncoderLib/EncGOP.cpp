@@ -417,7 +417,7 @@ void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, 
     // Currently this works in sequential mode. In the Frame Parallel mode the decoder bitstream reader would require jumping to AUs inside of debug-bitstream file. 
     if( trySkip )
     {
-      PicPP* pic = m_gopEncListToProcess.front();
+      Picture* pic = m_gopEncListToProcess.front();
       pic->encPic = true;
       pic->writePic = true;
 
@@ -442,7 +442,7 @@ void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, 
     bool isPicSubmited = false;
     for( auto it = m_gopEncListToProcess.begin(); it != m_gopEncListToProcess.end(); )
     {
-      PicPP* pic = *it;
+      Picture* pic = *it;
 
       if( waitForPicFinished || m_gopEncListInFlight.size() >= maxPicsInFlight )
       {
@@ -503,7 +503,7 @@ void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, 
   // AU output
   if( m_gopEncListOutput.size() > 0 )
   {
-    PicPP* pic = m_gopEncListOutput.front();
+    Picture* pic = m_gopEncListOutput.front();
     if( !pic->isReconstructed && m_gopEncListInput.empty() && m_gopEncListToProcess.empty() && !m_gopEncListInFlight.empty() )
     {
       while( !pic->isReconstructed )

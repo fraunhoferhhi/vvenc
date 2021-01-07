@@ -731,7 +731,6 @@ public:
 
       , m_fastLocalDualTreeMode                       ( 0 )
       , m_maxParallelFrames                           ( 0 )
-      , m_frameParallel                               ( false )
       , m_numFppThreads                               ( 0 )
       , m_ensureFppBitEqual                           ( false )
       , m_picPartitionFlag                            ( false )
