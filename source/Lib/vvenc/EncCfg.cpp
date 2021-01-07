@@ -113,10 +113,19 @@ bool EncCfg::initCfgParameter()
     CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::NONE, "can not determin auto profile");
   }
 
+  if( m_maxParallelFrames > 0 && !m_numWppThreads && !m_numFppThreads )
+  {
+    // Use picture threads for FPP
+    m_numFppThreads = m_maxParallelFrames;
+  }
+  else if( m_numFppThreads && !m_maxParallelFrames )
+  {
+    m_maxParallelFrames = m_numFppThreads;
+  }
 
   if ( m_InputQueueSize <= 0 )
   {
-    m_InputQueueSize = m_GOPSize;
+    m_InputQueueSize = m_maxParallelFrames ? 2*m_GOPSize + 1: m_GOPSize;
   }
   if ( m_MCTF )
   {
@@ -538,13 +547,17 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_confWinTop    % SPS::getWinUnitY(m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_confWinBottom % SPS::getWinUnitY(m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
 
-  confirmParameter( ( m_frameParallel || m_ensureFppBitEqual ) && m_useAMaxBT,            "AMaxBT and frame parallel encoding not supported" );
-  confirmParameter( ( m_frameParallel || m_ensureFppBitEqual ) && m_cabacInitPresent,     "CabacInitPresent and frame parallel encoding not supported" );
-  confirmParameter( ( m_frameParallel || m_ensureFppBitEqual ) && m_alf,                  "ALF and frame parallel encoding not supported" );
-  confirmParameter( ( m_frameParallel || m_ensureFppBitEqual ) && m_saoEncodingRate >= 0, "SaoEncodingRate and frame parallel encoding not supported" );
+  if( m_maxParallelFrames && m_ensureFppBitEqual )
+  {
+    confirmParameter( m_useAMaxBT,             "FPP bit-equal mode: AMaxBT is not supported (must be disabled)" );
+    confirmParameter( m_cabacInitPresent,      "FPP bit-equal mode: CabacInitPresent is not supported (must be disabled)" );
+    confirmParameter( m_saoEncodingRate > 0.0, "FPP bit-equal mode: SaoEncodingRate is not supported (must be disabled)" );
+    confirmParameter( m_alfTempPred,           "FPP bit-equal mode: ALFTempPred is not supported (must be disabled)" );
 #if ENABLE_TRACING
-  confirmParameter( m_frameParallel && ( m_numFppThreads != 0 && m_numFppThreads != 1 ) && ! m_traceFile.empty(), "Tracing and frame parallel encoding not supported" );
+    confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
+  }
+
   confirmParameter(((m_SourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
   confirmParameter(((m_SourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
 
@@ -1400,23 +1413,12 @@ bool EncCfg::initCfgParameter()
     m_PROF = bool(m_Affine);
     m_AffineType = (m_Affine == 2) ? true : false;
   }
-
-  if ( m_frameParallel )
+  if( m_maxParallelFrames )
   {
-    if ( m_numFppThreads < 0 )
-    {
-      const int iqs = m_MCTF ? m_InputQueueSize - MCTF_ADD_QUEUE_DELAY : m_InputQueueSize;
-            int num = m_GOPSize;
-      m_numFppThreads = 0;
-      for ( int i = 0; i < iqs; i += m_GOPSize )
-      {
-        num = num > 1 ? num >> 1 : 1;
-        m_numFppThreads += num;
-      }
-      confirmParameter( m_numFppThreads > m_InputQueueSize, "number of frame parallel processing threads should be less then size of input queue" );
-    }
+    confirmParameter( m_maxParallelFrames < 2, "maximum number of parallel frames should be greater or equal 2" );
+    confirmParameter( m_numFppThreads && m_maxParallelFrames && m_numFppThreads != m_maxParallelFrames, "NumFppThreads is not equal to MaxParallelFrames" );
   }
-
+  confirmParameter( m_maxParallelFrames > m_InputQueueSize, "maximum number of parallel frames should be less than size of input queue" );
   /// Experimental settings
   // checkExperimental( experimental combination of parameters, "Description!" );
 
@@ -1990,7 +1992,7 @@ void EncCfg::printCfg() const
   }
 
   msg( VERBOSE, "\nPARALLEL PROCESSING CFG: " );
-  msg( VERBOSE, "FPP:%d ",                   m_frameParallel );
+  msg( VERBOSE, "MaxParallelFrames:%d ",     m_maxParallelFrames );
   msg( VERBOSE, "NumFppThreads:%d ",         m_numFppThreads );
   msg( VERBOSE, "FppBitEqual:%d ",           m_ensureFppBitEqual );
   msg( VERBOSE, "WPP:%d ",                   m_numWppThreads );

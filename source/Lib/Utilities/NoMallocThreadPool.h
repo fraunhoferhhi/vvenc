@@ -89,7 +89,7 @@ const static auto BUSY_WAIT_TIME = [] {
 
 
 // enable this if tasks need to be added from mutliple threads
-#define ADD_TASK_THREAD_SAFE 0
+#define ADD_TASK_THREAD_SAFE 1
 
 
 // ---------------------------------------------------------------------------

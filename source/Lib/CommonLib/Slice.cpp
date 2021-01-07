@@ -747,7 +747,7 @@ bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) c
   while ( iterPic != rcListPic.end())
   {
     const Picture* pic = *(iterPic++);
-    if( pic->isReferenced && pic->isReconstructed && pic->poc != poc)
+    if( pic->isReferenced && pic->poc != poc)
     {
       if( pic->TLayer >= TLayer)
       {
@@ -1978,10 +1978,10 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
           }
         }
 
-        m_spsMap.clear();
+        m_spsMap.clearActive();
         m_spsMap.setActive(spsId);
         m_activeSPSId = spsId;
-        m_ppsMap.clear();
+        m_ppsMap.clearActive();
         m_ppsMap.setActive(ppsId);
         return true;
       }

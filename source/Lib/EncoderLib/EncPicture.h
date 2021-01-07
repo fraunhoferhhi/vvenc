@@ -84,11 +84,12 @@ class EncPicture
     virtual ~EncPicture() {}
 
     void      init          ( const EncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                              const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool );
+                              const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP = nullptr );
     EncSlice* getEncSlice   () { return &m_SliceEncoder; }
 
     void      encodePicture ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
 
+    void finalizePicture        ( Picture& pic );
   protected:
     void xInitPicEncoder        ( Picture& pic );
     void xCompressPicture       ( Picture& pic );

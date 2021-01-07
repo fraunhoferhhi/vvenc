@@ -464,15 +464,22 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
     }
 
     // encode picture with current poc
-    m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
+    if( m_cEncCfg.m_maxParallelFrames )
+      m_cGOPEncoder->encodeGOP( encList, m_cListPic, au, false, flush );
+    else
+      m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
     m_numPicsInQueue -= 1;
     m_numPicsCoded   += 1;
     // output reconstructed yuv
     xOutputRecYuv();
   }
+  else if( m_cEncCfg.m_maxParallelFrames && flush && !m_cGOPEncoder->m_gopEncListOutput.empty() )
+  {
+    std::vector<Picture*> encList;
+    m_cGOPEncoder->encodeGOP( encList, m_cListPic, au, false, flush );
+  }
 
-  isQueueEmpty = ( m_numPicsInQueue <= 0 );
-
+  isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? (  m_numPicsInQueue <= 0 && !m_cGOPEncoder->anyFramesInOutputQueue() ): ( m_numPicsInQueue <= 0 );
   if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
   {
     m_cRateCtrl.destroyRCGOP();
@@ -531,7 +538,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
     while ( picItr != std::end( m_cListPic ) )
     {
       Picture* curPic = *picItr;
-      if ( ! curPic->isNeededForOutput && ! curPic->isReferenced && curPic->refCounter <= 0 )
+      if ( !isPicInUse( curPic ) )
       {
         pic = curPic;
         break;
@@ -563,6 +570,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
   pic->isMctfProcessed   = false;
   pic->isInitDone        = false;
   pic->isReconstructed   = false;
+  pic->isFinished        = false;
   pic->isBorderExtended  = false;
   pic->isReferenced      = true;
   pic->isNeededForOutput = true;
@@ -584,7 +592,7 @@ void EncLib::xInitPicture( Picture& pic, int picNum, const PPS& pps, const SPS& 
   pic.gopId  = gopId;
   pic.TLayer = m_cEncCfg.m_GOPList[ pic.gopId ].m_temporalId;
 
-  std::mutex* mutex = ( m_cEncCfg.m_frameParallel ) ? &m_unitCacheMutex : nullptr;
+  std::mutex* mutex = ( m_cEncCfg.m_maxParallelFrames ) ? &m_unitCacheMutex : nullptr;
 
   PicHeader *picHeader = nullptr;
   if ( pic.cs && pic.cs->picHeader )

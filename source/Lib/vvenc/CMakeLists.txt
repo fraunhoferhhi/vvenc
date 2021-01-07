@@ -89,7 +89,11 @@ target_include_directories( ${LIB_NAME} PRIVATE           $<BUILD_INTERFACE:${CM
                                         SYSTEM INTERFACE  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../../include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}> )
 target_include_directories( ${LIB_NAME} PRIVATE . .. ../DecoderLib ../EncoderLib ../CommonLib ../CommonLib/x86 )
 
-target_link_libraries( ${LIB_NAME} Threads::Threads )
+if( TARGET INTEL_ITT)
+  target_link_libraries( ${LIB_NAME} INTEL_ITT Threads::Threads )
+else()
+  target_link_libraries( ${LIB_NAME} Threads::Threads )
+endif()
 
 # set the folder where to place the projects
 set_target_properties( ${LIB_NAME} PROPERTIES FOLDER lib )

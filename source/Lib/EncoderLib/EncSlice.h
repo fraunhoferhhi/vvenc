@@ -64,6 +64,7 @@ struct SAOStatData;
 class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
 class EncPicture;
+class EncPicturePP;
 class NoMallocThreadPool;
 
 // ====================================================================================================================
@@ -71,8 +72,9 @@ class NoMallocThreadPool;
 // ====================================================================================================================
 
 struct LineEncRsrc;
-struct CtuTaskRsrc;
+struct PerThreadRsrc;
 struct CtuEncParam;
+struct CompressCtusFinishedParam;
 
 enum ProcessCtuState {
   CTU_ENCODE     = 0,
@@ -92,7 +94,7 @@ private:
   // encoder configuration
   const EncCfg*                m_pcEncCfg;                           ///< encoder configuration class
 
-  std::vector<CtuTaskRsrc*>    m_CtuTaskRsrc;
+  std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
   std::vector<LineEncRsrc*>    m_LineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
   std::vector<ProcessCtuState> m_processStates;
@@ -113,6 +115,8 @@ private:
   bool                         m_saoAllDisabled;
   std::vector<SAOBlkParam>     m_saoReconParams;
   std::vector<SAOStatData**>   m_saoStatData;
+  EncPicturePP*                m_encPicPP;
+  std::vector<CtuEncParam>     ctuEncParams;
 
 public:
   EncSlice();
@@ -125,7 +129,8 @@ public:
                                 LoopFilter& loopFilter,
                                 EncAdaptiveLoopFilter& alf,
                                 RateCtrl& rateCtrl,
-                                NoMallocThreadPool* threadPool );
+                                NoMallocThreadPool* threadPool,
+                                EncPicturePP* encPicPP = nullptr );
 
   void    initPic             ( Picture* pic, int gopId );
 
@@ -140,9 +145,10 @@ private:
   void    xInitSliceLambdaQP   ( Slice* slice, int gopId );
   double  xCalculateLambda     ( const Slice* slice, const int GOPid, const int depth, const double refQP, const double dQP, int& iQP );
   void    xProcessCtus         ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
-
+  void xFinishCompressSlice    ( Picture* pic, Slice& slice );
   template<bool checkReadyState=false>
   static bool xProcessCtuTask  ( int taskIdx, CtuEncParam* ctuEncParam );
+  static bool xProcessCtusFinishingTask( int taskIdx, CompressCtusFinishedParam* ctuTaskCounter );
 
   int     xGetQPForPicture     ( const Slice* slice, unsigned gopId );
 };
