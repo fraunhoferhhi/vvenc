@@ -475,7 +475,6 @@ public:
 
   int                 m_fastLocalDualTreeMode;
   int                 m_maxParallelFrames;
-  bool                m_frameParallel;
   int                 m_numFppThreads;
   bool                m_ensureFppBitEqual;
   bool                m_picPartitionFlag;

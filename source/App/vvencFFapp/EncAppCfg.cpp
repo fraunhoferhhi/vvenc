@@ -882,7 +882,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   ("NumWppThreads",                                   m_numWppThreads,                                  "Number of parallel wpp threads")
   ("WppBitEqual",                                     m_ensureWppBitEqual,                              "Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line above, 2:line wise reset)")
-  ("FrameParallel",                                   m_frameParallel,                                  "Encode multiple frames in parallel (if permitted by GOP structure)")
   ("NumFppThreads",                                   m_numFppThreads,                                  "Number of frame parallel processing threads")
   ("MaxParallelFrames",                               m_maxParallelFrames,                              "Maximum number of frames to be processed in parallel(0:off, >=2: enable parallel frames)")
   ("FppBitEqual",                                     m_ensureFppBitEqual,                              "Ensure bit equality with frame parallel processing case")
