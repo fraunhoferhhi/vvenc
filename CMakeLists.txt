@@ -35,10 +35,23 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
 endif()
 
 # enable install target
-set( VVENC_ENABLE_INSTALL ON CACHE BOOL "Enable or disable install target" )
+set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable install target" )
+                                                             
+# enable postfix                                             
+set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
+                                                             
+set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
 
-# enable postfix
-set( VVENC_ENABLE_BUILD_TYPE_POSTFIX OFF CACHE BOOL "Enable or disable build type postfix for apps and libs" )
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    
+  # enable address sanitizer
+  set( VVENC_USE_ADDRESS_SANITIZER          OFF CACHE BOOL   "Enable or disable address sanitizer" )
+  
+  # add -march=native
+  set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
+endif()
+
 
 if( VVENC_ENABLE_BUILD_TYPE_POSTFIX )
   if( BUILD_SHARED_LIBS )
@@ -94,12 +107,6 @@ if( NOT CMAKE_BUILD_TYPE )
   set( CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE )
 endif()
 
-# address sanitizer
-if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
-    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-  set( VVENC_USE_ADDRESS_SANITIZER OFF CACHE BOOL "Compiles with -sanitize=address and links to libasan" )
-endif()
-
 #set( ENABLE_LINK_TIME_OPT ON       CACHE BOOL   "Enable link time optimization for release and profile builds" )
 #set( OPT_TARGET_ARCH      "native" CACHE STRING "Create code and optimize for this architecture (default native)" )
 
@@ -142,6 +149,17 @@ endif()
 
 if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
+endif()
+
+if( ( UNIX OR MINGW ) AND NOT VVENC_OPT_TARGET_ARCH STREQUAL "" )
+  set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+endif()
+
+if( VVENC_ENABLE_LINK_TIME_OPT )
+  set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON )
+  set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON )
+  set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON )
 endif()
 
 if( VVCEncoderLib_ENABLE_ITT )
