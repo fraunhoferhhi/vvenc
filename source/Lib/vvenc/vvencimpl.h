@@ -82,7 +82,6 @@ public:
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
   int flush( VvcAccessUnit& rcVvcAccessUnit );
 
-  int getPreferredBuffer( PicBuffer &rcPicBuffer ) const;
   int getConfig( VVEncParameter& rcVVEncParameter ) const;
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
 

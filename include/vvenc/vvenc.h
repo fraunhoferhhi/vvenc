@@ -264,8 +264,7 @@ typedef struct VVENC_DECL VvcAccessUnit
 /**
   \ingroup VVEncExternalInterfaces
   The struct PicBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture. Memory has to be allocated by the user. For using maximum performance
-  consider allocating 16byte aligned memory for all three color components or use HhiVvcEnc::getPreferredBuffer() to let the encoder allocate an appropriate buffer.
-
+  consider allocating 16byte aligned memory for all three color components.
 */
 typedef struct VVENC_DECL PicBuffer
 {
@@ -430,14 +429,6 @@ public:
      \pre        The encoder has to be initialized.
    */
    int flush( VvcAccessUnit& rcVvcAccessUnit );
-
-  /**
-    This method returns an allocated picture buffer according to the encoder's preference. To is this call the encoder has to be initialized.
-    \param[out] rcPicBuffer reference to PicBuffer
-    \retval     int nonzero indicates an error VVENC_ERR_INITIALIZE, VVENC_ERR_ALLOCATE, otherwise VVENC_OK
-     \pre       The encoder has to be initialized.
-  */
-   int getPreferredBuffer( PicBuffer &rcPicBuffer );
 
    /**
      This method fetches the current encoder configuration.

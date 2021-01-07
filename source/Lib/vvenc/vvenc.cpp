@@ -124,13 +124,6 @@ int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->flush( rcVvcAccessUnit ) );
 }
 
-int VVEnc::getPreferredBuffer( PicBuffer &rcPicBuffer )
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getPreferredBuffer( rcPicBuffer ) );
-}
-
 int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 {
   if( !m_pcVVEncImpl->isInitialized() )

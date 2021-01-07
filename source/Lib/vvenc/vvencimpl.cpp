@@ -302,69 +302,6 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   return iRet;
 }
 
-struct BufferDimensions
-{
-  BufferDimensions(int iWidth, int iHeight, int iBitDepth, int iMaxCUSizeLog2, int iAddMargin = 16 )
-    : iMaxCuSize      (1<<iMaxCUSizeLog2)
-    , iSizeFactor     ((iBitDepth>8) ? (2) : (1))
-    , iLumaMarginX    (iMaxCuSize + iAddMargin)
-    , iLumaMarginY    (iLumaMarginX)
-    , iStride         ((((iWidth + iMaxCuSize-1)>>iMaxCUSizeLog2)<<iMaxCUSizeLog2) + 2 * iLumaMarginX)
-    , iLumaSize       ( iStride * ((((iHeight + iMaxCuSize-1)>>iMaxCUSizeLog2)<<iMaxCUSizeLog2) + 2 * iLumaMarginY))
-    , iLumaOffset     ( iLumaMarginY * iStride + iLumaMarginX)
-    , iChromaOffset   ((iLumaMarginY * iStride + iLumaMarginX * 2)/4)
-    , iAlignmentGuard (16)
-  {}
-
-  int iMaxCuSize;
-  int iSizeFactor;
-  int iLumaMarginX;
-  int iLumaMarginY;
-  int iStride;
-  int iLumaSize;
-  int iLumaOffset;
-  int iChromaOffset;
-  int iAlignmentGuard;
-};
-
-int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer ) const
-{
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
-  int iRet= VVENC_OK;
-
-  bool bMarginReq          = false;
-  int iAddMargin           = bMarginReq ? 16: -1;
-  const int iMaxCUSizeLog2 = 7;
-  const int iBitDepth      = 10;
-
-  int iMaxCUSizeLog2Buffer = bMarginReq ? iMaxCUSizeLog2 : 0;
-  const BufferDimensions bd( m_cVVEncParameter.m_iWidth, m_cVVEncParameter.m_iHeight, iBitDepth, iMaxCUSizeLog2Buffer, iAddMargin);
-  rcPicBuffer.m_iBitDepth = iBitDepth;
-  rcPicBuffer.m_iWidth    = m_cVVEncParameter.m_iWidth;
-  rcPicBuffer.m_iHeight   = m_cVVEncParameter.m_iHeight;
-  rcPicBuffer.m_iStride   = bd.iStride;
-  const int iBufSize      = bd.iSizeFactor * bd.iLumaSize * 3 / 2 + 3*bd.iAlignmentGuard;
-
-  rcPicBuffer.m_pucDeletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
-  if( NULL == rcPicBuffer.m_pucDeletePicBuffer )
-  {
-    return VVENC_NOT_ENOUGH_MEM;
-  }
-
-  unsigned char* pY = rcPicBuffer.m_pucDeletePicBuffer + bd.iSizeFactor * ( bd.iLumaOffset );
-  unsigned char* pU = rcPicBuffer.m_pucDeletePicBuffer + bd.iSizeFactor * ( bd.iChromaOffset +   bd.iLumaSize);
-  unsigned char* pV = rcPicBuffer.m_pucDeletePicBuffer + bd.iSizeFactor * ( bd.iChromaOffset + 5*bd.iLumaSize/4);
-
-  rcPicBuffer.m_pvY = (pY +   bd.iAlignmentGuard) - (((size_t)pY) & (bd.iAlignmentGuard-1));
-  rcPicBuffer.m_pvU = (pU + 2*bd.iAlignmentGuard) - (((size_t)pU) & (bd.iAlignmentGuard-1));
-  rcPicBuffer.m_pvV = (pV + 3*bd.iAlignmentGuard) - (((size_t)pV) & (bd.iAlignmentGuard-1));
-
-  rcPicBuffer.m_eColorFormat     = VVC_CF_YUV420_PLANAR;
-  rcPicBuffer.m_uiSequenceNumber = 0;
-
-  return iRet;
-}
-
 int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }

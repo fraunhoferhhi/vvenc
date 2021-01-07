@@ -150,6 +150,35 @@ int main( int argc, char* argv[] )
 }
 
 
+template< class PicBufferLocal >
+int allocPicBuffer( PicBufferLocal& rcPicBuffer, unsigned int uiWidth,  unsigned int uiHeight )
+{
+  const int iSizeFactor     = 2;
+  const int iAlignmentGuard =16;
+  rcPicBuffer.m_iBitDepth = 10;
+  rcPicBuffer.m_iWidth    = uiWidth;
+  rcPicBuffer.m_iHeight   = uiHeight;
+  rcPicBuffer.m_iStride   = uiWidth;
+  int iLumaSize   = uiWidth * uiHeight;
+  const int iBufSize = iSizeFactor * iLumaSize * 3 / 2 + 3*iAlignmentGuard;
+
+  rcPicBuffer.m_pucDeletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
+  if( NULL == rcPicBuffer.m_pucDeletePicBuffer )
+  {
+    return vvenc::VVENC_NOT_ENOUGH_MEM;
+  }
+
+  unsigned char* pY = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( 0 );
+  unsigned char* pU = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( iLumaSize);
+  unsigned char* pV = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( 5*iLumaSize/4);
+
+  rcPicBuffer.m_pvY = (pY +   iAlignmentGuard) - (((size_t)pY) & (iAlignmentGuard-1));
+  rcPicBuffer.m_pvU = (pU + 2*iAlignmentGuard) - (((size_t)pU) & (iAlignmentGuard-1));
+  rcPicBuffer.m_pvV = (pV + 3*iAlignmentGuard) - (((size_t)pV) & (iAlignmentGuard-1));
+
+  return 0;
+}
+
 void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
 {
   cVVEncParameter.m_iQp               = 32;                         // quantization parameter 0-51
@@ -377,7 +406,7 @@ int callingOrderRegular()
   cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
 
   vvenc::InputPicture cInputPic;
-  if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
+  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
   {
     return -1;
   }
@@ -406,7 +435,8 @@ int callingOrderRegularInitPass()
   cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
 
   vvenc::InputPicture cInputPic;
-  if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
+
+  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
   {
     return -1;
   }
@@ -426,6 +456,60 @@ int callingOrderRegularInitPass()
   return 0;
 }
 
+int callingOrderRegularInit2Pass()
+{
+  vvenc::VVEnc cVVEnc;
+  vvenc::VVEncParameter vvencParams;
+  fillEncoderParameters( vvencParams );
+
+  vvencParams.m_iNumPasses = 2;
+  vvencParams.m_iTargetBitRate = 500000;
+
+  if( 0 != cVVEnc.init( vvencParams ) )
+  {
+    return -1;
+  }
+  vvenc::VvcAccessUnit cAU;
+  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+
+  vvenc::InputPicture cInputPic;
+  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
+  {
+    return -1;
+  }
+  fillInputPic( cInputPic );
+  if( 0 != cVVEnc.initPass( 0 ) )
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  {
+    return -1;
+  }
+
+  if( 0 != cVVEnc.flush( cAU))
+  {
+    return -1;
+  }
+
+  if( 0 != cVVEnc.initPass( 1 ) )
+  {
+    return -1;
+  }
+
+  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  {
+    return -1;
+  }
+  if( 0 != cVVEnc.uninit())
+  {
+    return -1;
+  }
+  return 0;
+}
+
+
+
 int testLibCallingOrder()
 {
   testfunc( "callingOrderInvalidUninit",   &callingOrderInvalidUninit,   true  );
@@ -434,6 +518,8 @@ int testLibCallingOrder()
   testfunc( "callingOrderNoInit",          &callingOrderNoInit,          true  );
   testfunc( "callingOrderRegular",         &callingOrderRegular,         false );
   testfunc( "callingOrderRegularInitPass", &callingOrderRegularInitPass, false );
+  testfunc( "callingOrderRegularInit2Pass", &callingOrderRegularInit2Pass, false );
+
   return 0;
 }
 
@@ -539,7 +625,7 @@ int invaildInputBuf( )
   }
 
   vvenc::InputPicture cInputPic;
-  if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
+  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
   {
     return -1;
   }
@@ -576,7 +662,7 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
   }
 
   vvenc::InputPicture cInputPic;
-  if( 0 != cVVEnc.getPreferredBuffer( cInputPic.m_cPicBuffer ))
+  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
   {
     return -1;
   }
