@@ -133,6 +133,15 @@ int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 }
 
 
+int VVEnc::reconfig( const VVEncParameter& rcVVEncParameter )
+{
+  if( !m_pcVVEncImpl->isInitialized() )
+  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncParameter ) );
+}
+
+
 std::string VVEnc::getEncoderInfo() const
 {
   return m_pcVVEncImpl->getEncoderInfo();

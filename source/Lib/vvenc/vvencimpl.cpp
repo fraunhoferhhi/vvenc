@@ -310,6 +310,12 @@ int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter ) const
   return 0;
 }
 
+int VVEncImpl::reconfig( const VVEncParameter& rcVVEncParameter )
+{
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  return VVENC_ERR_NOT_SUPPORTED;
+}
+
 
 std::string VVEncImpl::getVersionNumber()
 {

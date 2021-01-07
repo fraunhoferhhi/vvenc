@@ -84,6 +84,7 @@ public:
 
   int getConfig( VVEncParameter& rcVVEncParameter ) const;
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
+  int reconfig( const VVEncParameter& rcVVEncParameter );
 
   int setAndRetErrorMsg( int Ret );
 
