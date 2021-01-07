@@ -53,7 +53,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <chrono>
 #include "vvenc/EncCfg.h"
 #include "vvenc/EncoderIf.h"
 #include "vvenc/vvenc.h"
@@ -78,32 +77,31 @@ public:
   int initPass( int pass );
   int uninit();
 
+  bool isInitialized() const;
+
   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
   int flush( VvcAccessUnit& rcVvcAccessUnit );
 
-  int getPreferredBuffer( PicBuffer &rcPicBuffer );
-  int getConfig( VVEncParameter& rcVVEncParameter );
+  int getConfig( VVEncParameter& rcVVEncParameter ) const;
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
-
-  void clockStartTime();
-  void clockEndTime();
-  double clockGetTimeDiffMs();
+  int reconfig( const VVEncParameter& rcVVEncParameter );
 
   int setAndRetErrorMsg( int Ret );
 
-  int getNumLeadFrames();
-  int getNumTrailFrames();
+  int getNumLeadFrames() const;
+  int getNumTrailFrames() const;
 
-  const char* getEncoderInfo();
+  std::string getEncoderInfo() const;
 
-  static const char* getErrorMsg( int nRet );
-  static const char* getVersionNumber();
+  std::string getLastError() const;
 
-  static const char* getPresetParamsAsStr( int iQuality );
+  static std::string getErrorMsg( int nRet );
+  static std::string getVersionNumber();
+  static std::string getPresetParamsAsStr( int iQuality );
 
 private:
 
-  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString );
+  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString ) const;
 
   int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
 
@@ -111,7 +109,7 @@ private:
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
   int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
 
-public:
+private:
   bool                                                        m_bInitialized         = false;
   bool                                                        m_bFlushed             = false;
 
@@ -120,14 +118,8 @@ public:
   VVEncParameter                                              m_cVVEncParameter;
   vvenc::EncCfg                                               m_cEncCfg;
 
-  std::string                                                 m_sEncoderInfo;
   std::string                                                 m_cErrorString;
   std::string                                                 m_sEncoderCapabilities;
-  static std::string                                          m_sPresetAsStr;
-  static std::string                                          m_cTmpErrorString;
-
-  std::chrono::steady_clock::time_point                       m_cTPStart;
-  std::chrono::steady_clock::time_point                       m_cTPEnd;
 };
 
 

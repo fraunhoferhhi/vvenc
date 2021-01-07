@@ -115,17 +115,13 @@ public:
       {
         std::cout <<
           "\t              faster          : best speed      : quality=0 :\n"
-          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(0) << "\n\n";
-        std::cout <<
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(0) << "\n\n"
           "\t              fast            : fast mode       : quality=1 :\n"
-          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n";
-        std::cout <<
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(1) << "\n\n"
           "\t              medium          : default quality : quality=2 :\n"
-          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n";
-        std::cout <<
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(2) << "\n\n"
           "\t              slow            : better quality  : quality=3 :\n"
-          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n";
-        std::cout <<
+          "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(3) << "\n\n"
           "\t              slower          : best quality    : quality=4 :\n"
           "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(4) << "\n\n";
       }

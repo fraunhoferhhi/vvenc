@@ -84,9 +84,10 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
   std::cout << cAppname  << " [error]: " << cMessage << ", ";
   switch( code )
   {
-    case vvenc::VVENC_ERR_CPU :       std::cout << "SSE 4.1 cpu support required."; break;
-    case vvenc::VVENC_ERR_PARAMETER : std::cout << "invalid parameter."; break;
-    default :                         std::cout << "error " << code; break;
+    case vvenc::VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required."; break;
+    case vvenc::VVENC_ERR_PARAMETER :     std::cout << "invalid parameter."; break;
+    case vvenc::VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request."; break;
+    default :                             std::cout << "error " << code; break;
   };
   if( !cErr.empty() )
   {
@@ -230,29 +231,20 @@ int main( int argc, char* argv[] )
   cAccessUnit.m_iBufSize  = cVVEncParameter.m_iWidth * cVVEncParameter.m_iHeight;
   cAccessUnit.m_pucBuffer = new unsigned char [ cAccessUnit.m_iBufSize ];
 
-  vvenc::InputPicture cInputPicture;
-  iRet = cVVEnc.getPreferredBuffer( cInputPicture.m_cPicBuffer );
-  if( 0 != iRet )
-  {
-    printVVEncErrorMsg( cAppname, "failed to get preferred buffer", iRet, cVVEnc.getLastError() );
-    return iRet;
-  }
-  const unsigned char* pucDeletePicBuffer = cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer;
-  cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer = NULL;
-
   // --- start timer
-  std::chrono::steady_clock::time_point cTPStart;
-  std::chrono::steady_clock::time_point cTPEnd;
-  cVVEnc.clockStartTime();
-  cTPStart = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point cTPStartRun;
+  std::chrono::steady_clock::time_point cTPEndRun;
+
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
   if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
   {
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
-  unsigned int uiFrames = 0;
+  vvenc::InputPicture cInputPicture;
+  unsigned char* pucDeletePicBuffer = nullptr;
 
+  unsigned int uiFrames = 0;
   for( int pass = 0; pass < cVVEncParameter.m_iNumPasses; pass++ )
   {
     // initialize the encoder pass
@@ -271,11 +263,23 @@ int main( int argc, char* argv[] )
       return -1;
     }
 
+    // allocate input picture buffer
+    if( cInputPicture.m_cPicBuffer.m_iWidth == 0 )
+    {
+      iRet = cYuvFileReader.allocBuffer( cInputPicture.m_cPicBuffer );
+      if( 0 != iRet )
+      {
+        std::cout << cAppname  << " [error]: failed to allocate picture buffer " << std::endl;
+        return iRet;
+      }
+      pucDeletePicBuffer = cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer;
+      cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer = NULL;
+    }
+
     const int64_t iFrameSkip  = std::max<int64_t>( cVVEncParameter.m_iFrameSkip - cVVEnc.getNumLeadFrames(), 0 );
     const int64_t iMaxFrames  = cVVEncParameter.m_iMaxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
-    unsigned int  uiFramesTmp = 0;
     uiFrames    = 0;
 
     while( !bEof )
@@ -315,20 +319,6 @@ int main( int argc, char* argv[] )
           }
 
           uiFrames++;
-          uiFramesTmp++;
-
-          if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE)
-          {
-            cTPEnd = std::chrono::steady_clock::now();
-            double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
-            if( dTimeMs > 1000.0 )
-            {
-              if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
-              std::cout <<  "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
-              cTPStart = std::chrono::steady_clock::now();
-              uiFramesTmp = 0;
-            }
-          }
         }
       }
       iSeqNumber++;
@@ -353,19 +343,6 @@ int main( int argc, char* argv[] )
 
       uiFrames++;
 
-      if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
-      {
-        cTPEnd = std::chrono::steady_clock::now();
-        double dTimeMs = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEnd)-(cTPStart)).count();
-        if( dTimeMs > 1000.0 )
-        {
-          if( cVVEncParameter.m_eLogLevel > vvenc::LL_INFO ){ std::cout << std::endl;}
-          std::cout << "encoded Frames: " << uiFrames << " Fps: " << uiFramesTmp << std::endl;
-          cTPStart = std::chrono::steady_clock::now();
-          uiFramesTmp = 0;
-        }
-      }
-
       if( cBinFileWriter.isOpen() )
       {
         // write output
@@ -376,8 +353,8 @@ int main( int argc, char* argv[] )
     cYuvFileReader.close();
   }
 
-  cVVEnc.clockEndTime();
-  double dTimeSec = cVVEnc.clockGetTimeDiffMs() / 1000;
+  cTPEndRun = std::chrono::steady_clock::now();
+  double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEndRun)-(cTPStartRun)).count() / 1000;
 
   delete[] cAccessUnit.m_pucBuffer;
   delete[] pucDeletePicBuffer;

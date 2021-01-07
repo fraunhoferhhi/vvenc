@@ -67,7 +67,7 @@ VVEnc::~VVEnc()
 {
   if( NULL != m_pcVVEncImpl )
   {
-    if( m_pcVVEncImpl->m_bInitialized )
+    if( m_pcVVEncImpl->isInitialized() )
     {
       uninit();
     }
@@ -85,88 +85,71 @@ int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
 
 int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
 {
-  if( m_pcVVEncImpl->m_bInitialized )       { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
   if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
-
-  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string simdOpt;
-  vvenc::setSIMDExtension( simdOpt );
 
   return m_pcVVEncImpl->init( rcVVEncParameter );
 }
 
 int VVEnc::initPass( int pass )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
   return m_pcVVEncImpl->initPass( pass );
 }
 
 int VVEnc::uninit()
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
   return m_pcVVEncImpl->uninit( );
 }
 
 bool VVEnc::isInitialized()
 {
-  return m_pcVVEncImpl->m_bInitialized;
+  return m_pcVVEncImpl->isInitialized();
 }
 
 int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
 }
 
 int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->flush( rcVvcAccessUnit ) );
 }
 
-int VVEnc::getPreferredBuffer( PicBuffer &rcPicBuffer )
-{
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getPreferredBuffer( rcPicBuffer ) );
-}
-
-void VVEnc::clockStartTime()
-{
-  m_pcVVEncImpl->clockStartTime();
-}
-
-void VVEnc::clockEndTime()
-{
-  m_pcVVEncImpl->clockEndTime();
-}
-
-double VVEnc::clockGetTimeDiffMs()
-{
-  return m_pcVVEncImpl->clockGetTimeDiffMs();
-}
-
 int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 {
-  if( !m_pcVVEncImpl->m_bInitialized )
+  if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
 }
 
 
-const char* VVEnc::getEncoderInfo() const
+int VVEnc::reconfig( const VVEncParameter& rcVVEncParameter )
+{
+  if( !m_pcVVEncImpl->isInitialized() )
+  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncParameter ) );
+}
+
+
+std::string VVEnc::getEncoderInfo() const
 {
   return m_pcVVEncImpl->getEncoderInfo();
 }
 
-const char* VVEnc::getLastError() const
+std::string VVEnc::getLastError() const
 {
-  return m_pcVVEncImpl->m_cErrorString.c_str();
+  return m_pcVVEncImpl->getLastError();
 }
 
 int VVEnc::getNumLeadFrames() const
@@ -179,17 +162,17 @@ int VVEnc::getNumTrailFrames() const
   return m_pcVVEncImpl->getNumTrailFrames();
 }
 
-const char* VVEnc::getVersionNumber()
+std::string VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();
 }
 
-const char* VVEnc::getErrorMsg( int nRet )
+std::string VVEnc::getErrorMsg( int nRet )
 {
   return VVEncImpl::getErrorMsg(nRet);
 }
 
-const char* VVEnc::getPresetParamsAsStr( int iQuality )
+std::string VVEnc::getPresetParamsAsStr( int iQuality )
 {
   return VVEncImpl::getPresetParamsAsStr(iQuality);
 }

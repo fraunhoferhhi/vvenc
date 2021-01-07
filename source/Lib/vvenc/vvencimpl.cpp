@@ -65,12 +65,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-std::string VVEncImpl::m_cTmpErrorString;
-std::string VVEncImpl::m_sPresetAsStr;
-
-
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
-
 
 VVEncImpl::VVEncImpl()
 {
@@ -100,34 +95,18 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
+  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
+  std::string simdOpt;
+  std::string curSimd = vvenc::setSIMDExtension( simdOpt );
+
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
   std::stringstream cssCap;
-//  cssCap << NVM_ONOS;
-//
-//  char *tmp = nullptr;
-//  int iRet = asprintf(&tmp, NVM_COMPILEDBY);
-//  if( 0 == iRet ) cssCap << tmp;
-//  free(tmp);
-//
-//  iRet = asprintf(&tmp, NVM_BITS);
-//  if( 0 == iRet ) cssCap << tmp;
-//  free(tmp);
-//
-//#if ENABLE_SIMD_OPT
-//  std::string cSIMD;
-//  cssCap << "SIMD=" << read_x86_extension( cSIMD ) << " ";
-//#else
-//  cssCap << "SIMD=NONE ";
-//#endif
-//
-//#if ENABLE_TRACING
-//  cssCap << "[ENABLE_TRACING] ";
-//#endif
+  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  m_sEncoderCapabilities = cssCap.str();
 
   m_cVVEncParameter = rcVVEncParameter;
-  m_sEncoderCapabilities = cssCap.str();
 
   if( 0 != xInitLibCfg( rcVVEncParameter, m_cEncCfg ) )
   {
@@ -145,6 +124,13 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 int VVEncImpl::initPass( int pass )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  if( pass > 1 )
+  {
+    std::stringstream css;
+    css << "initPass(" << pass << ") no support for pass " << pass << ". use 0 (first pass) and 1 (second pass)";
+    m_cErrorString = css.str();
+    return VVENC_ERR_NOT_SUPPORTED;
+  }
 
   m_cEncoderIf.initPass( pass );
 
@@ -162,6 +148,11 @@ int VVEncImpl::uninit()
   m_bInitialized = false;
   m_bFlushed     = false;
   return VVENC_OK;
+}
+
+bool VVEncImpl::isInitialized() const
+{
+  return m_bInitialized;
 }
 
 
@@ -311,70 +302,7 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   return iRet;
 }
 
-struct BufferDimensions
-{
-  BufferDimensions(int iWidth, int iHeight, int iBitDepth, int iMaxCUSizeLog2, int iAddMargin = 16 )
-    : iMaxCuSize      (1<<iMaxCUSizeLog2)
-    , iSizeFactor     ((iBitDepth>8) ? (2) : (1))
-    , iLumaMarginX    (iMaxCuSize + iAddMargin)
-    , iLumaMarginY    (iLumaMarginX)
-    , iStride         ((((iWidth + iMaxCuSize-1)>>iMaxCUSizeLog2)<<iMaxCUSizeLog2) + 2 * iLumaMarginX)
-    , iLumaSize       ( iStride * ((((iHeight + iMaxCuSize-1)>>iMaxCUSizeLog2)<<iMaxCUSizeLog2) + 2 * iLumaMarginY))
-    , iLumaOffset     ( iLumaMarginY * iStride + iLumaMarginX)
-    , iChromaOffset   ((iLumaMarginY * iStride + iLumaMarginX * 2)/4)
-    , iAlignmentGuard (16)
-  {}
-
-  int iMaxCuSize;
-  int iSizeFactor;
-  int iLumaMarginX;
-  int iLumaMarginY;
-  int iStride;
-  int iLumaSize;
-  int iLumaOffset;
-  int iChromaOffset;
-  int iAlignmentGuard;
-};
-
-int VVEncImpl::getPreferredBuffer( PicBuffer &rcPicBuffer )
-{
-  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
-  int iRet= VVENC_OK;
-
-  bool bMarginReq          = false;
-  int iAddMargin           = bMarginReq ? 16: -1;
-  const int iMaxCUSizeLog2 = 7;
-  const int iBitDepth      = 10;
-
-  int iMaxCUSizeLog2Buffer = bMarginReq ? iMaxCUSizeLog2 : 0;
-  const BufferDimensions bd( m_cVVEncParameter.m_iWidth, m_cVVEncParameter.m_iHeight, iBitDepth, iMaxCUSizeLog2Buffer, iAddMargin);
-  rcPicBuffer.m_iBitDepth = iBitDepth;
-  rcPicBuffer.m_iWidth    = m_cVVEncParameter.m_iWidth;
-  rcPicBuffer.m_iHeight   = m_cVVEncParameter.m_iHeight;
-  rcPicBuffer.m_iStride   = bd.iStride;
-  const int iBufSize      = bd.iSizeFactor * bd.iLumaSize * 3 / 2 + 3*bd.iAlignmentGuard;
-
-  rcPicBuffer.m_pucDeletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
-  if( NULL == rcPicBuffer.m_pucDeletePicBuffer )
-  {
-    return VVENC_NOT_ENOUGH_MEM;
-  }
-
-  unsigned char* pY = rcPicBuffer.m_pucDeletePicBuffer + bd.iSizeFactor * ( bd.iLumaOffset );
-  unsigned char* pU = rcPicBuffer.m_pucDeletePicBuffer + bd.iSizeFactor * ( bd.iChromaOffset +   bd.iLumaSize);
-  unsigned char* pV = rcPicBuffer.m_pucDeletePicBuffer + bd.iSizeFactor * ( bd.iChromaOffset + 5*bd.iLumaSize/4);
-
-  rcPicBuffer.m_pvY = (pY +   bd.iAlignmentGuard) - (((size_t)pY) & (bd.iAlignmentGuard-1));
-  rcPicBuffer.m_pvU = (pU + 2*bd.iAlignmentGuard) - (((size_t)pU) & (bd.iAlignmentGuard-1));
-  rcPicBuffer.m_pvV = (pV + 3*bd.iAlignmentGuard) - (((size_t)pV) & (bd.iAlignmentGuard-1));
-
-  rcPicBuffer.m_eColorFormat     = VVC_CF_YUV420_PLANAR;
-  rcPicBuffer.m_uiSequenceNumber = 0;
-
-  return iRet;
-}
-
-int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter )
+int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -382,36 +310,50 @@ int VVEncImpl::getConfig( vvenc::VVEncParameter& rcVVEncParameter )
   return 0;
 }
 
-
-const char* VVEncImpl::getVersionNumber()
+int VVEncImpl::reconfig( const VVEncParameter& rcVVEncParameter )
 {
-  return VVENC_VERSION;
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  return VVENC_ERR_NOT_SUPPORTED;
 }
 
-const char* VVEncImpl::getEncoderInfo()
+
+std::string VVEncImpl::getVersionNumber()
 {
-    m_sEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
-    m_sEncoderInfo += " ";
-    m_sEncoderInfo += m_sEncoderCapabilities;
-    return m_sEncoderInfo.c_str();
+  std::string cVersion = VVENC_VERSION;
+  return cVersion;
 }
 
-const char* VVEncImpl::getErrorMsg( int nRet )
+std::string VVEncImpl::getEncoderInfo() const
 {
+  std::string cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
+  cEncoderInfo += " ";
+  cEncoderInfo += m_sEncoderCapabilities;
+  return cEncoderInfo;
+}
+
+std::string VVEncImpl::getLastError() const
+{
+  return m_cErrorString;
+}
+
+std::string VVEncImpl::getErrorMsg( int nRet )
+{
+  std::string cErr;
   switch( nRet )
   {
-  case VVENC_OK :                  m_cTmpErrorString = "expected behavior"; break;
-  case VVENC_ERR_UNSPECIFIED:      m_cTmpErrorString = "unspecified malfunction"; break;
-  case VVENC_ERR_INITIALIZE:       m_cTmpErrorString = "decoder not initialized or tried to initialize multiple times"; break;
-  case VVENC_ERR_ALLOCATE:         m_cTmpErrorString = "internal allocation error"; break;
-  case VVENC_NOT_ENOUGH_MEM:       m_cTmpErrorString = "allocated memory to small to receive encoded data"; break;
-  case VVENC_ERR_PARAMETER:        m_cTmpErrorString = "inconsistent or invalid parameters"; break;
-  case VVENC_ERR_NOT_SUPPORTED:    m_cTmpErrorString = "unsupported request"; break;
-  case VVENC_ERR_RESTART_REQUIRED: m_cTmpErrorString = "decoder requires restart"; break;
-  case VVENC_ERR_CPU:              m_cTmpErrorString = "unsupported CPU - SSE 4.1 needed!"; break;
-  default:                         m_cTmpErrorString = "unknown ret code"; break;
+  case VVENC_OK :                  cErr = "expected behavior"; break;
+  case VVENC_ERR_UNSPECIFIED:      cErr = "unspecified malfunction"; break;
+  case VVENC_ERR_INITIALIZE:       cErr = "encoder not initialized or tried to initialize multiple times"; break;
+  case VVENC_ERR_ALLOCATE:         cErr = "internal allocation error"; break;
+  case VVENC_NOT_ENOUGH_MEM:       cErr = "allocated memory to small to receive encoded data"; break;
+  case VVENC_ERR_PARAMETER:        cErr = "inconsistent or invalid parameters"; break;
+  case VVENC_ERR_NOT_SUPPORTED:    cErr = "unsupported request"; break;
+  case VVENC_ERR_RESTART_REQUIRED: cErr = "encoder requires restart"; break;
+  case VVENC_ERR_CPU:              cErr = "unsupported CPU - SSE 4.1 needed!"; break;
+  default:                         cErr = "unknown ret code"; break;
   }
-  return m_cTmpErrorString.c_str();
+
+  return cErr;
 }
 
 int VVEncImpl::setAndRetErrorMsg( int iRet )
@@ -424,41 +366,26 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
   return iRet;
 }
 
-int VVEncImpl::getNumLeadFrames()
+int VVEncImpl::getNumLeadFrames() const
 {
   return m_cEncCfg.m_MCTFNumLeadFrames;
 }
 
-int VVEncImpl::getNumTrailFrames()
+int VVEncImpl::getNumTrailFrames() const
 {
   return m_cEncCfg.m_MCTFNumTrailFrames;
 }
 
-void VVEncImpl::clockStartTime()
+std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
 {
-  m_cTPStart = std::chrono::steady_clock::now();
-}
-
-void VVEncImpl::clockEndTime()
-{
-  m_cTPEnd = std::chrono::steady_clock::now();
-}
-
-double VVEncImpl::clockGetTimeDiffMs()
-{
-  return (double)(std::chrono::duration_cast<std::chrono::milliseconds>((m_cTPEnd)-(m_cTPStart)).count());
-}
-
-const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
-{
-  m_sPresetAsStr.clear();
-
   std::stringstream css;
   vvenc::EncCfg cEncCfg;
   if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
   {
     css << "undefined preset " << iQuality;
+    return css.str();
   }
+
 // tools
   if( cEncCfg.m_RDOQ )           { css << "RDOQ " << cEncCfg.m_RDOQ << " ";}
   if( cEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
@@ -506,14 +433,12 @@ const char* VVEncImpl::getPresetParamsAsStr( int iQuality )
   // fast tools
   if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
 
-
-  m_sPresetAsStr = css.str();
-  return m_sPresetAsStr.c_str();
+  return css.str();
 }
 
 
 /* converting sdk params to internal (wrapper) params*/
-int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString )
+int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString ) const
 {
   // check src params
   ROTPARAMS( rcSrc.m_iQp < 0 || rcSrc.m_iQp > 51,                                           "qp must be between 0 - 51."  );

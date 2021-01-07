@@ -264,8 +264,7 @@ typedef struct VVENC_DECL VvcAccessUnit
 /**
   \ingroup VVEncExternalInterfaces
   The struct PicBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture. Memory has to be allocated by the user. For using maximum performance
-  consider allocating 16byte aligned memory for all three color components or use HhiVvcEnc::getPreferredBuffer() to let the encoder allocate an appropriate buffer.
-
+  consider allocating 16byte aligned memory for all three color components.
 */
 typedef struct VVENC_DECL PicBuffer
 {
@@ -431,30 +430,6 @@ public:
    */
    int flush( VvcAccessUnit& rcVvcAccessUnit );
 
-  /**
-    This method returns an allocated picture buffer according to the encoder's preference. To is this call the encoder has to be initialized.
-    \param[out] rcPicBuffer reference to PicBuffer
-    \retval     int nonzero indicates an error VVENC_ERR_INITIALIZE, VVENC_ERR_ALLOCATE, otherwise VVENC_OK
-     \pre       The encoder has to be initialized.
-  */
-   int getPreferredBuffer( PicBuffer &rcPicBuffer );
-
-   /**
-     This method sets a encoder start timer.
-   */
-   void clockStartTime();
-
-   /**
-     This method sets a encoder finish timer.
-   */
-   void clockEndTime();
-
-   /**
-     This method return the clock difference of end and start time.
-     \retval     double clock time difference in milli seconds
-   */
-   double clockGetTimeDiffMs();
-
    /**
      This method fetches the current encoder configuration.
      The method fails if the encoder is not initialized.
@@ -491,10 +466,9 @@ public:
      \param      None
      \retval     std::string empty string for no error assigned
    */
-   const char* getLastError() const;
+   std::string getLastError() const;
 
-
-   const char* getEncoderInfo() const;
+   std::string getEncoderInfo() const;
 
    int getNumLeadFrames() const;
 
@@ -505,21 +479,21 @@ public:
      \param      None
      \retval     std::string returns the version number
    */
-   static const char* getVersionNumber();
+   static std::string getVersionNumber();
 
    /**
      This static function returns a string according to the passed parameter nRet.
      \param[in]  nRet return value code to translate
      \retval[ ]  std::string empty string for no error
    */
-   static const char* getErrorMsg( int nRet );
+   static std::string getErrorMsg( int nRet );
 
    /**
      This static function returns a string according to the passed parameter iQuality.
      \param[in]  iQuality Quality (preset) as integer
      \retval[ ]  std::string enabled encoding parameter as string
    */
-   static const char* getPresetParamsAsStr( int iQuality );
+   static std::string getPresetParamsAsStr( int iQuality );
 
    /**
      This method registers a log message callback function to the encoder library. 
