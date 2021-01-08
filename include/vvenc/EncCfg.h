@@ -80,6 +80,7 @@ public:
   Level::Name         m_level;
 
   int                 m_IntraPeriod;                                    ///< period of I-slice (random access period)
+  int                 m_IntraPeriodSec;                                 ///< period of I-slice in seconds (random access period)
   int                 m_DecodingRefreshType;                            ///< random access type
   int                 m_GOPSize;                                        ///< GOP size of hierarchical structure
 
@@ -110,6 +111,7 @@ public:
     , m_level                                       ( Level::LEVEL4_1 )
 
     , m_IntraPeriod                                 ( 32 )
+    , m_IntraPeriodSec                              ( 1 )
     , m_DecodingRefreshType                         ( 1 )
     , m_GOPSize                                     ( 32 )
 

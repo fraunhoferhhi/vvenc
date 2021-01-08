@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
     \brief    Handle encoder configuration parameters
 */
 
-#include "../vvencFFapp/EncAppCfg.h"
+#include "apputils/EncAppCfg.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,8 +57,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <fstream>
 #include <algorithm>
-#include "../vvencFFapp/EncApp.h"
-#include "../vvencFFapp/ParseArg.h"
+//#include "../vvencFFapp/EncApp.h"
+#include "apputils/ParseArg.h"
+#include "vvenc/EncoderIf.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
@@ -68,6 +69,15 @@ namespace po = VVCEncoderFFApp::df::program_options_lite;
 
 //! \ingroup EncoderApp
 //! \{
+//!
+//!
+//! // ====================================================================================================================
+
+extern int g_verbosity;
+void msgFnc( int level, const char* fmt, va_list args );
+void msgApp( int level, const char* fmt, ... );
+
+// ====================================================================================================================
 
 // ====================================================================================================================
 // string <-> enum
@@ -344,6 +354,14 @@ const std::vector<SVPair<PresetMode>> PresetToEnumMap =
   { "tooltest",  PresetMode::TOOLTEST },
 };
 
+const std::vector<SVPair<SegmentMode>> SegmentToEnumMap =
+{
+  { "off",      SegmentMode::SEG_OFF },
+  { "first",    SegmentMode::SEG_FIRST },
+  { "mid",      SegmentMode::SEG_MID },
+  { "last",     SegmentMode::SEG_LAST },
+};
+
 
 const std::vector<SVPair<Profile::Name>> ProfileToEnumMap =
 {
@@ -544,6 +562,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   IStreamToVec<int>            toMCTFFrames                 ( &m_MCTFFrames   );
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
+  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
 
   //
   // setup configuration parameters
@@ -571,6 +590,8 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("Level",                                           toLevel,                                          "Level limit to be used, eg 5.1, or none")
 
   ("IntraPeriod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
+  ("RefreshSec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
+
   ("DecodingRefreshType,-dr",                         m_DecodingRefreshType,                            "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI)")
   ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
 
@@ -876,6 +897,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("MCTFNumTrailFrames",                              m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFFrame",                                       toMCTFFrames,                                     "Frame to filter Strength for frame in GOP based temporal filter")
   ("MCTFStrength",                                    toMCTFStrengths,                                  "Strength for  frame in GOP based temporal filter.")
+  ("segmet",                                          toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -929,7 +951,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
   for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
   {
-    msgApp( ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
   }
   if ( argc == 1 || do_help )
   {

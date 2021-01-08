@@ -239,6 +239,7 @@ endif()
 
 
 add_subdirectory( "source/Lib/vvenc" )
+add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )

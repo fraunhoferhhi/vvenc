@@ -320,6 +320,32 @@ bool EncCfg::initCfgParameter()
   m_reshapeCW.initialCW  = m_initialCW;
 
 
+  if( m_IntraPeriod == 0 &&  m_IntraPeriodSec > 0 )
+  {
+    if ( m_FrameRate % m_GOPSize == 0 )
+    {
+      m_IntraPeriod = m_FrameRate * m_IntraPeriodSec;
+    }
+    else
+    {
+      int iIDRPeriod  = (m_FrameRate * m_IntraPeriodSec);
+      if( iIDRPeriod < m_GOPSize )
+      {
+        iIDRPeriod = m_GOPSize;
+      }
+
+      int iDiff = iIDRPeriod % m_GOPSize;
+      if( iDiff < m_GOPSize >> 1 )
+      {
+        m_IntraPeriod = iIDRPeriod - iDiff;
+      }
+      else
+      {
+        m_IntraPeriod = iIDRPeriod + m_GOPSize - iDiff;
+      }
+    }
+  }
+
   //
   // do some check and set of parameters next
   //

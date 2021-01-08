@@ -121,6 +121,33 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
   return VVENC_OK;
 }
 
+int VVEncImpl::init( const EncCfg& rcEncCfg )
+{
+  if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+
+  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
+  std::string simdOpt;
+  std::string curSimd = vvenc::setSIMDExtension( simdOpt );
+
+  int iRet = xCheckParameter( rcEncCfg, m_cErrorString );
+  if( 0 != iRet ) { return iRet; }
+
+  std::stringstream cssCap;
+  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  m_sEncoderCapabilities = cssCap.str();
+
+  m_cEncCfg = rcEncCfg;
+
+  m_cEncCfg.printCfg();
+
+  // initialize the encoder
+  m_cEncoderIf.initEncoderLib( m_cEncCfg );
+
+  m_bInitialized = true;
+  m_bFlushed     = false;
+  return VVENC_OK;
+}
+
 int VVEncImpl::initPass( int pass )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
@@ -176,27 +203,27 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cVVEncParameter.m_iWidth )
+  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cEncCfg.m_SourceWidth )
   {
-    m_cErrorString = "InputPicture: unsuported width";
+    m_cErrorString = "InputPicture: unsupported width";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cVVEncParameter.m_iHeight )
+  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cEncCfg.m_SourceHeight )
   {
-    m_cErrorString = "InputPicture: unsuported height";
+    m_cErrorString = "InputPicture: unsupported height";
     return VVENC_ERR_UNSPECIFIED;
   }
 
   if( pcInputPicture->m_cPicBuffer.m_iWidth > pcInputPicture->m_cPicBuffer.m_iStride )
   {
-    m_cErrorString = "InputPicture: unsuported width stride combination";
+    m_cErrorString = "InputPicture: unsupported width stride combination";
     return VVENC_ERR_UNSPECIFIED;
   }
 
   if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iWidth/2 > pcInputPicture->m_cPicBuffer.m_iCStride )
   {
-    m_cErrorString = "InputPicture: unsuported width cstride combination";
+    m_cErrorString = "InputPicture: unsupported width cstride combination";
     return VVENC_ERR_UNSPECIFIED;
   }
 
@@ -465,21 +492,21 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   if( 1 != rcSrc.m_iGopSize && ( rcSrc.m_iIDRPeriod > 0  ))
   {
-    ROTPARAMS( (rcSrc.m_eDecodingRefreshType == VVC_DRT_IDR || rcSrc.m_eDecodingRefreshType == VVC_DRT_CRA )&& (0 != rcSrc.m_iIDRPeriod % rcSrc.m_iGopSize),          "IDR period must be multiple of GOPSize" );
+    ROTPARAMS( (rcSrc.m_eDecodingRefreshType == DRT_IDR || rcSrc.m_eDecodingRefreshType == DRT_CRA )&& (0 != rcSrc.m_iIDRPeriod % rcSrc.m_iGopSize),          "IDR period must be multiple of GOPSize" );
   }
 
   ROTPARAMS( rcSrc.m_iPerceptualQPA < 0 || rcSrc.m_iPerceptualQPA > 5,                      "Perceptual QPA must be in the range 0 - 5" );
 
-  ROTPARAMS( rcSrc.m_eProfile != VVC_PROFILE_MAIN_10 && rcSrc.m_eProfile != VVC_PROFILE_MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != VVC_PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
+  ROTPARAMS( rcSrc.m_eProfile != Profile::Name::MAIN_10 && rcSrc.m_eProfile != Profile::Name::MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != Profile::Name::AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
   ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 4) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 4  (0: faster, 1: fast, 2: medium, 3: slow, 4: slower)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
   ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
 
-  ROTPARAMS( rcSrc.m_eLogLevel < 0 || rcSrc.m_eLogLevel > LL_DETAILS,                       "log message level range 0 - 6" );
+  ROTPARAMS( rcSrc.m_eMsgLevel < 0 || rcSrc.m_eMsgLevel > DETAILS,                          "log message level range 0 - 6" );
 
-  ROTPARAMS( rcSrc.m_eSegMode != VVC_SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
+  ROTPARAMS( rcSrc.m_eSegMode != SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
   if( 0 == rcSrc.m_iTargetBitRate )
   {
@@ -494,9 +521,72 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
   return 0;
 }
 
-int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg )
+
+/* converting sdk params to internal (wrapper) params*/
+int VVEncImpl::xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString ) const
 {
-  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eLogLevel, (int)vvenc::DETAILS);
+  // check src params
+  ROTPARAMS( rcSrc.m_QP < 0 || rcSrc.m_QP > 51,                                             "qp must be between 0 - 51."  );
+
+  ROTPARAMS( ( rcSrc.m_SourceWidth == 0 )   || ( rcSrc.m_SourceHeight == 0 ),                         "specify input picture dimension"  );
+
+  ROTPARAMS( rcSrc.m_FrameRate < 1 || rcSrc.m_FrameRate > 120,                                                      "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
+
+  ROTPARAMS( rcSrc.m_TicksPerSecond <= 0 || rcSrc.m_TicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
+
+  int temporalRate   = rcSrc.m_FrameRate;
+  int temporalScale  = 1;
+
+  switch( rcSrc.m_FrameRate )
+  {
+  case 23: temporalRate = 24000; temporalScale = 1001; break;
+  case 29: temporalRate = 30000; temporalScale = 1001; break;
+  case 59: temporalRate = 60000; temporalScale = 1001; break;
+  default: break;
+  }
+
+  ROTPARAMS( (rcSrc.m_TicksPerSecond < 90000) && (rcSrc.m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+
+  ROTPARAMS( rcSrc.m_numWppThreads < 0,                                                      "numWppThreads must be >= 0" );
+
+  ROTPARAMS( rcSrc.m_IntraPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
+  ROTPARAMS( rcSrc.m_IntraPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
+
+  ROTPARAMS( rcSrc.m_GOPSize != 1 && rcSrc.m_GOPSize != 16 && rcSrc.m_GOPSize != 32,         "GOP size 1, 16, 32 supported" );
+
+  if( 1 != rcSrc.m_GOPSize && ( rcSrc.m_IntraPeriod > 0  ))
+  {
+    ROTPARAMS( (rcSrc.m_DecodingRefreshType == DRT_IDR || rcSrc.m_DecodingRefreshType == DRT_CRA )&& (0 != rcSrc.m_IntraPeriod % rcSrc.m_GOPSize),          "IDR period must be multiple of GOPSize" );
+  }
+
+  ROTPARAMS( rcSrc.m_usePerceptQPA < 0 || rcSrc.m_usePerceptQPA > 5,                        "Perceptual QPA must be in the range 0 - 5" );
+
+  ROTPARAMS( rcSrc.m_profile != Profile::MAIN_10 && rcSrc.m_profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_profile != Profile::AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
+
+  ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 100000000,           "TargetBitrate must be between 0 - 100000000" );
+  ROTPARAMS( rcSrc.m_RCTargetBitrate == 0 && rcSrc.m_RCNumPasses != 1,                     "Only single pass encoding supported, when rate control is disabled" );
+  ROTPARAMS( rcSrc.m_RCNumPasses < 1 || rcSrc.m_RCNumPasses > 2,                           "Only one pass or two pass encoding supported"  );
+
+  ROTPARAMS( rcSrc.m_verbosity < 0 || rcSrc.m_verbosity > DETAILS,                         "log message level range 0 - 6" );
+
+  ROTPARAMS( rcSrc.m_SegmentMode != SEG_OFF && rcSrc.m_framesToBeEncoded < MCTF_RANGE,     "When using segment parallel encoding more then 2 frames have to be encoded" );
+
+  if( 0 == rcSrc.m_RCTargetBitrate )
+  {
+    ROTPARAMS( rcSrc.m_hrdParametersPresent,              "hrdParameters present requires rate control" );
+    ROTPARAMS( rcSrc.m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+    ROTPARAMS( rcSrc.m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+  }
+
+  ROTPARAMS( rcSrc.m_inputBitDepth[0] != 8 && rcSrc.m_inputBitDepth[0] != 10,                   "Input bitdepth must be 8 or 10 bit" );
+  ROTPARAMS( rcSrc.m_internalBitDepth[0] != 8 && rcSrc.m_internalBitDepth[0] != 10,             "Internal bitdepth must be 8 or 10 bit" );
+
+  return 0;
+}
+
+int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEncCfg )
+{
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eMsgLevel, (int)vvenc::DETAILS);
 
   rcEncCfg.m_SourceWidth               = rcVVEncParameter.m_iWidth;
   rcEncCfg.m_SourceHeight              = rcVVEncParameter.m_iHeight;
@@ -574,15 +664,15 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     }
   }
 
-  if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_IDR )
+  if( rcVVEncParameter.m_eDecodingRefreshType == DRT_IDR )
   {
     rcEncCfg.m_DecodingRefreshType                 = 2;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
-  else if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_CRA )
+  else if( rcVVEncParameter.m_eDecodingRefreshType == DRT_CRA )
   {
     rcEncCfg.m_DecodingRefreshType                 = 1;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
-  else if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_RECOVERY_POINT_SEI )
+  else if( rcVVEncParameter.m_eDecodingRefreshType == DRT_RECOVERY_POINT_SEI )
   {
     rcEncCfg.m_DecodingRefreshType                 = 3;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
@@ -608,21 +698,21 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
     return VVENC_ERR_PARAMETER;
   }
 
-  if( rcVVEncParameter.m_eSegMode != VVC_SEG_OFF )
+  if( rcVVEncParameter.m_eSegMode != SEG_OFF )
   {
     if( rcEncCfg.m_MCTF )
     {
       switch( rcVVEncParameter.m_eSegMode )
       {
-        case VVC_SEG_FIRST:
+        case SEG_FIRST:
           rcEncCfg.m_MCTFNumLeadFrames  = 0;
           rcEncCfg.m_MCTFNumTrailFrames = MCTF_RANGE;
           break;
-        case VVC_SEG_MID:
+        case SEG_MID:
           rcEncCfg.m_MCTFNumLeadFrames  = MCTF_RANGE;
           rcEncCfg.m_MCTFNumTrailFrames = MCTF_RANGE;
           break;
-        case VVC_SEG_LAST:
+        case SEG_LAST:
           rcEncCfg.m_MCTFNumLeadFrames  = MCTF_RANGE;
           rcEncCfg.m_MCTFNumTrailFrames = 0;
           break;
@@ -769,7 +859,7 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
     rcVvcAccessUnit.m_uiCts     = rcAu.m_uiCts;
     rcVvcAccessUnit.m_uiDts     = rcAu.m_uiDts;
 
-    rcVvcAccessUnit.m_eSliceType     = (VvcSliceType)rcAu.m_eSliceType;
+    rcVvcAccessUnit.m_eSliceType     = (SliceType)rcAu.m_eSliceType;
     rcVvcAccessUnit.m_bRefPic        = rcAu.m_bRefPic;
     rcVvcAccessUnit.m_iTemporalLayer = rcAu.m_iTemporalLayer;
     rcVvcAccessUnit.m_uiPOC          = rcAu.m_uiPOC;

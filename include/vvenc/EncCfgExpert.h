@@ -54,6 +54,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <sstream>
 #include "vvenc/vvencDecl.h"
+
+#include "vvenc/vvencConfig.h"
 #include "vvenc/Basics.h"
 
 //! \ingroup Interface
@@ -467,6 +469,7 @@ public:
   bool                m_MCTFFutureReference;
   int                 m_MCTFNumLeadFrames;
   int                 m_MCTFNumTrailFrames;
+  SegmentMode         m_SegmentMode;
   std::vector<int>    m_MCTFFrames;
   std::vector<double> m_MCTFStrengths;
 
@@ -724,6 +727,7 @@ public:
       , m_MCTFFutureReference                         ( true )
       , m_MCTFNumLeadFrames                           ( 0 )
       , m_MCTFNumTrailFrames                          ( 0 )
+      , m_SegmentMode                                 ( SEG_OFF )
 
       , m_dqThresholdVal                              ( 8 )
       , m_qtbttSpeedUp                                ( false )

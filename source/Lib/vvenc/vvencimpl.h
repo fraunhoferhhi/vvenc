@@ -74,6 +74,8 @@ public:
   virtual ~VVEncImpl();
 
   int init( const VVEncParameter& rcVVEncParameter );
+  int init( const EncCfg& rcEncCfg );
+
   int initPass( int pass );
   int uninit();
 
@@ -102,12 +104,13 @@ public:
 private:
 
   int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString ) const;
+  int xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString ) const;
 
-  int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
+  int xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEncCfg );
 
   int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
-  int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
+  int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const AccessUnit& rcAu );
 
 private:
   bool                                                        m_bInitialized         = false;
@@ -116,7 +119,7 @@ private:
   vvenc::EncoderIf                                            m_cEncoderIf;                      ///< encoder library class
 
   VVEncParameter                                              m_cVVEncParameter;
-  vvenc::EncCfg                                               m_cEncCfg;
+  EncCfg                                                      m_cEncCfg;
 
   std::string                                                 m_cErrorString;
   std::string                                                 m_sEncoderCapabilities;

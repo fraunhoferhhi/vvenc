@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 
 #include "vvenc/Nal.h"
-#include "../vvencFFapp/ParseArg.h"
+#include "apputils/ParseArg.h"
 
 using namespace std;
 

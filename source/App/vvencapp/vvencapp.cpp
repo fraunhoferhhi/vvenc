@@ -69,7 +69,12 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CmdLineParser.h"
 #include "YuvFileReader.h"
 
-int g_verbosity = vvenc::LL_VERBOSE;
+#include "apputils/EncAppCfg.h"
+#include "apputils/ParseArg.h"
+#include "vvenc/EncoderIf.h"
+
+
+int g_verbosity = vvenc::VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {
@@ -77,6 +82,14 @@ void msgFnc( int level, const char* fmt, va_list args )
   {
     vfprintf( level == 1 ? stderr : stdout, fmt, args );
   }
+}
+
+void msgApp( int level, const char* fmt, ... )
+{
+    va_list args;
+    va_start( args, fmt );
+    msgFnc( level, fmt, args );
+    va_end( args );
 }
 
 void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage, int code, const std::string cErr )
@@ -96,6 +109,35 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
   std::cout << std::endl;
 }
 
+
+#define USE_FFPARAMS 0
+
+#if USE_FFPARAMS
+bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
+{
+  try
+  {
+    if( ! rcEncAppCfg.parseCfg( argc, argv ) )
+    {
+      return false;
+    }
+  }
+  catch( VVCEncoderFFApp::df::program_options_lite::ParseFailure &e )
+  {
+    msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
+    return false;
+  }
+
+  if( ! rcEncAppCfg.m_decode )
+  {
+    rcEncAppCfg.printCfg();
+  }
+
+  return true;
+}
+
+#endif
+
 int main( int argc, char* argv[] )
 {
   std::string cAppname = argv[0];
@@ -105,19 +147,111 @@ int main( int argc, char* argv[] )
     cAppname = cAppname.substr(iPos+1 );
   }
 
+  int iRet = 0;
+
+  vvenc::VVEnc::registerMsgCbf( msgFnc );
+
   std::string cInputFile;
   std::string cOutputfile = "";
 
   vvenc::VVEncParameter cVVEncParameter;
+
+#if USE_FFPARAMS
+  std::string simdOpt;
+  VVCEncoderFFApp::df::program_options_lite::Options opts;
+  opts.addOptions()
+    ( "c",           VVCEncoderFFApp::df::program_options_lite::parseConfigFile, "" )
+    ( "Verbosity,v", g_verbosity,                               "" )
+    ( "SIMD",        simdOpt,                                   "" );
+  VVCEncoderFFApp::df::program_options_lite::SilentReporter err;
+  VVCEncoderFFApp::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
+
+  simdOpt = vvenc::setSIMDExtension( simdOpt );
+
+  EncAppCfg    cEncAppCfg;                      ///< encoder configuration
+
+  cEncAppCfg.m_QP               = 32;                             // quantization parameter 0-51
+  cEncAppCfg.m_SourceWidth            = 1920;                    // luminance width of input picture
+  cEncAppCfg.m_SourceHeight           = 1080;                    // luminance height of input picture
+  cEncAppCfg.m_GOPSize           = 32;                           //  gop size (1: intra only, 16, 32: hierarchical b frames)
+  cEncAppCfg.m_DecodingRefreshType = vvenc::DRT_CRA;             // intra period refresh type
+  cEncAppCfg.m_IntraPeriodSec     = 1;                           // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  cEncAppCfg.m_IntraPeriod        = 0;                           // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  cEncAppCfg.m_verbosity         = (int)vvenc::VERBOSE;          // log level > 4 (VERBOSE) enables psnr/rate output
+  cEncAppCfg.m_FrameRate         = 60;                           // temporal rate (fps)
+  cEncAppCfg.m_TicksPerSecond   = 90000;                         // ticks per second e.g. 90000 for dts generation
+  cEncAppCfg.m_framesToBeEncoded = 0;                            // max number of frames to be encoded
+  cEncAppCfg.m_FrameSkip         = 0;                            // number of frames to skip before start encoding
+  cEncAppCfg.m_numWppThreads     = 0;                            // number of worker threads (should not exceed the number of physical cpu's)
+  //cEncAppCfg.m_iQuality          = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  cEncAppCfg.m_usePerceptQPA     = 2;                            // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  cEncAppCfg.m_inputBitDepth[0]    = 8;                          // input bitdepth
+  cEncAppCfg.m_internalBitDepth[0] = 10;                         // internal bitdepth
+  cEncAppCfg.m_profile          = vvenc::Profile::Name::MAIN_10; // profile: use main_10 or main_10_still_picture
+  cEncAppCfg.m_level            = vvenc::Level::Name::LEVEL4_1;  // level
+  cEncAppCfg.m_levelTier        = vvenc::Level::Tier::MAIN;      // tier
+  cEncAppCfg.m_SegmentMode      = vvenc::SEG_OFF;                // segment mode
+
+  if( 0 != cEncAppCfg.initPreset( vvenc::PresetMode::MEDIUM ))
+  {
+    std::cerr << cAppname  << " [error]: undefined preset " << std::endl;
+    return -1;
+  }
+
+  // parse configuration
+  if ( ! parseCfg( argc, argv, cEncAppCfg ) )
+  {
+    return 1;
+  }
+
+  if( cEncAppCfg.m_inputFileName.empty() )
+  {
+    std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
+    return -1;
+  }
+
+  if( cEncAppCfg.m_bitstreamFileName.empty() )
+  {
+    std::cout << cAppname  << " [error]: no output bitstream file given." << std::endl;
+    return -1;
+  }
+
+  cInputFile  = cEncAppCfg.m_inputFileName;
+  cOutputfile = cEncAppCfg.m_bitstreamFileName;
+
+  if( cEncAppCfg.m_verbosity > vvenc::SILENT && cEncAppCfg.m_verbosity < vvenc::NOTICE )
+  {
+    std::cout << "-------------------" << std::endl;
+    std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
+  }
+
+  if( cEncAppCfg.m_numWppThreads <= 0 )
+  {
+    if( cEncAppCfg.m_SourceWidth > 1920 || cEncAppCfg.m_SourceHeight > 1080)
+    {
+      cEncAppCfg.m_numWppThreads = 6;
+    }
+    else
+    {
+      cEncAppCfg.m_numWppThreads = 4;
+    }
+    cEncAppCfg.m_ensureWppBitEqual = 1;
+  }
+
+  cVVEncParameter.m_eMsgLevel = (vvenc::MsgLevel)cEncAppCfg.m_verbosity;
+  cVVEncParameter.m_iWidth    = cEncAppCfg.m_SourceWidth;
+  cVVEncParameter.m_iHeight    = cEncAppCfg.m_SourceHeight;
+
+#else
   // set desired encoding options
   cVVEncParameter.m_iQp               = 32;                         // quantization parameter 0-51
   cVVEncParameter.m_iWidth            = 1920;                       // luminance width of input picture
   cVVEncParameter.m_iHeight           = 1080;                       // luminance height of input picture
   cVVEncParameter.m_iGopSize          = 32;                         //  gop size (1: intra only, 16, 32: hierarchical b frames)
-  cVVEncParameter.m_eDecodingRefreshType = vvenc::VVC_DRT_CRA;      // intra period refresh type
+  cVVEncParameter.m_eDecodingRefreshType = vvenc::DRT_CRA;          // intra period refresh type
   cVVEncParameter.m_iIDRPeriodSec     = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
   cVVEncParameter.m_iIDRPeriod        = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_eLogLevel         = vvenc::LL_VERBOSE;          // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.m_eMsgLevel         = vvenc::VERBOSE;             // log level > 4 (VERBOSE) enables psnr/rate output
   cVVEncParameter.m_iTemporalRate     = 60;                         // temporal rate (fps)
   cVVEncParameter.m_iTemporalScale    = 1;                          // temporal scale (fps)
   cVVEncParameter.m_iTicksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
@@ -128,10 +262,10 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_iInputBitDepth    = 8;                          // input bitdepth
   cVVEncParameter.m_iInternalBitDepth = 10;                         // internal bitdepth
-  cVVEncParameter.m_eProfile          = vvenc::VVC_PROFILE_MAIN_10; // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.m_eLevel            = vvenc::VVC_LEVEL_4_1;       // level
-  cVVEncParameter.m_eTier             = vvenc::VVC_TIER_MAIN;       // tier
-  cVVEncParameter.m_eSegMode          = vvenc::VVC_SEG_OFF;         // segment mode
+  cVVEncParameter.m_eProfile          = vvenc::Profile::Name::MAIN_10; // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.m_eLevel            = vvenc::Level::Name::LEVEL5_1;  // level
+  cVVEncParameter.m_eTier             = vvenc::Level::Tier::MAIN;      // tier
+  cVVEncParameter.m_eSegMode          = vvenc::SEG_OFF;                // segment mode
 
   std::string cPreset  = "medium";
   std::string cProfile = "main10";
@@ -151,11 +285,7 @@ int main( int argc, char* argv[] )
     return 0;
   }
 
-  int iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile );
-
-  vvenc::VVEnc::registerMsgCbf( msgFnc );
-  g_verbosity = cVVEncParameter.m_eLogLevel;
-
+  iRet = vvcutilities::CmdLineParser::parse_command_line(  argc, argv, cVVEncParameter, cInputFile, cOutputfile );
   if( iRet != 0 )
   {
     if( iRet == 2 || iRet == 3 )
@@ -182,7 +312,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  if( cVVEncParameter.m_eLogLevel > vvenc::LL_SILENT && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
+  if( cVVEncParameter.m_eMsgLevel > vvenc::SILENT && cVVEncParameter.m_eMsgLevel < vvenc::NOTICE )
   {
     std::cout << "-------------------" << std::endl;
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
@@ -199,18 +329,23 @@ int main( int argc, char* argv[] )
       cVVEncParameter.m_iThreadCount = 4;
     }
   }
+#endif
 
   vvenc::VVEnc cVVEnc;
 
   // initialize the encoder
+#if USE_FFPARAMS
+  iRet = cVVEnc.init( cEncAppCfg );
+#else
   iRet = cVVEnc.init( cVVEncParameter );
+#endif
   if( 0 != iRet )
   {
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
     return iRet;
   }
 
-  if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
+  if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
   {
     std::cout << "VVEnc info: " << cVVEnc.getEncoderInfo() << std::endl;
   }
@@ -236,7 +371,7 @@ int main( int argc, char* argv[] )
   std::chrono::steady_clock::time_point cTPEndRun;
 
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
+  if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
   {
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
@@ -287,7 +422,7 @@ int main( int argc, char* argv[] )
       iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
       if( iRet )
       {
-        if( cVVEncParameter.m_eLogLevel > vvenc::LL_ERROR && cVVEncParameter.m_eLogLevel < vvenc::LL_NOTICE )
+        if( cVVEncParameter.m_eMsgLevel > vvenc::ERROR && cVVEncParameter.m_eMsgLevel < vvenc::NOTICE )
         {
           std::cout << "EOF reached" << std::endl;
         }
@@ -377,12 +512,12 @@ int main( int argc, char* argv[] )
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && cVVEncParameter.m_eLogLevel > vvenc::LL_SILENT )
+  if( uiFrames && cVVEncParameter.m_eMsgLevel > vvenc::SILENT )
   {
     std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     double dFps = (double)uiFrames / dTimeSec;
 
-    if( cVVEncParameter.m_eLogLevel > vvenc::LL_WARNING )
+    if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
     {
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;
     }

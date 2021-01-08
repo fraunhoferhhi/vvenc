@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/EncoderIf.h"
 #include "vvenc/FileIO.h"
-#include "../vvencFFapp/EncAppCfg.h"
+#include "apputils/EncAppCfg.h"
 
 //! \ingroup EncoderApp
 //! \{

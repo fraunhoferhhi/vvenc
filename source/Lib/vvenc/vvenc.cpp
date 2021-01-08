@@ -91,6 +91,13 @@ int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
   return m_pcVVEncImpl->init( rcVVEncParameter );
 }
 
+int VVEnc::init( const EncCfg& rcEncCfg  )
+{
+  if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+
+  return m_pcVVEncImpl->init( rcEncCfg );
+}
+
 int VVEnc::initPass( int pass )
 {
   if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }

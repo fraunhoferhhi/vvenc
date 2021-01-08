@@ -56,7 +56,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/version.h"
 #include "../vvencFFapp/EncApp.h"
-#include "../vvencFFapp/ParseArg.h"
+#include "apputils/ParseArg.h"
+
+#include "vvenc/EncoderIf.h"
 
 //! \ingroup EncoderApp
 //! \{
@@ -88,15 +90,15 @@ int main(int argc, char* argv[])
   simdOpt = vvenc::setSIMDExtension( simdOpt );
 
   // print information
-  msgApp( INFO, "\n");
-  msgApp( INFO, "vvencFFapp: Encoder Version %s ", VVENC_VERSION );
-  msgApp( INFO, "%s", getCompileInfoString().c_str() );
-  msgApp( INFO, "[SIMD=%s]", simdOpt.c_str() );
+  msgApp( vvenc::INFO, "\n");
+  msgApp( vvenc::INFO, "vvencFFapp: Encoder Version %s ", VVENC_VERSION );
+  msgApp( vvenc::INFO, "%s", getCompileInfoString().c_str() );
+  msgApp( vvenc::INFO, "[SIMD=%s]", simdOpt.c_str() );
   if ( vvenc::isTracingEnabled() )
   {
-    msgApp( INFO, "[ENABLE_TRACING]" );
+    msgApp( vvenc::INFO, "[ENABLE_TRACING]" );
   }
-  msgApp( INFO, "\n" );
+  msgApp( vvenc::INFO, "\n" );
 
   EncApp* pcEncApp = new EncApp;
 
