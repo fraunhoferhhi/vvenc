@@ -4,8 +4,8 @@ stages:
 .build_template:
    stage: build
    script:
-      - make all
-      - make test
+      - make disable-lto=1 all
+      - make disable-lto=1 test
    only:
       - web
       - schedules
