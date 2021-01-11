@@ -74,8 +74,24 @@ namespace po = VVCEncoderFFApp::df::program_options_lite;
 //! // ====================================================================================================================
 
 extern int g_verbosity;
-void msgFnc( int level, const char* fmt, va_list args );
-void msgApp( int level, const char* fmt, ... );
+//void msgFnc( int level, const char* fmt, va_list args );
+//void msgApp( int level, const char* fmt, ... );
+
+void msgApputilsFnc( int level, const char* fmt, va_list args )
+{
+  if ( g_verbosity >= level )
+  {
+    vfprintf( level == 1 ? stderr : stdout, fmt, args );
+  }
+}
+
+void msgApputilsApp( int level, const char* fmt, ... )
+{
+    va_list args;
+    va_start( args, fmt );
+    msgApputilsFnc( level, fmt, args );
+    va_end( args );
+}
 
 // ====================================================================================================================
 
@@ -951,7 +967,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
   for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
   {
-    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    msgApputilsApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
   }
   if ( argc == 1 || do_help )
   {
@@ -1015,13 +1031,13 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
 void EncAppCfg::printCfg() const
 {
-  msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
-  msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
+  msgApputilsApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
+  msgApputilsApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
+  msgApputilsApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
 
   EncCfg::printCfg();
 
-  msgApp( NOTICE, "\n");
+  msgApputilsApp( NOTICE, "\n");
 
   fflush( stdout );
 }
