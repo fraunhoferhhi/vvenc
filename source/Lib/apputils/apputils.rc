@@ -90,12 +90,12 @@ BEGIN
         BLOCK "200004b0"
         BEGIN
             VALUE "CompanyName", "Fraunhofer Heinrich Hertz Institute"
-            VALUE "FileDescription", "vvenc DLL"
+            VALUE "FileDescription", "apputils DLL"
             VALUE "FileVersion", VS_FILE_VERSION_STR
-            VALUE "InternalName", "vvenc.dll"
+            VALUE "InternalName", "apputils.dll"
             VALUE "LegalCopyright", "(c) Copyright (2019-2020) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
-            VALUE "OriginalFilename", "vvenc.dll"
-            VALUE "ProductName", "vvenc"
+            VALUE "OriginalFilename", "apputils.dll"
+            VALUE "ProductName", "apputils"
             VALUE "ProductVersion", VS_FILE_VERSION_STR
         END
     END
