@@ -576,13 +576,21 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
   {
     if(bEfficientFieldIRAPEnabled && (associatedIRAPType == NAL_UNIT_CODED_SLICE_IDR_N_LP || associatedIRAPType == NAL_UNIT_CODED_SLICE_IDR_W_RADL))
     {
+#if IDR_FIX
+      if (bRefreshPending==true && pocCurr > lastIDR) // IDR reference marking pending
+#else
       if (bRefreshPending==true && pocCurr > pocCRA) // IDR reference marking pending
+#endif
       {
         PicList::iterator        iterPic       = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
+#if IDR_FIX
+          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != lastIDR)
+#else
           if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != pocCRA)
+#endif
           {
             rpcPic->isReferenced = false;
           }
@@ -1192,9 +1200,17 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   int originalL0LtrpNum = numOfLTRPL0;
   int originalL0IlrpNum = numOfILRPL0;
 
+#if IDR_FIX
+  for (int ii = 0; numOfNeedToFill > 0 && ii < (numOfLTRPL1 + numOfSTRPL1 + numOfILRPL1); ii++)
+#else
   for (int ii = 0; numOfNeedToFill > 0 && ii < (pLocalRPL1->numberOfLongtermPictures + pLocalRPL1->numberOfShorttermPictures + pLocalRPL1->numberOfInterLayerPictures); ii++)
+#endif
   {
+#if IDR_FIX
+    if (ii <= (numOfLTRPL1 + numOfSTRPL1 + numOfILRPL1 - 1))
+#else
     if (ii <= (numOfLTRPL1 + numOfSTRPL1 - 1))
+#endif
     {
       //Make sure this copy is not already in L0
       bool canIncludeThis = true;
