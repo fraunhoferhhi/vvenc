@@ -260,10 +260,10 @@ int main( int argc, char* argv[] )
   cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_iInputBitDepth    = 8;                          // input bitdepth
   cVVEncParameter.m_iInternalBitDepth = 10;                         // internal bitdepth
-  cVVEncParameter.m_eProfile          = vvenc::Profile::Name::MAIN_10; // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.m_eLevel            = vvenc::Level::Name::LEVEL5_1;  // level
-  cVVEncParameter.m_eTier             = vvenc::Level::Tier::MAIN;      // tier
-  cVVEncParameter.m_eSegMode          = vvenc::SEG_OFF;                // segment mode
+  cVVEncParameter.m_eProfile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.m_eLevel            = vvenc::Level::LEVEL5_1;     // level
+  cVVEncParameter.m_eTier             = vvenc::Tier::TIER_MAIN;     // tier
+  cVVEncParameter.m_eSegMode          = vvenc::SEG_OFF;             // segment mode
 
   std::string cPreset  = "medium";
   std::string cProfile = "main10";

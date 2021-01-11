@@ -494,11 +494,11 @@ public:
 
           if( "main10" == cProfile)
           {
-            rcParams.m_eProfile = vvenc::Profile::Name::MAIN_10;
+            rcParams.m_eProfile = vvenc::Profile::MAIN_10;
           }
           else if( "main10_stillpic" == cProfile )
           {
-            rcParams.m_eProfile = vvenc::Profile::Name::MAIN_10_STILL_PICTURE;
+            rcParams.m_eProfile = vvenc::Profile::MAIN_10_STILL_PICTURE;
           }
           else
           {
@@ -519,63 +519,63 @@ public:
 
           if( "1.0" == cLevel)
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL1;
+            rcParams.m_eLevel = vvenc::Level::LEVEL1;
           }
           else if( "2.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL2;
+            rcParams.m_eLevel = vvenc::Level::LEVEL2;
           }
           else if( "2.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL2_1;
+            rcParams.m_eLevel = vvenc::Level::LEVEL2_1;
           }
           else if( "3.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL3;
+            rcParams.m_eLevel = vvenc::Level::LEVEL3;
           }
           else if( "3.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL3_1;
+            rcParams.m_eLevel = vvenc::Level::LEVEL3_1;
           }
           else if( "4.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL4;
+            rcParams.m_eLevel = vvenc::Level::LEVEL4;
           }
           else if( "4.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL4_1;
+            rcParams.m_eLevel = vvenc::Level::LEVEL4_1;
           }
           else if( "5.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL5;
+            rcParams.m_eLevel = vvenc::Level::LEVEL5;
           }
           else if( "5.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL5_1;
+            rcParams.m_eLevel = vvenc::Level::LEVEL5_1;
           }
           else if( "5.2" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL5_2;
+            rcParams.m_eLevel = vvenc::Level::LEVEL5_2;
           }
           else if( "6.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL6;
+            rcParams.m_eLevel = vvenc::Level::LEVEL6;
           }
           else if( "6.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL6_1;
+            rcParams.m_eLevel = vvenc::Level::LEVEL6_1;
           }
           else if( "6.2" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL6_2;
+            rcParams.m_eLevel = vvenc::Level::LEVEL6_2;
           }
           else if( "6.3" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL6_3;
+            rcParams.m_eLevel = vvenc::Level::LEVEL6_3;
           }
           else if( "15.5" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::Name::LEVEL15_5;
+            rcParams.m_eLevel = vvenc::Level::LEVEL15_5;
           }
           else
           {
@@ -596,11 +596,11 @@ public:
 
           if( "main" == cTier)
           {
-            rcParams.m_eTier = vvenc::Level::Tier::MAIN;
+            rcParams.m_eTier = vvenc::Tier::TIER_MAIN;
           }
           else if( "high" == cTier )
           {
-            rcParams.m_eTier = vvenc::Level::Tier::HIGH;
+            rcParams.m_eTier = vvenc::Tier::TIER_HIGH;
           }
           else
           {

@@ -52,11 +52,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <ostream>
 #include <cstdarg>
 
-#include "vvenc/FileIO.h"
 #include "apputils/EncAppCfg.h"
-
 #include "vvenc/vvenc.h"
-
+#include "vvenc/FileIO.h"
 
 //! \ingroup EncoderApp
 //! \{

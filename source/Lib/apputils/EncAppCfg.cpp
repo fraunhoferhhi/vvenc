@@ -355,9 +355,9 @@ const std::vector<SVPair<SegmentMode>> SegmentToEnumMap =
 };
 
 
-const std::vector<SVPair<Profile::Name>> ProfileToEnumMap =
+const std::vector<SVPair<Profile>> ProfileToEnumMap =
 {
-  { "none",                                  Profile::NONE },
+  { "none",                                  Profile::PROFILE_NONE },
   { "main_10",                               Profile::MAIN_10 },
   { "main_10_444",                           Profile::MAIN_10_444 },
   { "main_10_still_picture",                 Profile::MAIN_10_STILL_PICTURE },
@@ -366,12 +366,12 @@ const std::vector<SVPair<Profile::Name>> ProfileToEnumMap =
   { "multilayer_main_10_444",                Profile::MULTILAYER_MAIN_10_444 },
   { "multilayer_main_10_still_picture",      Profile::MULTILAYER_MAIN_10_STILL_PICTURE },
   { "multilayer_main_10_444_still_picture",  Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE },
-  { "auto",                                  Profile::AUTO }
+  { "auto",                                  Profile::PROFILE_AUTO }
 };
 
-const std::vector<SVPair<Level::Name>> LevelToEnumMap =
+const std::vector<SVPair<Level>> LevelToEnumMap =
 {
-  { "none",                    Level::NONE     },
+  { "none",                    Level::LEVEL_NONE},
   { "1",                       Level::LEVEL1   },
   { "2",                       Level::LEVEL2   },
   { "2.1",                     Level::LEVEL2_1 },
@@ -388,10 +388,10 @@ const std::vector<SVPair<Level::Name>> LevelToEnumMap =
   { "6.3",                     Level::LEVEL6_3 },
 };
 
-const std::vector<SVPair<Level::Tier>> TierToEnumMap =
+const std::vector<SVPair<Tier>> TierToEnumMap =
 {
-  { "main",                    Level::MAIN },
-  { "high",                    Level::HIGH },
+  { "main",                    Tier::TIER_MAIN },
+  { "high",                    Tier::TIER_HIGH },
 };
 
 const std::vector<SVPair<CostMode>> CostModeToEnumMap =
@@ -535,9 +535,9 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
   IStreamToRefVec<double>      toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
 
-  IStreamToEnum<Profile::Name> toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
-  IStreamToEnum<Level::Tier>   toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
-  IStreamToEnum<Level::Name>   toLevel                      ( &m_level,                       &LevelToEnumMap        );
+  IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
+  IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
+  IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
   IStreamToEnum<CostMode>      toCostMode                   ( &m_costMode,                    &CostModeToEnumMap     );
   IStreamToEnum<ChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
   IStreamToEnum<ChromaFormat>  toInternCoFormat             ( &m_internChromaFormat,          &ChromaFormatToEnumMap  );

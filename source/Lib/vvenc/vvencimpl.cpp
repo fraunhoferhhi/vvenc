@@ -813,7 +813,7 @@ int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string&
 
   ROTPARAMS( rcSrc.m_iPerceptualQPA < 0 || rcSrc.m_iPerceptualQPA > 5,                      "Perceptual QPA must be in the range 0 - 5" );
 
-  ROTPARAMS( rcSrc.m_eProfile != Profile::Name::MAIN_10 && rcSrc.m_eProfile != Profile::Name::MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != Profile::Name::AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
+  ROTPARAMS( rcSrc.m_eProfile != Profile::MAIN_10 && rcSrc.m_eProfile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
   ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 4) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 4  (0: faster, 1: fast, 2: medium, 3: slow, 4: slower)" );
   ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
@@ -877,7 +877,7 @@ int VVEncImpl::xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString 
 
   ROTPARAMS( rcSrc.m_usePerceptQPA < 0 || rcSrc.m_usePerceptQPA > 5,                        "Perceptual QPA must be in the range 0 - 5" );
 
-  ROTPARAMS( rcSrc.m_profile != Profile::MAIN_10 && rcSrc.m_profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_profile != Profile::AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
+  ROTPARAMS( rcSrc.m_profile != Profile::MAIN_10 && rcSrc.m_profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_profile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
   ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 100000000,           "TargetBitrate must be between 0 - 100000000" );
   ROTPARAMS( rcSrc.m_RCTargetBitrate == 0 && rcSrc.m_RCNumPasses != 1,                     "Only single pass encoding supported, when rate control is disabled" );
@@ -998,9 +998,9 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
   }
 
   //======== Profile ================
-  rcEncCfg.m_profile   = (vvenc::Profile::Name)rcVVEncParameter.m_eProfile;
-  rcEncCfg.m_levelTier = (vvenc::Level::Tier)rcVVEncParameter.m_eTier;
-  rcEncCfg.m_level     = (vvenc::Level::Name)rcVVEncParameter.m_eLevel;
+  rcEncCfg.m_profile   = (vvenc::Profile)rcVVEncParameter.m_eProfile;
+  rcEncCfg.m_levelTier = (vvenc::Tier)rcVVEncParameter.m_eTier;
+  rcEncCfg.m_level     = (vvenc::Level)rcVVEncParameter.m_eLevel;
 
   rcEncCfg.m_bitDepthConstraintValue = 10;
   rcEncCfg.m_rewriteParamSets        = true;

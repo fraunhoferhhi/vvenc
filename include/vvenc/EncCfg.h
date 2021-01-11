@@ -74,9 +74,9 @@ public:
   int                 m_TicksPerSecond;                                 ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
   bool                m_AccessUnitDelimiter;                            ///< add Access Unit Delimiter NAL units
 
-  Profile::Name       m_profile;
-  Level::Tier         m_levelTier;
-  Level::Name         m_level;
+  Profile             m_profile;
+  Tier                m_levelTier;
+  Level               m_level;
 
   int                 m_IntraPeriod;                                    ///< period of I-slice (random access period)
   int                 m_IntraPeriodSec;                                 ///< period of I-slice in seconds (random access period)
@@ -106,7 +106,7 @@ public:
     , m_AccessUnitDelimiter                         ( false )
 
     , m_profile                                     ( Profile::MAIN_10 )
-    , m_levelTier                                   ( Level::MAIN )
+    , m_levelTier                                   ( Tier::TIER_MAIN )
     , m_level                                       ( Level::LEVEL4_1 )
 
     , m_IntraPeriod                                 ( 32 )

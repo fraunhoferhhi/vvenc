@@ -91,67 +91,62 @@ enum MsgLevel
 };
 
 
-namespace Profile
-{
 /**
   \ingroup VVEncExternalInterfaces
   \enum Profile
   The enum Profile enumerates supported profiles
 */
-  enum Name
-  {
-    NONE                                 = 0,
-    MAIN_10                              = 1,
-    MAIN_10_STILL_PICTURE                = 2,
-    MAIN_10_444                          = 3,
-    MAIN_10_444_STILL_PICTURE            = 4,
-    MULTILAYER_MAIN_10                   = 5,
-    MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
-    MULTILAYER_MAIN_10_444               = 7,
-    MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
-    AUTO
-  };
-}
-
-namespace Level
+enum Profile
 {
+  PROFILE_NONE                         = 0,
+  MAIN_10                              = 1,
+  MAIN_10_STILL_PICTURE                = 2,
+  MAIN_10_444                          = 3,
+  MAIN_10_444_STILL_PICTURE            = 4,
+  MULTILAYER_MAIN_10                   = 5,
+  MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
+  MULTILAYER_MAIN_10_444               = 7,
+  MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
+  PROFILE_AUTO
+};
+
+
 /**
   \ingroup VVEncExternalInterfaces
   \enum Tier
   The enum Tier enumerates supported tier
 */
-  enum Tier
-  {
-    MAIN = 0,
-    HIGH = 1,
-    NUMBER_OF_TIERS
-  };
+enum Tier
+{
+  TIER_MAIN = 0,
+  TIER_HIGH = 1,
+  NUMBER_OF_TIERS
+};
 
-  /**
-    \ingroup VVEncExternalInterfaces
-    \enum Name
-    The enum Name enumerates supported level names
-  */
-  enum Name
-  {
-    NONE     = 0,
-    LEVEL1   = 16,
-    LEVEL2   = 32,
-    LEVEL2_1 = 35,
-    LEVEL3   = 48,
-    LEVEL3_1 = 51,
-    LEVEL4   = 64,
-    LEVEL4_1 = 67,
-    LEVEL5   = 80,
-    LEVEL5_1 = 83,
-    LEVEL5_2 = 86,
-    LEVEL6   = 96,
-    LEVEL6_1 = 99,
-    LEVEL6_2 = 102,
-    LEVEL6_3 = 105,
-    LEVEL15_5 = 255,
-  };
-}
+/**
+  \ingroup VVEncExternalInterfaces
+  \enum Name
+  The enum Name enumerates supported level names
+*/
+enum Level
+{
+  LEVEL_NONE = 0,
+  LEVEL1   = 16,
+  LEVEL2   = 32,
+  LEVEL2_1 = 35,
+  LEVEL3   = 48,
+  LEVEL3_1 = 51,
+  LEVEL4   = 64,
+  LEVEL4_1 = 67,
+  LEVEL5   = 80,
+  LEVEL5_1 = 83,
+  LEVEL5_2 = 86,
+  LEVEL6   = 96,
+  LEVEL6_1 = 99,
+  LEVEL6_2 = 102,
+  LEVEL6_3 = 105,
+  LEVEL15_5 = 255,
+};
 
 /**
   \ingroup VVEncExternalInterfaces

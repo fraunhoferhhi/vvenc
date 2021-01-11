@@ -90,10 +90,10 @@ bool EncCfg::initCfgParameter()
   //
   // set a lot of dependent parameters
   //
-  if( m_profile == Profile::AUTO )
+  if( m_profile == Profile::PROFILE_AUTO )
   {
     const int maxBitDepth= std::max(m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat==ChromaFormat::CHROMA_400 ? CH_L : CH_C]);
-    m_profile=Profile::NONE;
+    m_profile=Profile::PROFILE_NONE;
 
     if (m_internChromaFormat==ChromaFormat::CHROMA_400 || m_internChromaFormat==ChromaFormat::CHROMA_420)
     {
@@ -110,7 +110,7 @@ bool EncCfg::initCfgParameter()
       }
     }
 
-    CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::NONE, "can not determin auto profile");
+    CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
   }
 
   if( m_maxParallelFrames > 0 && !m_numWppThreads && !m_numFppThreads )
@@ -360,13 +360,13 @@ bool EncCfg::initCfgParameter()
     msg( DETAILS, "**          decoder requires this option to be enabled.         **\n");
     msg( DETAILS, "******************************************************************\n");
   }
-  if( m_profile == Profile::NONE )
+  if( m_profile == Profile::PROFILE_NONE )
   {
     msg( DETAILS, "***************************************************************************\n");
     msg( DETAILS, "** WARNING: For conforming bitstreams a valid Profile value must be set! **\n");
     msg( DETAILS, "***************************************************************************\n");
   }
-  if( m_level == Level::NONE )
+  if( m_level == Level::LEVEL_NONE )
   {
     msg( DETAILS, "***************************************************************************\n");
     msg( DETAILS, "** WARNING: For conforming bitstreams a valid Level value must be set!   **\n");
@@ -489,7 +489,7 @@ bool EncCfg::initCfgParameter()
     || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
     || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
     || (m_level==Level::LEVEL15_5)), "invalid level selected");
-  confirmParameter(!((m_levelTier==Level::Tier::MAIN) || (m_levelTier==Level::Tier::HIGH)), "invalid tier selected");
+  confirmParameter(!((m_levelTier==Tier::TIER_MAIN) || (m_levelTier==Tier::TIER_HIGH)), "invalid tier selected");
 
 
   confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
@@ -1800,7 +1800,7 @@ static inline std::string getProfileStr( int profile )
   std::string cT;
   switch( profile )
   {
-    case Profile::NONE                                 : cT = "none"; break;
+    case Profile::PROFILE_NONE                         : cT = "none"; break;
     case Profile::MAIN_10                              : cT = "main_10"; break;
     case Profile::MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
     case Profile::MAIN_10_444                          : cT = "main_10_444"; break;
@@ -1809,7 +1809,7 @@ static inline std::string getProfileStr( int profile )
     case Profile::MULTILAYER_MAIN_10_STILL_PICTURE     : cT = "multilayer_main_10_still_picture"; break;
     case Profile::MULTILAYER_MAIN_10_444               : cT = "multilayer_main_10_444"; break;
     case Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE : cT = "multilayer_main_10_444_still_picture"; break;
-    case Profile::AUTO                                 : cT = "auto"; break;
+    case Profile::PROFILE_AUTO                         : cT = "auto"; break;
     default                                            : cT = "unknown"; break;
   }
   return cT;
@@ -1820,7 +1820,7 @@ static inline std::string getLevelStr( int level )
   std::string cT;
   switch( level )
   {
-    case Level::NONE      : cT = "none";    break;
+    case Level::LEVEL_NONE: cT = "none";    break;
     case Level::LEVEL1    : cT = "1";       break;
     case Level::LEVEL2    : cT = "2";       break;
     case Level::LEVEL2_1  : cT = "2.1";     break;

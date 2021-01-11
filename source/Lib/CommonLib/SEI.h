@@ -660,7 +660,7 @@ public:
   int                                         sliMaxSublayers;
   bool                                        sliSublayerInfoPresent;
   std::vector<std::vector<int>>               nonSubpicLayersFraction;
-  std::vector<std::vector<Level::Name>>       refLevelIdc;
+  std::vector<std::vector<Level>>             refLevelIdc;
   std::vector<std::vector<std::vector<int>>>  refLevelFraction;
 };
 

@@ -196,9 +196,9 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.m_iInputBitDepth    = 8;                          // 8bit input
   cVVEncParameter.m_iInternalBitDepth = 10;                         // 10bit internal
-  cVVEncParameter.m_eProfile          = vvenc::Profile::Name::MAIN_10; // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.m_eLevel            = vvenc::Level::Name::LEVEL4_1;  // level
-  cVVEncParameter.m_eTier             = vvenc::Level::Tier::MAIN;      // tier
+  cVVEncParameter.m_eProfile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.m_eLevel            = vvenc::Level::LEVEL4_1;     // level
+  cVVEncParameter.m_eTier             = vvenc::Tier::TIER_MAIN;     // tier
   cVVEncParameter.m_bAccessUnitDelimiter       = false;
   cVVEncParameter.m_bHrdParametersPresent      = false;
   cVVEncParameter.m_bBufferingPeriodSEIEnabled = false;
