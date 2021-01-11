@@ -89,24 +89,12 @@ public:
 public:
   bool parseCfg( int argc, char* argv[] );                    ///< parse configuration file to fill member variables
   virtual void printCfg() const;
+  void printAppCfgOnly() const;
 
 private:
 
-  void msgApputilsFnc( int level, const char* fmt, va_list args ) const
-  {
-    if ( m_verbosity >= level )
-    {
-      vfprintf( level == 1 ? stderr : stdout, fmt, args );
-    }
-  }
-
-  void msgApputilsApp( int level, const char* fmt, ... ) const
-  {
-      va_list args;
-      va_start( args, fmt );
-      msgApputilsFnc( level, fmt, args );
-      va_end( args );
-  }
+  void msgFnc( int level, const char* fmt, va_list args ) const;
+  void msgApp( int level, const char* fmt, ... ) const;
 
 };
 

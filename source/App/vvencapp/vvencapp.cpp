@@ -110,7 +110,7 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 }
 
 
-#define USE_FFPARAMS 0
+#define USE_FFPARAMS 1
 
 #if USE_FFPARAMS
 bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
@@ -130,7 +130,7 @@ bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
 
   if( ! rcEncAppCfg.m_decode )
   {
-    rcEncAppCfg.printCfg();
+    rcEncAppCfg.printAppCfgOnly();
   }
 
   return true;

@@ -943,7 +943,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
   for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
   {
-    msgApputilsApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
   }
   if ( argc == 1 || do_help )
   {
@@ -1005,15 +1005,39 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   return true;
 }
 
+void EncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
+{
+  if ( m_verbosity >= level )
+  {
+    vfprintf( level == 1 ? stderr : stdout, fmt, args );
+  }
+}
+
+void EncAppCfg::msgApp( int level, const char* fmt, ... ) const
+{
+    va_list args;
+    va_start( args, fmt );
+    msgFnc( level, fmt, args );
+    va_end( args );
+}
+
 void EncAppCfg::printCfg() const
 {
-  msgApputilsApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
-  msgApputilsApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApputilsApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
+  msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
+  msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
+  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
 
   EncCfg::printCfg();
+  msgApp( NOTICE, "\n");
 
-  msgApputilsApp( NOTICE, "\n");
+  fflush( stdout );
+}
+
+void EncAppCfg::printAppCfgOnly() const
+{
+  msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
+  msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
+  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
 
   fflush( stdout );
 }
