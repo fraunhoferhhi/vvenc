@@ -43,54 +43,28 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncAppCfg.h
-    \brief    Handle encoder configuration parameters (header)
-*/
+/**
+  \ingroup VVEncExternalInterfaces
+  \file    apputilsDecl.h
+  \brief   This apputilsDecl.h file controls DLL export/import under windows
+  \author  lehmann
+  \date    2020-08-08
+ */
 
+/// \cond NEVER_DOC
 #pragma once
+/// \endcond
 
-#include "apputils/apputilsDecl.h"
-#include "vvenc/EncCfg.h"
+#if defined( _WIN32 )
+# if defined( APPUTILS_DYN_LINK )
+#   if defined( APPUTILS_SOURCE )
+#     define APPUTILS_DECL __declspec(dllexport)
+#   else
+#     define APPUTILS_DECL __declspec(dllimport)
+#   endif  // APPUTILS_SOURCE
+# endif // APPUTILS_DYN_LINK
+#endif // _WIN32
 
-using namespace vvenc;
-
-//! \ingroup EncoderApp
-//! \{
-
-// ====================================================================================================================
-// Class definition
-// ====================================================================================================================
-
-/// encoder configuration class
-class APPUTILS_DECL EncAppCfg : public EncCfg
-{
-public:
-  std::string  m_inputFileName;                                ///< source file name
-  std::string  m_bitstreamFileName;                            ///< output bitstream file
-  std::string  m_reconFileName;                                ///< output reconstruction file
-  ChromaFormat m_inputFileChromaFormat;
-  bool         m_bClipInputVideoToRec709Range;
-  bool         m_bClipOutputVideoToRec709Range;
-  bool         m_packedYUVMode;                                ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
-  bool         m_decode;
-
-public:
-
-  EncAppCfg()
-    :   m_inputFileChromaFormat           ( CHROMA_420 )
-      , m_bClipInputVideoToRec709Range    ( false )
-      , m_bClipOutputVideoToRec709Range   ( false )
-      , m_packedYUVMode                   ( false )
-      , m_decode                          ( false )
-  {
-  }
-
-  virtual ~EncAppCfg();
-
-public:
-  bool parseCfg( int argc, char* argv[] );                    ///< parse configuration file to fill member variables
-  virtual void printCfg() const;
-};
-
-//! \}
-
+#if !defined( APPUTILS_DECL )
+# define APPUTILS_DECL
+#endif
