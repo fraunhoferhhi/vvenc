@@ -56,9 +56,9 @@ target_include_directories( ${LIB_NAME} PRIVATE           $<BUILD_INTERFACE:${CM
 target_include_directories( ${LIB_NAME} PRIVATE . .. )
 
 if( TARGET INTEL_ITT)
-  target_link_libraries( ${LIB_NAME} INTEL_ITT Threads::Threads )
+  target_link_libraries( ${LIB_NAME} INTEL_ITT Threads::Threads vvenc )
 else()
-  target_link_libraries( ${LIB_NAME} Threads::Threads )
+  target_link_libraries( ${LIB_NAME} Threads::Threads vvenc )
 endif()
 
 # set the folder where to place the projects

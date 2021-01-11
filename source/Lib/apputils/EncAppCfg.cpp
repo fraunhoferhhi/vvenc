@@ -71,30 +71,6 @@ namespace po = VVCEncoderFFApp::df::program_options_lite;
 //! \{
 //!
 //!
-//! // ====================================================================================================================
-
-extern int g_verbosity;
-//void msgFnc( int level, const char* fmt, va_list args );
-//void msgApp( int level, const char* fmt, ... );
-
-void msgApputilsFnc( int level, const char* fmt, va_list args )
-{
-  if ( g_verbosity >= level )
-  {
-    vfprintf( level == 1 ? stderr : stdout, fmt, args );
-  }
-}
-
-void msgApputilsApp( int level, const char* fmt, ... )
-{
-    va_list args;
-    va_start( args, fmt );
-    msgApputilsFnc( level, fmt, args );
-    va_end( args );
-}
-
-// ====================================================================================================================
-
 // ====================================================================================================================
 // string <-> enum
 // ====================================================================================================================
