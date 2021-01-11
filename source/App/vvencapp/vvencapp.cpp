@@ -71,8 +71,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/EncAppCfg.h"
 #include "apputils/ParseArg.h"
-#include "vvenc/EncoderIf.h"
-
 
 int g_verbosity = vvenc::VERBOSE;
 
@@ -110,7 +108,7 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 }
 
 
-#define USE_FFPARAMS 1
+#define USE_FFPARAMS 0
 
 #if USE_FFPARAMS
 bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
@@ -166,7 +164,7 @@ int main( int argc, char* argv[] )
   VVCEncoderFFApp::df::program_options_lite::SilentReporter err;
   VVCEncoderFFApp::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  simdOpt = vvenc::setSIMDExtension( simdOpt );
+  simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
 
   EncAppCfg    cEncAppCfg;                      ///< encoder configuration
 
@@ -344,6 +342,8 @@ int main( int argc, char* argv[] )
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
     return iRet;
   }
+
+  cVVEnc.printConfig();
 
   if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
   {

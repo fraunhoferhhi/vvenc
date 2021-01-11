@@ -97,7 +97,7 @@ typedef struct VVENC_DECL VVEncParameter
   int m_iWidth                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
   int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
   int m_iGopSize              = 32;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
-  VvcDecodingRefreshType m_eDecodingRefreshType = DRT_IDR; ///< intra period refresh type           (default: VVC_DRT_IDR )
+  DecodingRefreshType m_eDecodingRefreshType = DRT_IDR; ///< intra period refresh type           (default: VVC_DRT_IDR )
   int m_iIDRPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
   int m_iIDRPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
   MsgLevel m_eMsgLevel        = INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
@@ -159,7 +159,7 @@ public:
   */
    int init( const VVEncParameter& rcVVEncParameter );
 
-   int init( const EncCfg& rcEncCfg );
+   int init( const EncCfg& rcEncCfg, YUVWriterIf* YUVWriterIf = nullptr );
   /**
     This method initializes the encoder instance in dependency to the encoder pass.
   */
@@ -190,6 +190,8 @@ public:
     \pre        The encoder has to be initialized successfully.
   */
    int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
+
+   int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit);
 
 
    /**
@@ -249,6 +251,9 @@ public:
 
    int getNumTrailFrames() const;
 
+   int printConfig() const;
+   int printSummary() const;
+
    /**
      This method returns the encoder version number as a string.
      \param      None
@@ -277,9 +282,20 @@ public:
    */
    static void registerMsgCbf( std::function<void( int, const char*, va_list )> msgCbf );
 
+   ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+   static std::string setSIMDExtension( const std::string& simdId );
+   ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+   static bool        isTracingEnabled();
+   ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+   static std::string getCompileInfoString();
+   ///< decode bitstream with limited build in decoder
+   static void        decodeBitstream( const std::string& FileName);
+
+
 private:
    VVEncImpl*  m_pcVVEncImpl;
 };
+
 
 
 } // namespace

@@ -54,6 +54,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "vvenc/vvencDecl.h"
+#include <cstdint>
+#include <cstdarg>
+#include <string>
+#include <vector>
 
 namespace vvenc {
 
@@ -195,7 +199,7 @@ enum SliceType
 
 
 /// supported IDR types
-enum VvcDecodingRefreshType
+enum DecodingRefreshType
 {
   DRT_NONE               = 0,
   DRT_CRA                = 1,
@@ -337,7 +341,13 @@ typedef struct VVENC_DECL VvcAccessUnit
 
   int             m_iStatus    = 0;        ///< additional info (see Status)
   std::string     m_cInfo;                 ///< debug info from inside the encoder
+
+  std::vector<NalUnitType> m_NalUnitTypeVec;
+  std::vector<uint32_t>    m_annexBsizeVec;
+
 } VvcAccessUnit_t;
+
+
 
 /**
   \ingroup VVEncExternalInterfaces
@@ -387,5 +397,55 @@ typedef struct VVENC_DECL InputPicture
   PicAttributes*  m_pcPicAttributes = nullptr;  ///< pointer to PicAttribute that might be NULL, containing encoder side information
 } InputPicture_t;
 
+
+// will be removed  CL
+struct VVENC_DECL YUVPlane
+{
+  int16_t* planeBuf;
+  int      width;
+  int      height;
+  int      stride;
+
+  YUVPlane()
+    : planeBuf( nullptr )
+    , width   ( 0 )
+    , height  ( 0 )
+    , stride  ( 0 )
+  {
+  }
+};
+
+struct VVENC_DECL YUVBuffer
+{
+  YUVPlane yuvPlanes[ MAX_NUM_COMP ];
+  uint64_t sequenceNumber;     ///< sequence number of the picture
+  uint64_t cts;                ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  bool     ctsValid;            ///< composition time stamp valid flag (true: valid, false: CTS not set)
+
+  YUVBuffer()
+  : sequenceNumber ( 0 )
+  , cts            ( 0 )
+  , ctsValid        ( false )
+  {
+  }
+};
+
+// ----------------------------------------
+
+class VVENC_DECL YUVWriterIf
+{
+protected:
+  YUVWriterIf() {}
+  virtual ~YUVWriterIf() {}
+
+public:
+  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
+  {
+  }
+
+  virtual void outputYuv( const PicBuffer& /*yuvOutBuf*/ )
+  {
+  }
+};
 } // namespace
 

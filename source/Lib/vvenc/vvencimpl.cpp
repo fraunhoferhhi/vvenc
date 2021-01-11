@@ -62,10 +62,16 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "CommonLib/CommonDef.h"
 
+#include "EncoderLib/EncLib.h"
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
+#include "CommonLib/TrQuant_EMT.h"
+#endif
 
 namespace vvenc {
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
+
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 VVEncImpl::VVEncImpl()
 {
@@ -97,7 +103,7 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
 
   // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
   std::string simdOpt;
-  std::string curSimd = vvenc::setSIMDExtension( simdOpt );
+  std::string curSimd = setSIMDExtension( simdOpt );
 
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
@@ -114,20 +120,31 @@ int VVEncImpl::init( const vvenc::VVEncParameter& rcVVEncParameter )
   }
 
   // initialize the encoder
-  m_cEncoderIf.initEncoderLib( m_cEncCfg );
+  m_pEncLib = new EncLib;
+  YUVWriterIf* pcYUVWriterIf = nullptr;
+
+  try
+  {
+    m_pEncLib->initEncoderLib( m_cEncCfg, pcYUVWriterIf );
+  }
+  catch( std::exception& e )
+  {
+    m_cErrorString = e.what();
+    return VVENC_ERR_UNSPECIFIED;
+  }
 
   m_bInitialized = true;
   m_bFlushed     = false;
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const EncCfg& rcEncCfg )
+int VVEncImpl::init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
   // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
   std::string simdOpt;
-  std::string curSimd = vvenc::setSIMDExtension( simdOpt );
+  std::string curSimd = setSIMDExtension( simdOpt );
 
   int iRet = xCheckParameter( rcEncCfg, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
@@ -138,10 +155,19 @@ int VVEncImpl::init( const EncCfg& rcEncCfg )
 
   m_cEncCfg = rcEncCfg;
 
-  m_cEncCfg.printCfg();
-
   // initialize the encoder
-  m_cEncoderIf.initEncoderLib( m_cEncCfg );
+  //m_cEncoderIf.initEncoderLib( m_cEncCfg );
+  m_pEncLib = new EncLib;
+
+  try
+  {
+    m_pEncLib->initEncoderLib( m_cEncCfg, pcYUVWriterIf );
+  }
+  catch( std::exception& e )
+  {
+    m_cErrorString = e.what();
+    return VVENC_ERR_UNSPECIFIED;
+  }
 
   m_bInitialized = true;
   m_bFlushed     = false;
@@ -159,7 +185,18 @@ int VVEncImpl::initPass( int pass )
     return VVENC_ERR_NOT_SUPPORTED;
   }
 
-  m_cEncoderIf.initPass( pass );
+  if ( m_pEncLib )
+  {
+    try
+    {
+      m_pEncLib->initPass( pass );
+    }
+    catch( std::exception& e )
+    {
+      m_cErrorString = e.what();
+      return VVENC_ERR_UNSPECIFIED;
+    }
+  }
 
   m_bFlushed = false;
   return VVENC_OK;
@@ -169,8 +206,22 @@ int VVEncImpl::uninit()
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
-  m_cEncoderIf.printSummary();
-  m_cEncoderIf.uninitEncoderLib();
+  if ( m_pEncLib )
+  {
+    try
+    {
+      m_pEncLib->printSummary();
+
+      m_pEncLib->uninitEncoderLib();
+      delete m_pEncLib;
+      m_pEncLib = nullptr;
+    }
+    catch( std::exception& e )
+    {
+      m_cErrorString = e.what();
+      return VVENC_ERR_UNSPECIFIED;
+    }
+  }
 
   m_bInitialized = false;
   m_bFlushed     = false;
@@ -267,11 +318,11 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
   }
 
   xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[0].planeBuf, cYUVBuffer.yuvPlanes[0].stride, cYUVBuffer.yuvPlanes[0].width, cYUVBuffer.yuvPlanes[0].height,
-                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvY, pcInputPicture->m_cPicBuffer.m_iStride, pcInputPicture->m_cPicBuffer.m_iWidth, pcInputPicture->m_cPicBuffer.m_iHeight, 0 );
+                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvY, pcInputPicture->m_cPicBuffer.m_iStride, pcInputPicture->m_cPicBuffer.m_iWidth, pcInputPicture->m_cPicBuffer.m_iHeight );
   xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[1].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[1].width, cYUVBuffer.yuvPlanes[1].height,
-                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvU, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1, 0 );
+                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvU, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1 );
   xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[2].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[2].width, cYUVBuffer.yuvPlanes[2].height,
-                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvV, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1, 0 );
+                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvV, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1 );
 
 
   cYUVBuffer.sequenceNumber = pcInputPicture->m_cPicBuffer.m_uiSequenceNumber;
@@ -281,10 +332,215 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
     cYUVBuffer.ctsValid = true;
   }
 
+  // reset AU data
+  rcVvcAccessUnit.m_iUsedSize      = 0;
+  rcVvcAccessUnit.m_uiCts          = 0;
+  rcVvcAccessUnit.m_uiDts          = 0;
+  rcVvcAccessUnit.m_bCtsValid      = false;
+  rcVvcAccessUnit.m_bDtsValid      = false;
+  rcVvcAccessUnit.m_bRAP           = false;
+  rcVvcAccessUnit.m_eSliceType     = NUMBER_OF_SLICE_TYPES;
+  rcVvcAccessUnit.m_bRefPic        = false;
+  rcVvcAccessUnit.m_iTemporalLayer = 0;
+  rcVvcAccessUnit.m_uiPOC          = 0;
+  rcVvcAccessUnit.m_iStatus        = 0;
+  rcVvcAccessUnit.m_cInfo.clear();
+  rcVvcAccessUnit.m_NalUnitTypeVec.clear();
+  rcVvcAccessUnit.m_annexBsizeVec.clear();
+
   AccessUnit cAu;
   bool encDone = false;
 
-  m_cEncoderIf.encodePicture( false, cYUVBuffer, cAu, encDone );
+  try
+  {
+    m_pEncLib->encodePicture( false, cYUVBuffer, cAu, encDone );
+  }
+  catch( std::exception& e )
+  {
+    m_cErrorString = e.what();
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  /* copy output AU */
+  rcVvcAccessUnit.m_iUsedSize = 0;
+  if ( !cAu.empty() )
+  {
+    iRet = xCopyAu( rcVvcAccessUnit, cAu  );
+  }
+
+  /* free memory of input image */
+  for ( int i = 0; i < 3; i++ )
+  {
+    vvenc::YUVPlane& yuvPlane = cYUVBuffer.yuvPlanes[ i ];
+    if ( yuvPlane.planeBuf )
+      delete [] yuvPlane.planeBuf;
+  }
+
+  return iRet;
+}
+
+int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)
+{
+  if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
+  if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if( m_bFlushed )                     { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
+
+  int iRet= VVENC_OK;
+
+  if( !pcYUVBuffer )
+  {
+    m_cErrorString = "InputPicture is null";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcYUVBuffer->yuvPlanes[0].planeBuf == nullptr )
+  {
+    m_cErrorString = "InputPicture: invalid input buffers";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( m_cEncCfg.m_internChromaFormat != CHROMA_400 )
+  {
+    if( pcYUVBuffer->yuvPlanes[1].planeBuf == nullptr ||
+        pcYUVBuffer->yuvPlanes[2].planeBuf == nullptr )
+    {
+      m_cErrorString = "InputPicture: invalid input buffers for chroma";
+      return VVENC_ERR_UNSPECIFIED;
+    }
+  }
+
+  if( pcYUVBuffer->yuvPlanes[0].width != this->m_cEncCfg.m_SourceWidth )
+  {
+    m_cErrorString = "InputPicture: unsupported width";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcYUVBuffer->yuvPlanes[0].height != this->m_cEncCfg.m_SourceHeight )
+  {
+    m_cErrorString = "InputPicture: unsupported height";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( pcYUVBuffer->yuvPlanes[0].width > pcYUVBuffer->yuvPlanes[0].stride )
+  {
+    m_cErrorString = "InputPicture: unsupported width stride combination";
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  if( m_cEncCfg.m_internChromaFormat != CHROMA_400 )
+  {
+    if( m_cEncCfg.m_internChromaFormat == CHROMA_444 )
+    {
+      if( pcYUVBuffer->yuvPlanes[1].stride && pcYUVBuffer->yuvPlanes[0].width > pcYUVBuffer->yuvPlanes[1].stride )
+      {
+        m_cErrorString = "InputPicture: unsupported width cstride combination for 2nd plane";
+        return VVENC_ERR_UNSPECIFIED;
+      }
+
+      if( pcYUVBuffer->yuvPlanes[2].stride && pcYUVBuffer->yuvPlanes[0].width > pcYUVBuffer->yuvPlanes[2].stride )
+      {
+        m_cErrorString = "InputPicture: unsupported width cstride combination for 3rd plane";
+        return VVENC_ERR_UNSPECIFIED;
+      }
+    }
+    else
+    {
+      if( pcYUVBuffer->yuvPlanes[1].stride && pcYUVBuffer->yuvPlanes[0].width/2 > pcYUVBuffer->yuvPlanes[1].stride )
+      {
+        m_cErrorString = "InputPicture: unsupported width cstride combination for 2nd plane";
+        return VVENC_ERR_UNSPECIFIED;
+      }
+
+      if( pcYUVBuffer->yuvPlanes[2].stride && pcYUVBuffer->yuvPlanes[0].width/2 > pcYUVBuffer->yuvPlanes[2].stride )
+      {
+        m_cErrorString = "InputPicture: unsupported width cstride combination for 3rd plane";
+        return VVENC_ERR_UNSPECIFIED;
+      }
+    }
+  }
+
+  // we know that the internal buffer requires to be a multiple of 8 in each direction
+  int internalLumaWidth = ((pcYUVBuffer->yuvPlanes[0].width + 7)/8)*8;
+  int internalLumaHeight = ((pcYUVBuffer->yuvPlanes[0].height + 7)/8)*8;
+  int internalLumaStride = (internalLumaWidth > pcYUVBuffer->yuvPlanes[0].stride) ? internalLumaWidth : pcYUVBuffer->yuvPlanes[0].width;
+
+  int iChromaInStride = (m_cEncCfg.m_internChromaFormat == CHROMA_444) ? internalLumaStride  : internalLumaStride >> 1;
+  if( pcYUVBuffer->yuvPlanes[1].stride && pcYUVBuffer->yuvPlanes[1].stride > (internalLumaWidth >> 1) )
+  {
+    iChromaInStride =  pcYUVBuffer->yuvPlanes[1].stride;
+  }
+  if( pcYUVBuffer->yuvPlanes[2].stride && pcYUVBuffer->yuvPlanes[2].stride > (internalLumaWidth >> 1) && pcYUVBuffer->yuvPlanes[2].stride > iChromaInStride )
+  {
+    iChromaInStride =  pcYUVBuffer->yuvPlanes[2].stride;
+  }
+
+  YUVBuffer cYUVBuffer;
+  for ( int i = 0; i < 3; i++ )
+  {
+    YUVPlane& yuvPlane = cYUVBuffer.yuvPlanes[ i ];
+    yuvPlane.width     = pcYUVBuffer->yuvPlanes[i].width;
+    yuvPlane.height    = pcYUVBuffer->yuvPlanes[i].height;
+    yuvPlane.stride    = pcYUVBuffer->yuvPlanes[i].stride;
+
+    if ( i > 0 )
+    {
+      yuvPlane.width     = (m_cEncCfg.m_internChromaFormat == CHROMA_444 ) ? internalLumaWidth  : internalLumaWidth >> 1;
+      yuvPlane.height    = (m_cEncCfg.m_internChromaFormat == CHROMA_444 || m_cEncCfg.m_internChromaFormat == CHROMA_422 ) ? internalLumaHeight  : internalLumaHeight >> 1;
+      yuvPlane.stride    = iChromaInStride;
+    }
+    else
+    {
+      yuvPlane.width     = internalLumaWidth;
+      yuvPlane.height    = internalLumaHeight;
+      yuvPlane.stride    = internalLumaStride;
+    }
+    const int size     = yuvPlane.stride * yuvPlane.height;
+    yuvPlane.planeBuf  = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+  }
+
+  xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[0].planeBuf, cYUVBuffer.yuvPlanes[0].stride, cYUVBuffer.yuvPlanes[0].width, cYUVBuffer.yuvPlanes[0].height,
+                         pcYUVBuffer->yuvPlanes[0].planeBuf, pcYUVBuffer->yuvPlanes[0].stride, pcYUVBuffer->yuvPlanes[0].width, pcYUVBuffer->yuvPlanes[0].height );
+
+  if( m_cEncCfg.m_internChromaFormat != CHROMA_400 )
+  {
+    xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[1].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[1].width, cYUVBuffer.yuvPlanes[1].height,
+                           pcYUVBuffer->yuvPlanes[1].planeBuf, pcYUVBuffer->yuvPlanes[1].stride, pcYUVBuffer->yuvPlanes[1].width, pcYUVBuffer->yuvPlanes[1].height );
+    xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[2].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[2].width, cYUVBuffer.yuvPlanes[2].height,
+                           pcYUVBuffer->yuvPlanes[2].planeBuf, pcYUVBuffer->yuvPlanes[2].stride, pcYUVBuffer->yuvPlanes[2].width, pcYUVBuffer->yuvPlanes[2].height );
+  }
+
+  cYUVBuffer.sequenceNumber = pcYUVBuffer->sequenceNumber;
+  cYUVBuffer.cts            = pcYUVBuffer->cts;
+  cYUVBuffer.ctsValid       = pcYUVBuffer->ctsValid;
+
+  // reset AU data
+  rcVvcAccessUnit.m_iUsedSize  = 0;
+  rcVvcAccessUnit.m_uiCts      = 0;
+  rcVvcAccessUnit.m_uiDts      = 0;
+  rcVvcAccessUnit.m_bCtsValid  = false;
+  rcVvcAccessUnit.m_bDtsValid  = false;
+  rcVvcAccessUnit.m_bRAP       = false;
+  rcVvcAccessUnit.m_eSliceType = NUMBER_OF_SLICE_TYPES;
+  rcVvcAccessUnit.m_bRefPic    = false;
+  rcVvcAccessUnit.m_iTemporalLayer = 0;
+  rcVvcAccessUnit.m_uiPOC   = 0;
+  rcVvcAccessUnit.m_iStatus = 0;
+  rcVvcAccessUnit.m_cInfo.clear();
+  rcVvcAccessUnit.m_NalUnitTypeVec.clear();
+  rcVvcAccessUnit.m_annexBsizeVec.clear();
+
+  AccessUnit cAu;
+  bool encDone = false;
+
+  try
+  {
+    m_pEncLib->encodePicture( false, cYUVBuffer, cAu, encDone );
+  }
+  catch( std::exception& e )
+  {
+    m_cErrorString = e.what();
+    return VVENC_ERR_UNSPECIFIED;
+  }
 
   /* copy output AU */
   rcVvcAccessUnit.m_iUsedSize = 0;
@@ -309,13 +565,37 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
   if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
 
+  // reset AU data
+  rcVvcAccessUnit.m_iUsedSize      = 0;
+  rcVvcAccessUnit.m_uiCts          = 0;
+  rcVvcAccessUnit.m_uiDts          = 0;
+  rcVvcAccessUnit.m_bCtsValid      = false;
+  rcVvcAccessUnit.m_bDtsValid      = false;
+  rcVvcAccessUnit.m_bRAP           = false;
+  rcVvcAccessUnit.m_eSliceType     = NUMBER_OF_SLICE_TYPES;
+  rcVvcAccessUnit.m_bRefPic        = false;
+  rcVvcAccessUnit.m_iTemporalLayer = 0;
+  rcVvcAccessUnit.m_uiPOC          = 0;
+  rcVvcAccessUnit.m_iStatus        = 0;
+  rcVvcAccessUnit.m_cInfo.clear();
+  rcVvcAccessUnit.m_NalUnitTypeVec.clear();
+  rcVvcAccessUnit.m_annexBsizeVec.clear();
+
   YUVBuffer cYUVBuffer;
   AccessUnit cAu;
 
   /* encode till next output AU done */
   while( !m_bFlushed && cAu.empty() )
   {
-    m_cEncoderIf.encodePicture( true, cYUVBuffer, cAu, m_bFlushed );
+    try
+    {
+      m_pEncLib->encodePicture( true, cYUVBuffer, cAu, m_bFlushed );
+    }
+    catch( std::exception& e )
+    {
+      m_cErrorString = e.what();
+      return VVENC_ERR_UNSPECIFIED;
+    }
   }
 
   /* copy next output AU */
@@ -401,6 +681,42 @@ int VVEncImpl::getNumLeadFrames() const
 int VVEncImpl::getNumTrailFrames() const
 {
   return m_cEncCfg.m_MCTFNumTrailFrames;
+}
+
+int VVEncImpl::printConfig() const
+{
+  if( !m_bInitialized ){ return -1; }
+
+  if( nullptr != m_pEncLib )
+  {
+    try
+    {
+      m_cEncCfg.printCfg();
+    }
+    catch( std::exception& e )
+    {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+int VVEncImpl::printSummary() const
+{
+  if( !m_bInitialized ){ return -1; }
+
+  if( nullptr != m_pEncLib )
+  {
+    try
+    {
+      m_pEncLib->printSummary();
+    }
+    catch( std::exception& e )
+    {
+      return -1;
+    }
+  }
+  return 0;
 }
 
 std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
@@ -735,7 +1051,8 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
   return 0;
 }
 
-int VVEncImpl::xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight, const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin )
+int VVEncImpl::xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
+                                      const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight )
 {
   if( iSrcStride == iDesStride )
   {
@@ -776,13 +1093,16 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
 {
   rcVvcAccessUnit.m_bRAP = false;
 
+  std::vector<uint32_t> annexBsizes;
+
   /* copy output AU */
   if ( ! rcAu.empty() )
   {
-    uint32_t size = 0;  /* size of annexB unit in bytes */
+    uint32_t sizeSum = 0;
     for (vvenc::AccessUnit::const_iterator it = rcAu.begin(); it != rcAu.end(); it++)
     {
       const vvenc::NALUnitEBSP& nalu = **it;
+      uint32_t size = 0; /* size of annexB unit in bytes */
 
       if (it == rcAu.begin() ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_DCI ||
@@ -799,9 +1119,11 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
         size += 3;
       }
       size += uint32_t(nalu.m_nalUnitData.str().size());
+      sizeSum += size;
+      annexBsizes.push_back( size );
     }
 
-    if( rcVvcAccessUnit.m_iBufSize < (int)size || rcVvcAccessUnit.m_pucBuffer == NULL )
+    if( rcVvcAccessUnit.m_iBufSize < (int)sizeSum || rcVvcAccessUnit.m_pucBuffer == NULL )
     {
       return VVENC_NOT_ENOUGH_MEM;
     }
@@ -846,14 +1168,17 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       {
         rcVvcAccessUnit.m_bRAP = true;
       }
+
+      rcVvcAccessUnit.m_NalUnitTypeVec.push_back( nalu.m_nalUnitType );
     }
 
-    if( iUsedSize != size  )
+    if( iUsedSize != sizeSum  )
     {
       return VVENC_NOT_ENOUGH_MEM;
     }
 
-    rcVvcAccessUnit.m_iUsedSize = size;
+    rcVvcAccessUnit.m_iUsedSize = iUsedSize;
+    rcVvcAccessUnit.m_annexBsizeVec = annexBsizes;
     rcVvcAccessUnit.m_bCtsValid = rcAu.m_bCtsValid;
     rcVvcAccessUnit.m_bDtsValid = rcAu.m_bDtsValid;
     rcVvcAccessUnit.m_uiCts     = rcAu.m_uiCts;
@@ -868,6 +1193,64 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
   }
 
   return 0;
+}
+
+
+///< set message output function for encoder lib. if not set, no messages will be printed.
+void VVEncImpl::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
+{
+  g_msgFnc = msgFnc;
+}
+
+///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
+{
+  std::string ret = "NA";
+#if ENABLE_SIMD_OPT
+#ifdef TARGET_SIMD_X86
+  const char* simdSet = read_x86_extension( simdId );
+  ret = simdSet;
+#endif
+  g_pelBufOP.initPelBufOpsX86();
+#endif
+#if ENABLE_SIMD_TRAFO
+  g_tCoeffOps.initTCoeffOpsX86();
+#endif
+  return ret;
+}
+
+///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+bool VVEncImpl::isTracingEnabled()
+{
+#if ENABLE_TRACING
+  return true;
+#else
+  return false;
+#endif
+}
+
+///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+std::string VVEncImpl::getCompileInfoString()
+{
+  char convBuf[ 256 ];
+  std::string compileInfo;
+  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      compileInfo += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); compileInfo += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      compileInfo += convBuf;
+  return compileInfo;
+}
+
+///< decode bitstream with limited build in decoder
+void VVEncImpl::decodeBitstream( const std::string& FileName)
+{
+  FFwdDecoder ffwdDecoder;
+  Picture cPicture; cPicture.poc=-8000;
+
+  if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, cPicture.poc, false ))
+  {
+    msg( ERROR, "decoding failed");
+    THROW("error decoding");
+  }
 }
 
 } // namespace

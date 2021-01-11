@@ -91,11 +91,11 @@ int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
   return m_pcVVEncImpl->init( rcVVEncParameter );
 }
 
-int VVEnc::init( const EncCfg& rcEncCfg  )
+int VVEnc::init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf  )
 {
   if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
-  return m_pcVVEncImpl->init( rcEncCfg );
+  return m_pcVVEncImpl->init( rcEncCfg, pcYUVWriterIf );
 }
 
 int VVEnc::initPass( int pass )
@@ -122,6 +122,13 @@ int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit 
   if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
   return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
+}
+
+int VVEnc::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)
+{
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+
+  return m_pcVVEncImpl->encode( pcYUVBuffer, rcVvcAccessUnit );
 }
 
 int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
@@ -169,6 +176,16 @@ int VVEnc::getNumTrailFrames() const
   return m_pcVVEncImpl->getNumTrailFrames();
 }
 
+int VVEnc::printSummary() const
+{
+  return m_pcVVEncImpl->printSummary();
+}
+
+int VVEnc::printConfig() const
+{
+  return m_pcVVEncImpl->printConfig();
+}
+
 std::string VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();
@@ -186,8 +203,29 @@ std::string VVEnc::getPresetParamsAsStr( int iQuality )
 
 void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
 {
-  vvenc::registerMsgCbf( msgFnc );
+  VVEncImpl::registerMsgCbf( msgFnc );
 }
+
+std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+{
+  return VVEncImpl::setSIMDExtension( simdId );
+}
+
+bool VVEnc::isTracingEnabled()
+{
+  return VVEncImpl::isTracingEnabled();
+}
+
+std::string VVEnc::getCompileInfoString()
+{
+  return VVEncImpl::getCompileInfoString();
+}
+
+void VVEnc::decodeBitstream( const std::string& FileName)
+{
+  VVEncImpl::decodeBitstream( FileName );
+}
+
 
 } // namespace
 

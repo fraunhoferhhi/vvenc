@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
+especially patent licenses, a separate Agreement needs to be closed.
 For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
@@ -58,8 +58,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <iomanip>
 
+#include "vvenc/vvenc.h"
 #include "vvenc/Nal.h"
 #include "apputils/ParseArg.h"
+
 
 using namespace std;
 
@@ -118,7 +120,7 @@ void EncApp::encode()
 {
   if( m_cEncAppCfg.m_decode )
   {
-    vvenc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
+    vvenc::VVEnc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
     return;
   }
 
@@ -128,7 +130,10 @@ void EncApp::encode()
   }
 
   // initialize encoder lib
-  m_cEncoderIf.initEncoderLib( m_cEncAppCfg, this );
+  if( 0 != m_cVVEnc.init( m_cEncAppCfg, this ) )
+  {
+    return;
+  }
 
   printChromaFormat();
 
@@ -146,6 +151,11 @@ void EncApp::encode()
     default: break;
   }
 
+
+  vvenc::VvcAccessUnit au;
+  au.m_iBufSize  = m_cEncAppCfg.m_SourceWidth * m_cEncAppCfg.m_SourceHeight;
+  au.m_pucBuffer = new unsigned char [ au.m_iBufSize ];
+
   int framesRcvd = 0;
   for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
   {
@@ -158,7 +168,7 @@ void EncApp::encode()
     }
 
     // initialize encoder pass
-    m_cEncoderIf.initPass( pass );
+    m_cVVEnc.initPass( pass );
 
     // loop over input YUV data
     bool inputDone  = false;
@@ -188,11 +198,31 @@ void EncApp::encode()
       }
 
       // encode picture
-      AccessUnit au;
-      m_cEncoderIf.encodePicture( inputDone, yuvInBuf, au, encDone );
+      int iRet = 0;
+      if( !inputDone )
+      {
+        iRet = m_cVVEnc.encode( &yuvInBuf, au );
+        if( 0 != iRet )
+        {
+          msgApp( ERROR, "encoding failed: err code %d - %s\n", iRet, m_cVVEnc.getLastError().c_str() );
+          encDone = true;
+          inputDone = true;
+        }
+      }
+      else
+      {
+        iRet = m_cVVEnc.flush( au );
+        encDone = au.m_iUsedSize == 0 ? true : false;
+        if( 0 != iRet )
+        {
+          msgApp( ERROR, "encoding failed: err code %d - %s\n", iRet, m_cVVEnc.getLastError().c_str() );
+          encDone = true;
+        }
+      }
+
 
       // write out encoded access units
-      if( au.size() )
+      if( au.m_iUsedSize > 0 )
       {
         outputAU( au );
       }
@@ -210,16 +240,18 @@ void EncApp::encode()
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );
 
+  delete[] au.m_pucBuffer;
+
   // cleanup encoder lib
-  m_cEncoderIf.uninitEncoderLib();
+  m_cVVEnc.uninit();
 
   closeFileIO();
 }
 
-void EncApp::outputAU( const AccessUnit& au )
+void EncApp::outputAU( const VvcAccessUnit& au )
 {
-  const vector<uint32_t>& stats = writeAnnexB( m_bitstream, au );
-  rateStatsAccum( au, stats );
+  writeAnnexB( m_bitstream, au );
+  rateStatsAccum( au );
   m_bitstream.flush();
 }
 
@@ -274,14 +306,14 @@ void EncApp::closeFileIO()
   m_bitstream.close();
 }
 
-void EncApp::rateStatsAccum(const AccessUnit& au, const std::vector<uint32_t>& annexBsizes)
+void EncApp::rateStatsAccum(const VvcAccessUnit& au )
 {
-  AccessUnit::const_iterator it_au = au.begin();
-  vector<uint32_t>::const_iterator it_stats = annexBsizes.begin();
+  std::vector<NalUnitType>::const_iterator it_nal = au.m_NalUnitTypeVec.begin();
+  std::vector<uint32_t>::const_iterator it_nalsize = au.m_annexBsizeVec.begin();
 
-  for( ; it_au != au.end(); it_au++, it_stats++ )
+  for( ; it_nal != au.m_NalUnitTypeVec.end(); it_nal++, it_nalsize++ )
   {
-    switch( (*it_au)->m_nalUnitType )
+    switch( (*it_nal) )
     {
       case NAL_UNIT_CODED_SLICE_TRAIL:
       case NAL_UNIT_CODED_SLICE_STSA:
@@ -297,19 +329,19 @@ void EncApp::rateStatsAccum(const AccessUnit& au, const std::vector<uint32_t>& a
       case NAL_UNIT_PPS:
       case NAL_UNIT_PREFIX_APS:
       case NAL_UNIT_SUFFIX_APS:
-        m_essentialBytes += *it_stats;
+        m_essentialBytes += *it_nalsize;
         break;
       default:
         break;
     }
 
-    m_totalBytes += *it_stats;
+    m_totalBytes += *it_nalsize;
   }
 }
 
 void EncApp::printRateSummary( int framesRcvd )
 {
-  m_cEncoderIf.printSummary();
+  m_cVVEnc.printSummary();
 
   double time = (double) framesRcvd / m_cEncAppCfg.m_FrameRate * m_cEncAppCfg.m_temporalSubsampleRatio;
   msgApp( DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );

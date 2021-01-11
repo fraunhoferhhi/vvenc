@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "../vvencFFapp/EncApp.h"
 #include "apputils/ParseArg.h"
 
-#include "vvenc/EncoderIf.h"
+#include "vvenc/vvenc.h"
 
 //! \ingroup EncoderApp
 //! \{
@@ -76,7 +76,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 int main(int argc, char* argv[])
 {
-  vvenc::registerMsgCbf( msgFnc );
+  vvenc::VVEnc::registerMsgCbf( msgFnc );
 
   std::string simdOpt;
   VVCEncoderFFApp::df::program_options_lite::Options opts;
@@ -87,14 +87,14 @@ int main(int argc, char* argv[])
   VVCEncoderFFApp::df::program_options_lite::SilentReporter err;
   VVCEncoderFFApp::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  simdOpt = vvenc::setSIMDExtension( simdOpt );
+  simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
 
   // print information
   msgApp( vvenc::INFO, "\n");
   msgApp( vvenc::INFO, "vvencFFapp: Encoder Version %s ", VVENC_VERSION );
-  msgApp( vvenc::INFO, "%s", getCompileInfoString().c_str() );
+  msgApp( vvenc::INFO, "%s", vvenc::VVEnc::getCompileInfoString().c_str() );
   msgApp( vvenc::INFO, "[SIMD=%s]", simdOpt.c_str() );
-  if ( vvenc::isTracingEnabled() )
+  if ( vvenc::VVEnc::isTracingEnabled() )
   {
     msgApp( vvenc::INFO, "[ENABLE_TRACING]" );
   }

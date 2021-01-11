@@ -55,7 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Unit.h"
 #include "Slice.h"
 #include "InterpolationFilter.h"
-#include "vvenc/Basics.h"
 
 //! \ingroup CommonLib
 //! \{

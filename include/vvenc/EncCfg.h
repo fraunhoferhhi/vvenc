@@ -54,7 +54,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <sstream>
 #include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
 #include "vvenc/EncCfgExpert.h"
 
 //! \ingroup Interface

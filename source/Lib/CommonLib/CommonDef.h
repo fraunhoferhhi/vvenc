@@ -63,8 +63,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma warning( disable : 4800 )
 #endif // _MSC_VER > 1000
 
-#include "vvenc/Basics.h"
-
 #define __IN_COMMONDEF_H__
 #include "TypeDef.h"
 #undef __IN_COMMONDEF_H__

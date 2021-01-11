@@ -462,11 +462,11 @@ public:
 
           if( "idr" == cDecRefreshType)
           {
-            rcParams.m_eDecodingRefreshType = vvenc::VvcDecodingRefreshType::DRT_IDR;
+            rcParams.m_eDecodingRefreshType = vvenc::DecodingRefreshType::DRT_IDR;
           }
           else if( "cra" == cDecRefreshType )
           {
-            rcParams.m_eDecodingRefreshType = vvenc::VvcDecodingRefreshType::DRT_CRA;
+            rcParams.m_eDecodingRefreshType = vvenc::DecodingRefreshType::DRT_CRA;
           }
           else
           {

@@ -52,9 +52,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <ostream>
 #include <cstdarg>
 
-#include "vvenc/EncoderIf.h"
 #include "vvenc/FileIO.h"
 #include "apputils/EncAppCfg.h"
+
+#include "vvenc/vvenc.h"
+
 
 //! \ingroup EncoderApp
 //! \{
@@ -66,6 +68,38 @@ void msgFnc( int level, const char* fmt, va_list args );
 void msgApp( int level, const char* fmt, ... );
 
 // ====================================================================================================================
+
+static inline int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
+{
+  int w = frameWidth;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: w = 0;      break;
+      case CHROMA_420:
+      case CHROMA_422: w = w >> 1; break;
+      default: break;
+    }
+  }
+  return w;
+}
+
+static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: h = 0;      break;
+      case CHROMA_420: h = h >> 1; break;
+      case CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
+}
 
 struct YUVBufferStorage : public YUVBuffer
 {
@@ -96,11 +130,11 @@ struct YUVBufferStorage : public YUVBuffer
 
 // ====================================================================================================================
 
-class EncApp : public YUVWriterIf
+class EncApp : public vvenc::YUVWriterIf
 {
 private:
   EncAppCfg    m_cEncAppCfg;                      ///< encoder configuration
-  EncoderIf    m_cEncoderIf;                      ///< encoder library class
+  VVEnc        m_cVVEnc;                          ///< encoder library class
   YuvIO        m_yuvInputFile;                    ///< input YUV file
   YuvIO        m_yuvReconFile;                    ///< output YUV reconstruction file
   std::fstream m_bitstream;                       ///< output bitstream file
@@ -120,7 +154,7 @@ public:
 
   bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
   void  encode();                                     ///< main encoding function
-  void  outputAU ( const AccessUnit& au );            ///< write encoded access units to bitstream
+  void  outputAU ( const VvcAccessUnit& au );         ///< write encoded access units to bitstream
   void  outputYuv( const YUVBuffer& yuvOutBuf );      ///< write reconstructed yuv output
 
 private:
@@ -129,7 +163,7 @@ private:
   void closeFileIO();
 
   // statistics
-  void rateStatsAccum  ( const AccessUnit& au, const std::vector<uint32_t>& stats );
+  void rateStatsAccum  ( const VvcAccessUnit& au );
   void printRateSummary( int framesRcvd );
   void printChromaFormat();
 };

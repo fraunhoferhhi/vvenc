@@ -51,13 +51,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "EncLib.h"
 
-#include "vvenc/EncoderIf.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
 #include "Utilities/NoMallocThreadPool.h"
-#include "vvenc/EncoderIf.h"
 
 //! \ingroup EncoderLib
 //! \{

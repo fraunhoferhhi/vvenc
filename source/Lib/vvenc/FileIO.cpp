@@ -57,7 +57,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncoderLib/NALwrite.h"
 
 #include <iostream>
-#include "vvenc/EncoderIf.h"
 
 //! \ingroup Interface
 //! \{
@@ -557,7 +556,7 @@ void YuvIO::skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int wi
   //set the frame size according to the chroma format
   std::streamoff frameSize      = 0;
   unsigned wordsize             = 1;
-  for ( int i = 0; i < getNumberValidComponents( inputChFmt ); i++ )
+  for ( int i = 0; i < (int)getNumberValidComponents( inputChFmt ); i++ )
   {
     const ComponentID compID = ComponentID( i );
     frameSize += ( width >> getComponentScaleX( compID, inputChFmt ) ) * ( height >> getComponentScaleY( compID, inputChFmt ));
@@ -665,7 +664,7 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internC
     PelUnitBuf pic;
     setupPelUnitBuf( yuvOutBuf, pic, internChFmt );
     picScaled.copyFrom( pic );
-    for( int comp = 0; comp < getNumberValidComponents( internChFmt ); comp++ )
+    for( int comp = 0; comp < (int)getNumberValidComponents( internChFmt ); comp++ )
     {
       const ComponentID compID  = ComponentID( comp );
       const ChannelType chType  = toChannelType( compID );
@@ -679,7 +678,7 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internC
 
   const YUVBuffer& yuvWriteBuf = nonZeroBitDepthShift ? yuvScaled : yuvOutBuf;
 
-  for( int comp = 0; comp < getNumberValidComponents( outputChFmt ); comp++ )
+  for( int comp = 0; comp < (int)getNumberValidComponents( outputChFmt ); comp++ )
   {
     const ComponentID compID = ComponentID( comp );
     const ChannelType chType = toChannelType( compID );
@@ -700,46 +699,48 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internC
  *  - the initial startcode in the access unit,
  *  - any SPS/PPS nal units
  */
-std::vector<uint32_t> writeAnnexB( std::ostream& out, const AccessUnit& au )
+std::vector<uint32_t> writeAnnexB( std::ostream& out, const VvcAccessUnit& au )
 {
-  std::vector<uint32_t> annexBsizes;
+  out.write(reinterpret_cast<const char*>(au.m_pucBuffer), au.m_iUsedSize);
 
-  for (AccessUnit::const_iterator it = au.begin(); it != au.end(); it++)
-  {
-    const NALUnitEBSP& nalu = **it;
-    uint32_t size = 0; /* size of annexB unit in bytes */
+//  std::vector<uint32_t> annexBsizes;
 
-    static const uint8_t start_code_prefix[] = {0,0,0,1};
-    if (it == au.begin() || nalu.m_nalUnitType == NAL_UNIT_DCI || nalu.m_nalUnitType == NAL_UNIT_SPS || nalu.m_nalUnitType == NAL_UNIT_VPS || nalu.m_nalUnitType == NAL_UNIT_PPS || nalu.m_nalUnitType == NAL_UNIT_PREFIX_APS || nalu.m_nalUnitType == NAL_UNIT_SUFFIX_APS )
-    {
-      /* From AVC, When any of the following conditions are fulfilled, the
-       * zero_byte syntax element shall be present:
-       *  - the nal_unit_type within the nal_unit() is equal to 7 (sequence
-       *    parameter set) or 8 (picture parameter set),
-       *  - the byte stream NAL unit syntax structure contains the first NAL
-       *    unit of an access unit in decoding order, as specified by subclause
-       *    7.4.1.2.3.
-       */
-      out.write(reinterpret_cast<const char*>(start_code_prefix), 4);
-      size += 4;
-    }
-    else
-    {
-      out.write(reinterpret_cast<const char*>(start_code_prefix+1), 3);
-      size += 3;
-    }
-    out << nalu.m_nalUnitData.str();
-    size += uint32_t(nalu.m_nalUnitData.str().size());
+//  for (AccessUnit::const_iterator it = au.begin(); it != au.end(); it++)
+//  {
+//    const NALUnitEBSP& nalu = **it;
+//    uint32_t size = 0; /* size of annexB unit in bytes */
 
-    annexBsizes.push_back(size);
-  }
+//    static const uint8_t start_code_prefix[] = {0,0,0,1};
+//    if (it == au.begin() || nalu.m_nalUnitType == NAL_UNIT_DCI || nalu.m_nalUnitType == NAL_UNIT_SPS || nalu.m_nalUnitType == NAL_UNIT_VPS || nalu.m_nalUnitType == NAL_UNIT_PPS || nalu.m_nalUnitType == NAL_UNIT_PREFIX_APS || nalu.m_nalUnitType == NAL_UNIT_SUFFIX_APS )
+//    {
+//      /* From AVC, When any of the following conditions are fulfilled, the
+//       * zero_byte syntax element shall be present:
+//       *  - the nal_unit_type within the nal_unit() is equal to 7 (sequence
+//       *    parameter set) or 8 (picture parameter set),
+//       *  - the byte stream NAL unit syntax structure contains the first NAL
+//       *    unit of an access unit in decoding order, as specified by subclause
+//       *    7.4.1.2.3.
+//       */
+//      out.write(reinterpret_cast<const char*>(start_code_prefix), 4);
+//      size += 4;
+//    }
+//    else
+//    {
+//      out.write(reinterpret_cast<const char*>(start_code_prefix+1), 3);
+//      size += 3;
+//    }
+//    out << nalu.m_nalUnitData.str();
+//    size += uint32_t(nalu.m_nalUnitData.str().size());
 
-  if (au.size() > 0)
-  {
-    out.flush();
-  }
+//    annexBsizes.push_back(size);
+//  }
 
-  return annexBsizes;
+//  if (au.size() > 0)
+//  {
+//    out.flush();
+//  }
+
+  return au.m_annexBsizeVec;
 }
 
 } // namespace vvenc

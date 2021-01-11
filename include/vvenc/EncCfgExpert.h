@@ -56,7 +56,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencDecl.h"
 
 #include "vvenc/vvencConfig.h"
-#include "vvenc/Basics.h"
 
 //! \ingroup Interface
 //! \{
@@ -215,6 +214,39 @@ struct VVENC_DECL WCGChromaQPControl
   double chromaCrQpScale; ///< Chroma Cr QP Scale (1.0:default)
   double chromaQpScale;   ///< Chroma QP Scale (0.0:default)
   double chromaQpOffset;  ///< Chroma QP Offset (0.0:default)
+};
+
+struct VVENC_DECL ChromaQpMappingTableParams
+{
+  int               m_numQpTables;
+  int               m_qpBdOffset;
+  bool              m_sameCQPTableForAllChromaFlag;
+  int               m_qpTableStartMinus26[MAX_NUM_CQP_MAPPING_TABLES];
+  int               m_numPtsInCQPTableMinus1[ MAX_NUM_CQP_MAPPING_TABLES ];
+  std::vector<int>  m_deltaQpInValMinus1[ MAX_NUM_CQP_MAPPING_TABLES ];
+  std::vector<int>  m_deltaQpOutVal[ MAX_NUM_CQP_MAPPING_TABLES ];
+
+  ChromaQpMappingTableParams()
+  : m_numQpTables                   ( 0 )
+  , m_qpBdOffset                    ( 12 )
+  , m_sameCQPTableForAllChromaFlag  ( true )
+  , m_qpTableStartMinus26           { 0 }
+  , m_numPtsInCQPTableMinus1        { 0 }
+  {
+  }
+};
+
+struct VVENC_DECL ReshapeCW
+{
+  std::vector<uint32_t> binCW;
+  int       updateCtrl;
+  int       adpOption;
+  uint32_t  initialCW;
+  int       rspPicSize;
+  int       rspFps;
+  int       rspBaseQP;
+  int       rspTid;
+  int       rspFpsToIp;
 };
 
 // ====================================================================================================================

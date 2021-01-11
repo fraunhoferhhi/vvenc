@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 //#include "../vvencFFapp/EncApp.h"
 #include "apputils/ParseArg.h"
-#include "vvenc/EncoderIf.h"
+#include "vvenc/vvenc.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
@@ -614,7 +614,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("SourceWidth,-wdt",                                m_SourceWidth,                                    "Source picture width")
   ("SourceHeight,-hgt",                               m_SourceHeight,                                   "Source picture height");
 
-  if ( vvenc::isTracingEnabled() )
+  if ( vvenc::VVEnc::isTracingEnabled() )
   {
      opts.addOptions()
     ("TraceChannelsList",                             m_listTracingChannels,                            "List all available tracing channels")

@@ -52,7 +52,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fstream>
 #include <vector>
 #include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
+#include "vvenc/vvencConfig.h"
 
 //! \ingroup Interface
 //! \{
@@ -82,7 +82,7 @@ public:
 // ====================================================================================================================
 
 class AccessUnit;
-std::vector<uint32_t> VVENC_DECL writeAnnexB( std::ostream& out, const AccessUnit& au );
+std::vector<uint32_t> VVENC_DECL writeAnnexB( std::ostream& out, const VvcAccessUnit& au );
 
 } // namespace vvenc
 
