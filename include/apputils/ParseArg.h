@@ -91,8 +91,8 @@ namespace df
     {
       SilentReporter() { }
       virtual ~SilentReporter() { }
-      virtual std::ostream& error( const std::string& where ) { return dest; }
-      virtual std::ostream& warn( const std::string& where ) { return dest; }
+      virtual std::ostream& error( const std::string& ) { return dest; }
+      virtual std::ostream& warn( const std::string& ) { return dest; }
       std::stringstream dest;
     };
 
