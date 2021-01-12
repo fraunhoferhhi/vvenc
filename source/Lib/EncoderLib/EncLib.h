@@ -52,8 +52,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncGOP.h"
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
+#include "CommonLib/Nal.h"
 #include "vvenc/EncCfg.h"
-#include "vvenc/Nal.h"
+
 #include <mutex>
 
 //! \ingroup EncoderLib

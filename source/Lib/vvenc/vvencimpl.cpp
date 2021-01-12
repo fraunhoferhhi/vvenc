@@ -58,9 +58,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <algorithm>
 
-#include "vvenc/Nal.h"
 #include "vvenc/version.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/Nal.h"
+
 
 #include "EncoderLib/EncLib.h"
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO

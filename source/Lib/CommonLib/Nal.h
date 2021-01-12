@@ -47,8 +47,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sstream>
 #include <list>
-#include "vvenc/vvencDecl.h"
 #include "vvenc/vvencConfig.h"
+#include "vvenc/vvenc.h"
 
 //! \ingroup Interface
 //! \{
@@ -58,7 +58,7 @@ namespace vvenc {
 /**
  * Represents a single NALunit header and the associated RBSPayload
  */
-struct VVENC_DECL NALUnit
+struct NALUnit
 {
   NalUnitType m_nalUnitType; ///< nal_unit_type
   uint32_t    m_temporalId;  ///< temporal_id

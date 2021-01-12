@@ -59,7 +59,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 
 #include "vvenc/vvenc.h"
-#include "vvenc/Nal.h"
 #include "apputils/ParseArg.h"
 
 

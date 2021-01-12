@@ -58,13 +58,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncReshape.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/Nal.h"
 #include "RateCtrl.h"
 
 #include <vector>
 #include <list>
 #include <stdlib.h>
 #include <atomic>
-#include "vvenc/Nal.h"
+
 
 #include "Utilities/NoMallocThreadPool.h"
 #include <mutex>

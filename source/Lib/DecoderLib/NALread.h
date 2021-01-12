@@ -50,7 +50,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/Nal.h"
+#include "CommonLib/Nal.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/BitStream.h"
 

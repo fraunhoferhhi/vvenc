@@ -56,11 +56,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/EncCfg.h"
 #include "vvenc/vvenc.h"
 
-#include "vvenc/Nal.h"
-
 namespace vvenc {
 
 class EncLib;
+class AccessUnit;
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the

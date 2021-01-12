@@ -53,7 +53,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include "vvenc/vvencDecl.h"
 #include "vvenc/vvencConfig.h"
-#include "vvenc/vvenc.h"
 
 //! \ingroup Interface
 //! \{
@@ -61,6 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // ====================================================================================================================
+class YUVBuffer;
 
 class VVENC_DECL YuvIO
 {
@@ -82,7 +82,7 @@ public:
 
 // ====================================================================================================================
 
-class AccessUnit;
+class VvcAccessUnit;
 std::vector<uint32_t> VVENC_DECL writeAnnexB( std::ostream& out, const VvcAccessUnit& au );
 
 } // namespace vvenc

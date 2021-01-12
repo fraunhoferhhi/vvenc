@@ -47,8 +47,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/BitStream.h"
+#include "CommonLib/Nal.h"
 #include <ostream>
-#include "vvenc/Nal.h"
 
 //! \ingroup EncoderLib
 //! \{
