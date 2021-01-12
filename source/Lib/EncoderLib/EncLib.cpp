@@ -538,7 +538,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
     while ( picItr != std::end( m_cListPic ) )
     {
       Picture* curPic = *picItr;
-      if ( !isPicInUse( curPic ) )
+      if ( curPic->isFinished && !curPic->isNeededForOutput && !curPic->isReferenced && curPic->refCounter <= 0 )
       {
         pic = curPic;
         break;
