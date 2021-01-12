@@ -701,7 +701,7 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internC
  */
 std::vector<uint32_t> writeAnnexB( std::ostream& out, const VvcAccessUnit& au )
 {
-  out.write(reinterpret_cast<const char*>(au.payload), au.payloadUsedSize);
+  out.write(reinterpret_cast<const char*>(au.payload.data()), au.payload.size());
   return au.annexBsizeVec;
 }
 

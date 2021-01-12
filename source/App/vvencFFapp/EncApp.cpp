@@ -152,8 +152,6 @@ void EncApp::encode()
 
 
   vvenc::VvcAccessUnit au;
-  au.payloadSize = m_cEncAppCfg.m_SourceWidth * m_cEncAppCfg.m_SourceHeight;
-  au.payload     = new unsigned char [ au.payloadSize ];
 
   int framesRcvd = 0;
   for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
@@ -212,7 +210,7 @@ void EncApp::encode()
       }
 
       // write out encoded access units
-      if( au.payloadUsedSize > 0 )
+      if( !au.payload.empty() )
       {
         outputAU( au );
       }
@@ -229,8 +227,6 @@ void EncApp::encode()
   }
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );
-
-  delete[] au.payload;
 
   // cleanup encoder lib
   m_cVVEnc.uninit();

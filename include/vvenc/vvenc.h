@@ -90,23 +90,20 @@ enum ErrorCodes
 */
 typedef struct VVENC_DECL YuvPicture
 {
-  YuvPicture()                             ///< default constructor, sets member attributes to default values
-  {}
-
-  unsigned char*  deletePicBuffer = nullptr;         ///< pointer to picture buffer origin if non zero the encoder doesn't copy the content off the buffer and deletes the buffer after encoding
-                                                     ///< this implies the buffer content to be const,
-                                                     ///< otherwise if the pointer is zero the buffer content is copied by the encoder into an intermediate buffer
-  void*           y                = nullptr;         ///< pointer to luminance top left pixel
-  void*           u                = nullptr;         ///< pointer to chrominance cb top left pixel
-  void*           v                = nullptr;         ///< pointer to chrominance cbr top left pixel
+  unsigned char*  deletePicBuffer  = nullptr;         ///< pointer to picture buffer origin if non zero the encoder doesn't copy the content off the buffer and deletes the buffer after encoding
+                                                      ///< this implies the buffer content to be const,
+                                                      ///< otherwise if the pointer is zero the buffer content is copied by the encoder into an intermediate buffer
+  void*           y                 = nullptr;        ///< pointer to luminance top left pixel
+  void*           u                 = nullptr;        ///< pointer to chrominance cb top left pixel
+  void*           v                 = nullptr;        ///< pointer to chrominance cbr top left pixel
   int             width             = 0;              ///< width of the luminance plane
   int             height            = 0;              ///< height of the luminance plane
   int             stride            = 0;              ///< stride (width + left margin + right margins) of luminance plane chrominance stride is assumed to be stride/2
   int             cStride           = 0;              ///< stride (width + left margin + right margins) of chrominance plane in case its value differs from stride/2
   int             bitDepth          = 0;              ///< bit depth of input signal (8: depth 8 bit, 10: depth 10 bit  )
   ColorFormat     colorFormat       = VVC_CF_INVALID; ///< color format (VVC_CF_YUV420_PLANAR)
-  uint64_t        sequenceNumber   = 0;               ///< sequence number of the picture
-  uint64_t        cts              = 0;               ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
+  uint64_t        sequenceNumber    = 0;               ///< sequence number of the picture
+  uint64_t        cts               = 0;               ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
   bool            ctsValid          = false;          ///< composition time stamp valid flag (true: valid, false: CTS not set)
 } YuvPicture_t;
 
@@ -114,33 +111,18 @@ typedef struct VVENC_DECL YuvPicture
 // will be removed  CL
 struct VVENC_DECL YUVPlane
 {
-  int16_t* planeBuf;
-  int      width;
-  int      height;
-  int      stride;
-
-  YUVPlane()
-    : planeBuf( nullptr )
-    , width   ( 0 )
-    , height  ( 0 )
-    , stride  ( 0 )
-  {
-  }
+  int16_t*   planeBuf = nullptr;  ///< pointer to plane buffer
+  int     width    = 0;        ///< width of the plane
+  int     height   = 0;        ///< height of the plane
+  int     stride   = 0;        ///< stride (width + left margin + right margins) of plane in samples
 };
 
 struct VVENC_DECL YUVBuffer
 {
-  YUVPlane yuvPlanes[ MAX_NUM_COMP ];
-  uint64_t sequenceNumber;     ///< sequence number of the picture
-  uint64_t cts;                ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
-  bool     ctsValid;            ///< composition time stamp valid flag (true: valid, false: CTS not set)
-
-  YUVBuffer()
-  : sequenceNumber ( 0 )
-  , cts            ( 0 )
-  , ctsValid        ( false )
-  {
-  }
+  YUVPlane  yuvPlanes[ MAX_NUM_COMP ];
+  uint64_t  sequenceNumber  = 0;      ///< sequence number of the picture
+  uint64_t  cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  bool      ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
 };
 
 // ----------------------------------------
@@ -173,12 +155,7 @@ public:
 
 typedef struct VVENC_DECL VvcAccessUnit
 {
-  VvcAccessUnit()                             ///< Default constructor, sets member attributes to default values
-  {}
-
-  unsigned char*  payload       = nullptr;  ///< pointer to buffer that retrieves the coded data,
-  int             payloadSize   = 0;        ///< size of the allocated buffer in bytes
-  int             payloadUsedSize = 0;      ///< length of the used data in bytes
+  std::vector<uint8_t> payload;
   uint64_t        cts           = 0;        ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
   uint64_t        dts           = 0;        ///< decoding time stamp in TicksPerSecond (see VVCEncoderParameter)
   bool            ctsValid      = false;    ///< composition time stamp valid flag (true: valid, false: CTS not set)
@@ -205,8 +182,6 @@ typedef struct VVENC_DECL VvcAccessUnit
 */
 typedef struct VVENC_DECL VVEncParameter
 {
-  VVEncParameter()           ///< default constructor, sets member attributes to default values
-  {}
   int qp                   = 32;     ///< quantization parameter                                 (no default || 0-51)
   int width                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
   int height               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)

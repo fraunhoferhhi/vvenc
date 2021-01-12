@@ -236,7 +236,6 @@ bool VVEncImpl::isInitialized() const
 int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone )
 {
   if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
-  if( 0 == rcVvcAccessUnit.payloadSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
   if( m_bFlushed )                      { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
@@ -334,7 +333,7 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
 
 
   // reset AU data
-  rcVvcAccessUnit.payloadUsedSize  = 0;
+  rcVvcAccessUnit.payload.clear();
   rcVvcAccessUnit.cts              = 0;
   rcVvcAccessUnit.dts              = 0;
   rcVvcAccessUnit.ctsValid         = false;
@@ -365,7 +364,6 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
   if( rbEncodeDone ){ m_bFlushed = true; }
 
   /* copy output AU */
-  rcVvcAccessUnit.payloadUsedSize = 0;
   if ( !cAu.empty() )
   {
     iRet = xCopyAu( rcVvcAccessUnit, cAu  );
@@ -388,7 +386,6 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
 int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone )
 {
   if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
-  if( 0 == rcVvcAccessUnit.payloadSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
   if( m_bFlushed )                      { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
@@ -522,7 +519,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, b
   }
 
   // reset AU data
-  rcVvcAccessUnit.payloadUsedSize  = 0;
+  rcVvcAccessUnit.payload.clear();
   rcVvcAccessUnit.cts      = 0;
   rcVvcAccessUnit.dts      = 0;
   rcVvcAccessUnit.ctsValid  = false;
@@ -553,7 +550,6 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, b
   if( rbEncodeDone ){ m_bFlushed = true; }
 
   /* copy output AU */
-  rcVvcAccessUnit.payloadUsedSize = 0;
   if ( !cAu.empty() )
   {
     iRet = xCopyAu( rcVvcAccessUnit, cAu  );
@@ -1084,11 +1080,7 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       annexBsizes.push_back( size );
     }
 
-    if( rcVvcAccessUnit.payloadSize < (int)sizeSum || rcVvcAccessUnit.payload == NULL )
-    {
-      return VVENC_NOT_ENOUGH_MEM;
-    }
-
+    rcVvcAccessUnit.payload.resize( sizeSum );
     uint32_t iUsedSize = 0;
     for (vvenc::AccessUnit::const_iterator it = rcAu.begin(); it != rcAu.end(); it++)
     {
@@ -1110,16 +1102,16 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
          *    unit of an access unit in decoding order, as specified by subclause
          *    7.4.1.2.3.
          */
-        ::memcpy( rcVvcAccessUnit.payload + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
+        ::memcpy( rcVvcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
         iUsedSize += 4;
       }
       else
       {
-        ::memcpy( rcVvcAccessUnit.payload + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
+        ::memcpy( rcVvcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
         iUsedSize += 3;
       }
       uint32_t nalDataSize = uint32_t(nalu.m_nalUnitData.str().size()) ;
-      ::memcpy( rcVvcAccessUnit.payload + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
+      ::memcpy( rcVvcAccessUnit.payload.data() + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
       iUsedSize += nalDataSize;
 
       if( nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
@@ -1138,7 +1130,6 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       return VVENC_NOT_ENOUGH_MEM;
     }
 
-    rcVvcAccessUnit.payloadUsedSize = iUsedSize;
     rcVvcAccessUnit.annexBsizeVec   = annexBsizes;
     rcVvcAccessUnit.ctsValid        = rcAu.ctsValid;
     rcVvcAccessUnit.dtsValid        = rcAu.dtsValid;

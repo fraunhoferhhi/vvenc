@@ -403,8 +403,6 @@ int callingOrderRegular()
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
-
   vvenc::YuvPicture cYuvPicture;
   if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
@@ -434,8 +432,6 @@ int callingOrderRegularInitPass()
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
-
   vvenc::YuvPicture cYuvPicture;
 
   if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
@@ -473,8 +469,6 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
-
   vvenc::YuvPicture cYuvPicture;
   if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
@@ -540,8 +534,6 @@ int inputBufTest( vvenc::YuvPicture& cYuvPicture )
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
-
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
@@ -692,8 +684,6 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
 int outputBufNull()
 {
   vvenc::VvcAccessUnit cAU;
-  cAU.payload = NULL;
-
   if( 0 != outputBufSizeTest( cAU, 1 ))
   {
     return -1;
@@ -704,9 +694,6 @@ int outputBufNull()
 int outputBufSizeZero()
 {
   vvenc::VvcAccessUnit cAU;
-  cAU.payload = new unsigned char [20000];
-  cAU.payloadSize = 0;
-
   if( 0 != outputBufSizeTest( cAU, 1 ))
   {
     return -1;
@@ -717,9 +704,6 @@ int outputBufSizeZero()
 int outputBufSizeToSmall()
 {
   vvenc::VvcAccessUnit cAU;
-  cAU.payloadSize = 10;
-  cAU.payload = new unsigned char [ cAU.payloadSize ];
-
   if( 0 != outputBufSizeTest( cAU, 17 ))
   {
     return -1;

@@ -107,7 +107,7 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 }
 
 
-#define USE_FFPARAMS 1
+#define USE_FFPARAMS 0
 
 #if USE_FFPARAMS
 bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
@@ -356,7 +356,7 @@ int main( int argc, char* argv[] )
   if( !cOutputfile.empty() )
   {
     cOutBitstream.open( cOutputfile.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-    if( 0 != cOutBitstream.is_open() )
+    if( !cOutBitstream.is_open() )
     {
       std::cout << cAppname  << " [error]: failed to open output file " << cOutputfile << std::endl;
       return -1;
@@ -365,8 +365,8 @@ int main( int argc, char* argv[] )
 
   // --- allocate memory for output packets
   vvenc::VvcAccessUnit cAccessUnit;
-  cAccessUnit.payloadSize = cVVEncParameter.width * cVVEncParameter.height;
-  cAccessUnit.payload     = new unsigned char [ cAccessUnit.payloadSize ];
+//  cAccessUnit.payloadSize = cVVEncParameter.width * cVVEncParameter.height;
+//  cAccessUnit.payload     = new unsigned char [ cAccessUnit.payloadSize ];
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun;
@@ -461,12 +461,12 @@ int main( int argc, char* argv[] )
         return iRet;
       }
 
-      if( 0 != cAccessUnit.payloadUsedSize  )
+      if( cAccessUnit.payload.empty()  )
       {
         if( cOutBitstream.is_open() )
         {
           // write output
-          cOutBitstream.write( (const char*)cAccessUnit.payload, cAccessUnit.payloadUsedSize );
+          cOutBitstream.write( (const char*)cAccessUnit.payload.data(), cAccessUnit.payload.size() );
         }
         uiFrames++;
       }
@@ -484,7 +484,6 @@ int main( int argc, char* argv[] )
   cTPEndRun = std::chrono::steady_clock::now();
   double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEndRun)-(cTPStartRun)).count() / 1000;
 
-  delete[] cAccessUnit.payload;
   delete[] pucDeletePicBuffer;
 
   if( cOutBitstream.is_open() )
