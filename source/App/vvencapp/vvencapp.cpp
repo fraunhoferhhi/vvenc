@@ -424,23 +424,8 @@ int main( int argc, char* argv[] )
 
     if( iFrameSkip )
     {
-      while( !bEof )
-      {
-        if( !bEof )
-        {
-          iRet = cYuvFileReader.readPicture( cYuvPicture );
-          if( iRet )
-          {
-            if( cVVEncParameter.msgLevel > vvenc::ERROR && cVVEncParameter.msgLevel < vvenc::NOTICE )
-            {
-              std::cout << "EOF reached" << std::endl;
-            }
-            bEof = true;
-          }
-        }
-        iSeqNumber++;
-        if( iSeqNumber >= ( iFrameSkip ) ){ break; }
-      }
+      cYuvFileReader.skipFrames(iFrameSkip);
+      iSeqNumber=iFrameSkip;
     }
 
     while( !bEof || !bEncodeDone )
