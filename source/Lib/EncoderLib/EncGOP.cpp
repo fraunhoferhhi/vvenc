@@ -379,6 +379,7 @@ void EncPicturePP::finish()
 static bool compressPic( int taskIdx, EncPicturePP* picEncoder )
 {
   picEncoder->encodePicture( *picEncoder->m_pic, picEncoder->m_encGOP->getSharedApsMap(), *picEncoder->m_encGOP );
+  picEncoder->finalizePicture( *picEncoder->m_pic );
   picEncoder->finish();
   return true;
 }

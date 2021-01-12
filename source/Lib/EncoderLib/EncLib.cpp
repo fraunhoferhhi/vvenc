@@ -244,10 +244,10 @@ void EncLib::initPass( int pass )
   xInitHrdParameters( sps0 );
 
   // thread pool
-  if( m_cEncCfg.m_numWppThreads > 0 )
+  if( m_cEncCfg.m_numWppThreads > 0 || m_cEncCfg.m_numFppThreads > 0 )
   {
-    const int maxCntEnc = ( m_cEncCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, m_cEncCfg.m_numWppThreads) : 1;
-    m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
+    const int maxThreads = ( m_cEncCfg.m_numWppThreads > 0 ) ? m_cEncCfg.m_numWppThreads * ( std::max( m_cEncCfg.m_numFppThreads, 1 ) ) + m_cEncCfg.m_numFppThreads: m_cEncCfg.m_numFppThreads;
+    m_threadPool = new NoMallocThreadPool( maxThreads, "EncSliceThreadPool" );
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
