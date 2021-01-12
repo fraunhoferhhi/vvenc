@@ -747,7 +747,7 @@ bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) c
   while ( iterPic != rcListPic.end())
   {
     const Picture* pic = *(iterPic++);
-    if( pic->isReferenced && pic->poc != poc)
+    if( pic->isInitDone && pic->isReferenced && pic->poc != poc)
     {
       if( pic->TLayer >= TLayer)
       {

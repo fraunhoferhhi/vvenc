@@ -1941,9 +1941,10 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     }
     else
     {
-      std::string cInfo = print("POC %4d TId: %1d ( %c-SLICE, QP %d ) %10d bits",
+      std::string cInfo = print("POC %4d TId: %1d ( %s, %c-SLICE, QP %d ) %10d bits",
           slice->poc,
           slice->TLayer,
+          nalUnitTypeToString( slice->nalUnitType ),
           c,
           slice->sliceQp,
           uibits );
