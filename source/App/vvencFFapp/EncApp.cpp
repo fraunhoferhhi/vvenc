@@ -197,28 +197,19 @@ void EncApp::encode()
       }
 
       // encode picture
-      int iRet = 0;
+      YUVBuffer* inputPacket = nullptr;
       if( !inputDone )
       {
-        iRet = m_cVVEnc.encode( &yuvInBuf, au );
-        if( 0 != iRet )
-        {
-          msgApp( ERROR, "encoding failed: err code %d - %s\n", iRet, m_cVVEnc.getLastError().c_str() );
-          encDone = true;
-          inputDone = true;
-        }
-      }
-      else
-      {
-        iRet = m_cVVEnc.flush( au );
-        encDone = au.payloadUsedSize == 0 ? true : false;
-        if( 0 != iRet )
-        {
-          msgApp( ERROR, "encoding failed: err code %d - %s\n", iRet, m_cVVEnc.getLastError().c_str() );
-          encDone = true;
-        }
+        inputPacket = &yuvInBuf;
       }
 
+      int iRet = m_cVVEnc.encode( inputPacket, au, encDone );
+      if( 0 != iRet )
+      {
+        msgApp( ERROR, "encoding failed: err code %d - %s\n", iRet, m_cVVEnc.getLastError().c_str() );
+        encDone = true;
+        inputDone = true;
+      }
 
       // write out encoded access units
       if( au.payloadUsedSize > 0 )

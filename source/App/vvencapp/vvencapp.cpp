@@ -417,75 +417,105 @@ int main( int argc, char* argv[] )
     const int64_t iMaxFrames  = cVVEncParameter.maxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
+    bool          bEncodeDone = false;
+    vvenc::YuvPicture* pcInputPicture = &cYuvPicture;
+
     uiFrames    = 0;
 
-    while( !bEof )
+    if( iFrameSkip )
     {
-      iRet = cYuvFileReader.readPicture( cYuvPicture );
-      if( iRet )
+      while( !bEof )
       {
-        if( cVVEncParameter.msgLevel > vvenc::ERROR && cVVEncParameter.msgLevel < vvenc::NOTICE )
+        if( !bEof )
         {
-          std::cout << "EOF reached" << std::endl;
-        }
-        bEof = true;
-      }
-
-      if( !bEof && iSeqNumber >= iFrameSkip )
-      {
-        // set sequence number and cts
-        cYuvPicture.sequenceNumber = iSeqNumber;
-        cYuvPicture.cts            = iSeqNumber * cVVEncParameter.ticksPerSecond * cVVEncParameter.temporalScale / cVVEncParameter.temporalRate;
-        cYuvPicture.ctsValid        = true;
-
-        //std::cout << "process picture " << cYuvPicture.m_uiSequenceNumber << " cts " << cYuvPicture.m_uiCts << std::endl;
-        // call encode
-        iRet = cVVEnc.encode( &cYuvPicture, cAccessUnit );
-        if( 0 != iRet )
-        {
-          printVVEncErrorMsg( cAppname, "encoding failed", iRet, cVVEnc.getLastError() );
-          return iRet;
-        }
-
-        if( 0 != cAccessUnit.payloadUsedSize  )
-        {
-          if( cBinFileWriter.isOpen())
+          iRet = cYuvFileReader.readPicture( cYuvPicture );
+          if( iRet )
           {
-            // write output
-            cBinFileWriter.writeAU( cAccessUnit );
+            if( cVVEncParameter.msgLevel > vvenc::ERROR && cVVEncParameter.msgLevel < vvenc::NOTICE )
+            {
+              std::cout << "EOF reached" << std::endl;
+            }
+            bEof = true;
           }
-
-          uiFrames++;
         }
+        iSeqNumber++;
+        if( iSeqNumber >= ( iFrameSkip ) ){ break; }
       }
-      iSeqNumber++;
-
-      if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) ){ break; }
     }
 
-    // flush the encoder
-    while( true )
+    while( !bEof || !bEncodeDone )
     {
-      iRet = cVVEnc.flush( cAccessUnit );
+      if( !bEof )
+      {
+        iRet = cYuvFileReader.readPicture( cYuvPicture );
+        if( iRet )
+        {
+          if( cVVEncParameter.msgLevel > vvenc::ERROR && cVVEncParameter.msgLevel < vvenc::NOTICE )
+          {
+            std::cout << "EOF reached" << std::endl;
+          }
+          bEof = true;
+          pcInputPicture = nullptr;
+        }
+        else
+        {
+          // set sequence number and cts
+          cYuvPicture.sequenceNumber = iSeqNumber;
+          cYuvPicture.cts            = iSeqNumber * cVVEncParameter.ticksPerSecond * cVVEncParameter.temporalScale / cVVEncParameter.temporalRate;
+          cYuvPicture.ctsValid        = true;
+          iSeqNumber++;
+          //std::cout << "process picture " << cYuvPicture.m_uiSequenceNumber << " cts " << cYuvPicture.m_uiCts << std::endl;
+        }
+      }
+
+      // call encode
+      iRet = cVVEnc.encode( pcInputPicture, cAccessUnit, bEncodeDone );
       if( 0 != iRet )
       {
-        printVVEncErrorMsg( cAppname, "flush encoder failed", iRet, cVVEnc.getLastError() );
+        printVVEncErrorMsg( cAppname, "encoding failed", iRet, cVVEnc.getLastError() );
         return iRet;
       }
 
-      if( 0 == cAccessUnit.payloadUsedSize  )
+      if( 0 != cAccessUnit.payloadUsedSize  )
       {
-        break;
+        if( cBinFileWriter.isOpen())
+        {
+          // write output
+          cBinFileWriter.writeAU( cAccessUnit );
+        }
+        uiFrames++;
       }
 
-      uiFrames++;
-
-      if( cBinFileWriter.isOpen() )
+      if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) )
       {
-        // write output
-        cBinFileWriter.writeAU( cAccessUnit );
+        bEof = true;
+        pcInputPicture = nullptr;
       }
     }
+
+//    // flush the encoder
+//    while( !bEncodeDone )
+//    {
+//      iRet = cVVEnc.flush( cAccessUnit );
+//      if( 0 != iRet )
+//      {
+//        printVVEncErrorMsg( cAppname, "flush encoder failed", iRet, cVVEnc.getLastError() );
+//        return iRet;
+//      }
+
+//      if( 0 == cAccessUnit.payloadUsedSize  )
+//      {
+//        break;
+//      }
+
+//      uiFrames++;
+
+//      if( cBinFileWriter.isOpen() )
+//      {
+//        // write output
+//        cBinFileWriter.writeAU( cAccessUnit );
+//      }
+//    }
 
     cYuvFileReader.close();
   }

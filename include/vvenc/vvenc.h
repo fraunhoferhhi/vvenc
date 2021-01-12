@@ -298,28 +298,15 @@ public:
     If the input parameter pcInputPicture is NULL, the encoder just returns a pending bitstream chunk if available.
     If the call returns VVENC_NOT_ENOUGH_MEM, the BufSize attribute in AccessUnit struct indicates that the buffer is to small to retrieve the compressed data waiting for delivery.
     In this case the UsedSize attribute returns the minimum buffersize required to fetch the pending chunk. After allocating sufficient memory the encoder can retry the last call with the parameter pcInputPicture set to NULL to prevent encoding the last picture twice.
-    \param[in]  pcInputPicture pointer to InputPicture structure containing uncompressed picture data and meta information, if pcInputPicture is NULL the encoder only checks for pending output data and returns a chunk if available.
+    \param[in]  pcYuvPicture pointer to InputPicture structure containing uncompressed picture data and meta information, to flush the encoder pcYuvPicture must be NULL.
     \param[out] rcAccessUnit reference to AccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
+    \param[out] rbEncodeDone reference to flag that indicates that the encoder completed the last frame after flushing.
     \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
     \pre        The encoder has to be initialized successfully.
   */
-   int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit);
+   int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone);
 
-   int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit);
-
-
-   /**
-     This method flushes the encoder. Use this method if a specific number of frames has to be encoded.
-     This call is used to get outstanding output data after all input frames have been passed over into the encoder using the encode call.
-     Using the flush method the encoder is signaled that there are no further input pictures to encode.
-     The caller should repeat the flush call until all pending output packets has been delivered to the caller, which is when the UsedSize attribute in the AccessUnit struct gets zero.
-     If the call returns VVENC_NOT_ENOUGH_MEM, the BufSize attribute in AccessUnit struct indicates that the buffer is to small to retrieve the compressed data waiting for delivery.
-     In this case the UsedSize attribute returns the minimum buffersize required to fetch the pending chunk. After allocating sufficient memory the encoder can retry fetching the outstanding chunks.
-     \param[out] rcAccessUnit reference to AccessUnit
-     \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
-     \pre        The encoder has to be initialized.
-   */
-   int flush( VvcAccessUnit& rcVvcAccessUnit );
+   int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone);
 
    /**
      This method fetches the current encoder configuration.

@@ -82,10 +82,8 @@ public:
 
   bool isInitialized() const;
 
-  int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit);
-  int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit);
-
-  int flush( VvcAccessUnit& rcVvcAccessUnit );
+  int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit, bool& rEncodeDone );
+  int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, bool& rEncodeDone);
 
   int getConfig( VVEncParameter& rcVVEncParameter ) const;
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );

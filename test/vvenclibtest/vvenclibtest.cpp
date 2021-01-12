@@ -385,7 +385,8 @@ int callingOrderNoInit()
   vvenc::VVEnc cVVEnc;
   vvenc::VvcAccessUnit cAU;
   vvenc::YuvPicture cYuvPicture;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
     return -1;
   }
@@ -410,7 +411,9 @@ int callingOrderRegular()
     return -1;
   }
   fillInputPic( cYuvPicture );
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
     return -1;
   }
@@ -444,7 +447,8 @@ int callingOrderRegularInitPass()
   {
     return -1;
   }
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
     return -1;
   }
@@ -481,12 +485,15 @@ int callingOrderRegularInit2Pass()
   {
     return -1;
   }
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
     return -1;
   }
 
-  if( 0 != cVVEnc.flush( cAU))
+  vvenc::YuvPicture* flushPicture = nullptr;
+  if( 0 != cVVEnc.encode( flushPicture, cAU, encodeDone ))
   {
     return -1;
   }
@@ -496,7 +503,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
     return -1;
   }
@@ -535,7 +542,8 @@ int inputBufTest( vvenc::YuvPicture& cYuvPicture )
   vvenc::VvcAccessUnit cAU;
   cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
 
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
     return -1;
   }
@@ -666,9 +674,10 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
     return -1;
   }
   fillInputPic( cYuvPicture );
+  bool encodeDone = false;
   for(int i = 0; i < numPics; i++ )
   {
-    if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
+    if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
     {
       return -1;
     }
