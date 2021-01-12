@@ -493,30 +493,6 @@ int main( int argc, char* argv[] )
       }
     }
 
-//    // flush the encoder
-//    while( !bEncodeDone )
-//    {
-//      iRet = cVVEnc.flush( cAccessUnit );
-//      if( 0 != iRet )
-//      {
-//        printVVEncErrorMsg( cAppname, "flush encoder failed", iRet, cVVEnc.getLastError() );
-//        return iRet;
-//      }
-
-//      if( 0 == cAccessUnit.payloadUsedSize  )
-//      {
-//        break;
-//      }
-
-//      uiFrames++;
-
-//      if( cBinFileWriter.isOpen() )
-//      {
-//        // write output
-//        cBinFileWriter.writeAU( cAccessUnit );
-//      }
-//    }
-
     cYuvFileReader.close();
   }
 
