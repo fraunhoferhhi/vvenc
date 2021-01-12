@@ -172,17 +172,17 @@ public:
 
   void clearAu()
   {
-    m_uiCts          = 0;
-    m_uiDts          = 0;
-    m_uiPOC          = 0;
-    m_eSliceType     = NUMBER_OF_SLICE_TYPES;
-    m_iTemporalLayer = 0;
-    m_iStatus        = 0;
-    m_bCtsValid      = false;
-    m_bDtsValid      = false;
-    m_bRAP           = false;
-    m_bRefPic        = false;
-    m_cInfo.clear();
+    cts          = 0;
+    dts          = 0;
+    poc          = 0;
+    sliceType     = NUMBER_OF_SLICE_TYPES;
+    temporalLayer = 0;
+    status        = 0;
+    ctsValid      = false;
+    dtsValid      = false;
+    rap           = false;
+    refPic        = false;
+    InfoString.clear();
 
     for (AccessUnit::iterator it = this->begin(); it != this->end(); it++)
     {
@@ -191,17 +191,17 @@ public:
     std::list<NALUnitEBSP*>::clear();
   }
 
-  uint64_t        m_uiCts;                                   ///< composition time stamp
-  uint64_t        m_uiDts;                                   ///< decoding time stamp
-  uint64_t        m_uiPOC;                                   ///< picture order count
-  SliceType       m_eSliceType;                              ///< slice type (I/P/B) */
-  int             m_iTemporalLayer;                          ///< temporal layer
-  int             m_iStatus;
-  bool            m_bCtsValid;                               ///< composition time stamp valid flag
-  bool            m_bDtsValid;                               ///< decoding time stamp valid flag
-  bool            m_bRAP;                                    ///< random access point flag
-  bool            m_bRefPic;                                 ///< reference picture
-  std::string     m_cInfo;
+  uint64_t        cts;                                   ///< composition time stamp
+  uint64_t        dts;                                   ///< decoding time stamp
+  uint64_t        poc;                                   ///< picture order count
+  SliceType       sliceType;                              ///< slice type (I/P/B) */
+  int             temporalLayer;                          ///< temporal layer
+  int             status;
+  bool            ctsValid;                               ///< composition time stamp valid flag
+  bool            dtsValid;                               ///< decoding time stamp valid flag
+  bool            rap;                                    ///< random access point flag
+  bool            refPic;                                 ///< reference picture
+  std::string     InfoString;
 };
 
 

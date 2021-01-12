@@ -100,15 +100,15 @@ public:
   */
   int writeAU( const vvenc::VvcAccessUnit& rcAccessUnit )
   {
-    if( rcAccessUnit.m_iUsedSize == 0 )
+    if( rcAccessUnit.payloadUsedSize == 0 )
     {
       return 0;
     }
 
     size_t lBefore = m_cOS.tellp();
-    m_cOS.write( (const char*)rcAccessUnit.m_pucBuffer, rcAccessUnit.m_iUsedSize );
+    m_cOS.write( (const char*)rcAccessUnit.payload, rcAccessUnit.payloadUsedSize );
     // check if this read was okay
-    return (int)(lBefore + rcAccessUnit.m_iUsedSize - m_cOS.tellp());
+    return (int)(lBefore + rcAccessUnit.payloadUsedSize - m_cOS.tellp());
   }
 
   /**

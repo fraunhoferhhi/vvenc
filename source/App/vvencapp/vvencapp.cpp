@@ -173,18 +173,18 @@ int main( int argc, char* argv[] )
   cEncAppCfg.m_SourceHeight           = 1080;                    // luminance height of input picture
   cEncAppCfg.m_GOPSize           = 32;                           //  gop size (1: intra only, 16, 32: hierarchical b frames)
   cEncAppCfg.m_DecodingRefreshType = vvenc::DRT_CRA;             // intra period refresh type
-  cEncAppCfg.m_IntraPeriodSec     = 1;                           // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
-  cEncAppCfg.m_IntraPeriod        = 0;                           // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  cEncAppCfg.ntraPeriodSec     = 1;                           // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  cEncAppCfg.ntraPeriod        = 0;                           // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
   cEncAppCfg.m_verbosity         = (int)vvenc::VERBOSE;          // log level > 4 (VERBOSE) enables psnr/rate output
   cEncAppCfg.m_FrameRate         = 60;                           // temporal rate (fps)
   cEncAppCfg.m_TicksPerSecond   = 90000;                         // ticks per second e.g. 90000 for dts generation
   cEncAppCfg.m_framesToBeEncoded = 0;                            // max number of frames to be encoded
   cEncAppCfg.m_FrameSkip         = 0;                            // number of frames to skip before start encoding
   cEncAppCfg.m_numWppThreads     = 0;                            // number of worker threads (should not exceed the number of physical cpu's)
-  //cEncAppCfg.m_iQuality          = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  //cEncAppCfg.Quality          = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
   cEncAppCfg.m_usePerceptQPA     = 2;                            // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cEncAppCfg.m_inputBitDepth[0]    = 8;                          // input bitdepth
-  cEncAppCfg.m_internalBitDepth[0] = 10;                         // internal bitdepth
+  cEncAppCfg.nputBitDepth[0]    = 8;                          // input bitdepth
+  cEncAppCfg.nternalBitDepth[0] = 10;                         // internal bitdepth
   cEncAppCfg.m_profile          = vvenc::Profile::Name::MAIN_10; // profile: use main_10 or main_10_still_picture
   cEncAppCfg.m_level            = vvenc::Level::Name::LEVEL4_1;  // level
   cEncAppCfg.m_levelTier        = vvenc::Level::Tier::MAIN;      // tier
@@ -202,7 +202,7 @@ int main( int argc, char* argv[] )
     return 1;
   }
 
-  if( cEncAppCfg.m_inputFileName.empty() )
+  if( cEncAppCfg.nputFileName.empty() )
   {
     std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
     return -1;
@@ -214,7 +214,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  cInputFile  = cEncAppCfg.m_inputFileName;
+  cInputFile  = cEncAppCfg.nputFileName;
   cOutputfile = cEncAppCfg.m_bitstreamFileName;
 
   if( cEncAppCfg.m_verbosity > vvenc::SILENT && cEncAppCfg.m_verbosity < vvenc::NOTICE )
@@ -236,34 +236,34 @@ int main( int argc, char* argv[] )
     cEncAppCfg.m_ensureWppBitEqual = 1;
   }
 
-  cVVEncParameter.m_eMsgLevel = (vvenc::MsgLevel)cEncAppCfg.m_verbosity;
-  cVVEncParameter.m_iWidth    = cEncAppCfg.m_SourceWidth;
-  cVVEncParameter.m_iHeight    = cEncAppCfg.m_SourceHeight;
+  cVVEncParameter.msgLevel = (vvenc::MsgLevel)cEncAppCfg.m_verbosity;
+  cVVEncParameter.Width    = cEncAppCfg.m_SourceWidth;
+  cVVEncParameter.Height    = cEncAppCfg.m_SourceHeight;
 
 #else
   // set desired encoding options
-  cVVEncParameter.m_iQp               = 32;                         // quantization parameter 0-51
-  cVVEncParameter.m_iWidth            = 1920;                       // luminance width of input picture
-  cVVEncParameter.m_iHeight           = 1080;                       // luminance height of input picture
-  cVVEncParameter.m_iGopSize          = 32;                         //  gop size (1: intra only, 16, 32: hierarchical b frames)
-  cVVEncParameter.m_eDecodingRefreshType = vvenc::DRT_CRA;          // intra period refresh type
-  cVVEncParameter.m_iIDRPeriodSec     = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
-  cVVEncParameter.m_iIDRPeriod        = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_eMsgLevel         = vvenc::VERBOSE;             // log level > 4 (VERBOSE) enables psnr/rate output
-  cVVEncParameter.m_iTemporalRate     = 60;                         // temporal rate (fps)
-  cVVEncParameter.m_iTemporalScale    = 1;                          // temporal scale (fps)
-  cVVEncParameter.m_iTicksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.m_iMaxFrames        = 0;                          // max number of frames to be encoded
-  cVVEncParameter.m_iFrameSkip        = 0;                          // number of frames to skip before start encoding
-  cVVEncParameter.m_iThreadCount      = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
-  cVVEncParameter.m_iQuality          = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
-  cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cVVEncParameter.m_iInputBitDepth    = 8;                          // input bitdepth
-  cVVEncParameter.m_iInternalBitDepth = 10;                         // internal bitdepth
-  cVVEncParameter.m_eProfile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.m_eLevel            = vvenc::Level::LEVEL5_1;     // level
-  cVVEncParameter.m_eTier             = vvenc::Tier::TIER_MAIN;     // tier
-  cVVEncParameter.m_eSegMode          = vvenc::SEG_OFF;             // segment mode
+  cVVEncParameter.qp               = 32;                         // quantization parameter 0-51
+  cVVEncParameter.width            = 1920;                       // luminance width of input picture
+  cVVEncParameter.height           = 1080;                       // luminance height of input picture
+  cVVEncParameter.gopSize          = 32;                         //  gop size (1: intra only, 16, 32: hierarchical b frames)
+  cVVEncParameter.decodingRefreshType = vvenc::DRT_CRA;          // intra period refresh type
+  cVVEncParameter.idrPeriodSec     = 1;                          // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  cVVEncParameter.idrPeriod        = 0;                          // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
+  cVVEncParameter.msgLevel         = vvenc::VERBOSE;             // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.temporalRate     = 60;                         // temporal rate (fps)
+  cVVEncParameter.temporalScale    = 1;                          // temporal scale (fps)
+  cVVEncParameter.ticksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
+  cVVEncParameter.maxFrames        = 0;                          // max number of frames to be encoded
+  cVVEncParameter.frameSkip        = 0;                          // number of frames to skip before start encoding
+  cVVEncParameter.threadCount      = -1;                         // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.quality          = 2;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  cVVEncParameter.perceptualQPA    = 2;                          // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  cVVEncParameter.inputBitDepth    = 8;                          // input bitdepth
+  cVVEncParameter.internalBitDepth = 10;                         // internal bitdepth
+  cVVEncParameter.profile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.level            = vvenc::Level::LEVEL4_1;     // level
+  cVVEncParameter.tier             = vvenc::Tier::TIER_MAIN;     // tier
+  cVVEncParameter.segmentMode      = vvenc::SEG_OFF;             // segment mode
 
   std::string cPreset  = "medium";
   std::string cProfile = "main10";
@@ -298,6 +298,8 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
+  g_verbosity = cVVEncParameter.msgLevel;
+
   if( cInputFile.empty() )
   {
     std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
@@ -310,21 +312,21 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  if( cVVEncParameter.m_eMsgLevel > vvenc::SILENT && cVVEncParameter.m_eMsgLevel < vvenc::NOTICE )
+  if( cVVEncParameter.msgLevel > vvenc::SILENT && cVVEncParameter.msgLevel < vvenc::NOTICE )
   {
     std::cout << "-------------------" << std::endl;
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( cVVEncParameter.m_iThreadCount < 0 )
+  if( cVVEncParameter.threadCount < 0 )
   {
-    if( cVVEncParameter.m_iWidth > 1920 || cVVEncParameter.m_iHeight > 1080)
+    if( cVVEncParameter.width > 1920 || cVVEncParameter.height > 1080)
     {
-      cVVEncParameter.m_iThreadCount = 6;
+      cVVEncParameter.threadCount = 6;
     }
     else
     {
-      cVVEncParameter.m_iThreadCount = 4;
+      cVVEncParameter.threadCount = 4;
     }
   }
 #endif
@@ -343,9 +345,9 @@ int main( int argc, char* argv[] )
     return iRet;
   }
 
-  cVVEnc.printConfig();
+  //cVVEnc.printConfig();
 
-  if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
+  if( cVVEncParameter.msgLevel > vvenc::WARNING )
   {
     std::cout << "VVEnc info: " << cVVEnc.getEncoderInfo() << std::endl;
   }
@@ -363,24 +365,24 @@ int main( int argc, char* argv[] )
 
   // --- allocate memory for output packets
   vvenc::VvcAccessUnit cAccessUnit;
-  cAccessUnit.m_iBufSize  = cVVEncParameter.m_iWidth * cVVEncParameter.m_iHeight;
-  cAccessUnit.m_pucBuffer = new unsigned char [ cAccessUnit.m_iBufSize ];
+  cAccessUnit.payloadSize = cVVEncParameter.width * cVVEncParameter.height;
+  cAccessUnit.payload     = new unsigned char [ cAccessUnit.payloadSize ];
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun;
   std::chrono::steady_clock::time_point cTPEndRun;
 
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
+  if( cVVEncParameter.msgLevel > vvenc::WARNING )
   {
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
-  vvenc::InputPicture cInputPicture;
+  vvenc::YuvPicture cYuvPicture;
   unsigned char* pucDeletePicBuffer = nullptr;
 
   unsigned int uiFrames = 0;
-  for( int pass = 0; pass < cVVEncParameter.m_iNumPasses; pass++ )
+  for( int pass = 0; pass < cVVEncParameter.numPasses; pass++ )
   {
     // initialize the encoder pass
     iRet = cVVEnc.initPass( pass );
@@ -392,37 +394,37 @@ int main( int argc, char* argv[] )
 
     // open the input file
     vvcutilities::YuvFileReader cYuvFileReader;
-    if( 0 != cYuvFileReader.open( cInputFile.c_str(), cVVEncParameter.m_iInputBitDepth, cVVEncParameter.m_iInternalBitDepth, cVVEncParameter.m_iWidth, cVVEncParameter.m_iHeight ) )
+    if( 0 != cYuvFileReader.open( cInputFile.c_str(), cVVEncParameter.inputBitDepth, cVVEncParameter.internalBitDepth, cVVEncParameter.width, cVVEncParameter.height ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
       return -1;
     }
 
     // allocate input picture buffer
-    if( cInputPicture.m_cPicBuffer.m_iWidth == 0 )
+    if( cYuvPicture.width == 0 )
     {
-      iRet = cYuvFileReader.allocBuffer( cInputPicture.m_cPicBuffer );
+      iRet = cYuvFileReader.allocBuffer( cYuvPicture );
       if( 0 != iRet )
       {
         std::cout << cAppname  << " [error]: failed to allocate picture buffer " << std::endl;
         return iRet;
       }
-      pucDeletePicBuffer = cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer;
-      cInputPicture.m_cPicBuffer.m_pucDeletePicBuffer = NULL;
+      pucDeletePicBuffer = cYuvPicture.deletePicBuffer;
+      cYuvPicture.deletePicBuffer = NULL;
     }
 
-    const int64_t iFrameSkip  = std::max<int64_t>( cVVEncParameter.m_iFrameSkip - cVVEnc.getNumLeadFrames(), 0 );
-    const int64_t iMaxFrames  = cVVEncParameter.m_iMaxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
+    const int64_t iFrameSkip  = std::max<int64_t>( cVVEncParameter.frameSkip - cVVEnc.getNumLeadFrames(), 0 );
+    const int64_t iMaxFrames  = cVVEncParameter.maxFrames + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     uiFrames    = 0;
 
     while( !bEof )
     {
-      iRet = cYuvFileReader.readPicture( cInputPicture.m_cPicBuffer );
+      iRet = cYuvFileReader.readPicture( cYuvPicture );
       if( iRet )
       {
-        if( cVVEncParameter.m_eMsgLevel > vvenc::ERROR && cVVEncParameter.m_eMsgLevel < vvenc::NOTICE )
+        if( cVVEncParameter.msgLevel > vvenc::ERROR && cVVEncParameter.msgLevel < vvenc::NOTICE )
         {
           std::cout << "EOF reached" << std::endl;
         }
@@ -432,20 +434,20 @@ int main( int argc, char* argv[] )
       if( !bEof && iSeqNumber >= iFrameSkip )
       {
         // set sequence number and cts
-        cInputPicture.m_cPicBuffer.m_uiSequenceNumber = iSeqNumber;
-        cInputPicture.m_cPicBuffer.m_uiCts            = iSeqNumber * cVVEncParameter.m_iTicksPerSecond * cVVEncParameter.m_iTemporalScale / cVVEncParameter.m_iTemporalRate;
-        cInputPicture.m_cPicBuffer.m_bCtsValid        = true;
+        cYuvPicture.sequenceNumber = iSeqNumber;
+        cYuvPicture.cts            = iSeqNumber * cVVEncParameter.ticksPerSecond * cVVEncParameter.temporalScale / cVVEncParameter.temporalRate;
+        cYuvPicture.ctsValid        = true;
 
-        //std::cout << "process picture " << cInputPicture.m_cPicBuffer.m_uiSequenceNumber << " cts " << cInputPicture.m_cPicBuffer.m_uiCts << std::endl;
+        //std::cout << "process picture " << cYuvPicture.m_uiSequenceNumber << " cts " << cYuvPicture.m_uiCts << std::endl;
         // call encode
-        iRet = cVVEnc.encode( &cInputPicture, cAccessUnit );
+        iRet = cVVEnc.encode( &cYuvPicture, cAccessUnit );
         if( 0 != iRet )
         {
           printVVEncErrorMsg( cAppname, "encoding failed", iRet, cVVEnc.getLastError() );
           return iRet;
         }
 
-        if( 0 != cAccessUnit.m_iUsedSize  )
+        if( 0 != cAccessUnit.payloadUsedSize  )
         {
           if( cBinFileWriter.isOpen())
           {
@@ -471,7 +473,7 @@ int main( int argc, char* argv[] )
         return iRet;
       }
 
-      if( 0 == cAccessUnit.m_iUsedSize  )
+      if( 0 == cAccessUnit.payloadUsedSize  )
       {
         break;
       }
@@ -491,13 +493,15 @@ int main( int argc, char* argv[] )
   cTPEndRun = std::chrono::steady_clock::now();
   double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEndRun)-(cTPStartRun)).count() / 1000;
 
-  delete[] cAccessUnit.m_pucBuffer;
+  delete[] cAccessUnit.payload;
   delete[] pucDeletePicBuffer;
 
   if( cBinFileWriter.isOpen())
   {
     cBinFileWriter.close();
   }
+
+  cVVEnc.printSummary();
 
   // un-initialize the encoder
   iRet = cVVEnc.uninit();
@@ -512,12 +516,12 @@ int main( int argc, char* argv[] )
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && cVVEncParameter.m_eMsgLevel > vvenc::SILENT )
+  if( uiFrames && cVVEncParameter.msgLevel > vvenc::SILENT )
   {
     std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     double dFps = (double)uiFrames / dTimeSec;
 
-    if( cVVEncParameter.m_eMsgLevel > vvenc::WARNING )
+    if( cVVEncParameter.msgLevel > vvenc::WARNING )
     {
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;
     }

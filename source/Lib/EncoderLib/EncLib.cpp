@@ -454,11 +454,11 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
         iDiffFrames = ( m_numPicsCoded - iNext );
       }
 
-      au.m_uiCts     = encList[0]->cts;
-      au.m_bCtsValid = encList[0]->ctsValid;
+      au.cts     = encList[0]->cts;
+      au.ctsValid = encList[0]->ctsValid;
 
-      au.m_uiDts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
-      au.m_bDtsValid = true;
+      au.dts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.cts;
+      au.dtsValid = true;
     }
 
     // encode picture with current poc

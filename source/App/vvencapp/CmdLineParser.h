@@ -81,9 +81,9 @@ public:
           " File input Options\n"
           "\n"
           "\t [--input,-i <str>          ] : raw yuv input file\n"
-          "\t [--size,-s  <intxint>      ] : specify input resolution (width x height) ["<< rcParams.m_iWidth << "x" << rcParams.m_iHeight <<"]\n"
+          "\t [--size,-s  <intxint>      ] : specify input resolution (width x height) ["<< rcParams.width << "x" << rcParams.height <<"]\n"
           "\t [--format,-c  <str>        ] : set input format (yuv420, yuv420_10) [yuv420]\n"
-          "\t [--framerate,-r  <int>     ] : temporal rate (framerate) e.g. 25,29,30,50,59,60 ["<< rcParams.m_iTemporalRate/rcParams.m_iTemporalScale <<"]\n"
+          "\t [--framerate,-r  <int>     ] : temporal rate (framerate) e.g. 25,29,30,50,59,60 ["<< rcParams.temporalRate/rcParams.temporalScale <<"]\n"
           "\t [--tickspersec   <int>     ] : ticks per second e.g. 90000 for dts generation [1..27000000]\n";
       if ( bFullHelp )
       {
@@ -126,21 +126,21 @@ public:
           "\t                                " << vvenc::VVEnc::getPresetParamsAsStr(4) << "\n\n";
       }
       std::cout <<
-          "\t [--bitrate,-b  <int>       ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.m_iTargetBitRate << "]\n"
-          "\t [--passes,-p   <int>       ] : number of rate control passes (1,2) default: [" << rcParams.m_iNumPasses << "]\n"
-          "\t [--qp,-q <int>             ] : quantization parameter, QP (0-51) default: [" << rcParams.m_iQp << "]\n"
+          "\t [--bitrate,-b  <int>       ] : bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second) default: [" << rcParams.targetBitRate << "]\n"
+          "\t [--passes,-p   <int>       ] : number of rate control passes (1,2) default: [" << rcParams.numPasses << "]\n"
+          "\t [--qp,-q <int>             ] : quantization parameter, QP (0-51) default: [" << rcParams.qp << "]\n"
           "\t [--qpa   <int>             ] : perceptual QP adaptation to improve visual coding quality (0: off, on for 1: SDR (WPSNR), 2: SDR (XPSNR),\n"
-          "\t                                3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.m_iPerceptualQPA << "]\n"
-          "\t [--threads,-t  <int>       ] : number of threads (1-n) default: [" << rcParams.m_iThreadCount << ": size <= HD: 4, UHD: 6]\n"
+          "\t                                3: HDR (WPSNR), 4: HDR (XPSNR), 5: HDR (mean luma based)) default: [" << rcParams.perceptualQPA << "]\n"
+          "\t [--threads,-t  <int>       ] : number of threads (1-n) default: [" << rcParams.threadCount << ": size <= HD: 4, UHD: 6]\n"
           "\n"
-          "\t [--gopsize,-g  <int>       ] : GOP size of temporal structure (16,32) [" <<  rcParams.m_iGopSize << "]\n"
+          "\t [--gopsize,-g  <int>       ] : GOP size of temporal structure (16,32) [" <<  rcParams.gopSize << "]\n"
           "\t [--refreshtype,-rt <str>   ] : intra refresh type (idr,cra)\n"
-          "\t [--refreshsec,-rs <int>    ] : Intra period/refresh in seconds [" <<  rcParams.m_iIDRPeriodSec << "]\n"
-          "\t [--intraperiod,-ip <int>   ] : Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize) [" <<  rcParams.m_iIDRPeriod << "]\n";
+          "\t [--refreshsec,-rs <int>    ] : Intra period/refresh in seconds [" <<  rcParams.idrPeriodSec << "]\n"
+          "\t [--intraperiod,-ip <int>   ] : Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize) [" <<  rcParams.idrPeriod << "]\n";
       if ( bFullHelp )
       {
         std::cout <<
-          "\t [--internal-bitdepth <int> ] : internal bitdepth (8,10) [" <<  rcParams.m_iInternalBitDepth << "]\n";
+          "\t [--internal-bitdepth <int> ] : internal bitdepth (8,10) [" <<  rcParams.internalBitDepth << "]\n";
       }
 
       std::cout <<
@@ -151,7 +151,7 @@ public:
           "\n"
           " General Options\n"
           "\n"
-          "\t [--verbosity,-v  <int>     ] : verbosity level (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) default: [" << (int)rcParams.m_eMsgLevel << "]\n"
+          "\t [--verbosity,-v  <int>     ] : verbosity level (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) default: [" << (int)rcParams.msgLevel << "]\n"
           "\t [--help,-h                 ] : show basic help\n"
           "\t [--fullhelp                ] : show full help\n"
           "\n" ;
@@ -173,12 +173,12 @@ public:
         int iLogLevel = atoi( argv[i_arg++] );
         if( iLogLevel < 0 ) iLogLevel = 0;
         if( iLogLevel > (int)vvenc::DETAILS ) iLogLevel = (int)vvenc::DETAILS;
-        rcParams.m_eMsgLevel = (vvenc::MsgLevel)iLogLevel;
+        rcParams.msgLevel = (vvenc::MsgLevel)iLogLevel;
 
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+        if( rcParams.msgLevel > vvenc::VERBOSE )
         {
           std::string cll;
-          switch (rcParams.m_eMsgLevel)
+          switch (rcParams.msgLevel)
           {
             case vvenc::SILENT : cll = "SILENT"; break;
             case vvenc::ERROR  : cll = "ERROR"; break;
@@ -189,7 +189,7 @@ public:
             case vvenc::DETAILS: cll = "DETAILS"; break;
             default: cll = "UNKNOWN"; break;
           };
-          fprintf( stdout, "[verbosity]            : %d - %s\n", (int)rcParams.m_eMsgLevel, cll.c_str() );
+          fprintf( stdout, "[verbosity]            : %d - %s\n", (int)rcParams.msgLevel, cll.c_str() );
         }
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-h" )) || !strcmp( (const char*)argv[i_arg], "--help" ) )
@@ -217,7 +217,7 @@ public:
       if( (!strcmp( (const char*)argv[i_arg], "-i" )) || !strcmp( (const char*)argv[i_arg], "--input" ) ) /* In: input-file */
       {
         i_arg++;
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+        if( rcParams.msgLevel > vvenc::VERBOSE )
           fprintf( stdout, "[input] input-file     : %s\n", argv[i_arg] );
         rcInputFile = argv[i_arg++];
       }
@@ -226,7 +226,7 @@ public:
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[output] bitstream-file: %s\n", argv[i_arg] );
           rcBitstreamFile = argv[i_arg++];
         }
@@ -234,7 +234,7 @@ public:
       else if( (!strcmp( (const char*)argv[i_arg], "-s" )) || !strcmp( (const char*)argv[i_arg], "--size" ) )
       {
         i_arg++;
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+        if( rcParams.msgLevel > vvenc::VERBOSE )
           fprintf( stdout, "[Size ]                : %s\n", argv[i_arg] );
         std::string cSize = argv[i_arg++];
         std::transform( cSize.begin(), cSize.end(), cSize.begin(), ::tolower );
@@ -246,8 +246,8 @@ public:
           std::string cW = match[1].str();
           std::string cH = match[2].str();
 
-          rcParams.m_iWidth  = std::stoi( cW ) ;
-          rcParams.m_iHeight = std::stoi( cH ) ;
+          rcParams.width  = std::stoi( cW ) ;
+          rcParams.height = std::stoi( cH ) ;
         }
         else
         {
@@ -259,66 +259,66 @@ public:
       {
         i_arg++;
         int iFramerate = atoi( argv[i_arg++] );
-        rcParams.m_iTemporalRate   = iFramerate;
-        rcParams.m_iTemporalScale  = 1;
+        rcParams.temporalRate   = iFramerate;
+        rcParams.temporalScale  = 1;
 
         switch( iFramerate )
         {
-        case 23: rcParams.m_iTemporalRate = 24000; rcParams.m_iTemporalScale = 1001; break;
-        case 29: rcParams.m_iTemporalRate = 30000; rcParams.m_iTemporalScale = 1001; break;
-        case 59: rcParams.m_iTemporalRate = 60000; rcParams.m_iTemporalScale = 1001; break;
+        case 23: rcParams.temporalRate = 24000; rcParams.temporalScale = 1001; break;
+        case 29: rcParams.temporalRate = 30000; rcParams.temporalScale = 1001; break;
+        case 59: rcParams.temporalRate = 60000; rcParams.temporalScale = 1001; break;
         default: break;
         }
 
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[Temp.Rate/Scale]      : %d/%d\n", rcParams.m_iTemporalRate, rcParams.m_iTemporalScale );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[Temp.Rate/Scale]      : %d/%d\n", rcParams.temporalRate, rcParams.temporalScale );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--tickspersec" ) )
       {
         i_arg++;
-        rcParams.m_iTicksPerSecond = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[tickspersec]          : %d\n", rcParams.m_iTicksPerSecond );
+        rcParams.ticksPerSecond = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[tickspersec]          : %d\n", rcParams.ticksPerSecond );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-f" )) || !strcmp( (const char*)argv[i_arg], "--frames" ) )
       {
         i_arg++;
-        rcParams.m_iMaxFrames = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[frames]               : %d\n", rcParams.m_iMaxFrames );
+        rcParams.maxFrames = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[frames]               : %d\n", rcParams.maxFrames );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--frameskip" ) )
       {
         i_arg++;
-        rcParams.m_iFrameSkip= atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[frameskip]           : %d\n", rcParams.m_iFrameSkip );
+        rcParams.frameSkip= atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[frameskip]           : %d\n", rcParams.frameSkip );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--segment" ) )
       {
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[segment]            : %s\n", argv[i_arg] );
           std::string cSegMode = argv[i_arg++];
           std::transform( cSegMode.begin(), cSegMode.end(), cSegMode.begin(), ::tolower );
 
           if( "off" == cSegMode)
           {
-            rcParams.m_eSegMode = vvenc::SEG_OFF;
+            rcParams.segmentMode = vvenc::SEG_OFF;
           }
           else if( "first" == cSegMode )
           {
-            rcParams.m_eSegMode = vvenc::SEG_FIRST;
+            rcParams.segmentMode = vvenc::SEG_FIRST;
           }
           else if( "mid" == cSegMode )
           {
-            rcParams.m_eSegMode = vvenc::SEG_MID;
+            rcParams.segmentMode = vvenc::SEG_MID;
           }
           else if( "last" == cSegMode )
           {
-            rcParams.m_eSegMode = vvenc::SEG_LAST;
+            rcParams.segmentMode = vvenc::SEG_LAST;
           }
           else
           {
@@ -332,18 +332,18 @@ public:
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[format] input format  : %s\n", argv[i_arg] );
           std::string cColorSpace = argv[i_arg++];
           std::transform( cColorSpace.begin(), cColorSpace.end(), cColorSpace.begin(), ::tolower );
 
           if( "yuv420" == cColorSpace || "yuv420p" == cColorSpace )
           {
-            rcParams.m_iInputBitDepth = 8;
+            rcParams.inputBitDepth = 8;
           }
           else if( "yuv420_10" == cColorSpace )
           {
-            rcParams.m_iInputBitDepth = 10;
+            rcParams.inputBitDepth = 10;
           }
           else
           {
@@ -356,43 +356,43 @@ public:
       {
         i_arg++;
         int iThreads = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+        if( rcParams.msgLevel > vvenc::VERBOSE )
           fprintf( stdout, "[threads]              : %d\n", iThreads );
-        rcParams.m_iThreadCount = iThreads;
+        rcParams.threadCount = iThreads;
       }
       else if( !strcmp( (const char*)argv[i_arg], "--preset") )
       {
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[preset]               : %s\n", argv[i_arg] );
           std::string cPreset = argv[i_arg++];
           std::transform( cPreset.begin(), cPreset.end(), cPreset.begin(), ::tolower );
 
           if( "tooltest" == cPreset)
           {
-            rcParams.m_iQuality = 255;
+            rcParams.quality = 255;
           }
           else if( "slower" == cPreset)
           {
-            rcParams.m_iQuality = 4;
+            rcParams.quality = 4;
           }
           else if( "slow" == cPreset)
           {
-            rcParams.m_iQuality = 3;
+            rcParams.quality = 3;
           }
           else if( "medium" == cPreset )
           {
-            rcParams.m_iQuality = 2;
+            rcParams.quality = 2;
           }
           else if( "fast" == cPreset )
           {
-            rcParams.m_iQuality = 1;
+            rcParams.quality = 1;
           }
           else if( "faster" == cPreset )
           {
-            rcParams.m_iQuality = 0;
+            rcParams.quality = 0;
           }
           else
           {
@@ -404,69 +404,69 @@ public:
       else if( (!strcmp( (const char*)argv[i_arg], "-b" )) || !strcmp( (const char*)argv[i_arg], "--bitrate" ) )
       {
         i_arg++;
-        rcParams.m_iTargetBitRate = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[bitrate]              : %d bits per second\n", rcParams.m_iTargetBitRate );
+        rcParams.targetBitRate = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[bitrate]              : %d bits per second\n", rcParams.targetBitRate );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-p" )) || !strcmp( (const char*)argv[i_arg], "--passes" ) )
       {
         i_arg++;
-        rcParams.m_iNumPasses = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[passes]               : %d\n", rcParams.m_iNumPasses );
+        rcParams.numPasses = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[passes]               : %d\n", rcParams.numPasses );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-q" )) || !strcmp( (const char*)argv[i_arg], "--qp" ) )
       {
         i_arg++;
-        rcParams.m_iQp = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[qp]                   : %d\n", rcParams.m_iQp );
+        rcParams.qp = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[qp]                   : %d\n", rcParams.qp );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--qpa" ) )
       {
         i_arg++;
-        rcParams.m_iPerceptualQPA = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[qpa]                  : %d\n", rcParams.m_iPerceptualQPA );
+        rcParams.perceptualQPA = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[qpa]                  : %d\n", rcParams.perceptualQPA );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "--gopsize" )) || !strcmp( (const char*)argv[i_arg], "-g" ) )
       {
         i_arg++;
-        rcParams.m_iGopSize = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[gopsize]              : %d\n", rcParams.m_iGopSize );
+        rcParams.gopSize = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[gopsize]              : %d\n", rcParams.gopSize );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-rs" )) || !strcmp( (const char*)argv[i_arg], "--refreshsec" ) )
       {
         i_arg++;
-        rcParams.m_iIDRPeriodSec = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[refreshsec]          : %d\n", rcParams.m_iIDRPeriodSec );
+        rcParams.idrPeriodSec = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[refreshsec]          : %d\n", rcParams.idrPeriodSec );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "-ip" )) || !strcmp( (const char*)argv[i_arg], "--intraperiod" ) )
       {
         i_arg++;
-        rcParams.m_iIDRPeriod = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[intraperiod]          : %d\n", rcParams.m_iIDRPeriod );
+        rcParams.idrPeriod = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[intraperiod]          : %d\n", rcParams.idrPeriod );
       }
       else if( (!strcmp( (const char*)argv[i_arg], "--refreshtype") ) || (!strcmp( (const char*)argv[i_arg], "-rt" )) )
       {
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[decrefreshtype]       : %s\n", argv[i_arg] );
           std::string cDecRefreshType = argv[i_arg++];
           std::transform( cDecRefreshType.begin(), cDecRefreshType.end(), cDecRefreshType.begin(), ::tolower );
 
           if( "idr" == cDecRefreshType)
           {
-            rcParams.m_eDecodingRefreshType = vvenc::DecodingRefreshType::DRT_IDR;
+            rcParams.decodingRefreshType = vvenc::DecodingRefreshType::DRT_IDR;
           }
           else if( "cra" == cDecRefreshType )
           {
-            rcParams.m_eDecodingRefreshType = vvenc::DecodingRefreshType::DRT_CRA;
+            rcParams.decodingRefreshType = vvenc::DecodingRefreshType::DRT_CRA;
           }
           else
           {
@@ -478,27 +478,27 @@ public:
       else if( !strcmp( (const char*)argv[i_arg], "--internal-bitdepth" ) )
       {
         i_arg++;
-        rcParams.m_iInternalBitDepth = atoi( argv[i_arg++] );
-        if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
-          fprintf( stdout, "[internal-bitdepth]      : %d\n", rcParams.m_iInternalBitDepth );
+        rcParams.internalBitDepth = atoi( argv[i_arg++] );
+        if( rcParams.msgLevel > vvenc::VERBOSE )
+          fprintf( stdout, "[internal-bitdepth]      : %d\n", rcParams.internalBitDepth );
       }
       else if( !strcmp( (const char*)argv[i_arg], "--profile") )
       {
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[profile]              : %s\n", argv[i_arg] );
           std::string cProfile = argv[i_arg++];
           std::transform( cProfile.begin(), cProfile.end(), cProfile.begin(), ::tolower );
 
           if( "main10" == cProfile)
           {
-            rcParams.m_eProfile = vvenc::Profile::MAIN_10;
+            rcParams.profile = vvenc::Profile::MAIN_10;
           }
           else if( "main10_stillpic" == cProfile )
           {
-            rcParams.m_eProfile = vvenc::Profile::MAIN_10_STILL_PICTURE;
+            rcParams.profile = vvenc::Profile::MAIN_10_STILL_PICTURE;
           }
           else
           {
@@ -512,70 +512,70 @@ public:
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[level]                : %s\n", argv[i_arg] );
           std::string cLevel = argv[i_arg++];
           std::transform( cLevel.begin(), cLevel.end(), cLevel.begin(), ::tolower );
 
           if( "1.0" == cLevel)
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL1;
+            rcParams.level = vvenc::Level::LEVEL1;
           }
           else if( "2.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL2;
+            rcParams.level = vvenc::Level::LEVEL2;
           }
           else if( "2.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL2_1;
+            rcParams.level = vvenc::Level::LEVEL2_1;
           }
           else if( "3.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL3;
+            rcParams.level = vvenc::Level::LEVEL3;
           }
           else if( "3.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL3_1;
+            rcParams.level = vvenc::Level::LEVEL3_1;
           }
           else if( "4.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL4;
+            rcParams.level = vvenc::Level::LEVEL4;
           }
           else if( "4.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL4_1;
+            rcParams.level = vvenc::Level::LEVEL4_1;
           }
           else if( "5.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL5;
+            rcParams.level = vvenc::Level::LEVEL5;
           }
           else if( "5.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL5_1;
+            rcParams.level = vvenc::Level::LEVEL5_1;
           }
           else if( "5.2" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL5_2;
+            rcParams.level = vvenc::Level::LEVEL5_2;
           }
           else if( "6.0" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL6;
+            rcParams.level = vvenc::Level::LEVEL6;
           }
           else if( "6.1" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL6_1;
+            rcParams.level = vvenc::Level::LEVEL6_1;
           }
           else if( "6.2" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL6_2;
+            rcParams.level = vvenc::Level::LEVEL6_2;
           }
           else if( "6.3" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL6_3;
+            rcParams.level = vvenc::Level::LEVEL6_3;
           }
           else if( "15.5" == cLevel )
           {
-            rcParams.m_eLevel = vvenc::Level::LEVEL15_5;
+            rcParams.level = vvenc::Level::LEVEL15_5;
           }
           else
           {
@@ -589,18 +589,18 @@ public:
         i_arg++;
         if( i_arg < argc && strlen( argv[i_arg] ) > 0 )
         {
-          if( rcParams.m_eMsgLevel > vvenc::VERBOSE )
+          if( rcParams.msgLevel > vvenc::VERBOSE )
             fprintf( stdout, "[tier]                 : %s\n", argv[i_arg] );
           std::string cTier = argv[i_arg++];
           std::transform( cTier.begin(), cTier.end(), cTier.begin(), ::tolower );
 
           if( "main" == cTier)
           {
-            rcParams.m_eTier = vvenc::Tier::TIER_MAIN;
+            rcParams.tier = vvenc::Tier::TIER_MAIN;
           }
           else if( "high" == cTier )
           {
-            rcParams.m_eTier = vvenc::Tier::TIER_HIGH;
+            rcParams.tier = vvenc::Tier::TIER_HIGH;
           }
           else
           {

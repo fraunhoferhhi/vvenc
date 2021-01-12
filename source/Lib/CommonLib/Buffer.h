@@ -62,6 +62,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <typeinfo>
 
 #include "vvenc/vvencConfig.h"
+#include "vvenc/vvenc.h"
 
 //! \ingroup CommonLib
 //! \{

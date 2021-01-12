@@ -701,46 +701,8 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internC
  */
 std::vector<uint32_t> writeAnnexB( std::ostream& out, const VvcAccessUnit& au )
 {
-  out.write(reinterpret_cast<const char*>(au.m_pucBuffer), au.m_iUsedSize);
-
-//  std::vector<uint32_t> annexBsizes;
-
-//  for (AccessUnit::const_iterator it = au.begin(); it != au.end(); it++)
-//  {
-//    const NALUnitEBSP& nalu = **it;
-//    uint32_t size = 0; /* size of annexB unit in bytes */
-
-//    static const uint8_t start_code_prefix[] = {0,0,0,1};
-//    if (it == au.begin() || nalu.m_nalUnitType == NAL_UNIT_DCI || nalu.m_nalUnitType == NAL_UNIT_SPS || nalu.m_nalUnitType == NAL_UNIT_VPS || nalu.m_nalUnitType == NAL_UNIT_PPS || nalu.m_nalUnitType == NAL_UNIT_PREFIX_APS || nalu.m_nalUnitType == NAL_UNIT_SUFFIX_APS )
-//    {
-//      /* From AVC, When any of the following conditions are fulfilled, the
-//       * zero_byte syntax element shall be present:
-//       *  - the nal_unit_type within the nal_unit() is equal to 7 (sequence
-//       *    parameter set) or 8 (picture parameter set),
-//       *  - the byte stream NAL unit syntax structure contains the first NAL
-//       *    unit of an access unit in decoding order, as specified by subclause
-//       *    7.4.1.2.3.
-//       */
-//      out.write(reinterpret_cast<const char*>(start_code_prefix), 4);
-//      size += 4;
-//    }
-//    else
-//    {
-//      out.write(reinterpret_cast<const char*>(start_code_prefix+1), 3);
-//      size += 3;
-//    }
-//    out << nalu.m_nalUnitData.str();
-//    size += uint32_t(nalu.m_nalUnitData.str().size());
-
-//    annexBsizes.push_back(size);
-//  }
-
-//  if (au.size() > 0)
-//  {
-//    out.flush();
-//  }
-
-  return au.m_annexBsizeVec;
+  out.write(reinterpret_cast<const char*>(au.payload), au.payloadUsedSize);
+  return au.annexBsizeVec;
 }
 
 } // namespace vvenc

@@ -155,65 +155,64 @@ int allocPicBuffer( PicBufferLocal& rcPicBuffer, unsigned int uiWidth,  unsigned
 {
   const int iSizeFactor     = 2;
   const int iAlignmentGuard =16;
-  rcPicBuffer.m_iBitDepth = 10;
-  rcPicBuffer.m_iWidth    = uiWidth;
-  rcPicBuffer.m_iHeight   = uiHeight;
-  rcPicBuffer.m_iStride   = uiWidth;
+  rcPicBuffer.bitDepth = 10;
+  rcPicBuffer.width    = uiWidth;
+  rcPicBuffer.height   = uiHeight;
+  rcPicBuffer.stride   = uiWidth;
   int iLumaSize   = uiWidth * uiHeight;
   const int iBufSize = iSizeFactor * iLumaSize * 3 / 2 + 3*iAlignmentGuard;
 
-  rcPicBuffer.m_pucDeletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
-  if( NULL == rcPicBuffer.m_pucDeletePicBuffer )
+  rcPicBuffer.deletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
+  if( NULL == rcPicBuffer.deletePicBuffer )
   {
     return vvenc::VVENC_NOT_ENOUGH_MEM;
   }
 
-  unsigned char* pY = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( 0 );
-  unsigned char* pU = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( iLumaSize);
-  unsigned char* pV = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( 5*iLumaSize/4);
+  unsigned char* pY = rcPicBuffer.deletePicBuffer + iSizeFactor * ( 0 );
+  unsigned char* pU = rcPicBuffer.deletePicBuffer + iSizeFactor * ( iLumaSize);
+  unsigned char* pV = rcPicBuffer.deletePicBuffer + iSizeFactor * ( 5*iLumaSize/4);
 
-  rcPicBuffer.m_pvY = (pY +   iAlignmentGuard) - (((size_t)pY) & (iAlignmentGuard-1));
-  rcPicBuffer.m_pvU = (pU + 2*iAlignmentGuard) - (((size_t)pU) & (iAlignmentGuard-1));
-  rcPicBuffer.m_pvV = (pV + 3*iAlignmentGuard) - (((size_t)pV) & (iAlignmentGuard-1));
+  rcPicBuffer.y = (pY +   iAlignmentGuard) - (((size_t)pY) & (iAlignmentGuard-1));
+  rcPicBuffer.u = (pU + 2*iAlignmentGuard) - (((size_t)pU) & (iAlignmentGuard-1));
+  rcPicBuffer.v = (pV + 3*iAlignmentGuard) - (((size_t)pV) & (iAlignmentGuard-1));
 
   return 0;
 }
 
 void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
 {
-  cVVEncParameter.m_iQp               = 32;                         // quantization parameter 0-51
-  cVVEncParameter.m_iWidth            = 176;                        // luminance width of input picture
-  cVVEncParameter.m_iHeight           = 144;                        // luminance height of input picture
-  cVVEncParameter.m_iGopSize          = 16;                         // gop size (1: intra only, 16, 32: hierarchical b frames)
-  cVVEncParameter.m_eDecodingRefreshType = vvenc::DRT_CRA;          // intra period refresh type
-  cVVEncParameter.m_iIDRPeriod        = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.m_eMsgLevel         = vvenc::SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
-  cVVEncParameter.m_iTemporalRate     = 60;                         // temporal rate (fps)
-  cVVEncParameter.m_iTemporalScale    = 1;                          // temporal scale (fps)
-  cVVEncParameter.m_iTicksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.m_iThreadCount      = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
-  cVVEncParameter.m_iQuality          = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
-  cVVEncParameter.m_iPerceptualQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cVVEncParameter.m_iInputBitDepth    = 8;                          // 8bit input
-  cVVEncParameter.m_iInternalBitDepth = 10;                         // 10bit internal
-  cVVEncParameter.m_eProfile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.m_eLevel            = vvenc::Level::LEVEL4_1;     // level
-  cVVEncParameter.m_eTier             = vvenc::Tier::TIER_MAIN;     // tier
-  cVVEncParameter.m_bAccessUnitDelimiter       = false;
-  cVVEncParameter.m_bHrdParametersPresent      = false;
-  cVVEncParameter.m_bBufferingPeriodSEIEnabled = false;
-  cVVEncParameter.m_bPictureTimingSEIEnabled   = false;
+  cVVEncParameter.qp               = 32;                         // quantization parameter 0-51
+  cVVEncParameter.width            = 176;                        // luminance width of input picture
+  cVVEncParameter.height           = 144;                        // luminance height of input picture
+  cVVEncParameter.gopSize          = 16;                         // gop size (1: intra only, 16, 32: hierarchical b frames)
+  cVVEncParameter.decodingRefreshType = vvenc::DRT_CRA;          // intra period refresh type
+  cVVEncParameter.idrPeriod           = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  cVVEncParameter.msgLevel         = vvenc::SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.temporalRate     = 60;                         // temporal rate (fps)
+  cVVEncParameter.temporalScale    = 1;                          // temporal scale (fps)
+  cVVEncParameter.ticksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
+  cVVEncParameter.threadCount      = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
+  cVVEncParameter.quality          = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  cVVEncParameter.perceptualQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  cVVEncParameter.inputBitDepth    = 8;                          // 8bit input
+  cVVEncParameter.internalBitDepth = 10;                         // 10bit internal
+  cVVEncParameter.profile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.level            = vvenc::Level::LEVEL4_1;     // level
+  cVVEncParameter.tier             = vvenc::Tier::TIER_MAIN;     // tier
+  cVVEncParameter.useAccessUnitDelimiter       = false;
+  cVVEncParameter.useHrdParametersPresent      = false;
+  cVVEncParameter.useBufferingPeriodSEIEnabled = false;
+  cVVEncParameter.usePictureTimingSEIEnabled   = false;
 }
 
-void fillInputPic( vvenc::InputPicture& cInputPic )
+void fillInputPic( vvenc::YuvPicture& cYuvPicture )
 {
-  cInputPic.m_pcPicAttributes = nullptr;
   const short val = 512;
-  int lumaSize   = cInputPic.m_cPicBuffer.m_iHeight   * cInputPic.m_cPicBuffer.m_iStride;
-  int chromaSize = ( cInputPic.m_cPicBuffer.m_iCStride ) ? (cInputPic.m_cPicBuffer.m_iHeight/2 * cInputPic.m_cPicBuffer.m_iCStride) : (lumaSize / 4);
-  std::fill_n( static_cast<short*> (cInputPic.m_cPicBuffer.m_pvY), lumaSize, val );
-  std::fill_n( static_cast<short*> (cInputPic.m_cPicBuffer.m_pvU), chromaSize, val );
-  std::fill_n( static_cast<short*> (cInputPic.m_cPicBuffer.m_pvV), chromaSize, val );
+  int lumaSize   = cYuvPicture.height   * cYuvPicture.stride;
+  int chromaSize = ( cYuvPicture.cStride ) ? (cYuvPicture.height/2 * cYuvPicture.cStride) : (lumaSize / 4);
+  std::fill_n( static_cast<short*> (cYuvPicture.y), lumaSize, val );
+  std::fill_n( static_cast<short*> (cYuvPicture.u), chromaSize, val );
+  std::fill_n( static_cast<short*> (cYuvPicture.v), chromaSize, val );
 }
 
 template< typename T, typename V = int>
@@ -247,81 +246,81 @@ int testLibParameterRanges()
   vvenc::VVEncParameter vvencParams;
   fillEncoderParameters( vvencParams );
 
-  testParamList( "DecodingRefreshType",                    vvencParams.m_eDecodingRefreshType,        vvencParams, { 0 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_eDecodingRefreshType,        vvencParams, { -1,1,2,3,4 }, true );
+  testParamList( "DecodingRefreshType",                    vvencParams.decodingRefreshType,        vvencParams, { 0 } );
+  testParamList( "DecodingRefreshType",                    vvencParams.decodingRefreshType,        vvencParams, { -1,1,2,3,4 }, true );
 
-  testParamList( "Level",                                  vvencParams.m_eLevel,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
-  testParamList( "Level",                                  vvencParams.m_eLevel,                      vvencParams, { -1,0,15,31,256, }, true );
+  testParamList( "Level",                                  vvencParams.level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
+  testParamList( "Level",                                  vvencParams.level,                      vvencParams, { -1,0,15,31,256, }, true );
 
-  //  testParamList( "LogLevel",                               vvencParams.m_eLogLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
-  //  testParamList( "LogLevel",                               vvencParams.m_eLogLevel,                   vvencParams, {-1,7,8}, true );
+  //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
+  //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
 
-  testParamList( "Profile",                                vvencParams.m_eProfile,                    vvencParams, { 1,3,9 } );
-  testParamList( "Profile",                                vvencParams.m_eProfile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
+  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
+  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 
-  testParamList( "Tier",                                   vvencParams.m_eTier,                       vvencParams, { 0,1 } );
-  testParamList( "Tier",                                   vvencParams.m_eTier,                       vvencParams, { -1,2 }, true );
+  testParamList( "Tier",                                   vvencParams.tier,                       vvencParams, { 0,1 } );
+  testParamList( "Tier",                                   vvencParams.tier,                       vvencParams, { -1,2 }, true );
 
-  testParamList( "GOPSize",                                vvencParams.m_iGopSize,                    vvencParams, { 16,32 } );
-  testParamList( "GOPSize",                                vvencParams.m_iGopSize,                    vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128 }, true ); //th is this intended
+  testParamList( "GOPSize",                                vvencParams.gopSize,                    vvencParams, { 16,32 } );
+  testParamList( "GOPSize",                                vvencParams.gopSize,                    vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128 }, true ); //th is this intended
 
-  testParamList( "Width",                                  vvencParams.m_iWidth,                      vvencParams, { 320,1920,3840 } );
-  testParamList( "Width",                                  vvencParams.m_iWidth,                      vvencParams, { -1,0 }, true );
+  testParamList( "Width",                                  vvencParams.width,                      vvencParams, { 320,1920,3840 } );
+  testParamList( "Width",                                  vvencParams.width,                      vvencParams, { -1,0 }, true );
 
-  testParamList( "Height",                                 vvencParams.m_iHeight,                     vvencParams, { 16,32,1080,1088 } );
-  testParamList( "Height",                                 vvencParams.m_iHeight,                     vvencParams, { -1,0 }, true );
+  testParamList( "Height",                                 vvencParams.height,                     vvencParams, { 16,32,1080,1088 } );
+  testParamList( "Height",                                 vvencParams.height,                     vvencParams, { -1,0 }, true );
 
-  testParamList( "IDRPeriod",                              vvencParams.m_iIDRPeriod,                  vvencParams, { 16,32,48, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_iIDRPeriod,                  vvencParams, { 1,-1,17,24 }, true );
+  testParamList( "IDRPeriod",                              vvencParams.idrPeriod,                  vvencParams, { 16,32,48, 0 } );
+  testParamList( "IDRPeriod",                              vvencParams.idrPeriod,                  vvencParams, { 1,-1,17,24 }, true );
 
-  testParamList( "PerceptualQPA",                          vvencParams.m_iPerceptualQPA,              vvencParams, { 0,1,2,3,4,5 } );
-  testParamList( "PerceptualQPA",                          vvencParams.m_iPerceptualQPA,              vvencParams, { -1,6 }, true );
+  testParamList( "PerceptualQPA",                          vvencParams.perceptualQPA,              vvencParams, { 0,1,2,3,4,5 } );
+  testParamList( "PerceptualQPA",                          vvencParams.perceptualQPA,              vvencParams, { -1,6 }, true );
 
-  testParamList( "Qp",                                     vvencParams.m_iQp,                         vvencParams, { 0,1,2,3,4,51 } );
-  testParamList( "Qp",                                     vvencParams.m_iQp,                         vvencParams, { -1,52 }, true );
+  testParamList( "Qp",                                     vvencParams.qp,                         vvencParams, { 0,1,2,3,4,51 } );
+  testParamList( "Qp",                                     vvencParams.qp,                         vvencParams, { -1,52 }, true );
 
-  testParamList( "Quality",                                vvencParams.m_iQuality,                    vvencParams, { 0,1,2,3,4 } );
-  testParamList( "Quality",                                vvencParams.m_iQuality,                    vvencParams, { -1,5 }, true );
+  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
+  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
 
-  testParamList( "TargetBitRate",                          vvencParams.m_iTargetBitRate,              vvencParams, { 0,1000000,20000000 } );
-  testParamList( "TargetBitRate",                          vvencParams.m_iTargetBitRate,              vvencParams, { -1,100000001 }, true );
+  testParamList( "TargetBitRate",                          vvencParams.targetBitRate,              vvencParams, { 0,1000000,20000000 } );
+  testParamList( "TargetBitRate",                          vvencParams.targetBitRate,              vvencParams, { -1,100000001 }, true );
 
-  vvencParams.m_iTargetBitRate = 1;
-  testParamList( "NumPasses",                              vvencParams.m_iNumPasses,                  vvencParams, { 1,2 } );
-  testParamList( "NumPasses",                              vvencParams.m_iNumPasses,                  vvencParams, { -1,0,3 }, true );
-  vvencParams.m_iTargetBitRate = 0;
-  testParamList( "NumPasses",                              vvencParams.m_iNumPasses,                  vvencParams, { 1 } );
-  testParamList( "NumPasses",                              vvencParams.m_iNumPasses,                  vvencParams, { 0,2 }, true );
+  vvencParams.targetBitRate = 1;
+  testParamList( "NumPasses",                              vvencParams.numPasses,                  vvencParams, { 1,2 } );
+  testParamList( "NumPasses",                              vvencParams.numPasses,                  vvencParams, { -1,0,3 }, true );
+  vvencParams.targetBitRate = 0;
+  testParamList( "NumPasses",                              vvencParams.numPasses,                  vvencParams, { 1 } );
+  testParamList( "NumPasses",                              vvencParams.numPasses,                  vvencParams, { 0,2 }, true );
 
-  testParamList( "InputBitDepth",                          vvencParams.m_iInputBitDepth,              vvencParams, { 8,10 } );
-  testParamList( "InputBitDepth",                          vvencParams.m_iInputBitDepth,              vvencParams, { 0,1,7,9,11 }, true );
+  testParamList( "InputBitDepth",                          vvencParams.inputBitDepth,              vvencParams, { 8,10 } );
+  testParamList( "InputBitDepth",                          vvencParams.inputBitDepth,              vvencParams, { 0,1,7,9,11 }, true );
 
-  testParamList( "InternalBitDepth",                       vvencParams.m_iInternalBitDepth,           vvencParams, { 8,10 } );
-  testParamList( "InternalBitDepth",                       vvencParams.m_iInternalBitDepth,           vvencParams, { 0,1,7,9,11 }, true );
+  testParamList( "InternalBitDepth",                       vvencParams.internalBitDepth,           vvencParams, { 8,10 } );
+  testParamList( "InternalBitDepth",                       vvencParams.internalBitDepth,           vvencParams, { 0,1,7,9,11 }, true );
 
-  //  testParamList( "TemporalScale",                          vvencParams.m_iTemporalScale,              vvencParams, { 1,2,4,1001} );
-  //  testParamList( "TemporalScale",                          vvencParams.m_iTemporalScale,              vvencParams, { -1,0,3,1000 }, true );
+  //  testParamList( "TemporalScale",                          vvencParams.temporalScale,              vvencParams, { 1,2,4,1001} );
+  //  testParamList( "TemporalScale",                          vvencParams.temporalScale,              vvencParams, { -1,0,3,1000 }, true );
 
-  vvencParams.m_iTemporalScale = 1;
-  testParamList( "TemporalRate",                           vvencParams.m_iTemporalRate,               vvencParams, { 1,25,30,50,60,100,120 } );
-  testParamList( "TemporalRate",                           vvencParams.m_iTemporalRate,               vvencParams, { -1,0/*,24*/ }, true );    //th is this intended
+  vvencParams.temporalScale = 1;
+  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { 1,25,30,50,60,100,120 } );
+  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { -1,0/*,24*/ }, true );    //th is this intended
 
-  vvencParams.m_iTemporalScale = 1001;
-  testParamList( "TemporalRate",                           vvencParams.m_iTemporalRate,               vvencParams, { 24000,30000,60000 /*,1200000*/ } );
-  testParamList( "TemporalRate",                           vvencParams.m_iTemporalRate,               vvencParams, { -1,1,0,24 }, true );
+  vvencParams.temporalScale = 1001;
+  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { 24000,30000,60000 /*,1200000*/ } );
+  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { -1,1,0,24 }, true );
 
   fillEncoderParameters( vvencParams );
 
-  testParamList( "ThreadCount",                            vvencParams.m_iThreadCount,                vvencParams, { 0,1,2,64 } );
-  testParamList( "ThreadCount",                            vvencParams.m_iThreadCount,                vvencParams, { -1,65 }, true );
+  testParamList( "ThreadCount",                            vvencParams.threadCount,                vvencParams, { 0,1,2,64 } );
+  testParamList( "ThreadCount",                            vvencParams.threadCount,                vvencParams, { -1,65 }, true );
 
-  testParamList( "TicksPerSecond",                         vvencParams.m_iTicksPerSecond,             vvencParams, { 90000,27000000,60,120 } );
-  testParamList( "TicksPerSecond",                         vvencParams.m_iTicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
+  testParamList( "TicksPerSecond",                         vvencParams.ticksPerSecond,             vvencParams, { 90000,27000000,60,120 } );
+  testParamList( "TicksPerSecond",                         vvencParams.ticksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
 
-  vvencParams.m_iTargetBitRate = 0;
-  testParamList<bool, bool>( "HrdParametersPresent",       vvencParams.m_bHrdParametersPresent,       vvencParams, { true }, true );
-  testParamList<bool, bool>( "BufferingPeriodSEIEnabled",  vvencParams.m_bBufferingPeriodSEIEnabled,  vvencParams, { true }, true );
-  testParamList<bool, bool>( "PictureTimingSEIEnabled",    vvencParams.m_bPictureTimingSEIEnabled,    vvencParams, { true }, true );
+  vvencParams.targetBitRate = 0;
+  testParamList<bool, bool>( "useHrdParametersPresent",       vvencParams.useHrdParametersPresent,       vvencParams, { true }, true );
+  testParamList<bool, bool>( "useBufferingPeriodSEIEnabled",  vvencParams.useBufferingPeriodSEIEnabled,  vvencParams, { true }, true );
+  testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.usePictureTimingSEIEnabled,    vvencParams, { true }, true );
 
   return 0;
 }
@@ -385,8 +384,8 @@ int callingOrderNoInit()
 {
   vvenc::VVEnc cVVEnc;
   vvenc::VvcAccessUnit cAU;
-  vvenc::InputPicture cInputPic;
-  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  vvenc::YuvPicture cYuvPicture;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
   {
     return -1;
   }
@@ -403,15 +402,15 @@ int callingOrderRegular()
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
 
-  vvenc::InputPicture cInputPic;
-  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
+  vvenc::YuvPicture cYuvPicture;
+  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
     return -1;
   }
-  fillInputPic( cInputPic );
-  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  fillInputPic( cYuvPicture );
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
   {
     return -1;
   }
@@ -432,20 +431,20 @@ int callingOrderRegularInitPass()
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
 
-  vvenc::InputPicture cInputPic;
+  vvenc::YuvPicture cYuvPicture;
 
-  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
+  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
     return -1;
   }
-  fillInputPic( cInputPic );
+  fillInputPic( cYuvPicture );
   if( 0 != cVVEnc.initPass( 0 ) )
   {
     return -1;
   }
-  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
   {
     return -1;
   }
@@ -462,27 +461,27 @@ int callingOrderRegularInit2Pass()
   vvenc::VVEncParameter vvencParams;
   fillEncoderParameters( vvencParams );
 
-  vvencParams.m_iNumPasses = 2;
-  vvencParams.m_iTargetBitRate = 500000;
+  vvencParams.numPasses = 2;
+  vvencParams.targetBitRate = 500000;
 
   if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
 
-  vvenc::InputPicture cInputPic;
-  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
+  vvenc::YuvPicture cYuvPicture;
+  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
     return -1;
   }
-  fillInputPic( cInputPic );
+  fillInputPic( cYuvPicture );
   if( 0 != cVVEnc.initPass( 0 ) )
   {
     return -1;
   }
-  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
   {
     return -1;
   }
@@ -497,7 +496,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
   {
     return -1;
   }
@@ -524,7 +523,7 @@ int testLibCallingOrder()
 }
 
 
-int inputBufTest( vvenc::InputPicture& cInputPic )
+int inputBufTest( vvenc::YuvPicture& cYuvPicture )
 {
   vvenc::VVEnc cVVEnc;
   vvenc::VVEncParameter vvencParams;  
@@ -534,9 +533,9 @@ int inputBufTest( vvenc::InputPicture& cInputPic )
     return -1;
   }
   vvenc::VvcAccessUnit cAU;
-  cAU.m_iBufSize  = vvencParams.m_iWidth * vvencParams.m_iHeight;   cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+  cAU.payloadSize  = vvencParams.width * vvencParams.height;   cAU.payload = new unsigned char [ cAU.payloadSize ];
 
-  if( 0 != cVVEnc.encode( &cInputPic, cAU))
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
   {
     return -1;
   }
@@ -550,9 +549,9 @@ int inputBufTest( vvenc::InputPicture& cInputPic )
 
 int invaildInputUninitialzedInputPic( )
 {
-  vvenc::InputPicture cInputPic;
+  vvenc::YuvPicture cYuvPicture;
 
-  if( 0 != inputBufTest( cInputPic ))
+  if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
   }
@@ -562,12 +561,12 @@ int invaildInputUninitialzedInputPic( )
 
 int invaildInputInvalidPicSize( )
 {
-  vvenc::InputPicture cInputPic;
-  cInputPic.m_cPicBuffer.m_pvY = &cInputPic;
-  cInputPic.m_cPicBuffer.m_pvU = &cInputPic;
-  cInputPic.m_cPicBuffer.m_pvV = &cInputPic;
+  vvenc::YuvPicture cYuvPicture;
+  cYuvPicture.y = &cYuvPicture;
+  cYuvPicture.u = &cYuvPicture;
+  cYuvPicture.v = &cYuvPicture;
 
-  if( 0 != inputBufTest( cInputPic ))
+  if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
   }
@@ -577,15 +576,15 @@ int invaildInputInvalidPicSize( )
 
 int invaildInputInvalidLumaStride( )
 {
-  vvenc::InputPicture cInputPic;
-  cInputPic.m_cPicBuffer.m_pvY = &cInputPic;
-  cInputPic.m_cPicBuffer.m_pvU = &cInputPic;
-  cInputPic.m_cPicBuffer.m_pvV = &cInputPic;
-  cInputPic.m_cPicBuffer.m_iWidth = 176;
-  cInputPic.m_cPicBuffer.m_iHeight = 144;
-  cInputPic.m_cPicBuffer.m_iStride = 100;
+  vvenc::YuvPicture cYuvPicture;
+  cYuvPicture.y = &cYuvPicture;
+  cYuvPicture.u = &cYuvPicture;
+  cYuvPicture.v = &cYuvPicture;
+  cYuvPicture.width = 176;
+  cYuvPicture.height = 144;
+  cYuvPicture.stride = 100;
 
-  if( 0 != inputBufTest( cInputPic ))
+  if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
   }
@@ -596,16 +595,16 @@ int invaildInputInvalidLumaStride( )
 
 int invaildInputInvalidChromaStride( )
 {
-  vvenc::InputPicture cInputPic;
-  cInputPic.m_cPicBuffer.m_pvY = &cInputPic;
-  cInputPic.m_cPicBuffer.m_pvU = &cInputPic;
-  cInputPic.m_cPicBuffer.m_pvV = &cInputPic;
-  cInputPic.m_cPicBuffer.m_iWidth = 176;
-  cInputPic.m_cPicBuffer.m_iHeight = 144;
-  cInputPic.m_cPicBuffer.m_iStride = 176;
-  cInputPic.m_cPicBuffer.m_iCStride = 50;
+  vvenc::YuvPicture cYuvPicture;
+  cYuvPicture.y = &cYuvPicture;
+  cYuvPicture.u = &cYuvPicture;
+  cYuvPicture.v = &cYuvPicture;
+  cYuvPicture.width = 176;
+  cYuvPicture.height = 144;
+  cYuvPicture.stride = 176;
+  cYuvPicture.cStride = 50;
 
-  if( 0 != inputBufTest( cInputPic ))
+  if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
   }
@@ -624,14 +623,14 @@ int invaildInputBuf( )
     return -1;
   }
 
-  vvenc::InputPicture cInputPic;
-  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
+  vvenc::YuvPicture cYuvPicture;
+  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
     return -1;
   }
-  fillInputPic( cInputPic );
+  fillInputPic( cYuvPicture );
 
-  if( 0 != inputBufTest( cInputPic ))
+  if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
   }
@@ -661,15 +660,15 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
     return -1;
   }
 
-  vvenc::InputPicture cInputPic;
-  if( 0 != allocPicBuffer( cInputPic.m_cPicBuffer, vvencParams.m_iWidth, vvencParams.m_iHeight ))
+  vvenc::YuvPicture cYuvPicture;
+  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
   {
     return -1;
   }
-  fillInputPic( cInputPic );
+  fillInputPic( cYuvPicture );
   for(int i = 0; i < numPics; i++ )
   {
-    if( 0 != cVVEnc.encode( &cInputPic, cAU))
+    if( 0 != cVVEnc.encode( &cYuvPicture, cAU))
     {
       return -1;
     }
@@ -684,7 +683,7 @@ int outputBufSizeTest( vvenc::VvcAccessUnit& cAU, int numPics)
 int outputBufNull()
 {
   vvenc::VvcAccessUnit cAU;
-  cAU.m_pucBuffer = NULL;
+  cAU.payload = NULL;
 
   if( 0 != outputBufSizeTest( cAU, 1 ))
   {
@@ -696,8 +695,8 @@ int outputBufNull()
 int outputBufSizeZero()
 {
   vvenc::VvcAccessUnit cAU;
-  cAU.m_pucBuffer = new unsigned char [20000];
-  cAU.m_iBufSize = 0;
+  cAU.payload = new unsigned char [20000];
+  cAU.payloadSize = 0;
 
   if( 0 != outputBufSizeTest( cAU, 1 ))
   {
@@ -709,8 +708,8 @@ int outputBufSizeZero()
 int outputBufSizeToSmall()
 {
   vvenc::VvcAccessUnit cAU;
-  cAU.m_iBufSize = 10;
-  cAU.m_pucBuffer = new unsigned char [ cAU.m_iBufSize ];
+  cAU.payloadSize = 10;
+  cAU.payload = new unsigned char [ cAU.payloadSize ];
 
   if( 0 != outputBufSizeTest( cAU, 17 ))
   {

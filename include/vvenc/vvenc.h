@@ -85,6 +85,120 @@ enum ErrorCodes
 
 /**
   \ingroup VVEncExternalInterfaces
+  The struct PicBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture. Memory has to be allocated by the user. For using maximum performance
+  consider allocating 16byte aligned memory for all three color components.
+*/
+typedef struct VVENC_DECL YuvPicture
+{
+  YuvPicture()                             ///< default constructor, sets member attributes to default values
+  {}
+
+  unsigned char*  deletePicBuffer = nullptr;         ///< pointer to picture buffer origin if non zero the encoder doesn't copy the content off the buffer and deletes the buffer after encoding
+                                                     ///< this implies the buffer content to be const,
+                                                     ///< otherwise if the pointer is zero the buffer content is copied by the encoder into an intermediate buffer
+  void*           y                = nullptr;         ///< pointer to luminance top left pixel
+  void*           u                = nullptr;         ///< pointer to chrominance cb top left pixel
+  void*           v                = nullptr;         ///< pointer to chrominance cbr top left pixel
+  int             width             = 0;              ///< width of the luminance plane
+  int             height            = 0;              ///< height of the luminance plane
+  int             stride            = 0;              ///< stride (width + left margin + right margins) of luminance plane chrominance stride is assumed to be stride/2
+  int             cStride           = 0;              ///< stride (width + left margin + right margins) of chrominance plane in case its value differs from stride/2
+  int             bitDepth          = 0;              ///< bit depth of input signal (8: depth 8 bit, 10: depth 10 bit  )
+  ColorFormat     colorFormat       = VVC_CF_INVALID; ///< color format (VVC_CF_YUV420_PLANAR)
+  uint64_t        sequenceNumber   = 0;               ///< sequence number of the picture
+  uint64_t        cts              = 0;               ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
+  bool            ctsValid          = false;          ///< composition time stamp valid flag (true: valid, false: CTS not set)
+} YuvPicture_t;
+
+
+// will be removed  CL
+struct VVENC_DECL YUVPlane
+{
+  int16_t* planeBuf;
+  int      width;
+  int      height;
+  int      stride;
+
+  YUVPlane()
+    : planeBuf( nullptr )
+    , width   ( 0 )
+    , height  ( 0 )
+    , stride  ( 0 )
+  {
+  }
+};
+
+struct VVENC_DECL YUVBuffer
+{
+  YUVPlane yuvPlanes[ MAX_NUM_COMP ];
+  uint64_t sequenceNumber;     ///< sequence number of the picture
+  uint64_t cts;                ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  bool     ctsValid;            ///< composition time stamp valid flag (true: valid, false: CTS not set)
+
+  YUVBuffer()
+  : sequenceNumber ( 0 )
+  , cts            ( 0 )
+  , ctsValid        ( false )
+  {
+  }
+};
+
+// ----------------------------------------
+
+class VVENC_DECL YUVWriterIf
+{
+protected:
+  YUVWriterIf() {}
+  virtual ~YUVWriterIf() {}
+
+public:
+  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
+  {
+  }
+
+  virtual void outputYuv( const YuvPicture& /*yuvOutBuf*/ )
+  {
+  }
+};
+
+
+/**
+  \ingroup VVEncExternalInterfaces
+  The struct AccessUnitList contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
+  The structure contains buffer and size information of the compressed payload as well as timing, access and debug information.
+  The smallest output unit of VVC encoders are NalUnits. A set of NalUnits that belong to the same access unit are delivered in a continuous bitstream,
+  where the NalUnits are separated by three byte start codes.
+  The Buffer to retrieve the compressed video chunks has to be allocated by the caller. The related attribute BufSize
+*/
+
+typedef struct VVENC_DECL VvcAccessUnit
+{
+  VvcAccessUnit()                             ///< Default constructor, sets member attributes to default values
+  {}
+
+  unsigned char*  payload       = nullptr;  ///< pointer to buffer that retrieves the coded data,
+  int             payloadSize   = 0;        ///< size of the allocated buffer in bytes
+  int             payloadUsedSize = 0;      ///< length of the used data in bytes
+  uint64_t        cts           = 0;        ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
+  uint64_t        dts           = 0;        ///< decoding time stamp in TicksPerSecond (see VVCEncoderParameter)
+  bool            ctsValid      = false;    ///< composition time stamp valid flag (true: valid, false: CTS not set)
+  bool            dtsValid      = false;    ///< decoding time stamp valid flag (true: valid, false: DTS not set)
+  bool            rap           = false;    ///< random access point flag (true: AU is random access point, false: sequential access)
+  SliceType       sliceType     = NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
+  bool            refPic        = false;    ///< reference picture
+  int             temporalLayer = 0;        ///< temporal layer
+  uint64_t        poc           = 0;        ///< picture order count
+
+  int             status        = 0;        ///< additional info (see Status)
+  std::string     infoString;               ///< debug info from inside the encoder
+
+  std::vector<NalUnitType> nalUnitTypeVec;
+  std::vector<uint32_t>    annexBsizeVec;
+
+} VvcAccessUnit_t;
+
+/**
+  \ingroup VVEncExternalInterfaces
   The struct VVEncParameter is a container for encoder configuration parameters. This struct is used for initialization of an blank encoder
   as well as for reconfiguration of an already initialized encoder. The struct is equipped with an default constructor that initializes all parameters
   to default values for ease of use and best performance. However, some of the parameters has to be set by the caller, which can not be guessed by the encoder.
@@ -93,34 +207,34 @@ typedef struct VVENC_DECL VVEncParameter
 {
   VVEncParameter()           ///< default constructor, sets member attributes to default values
   {}
-  int m_iQp                   = 32;     ///< quantization parameter                                 (no default || 0-51)
-  int m_iWidth                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
-  int m_iHeight               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
-  int m_iGopSize              = 32;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
-  DecodingRefreshType m_eDecodingRefreshType = DRT_IDR; ///< intra period refresh type           (default: VVC_DRT_IDR )
-  int m_iIDRPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
-  int m_iIDRPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
-  MsgLevel m_eMsgLevel        = INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
-  int m_iTemporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
-  int m_iTemporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
-  int m_iTicksPerSecond       = 90000;  ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
-  int m_iMaxFrames            = 0;      ///< max number of frames to be encoded                     (default 0: encode all frames)
-  int m_iFrameSkip            = 0;      ///< number of frames to skip before start encoding         (default 0: off)
-  int m_iThreadCount          = -1;     ///< number of worker threads (no default || should not exceed the number of physical cpu's)
-  int m_iQuality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow, 4: slower
-  int m_iPerceptualQPA        = 2;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
-  int m_iTargetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
-  int m_iNumPasses            = 1;      ///< number of rate control passes                          (default: 1) 
-  int m_iInputBitDepth        = 8;      ///< input bit-depth                                        (default: 8)
-  int m_iInternalBitDepth     = 10;     ///< internal bit-depth                                     (default: 10)
-  Profile m_eProfile          = Profile::MAIN_10; ///< vvc profile                            (default: main_10)
-  Level   m_eLevel            = Level::LEVEL5_1;  ///< vvc level_idc                          (default: 5.1)
-  Tier    m_eTier             = Tier::TIER_MAIN;      ///< vvc tier                               (default: main)
-  SegmentMode   m_eSegMode    = SEG_OFF;               ///< segment mode                            (default: off)
-  bool m_bAccessUnitDelimiter       = false;  ///< enable aud                                       (default: off)
-  bool m_bHrdParametersPresent      = false;  ///< enable hrd                                       (default: off)
-  bool m_bBufferingPeriodSEIEnabled = false;  ///< enable bp sei                                    (default: off)
-  bool m_bPictureTimingSEIEnabled   = false;  ///< enable pt sei                                    (default: off)
+  int qp                   = 32;     ///< quantization parameter                                 (no default || 0-51)
+  int width                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
+  int height               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
+  int gopSize              = 32;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
+  DecodingRefreshType decodingRefreshType = DRT_IDR; ///< intra period refresh type           (default: VVC_DRT_IDR )
+  int idrPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
+  int idrPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
+  MsgLevel msgLevel        = INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
+  int temporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
+  int temporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
+  int ticksPerSecond       = 90000;  ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
+  int maxFrames            = 0;      ///< max number of frames to be encoded                     (default 0: encode all frames)
+  int frameSkip            = 0;      ///< number of frames to skip before start encoding         (default 0: off)
+  int threadCount          = -1;     ///< number of worker threads (no default || should not exceed the number of physical cpu's)
+  int quality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  int perceptualQPA        = 2;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
+  int targetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
+  int numPasses            = 1;      ///< number of rate control passes                          (default: 1)
+  int inputBitDepth        = 8;      ///< input bit-depth                                        (default: 8)
+  int internalBitDepth     = 10;     ///< internal bit-depth                                     (default: 10)
+  Profile profile          = Profile::MAIN_10; ///< vvc profile                            (default: main_10)
+  Level   level            = Level::LEVEL5_1;  ///< vvc level_idc                          (default: 5.1)
+  Tier    tier             = Tier::TIER_MAIN;      ///< vvc tier                               (default: main)
+  SegmentMode segmentMode  = SEG_OFF;               ///< segment mode                            (default: off)
+  bool useAccessUnitDelimiter       = false;  ///< enable aud                                       (default: off)
+  bool useHrdParametersPresent      = false;  ///< enable hrd                                       (default: off)
+  bool useBufferingPeriodSEIEnabled = false;  ///< enable bp sei                                    (default: off)
+  bool usePictureTimingSEIEnabled   = false;  ///< enable pt sei                                    (default: off)
 } VVEncParameter_t;
 
 
@@ -189,7 +303,7 @@ public:
     \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
     \pre        The encoder has to be initialized successfully.
   */
-   int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
+   int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit);
 
    int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit);
 

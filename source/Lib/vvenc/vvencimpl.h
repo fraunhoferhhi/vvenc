@@ -83,7 +83,7 @@ public:
 
   bool isInitialized() const;
 
-  int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
+  int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit);
   int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit);
 
   int flush( VvcAccessUnit& rcVvcAccessUnit );

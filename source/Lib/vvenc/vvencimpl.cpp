@@ -210,8 +210,6 @@ int VVEncImpl::uninit()
   {
     try
     {
-      m_pEncLib->printSummary();
-
       m_pEncLib->uninitEncoderLib();
       delete m_pEncLib;
       m_pEncLib = nullptr;
@@ -234,67 +232,67 @@ bool VVEncImpl::isInitialized() const
 }
 
 
-int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
+int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
   if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
-  if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if( 0 == rcVvcAccessUnit.payloadSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
   if( m_bFlushed )                     { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
-  if( !pcInputPicture )
+  if( !pcYuvPicture )
   {
     m_cErrorString = "InputPicture is null";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_pvY == nullptr || pcInputPicture->m_cPicBuffer.m_pvU == nullptr || pcInputPicture->m_cPicBuffer.m_pvV == nullptr )
+  if( pcYuvPicture->y == nullptr || pcYuvPicture->u == nullptr || pcYuvPicture->v == nullptr )
   {
     m_cErrorString = "InputPicture: invalid input buffers";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iWidth != this->m_cEncCfg.m_SourceWidth )
+  if( pcYuvPicture->width != this->m_cEncCfg.m_SourceWidth )
   {
     m_cErrorString = "InputPicture: unsupported width";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iHeight != this->m_cEncCfg.m_SourceHeight )
+  if( pcYuvPicture->height != this->m_cEncCfg.m_SourceHeight )
   {
     m_cErrorString = "InputPicture: unsupported height";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iWidth > pcInputPicture->m_cPicBuffer.m_iStride )
+  if( pcYuvPicture->width > pcYuvPicture->stride )
   {
     m_cErrorString = "InputPicture: unsupported width stride combination";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iWidth/2 > pcInputPicture->m_cPicBuffer.m_iCStride )
+  if( pcYuvPicture->cStride && pcYuvPicture->width/2 > pcYuvPicture->cStride )
   {
     m_cErrorString = "InputPicture: unsupported width cstride combination";
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pcInputPicture->m_cPicBuffer.m_iBitDepth < 10 || pcInputPicture->m_cPicBuffer.m_iBitDepth > 16 )
+  if( pcYuvPicture->bitDepth < 10 || pcYuvPicture->bitDepth > 16 )
   {
     std::stringstream css;
-    css << "InputPicture: unsupported input BitDepth " <<  pcInputPicture->m_cPicBuffer.m_iBitDepth  << ". must be 10 <= BitDepth <= 16";
+    css << "InputPicture: unsupported input BitDepth " <<  pcYuvPicture->bitDepth  << ". must be 10 <= BitDepth <= 16";
     m_cErrorString = css.str();
     return VVENC_ERR_UNSPECIFIED;
   }
 
   // we know that the internal buffer requires to be a multiple of 8 in each direction
-  int internalLumaWidth = ((pcInputPicture->m_cPicBuffer.m_iWidth + 7)/8)*8;
-  int internalLumaHeight = ((pcInputPicture->m_cPicBuffer.m_iHeight + 7)/8)*8;
-  int internalLumaStride = (internalLumaWidth > pcInputPicture->m_cPicBuffer.m_iStride) ? internalLumaWidth : pcInputPicture->m_cPicBuffer.m_iStride;
+  int internalLumaWidth = ((pcYuvPicture->width + 7)/8)*8;
+  int internalLumaHeight = ((pcYuvPicture->height + 7)/8)*8;
+  int internalLumaStride = (internalLumaWidth > pcYuvPicture->stride) ? internalLumaWidth : pcYuvPicture->stride;
 
   int iChromaInStride = internalLumaStride >> 1;
-  if( pcInputPicture->m_cPicBuffer.m_iCStride && pcInputPicture->m_cPicBuffer.m_iCStride > (internalLumaWidth >> 1) )
+  if( pcYuvPicture->cStride && pcYuvPicture->cStride > (internalLumaWidth >> 1) )
   {
-    iChromaInStride =  pcInputPicture->m_cPicBuffer.m_iCStride;
+    iChromaInStride =  pcYuvPicture->cStride;
   }
 
   YUVBuffer cYUVBuffer;
@@ -318,35 +316,35 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
   }
 
   xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[0].planeBuf, cYUVBuffer.yuvPlanes[0].stride, cYUVBuffer.yuvPlanes[0].width, cYUVBuffer.yuvPlanes[0].height,
-                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvY, pcInputPicture->m_cPicBuffer.m_iStride, pcInputPicture->m_cPicBuffer.m_iWidth, pcInputPicture->m_cPicBuffer.m_iHeight );
+                         (int16_t*)pcYuvPicture->y, pcYuvPicture->stride, pcYuvPicture->width, pcYuvPicture->height );
   xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[1].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[1].width, cYUVBuffer.yuvPlanes[1].height,
-                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvU, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1 );
+                         (int16_t*)pcYuvPicture->u, iChromaInStride, pcYuvPicture->width>>1, pcYuvPicture->height>>1 );
   xCopyAndPadInputPlane( cYUVBuffer.yuvPlanes[2].planeBuf, iChromaInStride, cYUVBuffer.yuvPlanes[2].width, cYUVBuffer.yuvPlanes[2].height,
-                         (int16_t*)pcInputPicture->m_cPicBuffer.m_pvV, iChromaInStride, pcInputPicture->m_cPicBuffer.m_iWidth>>1, pcInputPicture->m_cPicBuffer.m_iHeight>>1 );
+                         (int16_t*)pcYuvPicture->v, iChromaInStride, pcYuvPicture->width>>1, pcYuvPicture->height>>1 );
 
 
-  cYUVBuffer.sequenceNumber = pcInputPicture->m_cPicBuffer.m_uiSequenceNumber;
-  if( pcInputPicture->m_cPicBuffer.m_bCtsValid )
+  cYUVBuffer.sequenceNumber = pcYuvPicture->sequenceNumber;
+  if( pcYuvPicture->ctsValid )
   {
-    cYUVBuffer.cts = pcInputPicture->m_cPicBuffer.m_uiCts;
+    cYUVBuffer.cts = pcYuvPicture->cts;
     cYUVBuffer.ctsValid = true;
   }
 
   // reset AU data
-  rcVvcAccessUnit.m_iUsedSize      = 0;
-  rcVvcAccessUnit.m_uiCts          = 0;
-  rcVvcAccessUnit.m_uiDts          = 0;
-  rcVvcAccessUnit.m_bCtsValid      = false;
-  rcVvcAccessUnit.m_bDtsValid      = false;
-  rcVvcAccessUnit.m_bRAP           = false;
-  rcVvcAccessUnit.m_eSliceType     = NUMBER_OF_SLICE_TYPES;
-  rcVvcAccessUnit.m_bRefPic        = false;
-  rcVvcAccessUnit.m_iTemporalLayer = 0;
-  rcVvcAccessUnit.m_uiPOC          = 0;
-  rcVvcAccessUnit.m_iStatus        = 0;
-  rcVvcAccessUnit.m_cInfo.clear();
-  rcVvcAccessUnit.m_NalUnitTypeVec.clear();
-  rcVvcAccessUnit.m_annexBsizeVec.clear();
+  rcVvcAccessUnit.payloadUsedSize  = 0;
+  rcVvcAccessUnit.cts              = 0;
+  rcVvcAccessUnit.dts              = 0;
+  rcVvcAccessUnit.ctsValid         = false;
+  rcVvcAccessUnit.dtsValid         = false;
+  rcVvcAccessUnit.rap              = false;
+  rcVvcAccessUnit.sliceType        = NUMBER_OF_SLICE_TYPES;
+  rcVvcAccessUnit.refPic           = false;
+  rcVvcAccessUnit.temporalLayer    = 0;
+  rcVvcAccessUnit.poc              = 0;
+  rcVvcAccessUnit.status           = 0;
+  rcVvcAccessUnit.infoString.clear();
+  rcVvcAccessUnit.nalUnitTypeVec.clear();
+  rcVvcAccessUnit.annexBsizeVec.clear();
 
   AccessUnit cAu;
   bool encDone = false;
@@ -362,7 +360,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
   }
 
   /* copy output AU */
-  rcVvcAccessUnit.m_iUsedSize = 0;
+  rcVvcAccessUnit.payloadUsedSize = 0;
   if ( !cAu.empty() )
   {
     iRet = xCopyAu( rcVvcAccessUnit, cAu  );
@@ -382,7 +380,7 @@ int VVEncImpl::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessU
 int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)
 {
   if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
-  if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if( 0 == rcVvcAccessUnit.payloadSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
   if( m_bFlushed )                     { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
@@ -514,20 +512,20 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)
   cYUVBuffer.ctsValid       = pcYUVBuffer->ctsValid;
 
   // reset AU data
-  rcVvcAccessUnit.m_iUsedSize  = 0;
-  rcVvcAccessUnit.m_uiCts      = 0;
-  rcVvcAccessUnit.m_uiDts      = 0;
-  rcVvcAccessUnit.m_bCtsValid  = false;
-  rcVvcAccessUnit.m_bDtsValid  = false;
-  rcVvcAccessUnit.m_bRAP       = false;
-  rcVvcAccessUnit.m_eSliceType = NUMBER_OF_SLICE_TYPES;
-  rcVvcAccessUnit.m_bRefPic    = false;
-  rcVvcAccessUnit.m_iTemporalLayer = 0;
-  rcVvcAccessUnit.m_uiPOC   = 0;
-  rcVvcAccessUnit.m_iStatus = 0;
-  rcVvcAccessUnit.m_cInfo.clear();
-  rcVvcAccessUnit.m_NalUnitTypeVec.clear();
-  rcVvcAccessUnit.m_annexBsizeVec.clear();
+  rcVvcAccessUnit.payloadUsedSize  = 0;
+  rcVvcAccessUnit.cts      = 0;
+  rcVvcAccessUnit.dts      = 0;
+  rcVvcAccessUnit.ctsValid  = false;
+  rcVvcAccessUnit.dtsValid  = false;
+  rcVvcAccessUnit.rap       = false;
+  rcVvcAccessUnit.sliceType = NUMBER_OF_SLICE_TYPES;
+  rcVvcAccessUnit.refPic    = false;
+  rcVvcAccessUnit.temporalLayer = 0;
+  rcVvcAccessUnit.poc   = 0;
+  rcVvcAccessUnit.status = 0;
+  rcVvcAccessUnit.infoString.clear();
+  rcVvcAccessUnit.nalUnitTypeVec.clear();
+  rcVvcAccessUnit.annexBsizeVec.clear();
 
   AccessUnit cAu;
   bool encDone = false;
@@ -543,7 +541,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)
   }
 
   /* copy output AU */
-  rcVvcAccessUnit.m_iUsedSize = 0;
+  rcVvcAccessUnit.payloadUsedSize = 0;
   if ( !cAu.empty() )
   {
     iRet = xCopyAu( rcVvcAccessUnit, cAu  );
@@ -563,23 +561,23 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)
 int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
 {
   if( !m_bInitialized )                { return VVENC_ERR_INITIALIZE; }
-  if( 0 == rcVvcAccessUnit.m_iBufSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
+  if( 0 == rcVvcAccessUnit.payloadSize ){ m_cErrorString = "AccessUnit BufferSize is 0"; return VVENC_NOT_ENOUGH_MEM; }
 
   // reset AU data
-  rcVvcAccessUnit.m_iUsedSize      = 0;
-  rcVvcAccessUnit.m_uiCts          = 0;
-  rcVvcAccessUnit.m_uiDts          = 0;
-  rcVvcAccessUnit.m_bCtsValid      = false;
-  rcVvcAccessUnit.m_bDtsValid      = false;
-  rcVvcAccessUnit.m_bRAP           = false;
-  rcVvcAccessUnit.m_eSliceType     = NUMBER_OF_SLICE_TYPES;
-  rcVvcAccessUnit.m_bRefPic        = false;
-  rcVvcAccessUnit.m_iTemporalLayer = 0;
-  rcVvcAccessUnit.m_uiPOC          = 0;
-  rcVvcAccessUnit.m_iStatus        = 0;
-  rcVvcAccessUnit.m_cInfo.clear();
-  rcVvcAccessUnit.m_NalUnitTypeVec.clear();
-  rcVvcAccessUnit.m_annexBsizeVec.clear();
+  rcVvcAccessUnit.payloadUsedSize      = 0;
+  rcVvcAccessUnit.cts          = 0;
+  rcVvcAccessUnit.dts          = 0;
+  rcVvcAccessUnit.ctsValid      = false;
+  rcVvcAccessUnit.dtsValid      = false;
+  rcVvcAccessUnit.rap           = false;
+  rcVvcAccessUnit.sliceType     = NUMBER_OF_SLICE_TYPES;
+  rcVvcAccessUnit.refPic        = false;
+  rcVvcAccessUnit.temporalLayer = 0;
+  rcVvcAccessUnit.poc          = 0;
+  rcVvcAccessUnit.status        = 0;
+  rcVvcAccessUnit.infoString.clear();
+  rcVvcAccessUnit.nalUnitTypeVec.clear();
+  rcVvcAccessUnit.annexBsizeVec.clear();
 
   YUVBuffer cYUVBuffer;
   AccessUnit cAu;
@@ -599,7 +597,7 @@ int VVEncImpl::flush( VvcAccessUnit& rcVvcAccessUnit )
   }
 
   /* copy next output AU */
-  rcVvcAccessUnit.m_iUsedSize = 0;
+  rcVvcAccessUnit.payloadUsedSize = 0;
   int iRet                    = VVENC_OK;
   if( !cAu.empty() )
   {
@@ -784,55 +782,55 @@ std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
 int VVEncImpl::xCheckParameter( const vvenc::VVEncParameter& rcSrc, std::string& rcErrorString ) const
 {
   // check src params
-  ROTPARAMS( rcSrc.m_iQp < 0 || rcSrc.m_iQp > 51,                                           "qp must be between 0 - 51."  );
+  ROTPARAMS( rcSrc.qp < 0 || rcSrc.qp > 51,                                           "qp must be between 0 - 51."  );
 
-  ROTPARAMS( ( rcSrc.m_iWidth == 0 )   || ( rcSrc.m_iHeight == 0 ),                         "specify input picture dimension"  );
+  ROTPARAMS( ( rcSrc.width == 0 )   || ( rcSrc.height == 0 ),                         "specify input picture dimension"  );
 
-  ROTPARAMS( rcSrc.m_iTemporalScale != 1 && rcSrc.m_iTemporalScale != 2 && rcSrc.m_iTemporalScale != 4 && rcSrc.m_iTemporalScale != 1001,   "TemporalScale has to be 1, 2, 4 or 1001" );
+  ROTPARAMS( rcSrc.temporalScale != 1 && rcSrc.temporalScale != 2 && rcSrc.temporalScale != 4 && rcSrc.temporalScale != 1001,   "TemporalScale has to be 1, 2, 4 or 1001" );
 
-  double dFPS = (double)rcSrc.m_iTemporalRate / (double)rcSrc.m_iTemporalScale;
+  double dFPS = (double)rcSrc.temporalRate / (double)rcSrc.temporalScale;
   ROTPARAMS( dFPS < 1.0 || dFPS > 120,                                                      "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
 
-  ROTPARAMS( rcSrc.m_iTicksPerSecond <= 0 || rcSrc.m_iTicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
-  ROTPARAMS( (rcSrc.m_iTicksPerSecond < 90000) && (rcSrc.m_iTicksPerSecond*rcSrc.m_iTemporalScale)%rcSrc.m_iTemporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  ROTPARAMS( rcSrc.ticksPerSecond <= 0 || rcSrc.ticksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
+  ROTPARAMS( (rcSrc.ticksPerSecond < 90000) && (rcSrc.ticksPerSecond*rcSrc.temporalScale)%rcSrc.temporalRate,        "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  ROTPARAMS( rcSrc.m_iThreadCount < 0,                                                      "ThreadCount must be >= 0" );
+  ROTPARAMS( rcSrc.threadCount < 0,                                                      "ThreadCount must be >= 0" );
 
-  ROTPARAMS( rcSrc.m_iIDRPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
-  ROTPARAMS( rcSrc.m_iIDRPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
+  ROTPARAMS( rcSrc.idrPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
+  ROTPARAMS( rcSrc.idrPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
 
-  ROTPARAMS( rcSrc.m_iTemporalRate  <= 0,                                                   "TemporalRate must be > 0" );
-  ROTPARAMS( rcSrc.m_iTemporalScale <= 0,                                                   "TemporalScale must be > 0" );
+  ROTPARAMS( rcSrc.temporalRate  <= 0,                                                   "TemporalRate must be > 0" );
+  ROTPARAMS( rcSrc.temporalScale <= 0,                                                   "TemporalScale must be > 0" );
 
-  ROTPARAMS( rcSrc.m_iGopSize != 1 && rcSrc.m_iGopSize != 16 && rcSrc.m_iGopSize != 32,     "GOP size 1, 16, 32 supported" );
+  ROTPARAMS( rcSrc.gopSize != 1 && rcSrc.gopSize != 16 && rcSrc.gopSize != 32,          "GOP size 1, 16, 32 supported" );
 
-  if( 1 != rcSrc.m_iGopSize && ( rcSrc.m_iIDRPeriod > 0  ))
+  if( 1 != rcSrc.gopSize && ( rcSrc.idrPeriod > 0  ))
   {
-    ROTPARAMS( (rcSrc.m_eDecodingRefreshType == DRT_IDR || rcSrc.m_eDecodingRefreshType == DRT_CRA )&& (0 != rcSrc.m_iIDRPeriod % rcSrc.m_iGopSize),          "IDR period must be multiple of GOPSize" );
+    ROTPARAMS( (rcSrc.decodingRefreshType == DRT_IDR || rcSrc.decodingRefreshType == DRT_CRA )&& (0 != rcSrc.idrPeriod % rcSrc.gopSize),          "IDR period must be multiple of GOPSize" );
   }
 
-  ROTPARAMS( rcSrc.m_iPerceptualQPA < 0 || rcSrc.m_iPerceptualQPA > 5,                      "Perceptual QPA must be in the range 0 - 5" );
+  ROTPARAMS( rcSrc.perceptualQPA < 0 || rcSrc.perceptualQPA > 5,                      "Perceptual QPA must be in the range 0 - 5" );
 
-  ROTPARAMS( rcSrc.m_eProfile != Profile::MAIN_10 && rcSrc.m_eProfile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_eProfile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
+  ROTPARAMS( rcSrc.profile != Profile::MAIN_10 && rcSrc.profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.profile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( (rcSrc.m_iQuality < 0 || rcSrc.m_iQuality > 4) && rcSrc.m_iQuality != 255,     "quality must be between 0 - 4  (0: faster, 1: fast, 2: medium, 3: slow, 4: slower)" );
-  ROTPARAMS( rcSrc.m_iTargetBitRate < 0 || rcSrc.m_iTargetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
-  ROTPARAMS( rcSrc.m_iTargetBitRate == 0 && rcSrc.m_iNumPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
-  ROTPARAMS( rcSrc.m_iNumPasses < 1 || rcSrc.m_iNumPasses > 2,                              "Only one pass or two pass encoding supported"  );
+  ROTPARAMS( (rcSrc.quality < 0 || rcSrc.quality > 4) && rcSrc.quality != 255,        "quality must be between 0 - 4  (0: faster, 1: fast, 2: medium, 3: slow, 4: slower)" );
+  ROTPARAMS( rcSrc.targetBitRate < 0 || rcSrc.targetBitRate > 100000000,              "TargetBitrate must be between 0 - 100000000" );
+  ROTPARAMS( rcSrc.targetBitRate == 0 && rcSrc.numPasses != 1,                        "Only single pass encoding supported, when rate control is disabled" );
+  ROTPARAMS( rcSrc.numPasses < 1 || rcSrc.numPasses > 2,                              "Only one pass or two pass encoding supported"  );
 
-  ROTPARAMS( rcSrc.m_eMsgLevel < 0 || rcSrc.m_eMsgLevel > DETAILS,                          "log message level range 0 - 6" );
+  ROTPARAMS( rcSrc.msgLevel < 0 || rcSrc.msgLevel > DETAILS,                          "log message level range 0 - 6" );
 
-  ROTPARAMS( rcSrc.m_eSegMode != SEG_OFF && rcSrc.m_iMaxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
+  ROTPARAMS( rcSrc.segmentMode != SEG_OFF && rcSrc.maxFrames < MCTF_RANGE,            "When using segment parallel encoding more then 2 frames have to be encoded" );
 
-  if( 0 == rcSrc.m_iTargetBitRate )
+  if( 0 == rcSrc.targetBitRate )
   {
-    ROTPARAMS( rcSrc.m_bHrdParametersPresent,              "hrdParameters present requires rate control" );
-    ROTPARAMS( rcSrc.m_bBufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
-    ROTPARAMS( rcSrc.m_bPictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+    ROTPARAMS( rcSrc.useHrdParametersPresent,              "hrdParameters present requires rate control" );
+    ROTPARAMS( rcSrc.useBufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+    ROTPARAMS( rcSrc.usePictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
   }
 
-  ROTPARAMS( rcSrc.m_iInputBitDepth != 8 && rcSrc.m_iInputBitDepth != 10,                   "Input bitdepth must be 8 or 10 bit" );
-  ROTPARAMS( rcSrc.m_iInternalBitDepth != 8 && rcSrc.m_iInternalBitDepth != 10,             "Internal bitdepth must be 8 or 10 bit" );
+  ROTPARAMS( rcSrc.inputBitDepth != 8 && rcSrc.inputBitDepth != 10,                   "Input bitdepth must be 8 or 10 bit" );
+  ROTPARAMS( rcSrc.internalBitDepth != 8 && rcSrc.internalBitDepth != 10,             "Internal bitdepth must be 8 or 10 bit" );
 
   return 0;
 }
@@ -902,24 +900,24 @@ int VVEncImpl::xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString 
 
 int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEncCfg )
 {
-  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.m_eMsgLevel, (int)vvenc::DETAILS);
+  rcEncCfg.m_verbosity = std::min( (int)rcVVEncParameter.msgLevel, (int)vvenc::DETAILS);
 
-  rcEncCfg.m_SourceWidth               = rcVVEncParameter.m_iWidth;
-  rcEncCfg.m_SourceHeight              = rcVVEncParameter.m_iHeight;
-  rcEncCfg.m_QP                        = rcVVEncParameter.m_iQp;
+  rcEncCfg.m_SourceWidth               = rcVVEncParameter.width;
+  rcEncCfg.m_SourceHeight              = rcVVEncParameter.height;
+  rcEncCfg.m_QP                        = rcVVEncParameter.qp;
 
-  rcEncCfg.m_usePerceptQPA             = rcVVEncParameter.m_iPerceptualQPA;
+  rcEncCfg.m_usePerceptQPA             = rcVVEncParameter.perceptualQPA;
 
-  rcEncCfg.m_AccessUnitDelimiter       = rcVVEncParameter.m_bAccessUnitDelimiter;
-  rcEncCfg.m_hrdParametersPresent      = rcVVEncParameter.m_bHrdParametersPresent;
-  rcEncCfg.m_bufferingPeriodSEIEnabled = rcVVEncParameter.m_bBufferingPeriodSEIEnabled;
-  rcEncCfg.m_pictureTimingSEIEnabled   = rcVVEncParameter.m_bPictureTimingSEIEnabled;
+  rcEncCfg.m_AccessUnitDelimiter       = rcVVEncParameter.useAccessUnitDelimiter;
+  rcEncCfg.m_hrdParametersPresent      = rcVVEncParameter.useHrdParametersPresent;
+  rcEncCfg.m_bufferingPeriodSEIEnabled = rcVVEncParameter.useBufferingPeriodSEIEnabled;
+  rcEncCfg.m_pictureTimingSEIEnabled   = rcVVEncParameter.usePictureTimingSEIEnabled;
 
-  if(  rcVVEncParameter.m_iTargetBitRate )
+  if(  rcVVEncParameter.targetBitRate )
   {
     rcEncCfg.m_RCRateControlMode     = 2;
-    rcEncCfg.m_RCNumPasses           = rcVVEncParameter.m_iNumPasses;
-    rcEncCfg.m_RCTargetBitrate       = rcVVEncParameter.m_iTargetBitRate;
+    rcEncCfg.m_RCNumPasses           = rcVVEncParameter.numPasses;
+    rcEncCfg.m_RCTargetBitrate       = rcVVEncParameter.targetBitRate;
     rcEncCfg.m_RCKeepHierarchicalBit = 2;
     rcEncCfg.m_RCUseLCUSeparateModel = 1;
     rcEncCfg.m_RCInitialQP           = 0;
@@ -932,63 +930,63 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
     rcEncCfg.m_RCTargetBitrate       = 0;
   }
 
-  rcEncCfg.m_inputBitDepth[0]    = rcVVEncParameter.m_iInputBitDepth;
-  rcEncCfg.m_inputBitDepth[1]    = rcVVEncParameter.m_iInputBitDepth;
-  rcEncCfg.m_internalBitDepth[0] = rcVVEncParameter.m_iInternalBitDepth;
-  rcEncCfg.m_internalBitDepth[1] = rcVVEncParameter.m_iInternalBitDepth;;
+  rcEncCfg.m_inputBitDepth[0]    = rcVVEncParameter.inputBitDepth;
+  rcEncCfg.m_inputBitDepth[1]    = rcVVEncParameter.inputBitDepth;
+  rcEncCfg.m_internalBitDepth[0] = rcVVEncParameter.internalBitDepth;
+  rcEncCfg.m_internalBitDepth[1] = rcVVEncParameter.internalBitDepth;;
 
-  rcEncCfg.m_numWppThreads = rcVVEncParameter.m_iThreadCount;
-  if( rcVVEncParameter.m_iThreadCount > 0 )
+  rcEncCfg.m_numWppThreads = rcVVEncParameter.threadCount;
+  if( rcVVEncParameter.threadCount > 0 )
   {
       rcEncCfg.m_ensureWppBitEqual = 1;
   }
 
-  rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
-  rcEncCfg.m_framesToBeEncoded                   = rcVVEncParameter.m_iMaxFrames;
+  rcEncCfg.m_FrameRate                           = rcVVEncParameter.temporalRate / rcVVEncParameter.temporalScale;
+  rcEncCfg.m_framesToBeEncoded                   = rcVVEncParameter.maxFrames;
 
   //======== Coding Structure =============
-  rcEncCfg.m_GOPSize                             = rcVVEncParameter.m_iGopSize;
+  rcEncCfg.m_GOPSize                             = rcVVEncParameter.gopSize;
   rcEncCfg.m_InputQueueSize                      = 0;
 
-  if( rcVVEncParameter.m_iIDRPeriod >= rcVVEncParameter.m_iGopSize  )
+  if( rcVVEncParameter.idrPeriod >= rcVVEncParameter.gopSize  )
   {
-    rcEncCfg.m_IntraPeriod                       = rcVVEncParameter.m_iIDRPeriod;
+    rcEncCfg.m_IntraPeriod                       = rcVVEncParameter.idrPeriod;
   }
-  else // use m_iIDRPeriodSec
+  else // use idrPeriodSec
   {
-    if ( rcEncCfg.m_FrameRate % rcVVEncParameter.m_iGopSize == 0 )
+    if ( rcEncCfg.m_FrameRate % rcVVEncParameter.gopSize == 0 )
     {
-      rcEncCfg.m_IntraPeriod = rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec;
+      rcEncCfg.m_IntraPeriod = rcEncCfg.m_FrameRate * rcVVEncParameter.idrPeriodSec;
     }
     else
     {
-      int iIDRPeriod  = (rcEncCfg.m_FrameRate * rcVVEncParameter.m_iIDRPeriodSec);
-      if( iIDRPeriod < rcVVEncParameter.m_iGopSize )
+      int iIDRPeriod  = (rcEncCfg.m_FrameRate * rcVVEncParameter.idrPeriodSec);
+      if( iIDRPeriod < rcVVEncParameter.gopSize )
       {
-        iIDRPeriod = rcVVEncParameter.m_iGopSize;
+        iIDRPeriod = rcVVEncParameter.gopSize;
       }
 
-      int iDiff = iIDRPeriod % rcVVEncParameter.m_iGopSize;
-      if( iDiff < rcVVEncParameter.m_iGopSize >> 1 )
+      int iDiff = iIDRPeriod % rcVVEncParameter.gopSize;
+      if( iDiff < rcVVEncParameter.gopSize >> 1 )
       {
         rcEncCfg.m_IntraPeriod = iIDRPeriod - iDiff;
       }
       else
       {
-        rcEncCfg.m_IntraPeriod = iIDRPeriod + rcVVEncParameter.m_iGopSize - iDiff;
+        rcEncCfg.m_IntraPeriod = iIDRPeriod + rcVVEncParameter.gopSize - iDiff;
       }
     }
   }
 
-  if( rcVVEncParameter.m_eDecodingRefreshType == DRT_IDR )
+  if( rcVVEncParameter.decodingRefreshType == DRT_IDR )
   {
     rcEncCfg.m_DecodingRefreshType                 = 2;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
-  else if( rcVVEncParameter.m_eDecodingRefreshType == DRT_CRA )
+  else if( rcVVEncParameter.decodingRefreshType == DRT_CRA )
   {
     rcEncCfg.m_DecodingRefreshType                 = 1;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
-  else if( rcVVEncParameter.m_eDecodingRefreshType == DRT_RECOVERY_POINT_SEI )
+  else if( rcVVEncParameter.decodingRefreshType == DRT_RECOVERY_POINT_SEI )
   {
     rcEncCfg.m_DecodingRefreshType                 = 3;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
   }
@@ -998,27 +996,27 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
   }
 
   //======== Profile ================
-  rcEncCfg.m_profile   = (vvenc::Profile)rcVVEncParameter.m_eProfile;
-  rcEncCfg.m_levelTier = (vvenc::Tier)rcVVEncParameter.m_eTier;
-  rcEncCfg.m_level     = (vvenc::Level)rcVVEncParameter.m_eLevel;
+  rcEncCfg.m_profile   = (vvenc::Profile)rcVVEncParameter.profile;
+  rcEncCfg.m_levelTier = (vvenc::Tier)rcVVEncParameter.tier;
+  rcEncCfg.m_level     = (vvenc::Level)rcVVEncParameter.level;
 
   rcEncCfg.m_bitDepthConstraintValue = 10;
   rcEncCfg.m_rewriteParamSets        = true;
   rcEncCfg.m_internChromaFormat      = vvenc::CHROMA_420;
 
-  if( 0 != rcEncCfg.initPreset( (PresetMode)rcVVEncParameter.m_iQuality  ) )
+  if( 0 != rcEncCfg.initPreset( (PresetMode)rcVVEncParameter.quality  ) )
   {
     std::stringstream css;
-    css << "undefined quality preset " << rcVVEncParameter.m_iQuality << " quality must be between 0 - 4.";
+    css << "undefined quality preset " << rcVVEncParameter.quality << " quality must be between 0 - 4.";
     m_cErrorString  = css.str();
     return VVENC_ERR_PARAMETER;
   }
 
-  if( rcVVEncParameter.m_eSegMode != SEG_OFF )
+  if( rcVVEncParameter.segmentMode != SEG_OFF )
   {
     if( rcEncCfg.m_MCTF )
     {
-      switch( rcVVEncParameter.m_eSegMode )
+      switch( rcVVEncParameter.segmentMode )
       {
         case SEG_FIRST:
           rcEncCfg.m_MCTFNumLeadFrames  = 0;
@@ -1091,7 +1089,7 @@ int VVEncImpl::xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const
 
 int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu )
 {
-  rcVvcAccessUnit.m_bRAP = false;
+  rcVvcAccessUnit.rap = false;
 
   std::vector<uint32_t> annexBsizes;
 
@@ -1123,7 +1121,7 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       annexBsizes.push_back( size );
     }
 
-    if( rcVvcAccessUnit.m_iBufSize < (int)sizeSum || rcVvcAccessUnit.m_pucBuffer == NULL )
+    if( rcVvcAccessUnit.payloadSize < (int)sizeSum || rcVvcAccessUnit.payload == NULL )
     {
       return VVENC_NOT_ENOUGH_MEM;
     }
@@ -1149,16 +1147,16 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
          *    unit of an access unit in decoding order, as specified by subclause
          *    7.4.1.2.3.
          */
-        ::memcpy( rcVvcAccessUnit.m_pucBuffer + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
+        ::memcpy( rcVvcAccessUnit.payload + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
         iUsedSize += 4;
       }
       else
       {
-        ::memcpy( rcVvcAccessUnit.m_pucBuffer + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
+        ::memcpy( rcVvcAccessUnit.payload + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
         iUsedSize += 3;
       }
       uint32_t nalDataSize = uint32_t(nalu.m_nalUnitData.str().size()) ;
-      ::memcpy( rcVvcAccessUnit.m_pucBuffer + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
+      ::memcpy( rcVvcAccessUnit.payload + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
       iUsedSize += nalDataSize;
 
       if( nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
@@ -1166,10 +1164,10 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
           nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_CRA ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_GDR )
       {
-        rcVvcAccessUnit.m_bRAP = true;
+        rcVvcAccessUnit.rap = true;
       }
 
-      rcVvcAccessUnit.m_NalUnitTypeVec.push_back( nalu.m_nalUnitType );
+      rcVvcAccessUnit.nalUnitTypeVec.push_back( nalu.m_nalUnitType );
     }
 
     if( iUsedSize != sizeSum  )
@@ -1177,19 +1175,18 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       return VVENC_NOT_ENOUGH_MEM;
     }
 
-    rcVvcAccessUnit.m_iUsedSize = iUsedSize;
-    rcVvcAccessUnit.m_annexBsizeVec = annexBsizes;
-    rcVvcAccessUnit.m_bCtsValid = rcAu.m_bCtsValid;
-    rcVvcAccessUnit.m_bDtsValid = rcAu.m_bDtsValid;
-    rcVvcAccessUnit.m_uiCts     = rcAu.m_uiCts;
-    rcVvcAccessUnit.m_uiDts     = rcAu.m_uiDts;
-
-    rcVvcAccessUnit.m_eSliceType     = (SliceType)rcAu.m_eSliceType;
-    rcVvcAccessUnit.m_bRefPic        = rcAu.m_bRefPic;
-    rcVvcAccessUnit.m_iTemporalLayer = rcAu.m_iTemporalLayer;
-    rcVvcAccessUnit.m_uiPOC          = rcAu.m_uiPOC;
-    rcVvcAccessUnit.m_cInfo          = rcAu.m_cInfo;
-    rcVvcAccessUnit.m_iStatus        = rcAu.m_iStatus;
+    rcVvcAccessUnit.payloadUsedSize = iUsedSize;
+    rcVvcAccessUnit.annexBsizeVec   = annexBsizes;
+    rcVvcAccessUnit.ctsValid        = rcAu.ctsValid;
+    rcVvcAccessUnit.dtsValid        = rcAu.dtsValid;
+    rcVvcAccessUnit.cts             = rcAu.cts;
+    rcVvcAccessUnit.dts             = rcAu.dts;
+    rcVvcAccessUnit.sliceType       = (SliceType)rcAu.sliceType;
+    rcVvcAccessUnit.refPic          = rcAu.refPic;
+    rcVvcAccessUnit.temporalLayer   = rcAu.temporalLayer;
+    rcVvcAccessUnit.poc             = rcAu.poc;
+    rcVvcAccessUnit.infoString      = rcAu.InfoString;
+    rcVvcAccessUnit.status          = rcAu.status;
   }
 
   return 0;

@@ -153,8 +153,8 @@ void EncApp::encode()
 
 
   vvenc::VvcAccessUnit au;
-  au.m_iBufSize  = m_cEncAppCfg.m_SourceWidth * m_cEncAppCfg.m_SourceHeight;
-  au.m_pucBuffer = new unsigned char [ au.m_iBufSize ];
+  au.payloadSize = m_cEncAppCfg.m_SourceWidth * m_cEncAppCfg.m_SourceHeight;
+  au.payload     = new unsigned char [ au.payloadSize ];
 
   int framesRcvd = 0;
   for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
@@ -212,7 +212,7 @@ void EncApp::encode()
       else
       {
         iRet = m_cVVEnc.flush( au );
-        encDone = au.m_iUsedSize == 0 ? true : false;
+        encDone = au.payloadUsedSize == 0 ? true : false;
         if( 0 != iRet )
         {
           msgApp( ERROR, "encoding failed: err code %d - %s\n", iRet, m_cVVEnc.getLastError().c_str() );
@@ -222,7 +222,7 @@ void EncApp::encode()
 
 
       // write out encoded access units
-      if( au.m_iUsedSize > 0 )
+      if( au.payloadUsedSize > 0 )
       {
         outputAU( au );
       }
@@ -240,7 +240,7 @@ void EncApp::encode()
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );
 
-  delete[] au.m_pucBuffer;
+  delete[] au.payload;
 
   // cleanup encoder lib
   m_cVVEnc.uninit();
@@ -308,10 +308,10 @@ void EncApp::closeFileIO()
 
 void EncApp::rateStatsAccum(const VvcAccessUnit& au )
 {
-  std::vector<NalUnitType>::const_iterator it_nal = au.m_NalUnitTypeVec.begin();
-  std::vector<uint32_t>::const_iterator it_nalsize = au.m_annexBsizeVec.begin();
+  std::vector<NalUnitType>::const_iterator it_nal = au.nalUnitTypeVec.begin();
+  std::vector<uint32_t>::const_iterator it_nalsize = au.annexBsizeVec.begin();
 
-  for( ; it_nal != au.m_NalUnitTypeVec.end(); it_nal++, it_nalsize++ )
+  for( ; it_nal != au.nalUnitTypeVec.end(); it_nal++, it_nalsize++ )
   {
     switch( (*it_nal) )
     {

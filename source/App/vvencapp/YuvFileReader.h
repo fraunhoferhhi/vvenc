@@ -71,7 +71,7 @@ public:
   /// Constructor
   YuvFileReader()
   {
-    m_cReadBuffer.m_pucDeletePicBuffer = nullptr;
+    m_cReadBuffer.deletePicBuffer = nullptr;
   }
 
   /// Destructor
@@ -102,19 +102,19 @@ public:
     m_iDestBitDepth = iDestBitDepth;
     m_iPicSize = (1+!!(iFileBitDepth>8))* iWidth * iHeight * 3 / 2;
     m_iReadWidth = iWidth;
-    m_iWidth = iWidth;
-    m_iHeight = iHeight;
+    width = iWidth;
+    height = iHeight;
     m_iRepeatTimes = iRepeatTimes;
 
     m_bPacked = bPacked;
 
     if( m_bPacked )
     {
-      m_iReadWidth = m_iWidth*10/16;
+      m_iReadWidth = width*10/16;
       m_iPicSize = 2*m_iReadWidth * iHeight * 3 / 2;
       int iRet = allocBuffer( m_cReadBuffer );
-      m_cReadBuffer.m_iWidth = m_iReadWidth;
-      m_cReadBuffer.m_iStride = m_iReadWidth;
+      m_cReadBuffer.width = m_iReadWidth;
+      m_cReadBuffer.stride = m_iReadWidth;
       if( iRet ) { return iRet; }
     }
 
@@ -144,40 +144,40 @@ public:
     if( !m_bInitialized ){ assert( m_bInitialized ); return -1; }
 
     delete [] m_psBuffer;
-    delete [] m_cReadBuffer.m_pucDeletePicBuffer;
+    delete [] m_cReadBuffer.deletePicBuffer;
     m_cIS.close();
 
     m_bInitialized = false;
     return 0;
   }
 
-  template< class PicBufferLocal >
-  int allocBuffer( PicBufferLocal& rcPicBuffer )
+  template< class YuvPictureLocal >
+  int allocBuffer( YuvPictureLocal& rcYuvPicture )
   {
     if( !m_bInitialized ){ assert( m_bInitialized ); return -1; }
 
     const int iSizeFactor     = 2;
     const int iAlignmentGuard =16;
-    rcPicBuffer.m_iBitDepth = m_iDestBitDepth;
-    rcPicBuffer.m_iWidth    = m_iWidth;
-    rcPicBuffer.m_iHeight   = m_iHeight;
-    rcPicBuffer.m_iStride   = m_iWidth;
-    int iLumaSize   = m_iWidth * m_iHeight;
+    rcYuvPicture.bitDepth = m_iDestBitDepth;
+    rcYuvPicture.width    = width;
+    rcYuvPicture.height   = height;
+    rcYuvPicture.stride   = width;
+    int iLumaSize   = width * height;
     const int iBufSize = iSizeFactor * iLumaSize * 3 / 2 + 3*iAlignmentGuard;
 
-    rcPicBuffer.m_pucDeletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
-    if( NULL == rcPicBuffer.m_pucDeletePicBuffer )
+    rcYuvPicture.deletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
+    if( NULL == rcYuvPicture.deletePicBuffer )
     {
       return vvenc::VVENC_NOT_ENOUGH_MEM;
     }
 
-    unsigned char* pY = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( 0 );
-    unsigned char* pU = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( iLumaSize);
-    unsigned char* pV = rcPicBuffer.m_pucDeletePicBuffer + iSizeFactor * ( 5*iLumaSize/4);
+    unsigned char* pY = rcYuvPicture.deletePicBuffer + iSizeFactor * ( 0 );
+    unsigned char* pU = rcYuvPicture.deletePicBuffer + iSizeFactor * ( iLumaSize);
+    unsigned char* pV = rcYuvPicture.deletePicBuffer + iSizeFactor * ( 5*iLumaSize/4);
 
-    rcPicBuffer.m_pvY = (pY +   iAlignmentGuard) - (((size_t)pY) & (iAlignmentGuard-1));
-    rcPicBuffer.m_pvU = (pU + 2*iAlignmentGuard) - (((size_t)pU) & (iAlignmentGuard-1));
-    rcPicBuffer.m_pvV = (pV + 3*iAlignmentGuard) - (((size_t)pV) & (iAlignmentGuard-1));
+    rcYuvPicture.y = (pY +   iAlignmentGuard) - (((size_t)pY) & (iAlignmentGuard-1));
+    rcYuvPicture.u = (pU + 2*iAlignmentGuard) - (((size_t)pU) & (iAlignmentGuard-1));
+    rcYuvPicture.v = (pV + 3*iAlignmentGuard) - (((size_t)pV) & (iAlignmentGuard-1));
 
     return 0;
   }
@@ -193,7 +193,7 @@ public:
   }
 
 
-  virtual int readPicture( vvenc::PicBuffer& rcPicBuffer )
+  virtual int readPicture( vvenc::YuvPicture& rcYuvPicture )
   {
     if( !m_bInitialized ){ assert( m_bInitialized ); return -1; }
 
@@ -202,7 +202,7 @@ public:
       return -1;
     }
 
-    vvenc::PicBuffer& rcReadBuffer = m_bPacked ? m_cReadBuffer : rcPicBuffer;
+    vvenc::YuvPicture& rcReadBuffer = m_bPacked ? m_cReadBuffer : rcYuvPicture;
 
     int iRet = xReadPicture( rcReadBuffer );
     if( iRet != 0 && m_iRepeatTimes )
@@ -216,7 +216,7 @@ public:
 
     if( m_bPacked )
     {
-      xConvertPicture( rcPicBuffer, rcReadBuffer );
+      xConvertPicture( rcYuvPicture, rcReadBuffer );
     }
 
     return iRet;
@@ -224,30 +224,30 @@ public:
 
 protected:
 
-  virtual void xConvertPicture( vvenc::PicBuffer& rcOut, const vvenc::PicBuffer& rcIn)
+  virtual void xConvertPicture( vvenc::YuvPicture& rcOut, const vvenc::YuvPicture& rcIn)
   {
-    extCopyUnPack10BitBlk((short*)rcOut.m_pvY, rcOut.m_iStride, rcOut.m_iWidth, rcOut.m_iHeight, (unsigned char*)rcIn.m_pvY);
-    extCopyUnPack10BitBlk((short*)rcOut.m_pvU, rcOut.m_iStride >> 1, rcOut.m_iWidth >> 1, rcOut.m_iHeight >> 1, (unsigned char*)rcIn.m_pvU);
-    extCopyUnPack10BitBlk((short*)rcOut.m_pvV, rcOut.m_iStride >> 1, rcOut.m_iWidth >> 1, rcOut.m_iHeight >> 1, (unsigned char*)rcIn.m_pvV);
+    extCopyUnPack10BitBlk((short*)rcOut.y, rcOut.stride, rcOut.width, rcOut.height, (unsigned char*)rcIn.y);
+    extCopyUnPack10BitBlk((short*)rcOut.u, rcOut.stride >> 1, rcOut.width >> 1, rcOut.height >> 1, (unsigned char*)rcIn.u);
+    extCopyUnPack10BitBlk((short*)rcOut.v, rcOut.stride >> 1, rcOut.width >> 1, rcOut.height >> 1, (unsigned char*)rcIn.v);
   }
 
 private:
 
-  int xReadPicture( vvenc::PicBuffer& rcPicBuffer )
+  int xReadPicture( vvenc::YuvPicture& rcYuvPicture )
   {
     // let's focus on 420
     const int iCWidth  = m_iReadWidth>>1;
-    const int iCHeight = m_iHeight>>1;
-    const int iCStride = rcPicBuffer.m_iStride>>1;
-    assert( rcPicBuffer.m_iBitDepth == m_iDestBitDepth );
+    const int iCHeight = height>>1;
+    const int iCStride = rcYuvPicture.stride>>1;
+    assert( rcYuvPicture.bitDepth == m_iDestBitDepth );
 
-    rcPicBuffer.m_iWidth = m_iWidth;
-    rcPicBuffer.m_iHeight = m_iHeight;
+    rcYuvPicture.width = width;
+    rcYuvPicture.height = height;
 
     const size_t lBefore = m_cIS.tellg();
-    xReadPlane( rcPicBuffer.m_pvY, rcPicBuffer.m_iStride, m_iReadWidth, m_iHeight );
-    xReadPlane( rcPicBuffer.m_pvU, iCStride, iCWidth, iCHeight );
-    xReadPlane( rcPicBuffer.m_pvV, iCStride, iCWidth, iCHeight );
+    xReadPlane( rcYuvPicture.y, rcYuvPicture.stride, m_iReadWidth, height );
+    xReadPlane( rcYuvPicture.u, iCStride, iCWidth, iCHeight );
+    xReadPlane( rcYuvPicture.v, iCStride, iCWidth, iCHeight );
     // check if this read was okay
     const size_t lAfter = m_cIS.tellg();
     return (int)(lBefore + m_iPicSize - lAfter);
@@ -363,13 +363,13 @@ protected:
   int m_iFileBitDepth = 10;
   int m_iDestBitDepth = 10;
   int m_iReadWidth    = 0;
-  int m_iWidth        = 0;
-  int m_iHeight       = 0;
+  int width        = 0;
+  int height       = 0;
   int m_iRepeatTimes  = 0;
   bool m_bPacked      = false;
   size_t m_iPicSize   = 0;
   std::ifstream m_cIS;
-  vvenc::PicBuffer m_cReadBuffer;
+  vvenc::YuvPicture m_cReadBuffer;
 };
 
 } // namespace

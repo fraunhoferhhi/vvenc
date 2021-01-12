@@ -78,7 +78,7 @@ VVEnc::~VVEnc()
 
 int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
 {
-  if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
+  if( rcVVEncParameter.threadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
   return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
 }
@@ -86,7 +86,7 @@ int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
 int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
 {
   if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-  if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
+  if( rcVVEncParameter.threadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
   return m_pcVVEncImpl->init( rcVVEncParameter );
 }
@@ -117,11 +117,11 @@ bool VVEnc::isInitialized()
   return m_pcVVEncImpl->isInitialized();
 }
 
-int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
+int VVEnc::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit )
 {
   if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
+  return m_pcVVEncImpl->encode( pcYuvPicture, rcVvcAccessUnit );
 }
 
 int VVEnc::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit)

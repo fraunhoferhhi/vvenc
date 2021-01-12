@@ -1360,12 +1360,12 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
 {
   pic.encTime.startTimer();
 
-  au.m_uiPOC          = pic.poc;
-  au.m_iTemporalLayer = pic.TLayer;
-  au.m_bRefPic        = pic.isReferenced;
+  au.poc           = pic.poc;
+  au.temporalLayer = pic.TLayer;
+  au.refPic        = pic.isReferenced;
   if ( ! pic.slices.empty() )
   {
-    au.m_eSliceType = pic.slices[ 0 ]->sliceType;
+    au.sliceType = pic.slices[ 0 ]->sliceType;
   }
 
   m_actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
@@ -1934,7 +1934,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
           m_pcRateCtrl->rcMaxPass + 1,
           slice->poc );
 
-          accessUnit.m_cInfo.append( cInfo );
+          accessUnit.InfoString.append( cInfo );
 
           msg( NOTICE, cInfo.c_str() );
     }
@@ -1949,8 +1949,8 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
       std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
 
-      accessUnit.m_cInfo.append( cInfo );
-      accessUnit.m_cInfo.append( cPSNR );
+      accessUnit.InfoString.append( cInfo );
+      accessUnit.InfoString.append( cPSNR );
 
       msg( NOTICE, cInfo.c_str() );
       msg( NOTICE, cPSNR.c_str() );
@@ -1968,19 +1968,19 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
         std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
 
-        accessUnit.m_cInfo.append( cPSNRHex );
+        accessUnit.InfoString.append( cPSNRHex );
         msg(NOTICE, cPSNRHex.c_str() );
       }
 
       if( printFrameMSE )
       {
         std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
-        accessUnit.m_cInfo.append( cFrameMSE );
+        accessUnit.InfoString.append( cFrameMSE );
         msg(NOTICE, cFrameMSE.c_str() );
       }
 
       std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
-      accessUnit.m_cInfo.append( cEncTime );
+      accessUnit.InfoString.append( cEncTime );
       msg(NOTICE, cEncTime.c_str() );
 
       std::string cRefPics;
@@ -1995,7 +1995,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
         }
         cRefPics.append( "]" );
       }
-      accessUnit.m_cInfo.append( cRefPics );
+      accessUnit.InfoString.append( cRefPics );
       msg(NOTICE, cRefPics.c_str() );
     }
   }
