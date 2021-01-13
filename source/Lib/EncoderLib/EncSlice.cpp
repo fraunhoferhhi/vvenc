@@ -537,7 +537,7 @@ void EncSlice::compressSlice( Picture* pic )
   }
 
   xProcessCtus( pic, startCtuTsAddr, boundingCtuTsAddr );
-  if( !( m_pcEncCfg->m_numWppThreads && m_pcEncCfg->m_maxParallelFrames ) || m_pcEncCfg->m_numFppThreads )
+  if( !( (m_pcEncCfg->m_numWppThreads>0) && m_pcEncCfg->m_maxParallelFrames ) || m_pcEncCfg->m_numFppThreads )
   {
     xFinishCompressSlice( pic, *slice );
   }

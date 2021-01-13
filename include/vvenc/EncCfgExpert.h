@@ -62,6 +62,23 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
+enum FastInterSearchMode
+{
+  FASTINTERSEARCH_DISABLED = 0,
+  FASTINTERSEARCH_MODE1    = 1,
+  FASTINTERSEARCH_MODE2    = 2,
+  FASTINTERSEARCH_MODE3    = 3
+};
+
+enum CostMode
+{
+  COST_STANDARD_LOSSY              = 0,
+  COST_SEQUENCE_LEVEL_LOSSLESS     = 1,
+  COST_LOSSLESS_CODING             = 2,
+  COST_MIXED_LOSSLESS_LOSSY_CODING = 3
+};
+
 // ====================================================================================================================
 
 struct VVENC_DECL GOPEntry

@@ -233,7 +233,7 @@ bool VVEncImpl::isInitialized() const
 }
 
 
-int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone )
+int VVEncImpl::encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
 {
   if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
   if( m_bFlushed )                      { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
@@ -333,24 +333,24 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
 
 
   // reset AU data
-  rcVvcAccessUnit.payload.clear();
-  rcVvcAccessUnit.cts              = 0;
-  rcVvcAccessUnit.dts              = 0;
-  rcVvcAccessUnit.ctsValid         = false;
-  rcVvcAccessUnit.dtsValid         = false;
-  rcVvcAccessUnit.rap              = false;
-  rcVvcAccessUnit.sliceType        = NUMBER_OF_SLICE_TYPES;
-  rcVvcAccessUnit.refPic           = false;
-  rcVvcAccessUnit.temporalLayer    = 0;
-  rcVvcAccessUnit.poc              = 0;
-  rcVvcAccessUnit.status           = 0;
-  rcVvcAccessUnit.infoString.clear();
-  rcVvcAccessUnit.nalUnitTypeVec.clear();
-  rcVvcAccessUnit.annexBsizeVec.clear();
+  rcAccessUnit.payload.clear();
+  rcAccessUnit.cts              = 0;
+  rcAccessUnit.dts              = 0;
+  rcAccessUnit.ctsValid         = false;
+  rcAccessUnit.dtsValid         = false;
+  rcAccessUnit.rap              = false;
+  rcAccessUnit.sliceType        = NUMBER_OF_SLICE_TYPES;
+  rcAccessUnit.refPic           = false;
+  rcAccessUnit.temporalLayer    = 0;
+  rcAccessUnit.poc              = 0;
+  rcAccessUnit.status           = 0;
+  rcAccessUnit.infoString.clear();
+  rcAccessUnit.nalUnitTypeVec.clear();
+  rcAccessUnit.annexBsizeVec.clear();
 
   rbEncodeDone = false;
 
-  AccessUnit cAu;
+  AccessUnitList cAu;
   try
   {
     m_pEncLib->encodePicture( bFlush, cYUVBuffer, cAu, rbEncodeDone );
@@ -366,7 +366,7 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
   /* copy output AU */
   if ( !cAu.empty() )
   {
-    iRet = xCopyAu( rcVvcAccessUnit, cAu  );
+    iRet = xCopyAu( rcAccessUnit, cAu  );
   }
 
   if( cYUVBuffer.yuvPlanes[0].planeBuf )
@@ -383,7 +383,7 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
   return iRet;
 }
 
-int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone )
+int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
 {
   if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
   if( m_bFlushed )                      { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
@@ -519,24 +519,24 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, b
   }
 
   // reset AU data
-  rcVvcAccessUnit.payload.clear();
-  rcVvcAccessUnit.cts      = 0;
-  rcVvcAccessUnit.dts      = 0;
-  rcVvcAccessUnit.ctsValid  = false;
-  rcVvcAccessUnit.dtsValid  = false;
-  rcVvcAccessUnit.rap       = false;
-  rcVvcAccessUnit.sliceType = NUMBER_OF_SLICE_TYPES;
-  rcVvcAccessUnit.refPic    = false;
-  rcVvcAccessUnit.temporalLayer = 0;
-  rcVvcAccessUnit.poc   = 0;
-  rcVvcAccessUnit.status = 0;
-  rcVvcAccessUnit.infoString.clear();
-  rcVvcAccessUnit.nalUnitTypeVec.clear();
-  rcVvcAccessUnit.annexBsizeVec.clear();
+  rcAccessUnit.payload.clear();
+  rcAccessUnit.cts      = 0;
+  rcAccessUnit.dts      = 0;
+  rcAccessUnit.ctsValid  = false;
+  rcAccessUnit.dtsValid  = false;
+  rcAccessUnit.rap       = false;
+  rcAccessUnit.sliceType = NUMBER_OF_SLICE_TYPES;
+  rcAccessUnit.refPic    = false;
+  rcAccessUnit.temporalLayer = 0;
+  rcAccessUnit.poc   = 0;
+  rcAccessUnit.status = 0;
+  rcAccessUnit.infoString.clear();
+  rcAccessUnit.nalUnitTypeVec.clear();
+  rcAccessUnit.annexBsizeVec.clear();
 
   rbEncodeDone = false;
 
-  AccessUnit cAu;
+  AccessUnitList cAu;
   try
   {
     m_pEncLib->encodePicture( bFlush, cYUVBuffer, cAu, rbEncodeDone );
@@ -552,7 +552,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, b
   /* copy output AU */
   if ( !cAu.empty() )
   {
-    iRet = xCopyAu( rcVvcAccessUnit, cAu  );
+    iRet = xCopyAu( rcAccessUnit, cAu  );
   }
 
   /* free memory of input image */
@@ -1028,22 +1028,22 @@ int VVEncImpl::xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const
 }
 
 
-int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu )
+int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& rcAuList )
 {
-  rcVvcAccessUnit.rap = false;
+  rcAccessUnit.rap = false;
 
   std::vector<uint32_t> annexBsizes;
 
   /* copy output AU */
-  if ( ! rcAu.empty() )
+  if ( ! rcAuList.empty() )
   {
     uint32_t sizeSum = 0;
-    for (vvenc::AccessUnit::const_iterator it = rcAu.begin(); it != rcAu.end(); it++)
+    for (vvenc::AccessUnitList::const_iterator it = rcAuList.begin(); it != rcAuList.end(); it++)
     {
       const vvenc::NALUnitEBSP& nalu = **it;
       uint32_t size = 0; /* size of annexB unit in bytes */
 
-      if (it == rcAu.begin() ||
+      if (it == rcAuList.begin() ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_DCI ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_SPS ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_VPS ||
@@ -1062,13 +1062,13 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       annexBsizes.push_back( size );
     }
 
-    rcVvcAccessUnit.payload.resize( sizeSum );
+    rcAccessUnit.payload.resize( sizeSum );
     uint32_t iUsedSize = 0;
-    for (vvenc::AccessUnit::const_iterator it = rcAu.begin(); it != rcAu.end(); it++)
+    for (vvenc::AccessUnitList::const_iterator it = rcAuList.begin(); it != rcAuList.end(); it++)
     {
       const vvenc::NALUnitEBSP& nalu = **it;
       static const uint8_t start_code_prefix[] = {0,0,0,1};
-      if (it == rcAu.begin() ||
+      if (it == rcAuList.begin() ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_DCI ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_SPS ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_VPS ||
@@ -1084,16 +1084,16 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
          *    unit of an access unit in decoding order, as specified by subclause
          *    7.4.1.2.3.
          */
-        ::memcpy( rcVvcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
+        ::memcpy( rcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
         iUsedSize += 4;
       }
       else
       {
-        ::memcpy( rcVvcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
+        ::memcpy( rcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
         iUsedSize += 3;
       }
       uint32_t nalDataSize = uint32_t(nalu.m_nalUnitData.str().size()) ;
-      ::memcpy( rcVvcAccessUnit.payload.data() + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
+      ::memcpy( rcAccessUnit.payload.data() + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
       iUsedSize += nalDataSize;
 
       if( nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
@@ -1101,10 +1101,10 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
           nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_CRA ||
           nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_GDR )
       {
-        rcVvcAccessUnit.rap = true;
+        rcAccessUnit.rap = true;
       }
 
-      rcVvcAccessUnit.nalUnitTypeVec.push_back( nalu.m_nalUnitType );
+      rcAccessUnit.nalUnitTypeVec.push_back( nalu.m_nalUnitType );
     }
 
     if( iUsedSize != sizeSum  )
@@ -1112,17 +1112,17 @@ int VVEncImpl::xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit&
       return VVENC_NOT_ENOUGH_MEM;
     }
 
-    rcVvcAccessUnit.annexBsizeVec   = annexBsizes;
-    rcVvcAccessUnit.ctsValid        = rcAu.ctsValid;
-    rcVvcAccessUnit.dtsValid        = rcAu.dtsValid;
-    rcVvcAccessUnit.cts             = rcAu.cts;
-    rcVvcAccessUnit.dts             = rcAu.dts;
-    rcVvcAccessUnit.sliceType       = (SliceType)rcAu.sliceType;
-    rcVvcAccessUnit.refPic          = rcAu.refPic;
-    rcVvcAccessUnit.temporalLayer   = rcAu.temporalLayer;
-    rcVvcAccessUnit.poc             = rcAu.poc;
-    rcVvcAccessUnit.infoString      = rcAu.InfoString;
-    rcVvcAccessUnit.status          = rcAu.status;
+    rcAccessUnit.annexBsizeVec   = annexBsizes;
+    rcAccessUnit.ctsValid        = rcAuList.ctsValid;
+    rcAccessUnit.dtsValid        = rcAuList.dtsValid;
+    rcAccessUnit.cts             = rcAuList.cts;
+    rcAccessUnit.dts             = rcAuList.dts;
+    rcAccessUnit.sliceType       = (SliceType)rcAuList.sliceType;
+    rcAccessUnit.refPic          = rcAuList.refPic;
+    rcAccessUnit.temporalLayer   = rcAuList.temporalLayer;
+    rcAccessUnit.poc             = rcAuList.poc;
+    rcAccessUnit.infoString      = rcAuList.InfoString;
+    rcAccessUnit.status          = rcAuList.status;
   }
 
   return 0;

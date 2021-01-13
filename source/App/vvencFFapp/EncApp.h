@@ -152,7 +152,7 @@ public:
 
   bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
   void  encode();                                     ///< main encoding function
-  void  outputAU ( const VvcAccessUnit& au );         ///< write encoded access units to bitstream
+  void  outputAU ( const AccessUnit& au );         ///< write encoded access units to bitstream
   void  outputYuv( const YUVBuffer& yuvOutBuf );      ///< write reconstructed yuv output
 
 private:
@@ -161,7 +161,7 @@ private:
   void closeFileIO();
 
   // statistics
-  void rateStatsAccum  ( const VvcAccessUnit& au );
+  void rateStatsAccum  ( const AccessUnit& au );
   void printRateSummary( int framesRcvd );
   void printChromaFormat();
 };

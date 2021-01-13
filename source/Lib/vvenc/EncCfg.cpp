@@ -113,7 +113,7 @@ bool EncCfg::initCfgParameter()
     CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
   }
 
-  if( m_maxParallelFrames > 0 && !m_numWppThreads && !m_numFppThreads )
+  if( m_maxParallelFrames > 0 && (m_numWppThreads<=0) && !m_numFppThreads )
   {
     // Use picture threads for FPP
     m_numFppThreads = m_maxParallelFrames;
@@ -411,7 +411,11 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
   confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+#if IDR_FIX
+  confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#else
   confirmParameter( m_IntraPeriod > 0 && m_DecodingRefreshType !=1,                             "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#endif
   confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
   confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
@@ -430,9 +434,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
 
-  confirmParameter( m_numWppThreads < 0,                            "NumWppThreads out of range");
+  confirmParameter( m_numWppThreads < -1,                            "NumWppThreads out of range");
   confirmParameter( m_ensureWppBitEqual<0 || m_ensureWppBitEqual>1, "WppBitEqual out of range");
-  confirmParameter( m_numWppThreads && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
+  confirmParameter( (m_numWppThreads>0) && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
 
   if (m_lumaReshapeEnable)
   {

@@ -242,10 +242,10 @@ void EncLib::initPass( int pass )
   xInitHrdParameters( sps0 );
 
   // thread pool
-  if( m_cEncCfg.m_numWppThreads > 0 )
+  if( m_cEncCfg.m_numWppThreads > 0 || m_cEncCfg.m_numFppThreads > 0 )
   {
-    const int maxCntEnc = ( m_cEncCfg.m_numWppThreads > 0 ) ? std::min( (int)pps0.pcv->heightInCtus, m_cEncCfg.m_numWppThreads) : 1;
-    m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
+    const int maxThreads = ( m_cEncCfg.m_numWppThreads > 0 ) ? m_cEncCfg.m_numWppThreads * ( std::max( m_cEncCfg.m_numFppThreads, 1 ) ) + m_cEncCfg.m_numFppThreads: m_cEncCfg.m_numFppThreads;
+    m_threadPool = new NoMallocThreadPool( maxThreads, "EncSliceThreadPool" );
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
@@ -368,7 +368,7 @@ void EncLib::xSetRCEncCfg( int pass )
 // Public member functions
 // ====================================================================================================================
 
-void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty )
+void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
@@ -536,7 +536,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
     while ( picItr != std::end( m_cListPic ) )
     {
       Picture* curPic = *picItr;
-      if ( !isPicInUse( curPic ) )
+      if ( curPic->isFinished && !curPic->isNeededForOutput && !curPic->isReferenced && curPic->refCounter <= 0 )
       {
         pic = curPic;
         break;

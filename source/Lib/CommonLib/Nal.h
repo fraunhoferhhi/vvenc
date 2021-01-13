@@ -157,15 +157,15 @@ struct VVENC_DECL NALUnitEBSP : public NALUnit
  * The AccessUnit owns all pointers stored within.  Destroying the
  * AccessUnit will delete all contained objects.
  */
-class VVENC_DECL AccessUnit : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
+class VVENC_DECL AccessUnitList : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
 {
 public:
-  AccessUnit()
+  AccessUnitList()
   {
     clearAu();
   }
 
-  ~AccessUnit()
+  ~AccessUnitList()
   {
     clearAu();
   }
@@ -184,7 +184,7 @@ public:
     refPic        = false;
     InfoString.clear();
 
-    for (AccessUnit::iterator it = this->begin(); it != this->end(); it++)
+    for (AccessUnitList::iterator it = this->begin(); it != this->end(); it++)
     {
       delete *it;
     }

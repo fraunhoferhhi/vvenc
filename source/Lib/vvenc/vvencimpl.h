@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 class EncLib;
-class AccessUnit;
+class AccessUnitList;
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
@@ -82,8 +82,8 @@ public:
 
   bool isInitialized() const;
 
-  int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit, bool& rEncodeDone );
-  int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, bool& rEncodeDone);
+  int encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rEncodeDone );
+  int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
 
   int getConfig( VVEncParameter& rcVVEncParameter ) const;
   int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
@@ -121,7 +121,7 @@ private:
 
   int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
                        const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight );
-  int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const AccessUnit& rcAu );
+  int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:
   bool                   m_bInitialized         = false;
