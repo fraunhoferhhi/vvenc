@@ -281,6 +281,7 @@ namespace vvenc {
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
+    std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
 
   public:
     EncRCSeq*   encRCSeq;
@@ -295,6 +296,7 @@ namespace vvenc {
   private:
     std::list<EncRCPic*>    m_listRCPictures;
     std::list<TRCPassStats> m_listRCFirstPassStats;
+    std::vector<uint8_t>    m_listRCIntraPQPAStats;
   };
 }
 #endif

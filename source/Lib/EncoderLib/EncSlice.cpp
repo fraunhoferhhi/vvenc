@@ -279,15 +279,39 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == 2 ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
+    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == 0 && slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
+
+    if ((m_pcEncCfg->m_RCNumPasses == 2) && m_pcRateCtrl->rcIsFinalPass && slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && (boundingCtuTsAddr > startCtuTsAddr))
+    {
+      const int nCtu = int (boundingCtuTsAddr - startCtuTsAddr);
+      const int offs = (slice->poc / m_pcEncCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
+      std::vector<uint8_t>& ctuQPMem = *m_pcRateCtrl->getIntraPQPAStats(); // unpack pass-1 red. QPs
+      std::vector<int>& ctuPumpRedQP = *m_LineEncRsrc[0]->m_encCu.getQpPtr();
+
+      if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
+      {
+        const int dvsr = nCtu * (m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize);
+        int sliceRedQP = 0;
+
+        for (uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++)
+        {
+          const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
+
+          ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
+          sliceRedQP += ctuPumpRedQP[ctuRsAddr];
+        }
+        if (sliceRedQP < 0) iQP += (sliceRedQP * m_pcEncCfg->m_GOPSize - (dvsr >> 1)) / dvsr; // avg
+        else /* positive */ iQP += (sliceRedQP * m_pcEncCfg->m_GOPSize + (dvsr >> 1)) / dvsr;
+      }
+    }
 
     slice->sliceQp = iQP; // start slice QP for reference
     slice->pic->picInitialQP = iQP;
 
     if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                     rcIsFirstPassOf2,
+                                                     (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
                                                      startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_usePerceptQPA > 2)) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
@@ -603,10 +627,10 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
     int getNextTsAddr( const int _tsAddr ) const
     {
       const PreCalcValues& pcv  = *cs.pcv;
-      const int startSliceRsRow = m_startTsAddr / pcv.widthInCtus;     
-      const int startSliceRsCol = m_startTsAddr % pcv.widthInCtus;     
-      const int endSliceRsRow   = (m_endTsAddr - 1) / pcv.widthInCtus; 
-      const int endSliceRsCol   = (m_endTsAddr - 1) % pcv.widthInCtus; 
+      const int startSliceRsRow = m_startTsAddr / pcv.widthInCtus;
+      const int startSliceRsCol = m_startTsAddr % pcv.widthInCtus;
+      const int endSliceRsRow   = (m_endTsAddr - 1) / pcv.widthInCtus;
+      const int endSliceRsCol   = (m_endTsAddr - 1) % pcv.widthInCtus;
             int ctuTsAddr = _tsAddr;
       CHECK( ctuTsAddr > m_endTsAddr, "error: array index out of bounds" );
       while( ctuTsAddr < m_endTsAddr )
