@@ -514,8 +514,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
         {
           if (ctuPumpRedQP[ctuRsAddr] < 0) adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize - (dvsr >> 1)) / dvsr);
           else /*ctuPumpRedQP[addr] >= 0*/ adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize + (dvsr >> 1)) / dvsr);
-          ctuPumpRedQP[ctuRsAddr] = 0; // reset QP data for temporal pumping analysis
         }
+        ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
       meanLuma = MAX_UINT;
       if (isChromaEnabled (pic->chromaFormat) && (adaptedLumaQP < MAX_QP))
@@ -584,8 +584,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
       }
     } // end CTU-wise loop
 
-    adaptedSliceQP = ((savedQP < 0 || (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && (ctuPumpRedQP.size() > nCtu))) && (ctuBoundingAddr > ctuStartAddr)
-                      ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
+    adaptedSliceQP = ((savedQP < 0) && (ctuBoundingAddr > ctuStartAddr) ? (adaptedSliceQP < 0 ? adaptedSliceQP - (nCtu >> 1) : adaptedSliceQP + (nCtu >> 1)) / nCtu : sliceQP); // mean adapted luma QP
   }
 
   return adaptedSliceQP;

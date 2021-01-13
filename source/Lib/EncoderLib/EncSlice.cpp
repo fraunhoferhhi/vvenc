@@ -292,18 +292,12 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 
       if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
       {
-        const int dvsr = nCtu * (m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize);
-        int sliceRedQP = 0;
-
         for (uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++)
         {
           const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
 
           ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
-          sliceRedQP += ctuPumpRedQP[ctuRsAddr];
         }
-        if (sliceRedQP < 0) iQP += (sliceRedQP * m_pcEncCfg->m_GOPSize - (dvsr >> 1)) / dvsr; // avg
-        else /* positive */ iQP += (sliceRedQP * m_pcEncCfg->m_GOPSize + (dvsr >> 1)) / dvsr;
       }
     }
 
