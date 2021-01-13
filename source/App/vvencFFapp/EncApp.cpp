@@ -98,7 +98,7 @@ bool EncApp::parseCfg( int argc, char* argv[] )
       return false;
     }
   }
-  catch( VVCEncoderFFApp::df::program_options_lite::ParseFailure &e )
+  catch( apputils::df::program_options_lite::ParseFailure &e )
   {
     msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;

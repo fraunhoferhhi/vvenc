@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup Interface
 //! \{
 
-namespace VVCEncoderFFApp {
+namespace apputils {
 
 namespace df
 {
