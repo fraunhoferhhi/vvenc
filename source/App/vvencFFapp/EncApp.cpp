@@ -131,6 +131,7 @@ void EncApp::encode()
   // initialize encoder lib
   if( 0 != m_cVVEnc.init( m_cEncAppCfg, this ) )
   {
+    msgApp( ERROR, m_cVVEnc.getLastError().c_str() );
     return;
   }
 

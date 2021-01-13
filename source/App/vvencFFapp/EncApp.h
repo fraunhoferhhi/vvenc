@@ -133,8 +133,8 @@ class EncApp : public vvenc::YUVWriterIf
 private:
   EncAppCfg    m_cEncAppCfg;                      ///< encoder configuration
   VVEnc        m_cVVEnc;                          ///< encoder library class
-  YuvIO        m_yuvInputFile;                    ///< input YUV file
-  YuvIO        m_yuvReconFile;                    ///< output YUV reconstruction file
+  YuvFileIO    m_yuvInputFile;                    ///< input YUV file
+  YuvFileIO    m_yuvReconFile;                    ///< output YUV reconstruction file
   std::fstream m_bitstream;                       ///< output bitstream file
   unsigned     m_essentialBytes;
   unsigned     m_totalBytes;
@@ -152,7 +152,7 @@ public:
 
   bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
   void  encode();                                     ///< main encoding function
-  void  outputAU ( const AccessUnit& au );         ///< write encoded access units to bitstream
+  void  outputAU ( const AccessUnit& au );            ///< write encoded access units to bitstream
   void  outputYuv( const YUVBuffer& yuvOutBuf );      ///< write reconstructed yuv output
 
 private:
