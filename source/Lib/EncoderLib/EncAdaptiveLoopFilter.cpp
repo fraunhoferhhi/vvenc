@@ -574,7 +574,7 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
 void EncAdaptiveLoopFilter::init( const EncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
 {
 
-  AdaptiveLoopFilter::create( encCfg.m_SourceWidth, encCfg.m_SourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth );
+  AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth );
 
   m_encCfg = &encCfg;
   m_CABACEstimator = &cabacEstimator;
@@ -689,9 +689,9 @@ void EncAdaptiveLoopFilter::init( const EncCfg& encCfg, CABACWriter& cabacEstima
   }
   m_filterControl         = new uint8_t[m_numCTUsInPic];
   m_bestFilterControl     = new uint8_t[m_numCTUsInPic];
-  uint32_t area           = (encCfg.m_SourceWidth >> getComponentScaleX(COMP_Cb,encCfg.m_internChromaFormat))*(encCfg.m_SourceHeight >> getComponentScaleY(COMP_Cb,encCfg.m_internChromaFormat));
+  uint32_t area           = (encCfg.m_PadSourceWidth >> getComponentScaleX(COMP_Cb,encCfg.m_internChromaFormat))*(encCfg.m_PadSourceHeight >> getComponentScaleY(COMP_Cb,encCfg.m_internChromaFormat));
   m_bufOrigin             = ( Pel* ) xMalloc( Pel, area );
-  m_buf                   = new PelBuf( m_bufOrigin, encCfg.m_SourceWidth >> getComponentScaleX(COMP_Cb,encCfg.m_internChromaFormat), encCfg.m_SourceWidth >> getComponentScaleX(COMP_Cb,encCfg.m_internChromaFormat), encCfg.m_SourceHeight >> getComponentScaleY(COMP_Cb,encCfg.m_internChromaFormat) );
+  m_buf                   = new PelBuf( m_bufOrigin, encCfg.m_PadSourceWidth >> getComponentScaleX(COMP_Cb,encCfg.m_internChromaFormat), encCfg.m_PadSourceWidth >> getComponentScaleX(COMP_Cb,encCfg.m_internChromaFormat), encCfg.m_PadSourceHeight >> getComponentScaleY(COMP_Cb,encCfg.m_internChromaFormat) );
   m_lumaSwingGreaterThanThresholdCount = new uint64_t[m_numCTUsInPic];
   m_chromaSampleCountNearMidPoint = new uint64_t[m_numCTUsInPic];
   m_threadpool = threadpool;

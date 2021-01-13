@@ -264,7 +264,7 @@ void EncCu::init( const EncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter,
   const unsigned maxDepth = 2*maxSizeIdx;
   m_CtxBuffer.resize( maxDepth );
   m_CurrCtx = 0;
-  m_dbBuffer.create( chromaFormat, Area( 0, 0, encCfg.m_SourceWidth, encCfg.m_SourceHeight ) );
+  m_dbBuffer.create( chromaFormat, Area( 0, 0, encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight ) );
 }
 
 
@@ -554,8 +554,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
 
       if ((!slice.isIntra() || slice.sps->IBC) && // Museum fix
-          (uiLPelX + (pcv.maxCUSize >> 1) < m_pcEncCfg->m_SourceWidth) &&
-          (uiTPelY + (pcv.maxCUSize >> 1) < m_pcEncCfg->m_SourceHeight))
+          (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
+          (uiTPelY + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceHeight)))
       {
         const uint32_t h = lumaArea.height >> 1;
         const uint32_t w = lumaArea.width  >> 1;
@@ -569,7 +569,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         if ( ( m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == 3 && pic->gopId > 0 ) ) || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
         {
           if (m_pcEncCfg->m_usePerceptQPATempFiltISlice && (m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) // last CTU row of non-Intra key-frame
-              && (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_SourceHeight))
+              && (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
           {
             m_globalCtuQpVector->at (ctuRsAddr) = m_globalCtuQpVector->at (ctuRsAddr - pcv.widthInCtus);  // copy pumping reducing QP offset from top CTU neighbor
             tempCS->currQP[partitioner.chType] = tempCS->baseQP =

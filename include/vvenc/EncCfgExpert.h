@@ -268,6 +268,9 @@ public:
 
   unsigned            m_temporalSubsampleRatio;                         ///< temporal subsample ratio, 2 means code every two frames
 
+  int                 m_PadSourceWidth;                                 ///< source width in pixel
+  int                 m_PadSourceHeight;                                ///< source height in pixel (when interlaced = field height)
+
   int                 m_aiPad[ 2 ];                                     ///< number of padded pixels for width and height
   bool                m_enablePictureHeaderInSliceHeader;
   bool                m_AccessUnitDelimiter;                            ///< add Access Unit Delimiter NAL units
@@ -528,6 +531,8 @@ public:
       , m_confWinBottom                               ( 0 )
 
       , m_temporalSubsampleRatio                      ( 1 )
+      , m_PadSourceWidth                              ( 0 )
+      , m_PadSourceHeight                             ( 0 )
 
       , m_aiPad                                       { 0, 0 }
       , m_enablePictureHeaderInSliceHeader            ( true )

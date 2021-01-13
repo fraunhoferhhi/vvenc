@@ -60,30 +60,28 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // ====================================================================================================================
-class YUVBuffer;
+struct YUVBuffer;
 
 class VVENC_DECL YuvIO
 {
 private:
-  std::fstream  m_cHandle;                            ///< file handle
-  int           m_fileBitdepth[ MAX_NUM_CH ];         ///< bitdepth of input/output video file
-  int           m_MSBExtendedBitDepth[ MAX_NUM_CH ];  ///< bitdepth after addition of MSBs (with value 0)
-  int           m_bitdepthShift[ MAX_NUM_CH ];        ///< number of bits to increase or decrease image by before/after write/read
+  std::fstream  m_cHandle;              ///< file handle
+  int           m_fileBitdepth;         ///< bitdepth of input/output video file
+  int           m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
+  int           m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
+  ChromaFormat  m_fileChrFmt;  
+  ChromaFormat  m_bufferChrFmt;
+  bool          m_clipToRec709;
 
 public:
-  void  open( const std::string &fileName, bool bWriteMode, const int fileBitDepth[ MAX_NUM_CH ], const int MSBExtendedBitDepth[ MAX_NUM_CH ], const int internalBitDepth[ MAX_NUM_CH ] );
+  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709 );
   void  close();
   bool  isEof();
   bool  isFail();
-  void  skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int width, int height );
-  bool  readYuvBuf   ( YUVBuffer& yuvInBuf,        const ChromaFormat& inputChFmt,  const ChromaFormat& internChFmt, const int pad[ 2 ], bool bClipToRec709 );
-  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf, const ChromaFormat& internChFmt, const ChromaFormat& outputChFmt, bool bPackedYUVOutputMode, bool bClipToRec709 );
+  void  skipYuvFrames( int numFrames, int width, int height );
+  bool  readYuvBuf   ( YUVBuffer& yuvInBuf );
+  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf, bool packedYUVMode );
 };
-
-// ====================================================================================================================
-
-class VvcAccessUnit;
-std::vector<uint32_t> VVENC_DECL writeAnnexB( std::ostream& out, const VvcAccessUnit& au );
 
 } // namespace vvenc
 

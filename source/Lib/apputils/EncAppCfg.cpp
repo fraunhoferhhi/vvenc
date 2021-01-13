@@ -979,6 +979,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   confirmParameter( m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
   confirmParameter( m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
   confirmParameter( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT,   "Intern chroma format must be either 400, 420, 422 or 444" );
+
   if ( m_confirmFailed )
   {
     return false;
@@ -1001,6 +1002,26 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   {
     return false;
   }
+
+  if( m_packedYUVMode && ! m_reconFileName.empty() )  
+  {
+    if( ( m_outputBitDepth[ CH_L ] != 10 && m_outputBitDepth[ CH_L ] != 12 )
+        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) )
+    {
+      confirmParameter( true, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
+    }
+    // th fix this later
+//    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
+//          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
+//    {
+//      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
+//    }
+    if ( m_confirmFailed )
+    {
+      return false;
+    }
+  }
+
 
   return true;
 }

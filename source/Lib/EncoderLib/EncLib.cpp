@@ -123,8 +123,8 @@ void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 #if ENABLE_TIME_PROFILING_PIC_TYPES
     g_timeProfiler = new TimeProfiler2D( 3, 1 );
 #elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
-    int   widthInCTU  = ( m_cEncCfg.m_SourceWidth % m_cEncCfg.m_CTUSize )  ? m_cEncCfg.m_SourceWidth/m_cEncCfg.m_CTUSize  + 1 : m_cEncCfg.m_SourceWidth/m_cEncCfg.m_CTUSize;
-    int   heightInCTU = ( m_cEncCfg.m_SourceHeight % m_cEncCfg.m_CTUSize ) ? m_cEncCfg.m_SourceHeight/m_cEncCfg.m_CTUSize + 1 : m_cEncCfg.m_SourceHeight/m_cEncCfg.m_CTUSize;
+    int   widthInCTU  = ( m_cEncCfg.m_PadSourceWidth % m_cEncCfg.m_CTUSize )  ? m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize  + 1 : m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize;
+    int   heightInCTU = ( m_cEncCfg.m_PadSourceHeight % m_cEncCfg.m_CTUSize ) ? m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize + 1 : m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize;
     g_timeProfiler = new TimeProfiler2D( widthInCTU, heightInCTU, 2 );
 #elif ENABLE_TIME_PROFILING_CU_SHAPES
     g_timeProfiler = new TimeProfiler2D( Log2(m_cEncCfg.m_CTUSize) + 1, Log2(m_cEncCfg.m_CTUSize) + 1, 2 );
@@ -248,7 +248,7 @@ void EncLib::initPass( int pass )
     m_threadPool = new NoMallocThreadPool( maxCntEnc, "EncSliceThreadPool" );
   }
 
-  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
+  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
                m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
                m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
                m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
@@ -277,7 +277,7 @@ void EncLib::initPass( int pass )
 
   if ( m_cEncCfg.m_RCRateControlMode )
   {
-    m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight,
+    m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight,
       m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
 
     if ( pass == 1 )
@@ -840,8 +840,8 @@ void EncLib::xInitSPS(SPS &sps) const
   profileTierLevel->subProfileIdc.clear();
   profileTierLevel->subProfileIdc.push_back( m_cEncCfg.m_subProfile );
 
-  sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_SourceWidth;
-  sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_SourceHeight;
+  sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_PadSourceWidth;
+  sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_PadSourceHeight;
   sps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
   sps.chromaFormatIdc               = m_cEncCfg.m_internChromaFormat;
   sps.CTUSize                       = m_cEncCfg.m_CTUSize;
@@ -973,8 +973,8 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   // pps ID already initialised.
   pps.spsId                         = sps.spsId;
   pps.jointCbCrQpOffsetPresent      = m_cEncCfg.m_JointCbCrMode;
-  pps.picWidthInLumaSamples         = m_cEncCfg.m_SourceWidth;
-  pps.picHeightInLumaSamples        = m_cEncCfg.m_SourceHeight;
+  pps.picWidthInLumaSamples         = m_cEncCfg.m_PadSourceWidth;
+  pps.picHeightInLumaSamples        = m_cEncCfg.m_PadSourceHeight;
   if( pps.picWidthInLumaSamples == sps.maxPicWidthInLumaSamples && pps.picHeightInLumaSamples == sps.maxPicHeightInLumaSamples )
   {
     pps.conformanceWindow           = sps.conformanceWindow;

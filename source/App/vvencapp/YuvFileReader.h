@@ -158,7 +158,7 @@ public:
 
     const int iSizeFactor     = 2;
     const int iAlignmentGuard =16;
-    rcYuvPicture.bitDepth = m_iDestBitDepth;
+    rcYuvPicture.bitDepth = 10;
     rcYuvPicture.width    = width;
     rcYuvPicture.height   = height;
     rcYuvPicture.stride   = width;

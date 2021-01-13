@@ -100,7 +100,7 @@ typedef struct VVENC_DECL YuvPicture
   int             height            = 0;              ///< height of the luminance plane
   int             stride            = 0;              ///< stride (width + left margin + right margins) of luminance plane chrominance stride is assumed to be stride/2
   int             cStride           = 0;              ///< stride (width + left margin + right margins) of chrominance plane in case its value differs from stride/2
-  int             bitDepth          = 0;              ///< bit depth of input signal (8: depth 8 bit, 10: depth 10 bit  )
+  int             bitDepth          = 10;             ///< bit depth of input signal (8: depth 8 bit, 10: depth 10 bit  )
   ColorFormat     colorFormat       = VVC_CF_INVALID; ///< color format (VVC_CF_YUV420_PLANAR)
   uint64_t        sequenceNumber    = 0;               ///< sequence number of the picture
   uint64_t        cts               = 0;               ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)

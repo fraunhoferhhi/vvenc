@@ -461,7 +461,7 @@ int main( int argc, char* argv[] )
         return iRet;
       }
 
-      if( cAccessUnit.payload.empty()  )
+      if( ! cAccessUnit.payload.empty()  )
       {
         if( cOutBitstream.is_open() )
         {

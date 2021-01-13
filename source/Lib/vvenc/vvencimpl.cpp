@@ -250,13 +250,13 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit,
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( pcYuvPicture->width != this->m_cEncCfg.m_SourceWidth )
+    if( pcYuvPicture->width != m_cEncCfg.m_SourceWidth )
     {
       m_cErrorString = "InputPicture: unsupported width";
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( pcYuvPicture->height != this->m_cEncCfg.m_SourceHeight )
+    if( pcYuvPicture->height != m_cEncCfg.m_SourceHeight )
     {
       m_cErrorString = "InputPicture: unsupported height";
       return VVENC_ERR_UNSPECIFIED;
@@ -410,13 +410,13 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, b
       }
     }
 
-    if( pcYUVBuffer->yuvPlanes[0].width != this->m_cEncCfg.m_SourceWidth )
+    if( pcYUVBuffer->yuvPlanes[0].width != m_cEncCfg.m_SourceWidth )
     {
       m_cErrorString = "InputPicture: unsupported width";
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( pcYUVBuffer->yuvPlanes[0].height != this->m_cEncCfg.m_SourceHeight )
+    if( pcYUVBuffer->yuvPlanes[0].height != m_cEncCfg.m_SourceHeight )
     {
       m_cErrorString = "InputPicture: unsupported height";
       return VVENC_ERR_UNSPECIFIED;
@@ -642,37 +642,19 @@ int VVEncImpl::getNumTrailFrames() const
 
 int VVEncImpl::printConfig() const
 {
-  if( !m_bInitialized ){ return -1; }
+  if( !m_bInitialized )       { return -1; }
+  if( nullptr == m_pEncLib )  { return -1; }
 
-  if( nullptr != m_pEncLib )
-  {
-    try
-    {
-      m_cEncCfg.printCfg();
-    }
-    catch( std::exception& e )
-    {
-      return -1;
-    }
-  }
+  m_cEncCfg.printCfg();
   return 0;
 }
 
 int VVEncImpl::printSummary() const
 {
   if( !m_bInitialized ){ return -1; }
+  if( nullptr == m_pEncLib )  { return -1; }
 
-  if( nullptr != m_pEncLib )
-  {
-    try
-    {
-      m_pEncLib->printSummary();
-    }
-    catch( std::exception& e )
-    {
-      return -1;
-    }
-  }
+  m_pEncLib->printSummary();
   return 0;
 }
 
@@ -801,11 +783,11 @@ int VVEncImpl::xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString 
   // check src params
   ROTPARAMS( rcSrc.m_QP < 0 || rcSrc.m_QP > 51,                                             "qp must be between 0 - 51."  );
 
-  ROTPARAMS( ( rcSrc.m_SourceWidth == 0 )   || ( rcSrc.m_SourceHeight == 0 ),                         "specify input picture dimension"  );
+  ROTPARAMS( ( rcSrc.m_SourceWidth == 0 )   || ( rcSrc.m_SourceHeight == 0 ),               "specify input picture dimension"  );
 
-  ROTPARAMS( rcSrc.m_FrameRate < 1 || rcSrc.m_FrameRate > 120,                                                      "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
+  ROTPARAMS( rcSrc.m_FrameRate < 1 || rcSrc.m_FrameRate > 120,                              "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
 
-  ROTPARAMS( rcSrc.m_TicksPerSecond <= 0 || rcSrc.m_TicksPerSecond > 27000000,            "TicksPerSecond must be in range from 1 to 27000000" );
+  ROTPARAMS( rcSrc.m_TicksPerSecond <= 0 || rcSrc.m_TicksPerSecond > 27000000,              "TicksPerSecond must be in range from 1 to 27000000" );
 
   int temporalRate   = rcSrc.m_FrameRate;
   int temporalScale  = 1;

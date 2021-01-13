@@ -186,12 +186,10 @@ bool EncCfg::initCfgParameter()
       if (m_SourceWidth % minCuSize)
       {
         m_aiPad[0] = m_confWinRight  = ((m_SourceWidth / minCuSize) + 1) * minCuSize - m_SourceWidth;
-        m_SourceWidth  += m_confWinRight;
       }
       if (m_SourceHeight % minCuSize)
       {
         m_aiPad[1] = m_confWinBottom = ((m_SourceHeight / minCuSize) + 1) * minCuSize - m_SourceHeight;
-        m_SourceHeight += m_confWinBottom;
       }
       CONFIRM_PARAMETER_OR_RETURN( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
       CONFIRM_PARAMETER_OR_RETURN( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
@@ -200,8 +198,6 @@ bool EncCfg::initCfgParameter()
   case 2:
     {
       //padding
-      m_SourceWidth  += m_aiPad[0];
-      m_SourceHeight += m_aiPad[1];
       m_confWinRight  = m_aiPad[0];
       m_confWinBottom = m_aiPad[1];
       break;
@@ -221,6 +217,8 @@ bool EncCfg::initCfgParameter()
       break;
     }
   }
+  m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
+  m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
 
   m_sliceId.resize(1,0);
 
@@ -312,7 +310,7 @@ bool EncCfg::initCfgParameter()
 
   m_reshapeCW.binCW.resize(3);
   m_reshapeCW.rspFps     = m_FrameRate;
-  m_reshapeCW.rspPicSize = m_SourceWidth*m_SourceHeight;
+  m_reshapeCW.rspPicSize = m_PadSourceWidth*m_PadSourceHeight;
   m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)m_FrameRate /16.0)));
   m_reshapeCW.rspBaseQP  = m_QP;
   m_reshapeCW.updateCtrl = m_updateCtrl;
@@ -389,7 +387,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter(m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
 
   // check range of parameters
-  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                   "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
   confirmParameter( m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
 
 #if !RExt__HIGH_BIT_DEPTH_SUPPORT
@@ -528,7 +526,7 @@ bool EncCfg::initCfgParameter()
     msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
     msg(WARNING, "***************************************************************************\n");
   }
-  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_SourceWidth <= 2048) && (m_SourceHeight <= 1280) && (m_usePerceptQPA <= 4))
+  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_PadSourceWidth <= 2048) && (m_PadSourceHeight <= 1280) && (m_usePerceptQPA <= 4))
   {
     m_cuQpDeltaSubdiv = 2;
   }
@@ -558,12 +556,12 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_CTUSize != 32 && m_CTUSize != 64 && m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
   confirmParameter( m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
   confirmParameter( (m_CTUSize  >> ( m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
-  confirmParameter( (m_SourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0,    "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
+  confirmParameter( (m_PadSourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
   confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
-  confirmParameter( m_SourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_SourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
   confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
@@ -584,8 +582,8 @@ bool EncCfg::initCfgParameter()
 #endif
   }
 
-  confirmParameter(((m_SourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
-  confirmParameter(((m_SourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
 
 
   confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
@@ -1857,8 +1855,8 @@ static inline std::string getCostFunctionStr( int cost )
 
 void EncCfg::printCfg() const
 {
-  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_SourceWidth - m_confWinLeft - m_confWinRight, m_SourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
-  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_SourceWidth, m_SourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_PadSourceWidth - m_confWinLeft - m_confWinRight, m_PadSourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_PadSourceWidth, m_PadSourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
   msg( DETAILS, "Sequence PSNR output                   : %s\n",           m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" );
   msg( DETAILS, "Hexadecimal PSNR output                : %s\n",           m_printHexPsnr ? "Enabled" : "Disabled" );
   msg( DETAILS, "Sequence MSE output                    : %s\n",           m_printSequenceMSE ? "Enabled" : "Disabled" );
@@ -1907,7 +1905,7 @@ void EncCfg::printCfg() const
   }
   msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
 
-  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_SourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
+  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_PadSourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
   msg( VERBOSE, "WPP:%d ",                   m_entropyCodingSyncEnabled ? 1 : 0 );
   msg( VERBOSE, "WPP-Substreams:%d ",        iWaveFrontSubstreams );
   msg( VERBOSE, "TMVP:%d ",                  m_TMVPModeId );

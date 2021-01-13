@@ -157,11 +157,14 @@ void EncApp::encode()
   for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
   {
     // open input YUV
-    m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth, m_cEncAppCfg.m_MSBExtendedBitDepth, m_cEncAppCfg.m_internalBitDepth );
+    if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth[0], m_cEncAppCfg.m_MSBExtendedBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range ))
+    { 
+      break;
+    }
     const int skipFrames = m_cEncAppCfg.m_FrameSkip - m_cEncAppCfg.m_MCTFNumLeadFrames;
     if( skipFrames > 0 )
     {
-      m_yuvInputFile.skipYuvFrames( skipFrames, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
+      m_yuvInputFile.skipYuvFrames( skipFrames, m_cEncAppCfg.m_SourceWidth, m_cEncAppCfg.m_SourceHeight );
     }
 
     // initialize encoder pass
@@ -181,7 +184,7 @@ void EncApp::encode()
       // read input YUV
       if( ! inputDone )
       {
-        inputDone = ! m_yuvInputFile.readYuvBuf( yuvInBuf, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_aiPad, m_cEncAppCfg.m_bClipInputVideoToRec709Range );
+        inputDone = ! m_yuvInputFile.readYuvBuf( yuvInBuf );
         if( ! inputDone )
         {
           if( m_cEncAppCfg.m_FrameRate > 0 )
@@ -210,15 +213,12 @@ void EncApp::encode()
       }
 
       // write out encoded access units
-      if( !au.payload.empty() )
-      {
-        outputAU( au );
-      }
+      outputAU( au );
 
       // temporally skip frames
       if( ! inputDone && m_cEncAppCfg.m_temporalSubsampleRatio > 1 )
       {
-        m_yuvInputFile.skipYuvFrames( m_cEncAppCfg.m_temporalSubsampleRatio - 1, m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], m_cEncAppCfg.m_SourceHeight - m_cEncAppCfg.m_aiPad[ 1 ] );
+        m_yuvInputFile.skipYuvFrames( m_cEncAppCfg.m_temporalSubsampleRatio - 1, m_cEncAppCfg.m_SourceWidth, m_cEncAppCfg.m_SourceHeight );
       }
     }
 
@@ -236,7 +236,12 @@ void EncApp::encode()
 
 void EncApp::outputAU( const VvcAccessUnit& au )
 {
-  writeAnnexB( m_bitstream, au );
+ if( au.payload.empty() )
+ {
+   return;
+ } 
+
+  m_bitstream.write(reinterpret_cast<const char*>(au.payload.data()), au.payload.size());
   rateStatsAccum( au );
   m_bitstream.flush();
 }
@@ -245,7 +250,7 @@ void EncApp::outputYuv( const YUVBuffer& yuvOutBuf )
 {
   if ( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    m_yuvReconFile.writeYuvBuf( yuvOutBuf, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_packedYUVMode, m_cEncAppCfg.m_bClipOutputVideoToRec709Range );
+    m_yuvReconFile.writeYuvBuf( yuvOutBuf, m_cEncAppCfg.m_packedYUVMode );
   }
 }
 
@@ -258,20 +263,10 @@ bool EncApp::openFileIO()
   // output YUV
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    if( m_cEncAppCfg.m_packedYUVMode && ( ( m_cEncAppCfg.m_outputBitDepth[ CH_L ] != 10 && m_cEncAppCfg.m_outputBitDepth[ CH_L ] != 12 )
-          || ( ( ( m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ] ) & ( 1 + ( m_cEncAppCfg.m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) ) )
+    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range ))
     {
-      msgApp( ERROR, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
       return false;
     }
-    if( m_cEncAppCfg.m_packedYUVMode && ( m_cEncAppCfg.m_internChromaFormat != CHROMA_400 ) && ( ( m_cEncAppCfg.m_outputBitDepth[ CH_C ] != 10 && m_cEncAppCfg.m_outputBitDepth[ CH_C ] != 12 )
-          || ( ( getWidthOfComponent( m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_SourceWidth - m_cEncAppCfg.m_aiPad[ 0 ], 1 ) & ( 1 + ( m_cEncAppCfg.m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
-    {
-      msgApp( ERROR, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
-      return false;
-    }
-
-    m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth, m_cEncAppCfg.m_outputBitDepth, m_cEncAppCfg.m_internalBitDepth );
   }
 
   // output bitstream
