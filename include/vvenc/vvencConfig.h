@@ -202,23 +202,6 @@ enum DecodingRefreshType
   DRT_RECOVERY_POINT_SEI = 3
 };
 
-
-enum FastInterSearchMode
-{
-  FASTINTERSEARCH_DISABLED = 0,
-  FASTINTERSEARCH_MODE1    = 1,
-  FASTINTERSEARCH_MODE2    = 2,
-  FASTINTERSEARCH_MODE3    = 3
-};
-
-enum CostMode
-{
-  COST_STANDARD_LOSSY              = 0,
-  COST_SEQUENCE_LEVEL_LOSSLESS     = 1,
-  COST_LOSSLESS_CODING             = 2,
-  COST_MIXED_LOSSLESS_LOSSY_CODING = 3
-};
-
 enum HashType
 {
   HASHTYPE_MD5        = 0,
@@ -229,9 +212,6 @@ enum HashType
 };
 
 
-// TODO: Existing names used for the different NAL unit types can be altered to better reflect the names in the spec.
-//       However, the names in the spec are not yet stable at this point. Once the names are stable, a cleanup
-//       effort can be done without use of macros to alter the names used to indicate the different NAL unit types.
 enum NalUnitType
 {
   NAL_UNIT_CODED_SLICE_TRAIL = 0,   // 0
