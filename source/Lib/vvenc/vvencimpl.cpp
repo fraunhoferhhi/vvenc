@@ -282,42 +282,23 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool&
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    // we know that the internal buffer requires to be a multiple of 8 in each direction
-    int internalLumaWidth = ((pcYuvPicture->width + 7)/8)*8;
-    int internalLumaHeight = ((pcYuvPicture->height + 7)/8)*8;
-    int internalLumaStride = (internalLumaWidth > pcYuvPicture->stride) ? internalLumaWidth : pcYuvPicture->stride;
+    cYUVBuffer.planes[ COMP_Y ].ptr    = (int16_t*)pcYuvPicture->y;
+    cYUVBuffer.planes[ COMP_Y ].stride = pcYuvPicture->stride;
+    cYUVBuffer.planes[ COMP_Y ].width  = pcYuvPicture->width; 
+    cYUVBuffer.planes[ COMP_Y ].height = pcYuvPicture->height;
 
-    int iChromaInStride = internalLumaStride >> 1;
-    if( pcYuvPicture->cStride && pcYuvPicture->cStride > (internalLumaWidth >> 1) )
+    //dep on chr format
     {
-      iChromaInStride =  pcYuvPicture->cStride;
-    }
+      cYUVBuffer.planes[ COMP_Cb ].ptr    = (int16_t*)pcYuvPicture->u;
+      cYUVBuffer.planes[ COMP_Cb ].stride = pcYuvPicture->cStride ? pcYuvPicture->cStride : pcYuvPicture->stride/2;
+      cYUVBuffer.planes[ COMP_Cb ].width  = pcYuvPicture->width/2; 
+      cYUVBuffer.planes[ COMP_Cb ].height = pcYuvPicture->height/2;
 
-    for ( int i = 0; i < 3; i++ )
-    {
-      YUVBuffer::Plane& yuvPlane = cYUVBuffer.planes[ i ];
-      if ( i > 0 )
-      {
-        yuvPlane.width     = internalLumaWidth >> 1;
-        yuvPlane.height    = internalLumaHeight >> 1;
-        yuvPlane.stride    = iChromaInStride;
-      }
-      else
-      {
-        yuvPlane.width     = internalLumaWidth;
-        yuvPlane.height    = internalLumaHeight;
-        yuvPlane.stride    = internalLumaStride;
-      }
-      const int size     = yuvPlane.stride * yuvPlane.height;
-      yuvPlane.ptr  = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+      cYUVBuffer.planes[ COMP_Cr ].ptr    = (int16_t*)pcYuvPicture->v;
+      cYUVBuffer.planes[ COMP_Cr ].stride = pcYuvPicture->cStride ? pcYuvPicture->cStride : pcYuvPicture->stride/2;
+      cYUVBuffer.planes[ COMP_Cr ].width  = pcYuvPicture->width/2; 
+      cYUVBuffer.planes[ COMP_Cr ].height = pcYuvPicture->height/2;
     }
-
-    xCopyAndPadInputPlane( cYUVBuffer.planes[0].ptr, cYUVBuffer.planes[0].stride, cYUVBuffer.planes[0].width, cYUVBuffer.planes[0].height,
-                           (int16_t*)pcYuvPicture->y, pcYuvPicture->stride, pcYuvPicture->width, pcYuvPicture->height );
-    xCopyAndPadInputPlane( cYUVBuffer.planes[1].ptr, iChromaInStride, cYUVBuffer.planes[1].width, cYUVBuffer.planes[1].height,
-                           (int16_t*)pcYuvPicture->u, iChromaInStride, pcYuvPicture->width>>1, pcYuvPicture->height>>1 );
-    xCopyAndPadInputPlane( cYUVBuffer.planes[2].ptr, iChromaInStride, cYUVBuffer.planes[2].width, cYUVBuffer.planes[2].height,
-                           (int16_t*)pcYuvPicture->v, iChromaInStride, pcYuvPicture->width>>1, pcYuvPicture->height>>1 );
 
     cYUVBuffer.sequenceNumber = pcYuvPicture->sequenceNumber;
     if( pcYuvPicture->ctsValid )
@@ -367,17 +348,6 @@ int VVEncImpl::encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool&
   if ( !cAu.empty() )
   {
     iRet = xCopyAu( rcAccessUnit, cAu  );
-  }
-
-  if( cYUVBuffer.planes[0].ptr )
-  {
-    /* free memory of input image */
-    for ( int i = 0; i < 3; i++ )
-    {
-      vvenc::YUVBuffer::Plane& yuvPlane = cYUVBuffer.planes[ i ];
-      if ( yuvPlane.ptr )
-        delete [] yuvPlane.ptr;
-    }
   }
 
   return iRet;
@@ -459,59 +429,6 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
         }
       }
     }
-
-    // we know that the internal buffer requires to be a multiple of 8 in each direction
-    int internalLumaWidth = ((pcYUVBuffer->planes[0].width + 7)/8)*8;
-    int internalLumaHeight = ((pcYUVBuffer->planes[0].height + 7)/8)*8;
-    int internalLumaStride = (internalLumaWidth > pcYUVBuffer->planes[0].stride) ? internalLumaWidth : pcYUVBuffer->planes[0].width;
-
-    int iChromaInStride = (m_cEncCfg.m_internChromaFormat == CHROMA_444) ? internalLumaStride  : internalLumaStride >> 1;
-    if( pcYUVBuffer->planes[1].stride && pcYUVBuffer->planes[1].stride > (internalLumaWidth >> 1) )
-    {
-      iChromaInStride =  pcYUVBuffer->planes[1].stride;
-    }
-    if( pcYUVBuffer->planes[2].stride && pcYUVBuffer->planes[2].stride > (internalLumaWidth >> 1) && pcYUVBuffer->planes[2].stride > iChromaInStride )
-    {
-      iChromaInStride =  pcYUVBuffer->planes[2].stride;
-    }
-
-    for ( int i = 0; i < 3; i++ )
-    {
-      YUVBuffer::Plane& yuvPlane = cYUVBuffer.planes[ i ];
-      yuvPlane.width     = pcYUVBuffer->planes[i].width;
-      yuvPlane.height    = pcYUVBuffer->planes[i].height;
-      yuvPlane.stride    = pcYUVBuffer->planes[i].stride;
-
-      if ( i > 0 )
-      {
-        yuvPlane.width     = (m_cEncCfg.m_internChromaFormat == CHROMA_444 ) ? internalLumaWidth  : internalLumaWidth >> 1;
-        yuvPlane.height    = (m_cEncCfg.m_internChromaFormat == CHROMA_444 || m_cEncCfg.m_internChromaFormat == CHROMA_422 ) ? internalLumaHeight  : internalLumaHeight >> 1;
-        yuvPlane.stride    = iChromaInStride;
-      }
-      else
-      {
-        yuvPlane.width     = internalLumaWidth;
-        yuvPlane.height    = internalLumaHeight;
-        yuvPlane.stride    = internalLumaStride;
-      }
-      const int size     = yuvPlane.stride * yuvPlane.height;
-      yuvPlane.ptr  = ( size > 0 ) ? new int16_t[ size ] : nullptr;
-    }
-
-    xCopyAndPadInputPlane( cYUVBuffer.planes[0].ptr, cYUVBuffer.planes[0].stride, cYUVBuffer.planes[0].width, cYUVBuffer.planes[0].height,
-                           pcYUVBuffer->planes[0].ptr, pcYUVBuffer->planes[0].stride, pcYUVBuffer->planes[0].width, pcYUVBuffer->planes[0].height );
-
-    if( m_cEncCfg.m_internChromaFormat != CHROMA_400 )
-    {
-      xCopyAndPadInputPlane( cYUVBuffer.planes[1].ptr, iChromaInStride, cYUVBuffer.planes[1].width, cYUVBuffer.planes[1].height,
-                             pcYUVBuffer->planes[1].ptr, pcYUVBuffer->planes[1].stride, pcYUVBuffer->planes[1].width, pcYUVBuffer->planes[1].height );
-      xCopyAndPadInputPlane( cYUVBuffer.planes[2].ptr, iChromaInStride, cYUVBuffer.planes[2].width, cYUVBuffer.planes[2].height,
-                             pcYUVBuffer->planes[2].ptr, pcYUVBuffer->planes[2].stride, pcYUVBuffer->planes[2].width, pcYUVBuffer->planes[2].height );
-    }
-
-    cYUVBuffer.sequenceNumber = pcYUVBuffer->sequenceNumber;
-    cYUVBuffer.cts            = pcYUVBuffer->cts;
-    cYUVBuffer.ctsValid       = pcYUVBuffer->ctsValid;
   }
   else
   {
@@ -539,7 +456,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
   AccessUnitList cAu;
   try
   {
-    m_pEncLib->encodePicture( bFlush, cYUVBuffer, cAu, rbEncodeDone );
+    m_pEncLib->encodePicture( bFlush, *pcYUVBuffer, cAu, rbEncodeDone );
   }
   catch( std::exception& e )
   {
@@ -553,14 +470,6 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
   if ( !cAu.empty() )
   {
     iRet = xCopyAu( rcAccessUnit, cAu  );
-  }
-
-  /* free memory of input image */
-  for ( int i = 0; i < 3; i++ )
-  {
-    vvenc::YUVBuffer::Plane& yuvPlane = cYUVBuffer.planes[ i ];
-    if ( yuvPlane.ptr )
-      delete [] yuvPlane.ptr;
   }
 
   return iRet;
@@ -986,80 +895,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
   }
 
   rcEncCfg.printCfg();
-
-  return 0;
-}
-
-int VVEncImpl::xCopyAndPadInputPlane( YUVBuffer::Plane& dest, YUVBuffer::Plane& src )
-{
-  if( src.stride == dest.stride )
-  {
-    ::memcpy( dest.ptr, src.ptr, src.stride * src.height * sizeof(int16_t) );
-  }
-  else
-  {
-    for( int y = 0; y < src.height; y++ )
-    {
-      ::memcpy( dest.ptr + y*dest.stride, src.ptr + y*src.stride, src.width * sizeof(int16_t) );
-    }
-  }
-
-  if( src.width < dest.width )
-  {
-    for( int y = 0; y < src.height; y++ )
-    {
-      for( int x = src.width; x < dest.width; x++ )
-      {
-        dest.ptr[ x + y*dest.stride] = dest.ptr[ src.width - 1 + y*dest.stride];
-      }
-    }
-  }
-
-  if( src.height < dest.height )
-  {
-    for( int y = src.height; y < dest.height; y++ )
-    {
-      ::memcpy( dest.ptr + y*dest.stride, dest.ptr + (src.height-1)*dest.stride, dest.width * sizeof(int16_t) );
-    }
-  }
-
-  return 0;
-}
-
-
-int VVEncImpl::xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
-                                      const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight )
-{
-  if( iSrcStride == iDesStride )
-  {
-    ::memcpy( pDes, pSrc, iSrcStride * iSrcHeight * sizeof(int16_t) );
-  }
-  else
-  {
-    for( int y = 0; y < iSrcHeight; y++ )
-    {
-      ::memcpy( pDes + y*iDesStride, pSrc + y*iSrcStride, iSrcWidth * sizeof(int16_t) );
-    }
-  }
-
-  if( iSrcWidth < iDesWidth )
-  {
-    for( int y = 0; y < iSrcHeight; y++ )
-    {
-      for( int x = iSrcWidth; x < iDesWidth; x++ )
-      {
-        pDes[ x + y*iDesStride] = pDes[ iSrcWidth - 1 + y*iDesStride];
-      }
-    }
-  }
-
-  if( iSrcHeight < iDesHeight )
-  {
-    for( int y = iSrcHeight; y < iDesHeight; y++ )
-    {
-      ::memcpy( pDes + y*iDesStride, pDes + (iSrcHeight-1)*iDesStride, iDesWidth * sizeof(int16_t) );
-    }
-  }
 
   return 0;
 }

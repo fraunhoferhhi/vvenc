@@ -227,7 +227,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   // setup configuration parameters
   //
 
-  std::string ignore;
+  std::string ignoreParams;
   po::Options opts;
   
   opts.addOptions()
@@ -274,7 +274,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   ("c",                                               po::parseConfigFile,                              "configuration file name")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
-  ("SIMD",                                            ignore,                                           "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
+  ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
 
   // file, i/o and source parameters
 
