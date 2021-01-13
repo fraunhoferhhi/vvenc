@@ -677,12 +677,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
     {
       confirmParameter( true, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
     }
-    // th fix this later
-//    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
-//          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
-//    {
-//      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
-//    }
+    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
+          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
+    {
+      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
+    }
     if ( m_confirmFailed )
     {
       return false;

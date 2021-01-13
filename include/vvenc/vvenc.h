@@ -125,6 +125,12 @@ struct VVENC_DECL YUVBuffer
   bool      ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
 };
 
+struct VVENC_DECL YUVBufferStorage : public YUVBuffer
+{
+  YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight );
+  ~YUVBufferStorage();
+};
+
 // ----------------------------------------
 
 class VVENC_DECL YUVWriterIf
@@ -137,16 +143,12 @@ public:
   virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
   {
   }
-
-  virtual void outputYuv( const YuvPicture& /*yuvOutBuf*/ )
-  {
-  }
 };
 
 
 /**
   \ingroup VVEncExternalInterfaces
-  The struct AccessUnitList contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
+  The struct AccessUnit contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
   The structure contains buffer and size information of the compressed payload as well as timing, access and debug information.
   The smallest output unit of VVC encoders are NalUnits. A set of NalUnits that belong to the same access unit are delivered in a continuous bitstream,
   where the NalUnits are separated by three byte start codes.

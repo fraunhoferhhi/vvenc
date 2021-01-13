@@ -61,6 +61,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
+using namespace vvenc;
+
 #define TEST(x)     { int res = x; g_numTests++; g_numFails += res;  if( g_verbose ) if(res) { std::cerr << "\n test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__;} }
 #define TESTT(x,w)  { int res = x; g_numTests++; g_numFails += res;  if( g_verbose ) if(res) { std::cerr << "\n" << w << "\n test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__;} }
 #define ERROR(w)    { g_numTests++; g_numFails ++;  if( g_verbose ) std::cerr << "\n" << w << " test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__; }
@@ -72,7 +74,7 @@ int g_verbose = 0;
 int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
-int testInvalidOutputParams(); // AUBuffer to small
+//int testInvalidOutputParams(); // AUBuffer to small
 
 
 int main( int argc, char* argv[] )
@@ -119,16 +121,16 @@ int main( int argc, char* argv[] )
     testInvalidInputParams(); 
     break;
   }
-  case 4: 
-  {
-    testInvalidOutputParams(); 
-    break;
-  }
+//  case 4: 
+//  {
+//    testInvalidOutputParams(); 
+//    break;
+//  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
     testInvalidInputParams();
-    testInvalidOutputParams();
+//    testInvalidOutputParams();
     break;
   }
 
@@ -165,7 +167,7 @@ int allocPicBuffer( PicBufferLocal& rcPicBuffer, unsigned int uiWidth,  unsigned
   rcPicBuffer.deletePicBuffer = new (std::nothrow) unsigned char[ iBufSize ];
   if( NULL == rcPicBuffer.deletePicBuffer )
   {
-    return vvenc::VVENC_NOT_ENOUGH_MEM;
+    return VVENC_NOT_ENOUGH_MEM;
   }
 
   unsigned char* pY = rcPicBuffer.deletePicBuffer + iSizeFactor * ( 0 );
@@ -179,15 +181,15 @@ int allocPicBuffer( PicBufferLocal& rcPicBuffer, unsigned int uiWidth,  unsigned
   return 0;
 }
 
-void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
+void fillEncoderParameters( VVEncParameter& cVVEncParameter )
 {
   cVVEncParameter.qp               = 32;                         // quantization parameter 0-51
   cVVEncParameter.width            = 176;                        // luminance width of input picture
   cVVEncParameter.height           = 144;                        // luminance height of input picture
   cVVEncParameter.gopSize          = 16;                         // gop size (1: intra only, 16, 32: hierarchical b frames)
-  cVVEncParameter.decodingRefreshType = vvenc::DRT_CRA;          // intra period refresh type
+  cVVEncParameter.decodingRefreshType = DRT_CRA;          // intra period refresh type
   cVVEncParameter.idrPeriod           = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.msgLevel         = vvenc::SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
+  cVVEncParameter.msgLevel         = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
   cVVEncParameter.temporalRate     = 60;                         // temporal rate (fps)
   cVVEncParameter.temporalScale    = 1;                          // temporal scale (fps)
   cVVEncParameter.ticksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
@@ -196,16 +198,25 @@ void fillEncoderParameters( vvenc::VVEncParameter& cVVEncParameter )
   cVVEncParameter.perceptualQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cVVEncParameter.inputBitDepth    = 8;                          // 8bit input
   cVVEncParameter.internalBitDepth = 10;                         // 10bit internal
-  cVVEncParameter.profile          = vvenc::Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.level            = vvenc::Level::LEVEL4_1;     // level
-  cVVEncParameter.tier             = vvenc::Tier::TIER_MAIN;     // tier
+  cVVEncParameter.profile          = Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
+  cVVEncParameter.level            = Level::LEVEL4_1;     // level
+  cVVEncParameter.tier             = Tier::TIER_MAIN;     // tier
   cVVEncParameter.useAccessUnitDelimiter       = false;
   cVVEncParameter.useHrdParametersPresent      = false;
   cVVEncParameter.useBufferingPeriodSEIEnabled = false;
   cVVEncParameter.usePictureTimingSEIEnabled   = false;
 }
 
-void fillInputPic( vvenc::YuvPicture& cYuvPicture )
+void fillInputPic( YUVBuffer& cYuvBuffer, const short val = 512 )
+{
+  for( int n = 0; n < MAX_NUM_COMP; n++)
+  {
+    const int size = cYuvBuffer.planes[n].stride * cYuvBuffer.planes[n].height;
+    std::fill_n( static_cast<short*> (cYuvBuffer.planes[n].ptr), size, val );
+  }
+}
+
+void fillInputPic( YuvPicture& cYuvPicture )
 {
   const short val = 512;
   int lumaSize   = cYuvPicture.height   * cYuvPicture.stride;
@@ -216,9 +227,9 @@ void fillInputPic( vvenc::YuvPicture& cYuvPicture )
 }
 
 template< typename T, typename V = int>
-int testParamList( const std::string& w, T& testParam, vvenc::VVEncParameter& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
+int testParamList( const std::string& w, T& testParam, VVEncParameter& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
 {
-  vvenc::VVEnc cVVEnc;
+  VVEnc cVVEnc;
   const int numFails = g_numFails;
   const T savedTestParam = testParam;
 
@@ -243,7 +254,7 @@ int testParamList( const std::string& w, T& testParam, vvenc::VVEncParameter& vv
 
 int testLibParameterRanges()
 {
-  vvenc::VVEncParameter vvencParams;
+  VVEncParameter vvencParams;
   fillEncoderParameters( vvencParams );
 
   testParamList( "DecodingRefreshType",                    vvencParams.decodingRefreshType,        vvencParams, { 0, 1 } );
@@ -255,8 +266,10 @@ int testLibParameterRanges()
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
 
-  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
-  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
+  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,2,9 } );
+  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,3,4,5,6,7,8,10 }, true );
+//  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
+//  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 
   testParamList( "Tier",                                   vvencParams.tier,                       vvencParams, { 0,1 } );
   testParamList( "Tier",                                   vvencParams.tier,                       vvencParams, { -1,2 }, true );
@@ -344,7 +357,7 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
 
 int callingOrderInvalidUninit()
 {
-  vvenc::VVEnc cVVEnc;
+  VVEnc cVVEnc;
   if( 0 != cVVEnc.uninit())
   {
     return -1;
@@ -354,8 +367,8 @@ int callingOrderInvalidUninit()
 
 int callingOrderInitNoUninit()
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;  
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
@@ -366,8 +379,8 @@ int callingOrderInitNoUninit()
 
 int callingOrderInitTwice()
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams; // 
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams; // 
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ))
   {
@@ -382,9 +395,9 @@ int callingOrderInitTwice()
 
 int callingOrderNoInit()
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::AccessUnit cAU;
-  vvenc::YuvPicture cYuvPicture;
+  VVEnc cVVEnc;
+  AccessUnit cAU;
+  YuvPicture cYuvPicture;
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
@@ -395,19 +408,21 @@ int callingOrderNoInit()
 
 int callingOrderRegular()
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;  
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
-  vvenc::AccessUnit cAU;
-  vvenc::YuvPicture cYuvPicture;
-  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
-  {
-    return -1;
-  }
+  AccessUnit cAU;
+
+//  YuvPicture cYuvPicture;
+//  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
+//  {
+//    return -1;
+//  }
+  YUVBufferStorage cYuvPicture( CHROMA_420, vvencParams.width, vvencParams.height );
   fillInputPic( cYuvPicture );
 
   bool encodeDone = false;
@@ -424,20 +439,22 @@ int callingOrderRegular()
 
 int callingOrderRegularInitPass()
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;  
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
   }
-  vvenc::AccessUnit cAU;
-  vvenc::YuvPicture cYuvPicture;
+  AccessUnit cAU;
+//  YuvPicture cYuvPicture;
+//
+//  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
+//  {
+//    return -1;
+//  }
 
-  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
-  {
-    return -1;
-  }
+  YUVBufferStorage cYuvPicture( CHROMA_420, vvencParams.width, vvencParams.height );
   fillInputPic( cYuvPicture );
   if( 0 != cVVEnc.initPass( 0 ) )
   {
@@ -457,8 +474,8 @@ int callingOrderRegularInitPass()
 
 int callingOrderRegularInit2Pass()
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams;
   fillEncoderParameters( vvencParams );
 
   vvencParams.numPasses = 2;
@@ -468,12 +485,13 @@ int callingOrderRegularInit2Pass()
   {
     return -1;
   }
-  vvenc::AccessUnit cAU;
-  vvenc::YuvPicture cYuvPicture;
-  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
-  {
-    return -1;
-  }
+  AccessUnit cAU;
+//  YuvPicture cYuvPicture;
+//  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
+//  {
+//    return -1;
+//  }
+  YUVBufferStorage cYuvPicture( CHROMA_420, vvencParams.width, vvencParams.height );
   fillInputPic( cYuvPicture );
   if( 0 != cVVEnc.initPass( 0 ) )
   {
@@ -486,7 +504,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  vvenc::YuvPicture* flushPicture = nullptr;
+  YuvPicture* flushPicture = nullptr;
   if( 0 != cVVEnc.encode( flushPicture, cAU, encodeDone ))
   {
     return -1;
@@ -524,16 +542,17 @@ int testLibCallingOrder()
 }
 
 
-int inputBufTest( vvenc::YuvPicture& cYuvPicture )
+//int inputBufTest( YuvPicture& cYuvPicture )
+int inputBufTest( YUVBuffer& cYuvPicture )
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;  
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
-  vvenc::AccessUnit cAU;
+  AccessUnit cAU;
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
@@ -549,8 +568,8 @@ int inputBufTest( vvenc::YuvPicture& cYuvPicture )
 
 int invaildInputUninitialzedInputPic( )
 {
-  vvenc::YuvPicture cYuvPicture;
-
+//  YuvPicture cYuvPicture;
+  YUVBuffer  cYuvPicture;
   if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
@@ -561,10 +580,15 @@ int invaildInputUninitialzedInputPic( )
 
 int invaildInputInvalidPicSize( )
 {
-  vvenc::YuvPicture cYuvPicture;
-  cYuvPicture.y = &cYuvPicture;
-  cYuvPicture.u = &cYuvPicture;
-  cYuvPicture.v = &cYuvPicture;
+  int16_t dummy = 0;
+  YUVBuffer  cYuvPicture;
+  cYuvPicture.planes[0].ptr = &dummy;
+  cYuvPicture.planes[1].ptr = &dummy;
+  cYuvPicture.planes[2].ptr = &dummy;
+//  YuvPicture cYuvPicture;
+//  cYuvPicture.y = &cYuvPicture;
+//  cYuvPicture.u = &cYuvPicture;
+//  cYuvPicture.v = &cYuvPicture;
 
   if( 0 != inputBufTest( cYuvPicture ))
   {
@@ -576,13 +600,22 @@ int invaildInputInvalidPicSize( )
 
 int invaildInputInvalidLumaStride( )
 {
-  vvenc::YuvPicture cYuvPicture;
-  cYuvPicture.y = &cYuvPicture;
-  cYuvPicture.u = &cYuvPicture;
-  cYuvPicture.v = &cYuvPicture;
-  cYuvPicture.width = 176;
-  cYuvPicture.height = 144;
-  cYuvPicture.stride = 100;
+  int16_t dummy = 0;
+  YUVBuffer  cYuvPicture;
+  cYuvPicture.planes[0].ptr = &dummy;
+  cYuvPicture.planes[1].ptr = &dummy;
+  cYuvPicture.planes[2].ptr = &dummy;
+  cYuvPicture.planes[0].width  = 176;
+  cYuvPicture.planes[0].height = 144;
+  cYuvPicture.planes[0].stride = 100;
+
+//  YuvPicture cYuvPicture;
+//  cYuvPicture.y = &cYuvPicture;
+//  cYuvPicture.u = &cYuvPicture;
+//  cYuvPicture.v = &cYuvPicture;
+//  cYuvPicture.width = 176;
+//  cYuvPicture.height = 144;
+//  cYuvPicture.stride = 100;
 
   if( 0 != inputBufTest( cYuvPicture ))
   {
@@ -595,14 +628,25 @@ int invaildInputInvalidLumaStride( )
 
 int invaildInputInvalidChromaStride( )
 {
-  vvenc::YuvPicture cYuvPicture;
-  cYuvPicture.y = &cYuvPicture;
-  cYuvPicture.u = &cYuvPicture;
-  cYuvPicture.v = &cYuvPicture;
-  cYuvPicture.width = 176;
-  cYuvPicture.height = 144;
-  cYuvPicture.stride = 176;
-  cYuvPicture.cStride = 50;
+  int16_t dummy = 0;
+  YUVBuffer  cYuvPicture;
+  cYuvPicture.planes[0].ptr = &dummy;
+  cYuvPicture.planes[1].ptr = &dummy;
+  cYuvPicture.planes[2].ptr = &dummy;
+  cYuvPicture.planes[0].width  = 176;
+  cYuvPicture.planes[0].height = 144;
+  cYuvPicture.planes[0].stride = 100;
+  cYuvPicture.planes[1].width  = 88;
+  cYuvPicture.planes[1].height = 72;
+  cYuvPicture.planes[1].stride = 50;
+//  YuvPicture cYuvPicture;
+//  cYuvPicture.y = &cYuvPicture;
+//  cYuvPicture.u = &cYuvPicture;
+//  cYuvPicture.v = &cYuvPicture;
+//  cYuvPicture.width = 176;
+//  cYuvPicture.height = 144;
+//  cYuvPicture.stride = 176;
+//  cYuvPicture.cStride = 50;
 
   if( 0 != inputBufTest( cYuvPicture ))
   {
@@ -615,19 +659,20 @@ int invaildInputInvalidChromaStride( )
 
 int invaildInputBuf( )
 {
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;  
+  VVEnc cVVEnc;
+  VVEncParameter vvencParams;  
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ))
   {
     return -1;
   }
 
-  vvenc::YuvPicture cYuvPicture;
-  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
-  {
-    return -1;
-  }
+//  YuvPicture cYuvPicture;
+//  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
+//  {
+//    return -1;
+//  }
+  YUVBufferStorage cYuvPicture( CHROMA_420, vvencParams.width, vvencParams.height );
   fillInputPic( cYuvPicture );
 
   if( 0 != inputBufTest( cYuvPicture ))
@@ -650,71 +695,74 @@ int testInvalidInputParams()
   return 0;
 }
 
-int outputBufSizeTest( vvenc::AccessUnit& cAU, int numPics)
-{
-  vvenc::VVEnc cVVEnc;
-  vvenc::VVEncParameter vvencParams;  
-  fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
-  {
-    return -1;
-  }
-
-  vvenc::YuvPicture cYuvPicture;
-  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
-  {
-    return -1;
-  }
-  fillInputPic( cYuvPicture );
-  bool encodeDone = false;
-  for(int i = 0; i < numPics; i++ )
-  {
-    if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
-    {
-      return -1;
-    }
-  }
-  if( 0 != cVVEnc.uninit())
-  {
-    return -1;
-  }
-  return 0;
-}
-
-int outputBufNull()
-{
-  vvenc::AccessUnit cAU;
-  if( 0 != outputBufSizeTest( cAU, 1 ))
-  {
-    return -1;
-  }
-  return 0;
-}
-
-int outputBufSizeZero()
-{
-  vvenc::AccessUnit cAU;
-  if( 0 != outputBufSizeTest( cAU, 1 ))
-  {
-    return -1;
-  }
-  return 0;
-}
-
-int outputBufSizeToSmall()
-{
-  vvenc::AccessUnit cAU;
-  if( 0 != outputBufSizeTest( cAU, 17 ))
-  {
-    return -1;
-  }
-  return 0;
-}
-
-int testInvalidOutputParams()
-{
-  testfunc( "outputBufNull",              &outputBufNull,         true );
-  testfunc( "outputBufSizeZero",          &outputBufSizeZero,     true );
-  testfunc( "outputBufSizeToSmall",       &outputBufSizeToSmall,  true );
-  return 0;
-}
+//int outputBufSizeTest( AccessUnit& cAU, int numPics)
+//{
+//  VVEnc cVVEnc;
+//  VVEncParameter vvencParams;  
+//  fillEncoderParameters( vvencParams );
+//  if( 0 != cVVEnc.init( vvencParams ))
+//  {
+//    return -1;
+//  }
+//
+//  YUVBufferStorage cYuvPicture( CHROMA_420, vvencParams.width, vvencParams.height );
+//  fillInputPic( cYuvPicture );
+//
+////  YuvPicture cYuvPicture;
+////  if( 0 != allocPicBuffer( cYuvPicture, vvencParams.width, vvencParams.height ))
+////  {
+////    return -1;
+////  }
+////  fillInputPic( cYuvPicture );
+//  bool encodeDone = false;
+//  for(int i = 0; i < numPics; i++ )
+//  {
+//    if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+//    {
+//      return -1;
+//    }
+//  }
+//  if( 0 != cVVEnc.uninit())
+//  {
+//    return -1;
+//  }
+//  return 0;
+//}
+//
+//int outputBufNull()
+//{
+//  AccessUnit cAU;
+//  if( 0 != outputBufSizeTest( cAU, 1 ))
+//  {
+//    return -1;
+//  }
+//  return 0;
+//}
+//
+//int outputBufSizeZero()
+//{
+//  AccessUnit cAU;
+//  if( 0 != outputBufSizeTest( cAU, 1 ))
+//  {
+//    return -1;
+//  }
+//  return 0;
+//}
+//
+//int outputBufSizeToSmall()
+//{
+//  AccessUnit cAU;
+//  if( 0 != outputBufSizeTest( cAU, 17 ))
+//  {
+//    return -1;
+//  }
+//  return 0;
+//}
+//
+//int testInvalidOutputParams()
+//{
+//  testfunc( "outputBufNull",              &outputBufNull,         true );
+//  testfunc( "outputBufSizeZero",          &outputBufSizeZero,     true );
+//  testfunc( "outputBufSizeToSmall",       &outputBufSizeToSmall,  true );
+//  return 0;
+//}

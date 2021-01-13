@@ -72,6 +72,12 @@ namespace vvenc {
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
 
+// ====================================================================================================================
+
+static_assert( sizeof(Pel)  == sizeof(*(YUVBuffer::Plane::ptr)),   "internal bits per pel differ from interface definition" );
+
+// ====================================================================================================================
+
 bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 VVEncImpl::VVEncImpl()
@@ -437,16 +443,16 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
 
   // reset AU data
   rcAccessUnit.payload.clear();
-  rcAccessUnit.cts      = 0;
-  rcAccessUnit.dts      = 0;
-  rcAccessUnit.ctsValid  = false;
-  rcAccessUnit.dtsValid  = false;
-  rcAccessUnit.rap       = false;
-  rcAccessUnit.sliceType = NUMBER_OF_SLICE_TYPES;
-  rcAccessUnit.refPic    = false;
+  rcAccessUnit.cts           = 0;
+  rcAccessUnit.dts           = 0;
+  rcAccessUnit.ctsValid      = false;
+  rcAccessUnit.dtsValid      = false;
+  rcAccessUnit.rap           = false;
+  rcAccessUnit.sliceType     = NUMBER_OF_SLICE_TYPES;
+  rcAccessUnit.refPic        = false;
   rcAccessUnit.temporalLayer = 0;
-  rcAccessUnit.poc   = 0;
-  rcAccessUnit.status = 0;
+  rcAccessUnit.poc           = 0;
+  rcAccessUnit.status        = 0;
   rcAccessUnit.infoString.clear();
   rcAccessUnit.nalUnitTypeVec.clear();
   rcAccessUnit.annexBsizeVec.clear();

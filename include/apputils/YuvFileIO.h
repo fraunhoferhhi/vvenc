@@ -43,14 +43,15 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     FileIO.h
-    \brief    file I/O class (header)
+/** \file     YuvFileIO.h
+    \brief    yuv file I/O class (header)
 */
 
 #pragma once
 
 #include <fstream>
 #include <vector>
+#include "apputils/apputilsDecl.h"
 #include "vvenc/vvencDecl.h"
 #include "vvenc/vvencConfig.h"
 
@@ -58,33 +59,39 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \{
 
 namespace vvenc {
+struct YUVBuffer;
+}
+
+namespace apputils {
 
 // ====================================================================================================================
-struct YUVBuffer;
 
 class VVENC_DECL YuvFileIO
 {
 private:
-  std::fstream  m_cHandle;              ///< file handle
-  int           m_fileBitdepth;         ///< bitdepth of input/output video file
-  int           m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
-  int           m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
-  ChromaFormat  m_fileChrFmt;  
-  ChromaFormat  m_bufferChrFmt;
-  bool          m_clipToRec709;
-  bool          m_packedYUVMode;
+  std::fstream        m_cHandle;              ///< file handle
+  int                 m_fileBitdepth;         ///< bitdepth of input/output video file
+  int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
+  int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
+  vvenc::ChromaFormat m_fileChrFmt;  
+  vvenc::ChromaFormat m_bufferChrFmt;
+  bool                m_clipToRec709;
+  bool                m_packedYUVMode;
+  std::string         m_lastError;
 
 public:
-  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
+  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
+              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
   void  close();
   bool  isEof();
   bool  isFail();
   void  skipYuvFrames( int numFrames, int width, int height );
-  bool  readYuvBuf   ( YUVBuffer& yuvInBuf );
-  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf );
+  bool  readYuvBuf   ( vvenc::YUVBuffer& yuvInBuf );
+  bool  writeYuvBuf  ( const vvenc::YUVBuffer& yuvOutBuf );
+  std::string getLastError() const { return m_lastError; }   
 };
 
-} // namespace vvenc
+} // namespace apputils
 
 //! \}
 
