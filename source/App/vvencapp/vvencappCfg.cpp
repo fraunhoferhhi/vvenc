@@ -45,11 +45,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     EncAppCfg.cpp
+/** \file     vvencappCfg.cpp
     \brief    Handle encoder configuration parameters
 */
-
-#include "apputils/EncAppCfg.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,274 +55,25 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <fstream>
 #include <algorithm>
-//#include "../vvencFFapp/EncApp.h"
 #include "apputils/ParseArg.h"
+#include "apputils/IStreamIO.h"
 #include "vvenc/vvenc.h"
+#include "vvencappCfg.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
 
 using namespace std;
-namespace po = VVCEncoderFFApp::df::program_options_lite;
+namespace po = apputils::df::program_options_lite;
 
 //! \ingroup EncoderApp
 //! \{
 //!
 //!
-// ====================================================================================================================
-// string <-> enum
-// ====================================================================================================================
+//// ====================================================================================================================
+//// string <-> enum
+//// ====================================================================================================================
 
-
-template<typename E>
-struct SVPair
-{
-  const char* str;
-  E           value;
-};
-
-template<typename T>
-class IStreamToRefVec
-{
-  public:
-    IStreamToRefVec( std::vector<T*> v, bool _allRequired, char _sep = 'x' )
-      : valVec( v )
-      , sep( _sep)
-      , allRequired( _allRequired)
-    {
-    }
-
-    ~IStreamToRefVec()
-    {
-    }
-
-    template<typename F>
-    friend std::istream& operator >> ( std::istream& in, IStreamToRefVec<F>& toVec );
-
-    template<typename F>
-    friend std::ostream& operator << ( std::ostream& os, const IStreamToRefVec<F>& toVec );
-
-  private:
-    std::vector<T*> valVec;
-    char sep;
-    bool allRequired;
-};
-
-template<typename T>
-inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
-{
-  const size_t maxSize = toVec.valVec.size();
-  size_t idx = 0;
-  bool fail = false;
-  // split into multiple lines if any
-  while ( ! in.eof() )
-  {
-    string line;
-    std::getline( in, line );
-    // treat all whitespaces and commas as valid separators
-    if( toVec.sep == 'x')
-      std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
-    else
-      std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
-    std::stringstream tokenStream( line );
-    std::string token;
-    // split into multiple tokens if any
-    while( std::getline( tokenStream, token, ' ' ) )
-    {
-      if ( ! token.length() )
-        continue;
-      // convert to value
-      std::stringstream convStream( token );
-      T val;
-      convStream >> val;
-      fail |= convStream.fail();
-      if( idx >= maxSize )
-      {
-        fail = true;//try to write behind buffer
-      }
-      else
-      {
-        *toVec.valVec[idx++] =  val;
-      }
-    }
-  }
-
-  if ( fail || (toVec.allRequired && idx != maxSize) )
-  {
-    in.setstate( ios::failbit );
-  }
-
-  return in;
-}
-
-template<typename T>
-inline std::ostream& operator << ( std::ostream& os, const IStreamToRefVec<T>& toVec )
-{
-  bool bfirst = true;
-  for( auto& e: toVec.valVec )
-  {
-    if( bfirst )
-    {
-      bfirst = false;
-    }
-    else
-    {
-      os << toVec.sep;
-    }
-    os << *e;
-  }
-  return os;
-}
-
-
-template<typename E>
-class IStreamToEnum
-{
-  public:
-    IStreamToEnum( E* d, const std::vector<SVPair<E>>* m )
-      : dstVal ( d )
-        , toMap( m )
-    {
-    }
-
-    ~IStreamToEnum()
-    {
-    }
-
-    template<typename F>
-    friend std::ostream& operator << ( std::ostream& os, const IStreamToEnum<F>& toEnum );
-
-    template<typename F>
-    friend std::istream& operator >> ( std::istream& in, IStreamToEnum<F>& toEnum );
-
-    const char* to_string() const
-    {
-      for ( const auto& map : *toMap )
-      {
-        if ( *dstVal == map.value )
-        {
-          return map.str;
-        }
-      }
-      msgApp( ERROR, "Unknown enum \"%s\" in to_string", *dstVal );
-      return "";
-    }
-
-  private:
-    E*                            dstVal;
-    const std::vector<SVPair<E>>* toMap;
-};
-
-template<typename E>
-inline std::istream& operator >> ( std::istream& in, IStreamToEnum<E>& toEnum )
-{
-  std::string str;
-  in >> str;
-
-  for ( const auto& map : *toEnum.toMap )
-  {
-    if ( str == map.str )
-    {
-      *toEnum.dstVal = map.value;
-      return in;
-    }
-  }
-
-  /* not found */
-  in.setstate( ios::failbit );
-  return in;
-}
-
-template<typename E>
-inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toEnum )
-{
-  for ( const auto& map : *toEnum.toMap )
-  {
-    if ( *toEnum.dstVal == map.value )
-    {
-      os << map.str;
-      return os;
-    }
-  }
-
-  /* not found */
-  os.setstate( ios::failbit );
-  return os;
-}
-
-typedef void (*setParamFunc) (EncCfg*, int);
-
-template<typename E>
-class IStreamToFunc
-{
-  public:
-    IStreamToFunc( setParamFunc func, EncCfg* encCfg, const std::vector<SVPair<E>>* m, const E _default )
-      : mfunc( func )
-      , mencCfg( encCfg )
-      , toMap( m )
-      , dstVal( _default )
-    {
-    }
-
-    ~IStreamToFunc()
-    {
-    }
-
-    template<typename F>
-    friend std::istream& operator >> ( std::istream& in, IStreamToFunc<F>& toEnum );
-
-    template<typename F>
-    friend std::ostream& operator << ( std::ostream& in, const IStreamToFunc<F>& toEnum );
-
-    const char* to_string() const
-    {
-      return "";
-    }
-
-  private:
-    setParamFunc                  mfunc;
-    EncCfg*                       mencCfg;
-    const std::vector<SVPair<E>>* toMap;
-    E                             dstVal;
-};
-
-template<typename E>
-inline std::istream& operator >> ( std::istream& in, IStreamToFunc<E>& toEnum )
-{
-  std::string str;
-  in >> str;
-
-  for ( const auto& map : *toEnum.toMap )
-  {
-    if ( str == map.str )
-    {
-      toEnum.dstVal = map.value;
-      toEnum.mfunc(toEnum.mencCfg, map.value);
-      return in;
-    }
-  }
-
-  /* not found */
-  in.setstate( ios::failbit );
-  return in;
-}
-
-template<typename F>
-inline std::ostream& operator << ( std::ostream& os, const IStreamToFunc<F>& toEnum )
-{
-  for ( const auto& map : *toEnum.toMap )
-  {
-    if ( toEnum.dstVal == map.value )
-    {
-      os << map.str;
-      return os;
-    }
-  }
-
-  /* not found */
-  os.setstate( ios::failbit );
-  return os;
-}
 
 void setPresets( EncCfg* cfg, int preset )
 {
@@ -424,96 +173,14 @@ const std::vector<SVPair<HashType>> HashTypeToEnumMap =
   { "0",                       HASHTYPE_NONE     }
 };
 
-// ====================================================================================================================
-// string -> list
-// ====================================================================================================================
 
 
-template<typename T>
-class IStreamToVec
-{
-  public:
-    IStreamToVec( std::vector<T>* v )
-      : valVec( v )
-    {
-    }
-
-    ~IStreamToVec()
-    {
-    }
-
-    template<typename F>
-    friend std::istream& operator >> ( std::istream& in, IStreamToVec<F>& toVec );
-
-    template<typename F>
-    friend std::ostream& operator << ( std::ostream& in, const IStreamToVec<F>& toVec );
-
-  private:
-    std::vector<T>* valVec;
-};
-
-template<typename T>
-inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
-{
-  std::vector<T>* valVec = toVec.valVec;
-  valVec->clear();
-
-  bool fail = false;
-  // split into multiple lines if any
-  while ( ! in.eof() )
-  {
-    string line;
-    std::getline( in, line );
-    // treat all whitespaces and commas as valid separators
-    std::replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
-    std::stringstream tokenStream( line );
-    std::string token;
-    // split into multiple tokens if any
-    while( std::getline( tokenStream, token, ' ' ) )
-    {
-      if ( ! token.length() )
-        continue;
-      // convert to value
-      std::stringstream convStream( token );
-      T val;
-      convStream >> val;
-      fail |= convStream.fail();
-      valVec->push_back( val );
-    }
-  }
-
-  if ( fail || ! valVec->size() )
-  {
-    in.setstate( ios::failbit );
-  }
-
-  return in;
-}
-
-template<typename T>
-inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVec )
-{
-  bool bfirst = true;
-  for( auto& e : (*(toVec.valVec)))
-  {
-    if( bfirst )
-    {
-      bfirst = false;
-    }
-    else
-    {
-      os << ",";
-    }
-    os << e;
-  }
-
-  return os;
-}
 
 // ====================================================================================================================
 // Public member functions
-// ====================================================================================================================  virtual ~EncAppCfg()
-EncAppCfg::~EncAppCfg()
+// ====================================================================================================================
+
+vvencappCfg::~vvencappCfg()
 {
 }
 
@@ -522,7 +189,7 @@ EncAppCfg::~EncAppCfg()
     \param  argv        array of arguments
     \retval             true when success
  */
-bool EncAppCfg::parseCfg( int argc, char* argv[] )
+bool vvencappCfg::parseCfg( int argc, char* argv[] )
 {
   bool do_help                = false;
   bool do_expert_help         = false;
@@ -568,14 +235,22 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("help",                                            do_help,                                          "this help text")
   ("fullhelp",                                        do_expert_help,                                   "expert help text")
 
-  ("InputFile,i",                                     m_inputFileName,                                  "Original YUV input file name")
-  ("BitstreamFile,b",                                 m_bitstreamFileName,                              "Bitstream output file name")
-  ("ReconFile,o",                                     m_reconFileName,                                  "Reconstructed YUV output file name")
+  ("input,i",                                         m_inputFileName,                                  "Original YUV input file name")
+  ("size,s",                                         toSourceSize,                                     "Input resolution (WidthxHeight)")
+  ("framerate,r",                                   m_FrameRate,                                      "Frame rate")
 
-  ("FramesToBeEncoded,f",                             m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
-  ("FrameRate,-fr",                                   m_FrameRate,                                      "Frame rate")
-  ("FrameSkip,-fs",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
-  ("TicksPerSecond",                                  m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("frames,f",                             m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
+  ("frameskip",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
+
+
+  ("tickspersec",                                  m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+
+  ("output,o",                                 m_bitstreamFileName,                              "Bitstream output file name")
+
+  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
+
+  ("qp,q",                                            m_QP,                                             "Qp value")
+  ("qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
 
   ("Profile",                                         toProfile,                                        "Profile name to use for encoding. Use [multilayer_]main_10[_444][_still_picture], auto, or none")
   ("Tier",                                            toLevelTier,                                      "Tier to use for interpretation of level (main or high)")
@@ -590,13 +265,10 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                          "Bit-depth of input file")
   ("OutputBitDepth",                                  m_outputBitDepth[ CH_L ],                         "Bit-depth of output file")
 
-  ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
 
   ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
-  ("Size,-s",                                         toSourceSize,                                     "Input resolution (WidthxHeight)")
   ("Threads,-t",                                      m_numWppThreads,                                  "Number of threads")
-  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
     ;
 
   po::setDefaults( opts );
@@ -917,9 +589,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
                                                                                                         "(0: horizontally shifted by 0.5 units of luma samples, 1: collocated)")
   ("VerCollocatedChroma",                             m_verCollocatedChromaFlag,                        "Specifies location of a chroma sample relatively to the luma sample in vertical direction in the cross-component linear model intra prediction and the reference picture resampling"
                                                                                                         "(0: horizontally co-sited, vertically shifted by 0.5 units of luma samples, 1: collocated)")
-  ("ClipInputVideoToRec709Range",                     m_bClipInputVideoToRec709Range,                   "Enable clipping input video to the Rec. 709 Range on loading when InternalBitDepth is less than MSBExtendedBitDepth")
-  ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                  "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
-  ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
     ;
 
   po::setDefaults( opts );
@@ -932,7 +601,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), m_GOPList[i], GOPEntry());
   }
-  opts.addOptions()("decode",                          m_decode,                                         "decode only");
 
   //
   // parse command line parameters and read configuration files
@@ -961,13 +629,6 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   {
     /* error report has already been printed on stderr */
     return false;
-  }
-
-  if( m_decode )
-  {
-    m_confirmFailed = false;
-    confirmParameter( m_bitstreamFileName.empty(), "A bitstream file name must be specified (BitstreamFile)" );
-    return !m_confirmFailed;
   }
 
   //
@@ -1003,30 +664,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
     return false;
   }
 
-  if( m_packedYUVMode && ! m_reconFileName.empty() )  
-  {
-    if( ( m_outputBitDepth[ CH_L ] != 10 && m_outputBitDepth[ CH_L ] != 12 )
-        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) )
-    {
-      confirmParameter( true, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
-    }
-    // th fix this later
-//    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
-//          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
-//    {
-//      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
-//    }
-    if ( m_confirmFailed )
-    {
-      return false;
-    }
-  }
-
 
   return true;
 }
 
-void EncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
+void vvencappCfg::msgFnc( int level, const char* fmt, va_list args ) const
 {
   if ( m_verbosity >= level )
   {
@@ -1034,7 +676,7 @@ void EncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
   }
 }
 
-void EncAppCfg::msgApp( int level, const char* fmt, ... ) const
+void vvencappCfg::msgApp( int level, const char* fmt, ... ) const
 {
     va_list args;
     va_start( args, fmt );
@@ -1042,23 +684,21 @@ void EncAppCfg::msgApp( int level, const char* fmt, ... ) const
     va_end( args );
 }
 
-void EncAppCfg::printCfg() const
+void vvencappCfg::printCfg() const
 {
   msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
   msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
 
-  EncCfg::printCfg();
+  vvenc::EncCfg::printCfg();
   msgApp( NOTICE, "\n");
 
   fflush( stdout );
 }
 
-void EncAppCfg::printAppCfgOnly() const
+void vvencappCfg::printAppCfgOnly() const
 {
   msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
   msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
 
   fflush( stdout );
 }

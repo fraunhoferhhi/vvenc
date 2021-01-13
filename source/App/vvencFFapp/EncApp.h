@@ -52,7 +52,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <ostream>
 #include <cstdarg>
 
-#include "apputils/EncAppCfg.h"
+#include "EncAppCfg.h"
 #include "vvenc/vvenc.h"
 #include "vvenc/FileIO.h"
 

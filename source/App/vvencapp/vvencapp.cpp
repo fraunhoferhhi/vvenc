@@ -67,11 +67,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CmdLineParser.h"
 #include "YuvFileReader.h"
 
-#include "apputils/EncAppCfg.h"
 #include "apputils/ParseArg.h"
 
-#define USE_FFPARAMS 0
+#include "vvencappCfg.h"
 
+#define USE_FFPARAMS 0
 
 int g_verbosity = vvenc::VERBOSE;
 
@@ -111,25 +111,22 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 
 
 #if USE_FFPARAMS
-bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
+bool parseCfg( int argc, char* argv[], vvencappCfg& rvvencappCfg )
 {
   try
   {
-    if( ! rcEncAppCfg.parseCfg( argc, argv ) )
+    if( ! rvvencappCfg.parseCfg( argc, argv ) )
     {
       return false;
     }
   }
-  catch( VVCEncoderFFApp::df::program_options_lite::ParseFailure &e )
+  catch( apputils::df::program_options_lite::ParseFailure &e )
   {
     msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
 
-  if( ! rcEncAppCfg.m_decode )
-  {
-    rcEncAppCfg.printAppCfgOnly();
-  }
+  rvvencappCfg.printAppCfgOnly();
 
   return true;
 }
@@ -156,100 +153,100 @@ int main( int argc, char* argv[] )
 
 #if USE_FFPARAMS
   std::string simdOpt;
-  VVCEncoderFFApp::df::program_options_lite::Options opts;
+  apputils::df::program_options_lite::Options opts;
   opts.addOptions()
-    ( "c",           VVCEncoderFFApp::df::program_options_lite::parseConfigFile, "" )
+    ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
     ( "Verbosity,v", g_verbosity,                               "" )
     ( "SIMD",        simdOpt,                                   "" );
-  VVCEncoderFFApp::df::program_options_lite::SilentReporter err;
-  VVCEncoderFFApp::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
+  apputils::df::program_options_lite::SilentReporter err;
+  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
   simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
 
-  EncAppCfg    cEncAppCfg;                      ///< encoder configuration
+  vvencappCfg    vvencappCfg;                      ///< encoder configuration
 
-  cEncAppCfg.m_QP                  = 32;                       // quantization parameter 0-51
-  cEncAppCfg.m_SourceWidth         = 1920;                     // luminance width of input picture
-  cEncAppCfg.m_SourceHeight        = 1080;                     // luminance height of input picture
-  cEncAppCfg.m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
-  cEncAppCfg.m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
-  cEncAppCfg.m_IntraPeriod         = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
-  cEncAppCfg.m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
-  cEncAppCfg.m_verbosity           = (int)vvenc::VERBOSE;      // log level > 4 (VERBOSE) enables psnr/rate output
-  cEncAppCfg.m_FrameRate           = 60;                       // temporal rate (fps)
-  cEncAppCfg.m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
-  cEncAppCfg.m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
-  cEncAppCfg.m_FrameSkip           = 0;                        // number of frames to skip before start encoding
-  cEncAppCfg.m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
-  cEncAppCfg.m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cEncAppCfg.m_inputBitDepth[0]    = 8;                        // input bitdepth
-  cEncAppCfg.m_internalBitDepth[0] = 10;                       // internal bitdepth
-  cEncAppCfg.m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
-  cEncAppCfg.m_level               = vvenc::Level::LEVEL4_1;   // level
-  cEncAppCfg.m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
-  cEncAppCfg.m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
+  vvencappCfg.m_QP                  = 32;                       // quantization parameter 0-51
+  vvencappCfg.m_SourceWidth         = 1920;                     // luminance width of input picture
+  vvencappCfg.m_SourceHeight        = 1080;                     // luminance height of input picture
+  vvencappCfg.m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
+  vvencappCfg.m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
+  vvencappCfg.m_IntraPeriod         = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  vvencappCfg.m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
+  vvencappCfg.m_verbosity           = (int)vvenc::VERBOSE;      // log level > 4 (VERBOSE) enables psnr/rate output
+  vvencappCfg.m_FrameRate           = 60;                       // temporal rate (fps)
+  vvencappCfg.m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
+  vvencappCfg.m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
+  vvencappCfg.m_FrameSkip           = 0;                        // number of frames to skip before start encoding
+  vvencappCfg.m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
+  vvencappCfg.m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  vvencappCfg.m_inputBitDepth[0]    = 8;                        // input bitdepth
+  vvencappCfg.m_internalBitDepth[0] = 10;                       // internal bitdepth
+  vvencappCfg.m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
+  vvencappCfg.m_level               = vvenc::Level::LEVEL4_1;   // level
+  vvencappCfg.m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
+  vvencappCfg.m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
 
-  if( 0 != cEncAppCfg.initPreset( vvenc::PresetMode::MEDIUM ))
+  if( 0 != vvencappCfg.initPreset( vvenc::PresetMode::MEDIUM ))
   {
     std::cerr << cAppname  << " [error]: undefined preset " << std::endl;
     return -1;
   }
 
   // parse configuration
-  if ( ! parseCfg( argc, argv, cEncAppCfg ) )
+  if ( ! parseCfg( argc, argv, vvencappCfg ) )
   {
     return 1;
   }
 
-  if( cEncAppCfg.m_inputFileName.empty() )
+  if( vvencappCfg.m_inputFileName.empty() )
   {
     std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
     return -1;
   }
 
-  if( cEncAppCfg.m_bitstreamFileName.empty() )
+  if( vvencappCfg.m_bitstreamFileName.empty() )
   {
     std::cout << cAppname  << " [error]: no output bitstream file given." << std::endl;
     return -1;
   }
 
-  cInputFile  = cEncAppCfg.m_inputFileName;
-  cOutputfile = cEncAppCfg.m_bitstreamFileName;
+  cInputFile  = vvencappCfg.m_inputFileName;
+  cOutputfile = vvencappCfg.m_bitstreamFileName;
 
-  if( cEncAppCfg.m_verbosity > vvenc::SILENT && cEncAppCfg.m_verbosity < vvenc::NOTICE )
+  if( vvencappCfg.m_verbosity > vvenc::SILENT && vvencappCfg.m_verbosity < vvenc::NOTICE )
   {
     std::cout << "-------------------" << std::endl;
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( cEncAppCfg.m_numWppThreads < 0 )
+  if( vvencappCfg.m_numWppThreads < 0 )
   {
-    if( cEncAppCfg.m_SourceWidth > 1920 || cEncAppCfg.m_SourceHeight > 1080)
+    if( vvencappCfg.m_SourceWidth > 1920 || vvencappCfg.m_SourceHeight > 1080)
     {
-      cEncAppCfg.m_numWppThreads = 6;
+      vvencappCfg.m_numWppThreads = 6;
     }
     else
     {
-      cEncAppCfg.m_numWppThreads = 4;
+      vvencappCfg.m_numWppThreads = 4;
     }
-    cEncAppCfg.m_ensureWppBitEqual = 1;
+    vvencappCfg.m_ensureWppBitEqual = 1;
   }
 
-  cVVEncParameter.msgLevel = (vvenc::MsgLevel)cEncAppCfg.m_verbosity;
-  cVVEncParameter.width    = cEncAppCfg.m_SourceWidth;
-  cVVEncParameter.height   = cEncAppCfg.m_SourceHeight;
+  cVVEncParameter.msgLevel = (vvenc::MsgLevel)vvencappCfg.m_verbosity;
+  cVVEncParameter.width    = vvencappCfg.m_SourceWidth;
+  cVVEncParameter.height   = vvencappCfg.m_SourceHeight;
 
-  cVVEncParameter.inputBitDepth    = cEncAppCfg.m_inputBitDepth[0];
-  cVVEncParameter.internalBitDepth = cEncAppCfg.m_internalBitDepth[0];
+  cVVEncParameter.inputBitDepth    = vvencappCfg.m_inputBitDepth[0];
+  cVVEncParameter.internalBitDepth = vvencappCfg.m_internalBitDepth[0];
 
-  cVVEncParameter.maxFrames = cEncAppCfg.m_framesToBeEncoded;
-  cVVEncParameter.frameSkip = cEncAppCfg.m_FrameSkip;
+  cVVEncParameter.maxFrames = vvencappCfg.m_framesToBeEncoded;
+  cVVEncParameter.frameSkip = vvencappCfg.m_FrameSkip;
 
-  cVVEncParameter.ticksPerSecond = cEncAppCfg.m_TicksPerSecond;
-  cVVEncParameter.temporalRate   = cEncAppCfg.m_FrameRate;
+  cVVEncParameter.ticksPerSecond = vvencappCfg.m_TicksPerSecond;
+  cVVEncParameter.temporalRate   = vvencappCfg.m_FrameRate;
   cVVEncParameter.temporalScale  = 1;
 
-  switch( cEncAppCfg.m_FrameRate )
+  switch( vvencappCfg.m_FrameRate )
   {
   case 23: cVVEncParameter.temporalRate = 24000; cVVEncParameter.temporalScale = 1001; break;
   case 29: cVVEncParameter.temporalRate = 30000; cVVEncParameter.temporalScale = 1001; break;
@@ -257,7 +254,7 @@ int main( int argc, char* argv[] )
   default: break;
   }
 
-  cVVEncParameter.numPasses = cEncAppCfg.m_RCNumPasses;
+  cVVEncParameter.numPasses = vvencappCfg.m_RCNumPasses;
 
 #else
   // set desired encoding options
@@ -354,7 +351,7 @@ int main( int argc, char* argv[] )
 
   // initialize the encoder
 #if USE_FFPARAMS
-  iRet = cVVEnc.init( cEncAppCfg );
+  iRet = cVVEnc.init( vvencappCfg );
 #else
   iRet = cVVEnc.init( cVVEncParameter );
 #endif

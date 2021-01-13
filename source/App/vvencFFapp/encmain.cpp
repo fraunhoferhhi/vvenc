@@ -79,13 +79,13 @@ int main(int argc, char* argv[])
   vvenc::VVEnc::registerMsgCbf( msgFnc );
 
   std::string simdOpt;
-  VVCEncoderFFApp::df::program_options_lite::Options opts;
+  apputils::df::program_options_lite::Options opts;
   opts.addOptions()
-    ( "c",           VVCEncoderFFApp::df::program_options_lite::parseConfigFile, "" )
+    ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
     ( "Verbosity,v", g_verbosity,                               "" )
     ( "SIMD",        simdOpt,                                   "" );
-  VVCEncoderFFApp::df::program_options_lite::SilentReporter err;
-  VVCEncoderFFApp::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
+  apputils::df::program_options_lite::SilentReporter err;
+  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
   simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
 
