@@ -471,7 +471,7 @@ void scaleYuvPlane( YUVPlane& yuvPlane, const int shiftBits, const Pel minVal, c
 
 // ====================================================================================================================
 
-int YuvIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth, const int MSBExtendedBitDepth, const int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709 )
+int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth, const int MSBExtendedBitDepth, const int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode )
 {
   //NOTE: files cannot have bit depth greater than 16
   m_fileBitdepth        = std::min<unsigned>( fileBitDepth, 16 );
@@ -480,6 +480,13 @@ int YuvIO::open( const std::string &fileName, bool bWriteMode, const int fileBit
   m_fileChrFmt          = fileChrFmt; 
   m_bufferChrFmt        = bufferChrFmt; 
   m_clipToRec709        = clipToRec709;
+  m_packedYUVMode       = packedYUVMode;
+
+  if( ! bWriteMode && m_packedYUVMode )
+  {
+    msg( ERROR, "\nERROR: yuv file input - no packed mode support" );
+    return -1;
+  }
 
   if ( m_fileBitdepth > 16 )
   {
@@ -517,22 +524,22 @@ int YuvIO::open( const std::string &fileName, bool bWriteMode, const int fileBit
   return 0;
 }
 
-void YuvIO::close()
+void YuvFileIO::close()
 {
   m_cHandle.close();
 }
 
-bool YuvIO::isEof()
+bool YuvFileIO::isEof()
 {
   return m_cHandle.eof();
 }
 
-bool YuvIO::isFail()
+bool YuvFileIO::isFail()
 {
   return m_cHandle.fail();
 }
 
-void YuvIO::skipYuvFrames( int numFrames, int width, int height  )
+void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
 {
   if ( numFrames <= 0 )
   {
@@ -569,7 +576,7 @@ void YuvIO::skipYuvFrames( int numFrames, int width, int height  )
   m_cHandle.read( buf, offset_mod_bufsize );
 }
 
-bool YuvIO::readYuvBuf( YUVBuffer& yuvInBuf )
+bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
 {
   // check end-of-file
   if ( isEof() )
@@ -607,7 +614,7 @@ bool YuvIO::readYuvBuf( YUVBuffer& yuvInBuf )
   return true;
 }
 
-bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, bool packedYUVMode )
+bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
 {
   // compute actual YUV frame size excluding padding size
   bool is16bit              = m_fileBitdepth > 8;
@@ -637,7 +644,7 @@ bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, bool packedYUVMode )
 
   for( int comp = 0; comp < (int)getNumberValidComponents( m_fileChrFmt ); comp++ )
   {
-    if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.yuvPlanes[ comp ], is16bit, m_fileBitdepth, packedYUVMode, ComponentID( comp ), m_bufferChrFmt, m_fileChrFmt ) )
+    if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.yuvPlanes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, ComponentID( comp ), m_bufferChrFmt, m_fileChrFmt ) )
       return false;
   }
 

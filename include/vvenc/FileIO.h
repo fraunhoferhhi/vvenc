@@ -62,7 +62,7 @@ namespace vvenc {
 // ====================================================================================================================
 struct YUVBuffer;
 
-class VVENC_DECL YuvIO
+class VVENC_DECL YuvFileIO
 {
 private:
   std::fstream  m_cHandle;              ///< file handle
@@ -72,15 +72,16 @@ private:
   ChromaFormat  m_fileChrFmt;  
   ChromaFormat  m_bufferChrFmt;
   bool          m_clipToRec709;
+  bool          m_packedYUVMode;
 
 public:
-  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709 );
+  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
   void  close();
   bool  isEof();
   bool  isFail();
   void  skipYuvFrames( int numFrames, int width, int height );
   bool  readYuvBuf   ( YUVBuffer& yuvInBuf );
-  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf, bool packedYUVMode );
+  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf );
 };
 
 } // namespace vvenc

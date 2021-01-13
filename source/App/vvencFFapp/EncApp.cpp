@@ -157,7 +157,8 @@ void EncApp::encode()
   for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
   {
     // open input YUV
-    if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth[0], m_cEncAppCfg.m_MSBExtendedBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range ))
+    if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth[0], m_cEncAppCfg.m_MSBExtendedBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], 
+                             m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false ))
     { 
       break;
     }
@@ -250,7 +251,7 @@ void EncApp::outputYuv( const YUVBuffer& yuvOutBuf )
 {
   if ( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    m_yuvReconFile.writeYuvBuf( yuvOutBuf, m_cEncAppCfg.m_packedYUVMode );
+    m_yuvReconFile.writeYuvBuf( yuvOutBuf );
   }
 }
 
@@ -263,7 +264,8 @@ bool EncApp::openFileIO()
   // output YUV
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range ))
+    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], 
+                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
     {
       return false;
     }
