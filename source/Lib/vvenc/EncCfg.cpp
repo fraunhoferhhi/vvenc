@@ -1482,8 +1482,8 @@ int EncCfg::initPreset( PresetMode preset )
   m_useSelectiveRDOQ              = false;
   m_cabacInitPresent              = true;
   m_fastQtBtEnc                   = true;
-  m_fastInterSearchMode           = 1;
-  m_motionEstimationSearchMethod  = 4;
+  m_fastInterSearchMode           = FASTINTERSEARCH_MODE1;
+  m_motionEstimationSearchMethod  = MESEARCH_DIAMOND_FAST;
   m_SearchRange                   = 384;
   m_minSearchWindow               = 96;
   m_maxNumMergeCand               = 6;
@@ -1698,7 +1698,7 @@ int EncCfg::initPreset( PresetMode preset )
 
     case PresetMode::SLOWER:
 
-      m_motionEstimationSearchMethod = 1;
+      m_motionEstimationSearchMethod = MESEARCH_DIAMOND;
 
       // Q44B33
       m_MinQT[ 0 ]                = 8;

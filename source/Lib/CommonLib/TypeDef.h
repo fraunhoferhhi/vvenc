@@ -404,16 +404,6 @@ enum TransformDirection
   TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
-/// supported ME search methods
-enum MESearchMethod
-{
-  MESEARCH_FULL              = 0,
-  MESEARCH_DIAMOND           = 1,
-  MESEARCH_SELECTIVE         = 2,
-  MESEARCH_DIAMOND_ENHANCED  = 3,
-  MESEARCH_DIAMOND_FAST      = 4,
-  MESEARCH_NUMBER_OF_METHODS = 5
-};
 
 /// coefficient scanning type used in ACS
 enum CoeffScanType

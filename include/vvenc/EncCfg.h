@@ -64,65 +64,37 @@ namespace vvenc {
 class VVENC_DECL EncCfg : public EncCfgExpert
 {
 public:
-  bool                m_confirmFailed;                                  ///< state variable 
-  int                 m_verbosity;                                      ///< encoder verbosity
-  int                 m_framesToBeEncoded;                              ///< number of encoded frames
-  int                 m_FrameRate;                                      ///< source frame-rates (Hz)
-  int                 m_FrameSkip;                                      ///< number of skipped frames from the beginning
-  int                 m_SourceWidth;                                    ///< source width in pixel
-  int                 m_SourceHeight;                                   ///< source height in pixel (when interlaced = field height)
-  int                 m_TicksPerSecond;                                 ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
-  bool                m_AccessUnitDelimiter;                            ///< add Access Unit Delimiter NAL units
+  bool                m_confirmFailed                  = false;         ///< state variable
+  int                 m_verbosity                      = VERBOSE;       ///< encoder verbosity
+  int                 m_framesToBeEncoded              = 0;             ///< number of encoded frames
+  int                 m_FrameRate                      = 0;             ///< source frame-rates (Hz)
+  int                 m_FrameSkip                      = 0;             ///< number of skipped frames from the beginning
+  int                 m_SourceWidth                    = 0;             ///< source width in pixel
+  int                 m_SourceHeight                   = 0;             ///< source height in pixel (when interlaced = field height)
+  int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
+  bool                m_AccessUnitDelimiter            = false;         ///< add Access Unit Delimiter NAL units
 
-  Profile             m_profile;
-  Tier                m_levelTier;
-  Level               m_level;
+  Profile             m_profile                        = Profile::MAIN_10;
+  Tier                m_levelTier                      = Tier::TIER_MAIN ;
+  Level               m_level                          = Level::LEVEL4_1;
 
-  int                 m_IntraPeriod;                                    ///< period of I-slice (random access period)
-  int                 m_IntraPeriodSec;                                 ///< period of I-slice in seconds (random access period)
-  int                 m_DecodingRefreshType;                            ///< random access type
-  int                 m_GOPSize;                                        ///< GOP size of hierarchical structure
+  int                 m_IntraPeriod                    = 32;            ///< period of I-slice (random access period)
+  int                 m_IntraPeriodSec                 = 1;             ///< period of I-slice in seconds (random access period)
+  int                 m_DecodingRefreshType            = 1;             ///< random access type
+  int                 m_GOPSize                        = 32;            ///< GOP size of hierarchical structure
 
-  int                 m_QP;                                             ///< QP value of key-picture (integer)
-  unsigned            m_usePerceptQPA;                                  ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
-  bool                m_usePerceptQPATempFiltISlice;                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+  int                 m_QP                             = 32;            ///< QP value of key-picture (integer)
+  unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
+  bool                m_usePerceptQPATempFiltISlice    = false;         ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  int                 m_inputBitDepth   [ MAX_NUM_CH ];                 ///< bit-depth of input file
-  int                 m_internalBitDepth[ MAX_NUM_CH ];                 ///< bit-depth codec operates at (input/output files will be converted)
+  int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
+  int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
 
-  int                 m_numWppThreads;                                  ///< number of wpp threads
-  int                 m_ensureWppBitEqual;                              ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions  
+  int                 m_numWppThreads                  = 0;             ///< number of wpp threads
+  int                 m_ensureWppBitEqual              = 0;             ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 public:
 
   EncCfg()
-    : m_confirmFailed                               ( false )
-    , m_verbosity                                   ( VERBOSE )
-    , m_framesToBeEncoded                           ( 0 )
-    , m_FrameRate                                   ( 0 )
-    , m_FrameSkip                                   ( 0 )
-    , m_SourceWidth                                 ( 0 )
-    , m_SourceHeight                                ( 0 )
-    , m_TicksPerSecond                              ( 90000 )
-    , m_AccessUnitDelimiter                         ( false )
-
-    , m_profile                                     ( Profile::MAIN_10 )
-    , m_levelTier                                   ( Tier::TIER_MAIN )
-    , m_level                                       ( Level::LEVEL4_1 )
-
-    , m_IntraPeriod                                 ( 32 )
-    , m_IntraPeriodSec                              ( 1 )
-    , m_DecodingRefreshType                         ( 1 )
-    , m_GOPSize                                     ( 32 )
-
-    , m_QP                                          ( 32 )
-    , m_usePerceptQPA                               ( 0 )
-    , m_usePerceptQPATempFiltISlice                 ( false )
-
-    , m_inputBitDepth                               { 8, 0 }
-    , m_internalBitDepth                            { 10, 0 }
-
-    , m_numWppThreads                               ( 0 )
-    , m_ensureWppBitEqual                           ( 0 )
   {
   }
   virtual ~EncCfg()
