@@ -153,7 +153,7 @@ public:
   The Buffer to retrieve the compressed video chunks has to be allocated by the caller. The related attribute BufSize
 */
 
-typedef struct VVENC_DECL VvcAccessUnit
+typedef struct VVENC_DECL AccessUnit
 {
   std::vector<uint8_t> payload;
   uint64_t        cts           = 0;        ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
@@ -172,7 +172,7 @@ typedef struct VVENC_DECL VvcAccessUnit
   std::vector<NalUnitType> nalUnitTypeVec;
   std::vector<uint32_t>    annexBsizeVec;
 
-} VvcAccessUnit_t;
+} AccessUnit_t;
 
 /**
   \ingroup VVEncExternalInterfaces
@@ -279,9 +279,9 @@ public:
     \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
     \pre        The encoder has to be initialized successfully.
   */
-   int encode( YuvPicture* pcYuvPicture, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone);
+   int encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rbEncodeDone);
 
-   int encode( YUVBuffer* pcYUVBuffer, VvcAccessUnit& rcVvcAccessUnit, bool& rbEncodeDone);
+   int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone);
 
    /**
      This method fetches the current encoder configuration.

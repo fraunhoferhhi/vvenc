@@ -368,7 +368,7 @@ void EncLib::xSetRCEncCfg( int pass )
 // Public member functions
 // ====================================================================================================================
 
-void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty )
+void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 

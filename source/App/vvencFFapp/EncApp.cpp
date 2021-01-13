@@ -151,7 +151,7 @@ void EncApp::encode()
   }
 
 
-  vvenc::VvcAccessUnit au;
+  vvenc::AccessUnit au;
 
   int framesRcvd = 0;
   for( int pass = 0; pass < m_cEncAppCfg.m_RCNumPasses; pass++ )
@@ -234,7 +234,7 @@ void EncApp::encode()
   closeFileIO();
 }
 
-void EncApp::outputAU( const VvcAccessUnit& au )
+void EncApp::outputAU( const AccessUnit& au )
 {
  if( au.payload.empty() )
  {
@@ -287,7 +287,7 @@ void EncApp::closeFileIO()
   m_bitstream.close();
 }
 
-void EncApp::rateStatsAccum(const VvcAccessUnit& au )
+void EncApp::rateStatsAccum(const AccessUnit& au )
 {
   std::vector<NalUnitType>::const_iterator it_nal = au.nalUnitTypeVec.begin();
   std::vector<uint32_t>::const_iterator it_nalsize = au.annexBsizeVec.begin();
