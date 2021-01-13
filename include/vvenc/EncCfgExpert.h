@@ -188,26 +188,18 @@ inline std::istream& operator>> ( std::istream& in, GOPEntry& entry )
 
 struct VVENC_DECL RPLEntry
 {
-  int    m_POC                       = -1;
-  int    m_temporalId                = 0;
-  bool   m_refPic                    = false;
-  bool   m_ltrp_in_slice_header_flag = false;
-  int    m_numRefPicsActive          = 0;
-  int8_t m_sliceType                 ='P';
-  int    m_numRefPics                = 0;
-  int    m_deltaRefPics[ MAX_NUM_REF_PICS ];
-
-  RPLEntry()
-  {
-    ::memset( m_deltaRefPics, 0, sizeof( m_deltaRefPics ) );
-  }
+  int    m_POC                              = -1;
+  int    m_temporalId                       = 0;
+  bool   m_refPic                           = false;
+  bool   m_ltrp_in_slice_header_flag        = false;
+  int    m_numRefPicsActive                 = 0;
+  int8_t m_sliceType                        ='P';
+  int    m_numRefPics                       = 0;
+  int    m_deltaRefPics[ MAX_NUM_REF_PICS ] = { 0 };
 };
 
 struct VVENC_DECL WCGChromaQPControl
 {
-  WCGChromaQPControl()
-  {}
-
   bool   enabled         = false;  ///< Enabled flag (0:default)
   double chromaCbQpScale = 1.0;    ///< Chroma Cb QP Scale (1.0:default)
   double chromaCrQpScale = 1.0;    ///< Chroma Cr QP Scale (1.0:default)
@@ -224,10 +216,6 @@ struct VVENC_DECL ChromaQpMappingTableParams
   int               m_numPtsInCQPTableMinus1[ MAX_NUM_CQP_MAPPING_TABLES ] = { 0 };
   std::vector<int>  m_deltaQpInValMinus1[ MAX_NUM_CQP_MAPPING_TABLES ];
   std::vector<int>  m_deltaQpOutVal[ MAX_NUM_CQP_MAPPING_TABLES ];
-
-  ChromaQpMappingTableParams()
-  {
-  }
 };
 
 struct VVENC_DECL ReshapeCW

@@ -106,12 +106,12 @@ struct YUVBufferStorage : public YUVBuffer
   {
     for ( int i = 0; i < MAX_NUM_COMP; i++ )
     {
-      YUVPlane& yuvPlane = yuvPlanes[ i ];
+      YUVBuffer::Plane& yuvPlane = planes[ i ];
       yuvPlane.width     = getWidthOfComponent ( chFmt, frameWidth,  i );
-      yuvPlane.height    = getHeightOfComponent( chFmt, frameHeight, i );
-      yuvPlane.stride    = yuvPlane.width;
-      const int size     = yuvPlane.stride * yuvPlane.height;
-      yuvPlane.planeBuf  = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+      yuvPlane.height = getHeightOfComponent( chFmt, frameHeight, i );
+      yuvPlane.stride = yuvPlane.width;
+      const int size  = yuvPlane.stride * yuvPlane.height;
+      yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
     }
   }
 
@@ -119,9 +119,9 @@ struct YUVBufferStorage : public YUVBuffer
   {
     for ( int i = 0; i < MAX_NUM_COMP; i++ )
     {
-      YUVPlane& yuvPlane = yuvPlanes[ i ];
-      if ( yuvPlane.planeBuf )
-        delete [] yuvPlane.planeBuf;
+      YUVBuffer::Plane& yuvPlane = planes[ i ];
+      if ( yuvPlane.ptr )
+        delete [] yuvPlane.ptr;
     }
   }
 };

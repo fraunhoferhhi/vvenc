@@ -65,12 +65,12 @@ namespace vvenc {
 
 // ====================================================================================================================
 
-static_assert( sizeof(Pel)  == sizeof(*(YUVPlane::planeBuf)),   "internal bits per pel differ from interface definition" );
+static_assert( sizeof(Pel)  == sizeof(*(YUVBuffer::Plane::ptr)),   "internal bits per pel differ from interface definition" );
 
 // ====================================================================================================================
 
 bool readYuvPlane( std::istream&       fd,
-                   YUVPlane&           yuvPlane,
+                   YUVBuffer::Plane&   yuvPlane,
                    bool                is16bit,
                    int                 fileBitDepth,
                    const ComponentID&  compID,
@@ -86,7 +86,7 @@ bool readYuvPlane( std::istream&       fd,
   const int stride  = yuvPlane.stride;
   const int width   = yuvPlane.width;
   const int height  = yuvPlane.height;
-  Pel* dst          = yuvPlane.planeBuf;
+  Pel* dst          = yuvPlane.ptr;
 
   const int fileStride = ( ( width  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
   const int fileHeight = ( ( height << csy_dest )                       ) >> csy_file;
@@ -184,20 +184,20 @@ bool readYuvPlane( std::istream&       fd,
   return true;
 }
 
-bool writeYuvPlane( std::ostream&       fd,
-                    const YUVPlane&     yuvPlane,
-                    bool                is16bit,
-                    int                 fileBitDepth,
-                    int                 packedYUVOutputMode,
-                    const ComponentID&  compID,
-                    const ChromaFormat& internChFmt,
-                    const ChromaFormat& outputChFmt
+bool writeYuvPlane( std::ostream&           fd,
+                    const YUVBuffer::Plane& yuvPlane,
+                    bool                    is16bit,
+                    int                     fileBitDepth,
+                    int                     packedYUVOutputMode,
+                    const ComponentID&      compID,
+                    const ChromaFormat&     internChFmt,
+                    const ChromaFormat&     outputChFmt
                   )
 {
   const int stride = yuvPlane.stride;
   const int width  = yuvPlane.width;
   const int height = yuvPlane.height;
-  const Pel* src   = yuvPlane.planeBuf;
+  const Pel* src   = yuvPlane.ptr;
 
   const uint32_t csx_file = getComponentScaleX( compID, outputChFmt );
   const uint32_t csy_file = getComponentScaleY( compID, outputChFmt );
@@ -408,12 +408,12 @@ bool writeYuvPlane( std::ostream&       fd,
   return true;
 }
 
-bool verifyYuvPlane( YUVPlane& yuvPlane, const int bitDepth )
+bool verifyYuvPlane( YUVBuffer::Plane& yuvPlane, const int bitDepth )
 {
   const int stride = yuvPlane.stride;
   const int width  = yuvPlane.width;
   const int height = yuvPlane.height;
-  Pel* dst         = yuvPlane.planeBuf;
+  Pel* dst         = yuvPlane.ptr;
 
   const Pel mask = ~( ( 1 << bitDepth ) - 1 );
 
@@ -431,12 +431,12 @@ bool verifyYuvPlane( YUVPlane& yuvPlane, const int bitDepth )
   return true;
 }
 
-void scaleYuvPlane( YUVPlane& yuvPlane, const int shiftBits, const Pel minVal, const Pel maxVal )
+void scaleYuvPlane( YUVBuffer::Plane& yuvPlane, const int shiftBits, const Pel minVal, const Pel maxVal )
 {
   const int stride = yuvPlane.stride;
   const int width  = yuvPlane.width;
   const int height = yuvPlane.height;
-  Pel* dst         = yuvPlane.planeBuf;
+  Pel* dst         = yuvPlane.ptr;
 
   if( 0 == shiftBits )
   {
@@ -593,7 +593,7 @@ bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
   const int numComp          = std::max( getNumberValidComponents( m_fileChrFmt ), getNumberValidComponents( m_fileChrFmt ) );
   for( int comp = 0; comp < numComp; comp++ )
   {
-    YUVPlane& yuvPlane         = yuvInBuf.yuvPlanes[ comp ];
+    YUVBuffer::Plane& yuvPlane = yuvInBuf.planes[ comp ];
 
     if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, ComponentID( comp ), m_fileChrFmt, m_bufferChrFmt ) )
       return false;
@@ -601,7 +601,7 @@ bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
     if ( m_bufferChrFmt == CHROMA_400 )
       continue;
 
-    CHECK( yuvPlane.planeBuf == nullptr, "allocated yuv buffer does not fit to intern chroma format" );
+    CHECK( yuvPlane.ptr == nullptr, "allocated yuv buffer does not fit to intern chroma format" );
 
     if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
     {
@@ -625,18 +625,22 @@ bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
 
   if ( nonZeroBitDepthShift )
   {
-    picScaled.create( m_bufferChrFmt, Area( Position( 0, 0 ), Size( yuvOutBuf.yuvPlanes[ COMP_Y ].width, yuvOutBuf.yuvPlanes[ COMP_Y ].height ) ) );
+    picScaled.create( m_bufferChrFmt, Area( Position( 0, 0 ), Size( yuvOutBuf.planes[ COMP_Y ].width, yuvOutBuf.planes[ COMP_Y ].height ) ) );
     Window zeroWindow;
     setupYuvBuffer( picScaled, yuvScaled, &zeroWindow );
-    PelUnitBuf pic;
-    setupPelUnitBuf( yuvOutBuf, pic, m_bufferChrFmt );
-    picScaled.copyFrom( pic );
+
+//    PelUnitBuf pic;
+//    setupPelUnitBuf( yuvOutBuf, pic, m_bufferChrFmt );
+//    picScaled.copyFrom( pic );
+
+    copyPadToPelUnitBuf( picScaled, yuvOutBuf, m_bufferChrFmt );
+
     const bool b709Compliance = m_clipToRec709 && ( -m_bitdepthShift < 0 && m_MSBExtendedBitDepth >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
     const Pel minVal          = b709Compliance? ( (    1 << ( m_MSBExtendedBitDepth - 8 ) )    ) : 0;
     const Pel maxVal          = b709Compliance? ( ( 0xff << ( m_MSBExtendedBitDepth - 8 ) ) -1 ) : ( 1 << m_MSBExtendedBitDepth ) - 1;
     for( int comp = 0; comp < (int)getNumberValidComponents( m_bufferChrFmt ); comp++ )
     {
-      scaleYuvPlane( yuvScaled.yuvPlanes[ comp ], -m_bitdepthShift, minVal, maxVal );
+      scaleYuvPlane( yuvScaled.planes[ comp ], -m_bitdepthShift, minVal, maxVal );
     }
   }
 
@@ -644,7 +648,7 @@ bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
 
   for( int comp = 0; comp < (int)getNumberValidComponents( m_fileChrFmt ); comp++ )
   {
-    if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.yuvPlanes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, ComponentID( comp ), m_bufferChrFmt, m_fileChrFmt ) )
+    if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, ComponentID( comp ), m_bufferChrFmt, m_fileChrFmt ) )
       return false;
   }
 

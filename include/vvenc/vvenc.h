@@ -108,18 +108,18 @@ typedef struct VVENC_DECL YuvPicture
 } YuvPicture_t;
 
 
-// will be removed  CL
-struct VVENC_DECL YUVPlane
-{
-  int16_t*   planeBuf = nullptr;  ///< pointer to plane buffer
-  int     width    = 0;        ///< width of the plane
-  int     height   = 0;        ///< height of the plane
-  int     stride   = 0;        ///< stride (width + left margin + right margins) of plane in samples
-};
 
 struct VVENC_DECL YUVBuffer
 {
-  YUVPlane  yuvPlanes[ MAX_NUM_COMP ];
+  struct Plane
+  {
+    int16_t*  ptr     = nullptr;      ///< pointer to plane buffer
+    int       width   = 0;            ///< width of the plane
+    int       height  = 0;            ///< height of the plane
+    int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
+  };
+
+  Plane     planes[ MAX_NUM_COMP ];
   uint64_t  sequenceNumber  = 0;      ///< sequence number of the picture
   uint64_t  cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
   bool      ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)

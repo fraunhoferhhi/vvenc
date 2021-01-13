@@ -396,10 +396,12 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
 
       pic = xGetNewPicBuffer( pps, sps );
 
-      PelUnitBuf yuvOrgBuf;
-      setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_cEncCfg.m_internChromaFormat );
+      copyPadToPelUnitBuf( pic->getOrigBuf(), yuvInBuf, m_cEncCfg.m_internChromaFormat );
+//      PelUnitBuf yuvOrgBuf;
+//      setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_cEncCfg.m_internChromaFormat );
+//
+//      pic->getOrigBuf().copyFrom( yuvOrgBuf );
 
-      pic->getOrigBuf().copyFrom( yuvOrgBuf );
       if( yuvInBuf.ctsValid )
       {
         pic->cts = yuvInBuf.cts;
@@ -408,7 +410,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
 
-      xDetectScreenC(*pic, yuvOrgBuf, m_cEncCfg.m_TS );
+      xDetectScreenC(*pic, pic->getOrigBuf(), m_cEncCfg.m_TS );
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
