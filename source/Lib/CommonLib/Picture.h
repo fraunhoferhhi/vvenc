@@ -292,7 +292,6 @@ public:
 };
 
 int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
-inline bool isPicInUse( Picture* pic ) { return !( pic->isFinished && !pic->isNeededForOutput && !pic->isReferenced && pic->refCounter <= 0 ); }
 
 typedef std::list<Picture*> PicList;
 
