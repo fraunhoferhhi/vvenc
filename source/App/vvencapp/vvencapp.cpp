@@ -60,7 +60,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstring>
 #include <ctime>
 #include <chrono>
-#include <regex>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -70,6 +69,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/EncAppCfg.h"
 #include "apputils/ParseArg.h"
+
+#define USE_FFPARAMS 0
+
 
 int g_verbosity = vvenc::VERBOSE;
 
@@ -107,7 +109,6 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 }
 
 
-#define USE_FFPARAMS 0
 
 #if USE_FFPARAMS
 bool parseCfg( int argc, char* argv[], EncAppCfg& rcEncAppCfg )
@@ -179,8 +180,7 @@ int main( int argc, char* argv[] )
   cEncAppCfg.m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
   cEncAppCfg.m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
   cEncAppCfg.m_FrameSkip           = 0;                        // number of frames to skip before start encoding
-  cEncAppCfg.m_numWppThreads       = 0;                        // number of worker threads (should not exceed the number of physical cpu's)
-  //cEncAppCfg.Quality          = 2;                           // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  cEncAppCfg.m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
   cEncAppCfg.m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   cEncAppCfg.m_inputBitDepth[0]    = 8;                        // input bitdepth
   cEncAppCfg.m_internalBitDepth[0] = 10;                       // internal bitdepth
@@ -222,7 +222,7 @@ int main( int argc, char* argv[] )
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( cEncAppCfg.m_numWppThreads <= 0 )
+  if( cEncAppCfg.m_numWppThreads < 0 )
   {
     if( cEncAppCfg.m_SourceWidth > 1920 || cEncAppCfg.m_SourceHeight > 1080)
     {
@@ -238,6 +238,26 @@ int main( int argc, char* argv[] )
   cVVEncParameter.msgLevel = (vvenc::MsgLevel)cEncAppCfg.m_verbosity;
   cVVEncParameter.width    = cEncAppCfg.m_SourceWidth;
   cVVEncParameter.height   = cEncAppCfg.m_SourceHeight;
+
+  cVVEncParameter.inputBitDepth    = cEncAppCfg.m_inputBitDepth[0];
+  cVVEncParameter.internalBitDepth = cEncAppCfg.m_internalBitDepth[0];
+
+  cVVEncParameter.maxFrames = cEncAppCfg.m_framesToBeEncoded;
+  cVVEncParameter.frameSkip = cEncAppCfg.m_FrameSkip;
+
+  cVVEncParameter.ticksPerSecond = cEncAppCfg.m_TicksPerSecond;
+  cVVEncParameter.temporalRate   = cEncAppCfg.m_FrameRate;
+  cVVEncParameter.temporalScale  = 1;
+
+  switch( cEncAppCfg.m_FrameRate )
+  {
+  case 23: cVVEncParameter.temporalRate = 24000; cVVEncParameter.temporalScale = 1001; break;
+  case 29: cVVEncParameter.temporalRate = 30000; cVVEncParameter.temporalScale = 1001; break;
+  case 59: cVVEncParameter.temporalRate = 60000; cVVEncParameter.temporalScale = 1001; break;
+  default: break;
+  }
+
+  cVVEncParameter.numPasses = cEncAppCfg.m_RCNumPasses;
 
 #else
   // set desired encoding options
@@ -344,7 +364,9 @@ int main( int argc, char* argv[] )
     return iRet;
   }
 
-  //cVVEnc.printConfig();
+#if USE_FFPARAMS
+  cVVEnc.printConfig();
+#endif
 
   if( cVVEncParameter.msgLevel > vvenc::WARNING )
   {
@@ -365,8 +387,6 @@ int main( int argc, char* argv[] )
 
   // --- allocate memory for output packets
   vvenc::VvcAccessUnit cAccessUnit;
-//  cAccessUnit.payloadSize = cVVEncParameter.width * cVVEncParameter.height;
-//  cAccessUnit.payload     = new unsigned char [ cAccessUnit.payloadSize ];
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun;

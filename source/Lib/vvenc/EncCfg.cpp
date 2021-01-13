@@ -113,7 +113,7 @@ bool EncCfg::initCfgParameter()
     CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
   }
 
-  if( m_maxParallelFrames > 0 && !m_numWppThreads && !m_numFppThreads )
+  if( m_maxParallelFrames > 0 && (m_numWppThreads<=0) && !m_numFppThreads )
   {
     // Use picture threads for FPP
     m_numFppThreads = m_maxParallelFrames;
@@ -434,9 +434,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
 
-  confirmParameter( m_numWppThreads < 0,                            "NumWppThreads out of range");
+  confirmParameter( m_numWppThreads < -1,                            "NumWppThreads out of range");
   confirmParameter( m_ensureWppBitEqual<0 || m_ensureWppBitEqual>1, "WppBitEqual out of range");
-  confirmParameter( m_numWppThreads && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
+  confirmParameter( (m_numWppThreads>0) && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
 
   if (m_lumaReshapeEnable)
   {
