@@ -571,14 +571,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           if (m_pcEncCfg->m_usePerceptQPATempFiltISlice && (m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) // last CTU row of non-Intra key-frame
               && (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_SourceHeight))
           {
-            const bool rc1stPass = (m_pcEncCfg->m_RCRateControlMode == 0 ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
-
             m_globalCtuQpVector->at (ctuRsAddr) = m_globalCtuQpVector->at (ctuRsAddr - pcv.widthInCtus);  // copy pumping reducing QP offset from top CTU neighbor
-            if (!rc1stPass)
-            {
-              tempCS->currQP[partitioner.chType] = tempCS->baseQP =
-              bestCS->currQP[partitioner.chType] = bestCS->baseQP = tempCS->baseQP - m_globalCtuQpVector->at (ctuRsAddr);
-            }
+            tempCS->currQP[partitioner.chType] = tempCS->baseQP =
+            bestCS->currQP[partitioner.chType] = bestCS->baseQP = tempCS->baseQP - m_globalCtuQpVector->at (ctuRsAddr);
           }
           tempCS->currQP[partitioner.chType] = tempCS->baseQP =
           bestCS->currQP[partitioner.chType] = bestCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
@@ -2000,9 +1995,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       const Picture*    pic = slice.pic;
       const uint32_t rsAddr = getCtuAddr (partitioner.currQgPos, *pic->cs->pcv);
       const int pumpReducQP = BitAllocation::getCtuPumpingReducingQP (&slice, tempCS->getOrgBuf (COMP_Y), uiSadBestForQPA, *m_globalCtuQpVector, rsAddr, m_pcEncCfg->m_QP);
-      const bool  rc1stPass = (m_pcEncCfg->m_RCRateControlMode == 0 ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
 
-      if ((pumpReducQP != 0) && !rc1stPass) // subtract QP offset, reduces Intra-period pumping or overcoding
+      if (pumpReducQP != 0) // subtract QP offset, reduces Intra-period pumping or overcoding
       {
         encTestMode.qp = Clip3 (0, MAX_QP, encTestMode.qp - pumpReducQP);
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =

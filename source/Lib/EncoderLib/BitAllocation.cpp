@@ -510,7 +510,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
           if (ctuRsAddr & 1) ctuRCQPMemory->back() |= (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8) << 4;
           else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
         }
-        else if (slice->isIntra())
+        if (slice->isIntra())
         {
           if (ctuPumpRedQP[ctuRsAddr] < 0) adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize - (dvsr >> 1)) / dvsr);
           else /*ctuPumpRedQP[addr] >= 0*/ adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize + (dvsr >> 1)) / dvsr);
@@ -584,7 +584,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
       }
     } // end CTU-wise loop
 
-    adaptedSliceQP = ((savedQP < 0) && (ctuBoundingAddr > ctuStartAddr) ? (adaptedSliceQP < 0 ? adaptedSliceQP - (nCtu >> 1) : adaptedSliceQP + (nCtu >> 1)) / nCtu : sliceQP); // mean adapted luma QP
+    adaptedSliceQP = ((savedQP < 0 || (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
+                      ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
   }
 
   return adaptedSliceQP;

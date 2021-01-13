@@ -296,7 +296,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
         {
           const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
 
-          ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
+          ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8 - 1;
         }
       }
     }
