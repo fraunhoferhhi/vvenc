@@ -71,6 +71,17 @@ enum FastInterSearchMode
   FASTINTERSEARCH_MODE3    = 3
 };
 
+/// supported ME search methods
+enum MESearchMethod
+{
+  MESEARCH_FULL              = 0,
+  MESEARCH_DIAMOND           = 1,
+  MESEARCH_SELECTIVE         = 2,
+  MESEARCH_DIAMOND_ENHANCED  = 3,
+  MESEARCH_DIAMOND_FAST      = 4,
+  MESEARCH_NUMBER_OF_METHODS = 5
+};
+
 enum CostMode
 {
   COST_STANDARD_LOSSY              = 0,
@@ -83,51 +94,32 @@ enum CostMode
 
 struct VVENC_DECL GOPEntry
 {
-  int    m_POC;
-  int    m_QPOffset;
-  double m_QPOffsetModelOffset;
-  double m_QPOffsetModelScale;
-  int    m_CbQPoffset;
-  int    m_CrQPoffset;
-  double m_QPFactor;
-  int    m_tcOffsetDiv2;
-  int    m_betaOffsetDiv2;
-  int    m_CbTcOffsetDiv2;
-  int    m_CbBetaOffsetDiv2;
-  int    m_CrTcOffsetDiv2;
-  int    m_CrBetaOffsetDiv2;
-  int    m_temporalId;
-  bool   m_refPic;
-  int8_t m_sliceType;
-  int    m_numRefPicsActive[ 2 ];
-  int    m_numRefPics[ 2 ];
+  int    m_POC                       = -1;
+  int    m_QPOffset                  = 0;
+  double m_QPOffsetModelOffset       = 0.0;
+  double m_QPOffsetModelScale        = 0.0;
+  int    m_CbQPoffset                = 0;
+  int    m_CrQPoffset                = 0;
+  double m_QPFactor                  = 0.0;
+  int    m_tcOffsetDiv2              = 0;
+  int    m_betaOffsetDiv2            = 0;
+  int    m_CbTcOffsetDiv2            = 0;
+  int    m_CbBetaOffsetDiv2          = 0;
+  int    m_CrTcOffsetDiv2            = 0;
+  int    m_CrBetaOffsetDiv2          = 0;
+  int    m_temporalId                = 0;
+  bool   m_refPic                    = false;
+  int8_t m_sliceType                 = 'P';
+  int    m_numRefPicsActive[ 2 ]     = { 0 };
+  int    m_numRefPics[ 2 ]           = { 0 };
   int    m_deltaRefPics[ 2 ][ MAX_NUM_REF_PICS ];
-  bool   m_isEncoded;
-  bool   m_ltrp_in_slice_header_flag;
-GOPEntry()
-    : m_POC                   ( -1 )
-      , m_QPOffset            ( 0 )
-      , m_QPOffsetModelOffset ( 0 )
-      , m_QPOffsetModelScale  ( 0 )
-      , m_CbQPoffset          ( 0 )
-      , m_CrQPoffset          ( 0 )
-      , m_QPFactor            ( 0 )
-      , m_tcOffsetDiv2        ( 0 )
-      , m_betaOffsetDiv2      ( 0 )
-      , m_CbTcOffsetDiv2      ( 0 )
-      , m_CbBetaOffsetDiv2    ( 0 )
-      , m_CrTcOffsetDiv2      ( 0 )
-      , m_CrBetaOffsetDiv2    ( 0 )
-      , m_temporalId          ( 0 )
-      , m_refPic              ( false )
-      , m_sliceType           ( 'P' )
-      , m_numRefPicsActive    { 0 }
-      , m_numRefPics          { 0 }
-      , m_isEncoded(false)
-      , m_ltrp_in_slice_header_flag(false)
-      {
-        std::memset( m_deltaRefPics, 0, sizeof( m_deltaRefPics ) );
-      }
+  bool   m_isEncoded                 = false;
+  bool   m_ltrp_in_slice_header_flag = false;
+
+  GOPEntry()
+  {
+    std::memset( m_deltaRefPics, 0, sizeof( m_deltaRefPics ) );
+  }
 };
 
 inline std::ostream& operator<< ( std::ostream& os, const GOPEntry& entry )
@@ -196,23 +188,16 @@ inline std::istream& operator>> ( std::istream& in, GOPEntry& entry )
 
 struct VVENC_DECL RPLEntry
 {
-  int    m_POC;
-  int    m_temporalId;
-  bool   m_refPic;
-  bool   m_ltrp_in_slice_header_flag;
-  int    m_numRefPicsActive;
-  int8_t m_sliceType;
-  int    m_numRefPics;
+  int    m_POC                       = -1;
+  int    m_temporalId                = 0;
+  bool   m_refPic                    = false;
+  bool   m_ltrp_in_slice_header_flag = false;
+  int    m_numRefPicsActive          = 0;
+  int8_t m_sliceType                 ='P';
+  int    m_numRefPics                = 0;
   int    m_deltaRefPics[ MAX_NUM_REF_PICS ];
 
   RPLEntry()
-    : m_POC                ( -1 )
-      , m_temporalId       ( 0 )
-      , m_refPic           ( false )
-      , m_ltrp_in_slice_header_flag(false)
-      , m_numRefPicsActive ( 0 )
-      , m_sliceType        ( 'P' )
-      , m_numRefPics       ( 0 )
   {
     ::memset( m_deltaRefPics, 0, sizeof( m_deltaRefPics ) );
   }
@@ -221,34 +206,26 @@ struct VVENC_DECL RPLEntry
 struct VVENC_DECL WCGChromaQPControl
 {
   WCGChromaQPControl()
-  : enabled         (false)
-  , chromaCbQpScale (1.0)  , chromaCrQpScale (1.0)
-  , chromaQpScale   (0.0)  , chromaQpOffset  (0.0)
   {}
 
-  bool   enabled;         ///< Enabled flag (0:default)
-  double chromaCbQpScale; ///< Chroma Cb QP Scale (1.0:default)
-  double chromaCrQpScale; ///< Chroma Cr QP Scale (1.0:default)
-  double chromaQpScale;   ///< Chroma QP Scale (0.0:default)
-  double chromaQpOffset;  ///< Chroma QP Offset (0.0:default)
+  bool   enabled         = false;  ///< Enabled flag (0:default)
+  double chromaCbQpScale = 1.0;    ///< Chroma Cb QP Scale (1.0:default)
+  double chromaCrQpScale = 1.0;    ///< Chroma Cr QP Scale (1.0:default)
+  double chromaQpScale   = 0.0;    ///< Chroma QP Scale (0.0:default)
+  double chromaQpOffset  = 0-0;    ///< Chroma QP Offset (0.0:default)
 };
 
 struct VVENC_DECL ChromaQpMappingTableParams
 {
-  int               m_numQpTables;
-  int               m_qpBdOffset;
-  bool              m_sameCQPTableForAllChromaFlag;
-  int               m_qpTableStartMinus26[MAX_NUM_CQP_MAPPING_TABLES];
-  int               m_numPtsInCQPTableMinus1[ MAX_NUM_CQP_MAPPING_TABLES ];
+  int               m_numQpTables                                          = 0;
+  int               m_qpBdOffset                                           = 12;
+  bool              m_sameCQPTableForAllChromaFlag                         = true;
+  int               m_qpTableStartMinus26[MAX_NUM_CQP_MAPPING_TABLES]      = { 0 };
+  int               m_numPtsInCQPTableMinus1[ MAX_NUM_CQP_MAPPING_TABLES ] = { 0 };
   std::vector<int>  m_deltaQpInValMinus1[ MAX_NUM_CQP_MAPPING_TABLES ];
   std::vector<int>  m_deltaQpOutVal[ MAX_NUM_CQP_MAPPING_TABLES ];
 
   ChromaQpMappingTableParams()
-  : m_numQpTables                   ( 0 )
-  , m_qpBdOffset                    ( 12 )
-  , m_sameCQPTableForAllChromaFlag  ( true )
-  , m_qpTableStartMinus26           { 0 }
-  , m_numPtsInCQPTableMinus1        { 0 }
   {
   }
 };
@@ -273,524 +250,270 @@ class VVENC_DECL EncCfgExpert
 {
 public:
 
-  bool                m_listTracingChannels;
-  std::string         m_traceRule;
-  std::string         m_traceFile;
+  bool                m_listTracingChannels                     = false;
+  std::string         m_traceRule                               = "";
+  std::string         m_traceFile                               = "";
 
-  int                 m_conformanceWindowMode;
-  int                 m_confWinLeft;
-  int                 m_confWinRight;
-  int                 m_confWinTop;
-  int                 m_confWinBottom;
+  int                 m_conformanceWindowMode                   = 1;
+  int                 m_confWinLeft                             = 0;
+  int                 m_confWinRight                            = 0;
+  int                 m_confWinTop                              = 0;
+  int                 m_confWinBottom                           = 0;
 
-  unsigned            m_temporalSubsampleRatio;                         ///< temporal subsample ratio, 2 means code every two frames
+  unsigned            m_temporalSubsampleRatio                  = 1;                                     ///< temporal subsample ratio, 2 means code every two frames
 
-  int                 m_PadSourceWidth;                                 ///< source width in pixel
-  int                 m_PadSourceHeight;                                ///< source height in pixel (when interlaced = field height)
+  int                 m_PadSourceWidth                          = 0;                                     ///< source width in pixel
+  int                 m_PadSourceHeight                         = 0;                                     ///< source height in pixel (when interlaced = field height)
 
-  int                 m_aiPad[ 2 ];                                     ///< number of padded pixels for width and height
-  bool                m_enablePictureHeaderInSliceHeader;
-  bool                m_AccessUnitDelimiter;                            ///< add Access Unit Delimiter NAL units
+  int                 m_aiPad[ 2 ]                              = { 0, 0 };                              ///< number of padded pixels for width and height
+  bool                m_enablePictureHeaderInSliceHeader        = true;
+  bool                m_AccessUnitDelimiter                     = false;                                 ///< add Access Unit Delimiter NAL units
 
-  bool                m_printMSEBasedSequencePSNR;
-  bool                m_printHexPsnr;
-  bool                m_printFrameMSE;
-  bool                m_printSequenceMSE;
-  bool                m_cabacZeroWordPaddingEnabled;
+  bool                m_printMSEBasedSequencePSNR               = false;
+  bool                m_printHexPsnr                            = false;
+  bool                m_printFrameMSE                           = false;
+  bool                m_printSequenceMSE                        = false;
+  bool                m_cabacZeroWordPaddingEnabled             = true;
 
-  unsigned            m_subProfile;
+  unsigned            m_subProfile                              = 0;
+  unsigned            m_bitDepthConstraintValue                 = 10;
+  bool                m_intraOnlyConstraintFlag                 = false;
 
-  unsigned            m_bitDepthConstraintValue;
-  bool                m_intraOnlyConstraintFlag;
+  int                 m_InputQueueSize                          = 0;                                     ///< Size of frame input queue
+  bool                m_rewriteParamSets                        = false;                                 ///< Flag to enable rewriting of parameter sets at random access points
+  bool                m_idrRefParamList                         = false;                                 ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
+  RPLEntry            m_RPLList0[ MAX_GOP ];                                                             ///< the RPL entries from the config file
+  RPLEntry            m_RPLList1[ MAX_GOP ];                                                             ///< the RPL entries from the config file
+  GOPEntry            m_GOPList [ MAX_GOP ];                                                             ///< the coding structure entries from the config file
+  int                 m_maxDecPicBuffering[ MAX_TLAYER ]        = { 0, 0, 0, 0, 0, 0, 0 };               ///< total number of pictures in the decoded picture buffer
+  int                 m_maxNumReorderPics [ MAX_TLAYER ]        = { 0, 0, 0, 0, 0, 0, 0 };               ///< total number of reorder pictures
+  int                 m_maxTempLayer                            = 0;                                     ///< Max temporal layer
+  int                 m_numRPLList0                             = 0;
+  int                 m_numRPLList1                             = 0;
 
-  int                 m_InputQueueSize;                                 ///< Size of frame input queue
-  bool                m_rewriteParamSets;                               ///< Flag to enable rewriting of parameter sets at random access points
-  bool                m_idrRefParamList;                                ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
-  RPLEntry            m_RPLList0[ MAX_GOP ];                            ///< the RPL entries from the config file
-  RPLEntry            m_RPLList1[ MAX_GOP ];                            ///< the RPL entries from the config file
-  GOPEntry            m_GOPList [ MAX_GOP ];                            ///< the coding structure entries from the config file
-  int                 m_maxDecPicBuffering[ MAX_TLAYER ];               ///< total number of pictures in the decoded picture buffer
-  int                 m_maxNumReorderPics [ MAX_TLAYER ];               ///< total number of reorder pictures
-  int                 m_maxTempLayer;                                   ///< Max temporal layer
-  int                 m_numRPLList0;
-  int                 m_numRPLList1;
+  bool                m_useSameChromaQPTables                   = true;
+  ChromaQpMappingTableParams m_chromaQpMappingTableParams       = ChromaQpMappingTableParams();
+  int                 m_intraQPOffset                           = 0;                                     ///< QP offset for intra slice (integer)
+  bool                m_lambdaFromQPEnable                      = false;                                 ///< enable flag for QP:lambda fix
+  double              m_adLambdaModifier[ MAX_TLAYER ]          = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }; ///< Lambda modifier array for each temporal layer
+  std::vector<double> m_adIntraLambdaModifier;                                                           ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
+  double              m_dIntraQpFactor                          = -1.0;                                  ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
+  std::vector<int>    m_qpInValsCb                              = { 25, 33, 43 };                        ///< qp input values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpInValsCr                              = { 0 };                                 ///< qp input values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpInValsCbCr                            = { 0 };                                 ///< qp input values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpOutValsCb                             = { 25, 32, 37 };                        ///< qp output values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpOutValsCr                             = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpOutValsCbCr                           = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
+  int                 m_cuQpDeltaSubdiv                         = 0;                                     ///< Maximum subdiv for CU luma Qp adjustment (0:default)
+  int                 m_cuChromaQpOffsetSubdiv                  = -1;                                    ///< If negative, then do not apply chroma qp offsets.
+  int                 m_chromaCbQpOffset                        = 0;                                     ///< Chroma Cb QP Offset (0:default)
+  int                 m_chromaCrQpOffset                        = 0;                                     ///< Chroma Cr QP Offset (0:default)
+  int                 m_chromaCbQpOffsetDualTree                = 0;                                     ///< Chroma Cb QP Offset for dual tree (overwrite m_chromaCbQpOffset for dual tree)
+  int                 m_chromaCrQpOffsetDualTree                = 0;                                     ///< Chroma Cr QP Offset for dual tree (overwrite m_chromaCrQpOffset for dual tree)
+  int                 m_chromaCbCrQpOffset                      = -1;                                    ///< QP Offset for joint Cb-Cr mode
+  int                 m_chromaCbCrQpOffsetDualTree              = 0;                                     ///< QP Offset for joint Cb-Cr mode (overwrite m_chromaCbCrQpOffset for dual tree)
+  unsigned            m_sliceChromaQpOffsetPeriodicity          = 0;                                     ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
+  int                 m_sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { 0, 0};                               ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
 
-  bool                m_useSameChromaQPTables;
-  ChromaQpMappingTableParams m_chromaQpMappingTableParams;
-  int                 m_intraQPOffset;                                  ///< QP offset for intra slice (integer)
-  bool                m_lambdaFromQPEnable;                             ///< enable flag for QP:lambda fix
-  double              m_adLambdaModifier[ MAX_TLAYER ];                 ///< Lambda modifier array for each temporal layer
-  std::vector<double> m_adIntraLambdaModifier;                          ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
-  double              m_dIntraQpFactor;                                 ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
-  std::vector<int>    m_qpInValsCb;                                     ///< qp input values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpInValsCr;                                     ///< qp input values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpInValsCbCr;                                   ///< qp input values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpOutValsCb;                                    ///< qp output values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpOutValsCr;                                    ///< qp output values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpOutValsCbCr;                                  ///< qp output values used to derive the chroma QP mapping table
-  int                 m_cuQpDeltaSubdiv;                                ///< Maximum subdiv for CU luma Qp adjustment (0:default)
-  int                 m_cuChromaQpOffsetSubdiv;                         ///< If negative, then do not apply chroma qp offsets.
-  int                 m_chromaCbQpOffset;                               ///< Chroma Cb QP Offset (0:default)
-  int                 m_chromaCrQpOffset;                               ///< Chroma Cr QP Offset (0:default)
-  int                 m_chromaCbQpOffsetDualTree;                       ///< Chroma Cb QP Offset for dual tree (overwrite m_chromaCbQpOffset for dual tree)
-  int                 m_chromaCrQpOffsetDualTree;                       ///< Chroma Cr QP Offset for dual tree (overwrite m_chromaCrQpOffset for dual tree)
-  int                 m_chromaCbCrQpOffset;                             ///< QP Offset for joint Cb-Cr mode
-  int                 m_chromaCbCrQpOffsetDualTree;                     ///< QP Offset for joint Cb-Cr mode (overwrite m_chromaCbCrQpOffset for dual tree)
-  unsigned            m_sliceChromaQpOffsetPeriodicity;                 ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
-  int                 m_sliceChromaQpOffsetIntraOrPeriodic[ 2 ];        ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
-  bool                m_lumaLevelToDeltaQPEnabled;
-  WCGChromaQPControl  m_wcgChromaQpControl;
-  bool                m_sdr;
-  bool                m_calculateHdrMetrics;
-  int                 m_cropOffsetLeft;
-  int                 m_cropOffsetTop;
-  int                 m_cropOffsetRight;
-  int                 m_cropOffsetBottom;
+  bool                m_lumaLevelToDeltaQPEnabled               = false;
+  WCGChromaQPControl  m_wcgChromaQpControl                      = WCGChromaQPControl();
+  bool                m_sdr                                     = false;
+  bool                m_calculateHdrMetrics                     = false;
+  int                 m_cropOffsetLeft                          = 0;
+  int                 m_cropOffsetTop                           = 0;
+  int                 m_cropOffsetRight                         = 0;
+  int                 m_cropOffsetBottom                        = 0;
 
-
-  ChromaFormat        m_internChromaFormat;
-  bool                m_useIdentityTableForNon420Chroma;
-  int                 m_outputBitDepth[ MAX_NUM_CH ];                   ///< bit-depth of output file
-  int                 m_MSBExtendedBitDepth[ MAX_NUM_CH ];              ///< bit-depth of input samples after MSB extension
-  CostMode            m_costMode;                                       ///< Cost mode to use
-  HashType            m_decodedPictureHashSEIType;                      ///< Checksum mode for decoded picture hash SEI message
-  bool                m_bufferingPeriodSEIEnabled;
-  bool                m_pictureTimingSEIEnabled;
-  bool                m_decodingUnitInfoSEIEnabled;
-  bool                m_entropyCodingSyncEnabled;
-  bool                m_entryPointsPresent;
-  bool                m_signalledSliceIdFlag;
-  int                 m_signalledSliceIdLengthMinus1;
+  ChromaFormat        m_internChromaFormat                      = NUM_CHROMA_FORMAT;
+  bool                m_useIdentityTableForNon420Chroma         = true;
+  int                 m_outputBitDepth[ MAX_NUM_CH ]            = { 0, 0 };                              ///< bit-depth of output file
+  int                 m_MSBExtendedBitDepth[ MAX_NUM_CH ]       = { 0, 0 };                              ///< bit-depth of input samples after MSB extension
+  CostMode            m_costMode                                = COST_STANDARD_LOSSY;                   ///< Cost mode to use
+  HashType            m_decodedPictureHashSEIType               = HASHTYPE_NONE;                         ///< Checksum mode for decoded picture hash SEI message
+  bool                m_bufferingPeriodSEIEnabled               = false;
+  bool                m_pictureTimingSEIEnabled                 = false;
+  bool                m_decodingUnitInfoSEIEnabled              = false;
+  bool                m_entropyCodingSyncEnabled                = false;
+  bool                m_entryPointsPresent                      = true;
+  bool                m_signalledSliceIdFlag                    = false;
+  int                 m_signalledSliceIdLengthMinus1            = 0;
   std::vector<int>    m_rectSliceBoundary;
   std::vector<int>    m_signalledSliceId;
   std::vector<int>    m_sliceId;
 
-  unsigned            m_CTUSize;
-  unsigned            m_MinQT[ 3 ];                                     ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
-  unsigned            m_maxMTTDepth;
-  unsigned            m_maxMTTDepthI;
-  unsigned            m_maxMTTDepthIChroma;
-  unsigned            m_maxBT[3];
-  unsigned            m_maxTT[3];
-  bool                m_dualITree;
-  unsigned            m_MaxCodingDepth;                                 ///< max. total CU depth - includes depth of transform-block structure
-  unsigned            m_log2DiffMaxMinCodingBlockSize;                  ///< difference between largest and smallest CU depth
-  int                 m_log2MaxTbSize;
+  unsigned            m_CTUSize                                 = 128;
+  unsigned            m_MinQT[ 3 ]                              = { 8, 8, 4 };                           ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
+  unsigned            m_maxMTTDepth                             = 3;
+  unsigned            m_maxMTTDepthI                            = 3;
+  unsigned            m_maxMTTDepthIChroma                      = 3;
+  unsigned            m_maxBT[3]                                = {32, 128, 64};
+  unsigned            m_maxTT[3]                                = {32, 64, 32};
+  bool                m_dualITree                               = true;
+  unsigned            m_MaxCodingDepth                          = 0;                                     ///< max. total CU depth - includes depth of transform-block structure
+  unsigned            m_log2DiffMaxMinCodingBlockSize           = 0;                                     ///< difference between largest and smallest CU depth
+  int                 m_log2MaxTbSize                           = 6;
 
-  bool                m_bUseASR;                                        ///< flag for using adaptive motion search range
-  bool                m_bUseHADME;                                      ///< flag for using HAD in sub-pel ME
-  int                 m_RDOQ;                                           ///< flag for using RD optimized quantization
-  bool                m_useRDOQTS;                                      ///< flag for using RD optimized quantization for transform skip
-  bool                m_useSelectiveRDOQ;                               ///< flag for using selective RDOQ
+  bool                m_bUseASR                                 = false;                                 ///< flag for using adaptive motion search range
+  bool                m_bUseHADME                               = true;                                  ///< flag for using HAD in sub-pel ME
+  int                 m_RDOQ                                    = 1;                                     ///< flag for using RD optimized quantization
+  bool                m_useRDOQTS                               = true;                                  ///< flag for using RD optimized quantization for transform skip
+  bool                m_useSelectiveRDOQ                        = false;                                 ///< flag for using selective RDOQ
 
-  bool                m_JointCbCrMode;
-  bool                m_cabacInitPresent;
-  bool                m_useFastLCTU;
-  bool                m_usePbIntraFast;
-  int                 m_useFastMrg;
-  bool                m_useAMaxBT;
-  bool                m_fastQtBtEnc;
-  bool                m_contentBasedFastQtbt;
-  int                 m_fastInterSearchMode;                            ///< Parameter that controls fast encoder settings
-  bool                m_bUseEarlyCU;                                    ///< flag for using Early CU setting
-  bool                m_useFastDecisionForMerge;                        ///< flag for using Fast Decision Merge RD-Cost
-  bool                m_useEarlySkipDetection;                          ///< flag for using Early SKIP Detection
+  bool                m_JointCbCrMode                           = false;
+  bool                m_cabacInitPresent                        = true;
+  bool                m_useFastLCTU                             = false;
+  bool                m_usePbIntraFast                          = false;
+  int                 m_useFastMrg                              = 0;
+  bool                m_useAMaxBT                               = false;
+  bool                m_fastQtBtEnc                             = true;
+  bool                m_contentBasedFastQtbt                    = false;
+  int                 m_fastInterSearchMode                     = FASTINTERSEARCH_DISABLED;              ///< Parameter that controls fast encoder settings
+  bool                m_bUseEarlyCU                             = false;                                 ///< flag for using Early CU setting
+  bool                m_useFastDecisionForMerge                 = true;                                  ///< flag for using Fast Decision Merge RD-Cost
+  bool                m_useEarlySkipDetection                   = false;                                 ///< flag for using Early SKIP Detection
 
-  bool                m_bDisableIntraCUsInInterSlices;                  ///< Flag for disabling intra predicted CUs in inter slices.
-  bool                m_bUseConstrainedIntraPred;                       ///< flag for using constrained intra prediction
-  bool                m_bFastUDIUseMPMEnabled;
-  bool                m_bFastMEForGenBLowDelayEnabled;
+  bool                m_bDisableIntraCUsInInterSlices           = false;                                 ///< Flag for disabling intra predicted CUs in inter slices.
+  bool                m_bUseConstrainedIntraPred                = false;                                 ///< flag for using constrained intra prediction
+  bool                m_bFastUDIUseMPMEnabled                   = true;
+  bool                m_bFastMEForGenBLowDelayEnabled           = true;
 
-  bool                m_MTSImplicit;
-  int                 m_TMVPModeId;
-  bool                m_DepQuantEnabled;
-  bool                m_SignDataHidingEnabled;
-  bool                m_MIP;
-  int                 m_useFastMIP;
+  bool                m_MTSImplicit                             = false;
+  int                 m_TMVPModeId                              = 1;
+  bool                m_DepQuantEnabled                         = true;
+  bool                m_SignDataHidingEnabled                   = false;
 
-  unsigned            m_maxNumMergeCand;                                ///< Max number of merge candidates
-  unsigned            m_maxNumAffineMergeCand;                          ///< Max number of affine merge candidates
-//  unsigned            m_maxNumIBCMergeCand;                             ///< Max number of IBC merge candidates
-  int                 m_Geo;
-  unsigned            m_maxNumGeoCand;
-  int                 m_RCRateControlMode;
-  int                 m_RCNumPasses;
-  int                 m_RCTargetBitrate;
-  int                 m_RCKeepHierarchicalBit;
-  bool                m_RCUseLCUSeparateModel;
-  int                 m_RCInitialQP;
-  bool                m_RCForceIntraQP;
-  int                 m_motionEstimationSearchMethod;
-  bool                m_bRestrictMESampling;                            ///< Restrict sampling for the Selective ME
-  int                 m_SearchRange;                                    ///< ME search range
-  int                 m_bipredSearchRange;                              ///< ME search range for bipred refinement
-  int                 m_minSearchWindow;                                ///< ME minimum search window size for the Adaptive Window ME
-  bool                m_bClipForBiPredMeEnabled;                        ///< Enables clipping for Bi-Pred ME.
-  bool                m_bFastMEAssumingSmootherMVEnabled;               ///< Enables fast ME assuming a smoother MV.
-  int                 m_fastSubPel;
-  int                 m_SMVD;
-  int                 m_AMVRspeed;
-  bool                m_LMChroma;
-  bool                m_horCollocatedChromaFlag;
-  bool                m_verCollocatedChromaFlag;
-  bool                m_MRL;
-  bool                m_BDOF;
-  bool                m_DMVR;
-  int                 m_EDO;
-  bool                m_lumaReshapeEnable;
-  int                 m_reshapeSignalType;
-  int                 m_updateCtrl;
-  int                 m_adpOption;
-  int                 m_initialCW;
-  int                 m_LMCSOffset;
+  bool                m_MIP                                     = false;
+  int                 m_useFastMIP                              = 0;
+
+  unsigned            m_maxNumMergeCand                         = 5;                                     ///< Max number of merge candidates
+  unsigned            m_maxNumAffineMergeCand                   = 5;                                     ///< Max number of affine merge candidates
+//  unsigned            m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
+  int                 m_Geo                                     = 0;
+  unsigned            m_maxNumGeoCand                           = 5;
+  int                 m_RCRateControlMode                       = 0;
+  int                 m_RCNumPasses                             = 1;
+  int                 m_RCTargetBitrate                         = 0;
+  int                 m_RCKeepHierarchicalBit                   = 0;
+  bool                m_RCUseLCUSeparateModel                   = false;
+  int                 m_RCInitialQP                             = 0;
+  bool                m_RCForceIntraQP                          = false;
+  int                 m_motionEstimationSearchMethod            = MESEARCH_DIAMOND;
+  bool                m_bRestrictMESampling                     = false;                                 ///< Restrict sampling for the Selective ME
+  int                 m_SearchRange                             = 96;                                    ///< ME search range
+  int                 m_bipredSearchRange                       = 4;                                     ///< ME search range for bipred refinement
+  int                 m_minSearchWindow                         = 8;                                     ///< ME minimum search window size for the Adaptive Window ME
+  bool                m_bClipForBiPredMeEnabled                 = false;                                 ///< Enables clipping for Bi-Pred ME.
+  bool                m_bFastMEAssumingSmootherMVEnabled        = true;                                  ///< Enables fast ME assuming a smoother MV.
+  int                 m_fastSubPel                              = 0;
+  int                 m_SMVD                                    = 0;
+  int                 m_AMVRspeed                               = 0;
+  bool                m_LMChroma                                = false;
+  bool                m_horCollocatedChromaFlag                 = true;
+  bool                m_verCollocatedChromaFlag                 = false;
+  bool                m_MRL                                     = true;
+  bool                m_BDOF                                    = false;
+  bool                m_DMVR                                    = false;
+  int                 m_EDO                                     = 0;
+  bool                m_lumaReshapeEnable                       = false;
+  int                 m_reshapeSignalType                       = 0;
+  int                 m_updateCtrl                              = 0;
+  int                 m_adpOption                               = 0;
+  int                 m_initialCW                               = 0;
+  int                 m_LMCSOffset                              = 0;
   ReshapeCW           m_reshapeCW;
-  int                 m_Affine;
-  bool                m_PROF;
-  bool                m_AffineType;
-  int                 m_MMVD;
-  int                 m_MmvdDisNum;
-  bool                m_allowDisFracMMVD;
-  int                 m_CIIP;
-  bool                m_SbTMVP;
-  int                 m_SBT;                                            ///< Sub-Block Transform for inter blocks
-  int                 m_LFNST;
-  int                 m_MTS;
-  int                 m_MTSIntraMaxCand;
-  int                 m_ISP;
-  int                 m_TS;
-  int                 m_TSsize;
-  int                 m_useChromaTS;
-  int                 m_useBDPCM;
+  int                 m_Affine                                  = 0;
+  bool                m_PROF                                    = false;
+  bool                m_AffineType                              = true;
+  int                 m_MMVD                                    = 0;
+  int                 m_MmvdDisNum                              = 6;
+  bool                m_allowDisFracMMVD                        = false;
+  int                 m_CIIP                                    = 0;
+  bool                m_SbTMVP                                  = false;
+  int                 m_SBT                                     = 0;                                     ///< Sub-Block Transform for inter blocks
+  int                 m_LFNST                                   = 0;
+  int                 m_MTS                                     = 0;
+  int                 m_MTSIntraMaxCand                         = 3;
+  int                 m_ISP                                     = 0;
+  int                 m_TS                                      = 0;
+  int                 m_TSsize                                  = 3;
+  int                 m_useChromaTS                             = 0;
+  int                 m_useBDPCM                                = 0;
 
-  bool                m_bLoopFilterDisable;                             ///< flag for using deblocking filter
-  bool                m_loopFilterOffsetInPPS;                          ///< offset for deblocking filter in 0 = slice header, 1 = PPS
-  int                 m_loopFilterBetaOffsetDiv2[3];                    ///< beta offset for deblocking filter
-  int                 m_loopFilterTcOffsetDiv2[3];                      ///< tc offset for deblocking filter
-  int                 m_deblockingFilterMetric;
+  bool                m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter
+  bool                m_loopFilterOffsetInPPS                   = true;                                  ///< offset for deblocking filter in 0 = slice header, 1 = PPS
+  int                 m_loopFilterBetaOffsetDiv2[3]             = { 0 };                                 ///< beta offset for deblocking filter
+  int                 m_loopFilterTcOffsetDiv2[3]               = { 0 };                                 ///< tc offset for deblocking filter
+  int                 m_deblockingFilterMetric                  = 0;
 
-  bool                m_bLFCrossTileBoundaryFlag;
-  bool                m_bLFCrossSliceBoundaryFlag;                      ///< 1: filter across slice boundaries 0: do not filter across slice boundaries
-  bool                m_loopFilterAcrossSlicesEnabled;
+  bool                m_bLFCrossTileBoundaryFlag                = true;
+  bool                m_bLFCrossSliceBoundaryFlag               = true;                                  ///< 1: filter across slice boundaries 0: do not filter across slice boundaries
+  bool                m_loopFilterAcrossSlicesEnabled           = false;
 
-  bool                m_bUseSAO;
-  double              m_saoEncodingRate;                                ///< When >0 SAO early picture termination is enabled for luma and chroma
-  double              m_saoEncodingRateChroma;                          ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
-  unsigned            m_log2SaoOffsetScale[ MAX_NUM_CH ];               ///< number of bits for the upward bit shift operation on the decoded SAO offsets
-  int                 m_saoOffsetBitShift[ MAX_NUM_CH ];
+  bool                m_bUseSAO                                 = true;
+  double              m_saoEncodingRate                         = 0.75;                                  ///< When >0 SAO early picture termination is enabled for luma and chroma
+  double              m_saoEncodingRateChroma                   = 0.5;                                   ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
+  unsigned            m_log2SaoOffsetScale[ MAX_NUM_CH ]        = { 0, 0 };                              ///< n umber of bits for the upward bit shift operation on the decoded SAO offsets
+  int                 m_saoOffsetBitShift[ MAX_NUM_CH ]         = { 0, 0 };
 
-  bool                m_decodingParameterSetEnabled;                    ///< enable decoding parameter set
-  bool                m_vuiParametersPresent;                           ///< enable generation of VUI parameters
-  bool                m_hrdParametersPresent;                           ///< enable generation or HRD parameters 
-  bool                m_aspectRatioInfoPresent;                         ///< Signals whether aspect_ratio_idc is present
-  int                 m_aspectRatioIdc;                                 ///< aspect_ratio_idc
-  int                 m_sarWidth;                                       ///< horizontal size of the sample aspect ratio
-  int                 m_sarHeight;                                      ///< vertical size of the sample aspect ratio
-  bool                m_colourDescriptionPresent;                       ///< Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present
-  int                 m_colourPrimaries;                                ///< Indicates chromaticity coordinates of the source primaries
-  int                 m_transferCharacteristics;                        ///< Indicates the opto-electronic transfer characteristics of the source
-  int                 m_matrixCoefficients;                             ///< Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
-  bool                m_chromaLocInfoPresent;                           ///< Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
-  int                 m_chromaSampleLocTypeTopField;                    ///< Specifies the location of chroma samples for top field
-  int                 m_chromaSampleLocTypeBottomField;                 ///< Specifies the location of chroma samples for bottom field
-  int                 m_chromaSampleLocType;                            ///< Specifies the location of chroma samples for progressive content
-  bool                m_overscanInfoPresent;                            ///< Signals whether overscan_appropriate_flag is present
-  bool                m_overscanAppropriateFlag;                        ///< Indicates whether conformant decoded pictures are suitable for display using overscan
-  bool                m_videoSignalTypePresent;                         ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
-  bool                m_videoFullRangeFlag;                             ///< Indicates the black level and range of luma and chroma signals
+  bool                m_decodingParameterSetEnabled             = false;                                 ///< enable decoding parameter set
+  bool                m_vuiParametersPresent                    = false;                                 ///< enable generation of VUI parameters
+  bool                m_hrdParametersPresent                    = false;                                 ///< enable generation or HRD parameters
+  bool                m_aspectRatioInfoPresent                  = false;                                 ///< Signals whether aspect_ratio_idc is present
+  int                 m_aspectRatioIdc                          = 0;                                     ///< aspect_ratio_idc
+  int                 m_sarWidth                                = 0;                                     ///< horizontal size of the sample aspect ratio
+  int                 m_sarHeight                               = 0;                                     ///< vertical size of the sample aspect ratio
+  bool                m_colourDescriptionPresent                = false;                                 ///< Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present
+  int                 m_colourPrimaries                         = 2;                                     ///< Indicates chromaticity coordinates of the source primaries
+  int                 m_transferCharacteristics                 = 2;                                     ///< Indicates the opto-electronic transfer characteristics of the source
+  int                 m_matrixCoefficients                      = 2;                                     ///< Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
+  bool                m_chromaLocInfoPresent                    = false;                                 ///< Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
+  int                 m_chromaSampleLocTypeTopField             = 0;                                     ///< Specifies the location of chroma samples for top field
+  int                 m_chromaSampleLocTypeBottomField          = 0;                                     ///< Specifies the location of chroma samples for bottom field
+  int                 m_chromaSampleLocType                     = 0;                                     ///< Specifies the location of chroma samples for progressive content
+  bool                m_overscanInfoPresent                     = false;                                 ///< Signals whether overscan_appropriate_flag is present
+  bool                m_overscanAppropriateFlag                 = false;                                 ///< Indicates whether conformant decoded pictures are suitable for display using overscan
+  bool                m_videoSignalTypePresent                  = false;                                 ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
+  bool                m_videoFullRangeFlag                      = false;                                 ///< Indicates the black level and range of luma and chroma signals
 
-  std::string         m_summaryOutFilename;                             ///< filename to use for producing summary output file.
-  std::string         m_summaryPicFilenameBase;                         ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
-  unsigned            m_summaryVerboseness;                             ///< Specifies the level of the verboseness of the text output.
+  std::string         m_summaryOutFilename                      = "";                                    ///< filename to use for producing summary output file.
+  std::string         m_summaryPicFilenameBase                  = "";                                    ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
+  unsigned            m_summaryVerboseness                      = 0;                                     ///< Specifies the level of the verboseness of the text output.
 
-  std::string         m_decodeBitstreams[ 2 ];                          ///< filename for decode bitstreams.
-  int                 m_switchPOC;                                      ///< dbg poc.
-  int                 m_switchDQP;                                      ///< switch DQP.
-  int                 m_fastForwardToPOC;                               ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
-  bool                m_stopAfterFFtoPOC;
-  bool                m_bs2ModPOCAndType;
-  bool                m_forceDecodeBitstream1;
+  std::string         m_decodeBitstreams[ 2 ]                   = { "", "" };                            ///< filename for decode bitstreams.
+  int                 m_switchPOC                               = -1;                                    ///< dbg poc.
+  int                 m_switchDQP                               = 0;                                     ///< switch DQP.
+  int                 m_fastForwardToPOC                        = -1;                                    ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
+  bool                m_stopAfterFFtoPOC                        = false;
+  bool                m_bs2ModPOCAndType                        = false;
+  bool                m_forceDecodeBitstream1                   = false;
 
-  bool                m_alf;                                            ///> Adaptive Loop Filter
-  bool                m_useNonLinearAlfLuma;
-  bool                m_useNonLinearAlfChroma;
-  unsigned            m_maxNumAlfAlternativesChroma;
-  bool                m_ccalf;
-  int                 m_ccalfQpThreshold;
-  bool                m_alfTempPred;                                    ///> Indicates using of temporal filter data prediction through APS
-  int                 m_MCTF;
-  bool                m_MCTFFutureReference;
-  int                 m_MCTFNumLeadFrames;
-  int                 m_MCTFNumTrailFrames;
-  SegmentMode         m_SegmentMode;
+  bool                m_alf                                     = false;                                 ///> Adaptive Loop Filter
+  bool                m_useNonLinearAlfLuma                     = true;
+  bool                m_useNonLinearAlfChroma                   = true;
+  unsigned            m_maxNumAlfAlternativesChroma             = MAX_NUM_ALF_ALTERNATIVES_CHROMA;
+  bool                m_ccalf                                   = false;
+  int                 m_ccalfQpThreshold                        = 37;
+  bool                m_alfTempPred                             = true;                                  ///> Indicates using of temporal filter data prediction through APS
+
+  int                 m_MCTF                                    = 0;
+  bool                m_MCTFFutureReference                     = true;
+  int                 m_MCTFNumLeadFrames                       = 0;
+  int                 m_MCTFNumTrailFrames                      = 0;
+  SegmentMode         m_SegmentMode                             = SEG_OFF;
   std::vector<int>    m_MCTFFrames;
   std::vector<double> m_MCTFStrengths;
 
-  int                 m_dqThresholdVal;
-  bool                m_qtbttSpeedUp;
+  int                 m_dqThresholdVal                          = 8;
+  bool                m_qtbttSpeedUp                            = false;
 
-  int                 m_fastLocalDualTreeMode;
-  int                 m_maxParallelFrames;
-  int                 m_numFppThreads;
-  bool                m_ensureFppBitEqual;
-  bool                m_picPartitionFlag;
+  int                 m_fastLocalDualTreeMode                   = 0;
+  int                 m_maxParallelFrames                       = 0;
+  int                 m_numFppThreads                           = 0;
+  bool                m_ensureFppBitEqual                       = false;
+  bool                m_picPartitionFlag                        = false;
 public:
 
   EncCfgExpert()
-
-    :   m_listTracingChannels                         ( false )
-      , m_traceRule                                   ( "" )
-      , m_traceFile                                   ( "" )
-
-      , m_conformanceWindowMode                       ( 1 )
-      , m_confWinLeft                                 ( 0 )
-      , m_confWinRight                                ( 0 )
-      , m_confWinTop                                  ( 0 )
-      , m_confWinBottom                               ( 0 )
-
-      , m_temporalSubsampleRatio                      ( 1 )
-      , m_PadSourceWidth                              ( 0 )
-      , m_PadSourceHeight                             ( 0 )
-
-      , m_aiPad                                       { 0, 0 }
-      , m_enablePictureHeaderInSliceHeader            ( true )
-      , m_AccessUnitDelimiter                         ( false )
-
-      , m_printMSEBasedSequencePSNR                   ( false )
-      , m_printHexPsnr                                ( false )
-      , m_printFrameMSE                               ( false )
-      , m_printSequenceMSE                            ( false )
-      , m_cabacZeroWordPaddingEnabled                 ( true )
-
-      , m_subProfile                                  ( 0 )
-      , m_bitDepthConstraintValue                     ( 10 )
-      , m_intraOnlyConstraintFlag                     ( false )
-
-      , m_InputQueueSize                              ( 0 )
-      , m_rewriteParamSets                            ( false )
-      , m_idrRefParamList                             ( false )
-      , m_maxDecPicBuffering                          { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
-      , m_maxNumReorderPics                           { 0, 0, 0, 0, 0, 0, 0 }           // not set -> derived
-      , m_maxTempLayer                                ( 0 )                             // not set -> derived
-      , m_numRPLList0                                 ( 0 )                             // not set -> derived
-      , m_numRPLList1                                 ( 0 )                             // not set -> derived
-
-      , m_useSameChromaQPTables                       ( true )
-      , m_chromaQpMappingTableParams                  ()
-      , m_intraQPOffset                               ( 0 )
-      , m_lambdaFromQPEnable                          ( false )
-      , m_adLambdaModifier                            { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }
-      , m_adIntraLambdaModifier                       ()
-      , m_dIntraQpFactor                              ( -1.0 )
-      , m_qpInValsCb                                  { 25, 33, 43 }
-      , m_qpInValsCr                                  { 0 }
-      , m_qpInValsCbCr                                { 0 }
-      , m_qpOutValsCb                                 { 25, 32, 37 }
-      , m_qpOutValsCr                                 { 0 }
-      , m_qpOutValsCbCr                               { 0 }
-      , m_cuQpDeltaSubdiv                             ( 0 )
-      , m_cuChromaQpOffsetSubdiv                      ( -1 )
-      , m_chromaCbQpOffset                            ( 0 )
-      , m_chromaCrQpOffset                            ( 0 )
-      , m_chromaCbQpOffsetDualTree                    ( 0 )
-      , m_chromaCrQpOffsetDualTree                    ( 0 )
-      , m_chromaCbCrQpOffset                          ( -1 )
-      , m_chromaCbCrQpOffsetDualTree                  ( 0 )
-      , m_sliceChromaQpOffsetPeriodicity              ( 0 )
-      , m_sliceChromaQpOffsetIntraOrPeriodic          { 0 , 0 }
-
-      , m_lumaLevelToDeltaQPEnabled                   (false)
-      , m_wcgChromaQpControl                          ()
-      , m_sdr                                         (false)
-      , m_calculateHdrMetrics                         (false)
-      , m_cropOffsetLeft                              (0)
-      , m_cropOffsetTop                               (0)
-      , m_cropOffsetRight                             (0)
-      , m_cropOffsetBottom                            (0)
-
-      , m_internChromaFormat                          ( NUM_CHROMA_FORMAT )
-      , m_useIdentityTableForNon420Chroma             ( true )
-      , m_outputBitDepth                              { 0, 0 }
-      , m_MSBExtendedBitDepth                         { 0, 0 }
-      , m_costMode                                    ( COST_STANDARD_LOSSY )
-      , m_decodedPictureHashSEIType                   ( HASHTYPE_NONE )
-      , m_bufferingPeriodSEIEnabled                   ( false )
-      , m_pictureTimingSEIEnabled                     ( false )
-      , m_decodingUnitInfoSEIEnabled                  ( false )
-      , m_entropyCodingSyncEnabled                    ( false )
-      , m_entryPointsPresent                          ( true )
-      , m_signalledSliceIdFlag                        ( false )
-      , m_signalledSliceIdLengthMinus1                ( 0 )
-      , m_rectSliceBoundary                           ()
-      , m_signalledSliceId                            ()
-      , m_sliceId                                     ()                                // not set -> derived
-
-      , m_CTUSize                                     ( 128 )
-      , m_MinQT                                       { 8, 8, 4 }
-      , m_maxMTTDepth                                  ( 3 )
-      , m_maxMTTDepthI                                 ( 3 )
-      , m_maxMTTDepthIChroma                           ( 3 )
-      , m_maxBT                                       {32, 128, 64}
-      , m_maxTT                                       {32, 64, 32}
-      , m_dualITree                                   ( true )
-      , m_MaxCodingDepth                              ( 0 )                             // not set -> derived
-      , m_log2DiffMaxMinCodingBlockSize               ( 0 )                             // not set -> derived
-      , m_log2MaxTbSize                               ( 6 )
-
-      , m_bUseASR                                     ( false )
-      , m_bUseHADME                                   ( true )
-      , m_RDOQ                                        ( 1 )
-      , m_useRDOQTS                                   ( true )
-      , m_useSelectiveRDOQ                            ( false)
-
-      , m_JointCbCrMode                               ( false )
-      , m_cabacInitPresent                            ( true )
-      , m_useFastLCTU                                 ( false )
-      , m_usePbIntraFast                              ( false )
-      , m_useFastMrg                                  ( 0 )
-      , m_useAMaxBT                                   ( false )
-      , m_fastQtBtEnc                                 ( true )
-      , m_contentBasedFastQtbt                        ( false )
-      , m_fastInterSearchMode                         ( FASTINTERSEARCH_DISABLED )
-      , m_bUseEarlyCU                                 ( false )
-      , m_useFastDecisionForMerge                     ( true )
-      , m_useEarlySkipDetection                       ( false )
-
-      , m_bDisableIntraCUsInInterSlices               ( false )
-      , m_bUseConstrainedIntraPred                    ( false )
-      , m_bFastUDIUseMPMEnabled                       ( true )
-      , m_bFastMEForGenBLowDelayEnabled               ( true )
-
-      , m_MTSImplicit                                 ( false )
-      , m_TMVPModeId                                  ( 1 )
-      , m_DepQuantEnabled                             ( true )
-      , m_SignDataHidingEnabled                       ( false )
-
-      , m_MIP                                         ( false )
-      , m_useFastMIP                                  ( 0 )
-      , m_maxNumMergeCand                             ( 5 )
-      , m_maxNumAffineMergeCand                       ( 5 )
-//    , m_maxNumIBCMergeCand                          ( 6 )
-      , m_Geo                                         ( 0 )
-      , m_maxNumGeoCand                               ( 5 )
-      , m_RCRateControlMode                           ( 0 )
-      , m_RCNumPasses                                 ( 1 )
-      , m_RCTargetBitrate                             ( 0 )
-      , m_RCKeepHierarchicalBit                       ( 0 )
-      , m_RCUseLCUSeparateModel                       ( false )
-      , m_RCInitialQP                                 ( 0 )
-      , m_RCForceIntraQP                              ( false )
-      , m_motionEstimationSearchMethod                ( 1 )
-      , m_bRestrictMESampling                         ( false )
-      , m_SearchRange                                 ( 96 )
-      , m_bipredSearchRange                           ( 4 )
-      , m_minSearchWindow                             ( 8 )
-      , m_bClipForBiPredMeEnabled                     ( false )
-      , m_bFastMEAssumingSmootherMVEnabled            ( true )
-      , m_fastSubPel                                  ( 0 )
-      , m_SMVD                                        ( 0 )
-      , m_AMVRspeed                                   ( 0 )
-      , m_LMChroma                                    ( false )
-      , m_horCollocatedChromaFlag                     ( true )
-      , m_verCollocatedChromaFlag                     ( false )
-      , m_MRL                                         ( true )
-      , m_BDOF                                        ( false )
-      , m_DMVR                                        ( false )
-      , m_EDO                                         ( 0 )
-      , m_lumaReshapeEnable                           ( false )
-      , m_reshapeSignalType                           ( 0 )
-      , m_updateCtrl                                  ( 0 )
-      , m_adpOption                                   ( 0 )
-      , m_initialCW                                   ( 0 )
-      , m_LMCSOffset                                  ( 0 )
-      , m_reshapeCW                                   ( )
-      , m_Affine                                      ( 0 )
-      , m_PROF                                        ( false )
-      , m_AffineType                                  ( true )
-      , m_MMVD                                        ( 0 )
-      , m_MmvdDisNum                                  ( 6 )
-      , m_allowDisFracMMVD                            ( false )
-      , m_CIIP                                        ( 0 )
-      , m_SbTMVP                                      ( false )
-      , m_SBT                                         ( 0 )
-      , m_LFNST                                       ( 0 )
-      , m_MTS                                         ( 0 )
-      , m_MTSIntraMaxCand                             ( 3 ) 
-      , m_ISP(0)
-      , m_TS                                          ( 0 )
-      , m_TSsize                                      ( 3 )
-      , m_useChromaTS                                 ( 0 )
-      , m_useBDPCM                                    ( 0 )
-
-      , m_bLoopFilterDisable                          ( false )
-      , m_loopFilterOffsetInPPS                       ( true )
-      , m_loopFilterBetaOffsetDiv2                    { 0 }
-      , m_loopFilterTcOffsetDiv2                      { 0 }
-      , m_deblockingFilterMetric                      ( 0 )
-
-      , m_bLFCrossTileBoundaryFlag                    ( true )
-      , m_bLFCrossSliceBoundaryFlag                   ( true )
-      , m_loopFilterAcrossSlicesEnabled               ( false )
-
-      , m_bUseSAO                                     ( true )
-      , m_saoEncodingRate                             ( 0.75 )
-      , m_saoEncodingRateChroma                       ( 0.5 )
-      , m_log2SaoOffsetScale                          { 0, 0 }                          // not set -> derived
-      , m_saoOffsetBitShift                           { 0, 0 }
-
-      , m_decodingParameterSetEnabled                 ( false )
-      , m_vuiParametersPresent                        ( false )
-      , m_hrdParametersPresent                        ( false )
-      , m_aspectRatioInfoPresent                      ( false )
-      , m_aspectRatioIdc                              ( 0 )
-      , m_sarWidth                                    ( 0 )
-      , m_sarHeight                                   ( 0 )
-      , m_colourDescriptionPresent                    ( false )
-      , m_colourPrimaries                             ( 2 )
-      , m_transferCharacteristics                     ( 2 )
-      , m_matrixCoefficients                          ( 2 )
-      , m_chromaLocInfoPresent                        ( false )
-      , m_chromaSampleLocTypeTopField                 ( 0 )
-      , m_chromaSampleLocTypeBottomField              ( 0 )
-      , m_chromaSampleLocType                         ( 0 )
-      , m_overscanInfoPresent                         ( false )
-      , m_overscanAppropriateFlag                     ( false )
-      , m_videoSignalTypePresent                      ( false )
-      , m_videoFullRangeFlag                          ( false )
-
-      , m_summaryOutFilename                          ( "" )
-      , m_summaryPicFilenameBase                      ( "" )
-      , m_summaryVerboseness                          ( 0 )
-
-      , m_decodeBitstreams                            { "", "" }
-      , m_switchPOC                                   ( -1 )
-      , m_switchDQP                                   ( 0 )
-      , m_fastForwardToPOC                            ( -1 )
-      , m_stopAfterFFtoPOC                            ( false )
-      , m_bs2ModPOCAndType                            ( false )
-      , m_forceDecodeBitstream1                       ( false )
-
-      , m_alf                                         ( false )
-      , m_useNonLinearAlfLuma                         ( true )
-      , m_useNonLinearAlfChroma                       ( true )
-      , m_maxNumAlfAlternativesChroma                 ( MAX_NUM_ALF_ALTERNATIVES_CHROMA )
-      , m_ccalf                                       ( false )
-      , m_ccalfQpThreshold                            ( 37 )
-      , m_alfTempPred                                 ( true )
-
-      , m_MCTF                                        ( 0 )
-      , m_MCTFFutureReference                         ( true )
-      , m_MCTFNumLeadFrames                           ( 0 )
-      , m_MCTFNumTrailFrames                          ( 0 )
-      , m_SegmentMode                                 ( SEG_OFF )
-
-      , m_dqThresholdVal                              ( 8 )
-      , m_qtbttSpeedUp                                ( false )
-
-      , m_fastLocalDualTreeMode                       ( 0 )
-      , m_maxParallelFrames                           ( 0 )
-      , m_numFppThreads                               ( 0 )
-      , m_ensureFppBitEqual                           ( false )
-      , m_picPartitionFlag                            ( false )
   {
   }
 
