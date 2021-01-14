@@ -208,7 +208,7 @@ void fillEncoderParameters( VVEncParameter& cVVEncParameter )
   cVVEncParameter.usePictureTimingSEIEnabled   = false;
 }
 */
-void fillEncoderParameters( EncCfg& rcEncCfg )
+void fillEncoderParameters( EncCfg& rcEncCfg, bool callInitCfgParameter = true )
 {
   rcEncCfg.m_QP               = 32;                         // quantization parameter 0-51
   rcEncCfg.m_SourceWidth      = 176;                        // luminance width of input picture
@@ -235,7 +235,10 @@ void fillEncoderParameters( EncCfg& rcEncCfg )
 
   rcEncCfg.m_internChromaFormat =  CHROMA_420;
   rcEncCfg.initPreset( PresetMode::FASTER  );
-  rcEncCfg.initCfgParameter();
+  if( callInitCfgParameter )
+  {
+    rcEncCfg.initCfgParameter();
+  }
 }
 
 void fillInputPic( YUVBuffer& cYuvBuffer, const short val = 512 )
@@ -287,7 +290,7 @@ int testParamList( const std::string& w, T& testParam, EncCfg& vvencParams, cons
 int testLibParameterRanges()
 {
   EncCfg vvencParams;
-  fillEncoderParameters( vvencParams );
+  fillEncoderParameters( vvencParams, false );
 
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2 } );
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4 }, true );
@@ -330,10 +333,13 @@ int testLibParameterRanges()
   testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { 0,1000000,20000000 } );
   testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,100000001 }, true );
 
+  vvencParams.m_RCRateControlMode = 2;
   vvencParams.m_RCTargetBitrate = 1;
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { -1,0,3 }, true );
+  vvencParams.m_RCRateControlMode = 0;
   vvencParams.m_RCTargetBitrate = 0;
+
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,2 }, true );
 
@@ -351,7 +357,7 @@ int testLibParameterRanges()
 //  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { 24000,30000,60000 /*,1200000*/ } );
 //  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { -1,1,0,24 }, true );
 
-  fillEncoderParameters( vvencParams );
+  fillEncoderParameters( vvencParams, false );
 
 //  testParamList( "ThreadCount",                            vvencParams.threadCount,                vvencParams, { 0,1,2,64 } );
 //  testParamList( "ThreadCount",                            vvencParams.threadCount,                vvencParams, { -1,65 }, true );
@@ -398,7 +404,7 @@ int callingOrderInitNoUninit()
 {
   VVEnc cVVEnc;
   EncCfg vvencParams;  
-  fillEncoderParameters( vvencParams );
+  fillEncoderParameters( vvencParams, true );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
