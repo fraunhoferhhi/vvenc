@@ -255,19 +255,19 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   ("framerate,r",                                     m_FrameRate,                                      "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
 
   ("frames,f",                                        m_framesToBeEncoded,                              "max. frames to encode (default=all)")
-  ("frameskip",                                       m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
-  ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
+  ("frameskip,-frameskip",                            m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
+  ("segment,-segment",                                toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
-  ("tickspersec",                                     m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("tickspersec,-tickspersec",                        m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
 
   ("output,o",                                        m_bitstreamFileName,                              "Bitstream output file name")
 
-  ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
+  ("preset,-preset",                                  toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
 
   ("bitrate,b",                                       m_RCTargetBitrate,                                "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
   ("passes,p",                                        m_RCNumPasses,                                    "number of rate control passes (1,2) " )
   ("qp,q",                                            m_QP,                                             "quantization parameter, QP (0-63)")
-  ("qpa",                                             m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+  ("qpa,-qpa",                                        m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
 
   ("threads,-t",                                      m_numWppThreads,                                  "Number of threads")
 
@@ -282,7 +282,7 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   ("tier",                                            toLevelTier,                                      "Tier to use for interpretation of level (main or high)")
 
 
-  ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
+  ("verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
    ;
 
   po::setDefaults( opts );
