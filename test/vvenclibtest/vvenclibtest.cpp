@@ -384,7 +384,9 @@ int callingOrderNoInit()
 {
   VVEnc cVVEnc;
   AccessUnit cAU;
-  YuvPicture cYuvPicture;
+  EncCfg vvencParams;  
+  fillEncoderParameters( vvencParams );
+  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
@@ -473,8 +475,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  YuvPicture* flushPicture = nullptr;
-  if( 0 != cVVEnc.encode( flushPicture, cAU, encodeDone ))
+  if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
   {
     return -1;
   }

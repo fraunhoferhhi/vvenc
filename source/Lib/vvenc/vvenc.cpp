@@ -109,13 +109,6 @@ bool VVEnc::isInitialized()
   return m_pcVVEncImpl->isInitialized();
 }
 
-int VVEnc::encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->encode( pcYuvPicture, rcAccessUnit, rbEncodeDone );
-}
-
 int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone)
 {
   if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }

@@ -81,7 +81,6 @@ public:
 
   bool isInitialized() const;
 
-  int encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rEncodeDone );
   int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
 
   int getConfig( EncCfg& rcVVEncParameter ) const;

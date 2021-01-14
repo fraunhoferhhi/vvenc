@@ -85,29 +85,8 @@ enum ErrorCodes
 
 /**
   \ingroup VVEncExternalInterfaces
-  The struct PicBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture. Memory has to be allocated by the user. For using maximum performance
-  consider allocating 16byte aligned memory for all three color components.
+  The struct YUVBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture.
 */
-typedef struct VVENC_DECL YuvPicture
-{
-  unsigned char*  deletePicBuffer  = nullptr;         ///< pointer to picture buffer origin if non zero the encoder doesn't copy the content off the buffer and deletes the buffer after encoding
-                                                      ///< this implies the buffer content to be const,
-                                                      ///< otherwise if the pointer is zero the buffer content is copied by the encoder into an intermediate buffer
-  void*           y                 = nullptr;        ///< pointer to luminance top left pixel
-  void*           u                 = nullptr;        ///< pointer to chrominance cb top left pixel
-  void*           v                 = nullptr;        ///< pointer to chrominance cbr top left pixel
-  int             width             = 0;              ///< width of the luminance plane
-  int             height            = 0;              ///< height of the luminance plane
-  int             stride            = 0;              ///< stride (width + left margin + right margins) of luminance plane chrominance stride is assumed to be stride/2
-  int             cStride           = 0;              ///< stride (width + left margin + right margins) of chrominance plane in case its value differs from stride/2
-  int             bitDepth          = 10;             ///< bit depth of input signal (8: depth 8 bit, 10: depth 10 bit  )
-  ColorFormat     colorFormat       = VVC_CF_INVALID; ///< color format (VVC_CF_YUV420_PLANAR)
-  uint64_t        sequenceNumber    = 0;               ///< sequence number of the picture
-  uint64_t        cts               = 0;               ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
-  bool            ctsValid          = false;          ///< composition time stamp valid flag (true: valid, false: CTS not set)
-} YuvPicture_t;
-
-
 
 struct VVENC_DECL YUVBuffer
 {
@@ -125,6 +104,10 @@ struct VVENC_DECL YUVBuffer
   bool      ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
 };
 
+/**
+  \ingroup VVEncExternalInterfaces
+  The struct YUVBufferStorage derived from YUVBuffer implements an easy to use allocator. The constructor takes parameters to determine the required buffer dimensions. The destructor frees all allocated resources.  
+*/
 struct VVENC_DECL YUVBufferStorage : public YUVBuffer
 {
   YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight );
@@ -133,6 +116,10 @@ struct VVENC_DECL YUVBufferStorage : public YUVBuffer
 
 // ----------------------------------------
 
+/**
+  \ingroup VVEncExternalInterfaces
+  The abstract class YUVWriterIf declares a callback interface used by the encoder to export YUVBuffer pointing to reconstructed yuv samples. The buffers are emitted in display order and are valid until the next call to the encoder interface.  
+*/
 class VVENC_DECL YUVWriterIf
 {
 protected:
@@ -140,9 +127,7 @@ protected:
   virtual ~YUVWriterIf() {}
 
 public:
-  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
-  {
-  }
+  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ ) = 0;
 };
 
 
@@ -205,11 +190,12 @@ public:
     The method fails if the encoder is already initialized or if the assigned parameter struct
     does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
     insufficient CPU-capabilities.
-    \param[in]  rvVVEncParameter const reference of VVEncParameter struct that holds initial encoder parameters.
+    \param[in]  rcEncCfg const reference of EncCfg struct that holds initial encoder parameters.
+    \param[in]  ptrYUVWriterIf pointer to callback interface YUVWriteIf used to emit reconstruced samples.  
     \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
     \pre        The encoder must not be initialized.
   */
-   int init( const EncCfg& rcEncCfg, YUVWriterIf* YUVWriterIf = nullptr );
+   int init( const EncCfg& rcEncCfg, YUVWriterIf* ptrYUVWriterIf = nullptr );
   /**
     This method initializes the encoder instance in dependency to the encoder pass.
   */
@@ -234,14 +220,12 @@ public:
     If the input parameter pcInputPicture is NULL, the encoder just returns a pending bitstream chunk if available.
     If the call returns VVENC_NOT_ENOUGH_MEM, the BufSize attribute in AccessUnit struct indicates that the buffer is to small to retrieve the compressed data waiting for delivery.
     In this case the UsedSize attribute returns the minimum buffersize required to fetch the pending chunk. After allocating sufficient memory the encoder can retry the last call with the parameter pcInputPicture set to NULL to prevent encoding the last picture twice.
-    \param[in]  pcYuvPicture pointer to InputPicture structure containing uncompressed picture data and meta information, to flush the encoder pcYuvPicture must be NULL.
+    \param[in]  pcYUVBuffer pointer to YUVBuffer structure containing uncompressed picture data and meta information, to flush the encoder pcYUVBuffer must be NULL.
     \param[out] rcAccessUnit reference to AccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
     \param[out] rbEncodeDone reference to flag that indicates that the encoder completed the last frame after flushing.
     \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
     \pre        The encoder has to be initialized successfully.
   */
-   int encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rbEncodeDone);
-
    int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone);
 
    /**

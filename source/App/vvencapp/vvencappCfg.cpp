@@ -252,7 +252,7 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<HashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap );
 
-  IStreamToFunc<BitDepthAndColorSpace> toInputBitdepth      ( setInputBitDepthAndColorSpace, this, &InputBitColorSpaceToIntMap, YUV420_8);
+  IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &InputBitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   //
@@ -262,44 +262,44 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   std::string ignoreParams;
   po::Options opts;
   opts.addOptions()
-  ("help",                                            do_help,                                          "this help text")
-  ("fullhelp",                                        do_expert_help,                                   "expert help text")
+  ("help",              do_help,                  "this help text")
+  ("fullhelp",          do_expert_help,           "expert help text")
 
-  ("input,i",                                         m_inputFileName,                                  "original YUV input file name")
-  ("size,s",                                          toSourceSize,                                     "specify input resolution (WidthxHeight)")
-  ("format,c",                                        toInputBitdepth,                                  "set input format (yuv420, yuv420_10)")
+  ("input,i",           m_inputFileName,          "original YUV input file name")
+  ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
+  ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
 
-  ("framerate,r",                                     m_FrameRate,                                      "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
+  ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
 
-  ("frames,f",                                        m_framesToBeEncoded,                              "max. frames to encode (default=all)")
-  ("frameskip,-frameskip",                            m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
-  ("segment,-segment",                                toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
+  ("frames,f",          m_framesToBeEncoded,      "max. frames to encode (default=all)")
+  ("frameskip",         m_FrameSkip,              "Number of frames to skip at start of input YUV")
+  ("segment",           toSegment,                "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
-  ("tickspersec,-tickspersec",                        m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, ( 1..27000000)")
 
-  ("output,o",                                        m_bitstreamFileName,                              "Bitstream output file name")
+  ("output,o",          m_bitstreamFileName,      "Bitstream output file name")
 
-  ("preset,-preset",                                  toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
+  ("preset",            toPreset,                 "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
 
-  ("bitrate,b",                                       m_RCTargetBitrate,                                "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
-  ("passes,p",                                        m_RCNumPasses,                                    "number of rate control passes (1,2) " )
-  ("qp,q",                                            m_QP,                                             "quantization parameter, QP (0-63)")
-  ("qpa,-qpa",                                        m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+  ("bitrate,b",         m_RCTargetBitrate,        "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
+  ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2) " )
+  ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
+  ("qpa,-qpa",          m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
 
-  ("threads,-t",                                      m_numWppThreads,                                  "Number of threads")
+  ("threads,-t",        m_numWppThreads,          "Number of threads")
 
-  ("gopsize,g",                                       m_GOPSize,                                        "GOP size of temporal structure (16,32)")
-  ("refreshtype,-rt",                                 toDecRefreshType,                                 "intra refresh type (idr,cra)")
-  ("refreshsec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
-  ("intraperiod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
-
-
-  ("profile",                                         toProfile,                                        "select profile (main10, main10_stillpic)")
-  ("level",                                           toLevel,                                          "Level limit to be used, eg 5.1, or none")
-  ("tier",                                            toLevelTier,                                      "Tier to use for interpretation of level (main or high)")
+  ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
+  ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
+  ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period in seconds")
+  ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames, (-1: only first frame)")
 
 
-  ("verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
+  ("profile",           toProfile,                "select profile (main10, main10_stillpic)")
+  ("level",             toLevel,                  "Level limit to be used, eg 5.1, or none")
+  ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
+
+
+  ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness")
    ;
 
   po::setDefaults( opts );

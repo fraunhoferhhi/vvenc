@@ -214,7 +214,6 @@ private:
   void xWaitForFinishedPic            ();
   EncPicturePP* xGetNextFreePicEncoder();
   bool xFinalizePicsPP                ();
-  bool xIsPlaceForNextNewPicture      ( PicList& picList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

@@ -121,7 +121,7 @@ public:
   void setCfgParameter( const EncCfg& encCfg );
   int  initPreset( PresetMode preset );
 
-  bool isRateCtr() const;
+  bool isRateCtr() const { return m_RCRateControlMode; } // th remove this
   virtual void printCfg() const;
 };
 

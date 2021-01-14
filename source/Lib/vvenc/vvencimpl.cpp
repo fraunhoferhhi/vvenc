@@ -213,126 +213,6 @@ bool VVEncImpl::isInitialized() const
 }
 
 
-int VVEncImpl::encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
-{
-  if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
-  if( m_bFlushed )                      { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
-
-  int iRet= VVENC_OK;
-
-  YUVBuffer cYUVBuffer;
-  bool bFlush = false;
-  if( pcYuvPicture )
-  {
-    if( pcYuvPicture->y == nullptr || pcYuvPicture->u == nullptr || pcYuvPicture->v == nullptr )
-    {
-      m_cErrorString = "InputPicture: invalid input buffers";
-      return VVENC_ERR_UNSPECIFIED;
-    }
-
-    if( pcYuvPicture->width != m_cEncCfg.m_SourceWidth )
-    {
-      m_cErrorString = "InputPicture: unsupported width";
-      return VVENC_ERR_UNSPECIFIED;
-    }
-
-    if( pcYuvPicture->height != m_cEncCfg.m_SourceHeight )
-    {
-      m_cErrorString = "InputPicture: unsupported height";
-      return VVENC_ERR_UNSPECIFIED;
-    }
-
-    if( pcYuvPicture->width > pcYuvPicture->stride )
-    {
-      m_cErrorString = "InputPicture: unsupported width stride combination";
-      return VVENC_ERR_UNSPECIFIED;
-    }
-
-    if( pcYuvPicture->cStride && pcYuvPicture->width/2 > pcYuvPicture->cStride )
-    {
-      m_cErrorString = "InputPicture: unsupported width cstride combination";
-      return VVENC_ERR_UNSPECIFIED;
-    }
-
-    if( pcYuvPicture->bitDepth < 10 || pcYuvPicture->bitDepth > 16 )
-    {
-      std::stringstream css;
-      css << "InputPicture: unsupported input BitDepth " <<  pcYuvPicture->bitDepth  << ". must be 10 <= BitDepth <= 16";
-      m_cErrorString = css.str();
-      return VVENC_ERR_UNSPECIFIED;
-    }
-
-    cYUVBuffer.planes[ COMP_Y ].ptr    = (int16_t*)pcYuvPicture->y;
-    cYUVBuffer.planes[ COMP_Y ].stride = pcYuvPicture->stride;
-    cYUVBuffer.planes[ COMP_Y ].width  = pcYuvPicture->width; 
-    cYUVBuffer.planes[ COMP_Y ].height = pcYuvPicture->height;
-
-    //dep on chr format
-    {
-      cYUVBuffer.planes[ COMP_Cb ].ptr    = (int16_t*)pcYuvPicture->u;
-      cYUVBuffer.planes[ COMP_Cb ].stride = pcYuvPicture->cStride ? pcYuvPicture->cStride : pcYuvPicture->stride/2;
-      cYUVBuffer.planes[ COMP_Cb ].width  = pcYuvPicture->width/2; 
-      cYUVBuffer.planes[ COMP_Cb ].height = pcYuvPicture->height/2;
-
-      cYUVBuffer.planes[ COMP_Cr ].ptr    = (int16_t*)pcYuvPicture->v;
-      cYUVBuffer.planes[ COMP_Cr ].stride = pcYuvPicture->cStride ? pcYuvPicture->cStride : pcYuvPicture->stride/2;
-      cYUVBuffer.planes[ COMP_Cr ].width  = pcYuvPicture->width/2; 
-      cYUVBuffer.planes[ COMP_Cr ].height = pcYuvPicture->height/2;
-    }
-
-    cYUVBuffer.sequenceNumber = pcYuvPicture->sequenceNumber;
-    if( pcYuvPicture->ctsValid )
-    {
-      cYUVBuffer.cts = pcYuvPicture->cts;
-      cYUVBuffer.ctsValid = true;
-    }
-  }
-  else
-  {
-    bFlush = true;
-  }
-
-
-  // reset AU data
-  rcAccessUnit.payload.clear();
-  rcAccessUnit.cts              = 0;
-  rcAccessUnit.dts              = 0;
-  rcAccessUnit.ctsValid         = false;
-  rcAccessUnit.dtsValid         = false;
-  rcAccessUnit.rap              = false;
-  rcAccessUnit.sliceType        = NUMBER_OF_SLICE_TYPES;
-  rcAccessUnit.refPic           = false;
-  rcAccessUnit.temporalLayer    = 0;
-  rcAccessUnit.poc              = 0;
-  rcAccessUnit.status           = 0;
-  rcAccessUnit.infoString.clear();
-  rcAccessUnit.nalUnitTypeVec.clear();
-  rcAccessUnit.annexBsizeVec.clear();
-
-  rbEncodeDone = false;
-
-  AccessUnitList cAu;
-  try
-  {
-    m_pEncLib->encodePicture( bFlush, cYUVBuffer, cAu, rbEncodeDone );
-  }
-  catch( std::exception& e )
-  {
-    m_cErrorString = e.what();
-    return VVENC_ERR_UNSPECIFIED;
-  }
-
-  if( rbEncodeDone ){ m_bFlushed = true; }
-
-  /* copy output AU */
-  if ( !cAu.empty() )
-  {
-    iRet = xCopyAu( rcAccessUnit, cAu  );
-  }
-
-  return iRet;
-}
-
 int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
 {
   if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
@@ -416,20 +296,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
   }
 
   // reset AU data
-  rcAccessUnit.payload.clear();
-  rcAccessUnit.cts           = 0;
-  rcAccessUnit.dts           = 0;
-  rcAccessUnit.ctsValid      = false;
-  rcAccessUnit.dtsValid      = false;
-  rcAccessUnit.rap           = false;
-  rcAccessUnit.sliceType     = NUMBER_OF_SLICE_TYPES;
-  rcAccessUnit.refPic        = false;
-  rcAccessUnit.temporalLayer = 0;
-  rcAccessUnit.poc           = 0;
-  rcAccessUnit.status        = 0;
-  rcAccessUnit.infoString.clear();
-  rcAccessUnit.nalUnitTypeVec.clear();
-  rcAccessUnit.annexBsizeVec.clear();
+  rcAccessUnit = AccessUnit();
 
   rbEncodeDone = false;
 
