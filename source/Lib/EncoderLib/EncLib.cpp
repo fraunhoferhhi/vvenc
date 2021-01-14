@@ -275,7 +275,7 @@ void EncLib::initPass( int pass )
     CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
   }
 
-  if ( m_cEncCfg.m_RCRateControlMode )
+  if ( m_cEncCfg.isRateCtr() )
   {
     m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight,
       m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
@@ -354,7 +354,7 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
 
     // use fixQP encoding in first pass
-    m_cBckCfg.m_RCRateControlMode = 0;
+    m_cBckCfg.m_RCRateControlMode = RateControlMode::RCM_OFF;
     m_cBckCfg.m_QP                = 32;
 
     // restore MCTF
@@ -480,7 +480,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
   }
 
   isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? (  m_numPicsInQueue <= 0 && !m_cGOPEncoder->anyFramesInOutputQueue() ): ( m_numPicsInQueue <= 0 );
-  if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
+  if( m_cEncCfg.isRateCtr() && isQueueEmpty )
   {
     m_cRateCtrl.destroyRCGOP();
   }
@@ -992,7 +992,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.subPics.resize(1);
   pps.subPics[0].init( pps.picWidthInCtu, pps.picHeightInCtu, pps.picWidthInLumaSamples, pps.picHeightInLumaSamples);
   pps.noPicPartition                = true;
-  pps.useDQP                        = m_cEncCfg.m_RCRateControlMode ? true : bUseDQP;
+  pps.useDQP                        = m_cEncCfg.isRateCtr() ? true : bUseDQP;
 
   if ( m_cEncCfg.m_cuChromaQpOffsetSubdiv >= 0 )
   {

@@ -1020,9 +1020,9 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
     pic.m_bufsOrigPrev[1] = nullptr;
 
     // this is needed for chunk-wise parallel RA encoding!
-    if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == 3) || !slice->isIntra())
+    if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ) || !slice->isIntra())
     {
-      if ((slice->TLayer == 0) && (m_pcEncCfg->m_RCRateControlMode == 3))
+      if ((slice->TLayer == 0) && (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ))
       {
         const int firstPoc = std::max (0, curPoc - m_pcEncCfg->m_GOPSize + 1);
         double gopLevelAct = 0.0;
@@ -1725,7 +1725,7 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
 
 void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
 {
-  if ( m_pcEncCfg->m_RCRateControlMode < 1 ) // TODO: does this work with multiple slices and slice-segments?
+  if ( !m_pcEncCfg->isRateCtr() ) // TODO: does this work with multiple slices and slice-segments?
   {
     return;
   }

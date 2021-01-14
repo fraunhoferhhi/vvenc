@@ -471,7 +471,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     if ( m_wppMutex ) m_wppMutex->unlock();
   }
 
-  if ( m_pcEncCfg->m_RCRateControlMode )
+  if ( m_pcEncCfg->isRateCtr() )
   {
     m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
   }
@@ -532,7 +532,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   const UnitArea currCsArea = clipArea (CS::getArea (*bestCS, bestCS->area, partitioner.chType, partitioner.treeType), *bestCS->picture);
 
-  if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable() && m_pcEncCfg->m_RCRateControlMode != 1)
+  if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable() && (int)m_pcEncCfg->m_RCRateControlMode != 1)
   {
     const PreCalcValues &pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
@@ -540,9 +540,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
     if (partitioner.currSubdiv == 0) // CTU-level QP adaptation
     {
-      if ( m_pcEncCfg->m_RCRateControlMode > 1 || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
+      if ( (int)m_pcEncCfg->m_RCRateControlMode > 1 || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
       {
-        if ( m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == 3 && pic->gopId > 0 ) )
+        if ( (int)m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL && pic->gopId > 0 ) )
         {
           // frame-level or GOP-level RC + QPA
           pic->ctuAdaptedQP[ ctuRsAddr ] += m_pcRateCtrl->encRCPic->picQPOffsetQPA;
@@ -566,7 +566,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min (std::min (adQPTL, adQPTR), std::min (adQPBL, adQPBR));
-        if ( ( m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == 3 && pic->gopId > 0 ) ) || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
+        if ( ( (int)m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL && pic->gopId > 0 ) ) || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
         {
           if (m_pcEncCfg->m_usePerceptQPATempFiltISlice && (m_globalCtuQpVector->size() > ctuRsAddr) && (slice.TLayer == 0) // last CTU row of non-Intra key-frame
               && (m_pcEncCfg->m_IntraPeriod == 2 * m_pcEncCfg->m_GOPSize) && (ctuRsAddr >= pcv.widthInCtus) && (uiTPelY + pcv.maxCUSize > m_pcEncCfg->m_PadSourceHeight))
@@ -591,7 +591,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
       tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcEncCfg->m_usePerceptQPA > 2);
-      if ( ( m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == 3 && pic->gopId > 0 ) ) || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
+      if ( ( (int)m_pcEncCfg->m_RCRateControlMode > 1 && !( m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL && pic->gopId > 0 ) ) || m_pcEncCfg->m_usePerceptQPATempFiltISlice )
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
@@ -632,7 +632,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
     const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
     const bool lossless           = false;
-    int qp                        = m_pcEncCfg->m_RCRateControlMode ? m_pcRateCtrl->rcQP : cs.baseQP;
+    int qp                        = (m_pcEncCfg->m_RCRateControlMode != RateControlMode::RCM_OFF) ? m_pcRateCtrl->rcQP : cs.baseQP;
 
     if( ! isBoundary )
     {
@@ -1400,7 +1400,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 
 void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr )
 {
-  if ( m_pcEncCfg->m_RCRateControlMode < 1 )
+  if ( !m_pcEncCfg->isRateCtr() )
   {
     return;
   }
@@ -1409,10 +1409,10 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
   double estLambda = -1.0;
   double bpp = -1.0;
 
-  if ( ( pic->slices[ 0 ]->isIRAP() && m_pcEncCfg->m_RCForceIntraQP ) || m_pcEncCfg->m_RCRateControlMode != 1 )
+  if ( ( pic->slices[ 0 ]->isIRAP() && m_pcEncCfg->m_RCForceIntraQP ) || m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL )
   {
     estQP = slice->sliceQp;
-    estLambda = m_pcEncCfg->m_RCRateControlMode == 3 ? m_cRdCost.getLambda() : m_pcRateCtrl->encRCPic->picEstLambda;
+    estLambda = m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ? m_cRdCost.getLambda() : m_pcRateCtrl->encRCPic->picEstLambda;
   }
   else
   {
@@ -1457,7 +1457,7 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
 
 void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr )
 {
-  if ( m_pcEncCfg->m_RCRateControlMode < 1 )
+  if ( !m_pcEncCfg->isRateCtr() )
   {
     return;
   }
@@ -1480,7 +1480,7 @@ void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const Un
   double skipRatio = (double)numberOfSkipPixel / ctuArea.lumaSize().area();
   CodingUnit* cu = cs.getCU( ctuArea.lumaPos(), CH_L, TREE_D );
 
-  actualQP = ( m_pcEncCfg->m_RCRateControlMode < 3 || anyCoded ) ? cu->qp : RC_INVALID_QP_VALUE;
+  actualQP = ( m_pcEncCfg->m_RCRateControlMode != (int)RCM_GOP_LEVEL || anyCoded ) ? cu->qp : RC_INVALID_QP_VALUE;
 
   m_cRdCost.setLambda( oldLambda, slice->sps->bitDepths );
 
@@ -1501,7 +1501,7 @@ void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const Un
   if ( m_rcMutex ) m_rcMutex->lock();
 
   m_pcRateCtrl->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualQP, actualLambda, skipRatio,
-    slice->isIRAP() ? 0 : m_pcEncCfg->m_RCRateControlMode == 1 );
+    slice->isIRAP() ? 0 : m_pcEncCfg->m_RCRateControlMode == RCM_CTU_LEVEL );
 
   if ( m_rcMutex ) m_rcMutex->unlock();
 

@@ -802,7 +802,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
 
   if(  rcVVEncParameter.targetBitRate )
   {
-    rcEncCfg.m_RCRateControlMode     = 2;
+    rcEncCfg.m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
     rcEncCfg.m_RCNumPasses           = rcVVEncParameter.numPasses;
     rcEncCfg.m_RCTargetBitrate       = rcVVEncParameter.targetBitRate;
     rcEncCfg.m_RCKeepHierarchicalBit = 2;
@@ -813,7 +813,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
   else
   {
     rcEncCfg.m_RCKeepHierarchicalBit = 0;
-    rcEncCfg.m_RCRateControlMode     = 0;
+    rcEncCfg.m_RCRateControlMode     = RateControlMode::RCM_OFF;
     rcEncCfg.m_RCTargetBitrate       = 0;
   }
 

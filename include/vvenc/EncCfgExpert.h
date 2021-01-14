@@ -378,9 +378,6 @@ public:
 //  unsigned            m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
   int                 m_Geo                                     = 0;
   unsigned            m_maxNumGeoCand                           = 5;
-  int                 m_RCRateControlMode                       = 0;
-  int                 m_RCNumPasses                             = 1;
-  int                 m_RCTargetBitrate                         = 0;
   int                 m_RCKeepHierarchicalBit                   = 0;
   bool                m_RCUseLCUSeparateModel                   = false;
   int                 m_RCInitialQP                             = 0;

@@ -61,6 +61,15 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
+  enum RateControlMode
+  {
+    RCM_OFF           = 0,
+    RCM_CTU_LEVEL     = 1,
+    RCM_PICTURE_LEVEL = 2,
+    RCM_GOP_LEVEL     = 3
+  };
+
 class VVENC_DECL EncCfg : public EncCfgExpert
 {
 public:
@@ -87,6 +96,10 @@ public:
   unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
   bool                m_usePerceptQPATempFiltISlice    = false;         ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
+  RateControlMode     m_RCRateControlMode              = RCM_OFF;
+  int                 m_RCNumPasses                    = 1;
+  int                 m_RCTargetBitrate                = 0;
+
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
 
@@ -106,6 +119,7 @@ public:
   bool initCfgParameter();
   void setCfgParameter( const EncCfg& encCfg );
   int  initPreset( PresetMode preset );
+
   virtual void printCfg() const;
 };
 

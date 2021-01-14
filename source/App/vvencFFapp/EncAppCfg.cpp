@@ -182,6 +182,14 @@ const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
   { "3",                     DRT_RECOVERY_POINT_SEI },
 };
 
+const std::vector<SVPair<RateControlMode>> RateControlModeToEnumMap =
+{
+  { "0",                     RCM_OFF },
+  { "1",                     RCM_CTU_LEVEL },
+  { "2",                     RCM_PICTURE_LEVEL },
+  { "3",                     RCM_GOP_LEVEL },
+};
+
 
 // ====================================================================================================================
 // Public member functions
@@ -229,6 +237,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
+  IStreamToEnum<RateControlMode>     toRateControlMode      ( &m_RCRateControlMode, &RateControlModeToEnumMap );
 
   //
   // setup configuration parameters
@@ -448,7 +457,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 //  ("MaxNumIBCMergeCand",                              m_maxNumIBCMergeCand,                             "Maximum number of IBC merge candidates")
   ("Geo",                                             m_Geo,                                            "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                  "Maximum number of geometric partitioning mode candidates")
-  ("RateControl",                                     m_RCRateControlMode,                              "Rate control: enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)" )
+  ("RateControl",                                     toRateControlMode,                                "Rate control: enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)" )
   ("NumPasses",                                       m_RCNumPasses,                                    "Rate control: number of passes; 1: one-pass rate control; 2: two-pass rate control" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
   ("KeepHierarchicalBit",                             m_RCKeepHierarchicalBit,                          "Rate control: (0:equal bit allocation, 1:fixed ratio bit allocation, 2:adaptive ratio bit allocation" )
