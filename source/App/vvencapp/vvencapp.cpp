@@ -60,13 +60,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstring>
 #include <ctime>
 #include <chrono>
+#include <algorithm>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-#include "YuvFileReader.h"
 
 #include "apputils/ParseArg.h"
+#include "apputils/YuvFileIO.h"
 
 #include "vvencappCfg.h"
 
@@ -261,9 +262,6 @@ int main( int argc, char* argv[] )
   default: break;
   }
 
-  vvenc::YuvPicture cYuvPicture;
-  unsigned char* pucDeletePicBuffer = nullptr;
-
   unsigned int uiFrames = 0;
   for( int pass = 0; pass < vvencappCfg.m_RCNumPasses; pass++ )
   {
@@ -276,68 +274,56 @@ int main( int argc, char* argv[] )
     }
 
     // open the input file
-    vvcutilities::YuvFileReader cYuvFileReader;
-    if( 0 != cYuvFileReader.open( cInputFile.c_str(), vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_internalBitDepth[0], vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight ) )
+    apputils::YuvFileIO cYuvFileInput;
+    if( 0 != cYuvFileInput.open( cInputFile, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0], vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_clipOutputVideoToRec709Range, false ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
       return -1;
     }
 
-    // allocate input picture buffer
-    if( cYuvPicture.width == 0 )
-    {
-      iRet = cYuvFileReader.allocBuffer( cYuvPicture );
-      if( 0 != iRet )
-      {
-        std::cout << cAppname  << " [error]: failed to allocate picture buffer " << std::endl;
-        return iRet;
-      }
-      pucDeletePicBuffer = cYuvPicture.deletePicBuffer;
-      cYuvPicture.deletePicBuffer = NULL;
-    }
+    YUVBufferStorage cYUVInputBuffer( vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
 
-    const int64_t iFrameSkip  = std::max<int64_t>( vvencappCfg.m_FrameSkip - cVVEnc.getNumLeadFrames(), 0 );
+    const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - cVVEnc.getNumLeadFrames(), 0 );
     const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     bool          bEncodeDone = false;
-    vvenc::YuvPicture* pcInputPicture = &cYuvPicture;
 
     uiFrames    = 0;
 
     if( iFrameSkip )
     {
-      cYuvFileReader.skipFrames(iFrameSkip);
+      cYuvFileInput.skipYuvFrames(iFrameSkip, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight);
       iSeqNumber=iFrameSkip;
     }
 
     while( !bEof || !bEncodeDone )
     {
+      vvenc::YUVBuffer* ptrYUVInputBuffer = nullptr;
       if( !bEof )
       {
-        iRet = cYuvFileReader.readPicture( cYuvPicture );
-        if( iRet )
+        if( cYuvFileInput.readYuvBuf( cYUVInputBuffer ) )
+        {
+          // set sequence number and cts
+          cYUVInputBuffer.sequenceNumber = iSeqNumber;
+          cYUVInputBuffer.cts            = iSeqNumber * vvencappCfg.m_TicksPerSecond * temporalScale / temporalRate;
+          cYUVInputBuffer.ctsValid        = true;
+          ptrYUVInputBuffer = &cYUVInputBuffer;
+          iSeqNumber++;
+          //std::cout << "process picture " << cYUVInputBuffer.m_uiSequenceNumber << " cts " << cYUVInputBuffer.m_uiCts << std::endl;
+        }
+        else
         {
           if( vvencappCfg.m_verbosity > vvenc::ERROR && vvencappCfg.m_verbosity < vvenc::NOTICE )
           {
             std::cout << "EOF reached" << std::endl;
           }
           bEof = true;
-          pcInputPicture = nullptr;
-        }
-        else
-        {
-          // set sequence number and cts
-          cYuvPicture.sequenceNumber = iSeqNumber;
-          cYuvPicture.cts            = iSeqNumber * vvencappCfg.m_TicksPerSecond * temporalScale / temporalRate;
-          cYuvPicture.ctsValid        = true;
-          iSeqNumber++;
-          //std::cout << "process picture " << cYuvPicture.m_uiSequenceNumber << " cts " << cYuvPicture.m_uiCts << std::endl;
         }
       }
 
       // call encode
-      iRet = cVVEnc.encode( pcInputPicture, cAccessUnit, bEncodeDone );
+      iRet = cVVEnc.encode( ptrYUVInputBuffer, cAccessUnit, bEncodeDone );
       if( 0 != iRet )
       {
         printVVEncErrorMsg( cAppname, "encoding failed", iRet, cVVEnc.getLastError() );
@@ -357,17 +343,14 @@ int main( int argc, char* argv[] )
       if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) )
       {
         bEof = true;
-        pcInputPicture = nullptr;
       }
     }
 
-    cYuvFileReader.close();
+    cYuvFileInput.close();
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
   double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEndRun)-(cTPStartRun)).count() / 1000;
-
-  delete[] pucDeletePicBuffer;
 
   if( cOutBitstream.is_open() )
   {

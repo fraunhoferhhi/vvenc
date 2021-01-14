@@ -67,6 +67,7 @@ public:
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
   ChromaFormat m_inputFileChromaFormat = CHROMA_420;
+  bool         m_clipOutputVideoToRec709Range = false;
 
 public:
 
