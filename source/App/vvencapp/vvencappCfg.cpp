@@ -200,13 +200,6 @@ void setBitDepth( EncCfg* cfg, int bitdepth )
   cfg->m_inputBitDepth[0] = bitdepth;
 }
 
-void setDecRefreshType( EncCfg* cfg, int decodingRefreshType )
-{
-  cfg->m_DecodingRefreshType = decodingRefreshType;
-}
-
-
-
 
 // ====================================================================================================================
 // Public member functions
@@ -232,7 +225,6 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   //
   IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
-  IStreamToRefVec<double>      toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
 
   IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
   IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
@@ -241,22 +233,10 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<ChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
   IStreamToEnum<ChromaFormat>  toInternCoFormat             ( &m_internChromaFormat,          &ChromaFormatToEnumMap  );
   IStreamToEnum<HashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
-  IStreamToVec<int>            toQpInCb                     ( &m_qpInValsCb            );
-  IStreamToVec<int>            toQpOutCb                    ( &m_qpOutValsCb           );
-  IStreamToVec<int>            toQpInCr                     ( &m_qpInValsCr            );
-  IStreamToVec<int>            toQpOutCr                    ( &m_qpOutValsCr           );
-  IStreamToVec<int>            toQpInCbCr                   ( &m_qpInValsCbCr          );
-  IStreamToVec<int>            toQpOutCbCr                  ( &m_qpOutValsCbCr         );
-  IStreamToVec<double>         toIntraLambdaModifier        ( &m_adIntraLambdaModifier );
-  IStreamToVec<int>            toRectSliceBoundary          ( &m_rectSliceBoundary     );
-  IStreamToVec<int>            toSignalledSliceId           ( &m_signalledSliceId      );
-
-  IStreamToVec<int>            toMCTFFrames                 ( &m_MCTFFrames   );
-  IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
 
   IStreamToFunc<vvencappCfgBitDepth> toInputBitdepth        ( setBitDepth, this, &InputBitColorSpaceToIntMap, BITDEPTH_8);
-  IStreamToFunc<DecodingRefreshType> toDecRefreshType       ( setDecRefreshType, this, &DecodingRefreshTypeToEnumMap, DRT_CRA );
+  IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   //
   // setup configuration parameters

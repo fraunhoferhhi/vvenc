@@ -865,22 +865,7 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEn
     }
   }
 
-  if( rcVVEncParameter.decodingRefreshType == DRT_IDR )
-  {
-    rcEncCfg.m_DecodingRefreshType                 = 2;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
-  }
-  else if( rcVVEncParameter.decodingRefreshType == DRT_CRA )
-  {
-    rcEncCfg.m_DecodingRefreshType                 = 1;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
-  }
-  else if( rcVVEncParameter.decodingRefreshType == DRT_RECOVERY_POINT_SEI )
-  {
-    rcEncCfg.m_DecodingRefreshType                 = 3;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
-  }
-  else
-  {
-    rcEncCfg.m_DecodingRefreshType                 = 0;  // Random Accesss 0:none, 1:CRA, 2:IDR, 3:Recovery Point SEI
-  }
+  rcEncCfg.m_DecodingRefreshType = rcVVEncParameter.decodingRefreshType;
 
   //======== Profile ================
   rcEncCfg.m_profile   = (vvenc::Profile)rcVVEncParameter.profile;

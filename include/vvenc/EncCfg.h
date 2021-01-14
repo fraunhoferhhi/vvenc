@@ -80,7 +80,7 @@ public:
 
   int                 m_IntraPeriod                    = 32;            ///< period of I-slice (random access period)
   int                 m_IntraPeriodSec                 = 1;             ///< period of I-slice in seconds (random access period)
-  int                 m_DecodingRefreshType            = 1;             ///< random access type
+  DecodingRefreshType m_DecodingRefreshType            = DRT_CRA;       ///< random access type
   int                 m_GOPSize                        = 32;            ///< GOP size of hierarchical structure
 
   int                 m_QP                             = 32;            ///< QP value of key-picture (integer)

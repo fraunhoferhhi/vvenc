@@ -196,10 +196,10 @@ enum SliceType
 /// supported IDR types
 enum DecodingRefreshType
 {
-  DRT_NONE               = -1,
-  DRT_CRA                = 0,
-  DRT_IDR                = 1,
-  DRT_RECOVERY_POINT_SEI = 2
+  DRT_NONE               = 0,
+  DRT_CRA                = 1,
+  DRT_IDR                = 2,
+  DRT_RECOVERY_POINT_SEI = 3
 };
 
 enum HashType

@@ -174,7 +174,13 @@ const std::vector<SVPair<HashType>> HashTypeToEnumMap =
   { "0",                       HASHTYPE_NONE     }
 };
 
-
+const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
+{
+  { "0",                     DRT_NONE },
+  { "1",                     DRT_CRA },
+  { "2",                     DRT_IDR },
+  { "3",                     DRT_RECOVERY_POINT_SEI },
+};
 
 
 // ====================================================================================================================
@@ -222,6 +228,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToVec<int>            toMCTFFrames                 ( &m_MCTFFrames   );
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
+  IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   //
   // setup configuration parameters
@@ -251,7 +258,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   ("IntraPeriod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
   ("RefreshSec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
 
-  ("DecodingRefreshType,-dr",                         m_DecodingRefreshType,                            "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI)")
+  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI)")
   ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
 
   ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                          "Bit-depth of input file")
