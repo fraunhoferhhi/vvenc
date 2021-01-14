@@ -74,13 +74,15 @@ class VVENC_DECL EncCfg : public EncCfgExpert
 {
 public:
   bool                m_confirmFailed                  = false;         ///< state variable
+
   int                 m_verbosity                      = VERBOSE;       ///< encoder verbosity
   int                 m_framesToBeEncoded              = 0;             ///< number of encoded frames
+
   int                 m_FrameRate                      = 0;             ///< source frame-rates (Hz)
   int                 m_FrameSkip                      = 0;             ///< number of skipped frames from the beginning
   int                 m_SourceWidth                    = 0;             ///< source width in pixel
   int                 m_SourceHeight                   = 0;             ///< source height in pixel (when interlaced = field height)
-  int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
+  int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
   bool                m_AccessUnitDelimiter            = false;         ///< add Access Unit Delimiter NAL units
 
   Profile             m_profile                        = Profile::MAIN_10;
@@ -96,15 +98,14 @@ public:
   unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
   bool                m_usePerceptQPATempFiltISlice    = false;         ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  RateControlMode     m_RCRateControlMode              = RCM_OFF;
+  RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode 
   int                 m_RCNumPasses                    = 1;
   int                 m_RCTargetBitrate                = 0;
 
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
 
-  int                 m_numWppThreads                  = 0;             ///< number of wpp threads
-  int                 m_ensureWppBitEqual              = 0;             ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+  int                 m_threadCount;
 public:
 
   EncCfg()

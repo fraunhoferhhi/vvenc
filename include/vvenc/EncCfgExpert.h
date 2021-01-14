@@ -492,6 +492,8 @@ public:
   bool                m_qtbttSpeedUp                            = false;
 
   int                 m_fastLocalDualTreeMode                   = 0;
+  int                 m_numWppThreads                           = 0;             ///< number of wpp threads
+  int                 m_ensureWppBitEqual                       = 0;             ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
   int                 m_maxParallelFrames                       = 0;
   int                 m_numFppThreads                           = 0;
   bool                m_ensureFppBitEqual                       = false;

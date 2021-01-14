@@ -410,13 +410,13 @@ bool EncCfg::initCfgParameter()
   confirmParameter( (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
   confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
-  confirmParameter( m_DecodingRefreshType < (int)DRT_NONE || m_DecodingRefreshType > (int)DRT_RECOVERY_POINT_SEI,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+  confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
 #if IDR_FIX
-  confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==DRT_CRA || m_DecodingRefreshType==DRT_IDR), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #else
-  confirmParameter( m_IntraPeriod > 0 && m_DecodingRefreshType !=DRT_CRA,                       "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  confirmParameter( m_IntraPeriod > 0 && m_DecodingRefreshType !=1,                             "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #endif
-  confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=DRT_NONE,                             "Only Decoding Refresh Type 0 for low delay supported" );
+  confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
   confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
   {
@@ -478,9 +478,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
 
 
-  confirmParameter( m_RCRateControlMode != RCM_OFF && m_RCRateControlMode != RCM_PICTURE_LEVEL, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
-  confirmParameter( m_RCRateControlMode == RCM_CTU_LEVEL && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode == RCM_OFF && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
+  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   confirmParameter( m_RCNumPasses == 2 && m_usePerceptQPATempFiltISlice == true, "QPA temporal filtering of I slice not supported with 2-pass rate control" );
   confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2, "Only one pass or two pass encoding supported" );
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
@@ -599,7 +599,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  confirmParameter( m_hrdParametersPresent && (RCM_OFF == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
   confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
   confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
 
@@ -1458,12 +1458,6 @@ void EncCfg::setCfgParameter( const EncCfg& encCfg )
   *this = encCfg;
 }
 
-
-bool EncCfg::isRateCtr() const
-{
-  return ( m_RCRateControlMode == RCM_OFF ) ? false : true;
-}
-
 int EncCfg::initPreset( PresetMode preset )
 {
   m_qpInValsCb.clear();
@@ -2014,8 +2008,8 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "QtbttExtraFast:%d ",        m_qtbttSpeedUp );
 
   msg( VERBOSE, "\nRATE CONTROL CFG: " );
-  msg( VERBOSE, "RateControl:%d ",           (int)m_RCRateControlMode );
-  if ( isRateCtr() )
+  msg( VERBOSE, "RateControl:%d ",           m_RCRateControlMode );
+  if ( m_RCRateControlMode )
   {
     msg( VERBOSE, "Passes:%d ",              m_RCNumPasses );
     msg( VERBOSE, "TargetBitrate:%d ",       m_RCTargetBitrate );

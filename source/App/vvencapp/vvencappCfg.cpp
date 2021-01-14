@@ -174,16 +174,22 @@ const std::vector<SVPair<HashType>> HashTypeToEnumMap =
 };
 
 
-enum vvencappCfgBitDepth
+enum BitDepthAndColorSpace
 {
-  BITDEPTH_8            = 8,
-  BITDEPTH_10           = 10
+  YUV420_8,
+  YUV420_10,
+  YUV422_8,
+  YUV422_10,
+  YUV444_8,
+  YUV444_10,
+  YUV400_8,
+  YUV400_10,
 };
 
-const std::vector<SVPair<vvencappCfgBitDepth>> InputBitColorSpaceToIntMap =
+const std::vector<SVPair<BitDepthAndColorSpace>> InputBitColorSpaceToIntMap =
 {
-  { "yuv420",                    BITDEPTH_8 },
-  { "yuv420_10",                 BITDEPTH_10 },
+  { "yuv420",                    YUV420_8 },
+  { "yuv420_10",                 YUV420_10 },
 };
 
 
@@ -191,13 +197,24 @@ const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
 {
   { "cra",                     DRT_CRA },
   { "idr",                     DRT_IDR },
- // { "rpsei",                     DRT_RECOVERY_POINT_SEI },
+  { "rpsei",                   DRT_RECOVERY_POINT_SEI },
 };
 
 
-void setBitDepth( EncCfg* cfg, int bitdepth )
+void setInputBitDepthAndColorSpace( EncCfg* cfg, int dbcs )
 {
-  cfg->m_inputBitDepth[0] = bitdepth;
+  switch( dbcs )
+  {
+  case YUV420_8 :  cfg->m_internChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 : cfg->m_internChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV422_8 :  cfg->m_internChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 : cfg->m_internChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :  cfg->m_internChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 : cfg->m_internChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :  cfg->m_internChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 : cfg->m_internChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  default: break;
+  }
 }
 
 
@@ -233,9 +250,9 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<ChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
   IStreamToEnum<ChromaFormat>  toInternCoFormat             ( &m_internChromaFormat,          &ChromaFormatToEnumMap  );
   IStreamToEnum<HashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
-  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
+  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap );
 
-  IStreamToFunc<vvencappCfgBitDepth> toInputBitdepth        ( setBitDepth, this, &InputBitColorSpaceToIntMap, BITDEPTH_8);
+  IStreamToFunc<BitDepthAndColorSpace> toInputBitdepth      ( setInputBitDepthAndColorSpace, this, &InputBitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   //
@@ -291,7 +308,7 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
 
   opts.addOptions()
 
-  ("SIMD",                                            ignoreParams,                                           "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
+  ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ("internal-bitdepth",                               m_internalBitDepth[0],                            "internal bitdepth (8,10)")
   ;
 
@@ -378,6 +395,8 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
     m_RCInitialQP           = 0;
     m_RCForceIntraQP        = 0;
   }
+
+  // this has to be set outside 
 
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {

@@ -66,18 +66,18 @@ namespace apputils {
 
 // ====================================================================================================================
 
-class VVENC_DECL YuvFileIO
+class APPUTILS_DECL YuvFileIO
 {
 private:
   std::fstream        m_cHandle;              ///< file handle
   int                 m_fileBitdepth;         ///< bitdepth of input/output video file
   int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
   int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
-  vvenc::ChromaFormat m_fileChrFmt;  
-  vvenc::ChromaFormat m_bufferChrFmt;
-  bool                m_clipToRec709;
-  bool                m_packedYUVMode;
-  std::string         m_lastError;
+  vvenc::ChromaFormat m_fileChrFmt;           ///< chroma format of the file
+  vvenc::ChromaFormat m_bufferChrFmt;         ///< chroma format of the buffer
+  bool                m_clipToRec709;         ///< clip data according to Recom.709
+  bool                m_packedYUVMode;        ///< used packed buffer file format
+  std::string         m_lastError;            ///< temporal storage for last occured error 
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 

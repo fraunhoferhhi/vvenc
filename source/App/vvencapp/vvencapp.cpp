@@ -65,7 +65,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-
 #include "apputils/ParseArg.h"
 #include "apputils/YuvFileIO.h"
 
@@ -305,10 +304,10 @@ int main( int argc, char* argv[] )
         if( cYuvFileInput.readYuvBuf( cYUVInputBuffer ) )
         {
           // set sequence number and cts
-          cYUVInputBuffer.sequenceNumber = iSeqNumber;
-          cYUVInputBuffer.cts            = iSeqNumber * vvencappCfg.m_TicksPerSecond * temporalScale / temporalRate;
+          cYUVInputBuffer.sequenceNumber  = iSeqNumber;
+          cYUVInputBuffer.cts             = iSeqNumber * vvencappCfg.m_TicksPerSecond * temporalScale / temporalRate;
           cYUVInputBuffer.ctsValid        = true;
-          ptrYUVInputBuffer = &cYUVInputBuffer;
+          ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.m_uiSequenceNumber << " cts " << cYUVInputBuffer.m_uiCts << std::endl;
         }
@@ -374,13 +373,13 @@ int main( int argc, char* argv[] )
 
   if( uiFrames && vvencappCfg.m_verbosity > vvenc::SILENT )
   {
-    std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    double dFps = (double)uiFrames / dTimeSec;
-
     if( vvencappCfg.m_verbosity > vvenc::WARNING )
     {
+      std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;
     }
+
+    double dFps = (double)uiFrames / dTimeSec;
     std::cout << "Total Time: " << dTimeSec << " sec. Fps(avg): " << dFps << " encoded Frames " << uiFrames << std::endl;
   }
 

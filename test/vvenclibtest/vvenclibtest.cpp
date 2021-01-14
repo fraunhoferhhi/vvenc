@@ -173,30 +173,30 @@ void fillEncoderParameters( VVEncParameter& cVVEncParameter )
 */
 void fillEncoderParameters( EncCfg& rcEncCfg, bool callInitCfgParameter = true )
 {
-  rcEncCfg.m_QP               = 32;                         // quantization parameter 0-51
-  rcEncCfg.m_SourceWidth      = 176;                        // luminance width of input picture
-  rcEncCfg.m_SourceHeight     = 144;                        // luminance height of input picture
-  rcEncCfg.m_GOPSize          = 16;                         // gop size (1: intra only, 16, 32: hierarchical b frames)
-  rcEncCfg.m_DecodingRefreshType = DRT_CRA;          // intra period refresh type
-  rcEncCfg.m_IntraPeriod      = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  rcEncCfg.m_verbosity         = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
-  rcEncCfg.m_FrameRate     = 60;                         // temporal rate (fps)
-//rcEncCfg.temporalScale    = 1;                          // temporal scale (fps)
-  rcEncCfg.m_TicksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
-  rcEncCfg.m_numWppThreads    = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
-//rcEncCfg.quality          = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
-  rcEncCfg.m_usePerceptQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  rcEncCfg.m_inputBitDepth[0]  = 8;                          // 8bit input
-  rcEncCfg.m_internalBitDepth[0] = 10;                         // 10bit internal
-  rcEncCfg.m_profile          = Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
-  rcEncCfg.m_level            = Level::LEVEL4_1;     // level
-  rcEncCfg.m_levelTier        = Tier::TIER_MAIN;     // tier
-  rcEncCfg.m_AccessUnitDelimiter       = false;
-  rcEncCfg.m_hrdParametersPresent      = false;
-  rcEncCfg.m_bufferingPeriodSEIEnabled = false;
-  rcEncCfg.m_pictureTimingSEIEnabled   = false;
+  rcEncCfg.m_QP                         = 32;                  // quantization parameter 0-51
+  rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
+  rcEncCfg.m_SourceHeight               = 144;                 // luminance height of input picture
+  rcEncCfg.m_GOPSize                    = 16;                  // gop size (1: intra only, 16, 32: hierarchical b frames)
+  rcEncCfg.m_DecodingRefreshType        = DRT_CRA;             // intra period refresh type
+  rcEncCfg.m_IntraPeriod                = 32;                  // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
+  rcEncCfg.m_verbosity                  = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
+  rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
+//rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
+  rcEncCfg.m_TicksPerSecond             = 90000;               // ticks per second e.g. 90000 for dts generation
+  rcEncCfg.m_numWppThreads              = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
+//rcEncCfg.quality                      = 0;                   // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
+  rcEncCfg.m_usePerceptQPA              = 2;                   // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
+  rcEncCfg.m_internalBitDepth[0]        = 10;                  // 10bit internal
+  rcEncCfg.m_profile                    = Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
+  rcEncCfg.m_level                      = Level::LEVEL4_1;     // level
+  rcEncCfg.m_levelTier                  = Tier::TIER_MAIN;     // tier
+  rcEncCfg.m_AccessUnitDelimiter        = false;
+  rcEncCfg.m_hrdParametersPresent       = false;
+  rcEncCfg.m_bufferingPeriodSEIEnabled  = false;
+  rcEncCfg.m_pictureTimingSEIEnabled    = false;
 
-  rcEncCfg.m_internChromaFormat =  CHROMA_420;
+  rcEncCfg.m_internChromaFormat         =  CHROMA_420;
   rcEncCfg.initPreset( PresetMode::FASTER  );
   if( callInitCfgParameter )
   {
@@ -311,8 +311,8 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams, false );
 
-//  testParamList( "ThreadCount",                            vvencParams.threadCount,                vvencParams, { 0,1,2,64 } );
-//  testParamList( "ThreadCount",                            vvencParams.threadCount,                vvencParams, { -1,65 }, true );
+//  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { 0,1,2,64 } );
+//  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { -1,65 }, true );
 
   testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { 90000,27000000,60,120 } );
   testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
