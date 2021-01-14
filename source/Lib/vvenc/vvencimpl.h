@@ -74,7 +74,6 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncParameter& rcVVEncParameter );
   int init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf );
 
   int initPass( int pass );
@@ -88,10 +87,6 @@ public:
   int getConfig( EncCfg& rcVVEncParameter ) const;
   int checkConfig( const EncCfg& rcVVEncParameter );
   int reconfig( const EncCfg& rcVVEncParameter );
-
-  int getConfig( VVEncParameter& rcVVEncParameter ) const;
-  int checkConfig( const VVEncParameter& rcVVEncParameter );
-  int reconfig( const VVEncParameter& rcVVEncParameter );
 
   int setAndRetErrorMsg( int Ret );
 
@@ -118,10 +113,7 @@ public:
 
 private:
 
-  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString ) const;
   int xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString ) const;
-
-  int xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEncCfg );
 
   int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
@@ -129,7 +121,6 @@ private:
   bool                   m_bInitialized         = false;
   bool                   m_bFlushed             = false;
 
-  VVEncParameter         m_cVVEncParameter;
   EncCfg                 m_cEncCfg;
 
   std::string            m_cErrorString;

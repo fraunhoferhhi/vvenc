@@ -176,45 +176,6 @@ typedef struct VVENC_DECL AccessUnit
 
 } AccessUnit_t;
 
-/**
-  \ingroup VVEncExternalInterfaces
-  The struct VVEncParameter is a container for encoder configuration parameters. This struct is used for initialization of an blank encoder
-  as well as for reconfiguration of an already initialized encoder. The struct is equipped with an default constructor that initializes all parameters
-  to default values for ease of use and best performance. However, some of the parameters has to be set by the caller, which can not be guessed by the encoder.
-*/
-typedef struct VVENC_DECL VVEncParameter
-{
-  int qp                   = 32;     ///< quantization parameter                                 (no default || 0-51)
-  int width                = 0;      ///< luminance width of input picture                       (no default || 2..4096)
-  int height               = 0;      ///< luminance height of input picture                      (no default || 2/4..2160)
-  int gopSize              = 32;     ///< gop size                                               (default: 16 || 1: low delay, 16,32: hierarchical b frames)
-  DecodingRefreshType decodingRefreshType = DRT_IDR; ///< intra period refresh type           (default: VVC_DRT_IDR )
-  int idrPeriodSec         = 1;       ///< intra period for IDR/CRA intra refresh/RAP flag in seconds (default: 1 || -1: only the first pic, otherwise refresh in seconds
-  int idrPeriod            = 0;       ///< intra period for IDR/CRA intra refresh/RAP flag in frames  (default: 0 || -1: only the first pic, otherwise factor of m_iGopSize
-  MsgLevel msgLevel        = INFO; ///< log level                                             (default: 0 || 0: no logging,  > 4 (LL_VERBOSE,LL_DETAILS)enables psnr/rate output  0: silent, 1: error, 2: warning, 3: info, 4: notice: 5, verbose, 6: details
-  int temporalRate         = 60;     ///< temporal rate /numerator for fps                       (no default || e.g. 50, 60000 -> 1-60 fps)
-  int temporalScale        = 1;      ///< temporal scale /denominator for fps                    (no default || 1, 1001)
-  int ticksPerSecond       = 90000;  ///< ticks per second e.g. 90000 for dts generation         (no default || 1..27000000)
-  int maxFrames            = 0;      ///< max number of frames to be encoded                     (default 0: encode all frames)
-  int frameSkip            = 0;      ///< number of frames to skip before start encoding         (default 0: off)
-  int threadCount          = -1;     ///< number of worker threads (no default || should not exceed the number of physical cpu's)
-  int quality              = 2;      ///< encoding quality vs speed                              (no default || 2    0: faster, 1: fast, 2: medium, 3: slow, 4: slower
-  int perceptualQPA        = 2;      ///< perceptual qpa usage                                   (default: 0 || Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = SDR WPSNR based, 2 = SDR XPSNR based, 3 = HDR WPSNR based, 4 = HDR XPSNR based, 5 = HDR mean-luma based))
-  int targetBitRate        = 0;      ///< target bit rate in bps                                 (no default || 0 : VBR, otherwise bitrate [bits per sec]
-  int numPasses            = 1;      ///< number of rate control passes                          (default: 1)
-  int inputBitDepth        = 8;      ///< input bit-depth                                        (default: 8)
-  int internalBitDepth     = 10;     ///< internal bit-depth                                     (default: 10)
-  Profile profile          = Profile::MAIN_10; ///< vvc profile                            (default: main_10)
-  Level   level            = Level::LEVEL5_1;  ///< vvc level_idc                          (default: 5.1)
-  Tier    tier             = Tier::TIER_MAIN;      ///< vvc tier                               (default: main)
-  SegmentMode segmentMode  = SEG_OFF;               ///< segment mode                            (default: off)
-  bool useAccessUnitDelimiter       = false;  ///< enable aud                                       (default: off)
-  bool useHrdParametersPresent      = false;  ///< enable hrd                                       (default: off)
-  bool useBufferingPeriodSEIEnabled = false;  ///< enable bp sei                                    (default: off)
-  bool usePictureTimingSEIEnabled   = false;  ///< enable pt sei                                    (default: off)
-} VVEncParameter_t;
-
-
 class VVEncImpl;
 
 /**
@@ -248,8 +209,6 @@ public:
     \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
     \pre        The encoder must not be initialized.
   */
-   int init( const VVEncParameter& rcVVEncParameter );
-
    int init( const EncCfg& rcEncCfg, YUVWriterIf* YUVWriterIf = nullptr );
   /**
     This method initializes the encoder instance in dependency to the encoder pass.
@@ -293,7 +252,6 @@ public:
      \pre        The encoder has to be initialized.
    */
    int getConfig( EncCfg& rcVVEncParameter );
-   int getConfig( VVEncParameter& rcVVEncParameter );
 
     /**
      This method reconfigures the encoder instance.
@@ -308,7 +266,6 @@ public:
      \pre        The encoder has to be initialized successfully.
    */
    int reconfig( const EncCfg& rcVVEncParameter );
-   int reconfig( const VVEncParameter& rcVVEncParameter );
 
    /**
      This method checks the passed configuration.
@@ -317,7 +274,6 @@ public:
      \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
    */
    int checkConfig( const EncCfg& rcVVEncParameter );
-   int checkConfig( const VVEncParameter& rcVVEncParameter );
 
     /**
      This method returns the last occurred error as a string.
