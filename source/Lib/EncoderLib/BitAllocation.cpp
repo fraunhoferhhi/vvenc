@@ -509,6 +509,10 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
         {
           if (ctuRsAddr & 1) ctuRCQPMemory->back() |= (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8) << 4;
           else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
+          if (slice->isIntra() && (adaptedLumaQP > 0))
+          {
+            adaptedLumaQP--; // this is a first-pass tuning to stabilize rate control
+          }
         }
         if (slice->isIntra())
         {
