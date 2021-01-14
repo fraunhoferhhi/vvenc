@@ -292,6 +292,7 @@ public:
      \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
      \pre        The encoder has to be initialized.
    */
+   int getConfig( EncCfg& rcVVEncParameter );
    int getConfig( VVEncParameter& rcVVEncParameter );
 
     /**
@@ -306,6 +307,7 @@ public:
      \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
      \pre        The encoder has to be initialized successfully.
    */
+   int reconfig( const EncCfg& rcVVEncParameter );
    int reconfig( const VVEncParameter& rcVVEncParameter );
 
    /**
@@ -314,6 +316,7 @@ public:
      \param[in]  rcVVCEncParameter reference to an VVCEncParameter struct that returns the current encoder setup.
      \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
    */
+   int checkConfig( const EncCfg& rcVVEncParameter );
    int checkConfig( const VVEncParameter& rcVVEncParameter );
 
     /**

@@ -90,6 +90,37 @@ VVEncImpl::~VVEncImpl()
 
 }
 
+int VVEncImpl::getConfig( EncCfg& rcVVEncParameter ) const
+{
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+
+  rcVVEncParameter = m_cEncCfg;
+  return VVENC_OK;
+}
+
+int VVEncImpl::reconfig( const EncCfg& rcVVEncParameter )
+{
+  if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+  return VVENC_ERR_NOT_SUPPORTED;
+}
+
+int VVEncImpl::checkConfig( const EncCfg& rcVVEncParameter )
+{
+  int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
+  if( 0 != iRet ) { return iRet; }
+
+  EncCfg cEncCfg = rcVVEncParameter;
+ 
+  if ( cEncCfg.initCfgParameter() )
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  return VVENC_OK;
+}
+
+
+
 int VVEncImpl::checkConfig( const vvenc::VVEncParameter& rcVVEncParameter )
 {
   int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );

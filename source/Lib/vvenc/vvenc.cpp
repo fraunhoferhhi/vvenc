@@ -83,6 +83,13 @@ int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
   return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
 }
 
+int VVEnc::checkConfig( const EncCfg& rcVVEncParameter )
+{
+  if( rcVVEncParameter.m_numWppThreads > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
+
+  return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
+}
+
 int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
 {
   if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
@@ -131,6 +138,14 @@ int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEnc
   return m_pcVVEncImpl->encode( pcYUVBuffer, rcAccessUnit, rbEncodeDone );
 }
 
+int VVEnc::getConfig( EncCfg& rcVVEncParameter )
+{
+  if( !m_pcVVEncImpl->isInitialized() )
+  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
+}
+
 int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
 {
   if( !m_pcVVEncImpl->isInitialized() )
@@ -139,6 +154,14 @@ int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
   return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
 }
 
+
+int VVEnc::reconfig( const EncCfg& rcVVEncParameter )
+{
+  if( !m_pcVVEncImpl->isInitialized() )
+  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncParameter ) );
+}
 
 int VVEnc::reconfig( const VVEncParameter& rcVVEncParameter )
 {

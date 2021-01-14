@@ -85,8 +85,12 @@ public:
   int encode( YuvPicture* pcYuvPicture, AccessUnit& rcAccessUnit, bool& rEncodeDone );
   int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
 
+  int getConfig( EncCfg& rcVVEncParameter ) const;
+  int checkConfig( const EncCfg& rcVVEncParameter );
+  int reconfig( const EncCfg& rcVVEncParameter );
+
   int getConfig( VVEncParameter& rcVVEncParameter ) const;
-  int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
+  int checkConfig( const VVEncParameter& rcVVEncParameter );
   int reconfig( const VVEncParameter& rcVVEncParameter );
 
   int setAndRetErrorMsg( int Ret );
