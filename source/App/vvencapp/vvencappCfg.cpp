@@ -352,9 +352,32 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
     return false;
   }
 
+
   //
   // set intern derived parameters (for convenience purposes only)
   //
+
+  if( m_numWppThreads < 0 )
+  {
+    if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
+    {
+      m_numWppThreads = 6;
+    }
+    else
+    {
+      m_numWppThreads = 4;
+    }
+    m_ensureWppBitEqual = 1;
+  }
+
+  if(  m_RCTargetBitrate )
+  {
+    m_RCRateControlMode     = 2;
+    m_RCKeepHierarchicalBit = 2;
+    m_RCUseLCUSeparateModel = 1;
+    m_RCInitialQP           = 0;
+    m_RCForceIntraQP        = 0;
+  }
 
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {

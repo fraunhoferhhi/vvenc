@@ -219,19 +219,7 @@ int main( int argc, char* argv[] )
     std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
   }
 
-  if( vvencappCfg.m_numWppThreads < 0 )
-  {
-    if( vvencappCfg.m_SourceWidth > 1920 || vvencappCfg.m_SourceHeight > 1080)
-    {
-      vvencappCfg.m_numWppThreads = 6;
-    }
-    else
-    {
-      vvencappCfg.m_numWppThreads = 4;
-    }
-    vvencappCfg.m_ensureWppBitEqual = 1;
-  }
-
+  // copy ff config params into easy params
   cVVEncParameter.msgLevel = (vvenc::MsgLevel)vvencappCfg.m_verbosity;
   cVVEncParameter.width    = vvencappCfg.m_SourceWidth;
   cVVEncParameter.height   = vvencappCfg.m_SourceHeight;
