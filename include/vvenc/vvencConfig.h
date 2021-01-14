@@ -285,9 +285,9 @@ enum ColorFormat
   VVC_CF_YUV420_PLANAR = 0,              ///< YUV420 planar color format
 };
 
-static inline ChannelType toChannelType             (const ComponentID id)                         { return (id==COMP_Y)? CH_L : CH_C;                     }
-static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return (id==COMP_Y || (fmt==CHROMA_444)) ? 0 : 1;     }
-static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return (id==COMP_Y || (fmt!=CHROMA_420)) ? 0 : 1;     }
+static inline ChannelType toChannelType             (const ComponentID id)                         { return ((int)id==(int)COMP_Y)? CH_L : CH_C;                     }
+static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return ((int)id==(int)COMP_Y || (fmt==CHROMA_444)) ? 0 : 1;     }
+static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return ((int)id==(int)COMP_Y || (fmt!=CHROMA_420)) ? 0 : 1;     }
 static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
 static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
 static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }

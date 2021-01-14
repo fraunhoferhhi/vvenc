@@ -84,14 +84,15 @@ public:
           "\t [--input,-i <str>          ] : raw yuv input file\n"
           "\t [--size,-s  <intxint>      ] : specify input resolution (width x height) ["<< rcParams.width << "x" << rcParams.height <<"]\n"
           "\t [--format,-c  <str>        ] : set input format (yuv420, yuv420_10) [yuv420]\n"
-          "\t [--framerate,-r  <int>     ] : temporal rate (framerate) e.g. 25,29,30,50,59,60 ["<< rcParams.temporalRate/rcParams.temporalScale <<"]\n"
-          "\t [--tickspersec   <int>     ] : ticks per second e.g. 90000 for dts generation [1..27000000]\n";
+          "\t [--framerate,-r  <int>     ] : temporal rate (framerate) e.g. 25,29,30,50,59,60 ["<< rcParams.temporalRate/rcParams.temporalScale <<"]\n";
       if ( bFullHelp )
       {
         std::cout <<
           "\t                                29.97 fps = 30000/1001 Hz = 29\n"
           "\t                                59.94 fps = 60000/1001 Hz = 59\n";
       }
+      std::cout <<
+          "\t [--tickspersec   <int>     ] : ticks per second e.g. 90000 for dts generation [1..27000000]\n";
       std::cout <<
           "\t [--frames,-f <int>         ] : max. frames to encode (default: -1 all frames)\n"
           "\t [--frameskip <int>         ] : number of frames to encode skip (default: 0 off)\n";
