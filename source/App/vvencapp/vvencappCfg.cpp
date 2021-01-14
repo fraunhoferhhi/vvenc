@@ -174,6 +174,38 @@ const std::vector<SVPair<HashType>> HashTypeToEnumMap =
 };
 
 
+enum vvencappCfgBitDepth
+{
+  BITDEPTH_8            = 8,
+  BITDEPTH_10           = 10
+};
+
+const std::vector<SVPair<vvencappCfgBitDepth>> InputBitColorSpaceToIntMap =
+{
+  { "yuv420",                    BITDEPTH_8 },
+  { "yuv420_10",                 BITDEPTH_10 },
+};
+
+
+const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
+{
+  { "cra",                     DRT_CRA },
+  { "idr",                     DRT_IDR },
+ // { "rpsei",                     DRT_RECOVERY_POINT_SEI },
+};
+
+
+void setBitDepth( EncCfg* cfg, int bitdepth )
+{
+  cfg->m_inputBitDepth[0] = bitdepth;
+}
+
+void setDecRefreshType( EncCfg* cfg, int decodingRefreshType )
+{
+  cfg->m_DecodingRefreshType = decodingRefreshType;
+}
+
+
 
 
 // ====================================================================================================================
@@ -223,6 +255,9 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
 
+  IStreamToFunc<vvencappCfgBitDepth> toInputBitdepth        ( setBitDepth, this, &InputBitColorSpaceToIntMap, BITDEPTH_8);
+  IStreamToFunc<DecodingRefreshType> toDecRefreshType       ( setDecRefreshType, this, &DecodingRefreshTypeToEnumMap, DRT_CRA );
+
   //
   // setup configuration parameters
   //
@@ -236,31 +271,40 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   ("fullhelp",                                        do_expert_help,                                   "expert help text")
 
   ("input,i",                                         m_inputFileName,                                  "Original YUV input file name")
-  ("size,s",                                         toSourceSize,                                     "Input resolution (WidthxHeight)")
-  ("framerate,r",                                   m_FrameRate,                                      "Frame rate")
+  ("size,s",                                          toSourceSize,                                     "Input resolution (WidthxHeight)")
+  ("format,c",                                        toInputBitdepth,                                  "set input format (yuv420, yuv420_10)")
 
-  ("frames,f",                             m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
-  ("frameskip",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
+  ("framerate,r",                                     m_FrameRate,                                      "Frame rate")
+
+  ("frames,f",                                        m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
+  ("frameskip",                                       m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
+  ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
 
-  ("tickspersec",                                  m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("tickspersec",                                     m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
 
-  ("output,o",                                 m_bitstreamFileName,                              "Bitstream output file name")
+  ("output,o",                                        m_bitstreamFileName,                              "Bitstream output file name")
 
   ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
 
+  ("bitrate,b",                                       m_RCTargetBitrate,                                "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
+  ("passes,p",                                        m_RCNumPasses,                                    "number of rate control passes (1,2) " )
   ("qp,q",                                            m_QP,                                             "Qp value")
-  ("qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+  ("qpa",                                             m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+
+  ("threads,-t",                                      m_numWppThreads,                                  "Number of threads")
+
+  ("gopsize,g",                                       m_GOPSize,                                        "GOP size of temporal structure (16,32)")
+  ("refreshtype,-rt",                                 toDecRefreshType,                                 "intra refresh type (idr,cra)")
+  ("refreshsec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
+  ("intraperiod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
+
 
   ("Profile",                                         toProfile,                                        "Profile name to use for encoding. Use [multilayer_]main_10[_444][_still_picture], auto, or none")
   ("Tier",                                            toLevelTier,                                      "Tier to use for interpretation of level (main or high)")
   ("Level",                                           toLevel,                                          "Level limit to be used, eg 5.1, or none")
 
-  ("IntraPeriod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
-  ("RefreshSec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
 
-  ("DecodingRefreshType,-dr",                         m_DecodingRefreshType,                            "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI)")
-  ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
 
   ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                          "Bit-depth of input file")
   ("OutputBitDepth",                                  m_outputBitDepth[ CH_L ],                         "Bit-depth of output file")
@@ -268,7 +312,6 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
 
   ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
-  ("Threads,-t",                                      m_numWppThreads,                                  "Number of threads")
     ;
 
   po::setDefaults( opts );
@@ -277,7 +320,6 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
 
   opts.addOptions()
 
-  ("c",                                               po::parseConfigFile,                              "configuration file name")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
   ("SIMD",                                            ignore,                                           "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
 
@@ -561,7 +603,6 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   ("MCTFNumTrailFrames",                              m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFFrame",                                       toMCTFFrames,                                     "Frame to filter Strength for frame in GOP based temporal filter")
   ("MCTFStrength",                                    toMCTFStrengths,                                  "Strength for  frame in GOP based temporal filter.")
-  ("segmet",                                          toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
