@@ -108,21 +108,27 @@ typedef struct VVENC_DECL YuvPicture
 } YuvPicture_t;
 
 
-// will be removed  CL
-struct VVENC_DECL YUVPlane
-{
-  int16_t*   planeBuf = nullptr;  ///< pointer to plane buffer
-  int     width    = 0;        ///< width of the plane
-  int     height   = 0;        ///< height of the plane
-  int     stride   = 0;        ///< stride (width + left margin + right margins) of plane in samples
-};
 
 struct VVENC_DECL YUVBuffer
 {
-  YUVPlane  yuvPlanes[ MAX_NUM_COMP ];
+  struct Plane
+  {
+    int16_t*  ptr     = nullptr;      ///< pointer to plane buffer
+    int       width   = 0;            ///< width of the plane
+    int       height  = 0;            ///< height of the plane
+    int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
+  };
+
+  Plane     planes[ MAX_NUM_COMP ];
   uint64_t  sequenceNumber  = 0;      ///< sequence number of the picture
   uint64_t  cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
   bool      ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
+};
+
+struct VVENC_DECL YUVBufferStorage : public YUVBuffer
+{
+  YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight );
+  ~YUVBufferStorage();
 };
 
 // ----------------------------------------
@@ -137,16 +143,12 @@ public:
   virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
   {
   }
-
-  virtual void outputYuv( const YuvPicture& /*yuvOutBuf*/ )
-  {
-  }
 };
 
 
 /**
   \ingroup VVEncExternalInterfaces
-  The struct AccessUnitList contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
+  The struct AccessUnit contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
   The structure contains buffer and size information of the compressed payload as well as timing, access and debug information.
   The smallest output unit of VVC encoders are NalUnits. A set of NalUnits that belong to the same access unit are delivered in a continuous bitstream,
   where the NalUnits are separated by three byte start codes.

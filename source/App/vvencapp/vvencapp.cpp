@@ -386,12 +386,10 @@ int main( int argc, char* argv[] )
   vvenc::AccessUnit cAccessUnit;
 
   // --- start timer
-  std::chrono::steady_clock::time_point cTPStartRun;
-  std::chrono::steady_clock::time_point cTPEndRun;
-
-  std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  std::chrono::steady_clock::time_point cTPStartRun = std::chrono::steady_clock::now();
   if( cVVEncParameter.msgLevel > vvenc::WARNING )
   {
+    std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
@@ -498,7 +496,7 @@ int main( int argc, char* argv[] )
     cYuvFileReader.close();
   }
 
-  cTPEndRun = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
   double dTimeSec = (double)std::chrono::duration_cast<std::chrono::milliseconds>((cTPEndRun)-(cTPStartRun)).count() / 1000;
 
   delete[] pucDeletePicBuffer;
@@ -514,7 +512,7 @@ int main( int argc, char* argv[] )
   iRet = cVVEnc.uninit();
   if( 0 != iRet )
   {
-    printVVEncErrorMsg( cAppname, "destroyencoder failed", iRet, cVVEnc.getLastError() );
+    printVVEncErrorMsg( cAppname, "destroy encoder failed", iRet, cVVEnc.getLastError() );
     return iRet;
   }
 

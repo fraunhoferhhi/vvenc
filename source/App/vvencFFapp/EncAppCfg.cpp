@@ -227,7 +227,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   // setup configuration parameters
   //
 
-  std::string ignore;
+  std::string ignoreParams;
   po::Options opts;
   
   opts.addOptions()
@@ -274,7 +274,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
 
   ("c",                                               po::parseConfigFile,                              "configuration file name")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
-  ("SIMD",                                            ignore,                                           "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
+  ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
 
   // file, i/o and source parameters
 
@@ -677,12 +677,11 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
     {
       confirmParameter( true, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
     }
-    // th fix this later
-//    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
-//          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
-//    {
-//      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
-//    }
+    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
+          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
+    {
+      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
+    }
     if ( m_confirmFailed )
     {
       return false;

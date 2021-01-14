@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "EncAppCfg.h"
 #include "vvenc/vvenc.h"
-#include "vvenc/FileIO.h"
+#include "apputils/YuvFileIO.h"
 
 //! \ingroup EncoderApp
 //! \{
@@ -67,77 +67,16 @@ void msgApp( int level, const char* fmt, ... );
 
 // ====================================================================================================================
 
-static inline int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
-{
-  int w = frameWidth;
-  if ( compId > 0 )
-  {
-    switch ( chFmt )
-    {
-      case CHROMA_400: w = 0;      break;
-      case CHROMA_420:
-      case CHROMA_422: w = w >> 1; break;
-      default: break;
-    }
-  }
-  return w;
-}
-
-static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
-{
-  int h = frameHeight;
-  if ( compId > 0 )
-  {
-    switch ( chFmt )
-    {
-      case CHROMA_400: h = 0;      break;
-      case CHROMA_420: h = h >> 1; break;
-      case CHROMA_422:
-      default: break;
-    }
-  }
-  return h;
-}
-
-struct YUVBufferStorage : public YUVBuffer
-{
-  YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
-    : YUVBuffer()
-  {
-    for ( int i = 0; i < MAX_NUM_COMP; i++ )
-    {
-      YUVPlane& yuvPlane = yuvPlanes[ i ];
-      yuvPlane.width     = getWidthOfComponent ( chFmt, frameWidth,  i );
-      yuvPlane.height    = getHeightOfComponent( chFmt, frameHeight, i );
-      yuvPlane.stride    = yuvPlane.width;
-      const int size     = yuvPlane.stride * yuvPlane.height;
-      yuvPlane.planeBuf  = ( size > 0 ) ? new int16_t[ size ] : nullptr;
-    }
-  }
-
-  ~YUVBufferStorage()
-  {
-    for ( int i = 0; i < MAX_NUM_COMP; i++ )
-    {
-      YUVPlane& yuvPlane = yuvPlanes[ i ];
-      if ( yuvPlane.planeBuf )
-        delete [] yuvPlane.planeBuf;
-    }
-  }
-};
-
-// ====================================================================================================================
-
 class EncApp : public vvenc::YUVWriterIf
 {
 private:
-  EncAppCfg    m_cEncAppCfg;                      ///< encoder configuration
-  VVEnc        m_cVVEnc;                          ///< encoder library class
-  YuvIO        m_yuvInputFile;                    ///< input YUV file
-  YuvIO        m_yuvReconFile;                    ///< output YUV reconstruction file
-  std::fstream m_bitstream;                       ///< output bitstream file
-  unsigned     m_essentialBytes;
-  unsigned     m_totalBytes;
+  EncAppCfg           m_cEncAppCfg;                      ///< encoder configuration
+  VVEnc               m_cVVEnc;                          ///< encoder library class
+  apputils::YuvFileIO m_yuvInputFile;                    ///< input YUV file
+  apputils::YuvFileIO m_yuvReconFile;                    ///< output YUV reconstruction file
+  std::fstream        m_bitstream;                       ///< output bitstream file
+  unsigned            m_essentialBytes;
+  unsigned            m_totalBytes;
 
 public:
   EncApp()
@@ -152,7 +91,7 @@ public:
 
   bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
   void  encode();                                     ///< main encoding function
-  void  outputAU ( const AccessUnit& au );         ///< write encoded access units to bitstream
+  void  outputAU ( const AccessUnit& au );            ///< write encoded access units to bitstream
   void  outputYuv( const YUVBuffer& yuvOutBuf );      ///< write reconstructed yuv output
 
 private:

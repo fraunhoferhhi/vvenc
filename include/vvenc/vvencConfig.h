@@ -196,10 +196,10 @@ enum SliceType
 /// supported IDR types
 enum DecodingRefreshType
 {
-  DRT_NONE               = 0,
-  DRT_CRA                = 1,
-  DRT_IDR                = 2,
-  DRT_RECOVERY_POINT_SEI = 3
+  DRT_NONE               = -1,
+  DRT_CRA                = 0,
+  DRT_IDR                = 1,
+  DRT_RECOVERY_POINT_SEI = 2
 };
 
 enum HashType
@@ -285,6 +285,44 @@ enum ColorFormat
   VVC_CF_YUV420_PLANAR = 0,              ///< YUV420 planar color format
 };
 
+static inline ChannelType toChannelType             (const ComponentID id)                         { return (id==COMP_Y)? CH_L : CH_C;                     }
+static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return (id==COMP_Y || (fmt==CHROMA_444)) ? 0 : 1;     }
+static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return (id==COMP_Y || (fmt!=CHROMA_420)) ? 0 : 1;     }
+static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
+static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
+static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
+static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
+static inline int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
+{
+  int w = frameWidth;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: w = 0;      break;
+      case CHROMA_420:
+      case CHROMA_422: w = w >> 1; break;
+      default: break;
+    }
+  }
+  return w;
+}
+
+static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: h = 0;      break;
+      case CHROMA_420: h = h >> 1; break;
+      case CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
+}
 
 
 } // namespace

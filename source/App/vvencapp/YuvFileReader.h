@@ -239,7 +239,7 @@ private:
     const int iCWidth  = m_iReadWidth>>1;
     const int iCHeight = height>>1;
     const int iCStride = rcYuvPicture.stride>>1;
-    assert( rcYuvPicture.bitDepth == m_iDestBitDepth );
+//    assert( rcYuvPicture.bitDepth == m_iDestBitDepth );
 
     rcYuvPicture.width = width;
     rcYuvPicture.height = height;

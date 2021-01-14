@@ -219,6 +219,27 @@ void VVEnc::decodeBitstream( const std::string& FileName)
   VVEncImpl::decodeBitstream( FileName );
 }
 
+YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+  : YUVBuffer()
+{
+  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    YUVBuffer::Plane& yuvPlane = planes[ i ];
+    yuvPlane.width  = getWidthOfComponent ( chFmt, frameWidth,  i );
+    yuvPlane.height = getHeightOfComponent( chFmt, frameHeight, i );
+    yuvPlane.stride = yuvPlane.width;
+    const int size  = yuvPlane.stride * yuvPlane.height;
+    yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+  }
+}
+
+YUVBufferStorage::~YUVBufferStorage()
+{
+  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    delete [] planes[ i ].ptr;
+  }
+}
 
 } // namespace
 

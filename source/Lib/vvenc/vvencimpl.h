@@ -119,8 +119,6 @@ private:
 
   int xInitLibCfg( const VVEncParameter& rcVVEncParameter, EncCfg& rcEncCfg );
 
-  int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
-                       const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight );
   int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:

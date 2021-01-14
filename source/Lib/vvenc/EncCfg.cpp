@@ -217,8 +217,8 @@ bool EncCfg::initCfgParameter()
       break;
     }
   }
-  m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
-  m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
+    m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
+    m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
 
   m_sliceId.resize(1,0);
 
