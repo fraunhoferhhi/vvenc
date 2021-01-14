@@ -120,6 +120,7 @@ public:
   void setCfgParameter( const EncCfg& encCfg );
   int  initPreset( PresetMode preset );
 
+  bool isRateCtr() const;
   virtual void printCfg() const;
 };
 
