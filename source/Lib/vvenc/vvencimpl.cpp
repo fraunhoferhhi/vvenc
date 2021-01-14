@@ -540,12 +540,6 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
   rcEncCfg.m_FrameRate                           = rcVVEncParameter.m_iTemporalRate / rcVVEncParameter.m_iTemporalScale;
   rcEncCfg.m_framesToBeEncoded                   = rcVVEncParameter.m_iMaxFrames;
 
-  if( (rcEncCfg.m_usePerceptQPA == 2 || rcEncCfg.m_usePerceptQPA == 4) && (rcEncCfg.m_QP <= MAX_QP_PERCEPT_QPA) && (rcEncCfg.m_RCNumPasses == 2) &&
-      (rcEncCfg.m_FrameRate >= 50) && (rcVVEncParameter.m_iGopSize == 32) && (rcVVEncParameter.m_iIDRPeriodSec > 0) )
-  {
-    rcEncCfg.m_usePerceptQPATempFiltISlice = true;
-  }
-
   //======== Coding Structure =============
   rcEncCfg.m_GOPSize                             = rcVVEncParameter.m_iGopSize;
   rcEncCfg.m_InputQueueSize                      = 0;
@@ -578,6 +572,12 @@ int VVEncImpl::xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCf
         rcEncCfg.m_IntraPeriod = iIDRPeriod + rcVVEncParameter.m_iGopSize - iDiff;
       }
     }
+  }
+
+  if( (rcEncCfg.m_usePerceptQPA == 2 || rcEncCfg.m_usePerceptQPA == 4) && (rcEncCfg.m_QP <= MAX_QP_PERCEPT_QPA) &&
+      (rcEncCfg.m_RCNumPasses == 2) && (rcEncCfg.m_GOPSize > 8) && (rcEncCfg.m_IntraPeriod >= 2 * rcEncCfg.m_GOPSize) )
+  {
+    rcEncCfg.m_usePerceptQPATempFiltISlice = true; // optimized combination of perceptual QPA and 2-pass rate control
   }
 
   if( rcVVEncParameter.m_eDecodingRefreshType == VVC_DRT_IDR )

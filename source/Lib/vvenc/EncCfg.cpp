@@ -513,10 +513,10 @@ bool EncCfg::initCfgParameter()
   {
     m_sliceChromaQpOffsetPeriodicity = 1;
   }
-  const bool QpaTFI = m_usePerceptQPATempFiltISlice && ((m_usePerceptQPA != 2 && m_usePerceptQPA != 4) || m_IntraPeriod <= 16 || m_GOPSize <= 8);
-  confirmParameter( QpaTFI, "invalid combination of PerceptQPATempFiltIPic, PerceptQPA, IntraPeriod, and GOPSize" );
+  const bool QpaTFI = m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8);
+  confirmParameter( QpaTFI, "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
-  if (m_usePerceptQPATempFiltISlice && (m_QP > MAX_QP_PERCEPT_QPA || m_IntraPeriod <= m_GOPSize))
+  if (m_usePerceptQPATempFiltISlice && (m_QP > MAX_QP_PERCEPT_QPA || (m_usePerceptQPA != 2 && m_usePerceptQPA != 4) || m_IntraPeriod < 2 * m_GOPSize))
   {
     msg(WARNING, "disabling Intra-picture temporal QPA mode due to configuration incompatibility\n");
     m_usePerceptQPATempFiltISlice = false;
