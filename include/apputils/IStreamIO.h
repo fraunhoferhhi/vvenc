@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup Interface
 //! \{
 
-//namespace apputils {
+namespace apputils {
 
 template<typename E>
 struct SVPair
@@ -400,7 +400,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 }
 
 
-//} // namespace
+} // namespace
 
 //! \}
 
