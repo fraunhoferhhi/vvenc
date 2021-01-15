@@ -47,9 +47,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 /**
   \ingroup hhivvcdeclibExternalInterfaces
   \file    vvencimpl.cpp
-  \brief   This file contains the internal interface of the hhivvcdec SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/10/2019
+  \brief   This file contains the internal interface of the vvenc SDK.
 */
 
 #include "vvencimpl.h"

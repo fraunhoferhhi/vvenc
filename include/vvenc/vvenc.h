@@ -44,11 +44,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \ingroup vvencExternalInterfaces
   \file    vvenc.h
-  \brief   This file contains the external interface of the hhivvcdec SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/08/2020
+  \brief   This file contains the external interface of the vvenc SDK.
 */
 
 #pragma once

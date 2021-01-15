@@ -45,11 +45,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 /**
-  \ingroup VVEncoderApp
-  \file    VVEncoderApp.cpp
-  \brief   This VVEncoderApp.cpp file contains the main entry point of the application.
-  \author  lehmann
-  \date    2019-10-10
+  \file    vvencapp.cpp
+  \brief   This vvencapp.cpp file contains the main entry point of the application.
 */
 
 #include <iostream>
