@@ -260,10 +260,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
   IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
   IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
-  IStreamToEnum<CostMode>      toCostMode                   ( &m_costMode,                    &CostModeToEnumMap     );
-  IStreamToEnum<ChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
-  IStreamToEnum<ChromaFormat>  toInternCoFormat             ( &m_internChromaFormat,          &ChromaFormatToEnumMap  );
-  IStreamToEnum<HashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap );
 
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &InputBitColorSpaceToIntMap, YUV420_8);
@@ -319,7 +315,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   po::doHelp( easyOpts, opts );
 
   opts.addOptions()
-  ("internal-bitdepth",                               m_internalBitDepth[0],                            "internal bitdepth (8,10)")
+  ("internal-bitdepth",   m_internalBitDepth[0],       "internal bitdepth (8,10)")
+  ("aud",                 m_AccessUnitDelimiter,       "Enable Access Unit Delimiter NALUs")
+  ("vui",                 m_vuiParametersPresent,      "Enable generation of vui_parameters")
+  ("hrd",                 m_hrdParametersPresent,      "Enable generation of hrd_parameters")
   ;
 
   po::setDefaults( opts );
@@ -494,8 +493,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
 
   ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
-  ("Size,-s",                                         toSourceSize,                                     "Input resolution (WidthxHeight)")
-  ("Threads,-t",                                      m_numWppThreads,                                  "Number of threads")
+  ("Size,s",                                          toSourceSize,                                     "Input resolution (WidthxHeight)")
+  ("Threads,t",                                       m_numWppThreads,                                  "Number of threads")
   ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
     ;
 
@@ -511,8 +510,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   // file, i/o and source parameters
 
-  ("SourceWidth,-wdt",                                m_SourceWidth,                                    "Source picture width")
-  ("SourceHeight,-hgt",                               m_SourceHeight,                                   "Source picture height");
+  ("SourceWidth",                                     m_SourceWidth,                                    "Source picture width")
+  ("SourceHeight",                                    m_SourceHeight,                                   "Source picture height");
 
   if ( vvenc::isTracingEnabled() )
   {
@@ -529,12 +528,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("ConfWinTop",                                      m_confWinTop,                                     "Top offset for window conformance mode 3")
   ("ConfWinBottom",                                   m_confWinBottom,                                  "Bottom offset for window conformance mode 3")
 
-  ("TemporalSubsampleRatio,-ts",                      m_temporalSubsampleRatio,                         "Temporal sub-sample ratio when reading input YUV")
+  ("TemporalSubsampleRatio",                          m_temporalSubsampleRatio,                         "Temporal sub-sample ratio when reading input YUV")
 
-  ("HorizontalPadding,-pdx",                          m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
-  ("VerticalPadding,-pdy",                            m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
+  ("HorizontalPadding",                               m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
+  ("VerticalPadding",                                 m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
   ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
-  ("AccessUnitDelimiter",                             m_AccessUnitDelimiter,                            "Enable Access Unit Delimiter NALUs")
 
   ("MSEBasedSequencePSNR",                            m_printMSEBasedSequencePSNR,                      "Emit sequence PSNR (0: only as a linear average of the frame PSNRs, 1: also based on an average of the frame MSEs")
   ("PrintHexPSNR",                                    m_printHexPsnr,                                   "Emit hexadecimal PSNR for each frame (0: off , 1:on")
@@ -557,22 +555,22 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SameCQPTablesForAllChroma",                       m_useSameChromaQPTables,                          "0: Different tables for Cb, Cr and joint Cb-Cr components, 1 (default): Same tables for all three chroma components")
   ("IntraQPOffset",                                   m_intraQPOffset,                                  "Qp offset value for intra slice, typically determined based on GOP size")
   ("LambdaFromQpEnable",                              m_lambdaFromQPEnable,                             "Enable flag for derivation of lambda from QP")
-  ("LambdaModifier,-LM",                              toLambdaModifier,                                 "Lambda modifier list for temporal layers. If LambdaModifierI is used, this will not affect intra pictures")
-  ("LambdaModifierI,-LMI",                            toIntraLambdaModifier,                            "Lambda modifiers for Intra pictures, comma separated, up to one the number of temporal layer. If entry for temporalLayer exists, then use it, else if some are specified, use the last, else use the standard LambdaModifiers.")
-  ("IQPFactor,-IQF",                                  m_dIntraQpFactor,                                 "Intra QP Factor for Lambda Computation. If negative, the default will scale lambda based on GOP size (unless LambdaFromQpEnable then IntraQPOffset is used instead)")
+  ("LambdaModifier",                                  toLambdaModifier,                                 "Lambda modifier list for temporal layers. If LambdaModifierI is used, this will not affect intra pictures")
+  ("LambdaModifierI",                                 toIntraLambdaModifier,                            "Lambda modifiers for Intra pictures, comma separated, up to one the number of temporal layer. If entry for temporalLayer exists, then use it, else if some are specified, use the last, else use the standard LambdaModifiers.")
+  ("IQPFactor",                                       m_dIntraQpFactor,                                 "Intra QP Factor for Lambda Computation. If negative, the default will scale lambda based on GOP size (unless LambdaFromQpEnable then IntraQPOffset is used instead)")
   ("QpInValCb",                                       toQpInCb,                                         "Input coordinates for the QP table for Cb component")
   ("QpInValCr",                                       toQpInCr,                                         "Input coordinates for the QP table for Cr component")
   ("QpInValCbCr",                                     toQpInCbCr,                                       "Input coordinates for the QP table for joint Cb-Cr component")
   ("QpOutValCb",                                      toQpOutCb,                                        "Output coordinates for the QP table for Cb component")
   ("QpOutValCr",                                      toQpOutCr,                                        "Output coordinates for the QP table for Cr component")
   ("QpOutValCbCr",                                    toQpOutCbCr,                                      "Output coordinates for the QP table for joint Cb-Cr component")
-  ("MaxCuDQPSubdiv,-dqd",                             m_cuQpDeltaSubdiv,                                "Maximum subdiv for CU luma Qp adjustment")
+  ("MaxCuDQPSubdiv",                                  m_cuQpDeltaSubdiv,                                "Maximum subdiv for CU luma Qp adjustment")
   ("MaxCuChromaQpOffsetSubdiv",                       m_cuChromaQpOffsetSubdiv,                         "Maximum subdiv for CU chroma Qp adjustment - set less than 0 to disable")
-  ("CbQpOffset,-cbqpofs",                             m_chromaCbQpOffset,                               "Chroma Cb QP Offset")
-  ("CrQpOffset,-crqpofs",                             m_chromaCrQpOffset,                               "Chroma Cr QP Offset")
+  ("CbQpOffset",                                      m_chromaCbQpOffset,                               "Chroma Cb QP Offset")
+  ("CrQpOffset",                                      m_chromaCrQpOffset,                               "Chroma Cr QP Offset")
   ("CbQpOffsetDualTree",                              m_chromaCbQpOffsetDualTree,                       "Chroma Cb QP Offset for dual tree")
   ("CrQpOffsetDualTree",                              m_chromaCrQpOffsetDualTree,                       "Chroma Cr QP Offset for dual tree")
-  ("CbCrQpOffset,-cbcrqpofs",                         m_chromaCbCrQpOffset,                             "QP Offset for joint Cb-Cr mode")
+  ("CbCrQpOffset",                                    m_chromaCbCrQpOffset,                             "QP Offset for joint Cb-Cr mode")
   ("CbCrQpOffsetDualTree",                            m_chromaCbCrQpOffsetDualTree,                     "QP Offset for joint Cb-Cr mode in dual tree")
   ("SliceChromaQPOffsetPeriodicity",                  m_sliceChromaQpOffsetPeriodicity,                 "Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.")
   ("SliceCbQpOffsetIntraOrPeriodic",                  m_sliceChromaQpOffsetIntraOrPeriodic[0],          "Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
@@ -666,7 +664,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("TMVPMode",                                        m_TMVPModeId,                                     "TMVP mode enable(0: off 1: for all slices 2: for certain slices only)")
   ("DepQuant",                                        m_DepQuantEnabled,                                "Enable dependent quantization" )
   ("DQThrVal",                                        m_dqThresholdVal,                                 "Quantization threshold value for DQ last coefficient search" )
-  ("SignHideFlag,-SBH",                               m_SignDataHidingEnabled,                          "Enable sign data hiding" )
+  ("SignHideFlag",                                    m_SignDataHidingEnabled,                          "Enable sign data hiding" )
   ("MIP",                                             m_MIP,                                            "Enable MIP (matrix-based intra prediction)")
   ("FastMIP",                                         m_useFastMIP,                                     "Fast encoder search for MIP (matrix-based intra prediction)")
   ("MaxNumMergeCand",                                 m_maxNumMergeCand,                                "Maximum number of merge candidates")
@@ -716,6 +714,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SaoChromaOffsetBitShift",                         m_saoOffsetBitShift[ CH_C ],                      "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
 
   ("EnableDecodingParameterSet",                      m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
+  ("AccessUnitDelimiter,-aud",                        m_AccessUnitDelimiter,                            "Enable Access Unit Delimiter NALUs")
   ("VuiParametersPresent,-vui",                       m_vuiParametersPresent,                           "Enable generation of vui_parameters()")
   ("HrdParametersPresent,-hrd",                       m_hrdParametersPresent,                           "Enable generation of hrd_parameters()")
   ("AspectRatioInfoPresent",                          m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
