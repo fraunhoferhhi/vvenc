@@ -2029,6 +2029,67 @@ void VVEncCfg::printCfg() const
   msg( VERBOSE, "\n" );
 }
 
+std::string VVEncCfg::getPresetParamsAsStr( PresetMode preset )
+{
+  std::stringstream css;
+  vvenc::VVEncCfg cVVEncCfg;
+  if( 0 != cVVEncCfg.initPreset( preset ))
+  {
+    css << "undefined preset " << preset;
+    return css.str();
+  }
+
+// tools
+  if( cVVEncCfg.m_RDOQ )           { css << "RDOQ " << cVVEncCfg.m_RDOQ << " ";}
+  if( cVVEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
+  if( cVVEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
+  if( cVVEncCfg.m_alf )
+  {
+    css << "ALF ";
+    if( cVVEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
+    if( cVVEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
+  }
+  if( cVVEncCfg.m_ccalf ){ css << "CCALF ";}
+
+// vvc tools
+  if( cVVEncCfg.m_BDOF )             { css << "BIO ";}
+  if( cVVEncCfg.m_DMVR )             { css << "DMVR ";}
+  if( cVVEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
+  if( cVVEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cVVEncCfg.m_AMVRspeed << " ";}
+  if( cVVEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
+  if( cVVEncCfg.m_EDO )              { css << "EncDbOpt ";}
+  if( cVVEncCfg.m_MRL )              { css << "MRL ";}
+  if( cVVEncCfg.m_MCTF )             { css << "MCTF "; }
+  if( cVVEncCfg.m_SMVD )             { css << "SMVD " << cVVEncCfg.m_SMVD << " ";}
+  if( cVVEncCfg.m_Affine )
+  {
+    css << "Affine " << cVVEncCfg.m_Affine << " ";
+    if( cVVEncCfg.m_PROF )           { css << "(Prof " << cVVEncCfg.m_PROF << " ";}
+    if( cVVEncCfg.m_AffineType )     { css << "Type " << cVVEncCfg.m_AffineType << ") ";}
+  }
+
+  if( cVVEncCfg.m_MMVD )             { css << "MMVD " << cVVEncCfg.m_MMVD << " ";}
+  if( cVVEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
+
+  if( cVVEncCfg.m_MIP )          { css << "MIP ";}
+  if( cVVEncCfg.m_useFastMIP )   { css << "FastMIP " << cVVEncCfg.m_useFastMIP << " ";}
+  if( cVVEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
+  if( cVVEncCfg.m_Geo )          { css << "Geo " << cVVEncCfg.m_Geo << " ";}
+  if( cVVEncCfg.m_LFNST )        { css << "LFNST ";}
+
+  if( cVVEncCfg.m_SBT )          { css << "SBT " ;}
+  if( cVVEncCfg.m_CIIP )         { css << "CIIP ";}
+  if (cVVEncCfg.m_ISP)           { css << "ISP "; }
+  if (cVVEncCfg.m_TS)            { css << "TS "; }
+  if (cVVEncCfg.m_useBDPCM)      { css << "BDPCM "; }
+
+  // fast tools
+  if( cVVEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
+
+  return css.str();
+}
+
+
 } // namespace vvenc
 
 //! \}

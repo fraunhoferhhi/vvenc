@@ -514,7 +514,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SourceWidth,-wdt",                                m_SourceWidth,                                    "Source picture width")
   ("SourceHeight,-hgt",                               m_SourceHeight,                                   "Source picture height");
 
-  if ( vvenc::VVEnc::isTracingEnabled() )
+  if ( vvenc::isTracingEnabled() )
   {
      opts.addOptions()
     ("TraceChannelsList",                             m_listTracingChannels,                            "List all available tracing channels")

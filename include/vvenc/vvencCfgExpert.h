@@ -562,39 +562,13 @@ static inline uint32_t    getComponentScaleX        (const ComponentID id, const
 static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
 static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
 static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
-static inline int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
-{
-  int w = frameWidth;
-  if ( compId > 0 )
-  {
-    switch ( chFmt )
-    {
-      case CHROMA_400: w = 0;      break;
-      case CHROMA_420:
-      case CHROMA_422: w = w >> 1; break;
-      default: break;
-    }
-  }
-  return w;
-}
-
-static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
-{
-  int h = frameHeight;
-  if ( compId > 0 )
-  {
-    switch ( chFmt )
-    {
-      case CHROMA_400: h = 0;      break;
-      case CHROMA_420: h = h >> 1; break;
-      case CHROMA_422:
-      default: break;
-    }
-  }
-  return h;
-}
-
-
+///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+bool   VVENC_DECL  isTracingEnabled();
+///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+std::string getCompileInfoString();
+void   VVENC_DECL  decodeBitstream( const std::string& FileName);
+int    VVENC_DECL  getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId );
+int    VVENC_DECL  getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId );
 
 } // namespace vvenc
 

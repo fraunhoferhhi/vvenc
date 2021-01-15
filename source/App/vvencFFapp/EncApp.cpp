@@ -120,7 +120,7 @@ void EncApp::encode()
 {
   if( m_cEncAppCfg.m_decode )
   {
-    vvenc::VVEnc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
+    vvenc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
     return;
   }
 

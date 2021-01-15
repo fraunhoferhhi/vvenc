@@ -157,11 +157,6 @@ int VVEnc::printSummary() const
   return m_pcVVEncImpl->printSummary();
 }
 
-int VVEnc::printConfig() const
-{
-  return m_pcVVEncImpl->printConfig();
-}
-
 std::string VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();
@@ -172,11 +167,6 @@ std::string VVEnc::getErrorMsg( int nRet )
   return VVEncImpl::getErrorMsg(nRet);
 }
 
-std::string VVEnc::getPresetParamsAsStr( int iQuality )
-{
-  return VVEncImpl::getPresetParamsAsStr(iQuality);
-}
-
 void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
 {
   VVEncImpl::registerMsgCbf( msgFnc );
@@ -185,21 +175,6 @@ void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msg
 std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 {
   return VVEncImpl::setSIMDExtension( simdId );
-}
-
-bool VVEnc::isTracingEnabled()
-{
-  return VVEncImpl::isTracingEnabled();
-}
-
-std::string VVEnc::getCompileInfoString()
-{
-  return VVEncImpl::getCompileInfoString();
-}
-
-void VVEnc::decodeBitstream( const std::string& FileName)
-{
-  VVEncImpl::decodeBitstream( FileName );
 }
 
 YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
@@ -222,6 +197,16 @@ YUVBufferStorage::~YUVBufferStorage()
   {
     delete [] planes[ i ].ptr;
   }
+}
+
+///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+VVENC_DECL bool isTracingEnabled()
+{
+#if ENABLE_TRACING
+  return true;
+#else
+  return false;
+#endif
 }
 
 } // namespace

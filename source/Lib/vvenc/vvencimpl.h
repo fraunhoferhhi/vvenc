@@ -92,7 +92,6 @@ public:
   int getNumLeadFrames() const;
   int getNumTrailFrames() const;
 
-  int printConfig() const;
   int printSummary() const;
 
   std::string getEncoderInfo() const;
@@ -101,14 +100,9 @@ public:
 
   static std::string getErrorMsg( int nRet );
   static std::string getVersionNumber();
-  static std::string getPresetParamsAsStr( int iQuality );
-
-
+  
   static void        registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
   static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-  static bool        isTracingEnabled();                                                          ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-  static std::string getCompileInfoString();                                                      ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-  static void        decodeBitstream( const std::string& FileName);                               ///< decode bitstream with limited build in decoder
 
 private:
 

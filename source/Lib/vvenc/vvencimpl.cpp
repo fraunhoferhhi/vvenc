@@ -381,15 +381,6 @@ int VVEncImpl::getNumTrailFrames() const
   return m_cVVEncCfg.m_MCTFNumTrailFrames;
 }
 
-int VVEncImpl::printConfig() const
-{
-  if( !m_bInitialized )       { return -1; }
-  if( nullptr == m_pEncLib )  { return -1; }
-
-  m_cVVEncCfg.printCfg();
-  return 0;
-}
-
 int VVEncImpl::printSummary() const
 {
   if( !m_bInitialized ){ return -1; }
@@ -399,65 +390,6 @@ int VVEncImpl::printSummary() const
   return 0;
 }
 
-std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
-{
-  std::stringstream css;
-  vvenc::VVEncCfg cVVEncCfg;
-  if( 0 != cVVEncCfg.initPreset( (PresetMode)iQuality ))
-  {
-    css << "undefined preset " << iQuality;
-    return css.str();
-  }
-
-// tools
-  if( cVVEncCfg.m_RDOQ )           { css << "RDOQ " << cVVEncCfg.m_RDOQ << " ";}
-  if( cVVEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
-  if( cVVEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
-  if( cVVEncCfg.m_alf )
-  {
-    css << "ALF ";
-    if( cVVEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
-    if( cVVEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
-  }
-  if( cVVEncCfg.m_ccalf ){ css << "CCALF ";}
-
-// vvc tools
-  if( cVVEncCfg.m_BDOF )             { css << "BIO ";}
-  if( cVVEncCfg.m_DMVR )             { css << "DMVR ";}
-  if( cVVEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
-  if( cVVEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cVVEncCfg.m_AMVRspeed << " ";}
-  if( cVVEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
-  if( cVVEncCfg.m_EDO )              { css << "EncDbOpt ";}
-  if( cVVEncCfg.m_MRL )              { css << "MRL ";}
-  if( cVVEncCfg.m_MCTF )             { css << "MCTF "; }
-  if( cVVEncCfg.m_SMVD )             { css << "SMVD " << cVVEncCfg.m_SMVD << " ";}
-  if( cVVEncCfg.m_Affine )
-  {
-    css << "Affine " << cVVEncCfg.m_Affine << " ";
-    if( cVVEncCfg.m_PROF )           { css << "(Prof " << cVVEncCfg.m_PROF << " ";}
-    if( cVVEncCfg.m_AffineType )     { css << "Type " << cVVEncCfg.m_AffineType << ") ";}
-  }
-
-  if( cVVEncCfg.m_MMVD )             { css << "MMVD " << cVVEncCfg.m_MMVD << " ";}
-  if( cVVEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
-
-  if( cVVEncCfg.m_MIP )          { css << "MIP ";}
-  if( cVVEncCfg.m_useFastMIP )   { css << "FastMIP " << cVVEncCfg.m_useFastMIP << " ";}
-  if( cVVEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
-  if( cVVEncCfg.m_Geo )          { css << "Geo " << cVVEncCfg.m_Geo << " ";}
-  if( cVVEncCfg.m_LFNST )        { css << "LFNST ";}
-
-  if( cVVEncCfg.m_SBT )          { css << "SBT " ;}
-  if( cVVEncCfg.m_CIIP )         { css << "CIIP ";}
-  if (cVVEncCfg.m_ISP)           { css << "ISP "; }
-  if (cVVEncCfg.m_TS)            { css << "TS "; }
-  if (cVVEncCfg.m_useBDPCM)      { css << "BDPCM "; }
-
-  // fast tools
-  if( cVVEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
-
-  return css.str();
-}
 
 /* converting sdk params to internal (wrapper) params*/
 int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const
@@ -645,18 +577,8 @@ std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
   return ret;
 }
 
-///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-bool VVEncImpl::isTracingEnabled()
-{
-#if ENABLE_TRACING
-  return true;
-#else
-  return false;
-#endif
-}
-
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-std::string VVEncImpl::getCompileInfoString()
+std::string getCompileInfoString()
 {
   char convBuf[ 256 ];
   std::string compileInfo;
@@ -667,7 +589,7 @@ std::string VVEncImpl::getCompileInfoString()
 }
 
 ///< decode bitstream with limited build in decoder
-void VVEncImpl::decodeBitstream( const std::string& FileName)
+void decodeBitstream( const std::string& FileName)
 {
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
@@ -677,6 +599,38 @@ void VVEncImpl::decodeBitstream( const std::string& FileName)
     msg( ERROR, "decoding failed");
     THROW("error decoding");
   }
+}
+
+int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
+{
+  int w = frameWidth;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: w = 0;      break;
+      case CHROMA_420:
+      case CHROMA_422: w = w >> 1; break;
+      default: break;
+    }
+  }
+  return w;
+}
+
+int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: h = 0;      break;
+      case CHROMA_420: h = h >> 1; break;
+      case CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
 }
 
 } // namespace

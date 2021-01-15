@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <functional>
-#include "stdint.h"
+#include <stdint.h>
 #include <string>
 #include "vvenc/vvencDecl.h"
 
@@ -270,7 +270,6 @@ public:
 
    int getNumTrailFrames() const;
 
-   int printConfig() const;
    int printSummary() const;
 
    /**
@@ -288,13 +287,6 @@ public:
    static std::string getErrorMsg( int nRet );
 
    /**
-     This static function returns a string according to the passed parameter iQuality.
-     \param[in]  iQuality Quality (preset) as integer
-     \retval[ ]  std::string enabled encoding parameter as string
-   */
-   static std::string getPresetParamsAsStr( int iQuality );
-
-   /**
      This method registers a log message callback function to the encoder library. 
      If no such function has been registered, the library will omit all messages.
      \param      Log message callback function.
@@ -303,22 +295,10 @@ public:
 
    ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
    static std::string setSIMDExtension( const std::string& simdId );
-   ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-   static bool        isTracingEnabled();
-   ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-   static std::string getCompileInfoString();
-   ///< decode bitstream with limited build in decoder
-   static void        decodeBitstream( const std::string& FileName);
-
 
 private:
    VVEncImpl*  m_pcVVEncImpl;
 };
-
-
-
-
-
 
 } // namespace
 
