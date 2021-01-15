@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <list>
 #include <map>
 #include <algorithm>
+#include <regex>
 
 //! \ingroup Interface
 //! \{
@@ -348,11 +349,13 @@ namespace df
       unsigned extra_argc_consumed = 0;
       if (arg_opt_sep == std::string::npos)
       {
-        // check if we have a 
+        // check if we have an argument 
         if( argc > 1)
         {
           std::string val(argv[1]);
-          if( std::string::npos == val.find_first_of('-') )
+          size_t val_sep = val.find_first_of('-');
+          //check if either have no - or the parameter is a number 
+          if( 0 != val_sep || std::regex_match( val, std::regex( ( "((\\+|-)?[[:digit:]]+)(\\.(([[:digit:]]+)?))?" ) ) ) ) 
           {
             extra_argc_consumed++;
             /* argument occurs after option_sep */
