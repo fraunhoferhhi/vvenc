@@ -171,11 +171,7 @@ int main( int argc, char* argv[] )
   vvencappCfg.m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
   vvencappCfg.m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
 
-  if( 0 != vvencappCfg.initPreset( vvenc::PresetMode::MEDIUM ))
-  {
-    std::cerr << cAppname  << " [error]: undefined preset " << std::endl;
-    return -1;
-  }
+  vvencappCfg.initPreset( vvenc::PresetMode::MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
