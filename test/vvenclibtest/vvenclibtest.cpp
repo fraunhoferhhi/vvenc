@@ -171,7 +171,7 @@ void fillEncoderParameters( VVEncParameter& cVVEncParameter )
   cVVEncParameter.usePictureTimingSEIEnabled   = false;
 }
 */
-void fillEncoderParameters( EncCfg& rcEncCfg, bool callInitCfgParameter = true )
+void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true )
 {
   rcEncCfg.m_QP                         = 32;                  // quantization parameter 0-51
   rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
@@ -214,7 +214,7 @@ void fillInputPic( YUVBuffer& cYuvBuffer, const short val = 512 )
 }
 
 template< typename T, typename V = int>
-int testParamList( const std::string& w, T& testParam, EncCfg& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
+int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
 {
   VVEnc cVVEnc;
   const int numFails = g_numFails;
@@ -241,7 +241,7 @@ int testParamList( const std::string& w, T& testParam, EncCfg& vvencParams, cons
 
 int testLibParameterRanges()
 {
-  EncCfg vvencParams;
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams, false );
 
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2 } );
@@ -355,7 +355,7 @@ int callingOrderInvalidUninit()
 int callingOrderInitNoUninit()
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams;  
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams, true );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
@@ -367,7 +367,7 @@ int callingOrderInitNoUninit()
 int callingOrderInitTwice()
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams; // 
+  VVEncCfg vvencParams; //
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ))
   {
@@ -384,7 +384,7 @@ int callingOrderNoInit()
 {
   VVEnc cVVEnc;
   AccessUnit cAU;
-  EncCfg vvencParams;  
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
   YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   bool encodeDone = false;
@@ -398,7 +398,7 @@ int callingOrderNoInit()
 int callingOrderRegular()
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams;  
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
@@ -423,7 +423,7 @@ int callingOrderRegular()
 int callingOrderRegularInitPass()
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams;  
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ) )
   {
@@ -451,7 +451,7 @@ int callingOrderRegularInitPass()
 int callingOrderRegularInit2Pass()
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams;
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
 
   vvencParams.m_RCNumPasses = 2;
@@ -515,7 +515,7 @@ int testLibCallingOrder()
 int inputBufTest( YUVBuffer& cYuvPicture )
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams;  
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ))
   {
@@ -608,7 +608,7 @@ int invaildInputInvalidChromaStride( )
 int invaildInputBuf( )
 {
   VVEnc cVVEnc;
-  EncCfg vvencParams;  
+  VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
   if( 0 != cVVEnc.init( vvencParams ))
   {

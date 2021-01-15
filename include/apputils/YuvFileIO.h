@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include "apputils/apputilsDecl.h"
 #include "vvenc/vvencDecl.h"
-#include "vvenc/EncCfgExpert.h"
+#include "vvenc/vvencCfgExpert.h"
 
 //! \ingroup Interface
 //! \{

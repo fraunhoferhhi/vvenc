@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencDecl.h"
 
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 namespace vvenc {
 
@@ -141,8 +141,8 @@ public:
 typedef struct VVENC_DECL AccessUnit
 {
   std::vector<uint8_t> payload;
-  uint64_t        cts           = 0;        ///< composition time stamp in TicksPerSecond (see VVCEncoderParameter)
-  uint64_t        dts           = 0;        ///< decoding time stamp in TicksPerSecond (see VVCEncoderParameter)
+  uint64_t        cts           = 0;        ///< composition time stamp in TicksPerSecond (see VVEncCfg)
+  uint64_t        dts           = 0;        ///< decoding time stamp in TicksPerSecond (see VVEncCfg)
   bool            ctsValid      = false;    ///< composition time stamp valid flag (true: valid, false: CTS not set)
   bool            dtsValid      = false;    ///< decoding time stamp valid flag (true: valid, false: DTS not set)
   bool            rap           = false;    ///< random access point flag (true: AU is random access point, false: sequential access)
@@ -164,7 +164,7 @@ class VVEncImpl;
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcEnc provides the encoder's user interface. The simplest way to use the encoder is to call init() to initialize an encoder instance with the
-  the given VVCEncoderParameters. After initialization the encoding of the video is performed by using the encode() method to hand over frame by frame in display order
+  the given VVEncCfg. After initialization the encoding of the video is performed by using the encode() method to hand over frame by frame in display order
   and retrieve the compressed bitstream chunks of already processed pictures. The encoding can be end by calling flush() that causes the encoder to finish encoding of all pending pictures.
   Finally calling uninit() releases all allocated resources held by the encoder internally.
   Beside the basic functionality of encoding there are some more methods available.
@@ -188,12 +188,12 @@ public:
     The method fails if the encoder is already initialized or if the assigned parameter struct
     does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
     insufficient CPU-capabilities.
-    \param[in]  rcEncCfg const reference of EncCfg struct that holds initial encoder parameters.
+    \param[in]  rcVVEncCfg const reference of VVEncCfg struct that holds initial encoder parameters.
     \param[in]  ptrYUVWriterIf pointer to callback interface YUVWriteIf used to emit reconstruced samples.  
     \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
     \pre        The encoder must not be initialized.
   */
-   int init( const EncCfg& rcEncCfg, YUVWriterIf* ptrYUVWriterIf = nullptr );
+   int init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* ptrYUVWriterIf = nullptr );
   /**
     This method initializes the encoder instance in dependency to the encoder pass.
   */
@@ -229,11 +229,11 @@ public:
    /**
      This method fetches the current encoder configuration.
      The method fails if the encoder is not initialized.
-     \param[in]  rcVVCEncoderParameter reference to an VVCEncoderParameter struct that returns the current encoder setup.
+     \param[in]  rcVVEncCfg reference to an VVEncCfg struct that returns the current encoder setup.
      \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
      \pre        The encoder has to be initialized.
    */
-   int getConfig( EncCfg& rcVVEncParameter );
+   int getConfig( VVEncCfg& rcVVEncCfg );
 
     /**
      This method reconfigures the encoder instance.
@@ -241,13 +241,13 @@ public:
      Some parameter changes might require an internal encoder restart, especially when previously used parameter sets VPS, SPS or PPS
      become invalid after the parameter change. If changes are limited to TargetBitRate or QP changes then the encoder continues encoding
      without interruption, using the new parameters. Some parameters e.g. NumTheads are not reconfigurable - in this case the encoder returns an Error.
-     The method fails if the encoder is not initialized or if the assigned parameter set given in VVCEncoderParameter struct
+     The method fails if the encoder is not initialized or if the assigned parameter set given in VVEncCfg struct
      does not pass the consistency and parameter check.
-     \param[in]  rcVVCEncoderParameter const reference to VVCEncoderParameter struct that holds the new encoder parameters.
+     \param[in]  rcVVEncCfg const reference to VVEncCfg struct that holds the new encoder parameters.
      \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
      \pre        The encoder has to be initialized successfully.
    */
-   int reconfig( const EncCfg& rcVVEncParameter );
+   int reconfig( const VVEncCfg& rcVVEncCfg );
 
    /**
      This method checks the passed configuration.
@@ -255,7 +255,7 @@ public:
      \param[in]  rcVVCEncParameter reference to an VVCEncParameter struct that returns the current encoder setup.
      \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
    */
-   int checkConfig( const EncCfg& rcVVEncParameter );
+   int checkConfig( const VVEncCfg& rcVVEncCfg );
 
     /**
      This method returns the last occurred error as a string.

@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -101,7 +101,7 @@ EncSampleAdaptiveOffset::~EncSampleAdaptiveOffset()
 {
 }
 
-void EncSampleAdaptiveOffset::init( const EncCfg& encCfg )
+void EncSampleAdaptiveOffset::init( const VVEncCfg& encCfg )
 {
   m_EncCfg = &encCfg;
 

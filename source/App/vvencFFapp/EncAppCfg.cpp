@@ -78,7 +78,7 @@ namespace po = apputils::df::program_options_lite;
 //// ====================================================================================================================
 
 
-void setPresets( EncCfg* cfg, int preset )
+void setPresets( VVEncCfg* cfg, int preset )
 {
   cfg->initPreset( (PresetMode)preset );
 }
@@ -683,7 +683,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   // setup encoder configuration
   //
 
-  if ( EncCfg::initCfgParameter() )
+  if ( VVEncCfg::initCfgParameter() )
   {
     return false;
   }
@@ -732,7 +732,7 @@ void EncAppCfg::printCfg() const
   msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
   msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
 
-  EncCfg::printCfg();
+  VVEncCfg::printCfg();
   msgApp( NOTICE, "\n");
 
   fflush( stdout );

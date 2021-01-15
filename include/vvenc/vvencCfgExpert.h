@@ -55,8 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include "vvenc/vvencDecl.h"
 
-#include "vvenc/EncCfgExpert.h"
-
 //! \ingroup Interface
 //! \{
 
@@ -272,7 +270,7 @@ struct VVENC_DECL ReshapeCW
 // ====================================================================================================================
 
 /// encoder configuration class
-class VVENC_DECL EncCfgExpert
+class VVENC_DECL VVEncCfgExpert
 {
 public:
 
@@ -537,11 +535,11 @@ public:
   bool                m_picPartitionFlag                        = false;
 public:
 
-  EncCfgExpert()
+  VVEncCfgExpert()
   {
   }
 
-  virtual ~EncCfgExpert()
+  virtual ~VVEncCfgExpert()
   {
   }
 };

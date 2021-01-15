@@ -66,7 +66,7 @@ namespace vvenc {
 // ====================================================================================================================
 class EncPicture;
 class EncCu;
-class EncCfg;
+class VVEncCfg;
 
 /// encoder search class
 class IntraSearch : public IntraPrediction
@@ -134,7 +134,7 @@ private:
 
 protected:
   // interface to option
-  const EncCfg*   m_pcEncCfg;
+  const VVEncCfg* m_pcEncCfg;
 
   // interface to classes
   TrQuant*        m_pcTrQuant;
@@ -147,7 +147,7 @@ protected:
 public:
   IntraSearch();
   ~IntraSearch();
-  void init                       ( const EncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
+  void init                       ( const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
   void setCtuEncRsrc              ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
   void destroy                    ();
 

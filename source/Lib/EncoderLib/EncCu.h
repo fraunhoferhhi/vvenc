@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CABACWriter.h"
 #include "IntraSearch.h"
 #include "InterSearch.h"
@@ -177,7 +177,7 @@ private:
   PelStorage***         m_pRspBuffer;
 
   //  Access channel
-  const EncCfg*         m_pcEncCfg;
+  const VVEncCfg*       m_pcEncCfg;
   IntraSearch           m_cIntraSearch;
   InterSearch           m_cInterSearch;
   RdCost                m_cRdCost;
@@ -208,7 +208,7 @@ public:
   EncCu();
   virtual ~EncCu();
 
-  void  init                  ( const EncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
+  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
   void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
   void  destroy               ();
 

@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <cassert>
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 
 //! \ingroup CommonLib

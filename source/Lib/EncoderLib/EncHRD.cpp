@@ -68,7 +68,7 @@ int EncHRD::xCalcScale(int x)
   return scaleValue;
 }
 
-void EncHRD::initHRDParameters(const EncCfg& encCfg, const SPS& sps)
+void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
 {
 //  if (!encCfg.m_hrdParametersPresent && !encCfg.getCpbSaturationEnabled())
 //  {

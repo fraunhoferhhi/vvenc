@@ -77,7 +77,7 @@ namespace po = apputils::df::program_options_lite;
 //// ====================================================================================================================
 
 
-void setPresets( EncCfg* cfg, int preset )
+void setPresets( VVEncCfg* cfg, int preset )
 {
   cfg->initPreset( (PresetMode)preset );
 }
@@ -203,7 +203,7 @@ const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
 };
 
 
-void setInputBitDepthAndColorSpace( EncCfg* cfg, int dbcs )
+void setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
 {
   switch( dbcs )
   {
@@ -409,7 +409,7 @@ bool vvencappCfg::parseCfg( int argc, char* argv[] )
   // setup encoder configuration
   //
 
-  if ( EncCfg::initCfgParameter() )
+  if ( VVEncCfg::initCfgParameter() )
   {
     return false;
   }
@@ -439,7 +439,7 @@ void vvencappCfg::printCfg() const
   msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
   msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
 
-  vvenc::EncCfg::printCfg();
+  vvenc::VVEncCfg::printCfg();
   msgApp( NOTICE, "\n");
 
   fflush( stdout );

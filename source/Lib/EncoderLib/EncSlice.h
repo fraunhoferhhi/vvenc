@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 struct SAOStatData;
 class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
@@ -92,7 +92,7 @@ class EncSlice
 {
 private:
   // encoder configuration
-  const EncCfg*                m_pcEncCfg;                           ///< encoder configuration class
+  const VVEncCfg*              m_pcEncCfg;                           ///< encoder configuration class
 
   std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
   std::vector<LineEncRsrc*>    m_LineEncRsrc;
@@ -122,7 +122,7 @@ public:
   EncSlice();
   virtual ~EncSlice();
 
-  void    init                ( const EncCfg& encCfg,
+  void    init                ( const VVEncCfg& encCfg,
                                 const SPS& sps,
                                 const PPS& pps,
                                 std::vector<int>* const globalCtuQpVector,

@@ -135,7 +135,7 @@ private:
   int                       m_associatedIRAPPOC;
   NalUnitType               m_associatedIRAPType;
 
-  const EncCfg*             m_pcEncCfg;
+  const VVEncCfg*           m_pcEncCfg;
   HLSWriter                 m_HLSWriter;
   SEIWriter                 m_seiWriter;
   SEIEncoder                m_seiEncoder;
@@ -167,7 +167,7 @@ public:
   EncGOP();
   virtual ~EncGOP();
 
-  void init               ( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
+  void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
   void encodeGOP          ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef, bool flush );
   void encodePicture      ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );

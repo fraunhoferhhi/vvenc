@@ -164,7 +164,7 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
   }
 }
 
-void EncCu::init( const EncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter,
+void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter,
                   std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );

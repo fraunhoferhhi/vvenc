@@ -76,18 +76,18 @@ VVEnc::~VVEnc()
   }
 }
 
-int VVEnc::checkConfig( const EncCfg& rcVVEncParameter )
+int VVEnc::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
-  if( rcVVEncParameter.m_numWppThreads > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
+  if( rcVVEncCfg.m_numWppThreads > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
-  return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
+  return m_pcVVEncImpl->checkConfig( rcVVEncCfg );
 }
 
-int VVEnc::init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf  )
+int VVEnc::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf  )
 {
   if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
-  return m_pcVVEncImpl->init( rcEncCfg, pcYUVWriterIf );
+  return m_pcVVEncImpl->init( rcVVEncCfg, pcYUVWriterIf );
 }
 
 int VVEnc::initPass( int pass )
@@ -116,20 +116,20 @@ int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEnc
   return m_pcVVEncImpl->encode( pcYUVBuffer, rcAccessUnit, rbEncodeDone );
 }
 
-int VVEnc::getConfig( EncCfg& rcVVEncParameter )
+int VVEnc::getConfig( VVEncCfg& rcVVEncCfg )
 {
   if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncCfg ) );
 }
 
-int VVEnc::reconfig( const EncCfg& rcVVEncParameter )
+int VVEnc::reconfig( const VVEncCfg& rcVVEncCfg )
 {
   if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncParameter ) );
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncCfg ) );
 }
 
 std::string VVEnc::getEncoderInfo() const

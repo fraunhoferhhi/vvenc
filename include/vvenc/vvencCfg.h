@@ -43,7 +43,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncCfg.h
+/** \file     vvencCfg.h
     \brief    encoder configuration class (header)
 */
 
@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <sstream>
 #include "vvenc/vvencDecl.h"
-#include "vvenc/EncCfgExpert.h"
+#include "vvenc/vvencCfgExpert.h"
 
 //! \ingroup Interface
 //! \{
@@ -238,7 +238,7 @@ enum NalUnitType
   NAL_UNIT_INVALID
 };
 
-class VVENC_DECL EncCfg : public EncCfgExpert
+class VVENC_DECL VVEncCfg : public VVEncCfgExpert
 {
 public:
   bool                m_confirmFailed                  = false;         ///< state variable
@@ -278,17 +278,17 @@ public:
   int                 m_threadCount;
 public:
 
-  EncCfg()
+  VVEncCfg()
   {
   }
-  virtual ~EncCfg()
+  virtual ~VVEncCfg()
   {
   }
 
   bool checkExperimental( bool bflag, const char* message );
   bool confirmParameter ( bool bflag, const char* message );
   bool initCfgParameter();
-  void setCfgParameter( const EncCfg& encCfg );
+  void setCfgParameter( const VVEncCfg& encCfg );
   int  initPreset( PresetMode preset );
 
   bool isRateCtr() const { return m_RCRateControlMode; } // th remove this

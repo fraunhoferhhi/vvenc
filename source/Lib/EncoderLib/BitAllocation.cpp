@@ -329,7 +329,7 @@ static int getLumaLevelBasedDeltaQP (const Pel avgLumaValue, const uint32_t bitD
 
 // public functions
 
-int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const EncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
+int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
                                             int optChromaQPOffset[2], const bool isHDR /*= false*/)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
@@ -393,7 +393,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const EncCfg* en
   return savedLumaQP;
 }
 
-int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encCfg, const int savedQP, const double lambda, std::vector<int>& ctuPumpRedQP,
+int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda, std::vector<int>& ctuPumpRedQP,
                                           const bool forceFrameWiseQPA,
                                           const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, const bool isHDR /*= false*/)
 {
@@ -580,7 +580,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
   return adaptedSliceQP;
 }
 
-int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const EncCfg* encCfg, const Area& lumaArea, const bool isHDR /*= false*/)
+int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, const bool isHDR /*= false*/)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerSub = 0.0;
@@ -659,7 +659,7 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   return pumpingReducQP;
 }
 
-double BitAllocation::getPicVisualActivity (const Slice* slice, const EncCfg* encCfg, const PelBuf* origBuf /*= nullptr*/)
+double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const PelBuf* origBuf /*= nullptr*/)
 {
   Picture* const pic    = (slice != nullptr ? slice->pic : nullptr);
 
