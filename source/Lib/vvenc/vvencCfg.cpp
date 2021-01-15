@@ -45,11 +45,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     EncCfg.cpp
+/** \file     VVEncCfg.cpp
     \brief    encoder configuration class
 */
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-bool EncCfg::confirmParameter( bool bflag, const char* message )
+bool VVEncCfg::confirmParameter( bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
@@ -70,7 +70,7 @@ bool EncCfg::confirmParameter( bool bflag, const char* message )
   return true;
 }
 
-bool EncCfg::checkExperimental( bool bflag, const char* message )
+bool VVEncCfg::checkExperimental( bool bflag, const char* message )
 {
   if( !bflag )
     return false;
@@ -79,7 +79,7 @@ bool EncCfg::checkExperimental( bool bflag, const char* message )
   return true;
 }
 
-bool EncCfg::initCfgParameter()
+bool VVEncCfg::initCfgParameter()
 {
 #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
@@ -1453,12 +1453,12 @@ bool EncCfg::initCfgParameter()
   return( m_confirmFailed );
 }
 
-void EncCfg::setCfgParameter( const EncCfg& encCfg )
+void VVEncCfg::setCfgParameter( const VVEncCfg& encCfg )
 {
   *this = encCfg;
 }
 
-int EncCfg::initPreset( PresetMode preset )
+int VVEncCfg::initPreset( PresetMode preset )
 {
   m_qpInValsCb.clear();
   m_qpInValsCb.push_back( 17 );
@@ -1857,7 +1857,7 @@ static inline std::string getCostFunctionStr( int cost )
   return cT;
 }
 
-void EncCfg::printCfg() const
+void VVEncCfg::printCfg() const
 {
   msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_PadSourceWidth - m_confWinLeft - m_confWinRight, m_PadSourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
   msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_PadSourceWidth, m_PadSourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );

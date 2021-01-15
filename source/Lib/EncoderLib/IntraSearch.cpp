@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/Reshape.h"
 #include <math.h>
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -79,7 +79,7 @@ IntraSearch::IntraSearch()
 {
 }
 
-void IntraSearch::init(const EncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache )
+void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache )
 {
   IntraPrediction::init( encCfg.m_internChromaFormat, encCfg.m_internalBitDepth[ CH_L ] );
 

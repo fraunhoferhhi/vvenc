@@ -91,10 +91,10 @@ void EncLib::xResetLib()
   m_TicksPerFrameMul4 = 0;
 }
 
-void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
+void EncLib::initEncoderLib( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 {
   // copy config parameter
-  const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
+  const_cast<VVEncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
   m_cBckCfg.setCfgParameter( encCfg );
 
   m_yuvWriterIf = yuvWriterIf;
@@ -343,7 +343,7 @@ void EncLib::xUninitLib()
 void EncLib::xSetRCEncCfg( int pass )
 {
   // restore encoder configuration for second rate control passes
-  const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
+  const_cast<VVEncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
 
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
@@ -360,7 +360,7 @@ void EncLib::xSetRCEncCfg( int pass )
     // restore MCTF
     m_cBckCfg.m_MCTF              = mctf;
 
-    std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
+    std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
 

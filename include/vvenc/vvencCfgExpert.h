@@ -55,12 +55,39 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include "vvenc/vvencDecl.h"
 
-#include "vvenc/vvencConfig.h"
-
 //! \ingroup Interface
 //! \{
 
 namespace vvenc {
+
+
+// ====================================================================================================================
+
+static const int MAX_GOP                         = 64; ///< max. value of hierarchical GOP size
+static const int MAX_NUM_REF_PICS                = 29; ///< max. number of pictures used for reference
+static const int MAX_TLAYER                      =  7; ///< Explicit temporal layer QP offset - max number of temporal layer
+static const int MAX_NUM_CQP_MAPPING_TABLES      =  3; ///< Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
+static const int MAX_NUM_ALF_ALTERNATIVES_CHROMA =  8;
+static const int MCTF_RANGE                      =  2; ///< max number of frames used for MCTF filtering in forward / backward direction
+
+// ====================================================================================================================
+
+
+enum ChannelType
+{
+  CH_L = 0,
+  CH_C = 1,
+  MAX_NUM_CH = 2
+};
+
+enum ChromaFormat
+{
+  CHROMA_400        = 0,
+  CHROMA_420        = 1,
+  CHROMA_422        = 2,
+  CHROMA_444        = 3,
+  NUM_CHROMA_FORMAT = 4
+};
 
 
 enum FastInterSearchMode
@@ -88,6 +115,15 @@ enum CostMode
   COST_SEQUENCE_LEVEL_LOSSLESS     = 1,
   COST_LOSSLESS_CODING             = 2,
   COST_MIXED_LOSSLESS_LOSSY_CODING = 3
+};
+
+enum HashType
+{
+  HASHTYPE_MD5        = 0,
+  HASHTYPE_CRC        = 1,
+  HASHTYPE_CHECKSUM   = 2,
+  HASHTYPE_NONE       = 3,
+  NUMBER_OF_HASHTYPES = 4
 };
 
 // ====================================================================================================================
@@ -234,7 +270,7 @@ struct VVENC_DECL ReshapeCW
 // ====================================================================================================================
 
 /// encoder configuration class
-class VVENC_DECL EncCfgExpert
+class VVENC_DECL VVEncCfgExpert
 {
 public:
 
@@ -484,7 +520,6 @@ public:
   bool                m_MCTFFutureReference                     = true;
   int                 m_MCTFNumLeadFrames                       = 0;
   int                 m_MCTFNumTrailFrames                      = 0;
-  SegmentMode         m_SegmentMode                             = SEG_OFF;
   std::vector<int>    m_MCTFFrames;
   std::vector<double> m_MCTFStrengths;
 
@@ -500,11 +535,11 @@ public:
   bool                m_picPartitionFlag                        = false;
 public:
 
-  EncCfgExpert()
+  VVEncCfgExpert()
   {
   }
 
-  virtual ~EncCfgExpert()
+  virtual ~VVEncCfgExpert()
   {
   }
 };

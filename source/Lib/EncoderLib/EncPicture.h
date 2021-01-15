@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 class EncGOP;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ class EncGOP;
 class EncPicture
 {
   private:
-    const EncCfg*           m_pcEncCfg;
+    const VVEncCfg*         m_pcEncCfg;
     EncSlice                m_SliceEncoder;
     LoopFilter              m_LoopFilter;
     EncAdaptiveLoopFilter   m_ALF;
@@ -83,7 +83,7 @@ class EncPicture
     {}
     virtual ~EncPicture() {}
 
-    void      init          ( const EncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
+    void      init          ( const VVEncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
                               const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP = nullptr );
     EncSlice* getEncSlice   () { return &m_SliceEncoder; }
 

@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
 namespace vvenc {
@@ -74,7 +74,7 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf );
+  int init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf );
 
   int initPass( int pass );
   int uninit();
@@ -83,9 +83,9 @@ public:
 
   int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
 
-  int getConfig( EncCfg& rcVVEncParameter ) const;
-  int checkConfig( const EncCfg& rcVVEncParameter );
-  int reconfig( const EncCfg& rcVVEncParameter );
+  int getConfig( VVEncCfg& rcVVEncCfg ) const;
+  int checkConfig( const VVEncCfg& rcVVEncCfg );
+  int reconfig( const VVEncCfg& rcVVEncCfg );
 
   int setAndRetErrorMsg( int Ret );
 
@@ -112,7 +112,7 @@ public:
 
 private:
 
-  int xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString ) const;
+  int xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const;
 
   int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
@@ -120,7 +120,7 @@ private:
   bool                   m_bInitialized         = false;
   bool                   m_bFlushed             = false;
 
-  EncCfg                 m_cEncCfg;
+  VVEncCfg              m_cVVEncCfg;
 
   std::string            m_cErrorString;
   std::string            m_sEncoderCapabilities;

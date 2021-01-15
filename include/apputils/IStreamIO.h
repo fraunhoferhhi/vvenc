@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include <vvenc/vvenc.h>
-#include <vvenc/EncCfg.h>
+#include <vvenc/vvencCfg.h>
 
 //! \ingroup Interface
 //! \{
@@ -240,13 +240,13 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 // ====================================================================================================================
 
 
-typedef void (*setParamFunc) (vvenc::EncCfg*, int);
+typedef void (*setParamFunc) (vvenc::VVEncCfg*, int);
 
 template<typename E>
 class IStreamToFunc
 {
   public:
-    IStreamToFunc( setParamFunc func, vvenc::EncCfg* encCfg, const std::vector<SVPair<E>>* m, const E _default )
+    IStreamToFunc( setParamFunc func, vvenc::VVEncCfg* encCfg, const std::vector<SVPair<E>>* m, const E _default )
       : mfunc( func )
       , mencCfg( encCfg )
       , toMap( m )
@@ -271,7 +271,7 @@ class IStreamToFunc
 
   private:
     setParamFunc                  mfunc;
-    vvenc::EncCfg*                mencCfg;
+    vvenc::VVEncCfg*              mencCfg;
     const std::vector<SVPair<E>>* toMap;
     E                             dstVal;
 };

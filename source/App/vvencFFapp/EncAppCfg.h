@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 using namespace vvenc;
 
@@ -61,7 +61,7 @@ using namespace vvenc;
 // ====================================================================================================================
 
 /// encoder configuration class
-class EncAppCfg : public EncCfg
+class EncAppCfg : public VVEncCfg
 {
 public:
   std::string  m_inputFileName;                                ///< source file name

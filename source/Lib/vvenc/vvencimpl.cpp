@@ -90,28 +90,28 @@ VVEncImpl::~VVEncImpl()
 
 }
 
-int VVEncImpl::getConfig( EncCfg& rcVVEncParameter ) const
+int VVEncImpl::getConfig( VVEncCfg& rcVVEncCfg ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
-  rcVVEncParameter = m_cEncCfg;
+  rcVVEncCfg = m_cVVEncCfg;
   return VVENC_OK;
 }
 
-int VVEncImpl::reconfig( const EncCfg& rcVVEncParameter )
+int VVEncImpl::reconfig( const VVEncCfg& rcVVEncCfg )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   return VVENC_ERR_NOT_SUPPORTED;
 }
 
-int VVEncImpl::checkConfig( const EncCfg& rcVVEncParameter )
+int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
-  int iRet = xCheckParameter( rcVVEncParameter, m_cErrorString );
+  int iRet = xCheckParameter( rcVVEncCfg, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
-  EncCfg cEncCfg = rcVVEncParameter;
+  VVEncCfg cVVVVEncCfg = rcVVEncCfg;
  
-  if ( cEncCfg.initCfgParameter() )
+  if ( cVVVVEncCfg.initCfgParameter() )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -119,7 +119,7 @@ int VVEncImpl::checkConfig( const EncCfg& rcVVEncParameter )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf )
+int VVEncImpl::init( const VVEncCfg& rcVVVVEncCfg, YUVWriterIf* pcYUVWriterIf )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -127,22 +127,22 @@ int VVEncImpl::init( const EncCfg& rcEncCfg, YUVWriterIf* pcYUVWriterIf )
   std::string simdOpt;
   std::string curSimd = setSIMDExtension( simdOpt );
 
-  int iRet = xCheckParameter( rcEncCfg, m_cErrorString );
+  int iRet = xCheckParameter( rcVVVVEncCfg, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
 
-  m_cEncCfg = rcEncCfg;
+  m_cVVEncCfg = rcVVVVEncCfg;
 
   // initialize the encoder
-  //m_cEncoderIf.initEncoderLib( m_cEncCfg );
+  //m_cEncoderIf.initEncoderLib( m_cVVEncCfg );
   m_pEncLib = new EncLib;
 
   try
   {
-    m_pEncLib->initEncoderLib( m_cEncCfg, pcYUVWriterIf );
+    m_pEncLib->initEncoderLib( m_cVVEncCfg, pcYUVWriterIf );
   }
   catch( std::exception& e )
   {
@@ -230,7 +230,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
     {
       if( pcYUVBuffer->planes[1].ptr == nullptr ||
           pcYUVBuffer->planes[2].ptr == nullptr )
@@ -240,13 +240,13 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       }
     }
 
-    if( pcYUVBuffer->planes[0].width != m_cEncCfg.m_SourceWidth )
+    if( pcYUVBuffer->planes[0].width != m_cVVEncCfg.m_SourceWidth )
     {
       m_cErrorString = "InputPicture: unsupported width";
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( pcYUVBuffer->planes[0].height != m_cEncCfg.m_SourceHeight )
+    if( pcYUVBuffer->planes[0].height != m_cVVEncCfg.m_SourceHeight )
     {
       m_cErrorString = "InputPicture: unsupported height";
       return VVENC_ERR_UNSPECIFIED;
@@ -258,9 +258,9 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
     {
-      if( m_cEncCfg.m_internChromaFormat == CHROMA_444 )
+      if( m_cVVEncCfg.m_internChromaFormat == CHROMA_444 )
       {
         if( pcYUVBuffer->planes[1].stride && pcYUVBuffer->planes[0].width > pcYUVBuffer->planes[1].stride )
         {
@@ -373,12 +373,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cEncCfg.m_MCTFNumLeadFrames;
+  return m_cVVEncCfg.m_MCTFNumLeadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cEncCfg.m_MCTFNumTrailFrames;
+  return m_cVVEncCfg.m_MCTFNumTrailFrames;
 }
 
 int VVEncImpl::printConfig() const
@@ -386,7 +386,7 @@ int VVEncImpl::printConfig() const
   if( !m_bInitialized )       { return -1; }
   if( nullptr == m_pEncLib )  { return -1; }
 
-  m_cEncCfg.printCfg();
+  m_cVVEncCfg.printCfg();
   return 0;
 }
 
@@ -402,65 +402,65 @@ int VVEncImpl::printSummary() const
 std::string VVEncImpl::getPresetParamsAsStr( int iQuality )
 {
   std::stringstream css;
-  vvenc::EncCfg cEncCfg;
-  if( 0 != cEncCfg.initPreset( (PresetMode)iQuality ))
+  vvenc::VVEncCfg cVVEncCfg;
+  if( 0 != cVVEncCfg.initPreset( (PresetMode)iQuality ))
   {
     css << "undefined preset " << iQuality;
     return css.str();
   }
 
 // tools
-  if( cEncCfg.m_RDOQ )           { css << "RDOQ " << cEncCfg.m_RDOQ << " ";}
-  if( cEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
-  if( cEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
-  if( cEncCfg.m_alf )
+  if( cVVEncCfg.m_RDOQ )           { css << "RDOQ " << cVVEncCfg.m_RDOQ << " ";}
+  if( cVVEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
+  if( cVVEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
+  if( cVVEncCfg.m_alf )
   {
     css << "ALF ";
-    if( cEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
-    if( cEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
+    if( cVVEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
+    if( cVVEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
   }
-  if( cEncCfg.m_ccalf ){ css << "CCALF ";}
+  if( cVVEncCfg.m_ccalf ){ css << "CCALF ";}
 
 // vvc tools
-  if( cEncCfg.m_BDOF )             { css << "BIO ";}
-  if( cEncCfg.m_DMVR )             { css << "DMVR ";}
-  if( cEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
-  if( cEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cEncCfg.m_AMVRspeed << " ";}
-  if( cEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
-  if( cEncCfg.m_EDO )              { css << "EncDbOpt ";}
-  if( cEncCfg.m_MRL )              { css << "MRL ";}
-  if( cEncCfg.m_MCTF )             { css << "MCTF "; }
-  if( cEncCfg.m_SMVD )             { css << "SMVD " << cEncCfg.m_SMVD << " ";}
-  if( cEncCfg.m_Affine )
+  if( cVVEncCfg.m_BDOF )             { css << "BIO ";}
+  if( cVVEncCfg.m_DMVR )             { css << "DMVR ";}
+  if( cVVEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
+  if( cVVEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cVVEncCfg.m_AMVRspeed << " ";}
+  if( cVVEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
+  if( cVVEncCfg.m_EDO )              { css << "EncDbOpt ";}
+  if( cVVEncCfg.m_MRL )              { css << "MRL ";}
+  if( cVVEncCfg.m_MCTF )             { css << "MCTF "; }
+  if( cVVEncCfg.m_SMVD )             { css << "SMVD " << cVVEncCfg.m_SMVD << " ";}
+  if( cVVEncCfg.m_Affine )
   {
-    css << "Affine " << cEncCfg.m_Affine << " ";
-    if( cEncCfg.m_PROF )           { css << "(Prof " << cEncCfg.m_PROF << " ";}
-    if( cEncCfg.m_AffineType )     { css << "Type " << cEncCfg.m_AffineType << ") ";}
+    css << "Affine " << cVVEncCfg.m_Affine << " ";
+    if( cVVEncCfg.m_PROF )           { css << "(Prof " << cVVEncCfg.m_PROF << " ";}
+    if( cVVEncCfg.m_AffineType )     { css << "Type " << cVVEncCfg.m_AffineType << ") ";}
   }
 
-  if( cEncCfg.m_MMVD )             { css << "MMVD " << cEncCfg.m_MMVD << " ";}
-  if( cEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
+  if( cVVEncCfg.m_MMVD )             { css << "MMVD " << cVVEncCfg.m_MMVD << " ";}
+  if( cVVEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
 
-  if( cEncCfg.m_MIP )          { css << "MIP ";}
-  if( cEncCfg.m_useFastMIP )   { css << "FastMIP " << cEncCfg.m_useFastMIP << " ";}
-  if( cEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
-  if( cEncCfg.m_Geo )          { css << "Geo " << cEncCfg.m_Geo << " ";}
-  if( cEncCfg.m_LFNST )        { css << "LFNST ";}
+  if( cVVEncCfg.m_MIP )          { css << "MIP ";}
+  if( cVVEncCfg.m_useFastMIP )   { css << "FastMIP " << cVVEncCfg.m_useFastMIP << " ";}
+  if( cVVEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
+  if( cVVEncCfg.m_Geo )          { css << "Geo " << cVVEncCfg.m_Geo << " ";}
+  if( cVVEncCfg.m_LFNST )        { css << "LFNST ";}
 
-  if( cEncCfg.m_SBT )          { css << "SBT " ;}
-  if( cEncCfg.m_CIIP )         { css << "CIIP ";}
-  if (cEncCfg.m_ISP)           { css << "ISP "; }
-  if (cEncCfg.m_TS)            { css << "TS "; }
-  if (cEncCfg.m_useBDPCM)      { css << "BDPCM "; }
+  if( cVVEncCfg.m_SBT )          { css << "SBT " ;}
+  if( cVVEncCfg.m_CIIP )         { css << "CIIP ";}
+  if (cVVEncCfg.m_ISP)           { css << "ISP "; }
+  if (cVVEncCfg.m_TS)            { css << "TS "; }
+  if (cVVEncCfg.m_useBDPCM)      { css << "BDPCM "; }
 
   // fast tools
-  if( cEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
+  if( cVVEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
 
   return css.str();
 }
 
 /* converting sdk params to internal (wrapper) params*/
-int VVEncImpl::xCheckParameter( const EncCfg& rcSrc, std::string& rcErrorString ) const
+int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const
 {
   // check src params
   ROTPARAMS( rcSrc.m_QP < 0 || rcSrc.m_QP > 51,                                             "qp must be between 0 - 51."  );

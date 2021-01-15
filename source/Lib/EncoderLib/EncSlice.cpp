@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/NoMallocThreadPool.h"
 
 #include <math.h>
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -90,7 +90,7 @@ struct LineEncRsrc
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
-  LineEncRsrc( const EncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
+  LineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
 };
 
 struct PerThreadRsrc
@@ -169,7 +169,7 @@ EncSlice::~EncSlice()
   m_saoStatData.clear();
 }
 
-void EncSlice::init( const EncCfg& encCfg,
+void EncSlice::init( const VVEncCfg& encCfg,
                      const SPS& sps,
                      const PPS& pps,
                      std::vector<int>* const globalCtuQpVector,

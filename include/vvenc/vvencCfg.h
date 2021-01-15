@@ -43,35 +43,23 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/**
-  \ingroup vvencExternalInterfaces
-  \file    vvenc.h
-  \brief   This file contains the external interface of the hhivvcdec SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/08/2020
+/** \file     vvencCfg.h
+    \brief    encoder configuration class (header)
 */
 
 #pragma once
 
-#include "vvenc/vvencDecl.h"
-#include <cstdint>
-#include <cstdarg>
-#include <string>
+#include <cstring>
 #include <vector>
+#include <string>
+#include <sstream>
+#include "vvenc/vvencDecl.h"
+#include "vvenc/vvencCfgExpert.h"
+
+//! \ingroup Interface
+//! \{
 
 namespace vvenc {
-
-
-// ====================================================================================================================
-
-static const int MAX_GOP                         = 64; ///< max. value of hierarchical GOP size
-static const int MAX_NUM_REF_PICS                = 29; ///< max. number of pictures used for reference
-static const int MAX_TLAYER                      =  7; ///< Explicit temporal layer QP offset - max number of temporal layer
-static const int MAX_NUM_CQP_MAPPING_TABLES      =  3; ///< Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
-static const int MAX_NUM_ALF_ALTERNATIVES_CHROMA =  8;
-static const int MCTF_RANGE                      =  2; ///< max number of frames used for MCTF filtering in forward / backward direction
-
-// ====================================================================================================================
 
 
 /**
@@ -90,6 +78,40 @@ enum MsgLevel
   DETAILS = 6
 };
 
+
+enum PresetMode
+{
+ NONE      = -1,
+ FASTER    = 0,
+ FAST      = 1,
+ MEDIUM    = 2,
+ SLOW      = 3,
+ SLOWER    = 4,
+ FIRSTPASS = 254,
+ TOOLTEST  = 255,
+};
+
+/**
+  \ingroup VVEnc
+  The class SliceType enumerates several supported slice types.
+*/
+enum SliceType
+{
+  B_SLICE               = 0,
+  P_SLICE               = 1,
+  I_SLICE               = 2,
+  NUMBER_OF_SLICE_TYPES = 3
+};
+
+enum ComponentID
+{
+  COMP_Y          = 0,
+  COMP_Cb         = 1,
+  COMP_Cr         = 2,
+  MAX_NUM_COMP    = 3,
+  COMP_JOINT_CbCr = MAX_NUM_COMP,
+  MAX_NUM_TBLOCKS = MAX_NUM_COMP
+};
 
 /**
   \ingroup VVEncExternalInterfaces
@@ -148,50 +170,6 @@ enum Level
   LEVEL15_5 = 255,
 };
 
-/**
-  \ingroup VVEncExternalInterfaces
-  \enum chroma
-  chroma formats (according to semantics of chroma_format_idc)
-*/
-enum ChromaFormat
-{
-  CHROMA_400        = 0,
-  CHROMA_420        = 1,
-  CHROMA_422        = 2,
-  CHROMA_444        = 3,
-  NUM_CHROMA_FORMAT = 4
-};
-
-enum ComponentID
-{
-  COMP_Y          = 0,
-  COMP_Cb         = 1,
-  COMP_Cr         = 2,
-  MAX_NUM_COMP    = 3,
-  COMP_JOINT_CbCr = MAX_NUM_COMP,
-  MAX_NUM_TBLOCKS = MAX_NUM_COMP
-};
-
-enum ChannelType
-{
-  CH_L = 0,
-  CH_C = 1,
-  MAX_NUM_CH = 2
-};
-
-
-/**
-  \ingroup VVEnc
-  The class SliceType enumerates several supported slice types.
-*/
-enum SliceType
-{
-  B_SLICE               = 0,
-  P_SLICE               = 1,
-  I_SLICE               = 2,
-  NUMBER_OF_SLICE_TYPES = 3
-};
-
 
 /// supported IDR types
 enum DecodingRefreshType
@@ -202,15 +180,21 @@ enum DecodingRefreshType
   DRT_RECOVERY_POINT_SEI = 3
 };
 
-enum HashType
+enum RateControlMode
 {
-  HASHTYPE_MD5        = 0,
-  HASHTYPE_CRC        = 1,
-  HASHTYPE_CHECKSUM   = 2,
-  HASHTYPE_NONE       = 3,
-  NUMBER_OF_HASHTYPES = 4
+  RCM_OFF           = 0,
+  RCM_CTU_LEVEL     = 1,
+  RCM_PICTURE_LEVEL = 2,
+  RCM_GOP_LEVEL     = 3
 };
 
+enum SegmentMode
+{
+  SEG_OFF,
+  SEG_FIRST,
+  SEG_MID,
+  SEG_LAST
+};
 
 enum NalUnitType
 {
@@ -254,35 +238,61 @@ enum NalUnitType
   NAL_UNIT_INVALID
 };
 
-enum PresetMode
+class VVENC_DECL VVEncCfg : public VVEncCfgExpert
 {
- NONE      = -1,
- FASTER    = 0,
- FAST      = 1,
- MEDIUM    = 2,
- SLOW      = 3,
- SLOWER    = 4,
- FIRSTPASS = 254,
- TOOLTEST  = 255,
-};
+public:
+  bool                m_confirmFailed                  = false;         ///< state variable
 
-enum SegmentMode
-{
-  SEG_OFF,
-  SEG_FIRST,
-  SEG_MID,
-  SEG_LAST
-};
+  int                 m_verbosity                      = VERBOSE;       ///< encoder verbosity
+  int                 m_framesToBeEncoded              = 0;             ///< number of encoded frames
 
-/**
-  \ingroup VVEncExternalInterfaces
-  \enum ColorFormat
-  The enum ColorFormat enumerates supported input color formats.
-*/
-enum ColorFormat
-{
-  VVC_CF_INVALID       = -1,             ///< invalid color format
-  VVC_CF_YUV420_PLANAR = 0,              ///< YUV420 planar color format
+  int                 m_FrameRate                      = 0;             ///< source frame-rates (Hz)
+  int                 m_FrameSkip                      = 0;             ///< number of skipped frames from the beginning
+  int                 m_SourceWidth                    = 0;             ///< source width in pixel
+  int                 m_SourceHeight                   = 0;             ///< source height in pixel (when interlaced = field height)
+  int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
+  bool                m_AccessUnitDelimiter            = false;         ///< add Access Unit Delimiter NAL units
+
+  Profile             m_profile                        = Profile::MAIN_10;
+  Tier                m_levelTier                      = Tier::TIER_MAIN ;
+  Level               m_level                          = Level::LEVEL4_1;
+
+  int                 m_IntraPeriod                    = 32;            ///< period of I-slice (random access period)
+  int                 m_IntraPeriodSec                 = 1;             ///< period of I-slice in seconds (random access period)
+  DecodingRefreshType m_DecodingRefreshType            = DRT_CRA;       ///< random access type
+  int                 m_GOPSize                        = 32;            ///< GOP size of hierarchical structure
+
+  int                 m_QP                             = 32;            ///< QP value of key-picture (integer)
+  unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
+  bool                m_usePerceptQPATempFiltISlice    = false;         ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+
+  RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode 
+  int                 m_RCNumPasses                    = 1;
+  int                 m_RCTargetBitrate                = 0;
+
+  SegmentMode         m_SegmentMode                    = SEG_OFF;
+
+  int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
+  int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
+
+  int                 m_threadCount;
+public:
+
+  VVEncCfg()
+  {
+  }
+  virtual ~VVEncCfg()
+  {
+  }
+
+  bool checkExperimental( bool bflag, const char* message );
+  bool confirmParameter ( bool bflag, const char* message );
+  bool initCfgParameter();
+  void setCfgParameter( const VVEncCfg& encCfg );
+  int  initPreset( PresetMode preset );
+
+  bool isRateCtr() const { return m_RCRateControlMode; } // th remove this
+  virtual void printCfg() const;
 };
 
 static inline ChannelType toChannelType             (const ComponentID id)                         { return ((int)id==(int)COMP_Y)? CH_L : CH_C;                     }
@@ -325,5 +335,7 @@ static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int fra
 }
 
 
-} // namespace
+} // namespace vvenc
+
+//! \}
 

@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 
 // ====================================================================================================================
 // Class definition
@@ -100,7 +100,7 @@ public:
   virtual ~EncSampleAdaptiveOffset();
 
   //interface
-  void init                  ( const EncCfg& encCfg );
+  void init                  ( const VVEncCfg& encCfg );
   void initSlice             ( const Slice* slice );
   void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
 
@@ -124,7 +124,7 @@ private:
 
 private:
 
-  const EncCfg* m_EncCfg;
+  const VVEncCfg* m_EncCfg;
 
   //for RDO
   CABACWriter*  m_CABACEstimator;
