@@ -471,7 +471,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     if ( m_wppMutex ) m_wppMutex->unlock();
   }
 
-  if ( m_pcEncCfg->isRateCtr() )
+  if ( m_pcEncCfg->m_RCRateControlMode )
   {
     m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
   }
@@ -1400,7 +1400,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 
 void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr )
 {
-  if ( !m_pcEncCfg->isRateCtr() )
+  if ( !m_pcEncCfg->m_RCRateControlMode )
   {
     return;
   }
@@ -1457,7 +1457,7 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
 
 void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr )
 {
-  if ( !m_pcEncCfg->isRateCtr() )
+  if ( !m_pcEncCfg->m_RCRateControlMode )
   {
     return;
   }

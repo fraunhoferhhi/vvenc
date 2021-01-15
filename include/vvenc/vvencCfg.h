@@ -281,7 +281,6 @@ public:
   void setCfgParameter( const VVEncCfg& encCfg );
   int  initPreset( PresetMode preset );
 
-  bool isRateCtr() const { return m_RCRateControlMode; } // th remove this
   virtual void printCfg() const;
   static std::string getPresetParamsAsStr( PresetMode preset );
 };

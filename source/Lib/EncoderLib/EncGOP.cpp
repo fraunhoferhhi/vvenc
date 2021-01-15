@@ -1725,7 +1725,7 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
 
 void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
 {
-  if ( !m_pcEncCfg->isRateCtr() ) // TODO: does this work with multiple slices and slice-segments?
+  if ( !m_pcEncCfg->m_RCRateControlMode ) // TODO: does this work with multiple slices and slice-segments?
   {
     return;
   }
