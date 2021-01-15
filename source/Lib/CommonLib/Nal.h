@@ -47,7 +47,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <sstream>
 #include <list>
-#include "vvenc/vvencConfig.h"
 #include "vvenc/vvenc.h"
 
 //! \ingroup Interface

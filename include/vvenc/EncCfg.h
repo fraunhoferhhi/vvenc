@@ -62,13 +62,181 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 
-  enum RateControlMode
-  {
-    RCM_OFF           = 0,
-    RCM_CTU_LEVEL     = 1,
-    RCM_PICTURE_LEVEL = 2,
-    RCM_GOP_LEVEL     = 3
-  };
+/**
+  \ingroup VVEncExternalInterfaces
+  \enum MsgLevel
+  The enum MsgLevel enumerates supported log levels/verbosity.
+*/
+enum MsgLevel
+{
+  SILENT  = 0,
+  ERROR   = 1,
+  WARNING = 2,
+  INFO    = 3,
+  NOTICE  = 4,
+  VERBOSE = 5,
+  DETAILS = 6
+};
+
+
+enum PresetMode
+{
+ NONE      = -1,
+ FASTER    = 0,
+ FAST      = 1,
+ MEDIUM    = 2,
+ SLOW      = 3,
+ SLOWER    = 4,
+ FIRSTPASS = 254,
+ TOOLTEST  = 255,
+};
+
+/**
+  \ingroup VVEnc
+  The class SliceType enumerates several supported slice types.
+*/
+enum SliceType
+{
+  B_SLICE               = 0,
+  P_SLICE               = 1,
+  I_SLICE               = 2,
+  NUMBER_OF_SLICE_TYPES = 3
+};
+
+enum ComponentID
+{
+  COMP_Y          = 0,
+  COMP_Cb         = 1,
+  COMP_Cr         = 2,
+  MAX_NUM_COMP    = 3,
+  COMP_JOINT_CbCr = MAX_NUM_COMP,
+  MAX_NUM_TBLOCKS = MAX_NUM_COMP
+};
+
+/**
+  \ingroup VVEncExternalInterfaces
+  \enum Profile
+  The enum Profile enumerates supported profiles
+*/
+enum Profile
+{
+  PROFILE_NONE                         = 0,
+  MAIN_10                              = 1,
+  MAIN_10_STILL_PICTURE                = 2,
+  MAIN_10_444                          = 3,
+  MAIN_10_444_STILL_PICTURE            = 4,
+  MULTILAYER_MAIN_10                   = 5,
+  MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
+  MULTILAYER_MAIN_10_444               = 7,
+  MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
+  PROFILE_AUTO
+};
+
+
+/**
+  \ingroup VVEncExternalInterfaces
+  \enum Tier
+  The enum Tier enumerates supported tier
+*/
+enum Tier
+{
+  TIER_MAIN = 0,
+  TIER_HIGH = 1,
+  NUMBER_OF_TIERS
+};
+
+/**
+  \ingroup VVEncExternalInterfaces
+  \enum Name
+  The enum Name enumerates supported level names
+*/
+enum Level
+{
+  LEVEL_NONE = 0,
+  LEVEL1   = 16,
+  LEVEL2   = 32,
+  LEVEL2_1 = 35,
+  LEVEL3   = 48,
+  LEVEL3_1 = 51,
+  LEVEL4   = 64,
+  LEVEL4_1 = 67,
+  LEVEL5   = 80,
+  LEVEL5_1 = 83,
+  LEVEL5_2 = 86,
+  LEVEL6   = 96,
+  LEVEL6_1 = 99,
+  LEVEL6_2 = 102,
+  LEVEL6_3 = 105,
+  LEVEL15_5 = 255,
+};
+
+
+/// supported IDR types
+enum DecodingRefreshType
+{
+  DRT_NONE               = 0,
+  DRT_CRA                = 1,
+  DRT_IDR                = 2,
+  DRT_RECOVERY_POINT_SEI = 3
+};
+
+enum RateControlMode
+{
+  RCM_OFF           = 0,
+  RCM_CTU_LEVEL     = 1,
+  RCM_PICTURE_LEVEL = 2,
+  RCM_GOP_LEVEL     = 3
+};
+
+enum SegmentMode
+{
+  SEG_OFF,
+  SEG_FIRST,
+  SEG_MID,
+  SEG_LAST
+};
+
+enum NalUnitType
+{
+  NAL_UNIT_CODED_SLICE_TRAIL = 0,   // 0
+  NAL_UNIT_CODED_SLICE_STSA,        // 1
+  NAL_UNIT_CODED_SLICE_RADL,        // 2
+  NAL_UNIT_CODED_SLICE_RASL,        // 3
+
+  NAL_UNIT_RESERVED_VCL_4,
+  NAL_UNIT_RESERVED_VCL_5,
+  NAL_UNIT_RESERVED_VCL_6,
+
+  NAL_UNIT_CODED_SLICE_IDR_W_RADL,  // 7
+  NAL_UNIT_CODED_SLICE_IDR_N_LP,    // 8
+  NAL_UNIT_CODED_SLICE_CRA,         // 9
+  NAL_UNIT_CODED_SLICE_GDR,         // 10
+
+  NAL_UNIT_RESERVED_IRAP_VCL_11,
+  NAL_UNIT_RESERVED_IRAP_VCL_12,
+  NAL_UNIT_DCI,                     // 13
+  NAL_UNIT_VPS,                     // 14
+  NAL_UNIT_SPS,                     // 15
+  NAL_UNIT_PPS,                     // 16
+  NAL_UNIT_PREFIX_APS,              // 17
+  NAL_UNIT_SUFFIX_APS,              // 18
+  NAL_UNIT_PH,                      // 19
+  NAL_UNIT_ACCESS_UNIT_DELIMITER,   // 20
+  NAL_UNIT_EOS,                     // 21
+  NAL_UNIT_EOB,                     // 22
+  NAL_UNIT_PREFIX_SEI,              // 23
+  NAL_UNIT_SUFFIX_SEI,              // 24
+  NAL_UNIT_FD,                      // 25
+
+  NAL_UNIT_RESERVED_NVCL_26,
+  NAL_UNIT_RESERVED_NVCL_27,
+
+  NAL_UNIT_UNSPECIFIED_28,
+  NAL_UNIT_UNSPECIFIED_29,
+  NAL_UNIT_UNSPECIFIED_30,
+  NAL_UNIT_UNSPECIFIED_31,
+  NAL_UNIT_INVALID
+};
 
 class VVENC_DECL EncCfg : public EncCfgExpert
 {
@@ -102,6 +270,8 @@ public:
   int                 m_RCNumPasses                    = 1;
   int                 m_RCTargetBitrate                = 0;
 
+  SegmentMode         m_SegmentMode                    = SEG_OFF;
+
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
 
@@ -124,6 +294,45 @@ public:
   bool isRateCtr() const { return m_RCRateControlMode; } // th remove this
   virtual void printCfg() const;
 };
+
+static inline ChannelType toChannelType             (const ComponentID id)                         { return ((int)id==(int)COMP_Y)? CH_L : CH_C;                     }
+static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return ((int)id==(int)COMP_Y || (fmt==CHROMA_444)) ? 0 : 1;     }
+static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return ((int)id==(int)COMP_Y || (fmt!=CHROMA_420)) ? 0 : 1;     }
+static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
+static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
+static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
+static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
+static inline int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
+{
+  int w = frameWidth;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: w = 0;      break;
+      case CHROMA_420:
+      case CHROMA_422: w = w >> 1; break;
+      default: break;
+    }
+  }
+  return w;
+}
+
+static inline int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case CHROMA_400: h = 0;      break;
+      case CHROMA_420: h = h >> 1; break;
+      case CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
+}
 
 
 } // namespace vvenc

@@ -55,6 +55,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <fstream>
 #include <algorithm>
+#include <cstdarg>
+
 #include "apputils/ParseArg.h"
 #include "apputils/IStreamIO.h"
 #include "vvenc/vvenc.h"

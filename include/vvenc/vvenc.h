@@ -60,7 +60,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include "vvenc/EncCfg.h"
-#include "vvenc/vvencConfig.h"
 
 namespace vvenc {
 
@@ -98,7 +97,7 @@ struct VVENC_DECL YUVBuffer
     int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
   };
 
-  Plane     planes[ MAX_NUM_COMP ];
+  Plane     planes[ 3 ];
   uint64_t  sequenceNumber  = 0;      ///< sequence number of the picture
   uint64_t  cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
   bool      ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
@@ -139,7 +138,6 @@ public:
   where the NalUnits are separated by three byte start codes.
   The Buffer to retrieve the compressed video chunks has to be allocated by the caller. The related attribute BufSize
 */
-
 typedef struct VVENC_DECL AccessUnit
 {
   std::vector<uint8_t> payload;
@@ -316,6 +314,9 @@ public:
 private:
    VVEncImpl*  m_pcVVEncImpl;
 };
+
+
+
 
 
 
