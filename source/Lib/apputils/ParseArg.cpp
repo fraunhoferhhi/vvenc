@@ -348,9 +348,22 @@ namespace df
       unsigned extra_argc_consumed = 0;
       if (arg_opt_sep == std::string::npos)
       {
+        // check if we have a 
+        if( argc > 1)
+        {
+          std::string val(argv[1]);
+          if( std::string::npos == val.find_first_of('-') )
+          {
+            extra_argc_consumed++;
+            /* argument occurs after option_sep */
+            storePair(true, false, option, val);
+            return extra_argc_consumed;
+          }
+        }
+
         /* no argument found => argument in argv[1] (maybe) */
         /* xxx, need to handle case where option isn't required */
-        if(!storePair(true, false, option, "1"))
+        if(!storePair(true, false, option, ""))
         {
           return 0;
         }

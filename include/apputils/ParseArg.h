@@ -177,6 +177,29 @@ namespace df
       opt_storage = arg;
     }
 
+    template<>
+    inline void
+    Option<bool>::parse(const std::string& arg, ErrorReporter&)
+    {
+      if( arg.empty() )
+      {
+        opt_storage = true;
+      }
+      else
+      {
+        std::istringstream arg_ss (arg,std::istringstream::in);
+        arg_ss.exceptions(std::ios::failbit);
+        try
+        {
+          arg_ss >> opt_storage;
+        }
+        catch (...)
+        {
+          throw ParseFailure(opt_string, arg);
+        }
+      }
+    }
+
     /** Option class for argument handling using a user provided function */
     struct OptionFunc : public OptionBase
     {
