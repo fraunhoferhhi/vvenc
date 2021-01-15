@@ -86,7 +86,6 @@ public:
   bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
 
   virtual void printCfg() const;
-  void printAppCfgOnly() const;
 
 private:
 

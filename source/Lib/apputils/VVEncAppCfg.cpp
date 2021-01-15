@@ -953,15 +953,6 @@ void VVEncAppCfg::printCfg() const
   fflush( stdout );
 }
 
-void VVEncAppCfg::printAppCfgOnly() const
-{
-  msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
-  msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
-
-  fflush( stdout );
-}
-
 } // namespace
 
 //! \}

@@ -121,7 +121,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  rcVVEncAppCfg.printAppCfgOnly();
+  rcVVEncAppCfg.printCfg();
 
   return true;
 }
@@ -218,8 +218,6 @@ int main( int argc, char* argv[] )
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
     return iRet;
   }
-
-  cVVEnc.printConfig();
 
   if( vvencappCfg.m_verbosity > vvenc::WARNING )
   {
