@@ -63,6 +63,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 using namespace std;
+using namespace vvenc;
 
 //! \ingroup EncoderApp
 //! \{
@@ -93,7 +94,7 @@ bool EncApp::parseCfg( int argc, char* argv[] )
 {
   try
   {
-    if( ! m_cEncAppCfg.parseCfg( argc, argv ) )
+    if( ! m_cEncAppCfg.parseCfgFF( argc, argv ) )
     {
       return false;
     }

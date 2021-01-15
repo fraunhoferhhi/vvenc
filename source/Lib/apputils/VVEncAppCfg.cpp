@@ -45,7 +45,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     EncAppCfg.cpp
+/** \file     VVEncAppCfg.cpp
     \brief    Handle encoder configuration parameters
 */
 
@@ -59,15 +59,18 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/ParseArg.h"
 #include "apputils/IStreamIO.h"
+#include "apputils/VVEncAppCfg.h"
 #include "vvenc/vvenc.h"
-
-#include "EncAppCfg.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
 
 using namespace std;
+using namespace vvenc;
 namespace po = apputils::df::program_options_lite;
+
+
+namespace apputils {
 
 //! \ingroup EncoderApp
 //! \{
@@ -78,7 +81,7 @@ namespace po = apputils::df::program_options_lite;
 //// ====================================================================================================================
 
 
-void setPresets( VVEncCfg* cfg, int preset )
+void VVEncAppCfg::setPresets( VVEncCfg* cfg, int preset )
 {
   cfg->initPreset( (PresetMode)preset );
 }
@@ -178,6 +181,10 @@ const std::vector<SVPair<HashType>> HashTypeToEnumMap =
 
 const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
 {
+  { "none",                  DRT_NONE },
+  { "cra",                   DRT_CRA },
+  { "idr",                   DRT_IDR },
+  { "rpsei",                 DRT_RECOVERY_POINT_SEI },
   { "0",                     DRT_NONE },
   { "1",                     DRT_CRA },
   { "2",                     DRT_IDR },
@@ -192,12 +199,220 @@ const std::vector<SVPair<RateControlMode>> RateControlModeToEnumMap =
   { "3",                     RCM_GOP_LEVEL },
 };
 
+enum BitDepthAndColorSpace
+{
+  YUV420_8,
+  YUV420_10,
+  YUV422_8,
+  YUV422_10,
+  YUV444_8,
+  YUV444_10,
+  YUV400_8,
+  YUV400_10,
+};
+
+
+void VVEncAppCfg::setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
+{
+  switch( dbcs )
+  {
+  case YUV420_8 :  cfg->m_internChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 : cfg->m_internChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV422_8 :  cfg->m_internChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 : cfg->m_internChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :  cfg->m_internChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 : cfg->m_internChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :  cfg->m_internChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 : cfg->m_internChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  default: break;
+  }
+}
+
+const std::vector<SVPair<BitDepthAndColorSpace>> InputBitColorSpaceToIntMap =
+{
+  { "yuv420",                    YUV420_8 },
+  { "yuv420_10",                 YUV420_10 },
+};
 
 // ====================================================================================================================
 // Public member functions
-// ====================================================================================================================  virtual ~EncAppCfg()
-EncAppCfg::~EncAppCfg()
+// ====================================================================================================================  virtual ~VVEncAppCfg()
+VVEncAppCfg::~VVEncAppCfg()
 {
+}
+
+/** \param  argc        number of arguments
+    \param  argv        array of arguments
+    \retval             true when success
+ */
+bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
+{
+  bool do_help                = false;
+  bool do_expert_help         = false;
+  int  warnUnknowParameter    = 0;
+
+  //
+  // link custom formated configuration parameters with istream reader
+  //
+  IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
+  IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
+
+  IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
+  IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
+  IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
+  IStreamToEnum<CostMode>      toCostMode                   ( &m_costMode,                    &CostModeToEnumMap     );
+  IStreamToEnum<ChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
+  IStreamToEnum<ChromaFormat>  toInternCoFormat             ( &m_internChromaFormat,          &ChromaFormatToEnumMap  );
+  IStreamToEnum<HashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
+  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap );
+
+  IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &InputBitColorSpaceToIntMap, YUV420_8);
+  IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
+
+  //
+  // setup configuration parameters
+  //
+
+  std::string ignoreParams;
+  po::Options opts;
+  opts.addOptions()
+  ("help",              do_help,                  "this help text")
+  ("fullhelp",          do_expert_help,           "expert help text")
+  ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness")
+
+  ("input,i",           m_inputFileName,          "original YUV input file name")
+  ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
+  ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
+
+  ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
+
+  ("frames,f",          m_framesToBeEncoded,      "max. frames to encode (default=all)")
+  ("frameskip",         m_FrameSkip,              "Number of frames to skip at start of input YUV")
+  ("segment",           toSegment,                "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
+
+  ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, ( 1..27000000)")
+
+  ("output,o",          m_bitstreamFileName,      "Bitstream output file name")
+
+  ("preset",            toPreset,                 "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
+
+  ("bitrate,b",         m_RCTargetBitrate,        "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
+  ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2) " )
+  ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
+  ("qpa,-qpa",          m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+
+  ("threads,-t",        m_numWppThreads,          "Number of threads")
+
+  ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
+  ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
+  ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period in seconds")
+  ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames, (-1: only first frame)")
+
+
+  ("profile",           toProfile,                "select profile (main10, main10_stillpic)")
+  ("level",             toLevel,                  "Level limit to be used, eg 5.1, or none")
+  ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
+   ;
+
+  po::setDefaults( opts );
+  std::ostringstream easyOpts;
+  po::doHelp( easyOpts, opts );
+
+  opts.addOptions()
+  ("internal-bitdepth",                               m_internalBitDepth[0],                            "internal bitdepth (8,10)")
+  ;
+
+  po::setDefaults( opts );
+  std::ostringstream fullOpts;
+  po::doHelp( fullOpts, opts );
+
+
+  //
+  // parse command line parameters and read configuration files
+  //
+
+  po::setDefaults( opts );
+  po::ErrorReporter err;
+  const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
+  for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
+  {
+    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+  }
+  if ( argc == 1 || do_help )
+  {
+    /* argc == 1: no options have been specified */
+    cout <<  easyOpts.str();
+    return false;
+  }
+  if ( argc == 1 || do_expert_help )
+  {
+    /* argc == 1: no options have been specified */
+    cout << fullOpts.str();
+    return false;
+  }
+  if ( err.is_errored && ! warnUnknowParameter )
+  {
+    /* error report has already been printed on stderr */
+    return false;
+  }
+
+  //
+  // check own parameters
+  //
+
+  m_confirmFailed = false;
+  confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (--output=bit.266)" );
+
+  if ( m_confirmFailed )
+  {
+    return false;
+  }
+
+
+  //
+  // set intern derived parameters (for convenience purposes only)
+  //
+
+  if( m_numWppThreads < 0 )
+  {
+    if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
+    {
+      m_numWppThreads = 6;
+    }
+    else
+    {
+      m_numWppThreads = 4;
+    }
+    m_ensureWppBitEqual = 1;
+  }
+
+  if(  m_RCTargetBitrate )
+  {
+    m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
+    m_RCKeepHierarchicalBit = 2;
+    m_RCUseLCUSeparateModel = 1;
+    m_RCInitialQP           = 0;
+    m_RCForceIntraQP        = 0;
+  }
+
+  // this has to be set outside
+
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  {
+    m_internChromaFormat = m_inputFileChromaFormat;
+  }
+
+  //
+  // setup encoder configuration
+  //
+
+  if ( VVEncCfg::initCfgParameter() )
+  {
+    return false;
+  }
+
+
+  return true;
 }
 
 
@@ -205,7 +420,7 @@ EncAppCfg::~EncAppCfg()
     \param  argv        array of arguments
     \retval             true when success
  */
-bool EncAppCfg::parseCfg( int argc, char* argv[] )
+bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 {
   bool do_help                = false;
   bool do_expert_help         = false;
@@ -710,7 +925,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   return true;
 }
 
-void EncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
+void VVEncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
 {
   if ( m_verbosity >= level )
   {
@@ -718,7 +933,7 @@ void EncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
   }
 }
 
-void EncAppCfg::msgApp( int level, const char* fmt, ... ) const
+void VVEncAppCfg::msgApp( int level, const char* fmt, ... ) const
 {
     va_list args;
     va_start( args, fmt );
@@ -726,7 +941,7 @@ void EncAppCfg::msgApp( int level, const char* fmt, ... ) const
     va_end( args );
 }
 
-void EncAppCfg::printCfg() const
+void VVEncAppCfg::printCfg() const
 {
   msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
   msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
@@ -738,7 +953,7 @@ void EncAppCfg::printCfg() const
   fflush( stdout );
 }
 
-void EncAppCfg::printAppCfgOnly() const
+void VVEncAppCfg::printAppCfgOnly() const
 {
   msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
   msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
@@ -746,6 +961,8 @@ void EncAppCfg::printAppCfgOnly() const
 
   fflush( stdout );
 }
+
+} // namespace
 
 //! \}
 

@@ -43,7 +43,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncAppCfg.h
+/** \file     VVEncAppCfg.h
     \brief    Handle encoder configuration parameters (header)
 */
 
@@ -51,9 +51,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvencCfg.h"
 
-using namespace vvenc;
+namespace apputils {
 
-//! \ingroup EncoderApp
+//! \ingroup apputils
 //! \{
 
 // ====================================================================================================================
@@ -61,24 +61,30 @@ using namespace vvenc;
 // ====================================================================================================================
 
 /// encoder configuration class
-class vvencappCfg : public VVEncCfg
+class VVEncAppCfg : public vvenc::VVEncCfg
 {
 public:
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
-  ChromaFormat m_inputFileChromaFormat = CHROMA_420;
-  bool         m_clipOutputVideoToRec709Range = false;
+  std::string  m_reconFileName;                                ///< output reconstruction file
+  vvenc::ChromaFormat m_inputFileChromaFormat  = vvenc::CHROMA_420;
+  bool         m_bClipInputVideoToRec709Range  = false;
+  bool         m_bClipOutputVideoToRec709Range = false;
+  bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_decode                        = false;
 
 public:
 
-  vvencappCfg()
+  VVEncAppCfg()
   {
   }
 
-  virtual ~vvencappCfg();
+  virtual ~VVEncAppCfg();
 
 public:
-  bool parseCfg( int argc, char* argv[] );                    ///< parse configuration file to fill member variables
+  bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
+  bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+
   virtual void printCfg() const;
   void printAppCfgOnly() const;
 
@@ -87,7 +93,11 @@ private:
   void msgFnc( int level, const char* fmt, va_list args ) const;
   void msgApp( int level, const char* fmt, ... ) const;
 
+  static void setPresets( VVEncCfg* cfg, int preset );
+  static void setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs );
 };
+
+} // namespace
 
 //! \}
 

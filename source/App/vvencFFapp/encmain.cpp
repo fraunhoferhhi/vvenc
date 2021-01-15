@@ -111,7 +111,7 @@ int main(int argc, char* argv[])
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  msgApp( INFO, " started @ %s", std::ctime(&startTime2) );
+  msgApp( vvenc::INFO, " started @ %s", std::ctime(&startTime2) );
   clock_t startClock = clock();
 
   // call encoding function
@@ -124,12 +124,12 @@ int main(int argc, char* argv[])
   }
   catch( std::exception &e )
   {
-    msgApp( ERROR, "%s\n", e.what() );
+    msgApp( vvenc::ERROR, "%s\n", e.what() );
     return 1;
   }
   catch( ... )
   {
-    msgApp( ERROR, "Unspecified error occurred\n" );
+    msgApp( vvenc::ERROR, "Unspecified error occurred\n" );
     return 1;
   }
 #endif
@@ -141,8 +141,8 @@ int main(int argc, char* argv[])
 
   delete pcEncApp;
 
-  msgApp( INFO, "\n finished @ %s", std::ctime(&endTime2) );
-  msgApp( INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
+  msgApp( vvenc::INFO, "\n finished @ %s", std::ctime(&endTime2) );
+  msgApp( vvenc::INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
 
   return 0;
 }

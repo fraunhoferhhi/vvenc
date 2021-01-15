@@ -68,8 +68,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "apputils/ParseArg.h"
 #include "apputils/YuvFileIO.h"
-
-#include "vvencappCfg.h"
+#include "apputils/VVEncAppCfg.h"
 
 int g_verbosity = vvenc::VERBOSE;
 
@@ -107,22 +106,22 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 }
 
 
-bool parseCfg( int argc, char* argv[], vvencappCfg& rvvencappCfg )
+bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
 {
   try
   {
-    if( ! rvvencappCfg.parseCfg( argc, argv ) )
+    if( ! rcVVEncAppCfg.parseCfg( argc, argv ) )
     {
       return false;
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
-    msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
+    msgApp( vvenc::ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
 
-  rvvencappCfg.printAppCfgOnly();
+  rcVVEncAppCfg.printAppCfgOnly();
 
   return true;
 }
@@ -154,7 +153,7 @@ int main( int argc, char* argv[] )
 
   simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
 
-  vvencappCfg    vvencappCfg;                      ///< encoder configuration
+  apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
 
   vvencappCfg.m_QP                  = 32;                       // quantization parameter 0-51
   vvencappCfg.m_SourceWidth         = 1920;                     // luminance width of input picture
@@ -275,13 +274,14 @@ int main( int argc, char* argv[] )
 
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
-    if( 0 != cYuvFileInput.open( cInputFile, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0], vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_clipOutputVideoToRec709Range, false ) )
+    if( 0 != cYuvFileInput.open( cInputFile, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0],
+                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
       return -1;
     }
 
-    YUVBufferStorage cYUVInputBuffer( vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
+    vvenc::YUVBufferStorage cYUVInputBuffer( vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
 
     const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - cVVEnc.getNumLeadFrames(), 0 );
     const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();

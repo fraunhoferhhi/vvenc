@@ -613,7 +613,7 @@ bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
   bool is16bit              = m_fileBitdepth > 8;
   bool nonZeroBitDepthShift = m_bitdepthShift != 0;
 
-  YUVBufferStorage yuvScaled( m_bufferChrFmt, yuvOutBuf.planes[ COMP_Y ].width, yuvOutBuf.planes[ COMP_Y ].height ); 
+  YUVBufferStorage yuvScaled( m_bufferChrFmt, yuvOutBuf.planes[ COMP_Y ].width, yuvOutBuf.planes[ COMP_Y ].height );
 
   if ( nonZeroBitDepthShift )
   {
