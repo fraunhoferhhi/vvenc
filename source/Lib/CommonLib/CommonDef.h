@@ -597,7 +597,7 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
-extern std::function<void( int, const char*, va_list )> g_msgFnc;
+extern std::function<void( int, const char*, char* )> g_msgFnc;
 
 inline void msg( int level, const char* fmt, ... )
 {
