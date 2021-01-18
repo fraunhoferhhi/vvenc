@@ -277,11 +277,14 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 
   std::string ignoreParams;
   po::Options opts;
+  opts.setSubSection("General Options");
   opts.addOptions()
   ("help",              do_help,                  "this help text")
   ("fullhelp",          do_full_help,             "show full text")
   ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
-
+  ;
+  opts.setSubSection("Input Options");
+  opts.addOptions()
   ("input,i",           m_inputFileName,          "original YUV input file name")
   ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
   ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
@@ -295,15 +298,19 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
                                                   "first: first segment           \n"
                                                   "mid  : all segments between first and last segment\n"
                                                   "last : last segment")
-
+  ;
+  opts.setSubSection("Output Options");
+  opts.addOptions()
   ("output,o",          m_bitstreamFileName,      "Bitstream output file name")
-
+  ;
+  opts.setSubSection("Encoder Options");
+  opts.addOptions()
   ("preset",            toPreset,                 "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
 
   ("bitrate,b",         m_RCTargetBitrate,        "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
   ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2) " )
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
-  ("qpa,-qpa",          m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+  ("qpa",               m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
 
   ("threads,-t",        m_numWppThreads,          "Number of threads default: [size <= HD: 4, UHD: 6]")
 

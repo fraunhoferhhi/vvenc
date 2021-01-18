@@ -254,6 +254,14 @@ namespace df
       typedef std::map<std::string, NamesPtrList> NamesMap;
       NamesMap opt_long_map;
       NamesMap opt_short_map;
+
+      void setSubSection(std::string subSection);
+
+      typedef std::list<std::string> subSectionsPtrList;
+      subSectionsPtrList subSections_list;
+      
+      typedef std::map<std::string, std::list<std::string> > SubSectionNamesListMap;
+      SubSectionNamesListMap sub_section_namelist_map;
     };
 
     /* Class with templated overloaded operator(), for use by Options::addOptions() */
