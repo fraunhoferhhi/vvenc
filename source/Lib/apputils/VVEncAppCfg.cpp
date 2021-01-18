@@ -128,19 +128,25 @@ const std::vector<SVPair<Level>> LevelToEnumMap =
 {
   { "none",                    Level::LEVEL_NONE},
   { "1",                       Level::LEVEL1   },
+  { "1.0",                     Level::LEVEL1   },
   { "2",                       Level::LEVEL2   },
+  { "2.0",                     Level::LEVEL2   },
   { "2.1",                     Level::LEVEL2_1 },
   { "3",                       Level::LEVEL3   },
+  { "3.0",                     Level::LEVEL3   },
   { "3.1",                     Level::LEVEL3_1 },
   { "4",                       Level::LEVEL4   },
   { "4.1",                     Level::LEVEL4_1 },
   { "5",                       Level::LEVEL5   },
+  { "5.0",                     Level::LEVEL5   },
   { "5.1",                     Level::LEVEL5_1 },
   { "5.2",                     Level::LEVEL5_2 },
   { "6",                       Level::LEVEL6   },
+  { "6.0",                     Level::LEVEL6   },
   { "6.1",                     Level::LEVEL6_1 },
   { "6.2",                     Level::LEVEL6_2 },
   { "6.3",                     Level::LEVEL6_3 },
+  { "15.5",                    Level::LEVEL15_5 },
 };
 
 const std::vector<SVPair<Tier>> TierToEnumMap =
@@ -248,7 +254,7 @@ VVEncAppCfg::~VVEncAppCfg()
 bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 {
   bool do_help                = false;
-  bool do_expert_help         = false;
+  bool do_full_help           = false;
   int  warnUnknowParameter    = 0;
 
   //
@@ -273,20 +279,22 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   po::Options opts;
   opts.addOptions()
   ("help",              do_help,                  "this help text")
-  ("fullhelp",          do_expert_help,           "expert help text")
-  ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness")
+  ("fullhelp",          do_full_help,             "show full text")
+  ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
 
   ("input,i",           m_inputFileName,          "original YUV input file name")
   ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
   ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
 
   ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
-
-  ("frames,f",          m_framesToBeEncoded,      "max. frames to encode (default=all)")
-  ("frameskip",         m_FrameSkip,              "Number of frames to skip at start of input YUV")
-  ("segment",           toSegment,                "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
-
   ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, ( 1..27000000)")
+
+  ("frames,f",          m_framesToBeEncoded,      "max. frames to encode [all]")
+  ("frameskip",         m_FrameSkip,              "Number of frames to skip at start of input YUV [off]")
+  ("segment",           toSegment,                "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
+                                                  "first: first segment           \n"
+                                                  "mid  : all segments between first and last segment\n"
+                                                  "last : last segment")
 
   ("output,o",          m_bitstreamFileName,      "Bitstream output file name")
 
@@ -297,16 +305,16 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
   ("qpa,-qpa",          m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
 
-  ("threads,-t",        m_numWppThreads,          "Number of threads")
+  ("threads,-t",        m_numWppThreads,          "Number of threads default: [size <= HD: 4, UHD: 6]")
 
   ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
   ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
-  ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period in seconds")
-  ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames, (-1: only first frame)")
+  ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
+  ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
 
 
   ("profile",           toProfile,                "select profile (main10, main10_stillpic)")
-  ("level",             toLevel,                  "Level limit to be used, eg 5.1, or none")
+  ("level",             toLevel,                  "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3 15.5)")
   ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
    ;
 
@@ -325,7 +333,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
 
-
   //
   // parse command line parameters and read configuration files
   //
@@ -343,7 +350,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     cout <<  easyOpts.str();
     return false;
   }
-  if ( argc == 1 || do_expert_help )
+  if ( argc == 1 || do_full_help )
   {
     /* argc == 1: no options have been specified */
     cout << fullOpts.str();
