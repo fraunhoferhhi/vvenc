@@ -379,6 +379,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   // set intern derived parameters (for convenience purposes only)
   //
 
+  // set thread count to default threads, if not set by user
   if( m_numWppThreads < 0 )
   {
     if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
@@ -390,6 +391,36 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
       m_numWppThreads = 4;
     }
     m_ensureWppBitEqual = 1;
+  }
+
+  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
+  m_rewriteParamSets        = true;
+
+  // set MCTF Lead/Trail frames
+  if( m_SegmentMode != SEG_OFF )
+  {
+    if( m_MCTF )
+    {
+      switch( m_SegmentMode )
+      {
+        case SEG_FIRST:
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = MCTF_RANGE;
+          break;
+        case SEG_MID:
+          m_MCTFNumLeadFrames  = MCTF_RANGE;
+          m_MCTFNumTrailFrames = MCTF_RANGE;
+          break;
+        case SEG_LAST:
+          m_MCTFNumLeadFrames  = MCTF_RANGE;
+          m_MCTFNumTrailFrames = 0;
+          break;
+        default:
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = 0;
+          break;
+      }
+    }
   }
 
   if(  m_RCTargetBitrate )
