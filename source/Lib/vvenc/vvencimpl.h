@@ -111,7 +111,7 @@ private:
   bool                   m_bInitialized         = false;
   bool                   m_bFlushed             = false;
 
-  VVEncCfg              m_cVVEncCfg;
+  VVEncCfg               m_cVVEncCfg;
 
   std::string            m_cErrorString;
   std::string            m_sEncoderCapabilities;

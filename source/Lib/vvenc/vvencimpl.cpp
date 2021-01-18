@@ -218,7 +218,6 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
 
   int iRet= VVENC_OK;
 
-  YUVBuffer cYUVBuffer; // internal pic
   bool bFlush = false;
   if( pcYUVBuffer )
   {
@@ -309,7 +308,17 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( rbEncodeDone ){ m_bFlushed = true; }
+  if( rbEncodeDone )
+  {
+    if( bFlush )
+    {
+      m_bFlushed = true;
+    }
+    else
+    {
+      rbEncodeDone = false;
+    }
+  }
 
   /* copy output AU */
   if ( !cAu.empty() )
