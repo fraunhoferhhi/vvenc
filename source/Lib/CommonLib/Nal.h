@@ -129,7 +129,7 @@ struct OutputNALUnit;
 /**
  * A single NALunit, with complete payload in EBSP format.
  */
-struct VVENC_DECL NALUnitEBSP : public NALUnit
+struct NALUnitEBSP : public NALUnit
 {
   std::ostringstream m_nalUnitData;
 
@@ -156,7 +156,7 @@ struct VVENC_DECL NALUnitEBSP : public NALUnit
  * The AccessUnit owns all pointers stored within.  Destroying the
  * AccessUnit will delete all contained objects.
  */
-class VVENC_DECL AccessUnitList : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
+class AccessUnitList : public std::list<NALUnitEBSP*> // NOTE: Should not inherit from STL.
 {
 public:
   AccessUnitList()
