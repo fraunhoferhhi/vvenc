@@ -149,7 +149,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   }
 
   m_bInitialized = true;
-  m_bFlushed     = false;
+  m_eState       = INTERNAL_STATE_INITIALIZED;
   return VVENC_OK;
 }
 
@@ -177,7 +177,7 @@ int VVEncImpl::initPass( int pass )
     }
   }
 
-  m_bFlushed = false;
+  m_eState = INTERNAL_STATE_INITIALIZED;
   return VVENC_OK;
 }
 
@@ -201,7 +201,7 @@ int VVEncImpl::uninit()
   }
 
   m_bInitialized = false;
-  m_bFlushed     = false;
+  m_eState       = INTERNAL_STATE_UNINITIALIZED;
   return VVENC_OK;
 }
 
@@ -213,14 +213,16 @@ bool VVEncImpl::isInitialized() const
 
 int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
 {
-  if( !m_bInitialized )                 { return VVENC_ERR_INITIALIZE; }
-  if( m_bFlushed )                      { m_cErrorString = "encoder already flushed"; return VVENC_ERR_RESTART_REQUIRED; }
+  if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
+  if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
 
   int iRet= VVENC_OK;
 
   bool bFlush = false;
   if( pcYUVBuffer )
   {
+    if( m_eState == INTERNAL_STATE_FLUSHING ) { m_cErrorString = "encoder already received flush indication, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
+
     if( pcYUVBuffer->planes[0].ptr == nullptr )
     {
       m_cErrorString = "InputPicture: invalid input buffers";
@@ -286,9 +288,12 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
         }
       }
     }
+
+    if( m_eState == INTERNAL_STATE_INITIALIZED ){ m_eState = INTERNAL_STATE_ENCODING; }
   }
   else
   {
+    if( m_eState == INTERNAL_STATE_ENCODING ){ m_eState = INTERNAL_STATE_FLUSHING; }
     bFlush = true;
   }
 
@@ -310,9 +315,9 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
 
   if( rbEncodeDone )
   {
-    if( bFlush )
+    if( m_eState == INTERNAL_STATE_FLUSHING )
     {
-      m_bFlushed = true;
+      m_eState = INTERNAL_STATE_FINALIZED;
     }
     else
     {

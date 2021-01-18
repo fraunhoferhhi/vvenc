@@ -68,6 +68,15 @@ class VVEncImpl
 {
 public:
 
+  enum VVEncInternalState
+  {
+    INTERNAL_STATE_UNINITIALIZED = 0,
+    INTERNAL_STATE_INITIALIZED   = 1,
+    INTERNAL_STATE_ENCODING      = 2,
+    INTERNAL_STATE_FLUSHING      = 3,
+    INTERNAL_STATE_FINALIZED     = 4
+  };
+
   VVEncImpl();
   virtual ~VVEncImpl();
 
@@ -108,8 +117,8 @@ private:
   int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:
+  VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
   bool                   m_bInitialized         = false;
-  bool                   m_bFlushed             = false;
 
   VVEncCfg               m_cVVEncCfg;
 

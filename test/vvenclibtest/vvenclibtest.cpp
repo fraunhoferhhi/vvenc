@@ -413,6 +413,55 @@ int callingOrderRegular()
   {
     return -1;
   }
+
+  YUVBuffer* pcYUVBuffer = nullptr;
+  if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
+  {
+    return -1;
+  }
+
+  if( !encodeDone )
+  {
+    return -1;
+  }
+
+  if( 0 != cVVEnc.uninit())
+  {
+    return -1;
+  }
+  return 0;
+}
+
+int callingOrderNotRegular()
+{
+  VVEnc cVVEnc;
+  VVEncCfg vvencParams;
+  fillEncoderParameters( vvencParams );
+  if( 0 != cVVEnc.init( vvencParams ) )
+  {
+    return -1;
+  }
+  AccessUnit cAU;
+  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( cYuvPicture );
+
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  {
+    return -1;
+  }
+
+  YUVBuffer* pcYUVBuffer = nullptr;
+  if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
+  {
+    return -1;
+  }
+
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  {
+    return -1;
+  }
+
   if( 0 != cVVEnc.uninit())
   {
     return -1;
@@ -507,6 +556,8 @@ int testLibCallingOrder()
   testfunc( "callingOrderRegular",         &callingOrderRegular,         false );
   testfunc( "callingOrderRegularInitPass", &callingOrderRegularInitPass, false );
   testfunc( "callingOrderRegularInit2Pass", &callingOrderRegularInit2Pass, false );
+
+  testfunc( "callingOrderNotRegular",       &callingOrderNotRegular,         true );
 
   return 0;
 }
