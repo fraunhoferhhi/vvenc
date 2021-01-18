@@ -164,6 +164,14 @@ int VVEncImpl::initPass( int pass )
     return VVENC_ERR_NOT_SUPPORTED;
   }
 
+  if( pass > 1 && m_eState != INTERNAL_STATE_FINALIZED )
+  {
+    std::stringstream css;
+    css << "initPass(" << pass << ") cannot initPass " << pass << " without having flushed the last pass. flush encoder till all frames are processed";
+    m_cErrorString = css.str();
+    return VVENC_ERR_INITIALIZE;
+  }
+
   if ( m_pEncLib )
   {
     try
