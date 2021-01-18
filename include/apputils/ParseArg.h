@@ -45,11 +45,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 #pragma once
 
+#include "apputils/apputilsDecl.h"
+
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <list>
 #include <map>
+#include <exception>
 
 //! \ingroup Interface
 //! \{
@@ -76,7 +79,7 @@ namespace df
       const char* what() const throw() { return "Option Parse Failure"; }
     };
 
-    struct ErrorReporter
+    struct APPUTILS_DECL ErrorReporter
     {
       ErrorReporter() : is_errored(0) {}
       virtual ~ErrorReporter() {}
@@ -87,7 +90,7 @@ namespace df
 
     extern ErrorReporter default_error_reporter;
 
-    struct SilentReporter : ErrorReporter
+    struct APPUTILS_DECL SilentReporter : ErrorReporter
     {
       SilentReporter() { }
       virtual ~SilentReporter() { }
@@ -96,10 +99,10 @@ namespace df
       std::stringstream dest;
     };
 
-    void doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
-    std::list<const char*> scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
-    void setDefaults(Options& opts);
-    void parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
+    void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
+    std::list<const char*> APPUTILS_DECL scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
+    void APPUTILS_DECL setDefaults(Options& opts);
+    void APPUTILS_DECL parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
 
     /** OptionBase: Virtual base class for storing information relating to a
      * specific option This base class describes common elements.  Type specific
@@ -144,7 +147,7 @@ namespace df
 
     template<typename T>
     inline 
-    const std::string Option<T>::getDefault() 
+    const std::string Option<T>::getDefault()
     { 
       std::ostringstream oss;
       oss << " [" << opt_default_val << "] ";
@@ -225,7 +228,7 @@ namespace df
     };
 
     class OptionSpecific;
-    struct Options
+    struct APPUTILS_DECL Options
     {
       ~Options();
 
@@ -257,7 +260,7 @@ namespace df
     };
 
     /* Class with templated overloaded operator(), for use by Options::addOptions() */
-    class OptionSpecific
+    class APPUTILS_DECL OptionSpecific
     {
     public:
       OptionSpecific(Options& parent_) : parent(parent_) {}
