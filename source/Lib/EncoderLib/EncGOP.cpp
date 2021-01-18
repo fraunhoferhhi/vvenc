@@ -1791,7 +1791,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
-        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && !slice->isIntra() && (sliceQP < MAX_QP) )
+        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
     {
       sliceQP++; // this is a second-pass tuning to stabilize rate control with pQPA
       m_lambda *= pow(2.0,  1.0 / 3.0); // adjust lambda based on change of slice QP

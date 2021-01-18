@@ -521,7 +521,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
         }
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
-      if (encCfg->m_usePerceptQPATempFiltISlice && !slice->isIntra() && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
+      if (encCfg->m_usePerceptQPATempFiltISlice && !slice->isIntra() && (slice->TLayer == 0) && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
       {
         adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
