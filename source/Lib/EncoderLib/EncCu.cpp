@@ -3540,7 +3540,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
 
         CHECK(std::min(uiMergeCand + 1, uiNumMrgSATDCand) != RdModeList.size(), "");
       }
-      double ThesholdCost = MRG_FAST_RATIO * candCostList[0];
+      double ThesholdCost = candCostList.empty() ? 0.0 : (MRG_FAST_RATIO * candCostList[0]);
       if (m_pcEncCfg->m_Affine > 1)
       {
         uiNumMrgSATDCand = int(uiNumMrgSATDCand) > int(candCostList.size()) ? int(candCostList.size()) : int(uiNumMrgSATDCand);
@@ -3558,7 +3558,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
       }
 
       tempCS->initStructData(encTestMode.qp);
-      m_AFFBestSATDCost = candCostList[0];
+      m_AFFBestSATDCost = candCostList.empty() ? 0.0 : candCostList[0];
     }
     else
     {
