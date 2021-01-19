@@ -44,6 +44,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 #pragma once
+#include "apputils/apputilsDecl.h"
 
 #include <iostream>
 #include <sstream>
@@ -61,14 +62,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace apputils {
 
 template<typename E>
-struct SVPair
+struct APPUTILS_DECL SVPair
 {
   const char* str;
   E           value;
 };
 
 template<typename T>
-class IStreamToRefVec
+class APPUTILS_DECL IStreamToRefVec
 {
   public:
     IStreamToRefVec( std::vector<T*> v, bool _allRequired, char _sep = 'x' )
@@ -161,7 +162,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToRefVec<T>& t
 }
 
 template<typename E>
-class IStreamToEnum
+class APPUTILS_DECL IStreamToEnum
 {
   public:
     IStreamToEnum( E* d, const std::vector<SVPair<E>>* m )
@@ -243,7 +244,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 typedef void (*setParamFunc) (vvenc::VVEncCfg*, int);
 
 template<typename E>
-class IStreamToFunc
+class APPUTILS_DECL IStreamToFunc
 {
   public:
     IStreamToFunc( setParamFunc func, vvenc::VVEncCfg* encCfg, const std::vector<SVPair<E>>* m, const E _default )
@@ -319,7 +320,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToFunc<F>& toE
 // ====================================================================================================================
 
 template<typename T>
-class IStreamToVec
+class APPUTILS_DECL IStreamToVec
 {
   public:
     IStreamToVec( std::vector<T>* v )

@@ -48,7 +48,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #pragma once
-
+#include "apputils/apputilsDecl.h"
 #include "vvenc/vvencCfg.h"
 
 namespace apputils {
@@ -61,7 +61,7 @@ namespace apputils {
 // ====================================================================================================================
 
 /// encoder configuration class
-class VVEncAppCfg : public vvenc::VVEncCfg
+class APPUTILS_DECL VVEncAppCfg : public vvenc::VVEncCfg
 {
 public:
   std::string  m_inputFileName;                                ///< source file name

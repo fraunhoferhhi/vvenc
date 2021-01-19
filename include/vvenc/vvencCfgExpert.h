@@ -565,7 +565,7 @@ static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)    
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
 bool   VVENC_DECL  isTracingEnabled();
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-std::string getCompileInfoString();
+std::string VVENC_DECL getCompileInfoString();
 void   VVENC_DECL  decodeBitstream( const std::string& FileName);
 int    VVENC_DECL  getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId );
 int    VVENC_DECL  getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId );
