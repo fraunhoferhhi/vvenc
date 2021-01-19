@@ -51,13 +51,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "EncLib.h"
 
-#include "vvenc/EncoderIf.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
 #include "Utilities/NoMallocThreadPool.h"
-#include "vvenc/EncoderIf.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -93,10 +91,10 @@ void EncLib::xResetLib()
   m_TicksPerFrameMul4 = 0;
 }
 
-void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
+void EncLib::initEncoderLib( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 {
   // copy config parameter
-  const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
+  const_cast<VVEncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
   m_cBckCfg.setCfgParameter( encCfg );
 
   m_yuvWriterIf = yuvWriterIf;
@@ -125,8 +123,8 @@ void EncLib::initEncoderLib( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 #if ENABLE_TIME_PROFILING_PIC_TYPES
     g_timeProfiler = new TimeProfiler2D( 3, 1 );
 #elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
-    int   widthInCTU  = ( m_cEncCfg.m_SourceWidth % m_cEncCfg.m_CTUSize )  ? m_cEncCfg.m_SourceWidth/m_cEncCfg.m_CTUSize  + 1 : m_cEncCfg.m_SourceWidth/m_cEncCfg.m_CTUSize;
-    int   heightInCTU = ( m_cEncCfg.m_SourceHeight % m_cEncCfg.m_CTUSize ) ? m_cEncCfg.m_SourceHeight/m_cEncCfg.m_CTUSize + 1 : m_cEncCfg.m_SourceHeight/m_cEncCfg.m_CTUSize;
+    int   widthInCTU  = ( m_cEncCfg.m_PadSourceWidth % m_cEncCfg.m_CTUSize )  ? m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize  + 1 : m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize;
+    int   heightInCTU = ( m_cEncCfg.m_PadSourceHeight % m_cEncCfg.m_CTUSize ) ? m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize + 1 : m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize;
     g_timeProfiler = new TimeProfiler2D( widthInCTU, heightInCTU, 2 );
 #elif ENABLE_TIME_PROFILING_CU_SHAPES
     g_timeProfiler = new TimeProfiler2D( Log2(m_cEncCfg.m_CTUSize) + 1, Log2(m_cEncCfg.m_CTUSize) + 1, 2 );
@@ -250,7 +248,7 @@ void EncLib::initPass( int pass )
     m_threadPool = new NoMallocThreadPool( maxThreads, "EncSliceThreadPool" );
   }
 
-  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight, sps0.CTUSize,
+  m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
                m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
                m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
                m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
@@ -279,7 +277,7 @@ void EncLib::initPass( int pass )
 
   if ( m_cEncCfg.m_RCRateControlMode )
   {
-    m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_SourceWidth, m_cEncCfg.m_SourceHeight,
+    m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight,
       m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
 
     if ( pass == 1 )
@@ -345,7 +343,7 @@ void EncLib::xUninitLib()
 void EncLib::xSetRCEncCfg( int pass )
 {
   // restore encoder configuration for second rate control passes
-  const_cast<EncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
+  const_cast<VVEncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
 
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
@@ -356,13 +354,13 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
 
     // use fixQP encoding in first pass
-    m_cBckCfg.m_RCRateControlMode = 0;
+    m_cBckCfg.m_RCRateControlMode = RateControlMode::RCM_OFF;
     m_cBckCfg.m_QP                = 32;
 
     // restore MCTF
     m_cBckCfg.m_MCTF              = mctf;
 
-    std::swap( const_cast<EncCfg&>(m_cEncCfg), m_cBckCfg );
+    std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
 
@@ -370,7 +368,7 @@ void EncLib::xSetRCEncCfg( int pass )
 // Public member functions
 // ====================================================================================================================
 
-void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty )
+void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
@@ -398,10 +396,12 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
       pic = xGetNewPicBuffer( pps, sps );
 
-      PelUnitBuf yuvOrgBuf;
-      setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_cEncCfg.m_internChromaFormat );
+      copyPadToPelUnitBuf( pic->getOrigBuf(), yuvInBuf, m_cEncCfg.m_internChromaFormat );
+//      PelUnitBuf yuvOrgBuf;
+//      setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_cEncCfg.m_internChromaFormat );
+//
+//      pic->getOrigBuf().copyFrom( yuvOrgBuf );
 
-      pic->getOrigBuf().copyFrom( yuvOrgBuf );
       if( yuvInBuf.ctsValid )
       {
         pic->cts = yuvInBuf.cts;
@@ -410,7 +410,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
 
-      xDetectScreenC(*pic, yuvOrgBuf, m_cEncCfg.m_TS );
+      xDetectScreenC(*pic, pic->getOrigBuf(), m_cEncCfg.m_TS );
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
@@ -456,11 +456,11 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& a
         iDiffFrames = ( m_numPicsCoded - iNext );
       }
 
-      au.m_uiCts     = encList[0]->cts;
-      au.m_bCtsValid = encList[0]->ctsValid;
+      au.cts     = encList[0]->cts;
+      au.ctsValid = encList[0]->ctsValid;
 
-      au.m_uiDts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.m_uiCts;
-      au.m_bDtsValid = true;
+      au.dts     = ((iDiffFrames - m_GOPSizeLog2) * m_TicksPerFrameMul4)/4 + au.cts;
+      au.dtsValid = true;
     }
 
     // encode picture with current poc
@@ -842,8 +842,8 @@ void EncLib::xInitSPS(SPS &sps) const
   profileTierLevel->subProfileIdc.clear();
   profileTierLevel->subProfileIdc.push_back( m_cEncCfg.m_subProfile );
 
-  sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_SourceWidth;
-  sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_SourceHeight;
+  sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_PadSourceWidth;
+  sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_PadSourceHeight;
   sps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
   sps.chromaFormatIdc               = m_cEncCfg.m_internChromaFormat;
   sps.CTUSize                       = m_cEncCfg.m_CTUSize;
@@ -975,8 +975,8 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   // pps ID already initialised.
   pps.spsId                         = sps.spsId;
   pps.jointCbCrQpOffsetPresent      = m_cEncCfg.m_JointCbCrMode;
-  pps.picWidthInLumaSamples         = m_cEncCfg.m_SourceWidth;
-  pps.picHeightInLumaSamples        = m_cEncCfg.m_SourceHeight;
+  pps.picWidthInLumaSamples         = m_cEncCfg.m_PadSourceWidth;
+  pps.picHeightInLumaSamples        = m_cEncCfg.m_PadSourceHeight;
   if( pps.picWidthInLumaSamples == sps.maxPicWidthInLumaSamples && pps.picHeightInLumaSamples == sps.maxPicHeightInLumaSamples )
   {
     pps.conformanceWindow           = sps.conformanceWindow;

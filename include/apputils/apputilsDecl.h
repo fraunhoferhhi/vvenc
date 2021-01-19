@@ -44,58 +44,24 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \ingroup VVEncExternalInterfaces
-  \file    ParcatSegmentFilter.h
-  \brief   This file contains the internal interface of the hhivvcenc SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/10/2019
-*/
-
+  \file    apputilsDecl.h
+  \brief   This apputilsDecl.h file controls DLL export/import under windows
+ */
+ 
+/// \cond NEVER_DOC
 #pragma once
+/// \endcond
 
-#include <vector>
-#include <stdint.h>
+#if defined( _WIN32 )
+# if defined( APPUTILS_DYN_LINK )
+#   if defined( APPUTILS_SOURCE )
+#     define APPUTILS_DECL __declspec(dllexport)
+#   else
+#     define APPUTILS_DECL __declspec(dllimport)
+#   endif  // APPUTILS_SOURCE
+# endif // APPUTILS_DYN_LINK
+#endif // _WIN32
 
-#include "vvenc/vvencDecl.h"
-
-
-namespace vvenc {
-
-/**
-  \ingroup VVEncExternalInterfaces
-  The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
-  the given VVCDecoderParameters. After initialization the decoding of the video is performed by using the decoder() method to hand over compressed packets (bitstream chunks) in decoding order
-  and retrieve uncompressed pictures. The decoding can be end by calling flush() that causes the decoder to finish decoding of all pending packets.
-  Finally calling uninit() releases all allocated resources held by the decoder internally.
-*/
-class VVENC_DECL ParcatSegmentFilter
-{
-public:
-
-  ParcatSegmentFilter();
-  virtual ~ParcatSegmentFilter();
-
-  std::vector<uint8_t> filter_segment(const std::vector<uint8_t> & v, int idx, int * poc_base, int * last_idr_poc);
-
-private:
-
-  /**
-   Find the beginning and end of a NAL (Network Abstraction Layer) unit in a byte buffer containing H264 bitstream data.
-   @param[in]   buf        the buffer
-   @param[in]   size       the size of the buffer
-   @param[out]  nal_start  the beginning offset of the nal
-   @param[out]  nal_end    the end offset of the nal
-   @return                 the length of the nal, or 0 if did not find start of nal, or -1 if did not find end of nal
-   */
-  // DEPRECATED - this will be replaced by a similar function with a slightly different API
-  int find_nal_unit(const uint8_t* buf, int size, int* nal_start, int* nal_end);
-
-private:
-
-  bool verbose = false;
-};
-
-
-
-} // namespace
-
+#if !defined( APPUTILS_DECL )
+# define APPUTILS_DECL
+#endif

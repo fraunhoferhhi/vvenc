@@ -43,48 +43,60 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     FileIO.h
-    \brief    file I/O class (header)
+/** \file     VVEncAppCfg.h
+    \brief    Handle encoder configuration parameters (header)
 */
 
 #pragma once
+#include "apputils/apputilsDecl.h"
+#include "vvenc/vvencCfg.h"
 
-#include <fstream>
-#include <vector>
-#include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
+namespace apputils {
 
-//! \ingroup Interface
+//! \ingroup apputils
 //! \{
 
-namespace vvenc {
-
+// ====================================================================================================================
+// Class definition
 // ====================================================================================================================
 
-class VVENC_DECL YuvIO
+/// encoder configuration class
+class APPUTILS_DECL VVEncAppCfg : public vvenc::VVEncCfg
 {
-private:
-  std::fstream  m_cHandle;                            ///< file handle
-  int           m_fileBitdepth[ MAX_NUM_CH ];         ///< bitdepth of input/output video file
-  int           m_MSBExtendedBitDepth[ MAX_NUM_CH ];  ///< bitdepth after addition of MSBs (with value 0)
-  int           m_bitdepthShift[ MAX_NUM_CH ];        ///< number of bits to increase or decrease image by before/after write/read
+public:
+  std::string  m_inputFileName;                                ///< source file name
+  std::string  m_bitstreamFileName;                            ///< output bitstream file
+  std::string  m_reconFileName;                                ///< output reconstruction file
+  vvenc::ChromaFormat m_inputFileChromaFormat  = vvenc::CHROMA_420;
+  bool         m_bClipInputVideoToRec709Range  = false;
+  bool         m_bClipOutputVideoToRec709Range = false;
+  bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_decode                        = false;
 
 public:
-  void  open( const std::string &fileName, bool bWriteMode, const int fileBitDepth[ MAX_NUM_CH ], const int MSBExtendedBitDepth[ MAX_NUM_CH ], const int internalBitDepth[ MAX_NUM_CH ] );
-  void  close();
-  bool  isEof();
-  bool  isFail();
-  void  skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int width, int height );
-  bool  readYuvBuf   ( YUVBuffer& yuvInBuf,        const ChromaFormat& inputChFmt,  const ChromaFormat& internChFmt, const int pad[ 2 ], bool bClipToRec709 );
-  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf, const ChromaFormat& internChFmt, const ChromaFormat& outputChFmt, bool bPackedYUVOutputMode, bool bClipToRec709 );
+
+  VVEncAppCfg()
+  {
+  }
+
+  virtual ~VVEncAppCfg();
+
+public:
+  bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
+  bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+
+  virtual void printCfg() const;
+
+private:
+
+  void msgFnc( int level, const char* fmt, va_list args ) const;
+  void msgApp( int level, const char* fmt, ... ) const;
+
+  static void setPresets( VVEncCfg* cfg, int preset );
+  static void setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs );
 };
 
-// ====================================================================================================================
-
-class AccessUnit;
-std::vector<uint32_t> VVENC_DECL writeAnnexB( std::ostream& out, const AccessUnit& au );
-
-} // namespace vvenc
+} // namespace
 
 //! \}
 

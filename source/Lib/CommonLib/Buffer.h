@@ -61,6 +61,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <type_traits>
 #include <typeinfo>
 
+#include "vvenc/vvenc.h"
+
 //! \ingroup CommonLib
 //! \{
 
@@ -1064,7 +1066,8 @@ private:
 struct YUVBuffer;
 struct Window;
 
-void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
+//void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
 void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow );
 
 } // namespace vvenc

@@ -56,15 +56,15 @@ struct SPS; // Forward declaration.
 
 struct LevelTierFeatures
 {
-  Level::Name   level;
+  Level        level;
   uint32_t      maxLumaPs;
-  uint32_t      maxCpb[Level::NUMBER_OF_TIERS];    // in units of CpbVclFactor or CpbNalFactor bits
+  uint32_t      maxCpb[NUMBER_OF_TIERS];    // in units of CpbVclFactor or CpbNalFactor bits
   uint32_t      maxSlicesPerAu;
   uint32_t      maxTilesPerAu;
   uint32_t      maxTileCols;
   uint64_t      maxLumaSr;
-  uint32_t      maxBr[Level::NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
-  uint32_t      minCrBase[Level::NUMBER_OF_TIERS];
+  uint32_t      maxBr[NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
+  uint32_t      minCrBase[NUMBER_OF_TIERS];
   uint32_t      getMaxPicWidthInLumaSamples()  const;
   uint32_t      getMaxPicHeightInLumaSamples() const;
 };
@@ -72,7 +72,7 @@ struct LevelTierFeatures
 
 struct ProfileFeatures
 {
-  Profile::Name            profile;
+  Profile                  profile;
   const char              *pNameString;
   uint32_t                 maxBitDepth;
   ChromaFormat             maxChromaFormat;
@@ -85,7 +85,7 @@ struct ProfileFeatures
   const LevelTierFeatures *pLevelTiersListInfo;
   bool                     onePictureOnlyFlagMustBe1;
 
-  static const ProfileFeatures *getProfileFeatures(const Profile::Name p);
+  static const ProfileFeatures *getProfileFeatures(const Profile p);
 };
 
 
@@ -94,15 +94,15 @@ class ProfileLevelTierFeatures
   private:
     const ProfileFeatures   *m_pProfile;
     const LevelTierFeatures *m_pLevelTier;
-    Level::Tier              m_tier;
+    Tier                     m_tier;
   public:
-    ProfileLevelTierFeatures() : m_pProfile(nullptr), m_pLevelTier(nullptr), m_tier(Level::MAIN) {}
+    ProfileLevelTierFeatures() : m_pProfile(nullptr), m_pLevelTier(nullptr), m_tier(Tier::TIER_MAIN) {}
 
     void extractPTLInformation(const SPS &sps);
 
     const ProfileFeatures     *getProfileFeatures()   const { return m_pProfile; }
     const LevelTierFeatures   *getLevelTierFeatures() const { return m_pLevelTier; }
-    Level::Tier                getTier()              const { return m_tier; }
+    Tier                       getTier()              const { return m_tier; }
     uint64_t getCpbSizeInBits()                       const;
     double getMinCr()                                 const;
     uint32_t getMaxDpbSize( uint32_t picSizeMaxInSamplesY ) const;

@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/Reshape.h"
 
 //! \ingroup EncoderLib
@@ -110,7 +110,7 @@ public:
   EncReshape();
   ~EncReshape();
 
-  void init( const EncCfg& encCfg );
+  void init( const VVEncCfg& encCfg );
   void destroy();
 
   void calcSeqStats     ( Picture& pic, SeqInfo &stats);

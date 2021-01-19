@@ -239,6 +239,7 @@ endif()
 
 
 add_subdirectory( "source/Lib/vvenc" )
+add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
@@ -294,7 +295,7 @@ add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess
 set_tests_properties( Test_vvencFFapp-slow PROPERTIES TIMEOUT 90 )
 add_test( NAME Test_compare_output-slow COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 
-add_test( NAME Test_vvencapp-medium_noqpa_0thr COMMAND vvencapp --preset medium --qpa 0 -threads 0 -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 -o out.vvc )
+add_test( NAME Test_vvencapp-medium_noqpa_0thr COMMAND vvencapp --preset medium --qpa 0 --threads 0 -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 -o out.vvc )
 set_tests_properties( Test_vvencapp-medium_noqpa_0thr PROPERTIES TIMEOUT 30 )
 add_test( NAME Test_vvencFFapp-medium_noqpa_0thr COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../test/data/RTn23.cfg -qpa 0 --WppBitEqual=0 --NumWppThreads=0 -f 5 -b outf.vvc )
 set_tests_properties( Test_vvencFFapp-medium_noqpa_0thr PROPERTIES TIMEOUT 30 )

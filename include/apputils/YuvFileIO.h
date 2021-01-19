@@ -43,69 +43,55 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncoderIf.h
-    \brief    encoder lib interface
+/** \file     YuvFileIO.h
+    \brief    yuv file I/O class (header)
 */
 
 #pragma once
 
-#include <string>
-#include <functional>
+#include <fstream>
+#include <vector>
+#include "apputils/apputilsDecl.h"
 #include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
+#include "vvenc/vvencCfgExpert.h"
 
 //! \ingroup Interface
 //! \{
 
 namespace vvenc {
-
-class  EncLib;
-class  EncCfg;
-class  AccessUnit;
 struct YUVBuffer;
+}
+
+namespace apputils {
 
 // ====================================================================================================================
 
-class VVENC_DECL YUVWriterIf
+class APPUTILS_DECL YuvFileIO
 {
-protected:
-  YUVWriterIf() {}
-  virtual ~YUVWriterIf() {}
+private:
+  std::fstream        m_cHandle;              ///< file handle
+  int                 m_fileBitdepth;         ///< bitdepth of input/output video file
+  int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
+  int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
+  vvenc::ChromaFormat m_fileChrFmt;           ///< chroma format of the file
+  vvenc::ChromaFormat m_bufferChrFmt;         ///< chroma format of the buffer
+  bool                m_clipToRec709;         ///< clip data according to Recom.709
+  bool                m_packedYUVMode;        ///< used packed buffer file format
+  std::string         m_lastError;            ///< temporal storage for last occured error 
 
 public:
-  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
-  {
-  }
+  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
+              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
+  void  close();
+  bool  isEof();
+  bool  isFail();
+  void  skipYuvFrames( int numFrames, int width, int height );
+  bool  readYuvBuf   ( vvenc::YUVBuffer& yuvInBuf );
+  bool  writeYuvBuf  ( const vvenc::YUVBuffer& yuvOutBuf );
+  std::string getLastError() const { return m_lastError; }   
 };
 
-// ====================================================================================================================
-
-class VVENC_DECL EncoderIf
-{
-  private:
-    EncLib* m_pEncLib;
-
-  public:
-    EncoderIf();
-
-    ~EncoderIf();
-
-    void  initEncoderLib  ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf = nullptr );
-    void  initPass        ( int pass = 0 );
-    void  encodePicture   ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
-    void  uninitEncoderLib();
-    void  printSummary    ();
-};
-
-// ====================================================================================================================
-
-void        VVENC_DECL registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
-std::string VVENC_DECL setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-bool        VVENC_DECL isTracingEnabled();                                                          ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-std::string VVENC_DECL getCompileInfoString();                                                      ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-void        VVENC_DECL decodeBitstream( const std::string& FileName);                               ///< decode bitstream with limited build in decoder
-
-} // namespace vvenc
+} // namespace apputils
 
 //! \}
 

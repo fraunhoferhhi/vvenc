@@ -45,7 +45,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-#include "../vvencFFapp/ParseArg.h"
+#include "apputils/ParseArg.h"
 
 #include <stdlib.h>
 #include <iostream>
@@ -55,11 +55,12 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <list>
 #include <map>
 #include <algorithm>
+#include <regex>
 
 //! \ingroup Interface
 //! \{
 
-namespace VVCEncoderFFApp {
+namespace apputils {
 
 namespace df
 {
@@ -117,12 +118,34 @@ namespace df
         }
         opt_start += opt_end + 1;
       }
+
+      if( !subSections_list.empty() )
+      {
+        if( curSubSection.empty() ){ curSubSection = subSections_list.back(); }
+        sub_section_namelist_map[curSubSection].push_back(opt_string);
+      }
+
       opt_list.push_back(names);
+    }
+
+    int Options::setSubSection(std::string subSection)
+    {
+      curSubSection = subSection;
+      for( auto s : subSections_list )
+      {
+        if( s == subSection )
+        {
+          return -1;
+        }
+      }
+      subSections_list.push_back( subSection );
+      return 0;
     }
 
     /* Helper method to initiate adding options to Options */
     OptionSpecific Options::addOptions()
     {
+      if( subSections_list.empty()){ subSections_list.push_back( "__$PLACEHOLDER$__" ); } // add dummy section if nothing is given
       return OptionSpecific(*this);
     }
 
@@ -137,6 +160,7 @@ namespace df
     }
 
     static const char spaces[41] = "                                        ";
+
 
     /* format help text for a single option:
      * using the formatting: "-x, --long",
@@ -169,6 +193,81 @@ namespace df
       out << entry.opt->getDefault();
     }
 
+    static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
+    {
+      std::ostringstream line(std::ios_base::out);
+      line << "  ";
+      doHelpOpt(line, entry, pad_short);
+
+      const std::string& opt_desc = entry.opt->opt_desc;
+      if (opt_desc.empty())
+      {
+        /* no help text: output option, skip further processing */
+        out << line.str() << std::endl;
+        return;
+      }
+      size_t currlength = size_t(line.tellp());
+      if (currlength > opt_width)
+      {
+        /* if option text is too long (and would collide with the
+         * help text, split onto next line */
+        line << std::endl;
+        currlength = 0;
+      }
+      /* split up the help text, taking into account new lines,
+       *   (add opt_width of padding to each new line) */
+      for (size_t newline_pos = 0, cur_pos = 0; cur_pos != std::string::npos; currlength = 0)
+      {
+        /* print any required padding space for vertical alignment */
+        line << &(spaces[40 - opt_width + currlength]);
+        newline_pos = opt_desc.find_first_of('\n', newline_pos);
+        if (newline_pos != std::string::npos)
+        {
+          /* newline found, print substring (newline needn't be stripped) */
+          newline_pos++;
+          line << opt_desc.substr(cur_pos, newline_pos - cur_pos);
+          cur_pos = newline_pos;
+          continue;
+        }
+        if (cur_pos + desc_width > opt_desc.size())
+        {
+          /* no need to wrap text, remainder is less than avaliable width */
+          line << opt_desc.substr(cur_pos);
+          break;
+        }
+        /* find a suitable point to split text (avoid spliting in middle of word) */
+        size_t split_pos = opt_desc.find_last_of(' ', cur_pos + desc_width);
+        if (split_pos != std::string::npos)
+        {
+          /* eat up multiple space characters */
+          split_pos = opt_desc.find_last_not_of(' ', split_pos) + 1;
+        }
+
+        /* bad split if no suitable space to split at.  fall back to width */
+        bool bad_split = split_pos == std::string::npos || split_pos <= cur_pos;
+        if (bad_split)
+        {
+          split_pos = cur_pos + desc_width;
+        }
+        line << opt_desc.substr(cur_pos, split_pos - cur_pos);
+
+        /* eat up any space for the start of the next line */
+        if (!bad_split)
+        {
+          split_pos = opt_desc.find_first_not_of(' ', split_pos);
+        }
+        cur_pos = newline_pos = split_pos;
+
+        if (cur_pos >= opt_desc.size())
+        {
+          break;
+        }
+        line << std::endl;
+      }
+
+      out << line.str() << std::endl;
+    }
+
     /* format the help text */
     void doHelp(std::ostream& out, Options& opts, unsigned columns)
     {
@@ -190,80 +289,42 @@ namespace df
        *  - if the option text is longer than opt_width, place the help
        *    text at opt_width on the next line.
        */
-      for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+      if( !opts.subSections_list.empty())
       {
-        std::ostringstream line(std::ios_base::out);
-        line << "  ";
-        doHelpOpt(line, **it, pad_short);
-
-        const std::string& opt_desc = (*it)->opt->opt_desc;
-        if (opt_desc.empty())
+        for(Options::subSectionsPtrList::iterator it = opts.subSections_list.begin(); it != opts.subSections_list.end(); it++)
         {
-          /* no help text: output option, skip further processing */
-          out << line.str() << std::endl;
-          continue;
+          std::string section = *it;
+          if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
+          {
+            out << std::endl << section << ":" << std::endl;
+          }
+
+          Options::SubSectionNamesListMap::iterator opt_it;
+          opt_it = opts.sub_section_namelist_map.find(section);  // get list of options of subsection
+          if (opt_it != opts.sub_section_namelist_map.end())
+          {
+            for( auto & s : opt_it->second ) // iterate over options of subsections and find/print entry in opts list
+            {
+              for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
+              {
+                if( (*itopt)->opt->opt_string == s )  // names are equal
+                {
+                  doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
+                  break;
+                }
+              }
+            }
+          }
         }
-        size_t currlength = size_t(line.tellp());
-        if (currlength > opt_width)
-        {
-          /* if option text is too long (and would collide with the
-           * help text, split onto next line */
-          line << std::endl;
-          currlength = 0;
-        }
-        /* split up the help text, taking into account new lines,
-         *   (add opt_width of padding to each new line) */
-        for (size_t newline_pos = 0, cur_pos = 0; cur_pos != std::string::npos; currlength = 0)
-        {
-          /* print any required padding space for vertical alignment */
-          line << &(spaces[40 - opt_width + currlength]);
-          newline_pos = opt_desc.find_first_of('\n', newline_pos);
-          if (newline_pos != std::string::npos)
-          {
-            /* newline found, print substring (newline needn't be stripped) */
-            newline_pos++;
-            line << opt_desc.substr(cur_pos, newline_pos - cur_pos);
-            cur_pos = newline_pos;
-            continue;
-          }
-          if (cur_pos + desc_width > opt_desc.size())
-          {
-            /* no need to wrap text, remainder is less than avaliable width */
-            line << opt_desc.substr(cur_pos);
-            break;
-          }
-          /* find a suitable point to split text (avoid spliting in middle of word) */
-          size_t split_pos = opt_desc.find_last_of(' ', cur_pos + desc_width);
-          if (split_pos != std::string::npos)
-          {
-            /* eat up multiple space characters */
-            split_pos = opt_desc.find_last_not_of(' ', split_pos) + 1;
-          }
-
-          /* bad split if no suitable space to split at.  fall back to width */
-          bool bad_split = split_pos == std::string::npos || split_pos <= cur_pos;
-          if (bad_split)
-          {
-            split_pos = cur_pos + desc_width;
-          }
-          line << opt_desc.substr(cur_pos, split_pos - cur_pos);
-
-          /* eat up any space for the start of the next line */
-          if (!bad_split)
-          {
-            split_pos = opt_desc.find_first_not_of(' ', split_pos);
-          }
-          cur_pos = newline_pos = split_pos;
-
-          if (cur_pos >= opt_desc.size())
-          {
-            break;
-          }
-          line << std::endl;
-        }
-
-        out << line.str() << std::endl;
       }
+      else
+      {
+        for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+        {
+          doPrintHelpEntry( out, **it, desc_width, opt_width, pad_short );
+        }
+      }
+
     }
 
     struct OptionWriter
@@ -348,9 +409,24 @@ namespace df
       unsigned extra_argc_consumed = 0;
       if (arg_opt_sep == std::string::npos)
       {
+        // check if we have an argument 
+        if( argc > 1)
+        {
+          std::string val(argv[1]);
+          size_t val_sep = val.find_first_of('-');
+          //check if either have no - or the parameter is a number 
+          if( 0 != val_sep || std::regex_match( val, std::regex( ( "((\\+|-)?[[:digit:]]+)(\\.(([[:digit:]]+)?))?" ) ) ) ) 
+          {
+            extra_argc_consumed++;
+            /* argument occurs after option_sep */
+            storePair(true, false, option, val);
+            return extra_argc_consumed;
+          }
+        }
+
         /* no argument found => argument in argv[1] (maybe) */
         /* xxx, need to handle case where option isn't required */
-        if(!storePair(true, false, option, "1"))
+        if(!storePair(true, false, option, ""))
         {
           return 0;
         }

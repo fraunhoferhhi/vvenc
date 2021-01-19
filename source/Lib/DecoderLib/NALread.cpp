@@ -55,10 +55,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Rom.h"
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/Nal.h"
 #include <vector>
 #include <algorithm>
 #include <ostream>
-#include "vvenc/Nal.h"
+
 
 //! \ingroup DecoderLib
 //! \{

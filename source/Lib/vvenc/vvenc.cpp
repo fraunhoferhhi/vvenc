@@ -45,11 +45,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 /**
-  \ingroup vvencExternalInterfaces
   \file    vvenc.cpp
-  \brief   This file contains the external interface of the hhivvcdec SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/08/2020
+  \brief   This file contains the external interface of the vvenc SDK.
 */
 
 #include "vvenc/vvenc.h"
@@ -76,19 +73,18 @@ VVEnc::~VVEnc()
   }
 }
 
-int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
+int VVEnc::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
-  if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
+  if( rcVVEncCfg.m_numWppThreads > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
-  return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
+  return m_pcVVEncImpl->checkConfig( rcVVEncCfg );
 }
 
-int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
+int VVEnc::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf  )
 {
   if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-  if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
 
-  return m_pcVVEncImpl->init( rcVVEncParameter );
+  return m_pcVVEncImpl->init( rcVVEncCfg, pcYUVWriterIf );
 }
 
 int VVEnc::initPass( int pass )
@@ -110,37 +106,28 @@ bool VVEnc::isInitialized()
   return m_pcVVEncImpl->isInitialized();
 }
 
-int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
+int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone)
 {
   if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
+  return m_pcVVEncImpl->encode( pcYUVBuffer, rcAccessUnit, rbEncodeDone );
 }
 
-int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->flush( rcVvcAccessUnit ) );
-}
-
-int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
+int VVEnc::getConfig( VVEncCfg& rcVVEncCfg )
 {
   if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncCfg ) );
 }
 
-
-int VVEnc::reconfig( const VVEncParameter& rcVVEncParameter )
+int VVEnc::reconfig( const VVEncCfg& rcVVEncCfg )
 {
   if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncParameter ) );
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncCfg ) );
 }
-
 
 std::string VVEnc::getEncoderInfo() const
 {
@@ -162,6 +149,11 @@ int VVEnc::getNumTrailFrames() const
   return m_pcVVEncImpl->getNumTrailFrames();
 }
 
+int VVEnc::printSummary() const
+{
+  return m_pcVVEncImpl->printSummary();
+}
+
 std::string VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();
@@ -172,14 +164,46 @@ std::string VVEnc::getErrorMsg( int nRet )
   return VVEncImpl::getErrorMsg(nRet);
 }
 
-std::string VVEnc::getPresetParamsAsStr( int iQuality )
-{
-  return VVEncImpl::getPresetParamsAsStr(iQuality);
-}
-
 void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
 {
-  vvenc::registerMsgCbf( msgFnc );
+  VVEncImpl::registerMsgCbf( msgFnc );
+}
+
+std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+{
+  return VVEncImpl::setSIMDExtension( simdId );
+}
+
+YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+  : YUVBuffer()
+{
+  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    YUVBuffer::Plane& yuvPlane = planes[ i ];
+    yuvPlane.width  = getWidthOfComponent ( chFmt, frameWidth,  i );
+    yuvPlane.height = getHeightOfComponent( chFmt, frameHeight, i );
+    yuvPlane.stride = yuvPlane.width;
+    const int size  = yuvPlane.stride * yuvPlane.height;
+    yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+  }
+}
+
+YUVBufferStorage::~YUVBufferStorage()
+{
+  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    delete [] planes[ i ].ptr;
+  }
+}
+
+///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+VVENC_DECL bool isTracingEnabled()
+{
+#if ENABLE_TRACING
+  return true;
+#else
+  return false;
+#endif
 }
 
 } // namespace

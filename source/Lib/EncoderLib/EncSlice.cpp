@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/NoMallocThreadPool.h"
 
 #include <math.h>
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -90,7 +90,7 @@ struct LineEncRsrc
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
-  LineEncRsrc( const EncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
+  LineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
 };
 
 struct PerThreadRsrc
@@ -169,7 +169,7 @@ EncSlice::~EncSlice()
   m_saoStatData.clear();
 }
 
-void EncSlice::init( const EncCfg& encCfg,
+void EncSlice::init( const VVEncCfg& encCfg,
                      const SPS& sps,
                      const PPS& pps,
                      std::vector<int>* const globalCtuQpVector,
@@ -271,7 +271,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   double dLambda = xCalculateLambda( slice, gopId, slice->depth, dQP, dQP, iQP );
   int sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] };
 
-  if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCRateControlMode != 1 &&
+  if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL &&
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
@@ -279,7 +279,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == 2 ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
+    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == RCM_PICTURE_LEVEL ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
@@ -348,7 +348,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
 {
   Slice* slice = pic->cs->slice;
-  if ( 3 == m_pcEncCfg->m_RCRateControlMode ) // GOP-level RC
+  if ( RCM_GOP_LEVEL == m_pcEncCfg->m_RCRateControlMode )
   {
     int gopQp = sliceQP - (( slice->sliceType == I_SLICE ) ? m_pcEncCfg->m_intraQPOffset : 1);
     m_pcRateCtrl->encRCGOP->gopQP = gopQp;
@@ -382,7 +382,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     const SliceType sliceType = slice->sliceType;
 
     qp = m_pcEncCfg->m_QP;
-    if ( 3 == m_pcEncCfg->m_RCRateControlMode )
+    if ( RCM_GOP_LEVEL == m_pcEncCfg->m_RCRateControlMode )
     {
       m_pcRateCtrl->encRCSeq->setQpInGOP( gopId, m_pcRateCtrl->encRCGOP->gopQP, qp );
     }
@@ -537,7 +537,7 @@ void EncSlice::compressSlice( Picture* pic )
   }
 
   xProcessCtus( pic, startCtuTsAddr, boundingCtuTsAddr );
-  if( !( m_pcEncCfg->m_numWppThreads && m_pcEncCfg->m_maxParallelFrames ) || m_pcEncCfg->m_numFppThreads )
+  if( !( (m_pcEncCfg->m_numWppThreads>0) && m_pcEncCfg->m_maxParallelFrames ) || m_pcEncCfg->m_numFppThreads )
   {
     xFinishCompressSlice( pic, *slice );
   }

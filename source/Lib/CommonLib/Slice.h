@@ -56,6 +56,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "MotionInfo.h"
 #include "HRD.h"
 
+#include "vvenc/vvencCfgExpert.h"
+
+
 #include <cstring>
 #include <list>
 #include <map>
@@ -261,23 +264,23 @@ struct ConstraintInfo
 
 struct ProfileTierLevel
 {
-  Level::Tier           tierFlag;
-  Profile::Name         profileIdc;
+  Tier                  tierFlag;
+  Profile               profileIdc;
   uint8_t               numSubProfile;
   std::vector<uint32_t> subProfileIdc;
-  Level::Name           levelIdc;
+  Level                 levelIdc;
   bool                  frameOnlyConstraintFlag;
   bool                  multiLayerEnabledFlag;
   ConstraintInfo        constraintInfo;
   bool                  subLayerLevelPresent[MAX_TLAYER - 1];
-  Level::Name           subLayerLevelIdc[MAX_TLAYER - 1];
+  Level                 subLayerLevelIdc[MAX_TLAYER - 1];
 
   ProfileTierLevel()
-    : tierFlag        (Level::MAIN)
-    , profileIdc      (Profile::NONE)
+    : tierFlag        ( TIER_MAIN )
+    , profileIdc      ( PROFILE_NONE )
     , numSubProfile   (0)
     , subProfileIdc   (0)
-    , levelIdc        (Level::NONE)
+    , levelIdc        ( LEVEL_NONE )
     , frameOnlyConstraintFlag ( true )
     , multiLayerEnabledFlag   ( false )
   {

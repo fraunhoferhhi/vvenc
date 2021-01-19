@@ -45,11 +45,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     EncCfg.cpp
+/** \file     VVEncCfg.cpp
     \brief    encoder configuration class
 */
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-bool EncCfg::confirmParameter( bool bflag, const char* message )
+bool VVEncCfg::confirmParameter( bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
@@ -70,7 +70,7 @@ bool EncCfg::confirmParameter( bool bflag, const char* message )
   return true;
 }
 
-bool EncCfg::checkExperimental( bool bflag, const char* message )
+bool VVEncCfg::checkExperimental( bool bflag, const char* message )
 {
   if( !bflag )
     return false;
@@ -79,7 +79,7 @@ bool EncCfg::checkExperimental( bool bflag, const char* message )
   return true;
 }
 
-bool EncCfg::initCfgParameter()
+bool VVEncCfg::initCfgParameter()
 {
 #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
@@ -90,10 +90,10 @@ bool EncCfg::initCfgParameter()
   //
   // set a lot of dependent parameters
   //
-  if( m_profile == Profile::AUTO )
+  if( m_profile == Profile::PROFILE_AUTO )
   {
     const int maxBitDepth= std::max(m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat==ChromaFormat::CHROMA_400 ? CH_L : CH_C]);
-    m_profile=Profile::NONE;
+    m_profile=Profile::PROFILE_NONE;
 
     if (m_internChromaFormat==ChromaFormat::CHROMA_400 || m_internChromaFormat==ChromaFormat::CHROMA_420)
     {
@@ -110,10 +110,10 @@ bool EncCfg::initCfgParameter()
       }
     }
 
-    CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::NONE, "can not determin auto profile");
+    CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
   }
 
-  if( m_maxParallelFrames > 0 && !m_numWppThreads && !m_numFppThreads )
+  if( m_maxParallelFrames > 0 && (m_numWppThreads<=0) && !m_numFppThreads )
   {
     // Use picture threads for FPP
     m_numFppThreads = m_maxParallelFrames;
@@ -186,12 +186,10 @@ bool EncCfg::initCfgParameter()
       if (m_SourceWidth % minCuSize)
       {
         m_aiPad[0] = m_confWinRight  = ((m_SourceWidth / minCuSize) + 1) * minCuSize - m_SourceWidth;
-        m_SourceWidth  += m_confWinRight;
       }
       if (m_SourceHeight % minCuSize)
       {
         m_aiPad[1] = m_confWinBottom = ((m_SourceHeight / minCuSize) + 1) * minCuSize - m_SourceHeight;
-        m_SourceHeight += m_confWinBottom;
       }
       CONFIRM_PARAMETER_OR_RETURN( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
       CONFIRM_PARAMETER_OR_RETURN( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
@@ -200,8 +198,6 @@ bool EncCfg::initCfgParameter()
   case 2:
     {
       //padding
-      m_SourceWidth  += m_aiPad[0];
-      m_SourceHeight += m_aiPad[1];
       m_confWinRight  = m_aiPad[0];
       m_confWinBottom = m_aiPad[1];
       break;
@@ -221,6 +217,8 @@ bool EncCfg::initCfgParameter()
       break;
     }
   }
+    m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
+    m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
 
   m_sliceId.resize(1,0);
 
@@ -312,12 +310,45 @@ bool EncCfg::initCfgParameter()
 
   m_reshapeCW.binCW.resize(3);
   m_reshapeCW.rspFps     = m_FrameRate;
-  m_reshapeCW.rspPicSize = m_SourceWidth*m_SourceHeight;
+  m_reshapeCW.rspPicSize = m_PadSourceWidth*m_PadSourceHeight;
   m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)m_FrameRate /16.0)));
   m_reshapeCW.rspBaseQP  = m_QP;
   m_reshapeCW.updateCtrl = m_updateCtrl;
   m_reshapeCW.adpOption  = m_adpOption;
   m_reshapeCW.initialCW  = m_initialCW;
+
+
+  if( m_IntraPeriod == 0 &&  m_IntraPeriodSec > 0 )
+  {
+    if ( m_FrameRate % m_GOPSize == 0 )
+    {
+      m_IntraPeriod = m_FrameRate * m_IntraPeriodSec;
+    }
+    else
+    {
+      int iIDRPeriod  = (m_FrameRate * m_IntraPeriodSec);
+      if( iIDRPeriod < m_GOPSize )
+      {
+        iIDRPeriod = m_GOPSize;
+      }
+
+      int iDiff = iIDRPeriod % m_GOPSize;
+      if( iDiff < m_GOPSize >> 1 )
+      {
+        m_IntraPeriod = iIDRPeriod - iDiff;
+      }
+      else
+      {
+        m_IntraPeriod = iIDRPeriod + m_GOPSize - iDiff;
+      }
+    }
+  }
+
+
+  if( m_ensureWppBitEqual < 0 )
+  {
+    m_ensureWppBitEqual = m_numWppThreads > 0 ? 1 : 0;
+  }
 
 
   //
@@ -334,13 +365,13 @@ bool EncCfg::initCfgParameter()
     msg( DETAILS, "**          decoder requires this option to be enabled.         **\n");
     msg( DETAILS, "******************************************************************\n");
   }
-  if( m_profile == Profile::NONE )
+  if( m_profile == Profile::PROFILE_NONE )
   {
     msg( DETAILS, "***************************************************************************\n");
     msg( DETAILS, "** WARNING: For conforming bitstreams a valid Profile value must be set! **\n");
     msg( DETAILS, "***************************************************************************\n");
   }
-  if( m_level == Level::NONE )
+  if( m_level == Level::LEVEL_NONE )
   {
     msg( DETAILS, "***************************************************************************\n");
     msg( DETAILS, "** WARNING: For conforming bitstreams a valid Level value must be set!   **\n");
@@ -363,7 +394,7 @@ bool EncCfg::initCfgParameter()
   confirmParameter(m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
 
   // check range of parameters
-  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                   "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
   confirmParameter( m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
 
 #if !RExt__HIGH_BIT_DEPTH_SUPPORT
@@ -410,9 +441,9 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
 
-  confirmParameter( m_numWppThreads < 0,                            "NumWppThreads out of range");
+  confirmParameter( m_numWppThreads < -1,                            "NumWppThreads out of range");
   confirmParameter( m_ensureWppBitEqual<0 || m_ensureWppBitEqual>1, "WppBitEqual out of range");
-  confirmParameter( m_numWppThreads && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
+  confirmParameter( (m_numWppThreads>0) && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
 
   if (m_lumaReshapeEnable)
   {
@@ -467,7 +498,7 @@ bool EncCfg::initCfgParameter()
     || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
     || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
     || (m_level==Level::LEVEL15_5)), "invalid level selected");
-  confirmParameter(!((m_levelTier==Level::Tier::MAIN) || (m_levelTier==Level::Tier::HIGH)), "invalid tier selected");
+  confirmParameter(!((m_levelTier==Tier::TIER_MAIN) || (m_levelTier==Tier::TIER_HIGH)), "invalid tier selected");
 
 
   confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
@@ -506,7 +537,7 @@ bool EncCfg::initCfgParameter()
     msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
     msg(WARNING, "***************************************************************************\n");
   }
-  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_SourceWidth <= 2048) && (m_SourceHeight <= 1280) && (m_usePerceptQPA <= 4))
+  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_PadSourceWidth <= 2048) && (m_PadSourceHeight <= 1280) && (m_usePerceptQPA <= 4))
   {
     m_cuQpDeltaSubdiv = 2;
   }
@@ -536,12 +567,12 @@ bool EncCfg::initCfgParameter()
   confirmParameter( m_CTUSize != 32 && m_CTUSize != 64 && m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
   confirmParameter( m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
   confirmParameter( (m_CTUSize  >> ( m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
-  confirmParameter( (m_SourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0,    "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
+  confirmParameter( (m_PadSourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
   confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
-  confirmParameter( m_SourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_SourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
   confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
@@ -562,8 +593,8 @@ bool EncCfg::initCfgParameter()
 #endif
   }
 
-  confirmParameter(((m_SourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
-  confirmParameter(((m_SourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
 
 
   confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
@@ -1429,12 +1460,41 @@ bool EncCfg::initCfgParameter()
   return( m_confirmFailed );
 }
 
-void EncCfg::setCfgParameter( const EncCfg& encCfg )
+void VVEncCfg::setCfgParameter( const VVEncCfg& encCfg )
 {
   *this = encCfg;
 }
 
-int EncCfg::initPreset( PresetMode preset )
+int VVEncCfg::initDefault( PresetMode preset )
+{
+  int iRet = 0;
+  m_QP                  = 32;                       // quantization parameter 0-51
+  m_SourceWidth         = 1920;                     // luminance width of input picture
+  m_SourceHeight        = 1080;                     // luminance height of input picture
+  m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
+  m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
+  m_IntraPeriodSec      = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
+  m_verbosity           = (int)vvenc::VERBOSE;      // log level > 4 (VERBOSE) enables psnr/rate output
+  m_FrameRate           = 60;                       // temporal rate (fps)
+  m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
+  m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
+  m_FrameSkip           = 0;                        // number of frames to skip before start encoding
+  m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
+  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  m_inputBitDepth[0]    = 8;                        // input bitdepth
+  m_internalBitDepth[0] = 10;                       // internal bitdepth
+  m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
+  m_level               = vvenc::Level::LEVEL4_1;   // level
+  m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
+  m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
+
+  iRet = initPreset( preset );
+
+  return iRet;
+}
+
+int VVEncCfg::initPreset( PresetMode preset )
 {
   m_qpInValsCb.clear();
   m_qpInValsCb.push_back( 17 );
@@ -1458,8 +1518,8 @@ int EncCfg::initPreset( PresetMode preset )
   m_useSelectiveRDOQ              = false;
   m_cabacInitPresent              = true;
   m_fastQtBtEnc                   = true;
-  m_fastInterSearchMode           = 1;
-  m_motionEstimationSearchMethod  = 4;
+  m_fastInterSearchMode           = FASTINTERSEARCH_MODE1;
+  m_motionEstimationSearchMethod  = MESEARCH_DIAMOND_FAST;
   m_SearchRange                   = 384;
   m_minSearchWindow               = 96;
   m_maxNumMergeCand               = 6;
@@ -1674,7 +1734,7 @@ int EncCfg::initPreset( PresetMode preset )
 
     case PresetMode::SLOWER:
 
-      m_motionEstimationSearchMethod = 1;
+      m_motionEstimationSearchMethod = MESEARCH_DIAMOND;
 
       // Q44B33
       m_MinQT[ 0 ]                = 8;
@@ -1778,7 +1838,7 @@ static inline std::string getProfileStr( int profile )
   std::string cT;
   switch( profile )
   {
-    case Profile::NONE                                 : cT = "none"; break;
+    case Profile::PROFILE_NONE                         : cT = "none"; break;
     case Profile::MAIN_10                              : cT = "main_10"; break;
     case Profile::MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
     case Profile::MAIN_10_444                          : cT = "main_10_444"; break;
@@ -1787,7 +1847,7 @@ static inline std::string getProfileStr( int profile )
     case Profile::MULTILAYER_MAIN_10_STILL_PICTURE     : cT = "multilayer_main_10_still_picture"; break;
     case Profile::MULTILAYER_MAIN_10_444               : cT = "multilayer_main_10_444"; break;
     case Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE : cT = "multilayer_main_10_444_still_picture"; break;
-    case Profile::AUTO                                 : cT = "auto"; break;
+    case Profile::PROFILE_AUTO                         : cT = "auto"; break;
     default                                            : cT = "unknown"; break;
   }
   return cT;
@@ -1798,7 +1858,7 @@ static inline std::string getLevelStr( int level )
   std::string cT;
   switch( level )
   {
-    case Level::NONE      : cT = "none";    break;
+    case Level::LEVEL_NONE: cT = "none";    break;
     case Level::LEVEL1    : cT = "1";       break;
     case Level::LEVEL2    : cT = "2";       break;
     case Level::LEVEL2_1  : cT = "2.1";     break;
@@ -1833,10 +1893,10 @@ static inline std::string getCostFunctionStr( int cost )
   return cT;
 }
 
-void EncCfg::printCfg() const
+void VVEncCfg::printCfg() const
 {
-  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_SourceWidth - m_confWinLeft - m_confWinRight, m_SourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
-  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_SourceWidth, m_SourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_PadSourceWidth - m_confWinLeft - m_confWinRight, m_PadSourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
+  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_PadSourceWidth, m_PadSourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
   msg( DETAILS, "Sequence PSNR output                   : %s\n",           m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" );
   msg( DETAILS, "Hexadecimal PSNR output                : %s\n",           m_printHexPsnr ? "Enabled" : "Disabled" );
   msg( DETAILS, "Sequence MSE output                    : %s\n",           m_printSequenceMSE ? "Enabled" : "Disabled" );
@@ -1885,7 +1945,7 @@ void EncCfg::printCfg() const
   }
   msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
 
-  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_SourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
+  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_PadSourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
   msg( VERBOSE, "WPP:%d ",                   m_entropyCodingSyncEnabled ? 1 : 0 );
   msg( VERBOSE, "WPP-Substreams:%d ",        iWaveFrontSubstreams );
   msg( VERBOSE, "TMVP:%d ",                  m_TMVPModeId );
@@ -2004,6 +2064,67 @@ void EncCfg::printCfg() const
   msg( VERBOSE, "WF:%d",                     m_entropyCodingSyncEnabled );
   msg( VERBOSE, "\n" );
 }
+
+std::string VVEncCfg::getPresetParamsAsStr( PresetMode preset )
+{
+  std::stringstream css;
+  vvenc::VVEncCfg cVVEncCfg;
+  if( 0 != cVVEncCfg.initPreset( preset ))
+  {
+    css << "undefined preset " << preset;
+    return css.str();
+  }
+
+// tools
+  if( cVVEncCfg.m_RDOQ )           { css << "RDOQ " << cVVEncCfg.m_RDOQ << " ";}
+  if( cVVEncCfg.m_DepQuantEnabled ){ css << "DQ ";}
+  if( cVVEncCfg.m_SignDataHidingEnabled ){ css << "SignBitHidingFlag ";}
+  if( cVVEncCfg.m_alf )
+  {
+    css << "ALF ";
+    if( cVVEncCfg.m_useNonLinearAlfLuma )   css << "NonLinLuma ";
+    if( cVVEncCfg.m_useNonLinearAlfChroma ) css << "NonLinChr ";
+  }
+  if( cVVEncCfg.m_ccalf ){ css << "CCALF ";}
+
+// vvc tools
+  if( cVVEncCfg.m_BDOF )             { css << "BIO ";}
+  if( cVVEncCfg.m_DMVR )             { css << "DMVR ";}
+  if( cVVEncCfg.m_JointCbCrMode )    { css << "JointCbCr ";}
+  if( cVVEncCfg.m_AMVRspeed )        { css << "AMVRspeed " << cVVEncCfg.m_AMVRspeed << " ";}
+  if( cVVEncCfg.m_lumaReshapeEnable ){ css << "Reshape ";}
+  if( cVVEncCfg.m_EDO )              { css << "EncDbOpt ";}
+  if( cVVEncCfg.m_MRL )              { css << "MRL ";}
+  if( cVVEncCfg.m_MCTF )             { css << "MCTF "; }
+  if( cVVEncCfg.m_SMVD )             { css << "SMVD " << cVVEncCfg.m_SMVD << " ";}
+  if( cVVEncCfg.m_Affine )
+  {
+    css << "Affine " << cVVEncCfg.m_Affine << " ";
+    if( cVVEncCfg.m_PROF )           { css << "(Prof " << cVVEncCfg.m_PROF << " ";}
+    if( cVVEncCfg.m_AffineType )     { css << "Type " << cVVEncCfg.m_AffineType << ") ";}
+  }
+
+  if( cVVEncCfg.m_MMVD )             { css << "MMVD " << cVVEncCfg.m_MMVD << " ";}
+  if( cVVEncCfg.m_allowDisFracMMVD ) { css << "DisFracMMVD ";}
+
+  if( cVVEncCfg.m_MIP )          { css << "MIP ";}
+  if( cVVEncCfg.m_useFastMIP )   { css << "FastMIP " << cVVEncCfg.m_useFastMIP << " ";}
+  if( cVVEncCfg.m_SbTMVP )       { css << "SbTMVP ";}
+  if( cVVEncCfg.m_Geo )          { css << "Geo " << cVVEncCfg.m_Geo << " ";}
+  if( cVVEncCfg.m_LFNST )        { css << "LFNST ";}
+
+  if( cVVEncCfg.m_SBT )          { css << "SBT " ;}
+  if( cVVEncCfg.m_CIIP )         { css << "CIIP ";}
+  if (cVVEncCfg.m_ISP)           { css << "ISP "; }
+  if (cVVEncCfg.m_TS)            { css << "TS "; }
+  if (cVVEncCfg.m_useBDPCM)      { css << "BDPCM "; }
+
+  // fast tools
+  if( cVVEncCfg.m_contentBasedFastQtbt ) { css << "ContentBasedFastQtbt ";}
+
+  return css.str();
+}
+
 
 } // namespace vvenc
 

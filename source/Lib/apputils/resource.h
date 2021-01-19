@@ -43,53 +43,23 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncAppCfg.h
-    \brief    Handle encoder configuration parameters (header)
+
+/**
+  \ingroup vvencApp
+  \file    /vvenc/resource.h
 */
 
-#pragma once
+//{{NO_DEPENDENCIES}}
+// Microsoft Visual C++ generated include file.
+// Used by vvenc.rc
 
-#include "vvenc/EncCfg.h"
-
-using namespace vvenc;
-
-//! \ingroup EncoderApp
-//! \{
-
-// ====================================================================================================================
-// Class definition
-// ====================================================================================================================
-
-/// encoder configuration class
-class EncAppCfg : public EncCfg
-{
-public:
-  std::string  m_inputFileName;                                ///< source file name
-  std::string  m_bitstreamFileName;                            ///< output bitstream file
-  std::string  m_reconFileName;                                ///< output reconstruction file
-  ChromaFormat m_inputFileChromaFormat;
-  bool         m_bClipInputVideoToRec709Range;
-  bool         m_bClipOutputVideoToRec709Range;
-  bool         m_packedYUVMode;                                ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
-  bool         m_decode;
-
-public:
-
-  EncAppCfg()
-    :   m_inputFileChromaFormat           ( CHROMA_420 )
-      , m_bClipInputVideoToRec709Range    ( false )
-      , m_bClipOutputVideoToRec709Range   ( false )
-      , m_packedYUVMode                   ( false )
-      , m_decode                          ( false )
-  {
-  }
-
-  virtual ~EncAppCfg();
-
-public:
-  bool parseCfg( int argc, char* argv[] );                    ///< parse configuration file to fill member variables
-  virtual void printCfg() const;
-};
-
-//! \}
-
+// Next default values for new objects
+//
+#ifdef APSTUDIO_INVOKED
+#  ifndef APSTUDIO_READONLY_SYMBOLS
+#    define _APS_NEXT_RESOURCE_VALUE 101
+#    define _APS_NEXT_COMMAND_VALUE 40001
+#    define _APS_NEXT_CONTROL_VALUE 1001
+#    define _APS_NEXT_SYMED_VALUE 101
+#  endif
+#endif

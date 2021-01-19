@@ -47,10 +47,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "NALwrite.h"
 #include "CommonLib/BitStream.h"
+#include "CommonLib/Nal.h"
 #include <vector>
 #include <algorithm>
 #include <ostream>
-#include "vvenc/Nal.h"
+
 
 //! \ingroup EncoderLib
 //! \{

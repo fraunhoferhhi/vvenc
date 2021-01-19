@@ -44,21 +44,19 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \ingroup VVEncExternalInterfaces
   \file    hhivvcencimpl.h
-  \brief   This file contains the internal interface of the hhivvcenc SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/10/2019
+  \brief   This file contains the internal interface of the vvenc SDK.
 */
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
-#include "vvenc/EncoderIf.h"
+#include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
 namespace vvenc {
 
+class EncLib;
+class AccessUnitList;
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
@@ -70,26 +68,37 @@ class VVEncImpl
 {
 public:
 
+  enum VVEncInternalState
+  {
+    INTERNAL_STATE_UNINITIALIZED = 0,
+    INTERNAL_STATE_INITIALIZED   = 1,
+    INTERNAL_STATE_ENCODING      = 2,
+    INTERNAL_STATE_FLUSHING      = 3,
+    INTERNAL_STATE_FINALIZED     = 4
+  };
+
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncParameter& rcVVEncParameter );
+  int init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf );
+
   int initPass( int pass );
   int uninit();
 
   bool isInitialized() const;
 
-  int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
-  int flush( VvcAccessUnit& rcVvcAccessUnit );
+  int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
 
-  int getConfig( VVEncParameter& rcVVEncParameter ) const;
-  int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
-  int reconfig( const VVEncParameter& rcVVEncParameter );
+  int getConfig( VVEncCfg& rcVVEncCfg ) const;
+  int checkConfig( const VVEncCfg& rcVVEncCfg );
+  int reconfig( const VVEncCfg& rcVVEncCfg );
 
   int setAndRetErrorMsg( int Ret );
 
   int getNumLeadFrames() const;
   int getNumTrailFrames() const;
+
+  int printSummary() const;
 
   std::string getEncoderInfo() const;
 
@@ -97,29 +106,26 @@ public:
 
   static std::string getErrorMsg( int nRet );
   static std::string getVersionNumber();
-  static std::string getPresetParamsAsStr( int iQuality );
+  
+  static void        registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
+  static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 
 private:
 
-  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString ) const;
+  int xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const;
 
-  int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
-
-  int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
-                       const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
-  int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
+  int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:
-  bool                                                        m_bInitialized         = false;
-  bool                                                        m_bFlushed             = false;
+  VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
+  bool                   m_bInitialized         = false;
 
-  vvenc::EncoderIf                                            m_cEncoderIf;                      ///< encoder library class
+  VVEncCfg               m_cVVEncCfg;
 
-  VVEncParameter                                              m_cVVEncParameter;
-  vvenc::EncCfg                                               m_cEncCfg;
+  std::string            m_cErrorString;
+  std::string            m_sEncoderCapabilities;
 
-  std::string                                                 m_cErrorString;
-  std::string                                                 m_sEncoderCapabilities;
+  EncLib*                m_pEncLib = nullptr;
 };
 
 

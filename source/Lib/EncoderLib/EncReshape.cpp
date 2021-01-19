@@ -88,7 +88,7 @@ EncReshape::~EncReshape()
 {
 }
 
-void  EncReshape::init( const EncCfg& encCfg )
+void  EncReshape::init( const VVEncCfg& encCfg )
 {
   if ( encCfg.m_lumaReshapeEnable )
   {

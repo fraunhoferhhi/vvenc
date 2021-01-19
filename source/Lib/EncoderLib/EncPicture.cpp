@@ -55,7 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/dtrace_codingstruct.h"
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -71,7 +71,7 @@ static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-void EncPicture::init( const EncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
+void EncPicture::init( const VVEncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
                        const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP )
 {
   m_pcEncCfg = &encCfg;

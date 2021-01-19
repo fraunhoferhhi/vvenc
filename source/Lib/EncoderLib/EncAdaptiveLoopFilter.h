@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CABACWriter.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 
@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 class NoMallocThreadPool;
 
 struct AlfCovariance
@@ -279,7 +279,7 @@ public:
 
 private:
   int m_alfWSSD;
-  const EncCfg*          m_encCfg;
+  const VVEncCfg*        m_encCfg;
   AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
   AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];
@@ -330,7 +330,7 @@ private:
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
-  void init                         ( const EncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
+  void init                         ( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
   void initDistortion               ();
   std::vector<int> getAvaiApsIdsLuma( CodingStructure& cs, int& newApsId );

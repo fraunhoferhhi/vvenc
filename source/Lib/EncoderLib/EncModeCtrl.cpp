@@ -511,7 +511,7 @@ bool BestEncInfoCache::setCsFrom( CodingStructure& cs, EncTestMode& testMode, co
 //////////////////////////////////////////////////////////////////////////
 // EncModeCtrl
 //////////////////////////////////////////////////////////////////////////
-void EncModeCtrl::init( const EncCfg& encCfg, RdCost* pRdCost )
+void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
 {
   m_pcEncCfg  = &encCfg;
   m_pcRdCost  = pRdCost;
