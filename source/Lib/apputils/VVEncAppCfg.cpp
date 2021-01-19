@@ -551,7 +551,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
   ;
 
-  opts.setSubSection("Rate control, Adaptive Quantization");
+  opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
   ("RateControl",                                     toRateControlMode,                                "enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)" )
   ("NumPasses",                                       m_RCNumPasses,                                    "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
@@ -625,7 +625,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("IntraConstraintFlag",                             m_intraOnlyConstraintFlag,                        "Value of general_intra_constraint_flag to use for RExt profiles (not used if an explicit RExt sub-profile is specified)")
   ;
 
-  opts.setSubSection("Rate control, Adaptive Quantization");
+  opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
   ("KeepHierarchicalBit",                             m_RCKeepHierarchicalBit,                          "Rate control: (0:equal bit allocation, 1:fixed ratio bit allocation, 2:adaptive ratio bit allocation" )
   ("RCLCUSeparateModel",                              m_RCUseLCUSeparateModel,                          "Rate control: use CTU level separate R-lambda model" )
@@ -783,7 +783,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ;
 
   // Deblocking filter parameters
-  opts.setSubSection("Loop filters (deblock and SAO");
+  opts.setSubSection("Loop filters (deblock and SAO)");
   opts.addOptions()
   ("LoopFilterDisable",                               m_bLoopFilterDisable,                             "")
   ("LoopFilterOffsetInPPS",                           m_loopFilterOffsetInPPS,                          "")
@@ -806,7 +806,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SaoChromaOffsetBitShift",                         m_saoOffsetBitShift[ CH_C ],                      "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
   ;
 
-  opts.setSubSection("VUI options");
+  opts.setSubSection("VUI and SEI options");
   opts.addOptions()
   ("SEIDecodedPictureHash,-dph",                      toHashType,                                       "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
   ("SEIBufferingPeriod",                              m_bufferingPeriodSEIEnabled,                      "Control generation of buffering period SEI messages")
