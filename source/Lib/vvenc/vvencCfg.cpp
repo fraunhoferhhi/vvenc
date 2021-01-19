@@ -344,6 +344,13 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
+
+  if( m_ensureWppBitEqual < 0 )
+  {
+    m_ensureWppBitEqual = m_numWppThreads > 0 ? 1 : 0;
+  }
+
+
   //
   // do some check and set of parameters next
   //
@@ -1456,6 +1463,35 @@ bool VVEncCfg::initCfgParameter()
 void VVEncCfg::setCfgParameter( const VVEncCfg& encCfg )
 {
   *this = encCfg;
+}
+
+int VVEncCfg::initDefault( PresetMode preset )
+{
+  int iRet = 0;
+  m_QP                  = 32;                       // quantization parameter 0-51
+  m_SourceWidth         = 1920;                     // luminance width of input picture
+  m_SourceHeight        = 1080;                     // luminance height of input picture
+  m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
+  m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
+  m_IntraPeriodSec      = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
+  m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
+  m_verbosity           = (int)vvenc::VERBOSE;      // log level > 4 (VERBOSE) enables psnr/rate output
+  m_FrameRate           = 60;                       // temporal rate (fps)
+  m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
+  m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
+  m_FrameSkip           = 0;                        // number of frames to skip before start encoding
+  m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
+  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  m_inputBitDepth[0]    = 8;                        // input bitdepth
+  m_internalBitDepth[0] = 10;                       // internal bitdepth
+  m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
+  m_level               = vvenc::Level::LEVEL4_1;   // level
+  m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
+  m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
+
+  iRet = initPreset( preset );
+
+  return iRet;
 }
 
 int VVEncCfg::initPreset( PresetMode preset )

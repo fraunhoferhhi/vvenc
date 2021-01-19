@@ -117,7 +117,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const VVEncCfg& rcVVVVEncCfg, YUVWriterIf* pcYUVWriterIf )
+int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -125,17 +125,16 @@ int VVEncImpl::init( const VVEncCfg& rcVVVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   std::string simdOpt;
   std::string curSimd = setSIMDExtension( simdOpt );
 
-  int iRet = xCheckParameter( rcVVVVEncCfg, m_cErrorString );
+  int iRet = xCheckParameter( rcVVEncCfg, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
 
-  m_cVVEncCfg = rcVVVVEncCfg;
+  m_cVVEncCfg = rcVVEncCfg;
 
   // initialize the encoder
-  //m_cEncoderIf.initEncoderLib( m_cVVEncCfg );
   m_pEncLib = new EncLib;
 
   try

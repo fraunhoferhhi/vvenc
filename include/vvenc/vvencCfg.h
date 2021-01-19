@@ -279,7 +279,9 @@ public:
   bool confirmParameter ( bool bflag, const char* message );
   bool initCfgParameter();
   void setCfgParameter( const VVEncCfg& encCfg );
-  int  initPreset( PresetMode preset );
+
+  int initDefault( PresetMode preset );
+  int initPreset( PresetMode preset );
 
   virtual void printCfg() const;
   static std::string getPresetParamsAsStr( PresetMode preset );

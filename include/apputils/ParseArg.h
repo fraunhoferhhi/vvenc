@@ -258,10 +258,11 @@ namespace df
       NamesMap opt_long_map;
       NamesMap opt_short_map;
 
-      void setSubSection(std::string subSection);
+      int setSubSection(std::string subSection);
 
       typedef std::list<std::string> subSectionsPtrList;
       subSectionsPtrList subSections_list;
+      std::string curSubSection;
       
       typedef std::map<std::string, std::list<std::string> > SubSectionNamesListMap;
       SubSectionNamesListMap sub_section_namelist_map;

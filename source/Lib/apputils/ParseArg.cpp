@@ -121,15 +121,25 @@ namespace df
 
       if( !subSections_list.empty() )
       {
-        sub_section_namelist_map[subSections_list.back()].push_back(opt_string);
+        if( curSubSection.empty() ){ curSubSection = subSections_list.back(); }
+        sub_section_namelist_map[curSubSection].push_back(opt_string);
       }
 
       opt_list.push_back(names);
     }
 
-    void Options::setSubSection(std::string subSection)
+    int Options::setSubSection(std::string subSection)
     {
+      curSubSection = subSection;
+      for( auto s : subSections_list )
+      {
+        if( s == subSection )
+        {
+          return -1;
+        }
+      }
       subSections_list.push_back( subSection );
+      return 0;
     }
 
     /* Helper method to initiate adding options to Options */
@@ -295,7 +305,7 @@ namespace df
           {
             for( auto & s : opt_it->second ) // iterate over options of subsections and find/print entry in opts list
             {
-              for(Options::NamesPtrList::iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
+              for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
               {
                 if( (*itopt)->opt->opt_string == s )  // names are equal
                 {

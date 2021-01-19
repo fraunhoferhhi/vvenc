@@ -150,28 +150,7 @@ int main( int argc, char* argv[] )
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
 
-  vvencappCfg.m_QP                  = 32;                       // quantization parameter 0-51
-  vvencappCfg.m_SourceWidth         = 1920;                     // luminance width of input picture
-  vvencappCfg.m_SourceHeight        = 1080;                     // luminance height of input picture
-  vvencappCfg.m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
-  vvencappCfg.m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
-  vvencappCfg.m_IntraPeriod         = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
-  vvencappCfg.m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
-  vvencappCfg.m_verbosity           = (int)vvenc::VERBOSE;      // log level > 4 (VERBOSE) enables psnr/rate output
-  vvencappCfg.m_FrameRate           = 60;                       // temporal rate (fps)
-  vvencappCfg.m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
-  vvencappCfg.m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
-  vvencappCfg.m_FrameSkip           = 0;                        // number of frames to skip before start encoding
-  vvencappCfg.m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
-  vvencappCfg.m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  vvencappCfg.m_inputBitDepth[0]    = 8;                        // input bitdepth
-  vvencappCfg.m_internalBitDepth[0] = 10;                       // internal bitdepth
-  vvencappCfg.m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
-  vvencappCfg.m_level               = vvenc::Level::LEVEL4_1;   // level
-  vvencappCfg.m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
-  vvencappCfg.m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
-
-  vvencappCfg.initPreset( vvenc::PresetMode::MEDIUM );
+  vvencappCfg.initDefault( vvenc::PresetMode::MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
