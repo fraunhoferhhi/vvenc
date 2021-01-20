@@ -1465,10 +1465,10 @@ void VVEncCfg::setCfgParameter( const VVEncCfg& encCfg )
   *this = encCfg;
 }
 
-int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, PresetMode preset )
+int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, int qp, PresetMode preset )
 {
   int iRet = 0;
-  m_QP                  = 32;                       // quantization parameter 0-51
+  m_QP                  = qp;                       // quantization parameter 0-63
   m_SourceWidth         = width;                    // luminance width of input picture
   m_SourceHeight        = height;                   // luminance height of input picture
   m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
@@ -1488,7 +1488,21 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_level               = vvenc::Level::LEVEL4_1;   // level
   m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
   m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
-  m_RCTargetBitrate     = targetbitrate;            // target bitrate
+
+  if( targetbitrate )
+  {
+    m_RCTargetBitrate       = targetbitrate;        // target bitrate
+    m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
+    m_RCKeepHierarchicalBit = 2;
+    m_RCUseLCUSeparateModel = 1;
+    m_RCInitialQP           = 0;
+    m_RCForceIntraQP        = 0;
+  }
+  else
+  {
+    m_RCTargetBitrate       = 0;
+    m_RCRateControlMode     = RateControlMode::RCM_OFF;
+  }
 
   iRet = initPreset( preset );
 

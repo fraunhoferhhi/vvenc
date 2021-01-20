@@ -280,7 +280,7 @@ public:
   bool initCfgParameter();
   void setCfgParameter( const VVEncCfg& encCfg );
 
-  int initDefault( int width, int height, int framerate, int targetbitrate = 0, PresetMode preset = PresetMode::MEDIUM );
+  int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
 
   virtual std::string getConfigAsString( MsgLevel eMsgLevel ) const;

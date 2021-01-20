@@ -49,6 +49,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 #include "apputils/apputilsDecl.h"
+
+#include <vector>
+#include <string>
+
 #include "vvenc/vvencCfg.h"
 
 #include "apputils/IStreamIO.h"

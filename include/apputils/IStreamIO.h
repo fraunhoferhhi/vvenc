@@ -47,13 +47,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/apputilsDecl.h"
 
 #include <iostream>
-#include <sstream>
-#include <string>
-#include <list>
-#include <map>
 #include <vector>
 
-#include <vvenc/vvenc.h>
 #include <vvenc/vvencCfg.h>
 
 //! \ingroup Interface

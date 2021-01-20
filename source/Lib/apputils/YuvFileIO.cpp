@@ -52,7 +52,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/YuvFileIO.h"
 #include "vvenc/vvenc.h"
 
-#include <algorithm>
 #include <iostream>
 
 //! \ingroup Interface

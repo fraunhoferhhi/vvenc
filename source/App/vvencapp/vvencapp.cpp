@@ -119,11 +119,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  std::string cCfg = rcVVEncAppCfg.getConfigAsString( rcVVEncAppCfg.m_verbosity );
-  if( !cCfg.empty() )
-  {
-    msgApp( vvenc::INFO, "%s", cCfg.c_str() );
-  }
+  msgApp( vvenc::INFO, "%s", rcVVEncAppCfg.getConfigAsString( rcVVEncAppCfg.m_verbosity ).c_str() );
 
   return true;
 }
@@ -153,7 +149,7 @@ int main( int argc, char* argv[] )
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-  vvencappCfg.initDefault( 1920, 1080, 60, 0, vvenc::PresetMode::MEDIUM );
+  vvencappCfg.initDefault( 1920, 1080, 60, 0, 32, vvenc::PresetMode::MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
