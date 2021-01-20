@@ -86,138 +86,6 @@ void VVEncAppCfg::setPresets( VVEncCfg* cfg, int preset )
   cfg->initPreset( (PresetMode)preset );
 }
 
-// ====================================================================================================================
-// string <-> enum fixed mappings
-// ====================================================================================================================
-const std::vector<SVPair<PresetMode>> PresetToEnumMap =
-{
-  { "none",      PresetMode::NONE },
-  { "faster",    PresetMode::FASTER },
-  { "fast",      PresetMode::FAST },
-  { "medium",    PresetMode::MEDIUM },
-  { "slow",      PresetMode::SLOW },
-  { "slower",    PresetMode::SLOWER },
-  { "firstpass", PresetMode::FIRSTPASS },
-  { "tooltest",  PresetMode::TOOLTEST },
-};
-
-const std::vector<SVPair<SegmentMode>> SegmentToEnumMap =
-{
-  { "off",      SegmentMode::SEG_OFF },
-  { "first",    SegmentMode::SEG_FIRST },
-  { "mid",      SegmentMode::SEG_MID },
-  { "last",     SegmentMode::SEG_LAST },
-};
-
-
-const std::vector<SVPair<Profile>> ProfileToEnumMap =
-{
-  { "none",                                  Profile::PROFILE_NONE },
-  { "main_10",                               Profile::MAIN_10 },
-  { "main_10_444",                           Profile::MAIN_10_444 },
-  { "main_10_still_picture",                 Profile::MAIN_10_STILL_PICTURE },
-  { "main_10_444_still_picture",             Profile::MAIN_10_444_STILL_PICTURE },
-  { "multilayer_main_10",                    Profile::MULTILAYER_MAIN_10 },
-  { "multilayer_main_10_444",                Profile::MULTILAYER_MAIN_10_444 },
-  { "multilayer_main_10_still_picture",      Profile::MULTILAYER_MAIN_10_STILL_PICTURE },
-  { "multilayer_main_10_444_still_picture",  Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE },
-  { "auto",                                  Profile::PROFILE_AUTO }
-};
-
-const std::vector<SVPair<Level>> LevelToEnumMap =
-{
-  { "none",                    Level::LEVEL_NONE},
-  { "1",                       Level::LEVEL1   },
-  { "1.0",                     Level::LEVEL1   },
-  { "2",                       Level::LEVEL2   },
-  { "2.0",                     Level::LEVEL2   },
-  { "2.1",                     Level::LEVEL2_1 },
-  { "3",                       Level::LEVEL3   },
-  { "3.0",                     Level::LEVEL3   },
-  { "3.1",                     Level::LEVEL3_1 },
-  { "4",                       Level::LEVEL4   },
-  { "4.1",                     Level::LEVEL4_1 },
-  { "5",                       Level::LEVEL5   },
-  { "5.0",                     Level::LEVEL5   },
-  { "5.1",                     Level::LEVEL5_1 },
-  { "5.2",                     Level::LEVEL5_2 },
-  { "6",                       Level::LEVEL6   },
-  { "6.0",                     Level::LEVEL6   },
-  { "6.1",                     Level::LEVEL6_1 },
-  { "6.2",                     Level::LEVEL6_2 },
-  { "6.3",                     Level::LEVEL6_3 },
-  { "15.5",                    Level::LEVEL15_5 },
-};
-
-const std::vector<SVPair<Tier>> TierToEnumMap =
-{
-  { "main",                    Tier::TIER_MAIN },
-  { "high",                    Tier::TIER_HIGH },
-};
-
-const std::vector<SVPair<CostMode>> CostModeToEnumMap =
-{
-  { "lossy",                   COST_STANDARD_LOSSY              },
-  { "sequence_level_lossless", COST_SEQUENCE_LEVEL_LOSSLESS     },
-  { "lossless",                COST_LOSSLESS_CODING             },
-  { "mixed_lossless_lossy",    COST_MIXED_LOSSLESS_LOSSY_CODING }
-};
-
-const std::vector<SVPair<ChromaFormat>> ChromaFormatToEnumMap =
-{
-  { "400",                     CHROMA_400 },
-  { "420",                     CHROMA_420 },
-  { "422",                     CHROMA_422 },
-  { "444",                     CHROMA_444 },
-  { "0",                       NUM_CHROMA_FORMAT }
-};
-
-const std::vector<SVPair<HashType>> HashTypeToEnumMap =
-{
-  { "md5",                     HASHTYPE_MD5      },
-  { "crc",                     HASHTYPE_CRC      },
-  { "checksum",                HASHTYPE_CHECKSUM },
-  { "off",                     HASHTYPE_NONE     },
-  // for backward compatibility support values as well
-  { "1",                       HASHTYPE_MD5      },
-  { "2",                       HASHTYPE_CRC      },
-  { "3",                       HASHTYPE_CHECKSUM },
-  { "0",                       HASHTYPE_NONE     }
-};
-
-const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
-{
-  { "none",                  DRT_NONE },
-  { "cra",                   DRT_CRA },
-  { "idr",                   DRT_IDR },
-  { "rpsei",                 DRT_RECOVERY_POINT_SEI },
-  { "0",                     DRT_NONE },
-  { "1",                     DRT_CRA },
-  { "2",                     DRT_IDR },
-  { "3",                     DRT_RECOVERY_POINT_SEI },
-};
-
-const std::vector<SVPair<RateControlMode>> RateControlModeToEnumMap =
-{
-  { "0",                     RCM_OFF },
-  { "1",                     RCM_CTU_LEVEL },
-  { "2",                     RCM_PICTURE_LEVEL },
-  { "3",                     RCM_GOP_LEVEL },
-};
-
-enum BitDepthAndColorSpace
-{
-  YUV420_8,
-  YUV420_10,
-  YUV422_8,
-  YUV422_10,
-  YUV444_8,
-  YUV444_10,
-  YUV400_8,
-  YUV400_10,
-};
-
-
 void VVEncAppCfg::setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
 {
   switch( dbcs )
@@ -234,11 +102,6 @@ void VVEncAppCfg::setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
   }
 }
 
-const std::vector<SVPair<BitDepthAndColorSpace>> InputBitColorSpaceToIntMap =
-{
-  { "yuv420",                    YUV420_8 },
-  { "yuv420_10",                 YUV420_10 },
-};
 
 // ====================================================================================================================
 // Public member functions
@@ -260,6 +123,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
+  IStreamToEnum<MsgLevel>      toMsgLevel                   ( &m_verbosity,                   &MsgLevelToEnumMap      );
   IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
 
@@ -281,7 +145,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.addOptions()
   ("help",              do_help,                  "this help text")
   ("fullhelp",          do_full_help,             "show full text")
-  ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
+  ("verbosity,v",       toMsgLevel,               "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
   ;
   opts.setSubSection("Input Options");
   opts.addOptions()
@@ -347,9 +211,9 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   po::setDefaults( opts );
   po::ErrorReporter err;
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
-  for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
+  for( auto& a : argv_unhandled )
   {
-    cout << "Unhandled argument ignored: `" << *it << "'\n";
+    cout << "Unhandled argument ignored: `" << a << "'\n";
   }
   if ( argc == 1 || do_help )
   {
@@ -472,6 +336,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
+  IStreamToEnum<MsgLevel>      toMsgLevel                   ( &m_verbosity,                   &MsgLevelToEnumMap      );
   IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
   IStreamToRefVec<double>      toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
@@ -509,7 +374,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("help",                                            do_help,                                          "this help text")
   ("fullhelp",                                        do_expert_help,                                   "expert help text")
-  ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
+  ("Verbosity,v",                                     toMsgLevel,                                       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)")
   ;
 
   opts.setSubSection("Input options");
@@ -962,9 +827,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   po::setDefaults( opts );
   po::ErrorReporter err;
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
-  for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
+  for( auto& a : argv_unhandled )
   {
-    cout << "Unhandled argument ignored: `" << *it << "'\n";
+    cout << "Unhandled argument ignored: `" << a << "'\n";
   }
   if ( argc == 1 || do_help )
   {

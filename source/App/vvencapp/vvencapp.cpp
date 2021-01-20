@@ -64,10 +64,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvenc.h"
 
 #include "apputils/ParseArg.h"
+#include "apputils/IStreamIO.h"
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
-int g_verbosity = vvenc::VERBOSE;
+vvenc::MsgLevel g_verbosity = vvenc::VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {
@@ -118,7 +119,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  std::string cCfg = rcVVEncAppCfg.getConfigAsString( (vvenc::MsgLevel)rcVVEncAppCfg.m_verbosity );
+  std::string cCfg = rcVVEncAppCfg.getConfigAsString( rcVVEncAppCfg.m_verbosity );
   if( !cCfg.empty() )
   {
     msgApp( vvenc::INFO, "%s", cCfg.c_str() );
@@ -143,18 +144,16 @@ int main( int argc, char* argv[] )
   std::string cInputFile;
   std::string cOutputfile = "";
 
-  std::string simdOpt;
+  apputils::IStreamToEnum<vvenc::MsgLevel>      toMsgLevel  ( &g_verbosity,   &apputils::MsgLevelToEnumMap      );
+
   apputils::df::program_options_lite::Options opts;
   opts.addOptions()
-    ( "verbosity,v", g_verbosity,                               "" );
+    ("verbosity,v",       toMsgLevel,               "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ");
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
-
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-
-  vvencappCfg.initDefault( vvenc::PresetMode::MEDIUM );
+  vvencappCfg.initDefault( 1920, 1080, 60, 0, vvenc::PresetMode::MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )

@@ -77,12 +77,14 @@ int main(int argc, char* argv[])
 {
   vvenc::VVEnc::registerMsgCbf( msgFnc );
 
+  apputils::IStreamToEnum<vvenc::MsgLevel>      toMsgLevel  ( &g_verbosity,   &apputils::MsgLevelToEnumMap      );
+
   std::string simdOpt;
   apputils::df::program_options_lite::Options opts;
   opts.addOptions()
     ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
-    ( "Verbosity,v", g_verbosity,                               "" )
-    ( "SIMD",        simdOpt,                                   "" );
+    ( "Verbosity,v", toMsgLevel,      "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
+    ( "SIMD",        simdOpt,         "" );
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 

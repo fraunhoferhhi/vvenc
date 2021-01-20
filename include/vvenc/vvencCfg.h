@@ -233,7 +233,7 @@ class VVENC_DECL VVEncCfg : public VVEncCfgExpert
 public:
   bool                m_confirmFailed                  = false;         ///< state variable
 
-  int                 m_verbosity                      = VERBOSE;       ///< encoder verbosity
+  MsgLevel            m_verbosity                      = VERBOSE;       ///< encoder verbosity
   int                 m_framesToBeEncoded              = 0;             ///< number of encoded frames
 
   int                 m_FrameRate                      = 0;             ///< source frame-rates (Hz)
@@ -280,7 +280,7 @@ public:
   bool initCfgParameter();
   void setCfgParameter( const VVEncCfg& encCfg );
 
-  int initDefault( PresetMode preset );
+  int initDefault( int width, int height, int framerate, int targetbitrate = 0, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
 
   virtual std::string getConfigAsString( MsgLevel eMsgLevel ) const;

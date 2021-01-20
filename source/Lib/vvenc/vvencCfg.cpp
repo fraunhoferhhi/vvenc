@@ -1465,18 +1465,18 @@ void VVEncCfg::setCfgParameter( const VVEncCfg& encCfg )
   *this = encCfg;
 }
 
-int VVEncCfg::initDefault( PresetMode preset )
+int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, PresetMode preset )
 {
   int iRet = 0;
   m_QP                  = 32;                       // quantization parameter 0-51
-  m_SourceWidth         = 1920;                     // luminance width of input picture
-  m_SourceHeight        = 1080;                     // luminance height of input picture
+  m_SourceWidth         = width;                    // luminance width of input picture
+  m_SourceHeight        = height;                   // luminance height of input picture
   m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
   m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
   m_IntraPeriodSec      = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
   m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
-  m_verbosity           = (int)vvenc::VERBOSE;      // log level > 4 (VERBOSE) enables psnr/rate output
-  m_FrameRate           = 60;                       // temporal rate (fps)
+  m_verbosity           = vvenc::VERBOSE;           // log level > 4 (VERBOSE) enables psnr/rate output
+  m_FrameRate           = framerate;                // temporal rate (fps)
   m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
   m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
   m_FrameSkip           = 0;                        // number of frames to skip before start encoding
@@ -1488,6 +1488,7 @@ int VVEncCfg::initDefault( PresetMode preset )
   m_level               = vvenc::Level::LEVEL4_1;   // level
   m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
   m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
+  m_RCTargetBitrate     = targetbitrate;            // target bitrate
 
   iRet = initPreset( preset );
 

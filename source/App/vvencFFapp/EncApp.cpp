@@ -70,7 +70,7 @@ using namespace vvenc;
 
 // ====================================================================================================================
 
-int g_verbosity = VERBOSE;
+vvenc::MsgLevel g_verbosity = VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {
@@ -107,11 +107,7 @@ bool EncApp::parseCfg( int argc, char* argv[] )
 
   if( ! m_cEncAppCfg.m_decode )
   {
-    std::string cCfg = m_cEncAppCfg.getConfigAsString( (MsgLevel)m_cEncAppCfg.m_verbosity );
-    if( !cCfg.empty() )
-    {
-      msgApp( vvenc::INFO, "%s", cCfg.c_str() );
-    }
+    msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
   }
 
   return true;
