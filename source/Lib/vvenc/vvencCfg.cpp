@@ -1893,176 +1893,188 @@ static inline std::string getCostFunctionStr( int cost )
   return cT;
 }
 
-void VVEncCfg::printCfg() const
+std::string VVEncCfg::getConfigAsString() const
 {
-  msg( DETAILS, "Real     Format                        : %dx%d %gHz\n",   m_PadSourceWidth - m_confWinLeft - m_confWinRight, m_PadSourceHeight - m_confWinTop - m_confWinBottom, (double)m_FrameRate / m_temporalSubsampleRatio );
-  msg( DETAILS, "Internal Format                        : %dx%d %gHz\n",   m_PadSourceWidth, m_PadSourceHeight, (double)m_FrameRate / m_temporalSubsampleRatio );
-  msg( DETAILS, "Sequence PSNR output                   : %s\n",           m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only" );
-  msg( DETAILS, "Hexadecimal PSNR output                : %s\n",           m_printHexPsnr ? "Enabled" : "Disabled" );
-  msg( DETAILS, "Sequence MSE output                    : %s\n",           m_printSequenceMSE ? "Enabled" : "Disabled" );
-  msg( DETAILS, "Frame MSE output                       : %s\n",           m_printFrameMSE ? "Enabled" : "Disabled" );
-  msg( DETAILS, "Cabac-zero-word-padding                : %s\n",           m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled" );
-  msg( DETAILS, "Frame/Field                            : Frame based coding\n" );
+  std::stringstream css;
+
+  if( m_verbosity >= DETAILS )
+  {
+  css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " << (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
+  css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
+  css << "Sequence PSNR output                   : " << (m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
+  css << "Hexadecimal PSNR output                : " << (m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
+  css << "Sequence MSE output                    : " << (m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
+  css << "Frame MSE output                       : " << (m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
+  css << "Cabac-zero-word-padding                : " << (m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
+  css << "Frame/Field                            : Frame based coding\n";
   if ( m_framesToBeEncoded > 0 )
-    msg( DETAILS, "Frame index                            : %d frames\n",  m_framesToBeEncoded );
+    css << "Frame index                            : " << m_framesToBeEncoded << " frames\n";
   else
-    msg( DETAILS, "Frame index                            : all frames\n" );
-  msg( DETAILS, "Profile                                : %s\n",           getProfileStr( m_profile ).c_str() );
-  msg( DETAILS, "Level                                  : %s\n",           getLevelStr( m_level ).c_str() );
-  msg( DETAILS, "CU size / total-depth                  : %d / %d\n",      m_CTUSize, m_MaxCodingDepth );
-  msg( DETAILS, "Max TB size                            : %d\n",           1 << m_log2MaxTbSize );
-  msg( DETAILS, "Motion search range                    : %d\n",           m_SearchRange );
-  msg( DETAILS, "Intra period                           : %d\n",           m_IntraPeriod );
-  msg( DETAILS, "Decoding refresh type                  : %d\n",           m_DecodingRefreshType );
-  msg( DETAILS, "QP                                     : %d\n",           m_QP);
-  msg( DETAILS, "Percept QPA                            : %d\n",           m_usePerceptQPA );
-  msg( DETAILS, "Max dQP signaling subdiv               : %d\n",           m_cuQpDeltaSubdiv);
-  msg( DETAILS, "Cb QP Offset (dual tree)               : %d (%d)\n",      m_chromaCbQpOffset, m_chromaCbQpOffsetDualTree );
-  msg( DETAILS, "Cr QP Offset (dual tree)               : %d (%d)\n",      m_chromaCrQpOffset, m_chromaCrQpOffsetDualTree );
-  msg( DETAILS, "GOP size                               : %d\n",           m_GOPSize );
-  msg( DETAILS, "Input queue size                       : %d\n",           m_InputQueueSize );
-  msg( DETAILS, "Input bit depth                        : (Y:%d, C:%d)\n", m_inputBitDepth[ CH_L ], m_inputBitDepth[ CH_C ] );
-  msg( DETAILS, "MSB-extended bit depth                 : (Y:%d, C:%d)\n", m_MSBExtendedBitDepth[ CH_L ], m_MSBExtendedBitDepth[ CH_C ] );
-  msg( DETAILS, "Internal bit depth                     : (Y:%d, C:%d)\n", m_internalBitDepth[ CH_L ], m_internalBitDepth[ CH_C ] );
-  msg( DETAILS, "cu_chroma_qp_offset_subdiv             : %d\n",           m_cuChromaQpOffsetSubdiv );
+    css << "Frame index                            : all frames\n";
+
+  css << "Profile                                : " << getProfileStr( m_profile ) << "\n";
+  css << "Level                                  : " << getLevelStr( m_level ) << "\n";
+  css << "CU size / total-depth                  : " << m_CTUSize << " / " << m_MaxCodingDepth << "\n";
+  css << "Max TB size                            : " << (1 << m_log2MaxTbSize) << "\n";
+  css << "Motion search range                    : " << m_SearchRange << "\n";
+  css << "Intra period                           : " << m_IntraPeriod << "\n";
+  css << "Decoding refresh type                  : " << m_DecodingRefreshType << "\n";
+  css << "QP                                     : " << m_QP << "\n";
+  css << "Percept QPA                            : " << m_usePerceptQPA << "\n";
+  css << "Max dQP signaling subdiv               : " << m_cuQpDeltaSubdiv << "\n";
+  css << "Cb QP Offset (dual tree)               : " << m_chromaCbQpOffset << " (" << m_chromaCbQpOffsetDualTree << ")\n";
+  css << "Cr QP Offset (dual tree)               : " << m_chromaCrQpOffset << " (" << m_chromaCrQpOffsetDualTree << ")\n";
+  css << "GOP size                               : " << m_GOPSize << "\n";
+  css << "Input queue size                       : " << m_InputQueueSize << "\n";
+  css << "Input bit depth                        : (Y:" << m_inputBitDepth[ CH_L ] << ", C:" << m_inputBitDepth[ CH_C ] << ")\n";
+  css << "MSB-extended bit depth                 : (Y:" << m_MSBExtendedBitDepth[ CH_L ] << ", C:" << m_MSBExtendedBitDepth[ CH_C ] << ")\n";
+  css << "Internal bit depth                     : (Y:" << m_internalBitDepth[ CH_L ] << ", C:" << m_internalBitDepth[ CH_C ] << ")\n";
+  css << "cu_chroma_qp_offset_subdiv             : " << m_cuChromaQpOffsetSubdiv << "\n";
   if (m_bUseSAO)
   {
-    msg( DETAILS, "log2_sao_offset_scale_luma             : %d\n",         m_log2SaoOffsetScale[ CH_L ] );
-    msg( DETAILS, "log2_sao_offset_scale_chroma           : %d\n",         m_log2SaoOffsetScale[ CH_C ] );
+    css << "log2_sao_offset_scale_luma             : " << m_log2SaoOffsetScale[ CH_L ] << "\n";
+    css << "log2_sao_offset_scale_chroma           : " << m_log2SaoOffsetScale[ CH_C ] << "\n";
   }
-  msg( DETAILS, "Cost function:                         : %s\n",           getCostFunctionStr( m_costMode ).c_str() );
-  msg( DETAILS, "\n");
+  css << "Cost function:                         : " << getCostFunctionStr( m_costMode ) << "\n";
+  css << "\n";
+  }
 
-  msg( VERBOSE, "CODING TOOL CFG: ");
-  msg( VERBOSE, "IBD:%d ",                   ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])));
-  msg( VERBOSE, "CIP:%d ",                   m_bUseConstrainedIntraPred );
-  msg( VERBOSE, "SAO:%d ",                   m_bUseSAO ? 1 : 0 );
-  msg( VERBOSE, "ALF:%d ",                   m_alf ? 1 : 0 );
+  if( m_verbosity >= VERBOSE )
+  {
+  // verbose output
+  css << "CODING TOOL CFG: ";
+  css << "IBD:" << ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])) << " ";
+  css << "CIP:" << m_bUseConstrainedIntraPred << " ";
+  css << "SAO:" << (m_bUseSAO ? 1 : 0) << " ";
+  css << "ALF:" << (m_alf ? 1 : 0) << " ";
   if( m_alf )
   {
-    msg( VERBOSE, "(NonLinLuma:%d ",         m_useNonLinearAlfLuma );
-    msg( VERBOSE, "NonLinChr:%d) ",          m_useNonLinearAlfChroma );
+    css << "(NonLinLuma:" << m_useNonLinearAlfLuma << " ";
+    css << "NonLinChr:" << m_useNonLinearAlfChroma << ") ";
   }
-  msg( VERBOSE, "CCALF:%d ",                 m_ccalf ? 1 : 0 );
+  css << "CCALF:" << (m_ccalf ? 1 : 0) << " ";
 
   const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_PadSourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
-  msg( VERBOSE, "WPP:%d ",                   m_entropyCodingSyncEnabled ? 1 : 0 );
-  msg( VERBOSE, "WPP-Substreams:%d ",        iWaveFrontSubstreams );
-  msg( VERBOSE, "TMVP:%d ",                  m_TMVPModeId );
+  css << "WPP:" << (m_entropyCodingSyncEnabled ? 1 : 0) << " ";
+  css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
+  css << "TMVP:" << m_TMVPModeId << " ";
 
-  msg( VERBOSE, "DQ:%d ",                    m_DepQuantEnabled );
+  css << "DQ:" << m_DepQuantEnabled << " ";
   if( m_DepQuantEnabled )
   {
     if( m_dqThresholdVal & 1 )
-      msg( VERBOSE, "(Thr: %d.5) ",          m_dqThresholdVal >> 1 );
+      css << "(Thr: " << (m_dqThresholdVal >> 1) << ".5) ";
     else
-      msg( VERBOSE, "(Thr: %d) ",            m_dqThresholdVal >> 1 );
+      css << "(Thr: " << (m_dqThresholdVal >> 1) << ") ";
   }
-  msg( VERBOSE, "SDH:%d ",                   m_SignDataHidingEnabled);
-  msg( VERBOSE, "CST:%d ",                   m_dualITree );
-  msg( VERBOSE, "BDOF:%d ",                  m_BDOF );
-  msg( VERBOSE, "DMVR:%d ",                  m_DMVR );
-  msg( VERBOSE, "MTSImplicit:%d ",           m_MTSImplicit );
-  msg( VERBOSE, "SBT:%d ",                   m_SBT );
-  msg( VERBOSE, "JCbCr:%d ",                 m_JointCbCrMode );
-  msg( VERBOSE, "CabacInitPresent:%d ",      m_cabacInitPresent );
-  msg( VERBOSE, "AMVR:%d ",                  m_AMVRspeed );
-  msg( VERBOSE, "SMVD:%d ",                  m_SMVD );
+  css << "SDH:" << m_SignDataHidingEnabled << " ";
+  css << "CST:" << m_dualITree << " ";
+  css << "BDOF:" << m_BDOF << " ";
+  css << "DMVR:" << m_DMVR << " ";
+  css << "MTSImplicit:" << m_MTSImplicit << " ";
+  css << "SBT:" << m_SBT << " ";
+  css << "JCbCr:" << m_JointCbCrMode << " ";
+  css << "CabacInitPresent:" << m_cabacInitPresent << " ";
+  css << "AMVR:" << m_AMVRspeed << " ";
+  css << "SMVD:" << m_SMVD << " ";
 
-  msg( VERBOSE, "LMCS:%d ",                  m_lumaReshapeEnable );
+  css << "LMCS:" << m_lumaReshapeEnable << " ";
   if( m_lumaReshapeEnable )
   {
-    msg( VERBOSE, "(Signal:%s ",             m_reshapeSignalType == 0 ? "SDR" : (m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ") );
-    msg( VERBOSE, "Opt:%d",                  m_adpOption );
+    css << "(Signal:" << (m_reshapeSignalType == 0 ? "SDR" : (m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
+    css << "Opt:" << m_adpOption << "";
     if( m_adpOption > 0 )
     {
-      msg( VERBOSE, " CW:%d",                m_initialCW );
+      css << " CW:" << m_initialCW << "";
     }
-    msg( VERBOSE, ") " );
+    css << ") ";
   }
-  msg( VERBOSE, "CIIP:%d ",                  m_CIIP );
-  msg( VERBOSE, "MIP:%d ",                   m_MIP );
-  msg( VERBOSE, "AFFINE:%d ",                m_Affine );
+  css << "CIIP:" << m_CIIP << " ";
+  css << "MIP:" << m_MIP << " ";
+  css << "AFFINE:" << m_Affine << " ";
   if( m_Affine )
   {
-    msg( VERBOSE, "(PROF:%d, ",              m_PROF );
-    msg( VERBOSE, "Type:%d)",                m_AffineType );
+    css << "(PROF:" << m_PROF << ", ";
+    css << "Type:" << m_AffineType << ")";
   }
-  msg( VERBOSE, "MMVD:%d ",                  m_MMVD );
+  css << "MMVD:" << m_MMVD << " ";
   if( m_MMVD )
-    msg( VERBOSE, "DisFracMMVD:%d ",         m_allowDisFracMMVD) ;
-  msg( VERBOSE, "SbTMVP:%d ",                m_SbTMVP );
-  msg( VERBOSE, "GPM:%d ",                   m_Geo );
-  msg( VERBOSE, "LFNST:%d ",                 m_LFNST );
-  msg( VERBOSE, "MTS:%d ",                   m_MTS );
+    css << "DisFracMMVD:" << m_allowDisFracMMVD << " ";
+  css << "SbTMVP:" << m_SbTMVP << " ";
+  css << "GPM:" << m_Geo << " ";
+  css << "LFNST:" << m_LFNST << " ";
+  css << "MTS:" << m_MTS << " ";
   if( m_MTS )
   {
-    msg( VERBOSE, "(IntraCand:%d)",          m_MTSIntraMaxCand );
+    css << "(IntraCand:" << m_MTSIntraMaxCand << ")";
   }
-  msg( VERBOSE, "ISP:%d ",                   m_ISP );
-  msg( VERBOSE, "TS:%d ",                    m_TS );
+  css << "ISP:" << m_ISP << " ";
+  css << "TS:" << m_TS << " ";
   if( m_TS )
   {
-    msg( VERBOSE, "TSLog2MaxSize:%d ",       m_TSsize );
-    msg( VERBOSE, "useChromaTS:%d ",         m_useChromaTS );
+    css << "TSLog2MaxSize:" << m_TSsize << " ";
+    css << "useChromaTS:" << m_useChromaTS << " ";
   }
-  msg( VERBOSE, "BDPCM:%d ",                 m_useBDPCM);
-  
-  msg( VERBOSE, "\nENC. ALG. CFG: " );
-  msg( VERBOSE, "QPA:%d ",                   m_usePerceptQPA );
-  msg( VERBOSE, "HAD:%d ",                   m_bUseHADME );
-  msg( VERBOSE, "RDQ:%d ",                   m_RDOQ );
-  msg( VERBOSE, "RDQTS:%d ",                 m_useRDOQTS );
-  msg( VERBOSE, "ASR:%d ",                   m_bUseASR );
-  msg( VERBOSE, "MinSearchWindow:%d ",       m_minSearchWindow );
-  msg( VERBOSE, "RestrictMESampling:%d ",    m_bRestrictMESampling );
-  msg( VERBOSE, "EDO:%d ",                   m_EDO );
-  msg( VERBOSE, "MCTF:%d ",                  m_MCTF );
+  css << "BDPCM:" << m_useBDPCM << " ";
+
+  css << "\nENC. ALG. CFG: ";
+  css << "QPA:" << m_usePerceptQPA << " ";
+  css << "HAD:" << m_bUseHADME << " ";
+  css << "RDQ:" << m_RDOQ << " ";
+  css << "RDQTS:" << m_useRDOQTS << " ";
+  css << "ASR:" << m_bUseASR << " ";
+  css << "MinSearchWindow:" << m_minSearchWindow << " ";
+  css << "RestrictMESampling:" << m_bRestrictMESampling << " ";
+  css << "EDO:" << m_EDO << " ";
+  css << "MCTF:" << m_MCTF << " ";
   if( m_MCTF )
   {
-    msg( VERBOSE, "[L:%d, T:%d] ",           m_MCTFNumLeadFrames, m_MCTFNumTrailFrames );
+    css << "[L:" << m_MCTFNumLeadFrames << ", T:" << m_MCTFNumTrailFrames << "] ";
   }
 
-  msg( VERBOSE, "\nFAST TOOL CFG: " );
-  msg( VERBOSE, "ECU:%d ",                   m_bUseEarlyCU );
-  msg( VERBOSE, "FEN:%d ",                   m_fastInterSearchMode );
-  msg( VERBOSE, "FDM:%d ",                   m_useFastDecisionForMerge );
-  msg( VERBOSE, "ESD:%d ",                   m_useEarlySkipDetection );
-  msg( VERBOSE, "FastSearch:%d ",            m_motionEstimationSearchMethod );
-  msg( VERBOSE, "LCTUFast:%d ",              m_useFastLCTU );
-  msg( VERBOSE, "FastMrg:%d ",               m_useFastMrg );
-  msg( VERBOSE, "PBIntraFast:%d ",           m_usePbIntraFast );
-  msg( VERBOSE, "AMaxBT:%d ",                m_useAMaxBT );
-  msg( VERBOSE, "FastQtBtEnc:%d ",           m_fastQtBtEnc );
-  msg( VERBOSE, "ContentBasedFastQtbt:%d ",  m_contentBasedFastQtbt );
+  css << "\nFAST TOOL CFG: ";
+  css << "ECU:" << m_bUseEarlyCU << " ";
+  css << "FEN:" << m_fastInterSearchMode << " ";
+  css << "FDM:" << m_useFastDecisionForMerge << " ";
+  css << "ESD:" << m_useEarlySkipDetection << " ";
+  css << "FastSearch:" << m_motionEstimationSearchMethod << " ";
+  css << "LCTUFast:" << m_useFastLCTU << " ";
+  css << "FastMrg:" << m_useFastMrg << " ";
+  css << "PBIntraFast:" << m_usePbIntraFast << " ";
+  css << "AMaxBT:" << m_useAMaxBT << " ";
+  css << "FastQtBtEnc:" << m_fastQtBtEnc << " ";
+  css << "ContentBasedFastQtbt:" << m_contentBasedFastQtbt << " ";
   if( m_MIP )
   {
-    msg( VERBOSE, "FastMIP:%d ",             m_useFastMIP );
+    css << "FastMIP:" << m_useFastMIP << " ";
   }
-  msg( VERBOSE, "FastLocalDualTree:%d ",     m_fastLocalDualTreeMode );
-  msg( VERBOSE, "FastSubPel:%d ",            m_fastSubPel );
-  msg( VERBOSE, "QtbttExtraFast:%d ",        m_qtbttSpeedUp );
+  css << "FastLocalDualTree:" << m_fastLocalDualTreeMode << " ";
+  css << "FastSubPel:" << m_fastSubPel << " ";
+  css << "QtbttExtraFast:" << m_qtbttSpeedUp << " ";
 
-  msg( VERBOSE, "\nRATE CONTROL CFG: " );
-  msg( VERBOSE, "RateControl:%d ",           m_RCRateControlMode );
+  css << "\nRATE CONTROL CFG: ";
+  css << "RateControl:" << m_RCRateControlMode << " ";
   if ( m_RCRateControlMode )
   {
-    msg( VERBOSE, "Passes:%d ",              m_RCNumPasses );
-    msg( VERBOSE, "TargetBitrate:%d ",       m_RCTargetBitrate );
-    msg( VERBOSE, "KeepHierarchicalBit:%d ", m_RCKeepHierarchicalBit );
-    msg( VERBOSE, "RCLCUSeparateModel:%d ",  m_RCUseLCUSeparateModel );
-    msg( VERBOSE, "InitialQP:%d ",           m_RCInitialQP );
-    msg( VERBOSE, "RCForceIntraQP:%d ",      m_RCForceIntraQP );
+    css << "Passes:" << m_RCNumPasses << " ";
+    css << "TargetBitrate:" << m_RCTargetBitrate << " ";
+    css << "KeepHierarchicalBit:" << m_RCKeepHierarchicalBit << " ";
+    css << "RCLCUSeparateModel:" << m_RCUseLCUSeparateModel << " ";
+    css << "InitialQP:" << m_RCInitialQP << " ";
+    css << "RCForceIntraQP:" << m_RCForceIntraQP << " ";
   }
 
-  msg( VERBOSE, "\nPARALLEL PROCESSING CFG: " );
-  msg( VERBOSE, "MaxParallelFrames:%d ",     m_maxParallelFrames );
-  msg( VERBOSE, "NumFppThreads:%d ",         m_numFppThreads );
-  msg( VERBOSE, "FppBitEqual:%d ",           m_ensureFppBitEqual );
-  msg( VERBOSE, "WPP:%d ",                   m_numWppThreads );
-  msg( VERBOSE, "WppBitEqual:%d ",           m_ensureWppBitEqual );
-  msg( VERBOSE, "WF:%d",                     m_entropyCodingSyncEnabled );
-  msg( VERBOSE, "\n" );
+  css << "\nPARALLEL PROCESSING CFG: ";
+  css << "MaxParallelFrames:" << m_maxParallelFrames << " ";
+  css << "NumFppThreads:" << m_numFppThreads << " ";
+  css << "FppBitEqual:" << m_ensureFppBitEqual << " ";
+  css << "WPP:" << m_numWppThreads << " ";
+  css << "WppBitEqual:" << m_ensureWppBitEqual << " ";
+  css << "WF:" << m_entropyCodingSyncEnabled << "";
+  css << "\n";
+  }
+
+  return css.str();
 }
 
 std::string VVEncCfg::getPresetParamsAsStr( PresetMode preset )

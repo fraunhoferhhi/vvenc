@@ -107,7 +107,11 @@ bool EncApp::parseCfg( int argc, char* argv[] )
 
   if( ! m_cEncAppCfg.m_decode )
   {
-    m_cEncAppCfg.printCfg();
+    std::string cCfg = m_cEncAppCfg.getConfigAsString();
+    if( !cCfg.empty() )
+    {
+      msgApp( vvenc::INFO, "%s", cCfg.c_str() );
+    }
   }
 
   return true;

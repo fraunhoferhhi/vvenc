@@ -283,7 +283,7 @@ public:
   int initDefault( PresetMode preset );
   int initPreset( PresetMode preset );
 
-  virtual void printCfg() const;
+  virtual std::string getConfigAsString() const;
   static std::string getPresetParamsAsStr( PresetMode preset );
 };
 

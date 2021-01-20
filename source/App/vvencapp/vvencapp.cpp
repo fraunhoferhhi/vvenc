@@ -118,7 +118,11 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  rcVVEncAppCfg.printCfg();
+  std::string cCfg = rcVVEncAppCfg.getConfigAsString();
+  if( !cCfg.empty() )
+  {
+    msgApp( vvenc::INFO, "%s", cCfg.c_str() );
+  }
 
   return true;
 }

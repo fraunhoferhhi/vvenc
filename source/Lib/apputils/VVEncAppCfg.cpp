@@ -349,7 +349,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
   for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
   {
-    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    cout << "Unhandled argument ignored: `" << *it << "'\n";
   }
   if ( argc == 1 || do_help )
   {
@@ -964,7 +964,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
   for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
   {
-    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    cout << "Unhandled argument ignored: `" << *it << "'\n";
   }
   if ( argc == 1 || do_help )
   {
@@ -1046,32 +1046,20 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   return true;
 }
 
-void VVEncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
+std::string VVEncAppCfg::getConfigAsString() const
 {
-  if ( m_verbosity >= level )
+  std::stringstream css;
+  if( m_verbosity >= DETAILS )
   {
-    vfprintf( level == 1 ? stderr : stdout, fmt, args );
+    css << "Input          File                    : " << m_inputFileName << "\n";
+    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
+    css << "Reconstruction File                    : " << m_reconFileName << "\n";
   }
-}
 
-void VVEncAppCfg::msgApp( int level, const char* fmt, ... ) const
-{
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( level, fmt, args );
-    va_end( args );
-}
+  css << VVEncCfg::getConfigAsString();
+  css << "\n";
 
-void VVEncAppCfg::printCfg() const
-{
-  msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
-  msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
-
-  VVEncCfg::printCfg();
-  msgApp( NOTICE, "\n");
-
-  fflush( stdout );
+  return css.str();
 }
 
 } // namespace

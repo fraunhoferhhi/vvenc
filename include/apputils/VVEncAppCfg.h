@@ -85,12 +85,9 @@ public:
   bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
   bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
 
-  virtual void printCfg() const;
+  virtual std::string getConfigAsString() const;
 
 private:
-
-  void msgFnc( int level, const char* fmt, va_list args ) const;
-  void msgApp( int level, const char* fmt, ... ) const;
 
   static void setPresets( VVEncCfg* cfg, int preset );
   static void setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs );
