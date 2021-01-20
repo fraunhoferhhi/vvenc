@@ -1046,17 +1046,17 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   return true;
 }
 
-std::string VVEncAppCfg::getConfigAsString() const
+std::string VVEncAppCfg::getConfigAsString( vvenc::MsgLevel eMsgLevel ) const
 {
   std::stringstream css;
-  if( m_verbosity >= DETAILS )
+  if( eMsgLevel >= DETAILS )
   {
     css << "Input          File                    : " << m_inputFileName << "\n";
     css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
     css << "Reconstruction File                    : " << m_reconFileName << "\n";
   }
 
-  css << VVEncCfg::getConfigAsString();
+  css << VVEncCfg::getConfigAsString( eMsgLevel );
   css << "\n";
 
   return css.str();

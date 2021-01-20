@@ -85,7 +85,7 @@ public:
   bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
   bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
 
-  virtual std::string getConfigAsString() const;
+  virtual std::string getConfigAsString( vvenc::MsgLevel eMsgLevel ) const;
 
 private:
 

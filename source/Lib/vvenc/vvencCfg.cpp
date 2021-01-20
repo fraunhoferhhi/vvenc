@@ -1893,11 +1893,11 @@ static inline std::string getCostFunctionStr( int cost )
   return cT;
 }
 
-std::string VVEncCfg::getConfigAsString() const
+std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
 {
   std::stringstream css;
 
-  if( m_verbosity >= DETAILS )
+  if( eMsgLevel >= DETAILS )
   {
   css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " << (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
   css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
@@ -1939,7 +1939,7 @@ std::string VVEncCfg::getConfigAsString() const
   css << "\n";
   }
 
-  if( m_verbosity >= VERBOSE )
+  if( eMsgLevel >= VERBOSE )
   {
   // verbose output
   css << "CODING TOOL CFG: ";

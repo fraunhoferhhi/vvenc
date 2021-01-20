@@ -283,7 +283,7 @@ public:
   int initDefault( PresetMode preset );
   int initPreset( PresetMode preset );
 
-  virtual std::string getConfigAsString() const;
+  virtual std::string getConfigAsString( MsgLevel eMsgLevel ) const;
   static std::string getPresetParamsAsStr( PresetMode preset );
 };
 

@@ -118,7 +118,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  std::string cCfg = rcVVEncAppCfg.getConfigAsString();
+  std::string cCfg = rcVVEncAppCfg.getConfigAsString( (vvenc::MsgLevel)rcVVEncAppCfg.m_verbosity );
   if( !cCfg.empty() )
   {
     msgApp( vvenc::INFO, "%s", cCfg.c_str() );
