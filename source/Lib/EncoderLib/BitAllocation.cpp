@@ -339,7 +339,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const EncCfg* en
 
   if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr || encCfg->m_usePerceptQPA > 4) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2 || encCfg->m_usePerceptQPATempFiltISlice);
   const bool isHighResolution = (encCfg->m_SourceWidth > 2048 || encCfg->m_SourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
   const int          bitDepth = slice->sps->bitDepths[CH_L];
 
@@ -403,7 +403,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const EncCfg* encC
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2 || encCfg->m_usePerceptQPATempFiltISlice);
   const bool isHighResolution = (encCfg->m_SourceWidth > 2048 || encCfg->m_SourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
@@ -608,7 +608,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const EncCfg* en
 
   if (pic == nullptr || encCfg == nullptr) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2 || encCfg->m_usePerceptQPATempFiltISlice);
   const bool isHighResolution = (encCfg->m_SourceWidth > 2048 || encCfg->m_SourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
   const int         bitDepth  = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);

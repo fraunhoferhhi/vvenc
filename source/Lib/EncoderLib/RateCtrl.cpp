@@ -1976,6 +1976,7 @@ RateCtrl::RateCtrl()
   encRCGOP      = NULL;
   encRCPic      = NULL;
   rcQP          = 0;
+  rcPQPAOffset  = 0;
   rcPass        = 0;
   rcMaxPass     = 0;
   rcIsFinalPass = true;
@@ -2355,7 +2356,7 @@ void RateCtrl::setRCPass( int pass, int maxPass )
   rcIsFinalPass = ( pass >= maxPass );
 }
 
-void RateCtrl::processFirstPassData()
+void RateCtrl::processFirstPassData( const unsigned sizeInCtus )
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
@@ -2380,6 +2381,25 @@ void RateCtrl::processFirstPassData()
     {
       estimateAlphaFirstPass( numOfLevels, it->poc, encRCSeq->intraPeriod, it->estAlpha );
     }
+  }
+
+  // derive average temporal stationarity index from perceptual QPA statistics, adapt lambdas
+  if ((m_listRCIntraPQPAStats.size() > 0) && rcIsFinalPass)
+  {
+    const uint64_t pairCount = m_listRCIntraPQPAStats.size();
+    uint64_t averageTempStat = 0, p;
+
+    for (p = 0; p < pairCount; p++)
+    {
+      averageTempStat += (m_listRCIntraPQPAStats[p] >> 4) + (m_listRCIntraPQPAStats[p] & 15);
+    }
+    p <<= 1; // number of CTUs
+    if (sizeInCtus & 1) // odd
+    {
+      p = (p / (sizeInCtus + 1u)) * sizeInCtus; // compensate for missing last (odd) CTU data
+    }
+    rcPQPAOffset = Clip3 (0, 15, int (averageTempStat / p)); // delta-QP offset for stability
+    rcPQPAOffset = (rcPQPAOffset > 8 ? 6 : 7);
   }
 }
 

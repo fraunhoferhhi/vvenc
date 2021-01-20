@@ -272,7 +272,7 @@ namespace vvenc {
 
     void setRCPass( int pass, int maxPass );
     void addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
-    void processFirstPassData();
+    void processFirstPassData( const unsigned sizeInCtus );
     void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
     void processGops();
     void scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling );
@@ -289,6 +289,7 @@ namespace vvenc {
     EncRCPic*   encRCPic;
     std::mutex  rcMutex;
     int         rcQP;
+    int         rcPQPAOffset;
     int         rcPass;
     int         rcMaxPass;
     bool        rcIsFinalPass;

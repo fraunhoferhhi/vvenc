@@ -1781,8 +1781,8 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
         (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && slice->isIntra() && (sliceQP > 0) )
     {
-      sliceQP--; // this is a second-pass tuning to stabilize rate control with pQPA
-      m_lambda *= pow(2.0, -1.0 / 3.0); // adjust lambda based on change of slice QP
+      sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
+      m_lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
     }
   }
   else    // normal case
@@ -1793,8 +1793,8 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
         (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
     {
-      sliceQP++; // this is a second-pass tuning to stabilize rate control with pQPA
-      m_lambda *= pow(2.0,  1.0 / 3.0); // adjust lambda based on change of slice QP
+      sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
+      m_lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP
     }
   }
 
