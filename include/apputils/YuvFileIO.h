@@ -49,10 +49,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <fstream>
-#include <vector>
 #include "apputils/apputilsDecl.h"
-#include "vvenc/vvencDecl.h"
+#include <fstream>
+#include <string>
+
 #include "vvenc/vvencCfgExpert.h"
 
 //! \ingroup Interface

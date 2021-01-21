@@ -52,7 +52,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string>
 #include <list>
 #include <map>
-#include <exception>
 
 //! \ingroup Interface
 //! \{

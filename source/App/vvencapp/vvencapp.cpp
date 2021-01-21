@@ -67,7 +67,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
-int g_verbosity = vvenc::VERBOSE;
+vvenc::MsgLevel g_verbosity = vvenc::VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {
@@ -118,7 +118,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  rcVVEncAppCfg.printCfg();
+  msgApp( vvenc::INFO, "%s", rcVVEncAppCfg.getConfigAsString( rcVVEncAppCfg.m_verbosity ).c_str() );
 
   return true;
 }
@@ -139,24 +139,16 @@ int main( int argc, char* argv[] )
   std::string cInputFile;
   std::string cOutputfile = "";
 
-  std::string simdOpt;
-  apputils::df::program_options_lite::Options opts;
-  opts.addOptions()
-    ( "verbosity,v", g_verbosity,                               "" );
-  apputils::df::program_options_lite::SilentReporter err;
-  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
-
-  simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
-
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-
-  vvencappCfg.initDefault( vvenc::PresetMode::MEDIUM );
+  vvencappCfg.initDefault( 1920, 1080, 60, 0, 32, vvenc::PresetMode::MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
   {
     return 1;
   }
+  // assign verbosity used for encoder output
+  g_verbosity = vvencappCfg.m_verbosity; 
 
   if( vvencappCfg.m_inputFileName.empty() )
   {

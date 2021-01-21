@@ -76,19 +76,44 @@ namespace apputils {
 //! \{
 //!
 //!
-//// ====================================================================================================================
-//// string <-> enum
-//// ====================================================================================================================
 
-
-void VVEncAppCfg::setPresets( VVEncCfg* cfg, int preset )
+// ====================================================================================================================
+// enums
+// ====================================================================================================================
+enum BitDepthAndColorSpace
 {
-  cfg->initPreset( (PresetMode)preset );
-}
+  YUV420_8,
+  YUV420_10,
+  YUV422_8,
+  YUV422_10,
+  YUV444_8,
+  YUV444_10,
+  YUV400_8,
+  YUV400_10,
+};
 
 // ====================================================================================================================
 // string <-> enum fixed mappings
 // ====================================================================================================================
+const std::vector<SVPair<MsgLevel>> MsgLevelToEnumMap =
+{
+  { "silent",  MsgLevel::SILENT  },
+  { "error",   MsgLevel::ERROR   },
+  { "warning", MsgLevel::WARNING },
+  { "info",    MsgLevel::INFO    },
+  { "notice",  MsgLevel::NOTICE  },
+  { "verbose", MsgLevel::VERBOSE },
+  { "details", MsgLevel::DETAILS },
+  { "0",       MsgLevel::SILENT  },
+  { "1",       MsgLevel::ERROR   },
+  { "2",       MsgLevel::WARNING },
+  { "3",       MsgLevel::INFO    },
+  { "4",       MsgLevel::NOTICE  },
+  { "5",       MsgLevel::VERBOSE },
+  { "6",       MsgLevel::DETAILS },
+};
+
+
 const std::vector<SVPair<PresetMode>> PresetToEnumMap =
 {
   { "none",      PresetMode::NONE },
@@ -205,20 +230,24 @@ const std::vector<SVPair<RateControlMode>> RateControlModeToEnumMap =
   { "3",                     RCM_GOP_LEVEL },
 };
 
-enum BitDepthAndColorSpace
+const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 {
-  YUV420_8,
-  YUV420_10,
-  YUV422_8,
-  YUV422_10,
-  YUV444_8,
-  YUV444_10,
-  YUV400_8,
-  YUV400_10,
+  { "yuv420",                    YUV420_8 },
+  { "yuv420_10",                 YUV420_10 },
 };
 
 
-void VVEncAppCfg::setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
+//// ====================================================================================================================
+//// string <-> enum
+//// ====================================================================================================================
+
+
+void setPresets( VVEncCfg* cfg, int preset )
+{
+  cfg->initPreset( (PresetMode)preset );
+}
+
+void setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
 {
   switch( dbcs )
   {
@@ -234,11 +263,6 @@ void VVEncAppCfg::setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
   }
 }
 
-const std::vector<SVPair<BitDepthAndColorSpace>> InputBitColorSpaceToIntMap =
-{
-  { "yuv420",                    YUV420_8 },
-  { "yuv420_10",                 YUV420_10 },
-};
 
 // ====================================================================================================================
 // Public member functions
@@ -260,6 +284,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
+  IStreamToEnum<MsgLevel>      toMsgLevel                   ( &m_verbosity,   &MsgLevelToEnumMap );
   IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
 
@@ -268,7 +293,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap );
 
-  IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &InputBitColorSpaceToIntMap, YUV420_8);
+  IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   //
@@ -281,7 +306,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.addOptions()
   ("help",              do_help,                  "this help text")
   ("fullhelp",          do_full_help,             "show full text")
-  ("verbosity,v",       m_verbosity,              "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
+  ("verbosity,v",       toMsgLevel,               "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
   ;
   opts.setSubSection("Input Options");
   opts.addOptions()
@@ -347,9 +372,9 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   po::setDefaults( opts );
   po::ErrorReporter err;
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
-  for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
+  for( auto& a : argv_unhandled )
   {
-    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    cout << "Unhandled argument ignored: `" << a << "'\n";
   }
   if ( argc == 1 || do_help )
   {
@@ -472,6 +497,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
+  IStreamToEnum<MsgLevel>      toMsgLevel                   ( &m_verbosity,                   &MsgLevelToEnumMap      );
   IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
   IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
   IStreamToRefVec<double>      toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
@@ -509,7 +535,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("help",                                            do_help,                                          "this help text")
   ("fullhelp",                                        do_expert_help,                                   "expert help text")
-  ("Verbosity,v",                                     m_verbosity,                                      "Specifies the level of the verboseness")
+  ("Verbosity,v",                                     toMsgLevel,                                       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)")
   ;
 
   opts.setSubSection("Input options");
@@ -962,9 +988,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   po::setDefaults( opts );
   po::ErrorReporter err;
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
-  for ( list<const char*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++ )
+  for( auto& a : argv_unhandled )
   {
-    msgApp( vvenc::ERROR, "Unhandled argument ignored: `%s'\n", *it);
+    cout << "Unhandled argument ignored: `" << a << "'\n";
   }
   if ( argc == 1 || do_help )
   {
@@ -996,9 +1022,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
 
   m_confirmFailed = false;
+
   confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (BitstreamFile)" );
-  confirmParameter( m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
-  confirmParameter( m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
+  confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
+  confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
   confirmParameter( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT,   "Input chroma format must be either 400, 420, 422 or 444" );
 
   if ( m_confirmFailed )
@@ -1046,32 +1073,20 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   return true;
 }
 
-void VVEncAppCfg::msgFnc( int level, const char* fmt, va_list args ) const
+std::string VVEncAppCfg::getConfigAsString( vvenc::MsgLevel eMsgLevel ) const
 {
-  if ( m_verbosity >= level )
+  std::stringstream css;
+  if( eMsgLevel >= DETAILS )
   {
-    vfprintf( level == 1 ? stderr : stdout, fmt, args );
+    css << "Input          File                    : " << m_inputFileName << "\n";
+    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
+    css << "Reconstruction File                    : " << m_reconFileName << "\n";
   }
-}
 
-void VVEncAppCfg::msgApp( int level, const char* fmt, ... ) const
-{
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( level, fmt, args );
-    va_end( args );
-}
+  css << VVEncCfg::getConfigAsString( eMsgLevel );
+  css << "\n";
 
-void VVEncAppCfg::printCfg() const
-{
-  msgApp( DETAILS, "Input          File                    : %s\n", m_inputFileName.c_str() );
-  msgApp( DETAILS, "Bitstream      File                    : %s\n", m_bitstreamFileName.c_str() );
-  msgApp( DETAILS, "Reconstruction File                    : %s\n", m_reconFileName.c_str() );
-
-  VVEncCfg::printCfg();
-  msgApp( NOTICE, "\n");
-
-  fflush( stdout );
+  return css.str();
 }
 
 } // namespace

@@ -94,8 +94,8 @@ void EncLib::xResetLib()
 void EncLib::initEncoderLib( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf )
 {
   // copy config parameter
-  const_cast<VVEncCfg&>(m_cEncCfg).setCfgParameter( encCfg );
-  m_cBckCfg.setCfgParameter( encCfg );
+  const_cast<VVEncCfg&>(m_cEncCfg) = encCfg;
+  m_cBckCfg = encCfg;
 
   m_yuvWriterIf = yuvWriterIf;
 
@@ -343,7 +343,7 @@ void EncLib::xUninitLib()
 void EncLib::xSetRCEncCfg( int pass )
 {
   // restore encoder configuration for second rate control passes
-  const_cast<VVEncCfg&>(m_cEncCfg).setCfgParameter( m_cBckCfg );
+  const_cast<VVEncCfg&>(m_cEncCfg) = m_cBckCfg;
 
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )

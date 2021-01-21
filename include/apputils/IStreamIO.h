@@ -53,7 +53,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <vector>
 
-#include <vvenc/vvenc.h>
 #include <vvenc/vvencCfg.h>
 
 //! \ingroup Interface

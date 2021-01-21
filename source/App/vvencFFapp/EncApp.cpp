@@ -70,7 +70,7 @@ using namespace vvenc;
 
 // ====================================================================================================================
 
-int g_verbosity = VERBOSE;
+vvenc::MsgLevel g_verbosity = VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {
@@ -90,7 +90,7 @@ void msgApp( int level, const char* fmt, ... )
 
 // ====================================================================================================================
 
-bool EncApp::parseCfg( int argc, char* argv[] )
+bool EncApp::parseCfg( int argc, char* argv[])
 {
   try
   {
@@ -101,13 +101,13 @@ bool EncApp::parseCfg( int argc, char* argv[] )
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
-    msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
+    msgApp( vvenc::ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
 
   if( ! m_cEncAppCfg.m_decode )
   {
-    m_cEncAppCfg.printCfg();
+    msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
   }
 
   return true;

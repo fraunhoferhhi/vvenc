@@ -81,8 +81,7 @@ int main(int argc, char* argv[])
   apputils::df::program_options_lite::Options opts;
   opts.addOptions()
     ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
-    ( "Verbosity,v", g_verbosity,                               "" )
-    ( "SIMD",        simdOpt,                                   "" );
+    ( "SIMD",        simdOpt,         "" );
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
