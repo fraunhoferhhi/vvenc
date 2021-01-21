@@ -2399,7 +2399,7 @@ void RateCtrl::processFirstPassData( const unsigned sizeInCtus )
       p = (p / (sizeInCtus + 1u)) * sizeInCtus; // compensate for missing last (odd) CTU data
     }
     rcPQPAOffset = Clip3 (0, 15, int (averageTempStat / p)); // delta-QP offset for stability
-    rcPQPAOffset = (rcPQPAOffset > 8 ? 6 : 7);
+    rcPQPAOffset = (rcPQPAOffset > 8 && encRCSeq->targetRate < 25000000 ? 6 : 7);
   }
 }
 
