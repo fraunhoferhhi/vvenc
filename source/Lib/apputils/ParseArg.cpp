@@ -46,7 +46,15 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 #include "apputils/ParseArg.h"
+
+#include <stdlib.h>
+#include <iostream>
 #include <fstream>
+#include <sstream>
+#include <string>
+#include <list>
+#include <map>
+#include <algorithm>
 #include <regex>
 
 //! \ingroup Interface

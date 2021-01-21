@@ -64,7 +64,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvenc.h"
 
 #include "apputils/ParseArg.h"
-#include "apputils/IStreamIO.h"
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
@@ -140,14 +139,6 @@ int main( int argc, char* argv[] )
   std::string cInputFile;
   std::string cOutputfile = "";
 
-  apputils::IStreamToEnum<vvenc::MsgLevel>      toMsgLevel  ( &g_verbosity,   &apputils::MsgLevelToEnumMap      );
-
-  apputils::df::program_options_lite::Options opts;
-  opts.addOptions()
-    ("verbosity,v",       toMsgLevel,               "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ");
-  apputils::df::program_options_lite::SilentReporter err;
-  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
-
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
   vvencappCfg.initDefault( 1920, 1080, 60, 0, 32, vvenc::PresetMode::MEDIUM );
 
@@ -156,6 +147,8 @@ int main( int argc, char* argv[] )
   {
     return 1;
   }
+  // assign verbosity used for encoder output
+  g_verbosity = vvencappCfg.m_verbosity; 
 
   if( vvencappCfg.m_inputFileName.empty() )
   {

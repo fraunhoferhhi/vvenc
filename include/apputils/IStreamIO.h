@@ -47,6 +47,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/apputilsDecl.h"
 
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <list>
+#include <map>
 #include <vector>
 
 #include <vvenc/vvencCfg.h>

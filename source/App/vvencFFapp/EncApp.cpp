@@ -90,7 +90,7 @@ void msgApp( int level, const char* fmt, ... )
 
 // ====================================================================================================================
 
-bool EncApp::parseCfg( int argc, char* argv[] )
+bool EncApp::parseCfg( int argc, char* argv[])
 {
   try
   {
@@ -101,7 +101,7 @@ bool EncApp::parseCfg( int argc, char* argv[] )
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
-    msgApp( ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
+    msgApp( vvenc::ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
 

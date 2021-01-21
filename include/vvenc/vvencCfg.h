@@ -264,8 +264,6 @@ public:
 
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
-
-  int                 m_threadCount;
 public:
 
   VVEncCfg()
@@ -278,13 +276,11 @@ public:
   bool checkExperimental( bool bflag, const char* message );
   bool confirmParameter ( bool bflag, const char* message );
   bool initCfgParameter();
-  void setCfgParameter( const VVEncCfg& encCfg );
 
   int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
 
   virtual std::string getConfigAsString( MsgLevel eMsgLevel ) const;
-  static std::string getPresetParamsAsStr( PresetMode preset );
 };
 
 
