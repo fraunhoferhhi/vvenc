@@ -521,6 +521,7 @@ bool EncCfg::initCfgParameter()
     msg(WARNING, "disabling Intra-picture temporal QPA mode due to configuration incompatibility\n");
     m_usePerceptQPATempFiltISlice = false;
   }
+  if (m_usePerceptQPATempFiltISlice && (m_RCNumPasses == 2) && (m_CTUSize == 128)) m_cuQpDeltaSubdiv = 2; // use subdiv. 2 even for UHD with 2-pass rate control
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
   if ( m_DecodingRefreshType == 2 )
