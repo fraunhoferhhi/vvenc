@@ -279,7 +279,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == 0 && slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
+    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == RCM_OFF && slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 

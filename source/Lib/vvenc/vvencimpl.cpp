@@ -455,12 +455,6 @@ int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorStrin
   ROTPARAMS( rcSrc.m_RCTargetBitrate == 0 && rcSrc.m_RCNumPasses != 1,                     "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_RCNumPasses < 1 || rcSrc.m_RCNumPasses > 2,                           "Only one pass or two pass encoding supported"  );
 
-  if( (rcSrc.m_usePerceptQPA == 2 || rcSrc.m_usePerceptQPA == 4) && (rcSrc.m_QP <= MAX_QP_PERCEPT_QPA) &&
-      (rcSrc.m_RCNumPasses == 2) && (rcSrc.m_GOPSize > 8) && (rcSrc.m_IntraPeriod >= 2 * rcSrc.m_GOPSize) )
-  {
-    rcSrc.m_usePerceptQPATempFiltISlice = true; // optimized combination of perceptual QPA and 2-pass rate control
-  }
-
   ROTPARAMS( rcSrc.m_verbosity < 0 || rcSrc.m_verbosity > DETAILS,                         "log message level range 0 - 6" );
 
   ROTPARAMS( rcSrc.m_SegmentMode != SEG_OFF && rcSrc.m_framesToBeEncoded < MCTF_RANGE,     "When using segment parallel encoding more then 2 frames have to be encoded" );
