@@ -1258,7 +1258,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
   {
     int SIZE_BL = 4;
 #if SCC_MCTF
-    int K_SC = 20;
+    int K_SC = 25;
 #else
     int K_SC = 5;
     int TH_SC = 6;
