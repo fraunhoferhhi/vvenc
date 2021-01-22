@@ -44,12 +44,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \ingroup VVEncExternalInterfaces
   \file    vvencDecl.h
   \brief   This vvencDecl.h file controls DLL export/import under windows
-  \author  lehmann
-  \date    2020-08-08
- */
+*/
 
 /// \cond NEVER_DOC
 #pragma once

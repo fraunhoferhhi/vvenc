@@ -43,64 +43,19 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncPicture.h
-    \brief    encode picture (header)
-*/
 
-#pragma once
+#if !defined( VVENC_VERSION )
 
-#include "EncSlice.h"
-#include "EncSampleAdaptiveOffset.h"
-#include "EncAdaptiveLoopFilter.h"
-#include "CommonLib/LoopFilter.h"
+#define VVENC_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${PROJECT_VERSION_TWEAK}"
 
-//! \ingroup EncoderLib
-//! \{
+#define VVENC_VERSION_MAJOR ${PROJECT_VERSION_MAJOR}
+#define VVENC_VERSION_MINOR ${PROJECT_VERSION_MINOR}
+#define VVENC_VERSION_PATCH ${PROJECT_VERSION_PATCH}
+#define VVENC_VERSION_TWEAK ${PROJECT_VERSION_TWEAK}
 
-namespace vvenc {
+#ifdef _WIN32
+#define VVENC_VS_VERSION      ${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},${PROJECT_VERSION_TWEAK}
+#define VVENC_VS_VERSION_STR "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${PROJECT_VERSION_TWEAK}"
+#endif
 
-class VVEncCfg;
-class EncGOP;
-
-// ---------------------------------------------------------------------------------------------------------------------
-
-class EncPicture
-{
-  private:
-    const VVEncCfg*         m_pcEncCfg;
-    EncSlice                m_SliceEncoder;
-    LoopFilter              m_LoopFilter;
-    EncAdaptiveLoopFilter   m_ALF;
-
-    BitEstimator            m_BitEstimator;
-    CABACWriter             m_CABACEstimator;
-    CtxCache                m_CtxCache;
-
-  public:
-    EncPicture()
-      : m_pcEncCfg( nullptr )
-      , m_CABACEstimator   ( m_BitEstimator )
-    {}
-    virtual ~EncPicture() {}
-
-    void      init          ( const VVEncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                              const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP = nullptr );
-    EncSlice* getEncSlice   () { return &m_SliceEncoder; }
-
-    void      encodePicture ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
-
-    void finalizePicture        ( Picture& pic );
-  protected:
-    void xInitPicEncoder        ( Picture& pic );
-    void xCompressPicture       ( Picture& pic );
-    void xSkipCompressPicture   ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
-    void xWriteSliceData        ( Picture& pic );
-
-    void xInitSliceColFromL0Flag( Slice* slice ) const;
-    void xInitSliceCheckLDC     ( Slice* slice ) const;
-};
-
-} // namespace vvenc
-
-//! \}
-
+#endif

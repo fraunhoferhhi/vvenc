@@ -43,59 +43,52 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/**
-  \ingroup VVEncExternalInterfaces
-  \file    ParcatSegmentFilter.h
-  \brief   This file contains the internal interface of the hhivvcenc SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/10/2019
+/** \file     VVEncAppCfg.h
+    \brief    Handle encoder configuration parameters (header)
 */
 
 #pragma once
+#include "apputils/apputilsDecl.h"
+#include "vvenc/vvencCfg.h"
 
-#include <vector>
-#include <stdint.h>
+namespace apputils {
 
-#include "vvenc/vvencDecl.h"
+//! \ingroup apputils
+//! \{
 
+// ====================================================================================================================
+// Class definition
+// ====================================================================================================================
 
-namespace vvenc {
-
-/**
-  \ingroup VVEncExternalInterfaces
-  The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
-  the given VVCDecoderParameters. After initialization the decoding of the video is performed by using the decoder() method to hand over compressed packets (bitstream chunks) in decoding order
-  and retrieve uncompressed pictures. The decoding can be end by calling flush() that causes the decoder to finish decoding of all pending packets.
-  Finally calling uninit() releases all allocated resources held by the decoder internally.
-*/
-class VVENC_DECL ParcatSegmentFilter
+/// encoder configuration class
+class APPUTILS_DECL VVEncAppCfg : public vvenc::VVEncCfg
 {
 public:
+  std::string  m_inputFileName;                                ///< source file name
+  std::string  m_bitstreamFileName;                            ///< output bitstream file
+  std::string  m_reconFileName;                                ///< output reconstruction file
+  vvenc::ChromaFormat m_inputFileChromaFormat  = vvenc::CHROMA_420;
+  bool         m_bClipInputVideoToRec709Range  = false;
+  bool         m_bClipOutputVideoToRec709Range = false;
+  bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_decode                        = false;
 
-  ParcatSegmentFilter();
-  virtual ~ParcatSegmentFilter();
+public:
 
-  std::vector<uint8_t> filter_segment(const std::vector<uint8_t> & v, int idx, int * poc_base, int * last_idr_poc);
+  VVEncAppCfg()
+  {
+  }
 
-private:
+  virtual ~VVEncAppCfg();
 
-  /**
-   Find the beginning and end of a NAL (Network Abstraction Layer) unit in a byte buffer containing H264 bitstream data.
-   @param[in]   buf        the buffer
-   @param[in]   size       the size of the buffer
-   @param[out]  nal_start  the beginning offset of the nal
-   @param[out]  nal_end    the end offset of the nal
-   @return                 the length of the nal, or 0 if did not find start of nal, or -1 if did not find end of nal
-   */
-  // DEPRECATED - this will be replaced by a similar function with a slightly different API
-  int find_nal_unit(const uint8_t* buf, int size, int* nal_start, int* nal_end);
+public:
+  bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
+  bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
 
-private:
-
-  bool verbose = false;
+  virtual std::string getConfigAsString( vvenc::MsgLevel eMsgLevel ) const;
 };
 
-
-
 } // namespace
+
+//! \}
 

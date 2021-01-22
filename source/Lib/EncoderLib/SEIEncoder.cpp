@@ -47,7 +47,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "SEIEncoder.h"
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/SEI.h"
 #include "CommonLib/PicYuvMD5.h"
@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-void SEIEncoder::init( const EncCfg& encCfg, EncHRD& encHRD)
+void SEIEncoder::init( const VVEncCfg& encCfg, EncHRD& encHRD)
 {
   m_pcEncCfg      = &encCfg;
   m_pcEncHRD      = &encHRD;

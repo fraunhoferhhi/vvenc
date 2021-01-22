@@ -270,9 +270,11 @@ Picture* MCTF::createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc )
   Picture* pic = new Picture;
   pic->create( m_chromaFormatIDC, m_area, m_ctuSize, m_ctuSize + 16, false, m_padding );
 
-  PelUnitBuf yuvOrgBuf;
-  setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_chromaFormatIDC );
-  pic->getOrigBuf().copyFrom( yuvOrgBuf );
+  copyPadToPelUnitBuf( pic->getOrigBuf(), yuvInBuf, m_chromaFormatIDC );
+
+//  PelUnitBuf yuvOrgBuf;
+//  setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_chromaFormatIDC );
+//  pic->getOrigBuf().copyFrom( yuvOrgBuf );
   pic->getOrigBuf().extendBorderPel( m_padding, true );
 
   pic->poc = poc;

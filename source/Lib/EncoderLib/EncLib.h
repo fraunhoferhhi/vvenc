@@ -52,8 +52,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncGOP.h"
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
-#include "vvenc/EncCfg.h"
-#include "vvenc/Nal.h"
+#include "CommonLib/Nal.h"
+#include "vvenc/vvencCfg.h"
+
 #include <mutex>
 
 //! \ingroup EncoderLib
@@ -80,8 +81,8 @@ private:
   int                       m_GOPSizeLog2;
   int                       m_TicksPerFrameMul4;
 
-  const EncCfg              m_cEncCfg;
-  EncCfg                    m_cBckCfg;
+  const VVEncCfg            m_cEncCfg;
+  VVEncCfg                  m_cBckCfg;
   EncGOP*                   m_cGOPEncoder;
   EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
@@ -105,9 +106,9 @@ public:
   EncLib();
   virtual ~EncLib();
 
-  void     initEncoderLib      ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf );
+  void     initEncoderLib      ( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf );
   void     initPass            ( int pass );
-  void     encodePicture       ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
+  void     encodePicture       ( bool flush, const YUVBuffer& yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
 

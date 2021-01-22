@@ -127,7 +127,7 @@ bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int in
   return curTLayer <= tarTL && curId == 0;
 }
 
-void trySkipOrDecodePicture( bool& decPic, bool& encPic, const EncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap )
+void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap )
 {
   // check if we should decode a leading bitstream
   if( !cfg.m_decodeBitstreams[ 0 ].empty() )
@@ -276,7 +276,7 @@ EncGOP::~EncGOP()
 }
 
 
-void EncGOP::init( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
+void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;
@@ -384,7 +384,7 @@ static bool compressPic( int taskIdx, EncPicturePP* picEncoder )
   return true;
 }
 
-void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef, bool flush )
+void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef, bool flush )
 {
   CHECK( !flush && encList.size() == 0, "error: no pictures to be encoded given" );
 
@@ -533,7 +533,7 @@ void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, 
   }
 }
 
-void EncGOP::encodePicture( const std::vector<Picture*>& encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef )
+void EncGOP::encodePicture( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
 {
   CHECK( encList.size() == 0, "error: no pictures to be encoded given" );
 
@@ -1020,9 +1020,9 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
     pic.m_bufsOrigPrev[1] = nullptr;
 
     // this is needed for chunk-wise parallel RA encoding!
-    if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == 3) || !slice->isIntra())
+    if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ) || !slice->isIntra())
     {
-      if ((slice->TLayer == 0) && (m_pcEncCfg->m_RCRateControlMode == 3))
+      if ((slice->TLayer == 0) && (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ))
       {
         const int firstPoc = std::max (0, curPoc - m_pcEncCfg->m_GOPSize + 1);
         double gopLevelAct = 0.0;
@@ -1357,16 +1357,16 @@ void EncGOP::xSyncAlfAps( Picture& pic, ParameterSetMap<APS>& dst, const Paramet
   }
 }
 
-void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
+void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef )
 {
   pic.encTime.startTimer();
 
-  au.m_uiPOC          = pic.poc;
-  au.m_iTemporalLayer = pic.TLayer;
-  au.m_bRefPic        = pic.isReferenced;
+  au.poc           = pic.poc;
+  au.temporalLayer = pic.TLayer;
+  au.refPic        = pic.isReferenced;
   if ( ! pic.slices.empty() )
   {
-    au.m_eSliceType = pic.slices[ 0 ]->sliceType;
+    au.sliceType = pic.slices[ 0 ]->sliceType;
   }
 
   m_actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
@@ -1388,7 +1388,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnit& au, bool isEncodeLtRef )
 }
 
 
-int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter& hlsWriter )
+int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter )
 {
   Slice* slice        = pic.slices[0];
   const SPS& sps      = *(slice->sps);
@@ -1473,7 +1473,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnit& accessUnit, HLSWriter
 }
 
 
-int EncGOP::xWritePictureSlices( Picture& pic, AccessUnit& accessUnit, HLSWriter& hlsWriter )
+int EncGOP::xWritePictureSlices( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter )
 {
   Slice* slice        = pic.slices[ 0 ];
   const int numSlices = (int)( pic.slices.size() );
@@ -1508,7 +1508,7 @@ int EncGOP::xWritePictureSlices( Picture& pic, AccessUnit& accessUnit, HLSWriter
   return numBytes * 8;
 }
 
-void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnit& accessUnit )
+void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
 {
   const Slice* slice = pic.slices[ 0 ];
   SEIMessages leadingSeiMessages;
@@ -1544,13 +1544,13 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnit& accessUnit )
   }
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
-  AccessUnit::iterator pos = accessUnit.end();
+  AccessUnitList::iterator pos = accessUnit.end();
   xWriteSEISeparately( NAL_UNIT_PREFIX_SEI, leadingSeiMessages, accessUnit, pos, slice->TLayer, slice->sps );
 
   deleteSEIs( leadingSeiMessages );
 }
 
-void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnit& accessUnit, std::string& digestStr )
+void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr )
 {
   const Slice* slice = pic.slices[ 0 ];
   SEIMessages trailingSeiMessages;
@@ -1564,14 +1564,14 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnit& accessUnit, std
   }
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
-  AccessUnit::iterator pos = accessUnit.end();
+  AccessUnitList::iterator pos = accessUnit.end();
   xWriteSEISeparately( NAL_UNIT_SUFFIX_SEI, trailingSeiMessages, accessUnit, pos, slice->TLayer, slice->sps );
 
   deleteSEIs( trailingSeiMessages );
 }
 
 
-int EncGOP::xWriteVPS ( AccessUnit &accessUnit, const VPS *vps, HLSWriter& hlsWriter )
+int EncGOP::xWriteVPS ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter )
 {
   OutputNALUnit nalu(NAL_UNIT_VPS);
   hlsWriter.setBitstream( &nalu.m_Bitstream );
@@ -1581,7 +1581,7 @@ int EncGOP::xWriteVPS ( AccessUnit &accessUnit, const VPS *vps, HLSWriter& hlsWr
 }
 
 
-int EncGOP::xWriteDCI ( AccessUnit &accessUnit, const DCI *dci, HLSWriter& hlsWriter )
+int EncGOP::xWriteDCI ( AccessUnitList &accessUnit, const DCI *dci, HLSWriter& hlsWriter )
 {
   if (dci->dciId ==0)
   {
@@ -1596,7 +1596,7 @@ int EncGOP::xWriteDCI ( AccessUnit &accessUnit, const DCI *dci, HLSWriter& hlsWr
 }
 
 
-int EncGOP::xWriteSPS ( AccessUnit &accessUnit, const SPS *sps, HLSWriter& hlsWriter )
+int EncGOP::xWriteSPS ( AccessUnitList &accessUnit, const SPS *sps, HLSWriter& hlsWriter )
 {
   OutputNALUnit nalu(NAL_UNIT_SPS);
   hlsWriter.setBitstream( &nalu.m_Bitstream );
@@ -1606,7 +1606,7 @@ int EncGOP::xWriteSPS ( AccessUnit &accessUnit, const SPS *sps, HLSWriter& hlsWr
 }
 
 
-int EncGOP::xWritePPS ( AccessUnit &accessUnit, const PPS *pps, const SPS *sps, HLSWriter& hlsWriter )
+int EncGOP::xWritePPS ( AccessUnitList &accessUnit, const PPS *pps, const SPS *sps, HLSWriter& hlsWriter )
 {
   OutputNALUnit nalu(NAL_UNIT_PPS);
   hlsWriter.setBitstream( &nalu.m_Bitstream );
@@ -1616,7 +1616,7 @@ int EncGOP::xWritePPS ( AccessUnit &accessUnit, const PPS *pps, const SPS *sps, 
 }
 
 
-int EncGOP::xWriteAPS( AccessUnit &accessUnit, const APS *aps, HLSWriter& hlsWriter, NalUnitType eNalUnitType )
+int EncGOP::xWriteAPS( AccessUnitList &accessUnit, const APS *aps, HLSWriter& hlsWriter, NalUnitType eNalUnitType )
 {
   OutputNALUnit nalu(eNalUnitType, aps->temporalId);
   hlsWriter.setBitstream(&nalu.m_Bitstream);
@@ -1626,7 +1626,7 @@ int EncGOP::xWriteAPS( AccessUnit &accessUnit, const APS *aps, HLSWriter& hlsWri
 }
 
 
-void EncGOP::xWriteAccessUnitDelimiter ( AccessUnit &accessUnit, Slice* slice, bool IrapOrGdr, HLSWriter& hlsWriter )
+void EncGOP::xWriteAccessUnitDelimiter ( AccessUnitList &accessUnit, Slice* slice, bool IrapOrGdr, HLSWriter& hlsWriter )
 {
   OutputNALUnit nalu(NAL_UNIT_ACCESS_UNIT_DELIMITER, slice->TLayer);
   hlsWriter.setBitstream(&nalu.m_Bitstream);
@@ -1635,7 +1635,7 @@ void EncGOP::xWriteAccessUnitDelimiter ( AccessUnit &accessUnit, Slice* slice, b
 }
 
 
-void EncGOP::xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, int temporalId, const SPS *sps)
+void EncGOP::xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps)
 {
   if (seiMessages.empty())
   {
@@ -1648,7 +1648,7 @@ void EncGOP::xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUn
 }
 
 
-void EncGOP::xWriteSEISeparately (NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, int temporalId, const SPS *sps)
+void EncGOP::xWriteSEISeparately (NalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps)
 {
   if (seiMessages.empty())
   {
@@ -1725,7 +1725,7 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
 
 void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
 {
-  if ( m_pcEncCfg->m_RCRateControlMode < 1 ) // TODO: does this work with multiple slices and slice-segments?
+  if ( !m_pcEncCfg->m_RCRateControlMode ) // TODO: does this work with multiple slices and slice-segments?
   {
     return;
   }
@@ -1836,7 +1836,7 @@ void EncGOP::xUpdateAfterPicRC(const Picture* pic)
   return;
 }
 
-void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUnit& accessUnit, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef )
+void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList& accessUnit, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef )
 {
   const SPS&         sps = *pic->cs->sps;
   const CPelUnitBuf& org = pic->getOrigBuf();
@@ -1881,12 +1881,12 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
    *  - SEI NAL units
    */
   uint32_t numRBSPBytes = 0;
-  for (AccessUnit::const_iterator it = accessUnit.begin(); it != accessUnit.end(); it++)
+  for (AccessUnitList::const_iterator it = accessUnit.begin(); it != accessUnit.end(); it++)
   {
     uint32_t numRBSPBytes_nal = uint32_t((*it)->m_nalUnitData.str().size());
     if (m_pcEncCfg->m_summaryVerboseness > 0)
     {
-      msg( NOTICE, "*** %6s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
+      msg( NOTICE, "*** %s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
     }
     if( ( *it )->m_nalUnitType != NAL_UNIT_PREFIX_SEI && ( *it )->m_nalUnitType != NAL_UNIT_SUFFIX_SEI )
     {
@@ -1947,13 +1947,13 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
           m_pcRateCtrl->rcMaxPass + 1,
           slice->poc );
 
-          accessUnit.m_cInfo.append( cInfo );
+          accessUnit.InfoString.append( cInfo );
 
           msg( NOTICE, cInfo.c_str() );
     }
     else
     {
-      std::string cInfo = print("POC %4d TId: %1d ( %s, %c-SLICE, QP %d ) %10d bits",
+      std::string cInfo = print("POC %4d TId: %1d (%10s, %c-SLICE, QP %d ) %10d bits",
           slice->poc,
           slice->TLayer,
           nalUnitTypeToString( slice->nalUnitType ),
@@ -1963,8 +1963,8 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
       std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
 
-      accessUnit.m_cInfo.append( cInfo );
-      accessUnit.m_cInfo.append( cPSNR );
+      accessUnit.InfoString.append( cInfo );
+      accessUnit.InfoString.append( cPSNR );
 
       msg( NOTICE, cInfo.c_str() );
       msg( NOTICE, cPSNR.c_str() );
@@ -1982,19 +1982,19 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
         std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
 
-        accessUnit.m_cInfo.append( cPSNRHex );
+        accessUnit.InfoString.append( cPSNRHex );
         msg(NOTICE, cPSNRHex.c_str() );
       }
 
       if( printFrameMSE )
       {
         std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
-        accessUnit.m_cInfo.append( cFrameMSE );
+        accessUnit.InfoString.append( cFrameMSE );
         msg(NOTICE, cFrameMSE.c_str() );
       }
 
       std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
-      accessUnit.m_cInfo.append( cEncTime );
+      accessUnit.InfoString.append( cEncTime );
       msg(NOTICE, cEncTime.c_str() );
 
       std::string cRefPics;
@@ -2009,7 +2009,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
         }
         cRefPics.append( "]" );
       }
-      accessUnit.m_cInfo.append( cRefPics );
+      accessUnit.InfoString.append( cRefPics );
       msg(NOTICE, cRefPics.c_str() );
     }
   }
@@ -2058,7 +2058,7 @@ uint64_t EncGOP::xFindDistortionPlane( const CPelBuf& pic0, const CPelBuf& pic1,
 }
 
 
-void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnit& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef )
+void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef )
 {
   double PSNR_Y;
   xCalculateAddPSNR( &pic, pic.getRecoBuf(), accessUnit, printFrameMSE, &PSNR_Y, isEncodeLtRef );

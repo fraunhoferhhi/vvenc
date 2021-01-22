@@ -46,7 +46,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/Common.h"
 #include "CommonLib/HRD.h"
 #include "CommonLib/Slice.h"
@@ -56,7 +56,7 @@ namespace vvenc {
   class EncHRD :public HRD
   {
   public:
-    void initHRDParameters( const EncCfg& encCfg, const SPS& sps );
+    void initHRDParameters( const VVEncCfg& encCfg, const SPS& sps );
 
   protected:
     // calculate scale value of bitrate and initial delay

@@ -2161,7 +2161,7 @@ void  HLSWriter::codeProfileTierLevel    ( const ProfileTierLevel* ptl, bool pro
   if(profileTierPresent)
   {
     WRITE_CODE( (uint32_t)ptl->profileIdc, 7 ,        "general_profile_idc"                     );
-    WRITE_FLAG( ptl->tierFlag==Level::HIGH,           "general_tier_flag"                       );
+    WRITE_FLAG( ptl->tierFlag==Tier::TIER_HIGH,           "general_tier_flag"                       );
   }
 
   WRITE_CODE( (uint32_t)ptl->levelIdc, 8 ,            "general_level_idc");

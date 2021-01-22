@@ -55,7 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // forward declarations
-class EncCfg;
+class VVEncCfg;
 class EncHRD;
 
 struct DUData
@@ -78,7 +78,7 @@ public:
   {};
   virtual ~SEIEncoder(){};
 
-  void init( const EncCfg& encCfg, EncHRD& encHRD);
+  void init( const VVEncCfg& encCfg, EncHRD& encHRD);
   void initDecodedPictureHashSEI  ( SEIDecodedPictureHash& dphSei, const CPelUnitBuf& pic, std::string &rHashString, const BitDepths &bitDepths);
 
   void initBufferingPeriodSEI     ( SEIBufferingPeriod& bpSei, bool noLeadingPictures);
@@ -86,12 +86,12 @@ public:
   void initDrapSEI                ( SEIDependentRAPIndication& drapSei) {};
 
 private:
-  const EncCfg* m_pcEncCfg;
-  EncHRD*       m_pcEncHRD;
-  bool          m_isInitialized;
-  bool          m_rapWithLeading;
-  uint32_t      m_lastBPSEI[MAX_TLAYER];
-  uint32_t      m_totalCoded[MAX_TLAYER];
+  const VVEncCfg* m_pcEncCfg;
+  EncHRD*         m_pcEncHRD;
+  bool            m_isInitialized;
+  bool            m_rapWithLeading;
+  uint32_t        m_lastBPSEI[MAX_TLAYER];
+  uint32_t        m_totalCoded[MAX_TLAYER];
 };
 
 } // namespace vvenc
