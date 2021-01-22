@@ -244,6 +244,9 @@ public:
   int                           picInitialQP;
   StopClock                     encTime;
   bool                          useSC;
+#if SCC_MCTF
+  bool                          NoUseMCTF;
+#endif
 
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];

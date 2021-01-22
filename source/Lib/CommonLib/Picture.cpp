@@ -180,6 +180,9 @@ Picture::Picture()
     , m_bufsOrigPrev    { nullptr, nullptr }
     , picInitialQP    ( 0 )
     , useSC           ( 0 )
+#if SCC_MCTF
+    , NoUseMCTF       ( 0 )
+#endif
 {
 }
 

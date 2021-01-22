@@ -370,6 +370,12 @@ void MCTF::filter( Picture* pic )
       break;
     }
   }
+#if SCC_MCTF
+  if (m_MCTFMode == 2 && fltrPic->NoUseMCTF)
+  {
+    isFilterThisFrame = false;
+  }
+#endif
   CHECK( fltrPic == nullptr || fltrPic->poc != process_poc, "error: picture not found in fifo" );
 
   if ( isFilterThisFrame )

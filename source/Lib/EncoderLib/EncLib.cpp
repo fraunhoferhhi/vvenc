@@ -1256,49 +1256,110 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
   }
   else
   {
-    int K_SC = 5;
     int SIZE_BL = 4;
+#if SCC_MCTF
+    int K_SC = 20;
+#else
+    int K_SC = 5;
     int TH_SC = 6;
+#endif
     const Pel* piSrc = yuvOrgBuf.Y().buf;
     uint32_t   uiStride = yuvOrgBuf.Y().stride;
     uint32_t   uiWidth = yuvOrgBuf.Y().width;
     uint32_t   uiHeight = yuvOrgBuf.Y().height;
-    unsigned   i, j;
     int size = SIZE_BL;
+#if SCC_MCTF
+    unsigned   hh, ww;
+    int SizeS = SIZE_BL << 1;
+    int sR[4] = { 0,0,0,0 };
+    int AmountBlock = (uiWidth >> 2) * (uiHeight >> 2);
+    for (hh = 0; hh < uiHeight;)
+    {
+      for (ww = 0; ww < uiWidth;)
+      {
+        int Rx = ww > (uiWidth >> 1) ? 1 : 0;
+        int Ry = hh > (uiHeight >> 1) ? 1 : 0;
+        Ry = Ry << 1 | Rx;
+
+        int i = ww;
+        int j = hh;
+        int n = 0;
+        int Var[4];
+        for (j = hh; (j < hh + SizeS) && (j < uiHeight); j++)
+        {
+          for (i = ww; (i < ww + SizeS) && (i < uiWidth); i++)
+          {
+#else
+    unsigned   i, j;
     std::vector<int> Vall;
     for (j = 0; j < uiHeight;)
     {
       for (i = 0; i < uiWidth;)
       {
-        int sum = 0;
-        int Mit = 0;
-        int V = 0;
-        int h = i;
-        int w = j;
-        for (h = j; (h < j + size) && (h < uiHeight); h++)
+#endif
+            int sum = 0;
+            int Mit = 0;
+            int V = 0;
+            int h = j;
+            int w = i;
+            for (h = j; (h < j + size) && (h < uiHeight); h++)
+            {
+              for (w = i; (w < i + size) && (w < uiWidth); w++)
+              {
+                sum += int(piSrc[h * uiStride + w]);
+              }
+            }
+            int sizeEnd = ((h - j) * (w - i));
+            Mit = sum / sizeEnd;
+            for (h = j; (h < j + size) && (h < uiHeight); h++)
+            {
+              for (w = i; (w < i + size) && (w < uiWidth); w++)
+              {
+                V += abs(Mit - int(piSrc[h * uiStride + w]));
+              }
+            }
+            // Variance in Block (SIZE_BL*SIZE_BL)
+            V = V / sizeEnd;
+#if SCC_MCTF
+            Var[n] = V;
+            n++;
+#else
+            Vall.push_back(V);
+#endif
+            i += size;
+          }
+          j += size;
+        }
+#if SCC_MCTF
+        for (int i = 0; i < 2; i++)
         {
-          for (w = i; (w < i + size) && (w < uiWidth); w++)
+          if (Var[i] == Var[i + 2])
           {
-            sum += int(piSrc[h * uiStride + w]);
+            sR[Ry] += 1;
+          }
+          if (Var[i << 1] == Var[(i << 1) + 1])
+          {
+            sR[Ry] += 1;
           }
         }
-        int sizeEnd = ((h - j) * (w - i));
-        Mit = sum / sizeEnd;
-        for (h = j; (h < j + size) && (h < uiHeight); h++)
-        {
-          for (w = i; (w < i + size) && (w < uiWidth); w++)
-          {
-            V += abs(Mit - int(piSrc[h * uiStride + w]));
-          }
-        }
-        // Variance in Block (SIZE_BL*SIZE_BL)
-        V = V / sizeEnd;
-        Vall.push_back(V);
-        i += size;
+        ww += SizeS;
       }
-      j += size;
+      hh += SizeS;
     }
+#endif
     int s = 0;
+#if SCC_MCTF
+    pic.NoUseMCTF = true; // for SCC no MCTF
+    for (int r = 0; r < 4; r++)
+    {
+      s += sR[r];
+      if (((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC))
+      {
+        pic.NoUseMCTF = false; //NC
+      }
+    }
+    if ((s * 100 / AmountBlock) > K_SC)
+#else
     for (auto it = Vall.begin(); it != Vall.end(); ++it)
     {
       if (*it < TH_SC)
@@ -1307,16 +1368,17 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
       }
     }
     if (s > (Vall.size() / K_SC))
+#endif
     {
       pic.useSC = true;
-     //  printf(" s= %d  all= %d SSC\n", s, int(Vall.size() / K_SC));
     }
     else
     {
       pic.useSC = false;
-      // printf(" s= %d  all= %d NC\n", s, int(Vall.size() / K_SC));
     }
+#if !SCC_MCTF
     Vall.clear();
+#endif
   }
 }
 
