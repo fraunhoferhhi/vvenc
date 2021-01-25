@@ -738,7 +738,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
     }
   }
 
-  if( m_pcEncCfg->m_qtbttSpeedUp )
+  if( m_pcEncCfg->m_qtbttSpeedUp > 0 )
   {
     const int availDepth = cs.pcv->getMaxMTTDepth( slice, partitioner.chType ) - partitioner.currMtDepth;
     if( bestCU && bestCU->skip && availDepth <= ( 3 - m_skipThresholdE0023FastEnc ) && !isModeSplit( lastTestmode ) && split != CU_QUAD_SPLIT )
@@ -787,7 +787,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         return false;
       }
 
-      if( m_pcEncCfg->m_qtbttSpeedUp )
+      if( m_pcEncCfg->m_qtbttSpeedUp > 1 )
       {
         //unsigned maxBTD = cs.pcv->getMaxMTTDepth( slice, partitioner.chType );
         if( /*maxBTD == 1 && */cuECtx.didHorzSplit && cuECtx.didVertSplit && cuECtx.bestCostHorzSplit > cuECtx.bestCostVertSplit )
@@ -807,7 +807,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         return false;
       }
 
-      if( m_pcEncCfg->m_qtbttSpeedUp )
+      if( m_pcEncCfg->m_qtbttSpeedUp > 1 )
       {
         //unsigned maxBTD = cs.pcv->getMaxMTTDepth( slice, partitioner.chType );
         if( /*maxBTD == 1 && */cuECtx.didHorzSplit && cuECtx.didVertSplit && cuECtx.bestCostHorzSplit < cuECtx.bestCostVertSplit )
@@ -857,10 +857,10 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if( split == CU_QUAD_SPLIT )
   {
-    cuECtx.didQuadSplit = !m_pcEncCfg->m_qtbttSpeedUp || !!cuECtx.doMoreSplits;
+    cuECtx.didQuadSplit = m_pcEncCfg->m_qtbttSpeedUp == 0 || !!cuECtx.doMoreSplits;
   }
 
-  return !m_pcEncCfg->m_qtbttSpeedUp || !!cuECtx.doMoreSplits;
+  return m_pcEncCfg->m_qtbttSpeedUp == 0 || !!cuECtx.doMoreSplits;
 }
 
 bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner )
