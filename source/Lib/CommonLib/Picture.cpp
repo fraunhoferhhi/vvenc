@@ -178,10 +178,13 @@ Picture::Picture()
     , cts               ( 0 )
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
-    , picInitialQP    ( 0 )
-    , useSC           ( 0 )
+    , picInitialQP      ( 0 )
 #if SCC_MCTF
-    , useScMCTF       ( 0 )
+    , useScMCTF         ( false )
+    , useScTS           ( false )
+    , useScBDPCM        ( false )
+#else
+    , useSC           ( 0 )
 #endif
 {
 }

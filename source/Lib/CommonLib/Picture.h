@@ -243,9 +243,12 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   StopClock                     encTime;
-  bool                          useSC;
 #if SCC_MCTF
   bool                          useScMCTF;
+  bool                          useScTS;
+  bool                          useScBDPCM;
+#else
+  bool                          useSC;
 #endif
 
 private:
