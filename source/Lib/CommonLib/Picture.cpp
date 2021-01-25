@@ -181,7 +181,7 @@ Picture::Picture()
     , picInitialQP    ( 0 )
     , useSC           ( 0 )
 #if SCC_MCTF
-    , NoUseMCTF       ( 0 )
+    , useScMCTF       ( 0 )
 #endif
 {
 }

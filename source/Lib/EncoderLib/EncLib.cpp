@@ -409,8 +409,16 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
       }
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
-
-      xDetectScreenC(*pic, pic->getOrigBuf(), m_cEncCfg.m_TS );
+#if SCC_MCTF
+      if (m_cEncCfg.m_TS == 2
+        || m_cEncCfg.m_useBDPCM == 2
+        || m_cEncCfg.m_MCTF == 2)
+      {
+        xDetectScreenC(*pic, pic->getOrigBuf());
+      }
+#else
+      xDetectScreenC(*pic, pic->getOrigBuf(), m_cEncCfg.m_TS);
+#endif
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
@@ -897,9 +905,9 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.signDataHidingEnabled         = m_cEncCfg.m_SignDataHidingEnabled;
   sps.MTSIntra                      = m_cEncCfg.m_MTS ;
   sps.ISP                           = m_cEncCfg.m_ISP;
-  sps.transformSkip                 = m_cEncCfg.m_TS;
+  sps.transformSkip                 = m_cEncCfg.m_TS != 0;
   sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
-  sps.BDPCM                         = m_cEncCfg.m_useBDPCM;
+  sps.BDPCM                         = m_cEncCfg.m_useBDPCM != 0;
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {
@@ -1248,6 +1256,10 @@ void EncLib::xInitHrdParameters(SPS &sps)
   }
 }
 
+#if SCC_MCTF
+void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
+{
+#else
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
 {
   if (useTS < 2)
@@ -1256,6 +1268,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
   }
   else
   {
+#endif
     int SIZE_BL = 4;
 #if SCC_MCTF
     int K_SC = 25;
@@ -1349,13 +1362,13 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
 #endif
     int s = 0;
 #if SCC_MCTF
-    pic.NoUseMCTF = true; // for SCC no MCTF
+    pic.useScMCTF = true; // for SCC no MCTF
     for (int r = 0; r < 4; r++)
     {
       s += sR[r];
       if (((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC))
       {
-        pic.NoUseMCTF = false; //NC
+        pic.useScMCTF = false; //NC
       }
     }
     if ((s * 100 / AmountBlock) > K_SC)
@@ -1378,8 +1391,8 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
     }
 #if !SCC_MCTF
     Vall.clear();
-#endif
   }
+#endif
 }
 
 } // namespace vvenc

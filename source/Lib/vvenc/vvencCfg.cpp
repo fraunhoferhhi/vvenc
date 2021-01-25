@@ -471,8 +471,9 @@ bool VVEncCfg::initCfgParameter()
   confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
   confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
   confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
-  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
-  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..2]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [2..5]" );
+  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,        "BDPCM out of range [0..2]");
   confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
 
   if( m_alf )
@@ -1610,7 +1611,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
@@ -1631,7 +1632,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
@@ -1654,7 +1655,7 @@ int VVEncCfg::initPreset( PresetMode preset )
 
       m_alf                       = 1;
       m_ccalf                     = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MCTF                      = 2;
@@ -1676,7 +1677,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1713,7 +1714,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1758,7 +1759,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_Affine                    = 1;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;

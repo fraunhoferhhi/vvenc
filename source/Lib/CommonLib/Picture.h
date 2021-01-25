@@ -245,7 +245,7 @@ public:
   StopClock                     encTime;
   bool                          useSC;
 #if SCC_MCTF
-  bool                          NoUseMCTF;
+  bool                          useScMCTF;
 #endif
 
 private:
