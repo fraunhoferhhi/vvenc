@@ -534,7 +534,7 @@ public:
   std::vector<double> m_MCTFStrengths;
 
   int                 m_dqThresholdVal                          = 8;
-  int                 m_qtbttSpeedUp                            = 0;
+  bool                m_qtbttSpeedUp                            = false;
 
   int                 m_fastLocalDualTreeMode                   = 0;
   int                 m_numWppThreads                           = 0;             ///< number of wpp threads
