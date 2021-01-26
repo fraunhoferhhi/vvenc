@@ -138,7 +138,7 @@ protected:
   bool     m_bResetAMaxBT;
 };
 
-class WaitCounter;
+struct WaitCounter;
 
 struct Picture : public UnitArea
 {
