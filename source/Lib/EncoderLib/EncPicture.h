@@ -54,6 +54,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncAdaptiveLoopFilter.h"
 #include "CommonLib/LoopFilter.h"
 
+#include <mutex>
+#include <condition_variable>
+
 //! \ingroup EncoderLib
 //! \{
 
@@ -67,30 +70,51 @@ class EncGOP;
 class EncPicture
 {
   private:
-    const VVEncCfg*         m_pcEncCfg;
-    EncSlice                m_SliceEncoder;
-    LoopFilter              m_LoopFilter;
-    EncAdaptiveLoopFilter   m_ALF;
+    const VVEncCfg*          m_pcEncCfg;
+    EncSlice                 m_SliceEncoder;
+    LoopFilter               m_LoopFilter;
+    EncAdaptiveLoopFilter    m_ALF;
 
-    BitEstimator            m_BitEstimator;
-    CABACWriter             m_CABACEstimator;
-    CtxCache                m_CtxCache;
+    BitEstimator             m_BitEstimator;
+    CABACWriter              m_CABACEstimator;
+    CtxCache                 m_CtxCache;
+
+    NoMallocThreadPool*      m_threadPool;
+    std::mutex*              m_gopEncMutex;
+    std::condition_variable* m_gopEncCond;
+    Picture*                 m_picPP;
+  public:
+    bool                     m_isRunning;
 
   public:
     EncPicture()
-      : m_pcEncCfg( nullptr )
-      , m_CABACEstimator   ( m_BitEstimator )
+      : m_pcEncCfg      ( nullptr )
+      , m_CABACEstimator( m_BitEstimator )
+      , m_threadPool    ( nullptr )
+      , m_gopEncMutex   ( nullptr )
+      , m_gopEncCond    ( nullptr )
+      , m_picPP         ( nullptr )
+      , m_isRunning     ( false )
     {}
     virtual ~EncPicture() {}
 
-    void      init          ( const VVEncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                              const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP = nullptr );
-    EncSlice* getEncSlice   () { return &m_SliceEncoder; }
+    void      init              ( const VVEncCfg& encCfg,
+                                  std::vector<int>* const globalCtuQpVector,
+                                  const SPS& sps,
+                                  const PPS& pps,
+                                  RateCtrl& rateCtrl,
+                                  NoMallocThreadPool* threadPool,
+                                  std::mutex* gopMutex,
+                                  std::condition_variable* gopCond );
+    void      encodePicture     ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
+    void      finalizePicture   ( Picture& pic );
 
-    void      encodePicture ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
+    EncSlice* getEncSlice       () { return &m_SliceEncoder; }
 
-    void finalizePicture        ( Picture& pic );
   protected:
+    void xStartPP               ( Picture& pic );
+    void xFinishPP              ();
+
     void xInitPicEncoder        ( Picture& pic );
     void xCompressPicture       ( Picture& pic );
     void xSkipCompressPicture   ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );

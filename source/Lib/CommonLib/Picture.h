@@ -138,6 +138,7 @@ protected:
   bool     m_bResetAMaxBT;
 };
 
+class WaitCounter;
 
 struct Picture : public UnitArea
 {
@@ -218,6 +219,7 @@ public:
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
+  // TODO (jb): cleanup flags
   bool                          isEncPicturePPFinished;
   bool                          isFinished;
   bool                          isLongTerm;
@@ -241,6 +243,7 @@ public:
   std::vector<double>           ctuQpaLambda;
   std::vector<Pel>              ctuAdaptedQP;
   std::mutex                    wppMutex;
+  WaitCounter*                  ctuTaskFinishCounter;
   int                           picInitialQP;
   StopClock                     encTime;
 #if SCC_MCTF

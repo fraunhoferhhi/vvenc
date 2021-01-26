@@ -91,7 +91,7 @@ void EncCu::initPic( Picture* pic )
   m_cRdCost.setReshapeParams( reshapeData.getReshapeLumaLevelToWeightPLUT(), reshapeData.getChromaWeight() );
   m_cInterSearch.setSearchRange( pic->cs->slice, *m_pcEncCfg );
 
-  m_wppMutex = (m_pcEncCfg->m_numWppThreads > 0 ) ? &pic->wppMutex : nullptr;
+  m_wppMutex = (m_pcEncCfg->m_numThreads > 0 ) ? &pic->wppMutex : nullptr;
 }
 
 void EncCu::initSlice( const Slice* slice )
@@ -183,7 +183,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter
   m_syncPicCtx = syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   m_pcRateCtrl = pRateCtrl;
 
-  m_rcMutex = (encCfg.m_numWppThreads > 0) ? &m_pcRateCtrl->rcMutex : nullptr;
+  m_rcMutex = (encCfg.m_numThreads > 0) ? &m_pcRateCtrl->rcMutex : nullptr;
 
   // Initialise scaling lists: The encoder will only use the SPS scaling lists. The PPS will never be marked present.
   const int maxLog2TrDynamicRange[ MAX_NUM_CH ] = { sps.getMaxLog2TrDynamicRange( CH_L ), sps.getMaxLog2TrDynamicRange( CH_C ) };

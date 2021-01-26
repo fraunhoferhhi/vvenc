@@ -104,17 +104,6 @@ struct FFwdDecoder
 };
 
 class EncGOP;
-class EncPicturePP : public EncPicture
-{
-public:
-  EncPicturePP() : m_isRunning( false ) {}
-  bool     m_isRunning;
-  Picture* m_pic;
-  EncGOP*  m_encGOP;
-
-  void start( EncGOP* encGOP, Picture* pic );
-  void finish();
-};
 
 // ====================================================================================================================
 
@@ -146,11 +135,10 @@ private:
   EncHRD*                   m_pcEncHRD;
   ParameterSetMap<APS>      m_gopApsMap;
 
-  std::vector<EncPicturePP*>  m_picEncoderList;
+  std::vector<EncPicture*>  m_picEncoderList;
   std::list<Picture*>       m_gopEncListInput;
-  std::list<Picture*>       m_gopEncListToProcess;
   std::list<Picture*>       m_gopEncListInFlight;
-  NoMallocThreadPool*       m_gopThreadPool;
+  NoMallocThreadPool*       m_threadPool;
   std::vector<int>          m_globalCtuQpVector;
 
   double                    m_lambda;
@@ -168,8 +156,7 @@ public:
   virtual ~EncGOP();
 
   void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
-  void encodeGOP          ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef, bool flush );
-  void encodePicture      ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
+  void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
   void picInitRateControl ( int gopId, Picture& pic, Slice* slice );
   ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
@@ -183,7 +170,7 @@ private:
   int  xGetSliceDepth                 ( int poc ) const;
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, PicList& picList, int gopId ) const;
 
-  void xInitPicsICO                   ( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef );
+  void xInitPicsInCodingOrder         ( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef );
   void xInitFirstSlice                ( Picture& pic, PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
@@ -212,8 +199,8 @@ private:
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
   void xWaitForFinishedPic            ();
-  EncPicturePP* xGetNextFreePicEncoder();
-  bool xFinalizePicsPP                ();
+  EncPicture* xGetNextFreePicEncoder  ();
+  void xRemoveFinishedPics            ();
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

@@ -435,7 +435,7 @@ int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorStrin
 
   ROTPARAMS( (rcSrc.m_TicksPerSecond < 90000) && (rcSrc.m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  ROTPARAMS( rcSrc.m_numWppThreads < 0,                                                      "numWppThreads must be >= 0" );
+  ROTPARAMS( rcSrc.m_numThreads < 0,                                                         "Number of threads must be >= 0" );
 
   ROTPARAMS( rcSrc.m_IntraPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
   ROTPARAMS( rcSrc.m_IntraPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
