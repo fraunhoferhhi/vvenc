@@ -410,12 +410,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
 #if SCC_MCTF
-      if (m_cEncCfg.m_TS == 2
-        || m_cEncCfg.m_useBDPCM == 2
-        || m_cEncCfg.m_MCTF == 2)
-      {
-        xDetectScreenC(*pic, pic->getOrigBuf());
-      }
+      xDetectScreenC(*pic, pic->getOrigBuf());
 #else
       xDetectScreenC(*pic, pic->getOrigBuf(), m_cEncCfg.m_TS);
 #endif
@@ -1259,6 +1254,11 @@ void EncLib::xInitHrdParameters(SPS &sps)
 #if SCC_MCTF
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
 {
+  bool useScMCTF = false;
+  bool useScTools = false;
+
+  if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_MCTF == 2)
+  {
 #else
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
 {
@@ -1362,16 +1362,16 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
 #endif
     int s = 0;
 #if SCC_MCTF
-    pic.useScMCTF = true; // for SCC no MCTF
+    useScMCTF = false; // for SCC no MCTF
     for (int r = 0; r < 4; r++)
     {
       s += sR[r];
       if (((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC))
       {
-        pic.useScMCTF = false; //NC
+        useScMCTF = true; //NC
       }
     }
-    if ((s * 100 / AmountBlock) > K_SC)
+    useScTools = ((s * 100 / AmountBlock) > K_SC);
 #else
     for (auto it = Vall.begin(); it != Vall.end(); ++it)
     {
@@ -1381,7 +1381,6 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
       }
     }
     if (s > (Vall.size() / K_SC))
-#endif
     {
       pic.useSC = true;
     }
@@ -1389,9 +1388,15 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
     {
       pic.useSC = false;
     }
-#if !SCC_MCTF
     Vall.clear();
   }
+#endif
+
+#if SCC_MCTF
+  }
+  pic.useScTS    = m_cEncCfg.m_TS == 1       || (m_cEncCfg.m_TS == 2 && useScTools);
+  pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1 || (m_cEncCfg.m_useBDPCM == 2 && useScTools);
+  pic.useScMCTF  = m_cEncCfg.m_MCTF == 1     || (m_cEncCfg.m_MCTF == 2 && useScMCTF);
 #endif
 }
 

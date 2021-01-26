@@ -554,7 +554,7 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
   int   bestLfnstIdx  = 0;
 #if SCC_MCTF
-  const bool useBDPCM = m_pcEncCfg->m_useBDPCM == 1 || (m_pcEncCfg->m_useBDPCM == 2 && cs.picture->useSC);
+  const bool useBDPCM = cs.picture->useScBDPCM;
   int   NumBDPCMCand = (useBDPCM && sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType))) ? 2 : 0;
 #else
   int   NumBDPCMCand  = (cs.picture->useSC && sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType))) ? 2 : 0;
@@ -724,7 +724,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
   double bestCostSoFar  = maxCostAllowed;
   const uint32_t numberValidComponents = getNumberValidComponents( cu.chromaFormat );
 #if SCC_MCTF
-  const bool useBDPCM = m_pcEncCfg->m_useBDPCM == 1 || (m_pcEncCfg->m_useBDPCM == 2 && cs.picture->useSC);
+  const bool useBDPCM = cs.picture->useScBDPCM;
 #endif
 
   uint32_t   uiBestMode = 0;
@@ -1511,7 +1511,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
   int endLfnstIdx           = (partitioner.isSepTree(cs) && partitioner.chType == CH_C && (currArea.lwidth() < 8 || currArea.lheight() < 8))
                            || (currArea.lwidth() > sps.getMaxTbSize() || currArea.lheight() > sps.getMaxTbSize()) || !sps.LFNST || (numMode < 0) ? 0 : 2;
 #if SCC_MCTF
-  const bool useTS          = m_pcEncCfg->m_TS == 1 || (m_pcEncCfg->m_TS == 2 && cs.picture->useSC);
+  const bool useTS          = cs.picture->useScTS;
 #endif
   numMode                   = (numMode < 0) ? -numMode : numMode;
 
@@ -1998,7 +1998,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
   ChromaCbfs cbfs(false);
   uint32_t   currDepth = partitioner.currTrDepth;
 #if SCC_MCTF
-  const bool useTS = m_pcEncCfg->m_TS == 1 || (m_pcEncCfg->m_TS == 2 && cs.picture->useSC);
+  const bool useTS = cs.picture->useScTS;
 #endif
   if (currDepth == currTU.depth)
   {

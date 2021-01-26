@@ -373,7 +373,7 @@ void MCTF::filter( Picture* pic )
     }
   }
 #if SCC_MCTF
-  if (m_MCTFMode == 2 && fltrPic->useScMCTF)
+  if( !fltrPic->useScMCTF )
   {
     isFilterThisFrame = false;
   }

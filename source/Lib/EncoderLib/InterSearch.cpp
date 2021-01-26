@@ -3577,7 +3577,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   CodingUnit& cu               = *cs.getCU(partitioner.chType, partitioner.treeType);
   const unsigned currDepth = partitioner.currTrDepth;
 #if SCC_MCTF
-  const bool useTS = m_pcEncCfg->m_TS == 1 || (m_pcEncCfg->m_TS == 2 && cs.picture->useSC);
+  const bool useTS = cs.picture->useScTS;
 #endif
 
   bool bCheckFull  = !partitioner.canSplit( TU_MAX_TR_SPLIT, cs );
