@@ -103,7 +103,16 @@ struct FFwdDecoder
   {}
 };
 
+// ====================================================================================================================
+
 class EncGOP;
+struct FinishTaskParam {
+  EncGOP*     gopEncoder;
+  EncPicture* picEncoder;
+  Picture*    pic;
+  FinishTaskParam()                                          : gopEncoder( nullptr ), picEncoder( nullptr ), pic( nullptr ) {}
+  FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p )      {}
+};
 
 // ====================================================================================================================
 
@@ -144,14 +153,14 @@ private:
   int                       m_estimatedBits;
   std::vector<int>          m_globalCtuQpVector;
 
-public:
-  std::list<Picture*>       m_gopEncListOutput;
-
   NoMallocThreadPool*       m_threadPool;
   std::mutex                m_gopEncMutex;
   std::condition_variable   m_gopEncCond;
   int                       m_numPicsInFlight;
   int                       m_numPicsFinished;
+
+public:
+  std::list<Picture*>       m_gopEncListOutput;
 
 public:
   EncGOP();
@@ -202,6 +211,7 @@ private:
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
   void xWaitForFinishedPic            ();
   EncPicture* xGetNextFreePicEncoder  ();
+  void xFinishPP                      ( EncPicture* picEncoder );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

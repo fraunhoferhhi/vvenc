@@ -77,19 +77,14 @@ class EncPicture
     CABACWriter              m_CABACEstimator;
     CtxCache                 m_CtxCache;
 
-    EncGOP*                  m_encGOP;
-    Picture*                 m_picPP;
-    WaitCounter              m_ctuTasksDoneCounter;
-
   public:
+    WaitCounter              m_ctuTasksDoneCounter;
     bool                     m_isRunning;
 
   public:
     EncPicture()
       : m_pcEncCfg      ( nullptr )
       , m_CABACEstimator( m_BitEstimator )
-      , m_encGOP        ( nullptr )
-      , m_picPP         ( nullptr )
       , m_isRunning     ( false )
     {}
     virtual ~EncPicture() {}
@@ -99,19 +94,14 @@ class EncPicture
                                   const SPS& sps,
                                   const PPS& pps,
                                   RateCtrl& rateCtrl,
-                                  NoMallocThreadPool* threadPool,
-                                  EncGOP* encGOP );
-    void      encodePicture     ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
+                                  NoMallocThreadPool* threadPool );
+    void      compressPicture   ( Picture& pic, EncGOP& gopEncoder );
     void      finalizePicture   ( Picture& pic );
 
     EncSlice* getEncSlice       () { return &m_SliceEncoder; }
 
   protected:
-    void xStartPP               ( Picture& pic );
-    void xFinishPP              ();
-
     void xInitPicEncoder        ( Picture& pic );
-    void xCompressPicture       ( Picture& pic );
     void xSkipCompressPicture   ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
     void xWriteSliceData        ( Picture& pic );
 

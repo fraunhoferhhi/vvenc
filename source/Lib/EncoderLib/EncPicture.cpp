@@ -71,81 +71,38 @@ static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-void EncPicture::xStartPP( Picture& pic )
-{
-  m_isRunning = true;
-  m_picPP     = &pic;
-}
-
-void EncPicture::xFinishPP()
-{
-  std::unique_lock<std::mutex> _lock( m_encGOP->m_gopEncMutex );
-  m_isRunning = false;
-  m_picPP     = nullptr;
-  m_encGOP->m_numPicsFinished += 1;
-  m_encGOP->m_gopEncCond.notify_one();
-}
-
 void EncPicture::init( const VVEncCfg& encCfg,
                        std::vector<int>* const globalCtuQpVector,
                        const SPS& sps,
                        const PPS& pps,
                        RateCtrl& rateCtrl,
-                       NoMallocThreadPool* threadPool,
-                       EncGOP* encGOP )
+                       NoMallocThreadPool* threadPool )
 {
-  m_pcEncCfg    = &encCfg;
-  m_encGOP      = encGOP;
+  m_pcEncCfg = &encCfg;
 
   m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
 }
 
 
-void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder )
+void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 {
   ITT_TASKSTART( itt_domain_picEncoder, itt_handle_start );
 
   pic.encTime.startTimer();
 
+  pic.createTempBuffers( pic.cs->pcv->maxCUSize );
+  pic.cs->createCoeffs();
+  pic.cs->createTempBuffers( true );
+  pic.cs->initStructData();
+
   // compress picture
-  if( pic.encPic )
-  {
-    // init parallel picture encoding
-    if( m_pcEncCfg->m_numThreads > 0 )
-    {
-      xStartPP( pic );
-    }
+  xInitPicEncoder ( pic );
+  gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
 
-    pic.createTempBuffers( pic.cs->pcv->maxCUSize );
-    pic.cs->createCoeffs();
-    pic.cs->createTempBuffers( true );
-    pic.cs->initStructData();
-
-    // compress picture
-    xInitPicEncoder ( pic );
-    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
-    xCompressPicture( pic );
-
-    // finish picture encoding and cleanup
-    if( m_pcEncCfg->m_numThreads > 0 )
-    {
-      static auto finishTask = []( int, EncPicture* encPic ) {
-        encPic->finalizePicture( *encPic->m_picPP );
-        encPic->xFinishPP();
-        return true;
-      };
-      m_encGOP->m_threadPool->addBarrierTask<EncPicture>( finishTask, this, nullptr, nullptr, { &m_ctuTasksDoneCounter.done } );
-    }
-    else
-    {
-      finalizePicture( pic );
-    }
-  }
-  else
-  {
-    xSkipCompressPicture( pic, shrdApsMap );
-  }
+  // compress current slice
+  pic.cs->slice = pic.slices[0];
+  m_SliceEncoder.compressSlice( &pic );
 
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
 }
@@ -267,13 +224,6 @@ void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
   }
 }
 
-
-void EncPicture::xCompressPicture( Picture& pic )
-{
-  // compress current slice
-  pic.cs->slice = pic.slices[0];
-  m_SliceEncoder.compressSlice( &pic );
-}
 
 void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
 {

@@ -293,7 +293,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
     m_picEncoderList[ i ] = new EncPicture;
-    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool, this );
+    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool );
   }
 
   if (encCfg.m_usePerceptQPA)
@@ -322,10 +322,24 @@ void EncGOP::xWaitForFinishedPic()
 
 EncPicture* EncGOP::xGetNextFreePicEncoder()
 {
+  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
   for( int i = 0; i < m_picEncoderList.size(); i++ )
+  {
     if( !m_picEncoderList[ i ]->m_isRunning )
+    {
+      m_picEncoderList[ i ]->m_isRunning = true;
       return m_picEncoderList[ i ];
+    }
+  }
   return nullptr;
+}
+
+void EncGOP::xFinishPP( EncPicture* picEncoder )
+{
+  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
+  picEncoder->m_isRunning = false;
+  m_numPicsFinished += 1;
+  m_gopEncCond.notify_one();
 }
 
 void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
@@ -367,6 +381,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     if( !pic->encPic )
     {
       m_picEncoderList[0]->encodePicture( *pic, m_gopApsMap, *this );
+      => xSkipCompressPicture( pic, shrdApsMap );
       m_picEncoderList[0]->finalizePicture( *pic );
 
       m_gopEncListInput.remove( pic );
@@ -380,15 +395,8 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       && !m_gopEncListOutput.front()->isReconstructed )
   {
     // get next picture ready to be encoded
-    Picture* pic = nullptr;
-    for( auto& picItr : m_gopEncListInput )
-    {
-      if( picItr->slices[ 0 ]->checkRefPicsReconstructed() )
-      {
-        pic = picItr;
-        break;
-      }
-    }
+    auto it = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+    Picture* pic = it != m_gopEncListInput.end() ? *it : nullptr;
 
     // check free picture encoder as well as picture to be encoded available
     if( m_numPicsInFlight >= maxPicsInParallel
@@ -398,22 +406,18 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       continue;
     }
 
+    // get next free encoder for the picture
+    EncPicture* picEncoder = xGetNextFreePicEncoder();
+
+    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
+    CHECK( picEncoder == nullptr, "no free picture encoder available" );
+
     // mark picture as in flight
     if( m_pcEncCfg->m_numThreads > 0 )
     {
       m_numPicsInFlight += 1;
     }
     m_gopEncListInput.remove( pic );
-
-    // get next free encoder for the picture
-    EncPicture* picEncoder = nullptr;
-    {
-      std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-      picEncoder = xGetNextFreePicEncoder();
-    }
-
-    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
-    CHECK( picEncoder == nullptr, "no free picture encoder available" );
 
     // encode next picture
     pic->encPic   = true;
@@ -422,7 +426,25 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
-    picEncoder->encodePicture( *pic, m_gopApsMap, *this );
+    picEncoder->compressPicture( *pic, *this );
+
+    // finish picture encoding and cleanup
+    if( m_pcEncCfg->m_numThreads > 0 )
+    {
+      static auto finishTask = []( int, FinishTaskParam* param ) {
+        param->picEncoder->finalizePicture( *param->pic );
+        param->gopEncoder->xFinishPP( param->picEncoder );
+        delete param;
+        return true;
+      };
+      FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
+      m_threadPool->addBarrierTask<FinishTaskParam>( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
+    }
+    else
+    {
+      picEncoder->finalizePicture( *pic );
+      picEncoder->m_isRunning = false;
+    }
   }
 
   // AU output
