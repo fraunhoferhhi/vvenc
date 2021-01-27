@@ -357,38 +357,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   m_actualTotalBits = 0;
   m_estimatedBits   = 0;
 
-  // TODO (jb): fix decoder in encoder
-#if 0
-  // Test if we can skip the picture entirely or decode instead of encoding (i.e. used for DebugBitstream feature)
-  // Currently this works in sequential mode. In the Frame Parallel mode the decoder bitstream reader would require jumping to AUs inside of debug-bitstream file. 
-  if( !m_gopEncListInput.empty() )
-  {
-    Picture* pic  = m_gopEncListInput.front();
-    pic->encPic   = true;
-    pic->writePic = true;
-
-    bool decPic = false;
-    bool encPic = false;
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
-    pic->writePic = decPic || encPic;
-    pic->encPic   = encPic;
-
-    if( decPic && m_pcEncCfg->m_alfTempPred )
-    {
-      xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
-    }
-
-    if( !pic->encPic )
-    {
-      m_picEncoderList[0]->encodePicture( *pic, m_gopApsMap, *this );
-      => xSkipCompressPicture( pic, shrdApsMap );
-      m_picEncoderList[0]->finalizePicture( *pic );
-
-      m_gopEncListInput.remove( pic );
-    }
-  }
-#endif
-
   const int maxPicsInParallel = std::max( 1, m_pcEncCfg->m_maxParallelFrames );
 
   while( !m_gopEncListInput.empty()
@@ -411,13 +379,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     CHECK( picEncoder == nullptr, "no free picture encoder available" );
     CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
 
-    // mark picture as in flight
-    if( m_pcEncCfg->m_numThreads > 0 )
-    {
-      m_numPicsInFlight += 1;
-    }
-    m_gopEncListInput.remove( pic );
-
     bool decPic = false;
     bool encPic = false;
     trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
@@ -428,6 +389,13 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
+
+    // mark picture as in flight
+    if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
+    {
+      m_numPicsInFlight += 1;
+    }
+    m_gopEncListInput.remove( pic );
 
     // compress next picture
     if( pic->encPic )
