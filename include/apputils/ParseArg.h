@@ -99,6 +99,8 @@ namespace df
     };
 
     void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
+    void APPUTILS_DECL doSaveConfig(std::ostream& out, Options& opts, unsigned columns = 120 );
+
     std::list<const char*> APPUTILS_DECL scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
     void APPUTILS_DECL setDefaults(Options& opts);
     void APPUTILS_DECL parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
@@ -118,7 +120,7 @@ namespace df
       virtual void parse(const std::string& arg, ErrorReporter&) = 0;
       /* set the argument to the default value */
       virtual void setDefault() = 0;
-      virtual const std::string getDefault() { return std::string(); }
+      virtual const std::string getDefault( std::string pre, std::string post ) { return std::string(); }
 
       std::string opt_string;
       std::string opt_desc;
@@ -138,7 +140,7 @@ namespace df
       {
         opt_storage = opt_default_val;
       }
-      virtual const std::string getDefault(); 
+      virtual const std::string getDefault( std::string pre, std::string post );
 
       T& opt_storage;
       T opt_default_val;
@@ -146,11 +148,27 @@ namespace df
 
     template<typename T>
     inline 
-    const std::string Option<T>::getDefault()
+    const std::string Option<T>::getDefault( std::string pre, std::string post)
     { 
       std::ostringstream oss;
-      oss << " [" << opt_default_val << "] ";
+      oss << pre << opt_default_val << post;
       return oss.str(); 
+    }
+
+    template<>
+    inline
+    const std::string Option<std::string>::getDefault( std::string pre, std::string post)
+    {
+      std::ostringstream oss;
+      if( opt_default_val.empty() )
+      {
+        oss << pre << "\"\"" << post;
+      }
+      else
+      {
+        oss << pre << opt_default_val << post;
+      }
+      return oss.str();
     }
 
     /* Generic parsing */

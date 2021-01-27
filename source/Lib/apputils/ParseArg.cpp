@@ -190,7 +190,25 @@ namespace df
       {
         out << "--" << entry.opt_long.front();
       }
-      out << entry.opt->getDefault();
+      out << entry.opt->getDefault( " [", "] ");
+    }
+
+    static void doPrintCfgOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
+    {
+      if (!entry.opt_long.empty())
+      {
+        out << entry.opt_long.front();
+
+        if( pad_short )
+        {
+          size_t spaces = pad_short-entry.opt_long.front().size();
+          for( size_t num_sp = 0 ; num_sp < spaces ; ++num_sp )
+          {
+            out << ' ' ;
+          }
+        }
+      }
+      out << entry.opt->getDefault( ": ","" );
     }
 
     static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
@@ -268,6 +286,88 @@ namespace df
       out << line.str() << std::endl;
     }
 
+    static void doPrintCfgEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned opt_value_width )
+    {
+      std::ostringstream line(std::ios_base::out);
+      doPrintCfgOpt(line, entry, opt_width);
+
+      const std::string& opt_desc = entry.opt->opt_desc;
+      if (opt_desc.empty())
+      {
+        /* no help text: output option, skip further processing */
+        out << line.str() << std::endl;
+        return;
+      }
+
+      size_t currlength = size_t(line.tellp());
+      if (currlength > opt_value_width)
+      {
+        /* if option text is too long (and would collide with the
+         * help text, split onto next line */
+        line << std::endl;
+        currlength = 0;
+      }
+      /* split up the help text, taking into account new lines,
+       *   (add opt_value_width of padding to each new line) */
+      for (size_t newline_pos = 0, cur_pos = 0; cur_pos != std::string::npos; currlength = 0)
+      {
+        /* print any required padding space for vertical alignment */
+
+        for( size_t num_sp = 0 ; num_sp < opt_value_width - currlength ; ++num_sp )
+        {
+          line << ' ' ;
+        }
+        newline_pos = opt_desc.find_first_of('\n', newline_pos);
+        if (newline_pos != std::string::npos)
+        {
+          /* newline found, print substring (newline needn't be stripped) */
+          newline_pos++;
+          line << " # ";
+          line << opt_desc.substr(cur_pos, newline_pos - cur_pos);
+          cur_pos = newline_pos;
+          continue;
+        }
+        if (cur_pos + desc_width > opt_desc.size())
+        {
+          /* no need to wrap text, remainder is less than avaliable width */
+          line << " # ";
+          line << opt_desc.substr(cur_pos);
+          break;
+        }
+        /* find a suitable point to split text (avoid spliting in middle of word) */
+        size_t split_pos = opt_desc.find_last_of(' ', cur_pos + desc_width);
+        if (split_pos != std::string::npos)
+        {
+          /* eat up multiple space characters */
+          split_pos = opt_desc.find_last_not_of(' ', split_pos) + 1;
+        }
+
+        /* bad split if no suitable space to split at.  fall back to width */
+        bool bad_split = split_pos == std::string::npos || split_pos <= cur_pos;
+        if (bad_split)
+        {
+          split_pos = cur_pos + desc_width;
+        }
+        line << " # ";
+        line << opt_desc.substr(cur_pos, split_pos - cur_pos);
+
+        /* eat up any space for the start of the next line */
+        if (!bad_split)
+        {
+          split_pos = opt_desc.find_first_not_of(' ', split_pos);
+        }
+        cur_pos = newline_pos = split_pos;
+
+        if (cur_pos >= opt_desc.size())
+        {
+          break;
+        }
+        line << std::endl;
+      }
+
+      out << line.str() << std::endl;
+    }
+
     /* format the help text */
     void doHelp(std::ostream& out, Options& opts, unsigned columns)
     {
@@ -324,7 +424,73 @@ namespace df
           doPrintHelpEntry( out, **it, desc_width, opt_width, pad_short );
         }
       }
+    }
 
+    /* format the help text */
+    void doSaveConfig(std::ostream& out, Options& opts, unsigned columns )
+    {
+      const unsigned pad_short = 0;
+      /* first pass: work out the longest option name */
+      unsigned max_width = 0;
+      for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+      {
+        std::ostringstream line(std::ios_base::out);
+        doPrintCfgOpt(line, **it, pad_short);
+        max_width = std::max(max_width, (unsigned) line.tellp());
+      }
+
+      /* second pass: work out the longest option name + default value*/
+      unsigned max_width_opt = max_width;
+      for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+      {
+        std::ostringstream line(std::ios_base::out);
+        doPrintCfgOpt(line, **it, max_width_opt);
+        max_width = std::max(max_width, (unsigned) line.tellp());
+      }
+
+      unsigned max_width_opt_value = max_width; //std::min(max_width+2, 32u + pad_short) + 2;
+      unsigned desc_width = columns - max_width_opt_value;
+
+      /* second pass: write out formatted option and help text.
+       *  - align start of help text to start at opt_width
+       *  - if the option text is longer than opt_width, place the help
+       *    text at opt_width on the next line.
+       */
+      if( !opts.subSections_list.empty())
+      {
+        for(Options::subSectionsPtrList::iterator it = opts.subSections_list.begin(); it != opts.subSections_list.end(); it++)
+        {
+          std::string section = *it;
+          if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
+          {
+            out << std::endl << "#======== " << section << "================" << std::endl;
+          }
+
+          Options::SubSectionNamesListMap::iterator opt_it;
+          opt_it = opts.sub_section_namelist_map.find(section);  // get list of options of subsection
+          if (opt_it != opts.sub_section_namelist_map.end())
+          {
+            for( auto & s : opt_it->second ) // iterate over options of subsections and find/print entry in opts list
+            {
+              for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
+              {
+                if( (*itopt)->opt->opt_string == s )  // names are equal
+                {
+                  doPrintCfgEntry( out, **itopt, desc_width, max_width_opt, max_width_opt_value );
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      else
+      {
+        for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+        {
+          doPrintHelpEntry( out, **it, desc_width, max_width_opt, max_width_opt_value );
+        }
+      }
     }
 
     struct OptionWriter

@@ -495,6 +495,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   bool do_expert_help         = false;
   int  warnUnknowParameter    = 0;
 
+  std::string writeCfg = "";
   //
   // link custom formated configuration parameters with istream reader
   //
@@ -596,6 +597,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.setSubSection("General options");
   opts.addOptions()
   ("c",                                               po::parseConfigFile,                              "configuration file name")
+  ("WriteConfig",                                     writeCfg,                                         "write the current config into cfg file")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
   ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ;
@@ -1009,6 +1011,25 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   {
     /* error report has already been printed on stderr */
     return false;
+  }
+
+  if( !writeCfg.empty() )
+  {
+    std::ofstream cfgFile;
+    cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
+    if( !cfgFile.is_open() )
+    {
+      std::cout << " [error]: failed to open output config file " << writeCfg << std::endl;
+      return false;
+    }
+    else
+    {
+      std::ostringstream cfgStream;
+      po::doSaveConfig( cfgStream, opts );
+      cfgFile << cfgStream.str() << std::endl;
+      cfgFile.close();
+      return false;
+    }
   }
 
   if( m_decode )
