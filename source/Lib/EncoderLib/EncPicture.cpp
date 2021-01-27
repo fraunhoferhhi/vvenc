@@ -225,7 +225,7 @@ void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
 }
 
 
-void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
+void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
 {
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[ 0 ];

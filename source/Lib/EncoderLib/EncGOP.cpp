@@ -396,21 +396,20 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   {
     // get next picture ready to be encoded
     auto it = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
-    Picture* pic = it != m_gopEncListInput.end() ? *it : nullptr;
 
     // check free picture encoder as well as picture to be encoded available
     if( m_numPicsInFlight >= maxPicsInParallel
-        || pic == nullptr )
+        || it == m_gopEncListInput.end() )
     {
       xWaitForFinishedPic();
       continue;
     }
 
-    // get next free encoder for the picture
     EncPicture* picEncoder = xGetNextFreePicEncoder();
+    Picture*    pic        = *it;
 
-    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
     CHECK( picEncoder == nullptr, "no free picture encoder available" );
+    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
 
     // mark picture as in flight
     if( m_pcEncCfg->m_numThreads > 0 )
@@ -419,17 +418,29 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     }
     m_gopEncListInput.remove( pic );
 
-    // encode next picture
-    pic->encPic   = true;
-    pic->writePic = true;
+    bool decPic = false;
+    bool encPic = false;
+    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
+    pic->writePic = decPic || encPic;
+    pic->encPic   = encPic;
+
     if( m_pcEncCfg->m_alfTempPred )
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
-    picEncoder->compressPicture( *pic, *this );
+
+    // compress next picture
+    if( pic->encPic )
+    {
+      picEncoder->compressPicture( *pic, *this );
+    }
+    else
+    {
+      picEncoder->skipCompressPicture( *pic, m_gopApsMap );
+    }
 
     // finish picture encoding and cleanup
-    if( m_pcEncCfg->m_numThreads > 0 )
+    if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
     {
       static auto finishTask = []( int, FinishTaskParam* param ) {
         param->picEncoder->finalizePicture( *param->pic );
@@ -462,10 +473,11 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     if( pic->writePic )
     {
       xWritePicture( *pic, au, isEncodeLtRef );
-      if( m_pcEncCfg->m_alfTempPred )
-      {
-        xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
-      }
+    }
+
+    if( m_pcEncCfg->m_alfTempPred )
+    {
+      xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
     }
 
     xUpdateAfterPicRC( pic );

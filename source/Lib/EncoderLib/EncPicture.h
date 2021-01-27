@@ -89,20 +89,20 @@ class EncPicture
     {}
     virtual ~EncPicture() {}
 
-    void      init              ( const VVEncCfg& encCfg,
+    void init                   ( const VVEncCfg& encCfg,
                                   std::vector<int>* const globalCtuQpVector,
                                   const SPS& sps,
                                   const PPS& pps,
                                   RateCtrl& rateCtrl,
                                   NoMallocThreadPool* threadPool );
-    void      compressPicture   ( Picture& pic, EncGOP& gopEncoder );
-    void      finalizePicture   ( Picture& pic );
+    void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
+    void skipCompressPicture    ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
+    void finalizePicture        ( Picture& pic );
 
     EncSlice* getEncSlice       () { return &m_SliceEncoder; }
 
   protected:
     void xInitPicEncoder        ( Picture& pic );
-    void xSkipCompressPicture   ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
     void xWriteSliceData        ( Picture& pic );
 
     void xInitSliceColFromL0Flag( Slice* slice ) const;
