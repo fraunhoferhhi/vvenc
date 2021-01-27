@@ -115,14 +115,15 @@ struct CtuEncParam
 // ====================================================================================================================
 
 EncSlice::EncSlice()
-  : m_pcEncCfg         ( nullptr)
-  , m_threadPool       ( nullptr )
-  , m_pLoopFilter      ( nullptr )
-  , m_pALF             ( nullptr )
-  , m_pcRateCtrl       ( nullptr )
-  , m_CABACWriter      ( m_BinEncoder )
-  , m_encCABACTableIdx ( I_SLICE )
-  , m_appliedSwitchDQQ ( 0 )
+  : m_pcEncCfg           ( nullptr)
+  , m_threadPool         ( nullptr )
+  , m_ctuTasksDoneCounter( nullptr )
+  , m_pLoopFilter        ( nullptr )
+  , m_pALF               ( nullptr )
+  , m_pcRateCtrl         ( nullptr )
+  , m_CABACWriter        ( m_BinEncoder )
+  , m_encCABACTableIdx   ( I_SLICE )
+  , m_appliedSwitchDQQ   ( 0 )
 {
 }
 
@@ -162,13 +163,15 @@ void EncSlice::init( const VVEncCfg& encCfg,
                      LoopFilter& loopFilter,
                      EncAdaptiveLoopFilter& alf,
                      RateCtrl& rateCtrl,
-                     NoMallocThreadPool* threadPool )
+                     NoMallocThreadPool* threadPool,
+                     WaitCounter* ctuTasksDoneCounter )
 {
-  m_pcEncCfg        = &encCfg;
-  m_pLoopFilter     = &loopFilter;
-  m_pALF            = &alf;
-  m_pcRateCtrl      = &rateCtrl;
-  m_threadPool      = threadPool;
+  m_pcEncCfg            = &encCfg;
+  m_pLoopFilter         = &loopFilter;
+  m_pALF                = &alf;
+  m_pcRateCtrl          = &rateCtrl;
+  m_threadPool          = threadPool;
+  m_ctuTasksDoneCounter = ctuTasksDoneCounter;
   m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.pcv->heightInCtus : 0 );
 
   const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.pcv->heightInCtus : 1;
@@ -739,7 +742,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     {
       m_threadPool->addBarrierTask<CtuEncParam>( EncSlice::xProcessCtuTask<false>,
                                                  &ctuEncParam,
-                                                 pic->ctuTaskFinishCounter,
+                                                 m_ctuTasksDoneCounter,
                                                  nullptr,
                                                  {},
                                                  EncSlice::xProcessCtuTask<true> );

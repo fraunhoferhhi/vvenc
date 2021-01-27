@@ -65,6 +65,7 @@ class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
 class EncPicture;
 class NoMallocThreadPool;
+struct WaitCounter;
 
 // ====================================================================================================================
 // Class definition
@@ -96,6 +97,7 @@ private:
   std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
   std::vector<LineEncRsrc*>    m_LineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
+  WaitCounter*                 m_ctuTasksDoneCounter;
   std::vector<ProcessCtuState> m_processStates;
 
   LoopFilter*                  m_pLoopFilter;
@@ -127,7 +129,8 @@ public:
                                 LoopFilter& loopFilter,
                                 EncAdaptiveLoopFilter& alf,
                                 RateCtrl& rateCtrl,
-                                NoMallocThreadPool* threadPool );
+                                NoMallocThreadPool* threadPool,
+                                WaitCounter* ctuTasksDoneCounter );
 
   void    initPic             ( Picture* pic, int gopId );
 

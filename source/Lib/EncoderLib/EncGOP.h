@@ -137,19 +137,21 @@ private:
 
   std::vector<EncPicture*>  m_picEncoderList;
   std::list<Picture*>       m_gopEncListInput;
-  std::list<Picture*>       m_gopEncListInFlight;
-  NoMallocThreadPool*       m_threadPool;
-  std::vector<int>          m_globalCtuQpVector;
 
   double                    m_lambda;
   int                       m_actualHeadBits;
   int                       m_actualTotalBits;
   int                       m_estimatedBits;
+  std::vector<int>          m_globalCtuQpVector;
 
 public:
+  std::list<Picture*>       m_gopEncListOutput;
+
+  NoMallocThreadPool*       m_threadPool;
   std::mutex                m_gopEncMutex;
   std::condition_variable   m_gopEncCond;
-  std::list<Picture*>       m_gopEncListOutput;
+  int                       m_numPicsInFlight;
+  int                       m_numPicsFinished;
 
 public:
   EncGOP();
@@ -200,7 +202,6 @@ private:
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
   void xWaitForFinishedPic            ();
   EncPicture* xGetNextFreePicEncoder  ();
-  void xRemoveFinishedPics            ();
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

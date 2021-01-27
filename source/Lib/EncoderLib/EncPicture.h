@@ -53,9 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncSampleAdaptiveOffset.h"
 #include "EncAdaptiveLoopFilter.h"
 #include "CommonLib/LoopFilter.h"
-
-#include <mutex>
-#include <condition_variable>
+#include "Utilities/NoMallocThreadPool.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -79,10 +77,10 @@ class EncPicture
     CABACWriter              m_CABACEstimator;
     CtxCache                 m_CtxCache;
 
-    NoMallocThreadPool*      m_threadPool;
-    std::mutex*              m_gopEncMutex;
-    std::condition_variable* m_gopEncCond;
+    EncGOP*                  m_encGOP;
     Picture*                 m_picPP;
+    WaitCounter              m_ctuTasksDoneCounter;
+
   public:
     bool                     m_isRunning;
 
@@ -90,9 +88,7 @@ class EncPicture
     EncPicture()
       : m_pcEncCfg      ( nullptr )
       , m_CABACEstimator( m_BitEstimator )
-      , m_threadPool    ( nullptr )
-      , m_gopEncMutex   ( nullptr )
-      , m_gopEncCond    ( nullptr )
+      , m_encGOP        ( nullptr )
       , m_picPP         ( nullptr )
       , m_isRunning     ( false )
     {}
@@ -104,8 +100,7 @@ class EncPicture
                                   const PPS& pps,
                                   RateCtrl& rateCtrl,
                                   NoMallocThreadPool* threadPool,
-                                  std::mutex* gopMutex,
-                                  std::condition_variable* gopCond );
+                                  EncGOP* encGOP );
     void      encodePicture     ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
     void      finalizePicture   ( Picture& pic );
 

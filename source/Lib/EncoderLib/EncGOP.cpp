@@ -247,11 +247,13 @@ EncGOP::EncGOP()
   , m_pcRateCtrl         ( nullptr )
   , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
-  , m_threadPool         ( nullptr )
   , m_lambda             ( 0.0 )
   , m_actualHeadBits     ( 0 )
   , m_actualTotalBits    ( 0 )
   , m_estimatedBits      ( 0 )
+  , m_threadPool         ( nullptr )
+  , m_numPicsInFlight    ( 0 )
+  , m_numPicsFinished    ( 0 )
 {
 }
 
@@ -291,7 +293,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
     m_picEncoderList[ i ] = new EncPicture;
-    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool, &m_gopEncMutex, &m_gopEncCond );
+    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool, this );
   }
 
   if (encCfg.m_usePerceptQPA)
@@ -307,27 +309,15 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 
 void EncGOP::xWaitForFinishedPic()
 {
+  CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no multi-threading enabled" );
   std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  bool isEncPicturePPFinished = false;
-  for( auto picPP : m_gopEncListInFlight )
-  {
-    if( picPP->isEncPicturePPFinished )
-    {
-      isEncPicturePPFinished = true;
-      break;
-    }
-  }
-
-  if( !isEncPicturePPFinished )
+  if( m_numPicsFinished <= 0 )
   {
     m_gopEncCond.wait( _lock );
   }
-}
-
-void EncGOP::xRemoveFinishedPics()
-{
-  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  m_gopEncListInFlight.remove_if( []( auto& pic ){ return pic->isEncPicturePPFinished; } );
+  CHECK( m_numPicsFinished > m_numPicsInFlight, "more pics currently finished than pics in flight");
+  m_numPicsInFlight -= m_numPicsFinished;
+  m_numPicsFinished = 0;
 }
 
 EncPicture* EncGOP::xGetNextFreePicEncoder()
@@ -401,17 +391,18 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     }
 
     // check free picture encoder as well as picture to be encoded available
-    if( m_gopEncListInFlight.size() >= maxPicsInParallel
+    if( m_numPicsInFlight >= maxPicsInParallel
         || pic == nullptr )
     {
-      if( m_pcEncCfg->m_numThreads > 0 )
-        xWaitForFinishedPic();
-      xRemoveFinishedPics();
+      xWaitForFinishedPic();
       continue;
     }
 
-    // add picture to in flight list
-    m_gopEncListInFlight.push_back( pic );
+    // mark picture as in flight
+    if( m_pcEncCfg->m_numThreads > 0 )
+    {
+      m_numPicsInFlight += 1;
+    }
     m_gopEncListInput.remove( pic );
 
     // get next free encoder for the picture
@@ -419,8 +410,10 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       std::unique_lock<std::mutex> _lock( m_gopEncMutex );
       picEncoder = xGetNextFreePicEncoder();
-      CHECK( picEncoder == nullptr, "No free picture encoder available" );
     }
+
+    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
+    CHECK( picEncoder == nullptr, "no free picture encoder available" );
 
     // encode next picture
     pic->encPic   = true;
@@ -441,9 +434,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
     while( !pic->isReconstructed )
     {
-      if( m_pcEncCfg->m_numThreads > 0 )
-        xWaitForFinishedPic();
-      xRemoveFinishedPics();
+      xWaitForFinishedPic();
     }
 
     if( pic->writePic )
@@ -465,85 +456,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     pic->isFinished = true;
   }
 }
-
-// TODO (jb): remove obsolete code (encodePicture)
-#if 0
-void EncGOP::encodePicture( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
-{
-  CHECK( encList.size() == 0, "error: no pictures to be encoded given" );
-
-  // init pictures and first slice in coding order
-  xInitPicsICO( encList, picList, isEncodeLtRef );
-
-  m_lambda = 0.0;
-  m_actualHeadBits = 0;
-  m_actualTotalBits = 0;
-  m_estimatedBits = 0;
-
-  std::list<Picture*> processPics;
-  for( auto& pic : m_gopEncListInput )
-  {
-    if( pic->slices[ 0 ]->checkRefPicsReconstructed() )
-    {
-      processPics.push_back( pic );
-    }
-  }
-
-  bool trySkip = true;
-  while( processPics.size() )
-  {
-    Picture* pic = processPics.front();
-    processPics.pop_front();
-    m_gopEncListInput.remove( pic );
-
-    DTRACE_UPDATE( g_trace_ctx, ( std::make_pair( "poc", pic->poc ) ) );
-    DTRACE_UPDATE( g_trace_ctx, ( std::make_pair( "final", 0 ) ) );
-
-    // test if we can skip the picture entirely or decode instead of encoding
-    pic->encPic = true;
-    pic->writePic = true;
-    bool decPic( false );
-    if( trySkip )
-    {
-      bool /*decPic( false ),*/ encPic( false );
-      trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
-      pic->writePic = decPic || encPic;
-      pic->encPic = encPic;
-      trySkip = false;
-    }
-
-    if( decPic || m_pcEncCfg->m_alfTempPred )
-    {
-      xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
-    }
-    m_picEncoderList[0]->encodePicture( *pic, m_gopApsMap, *this );
-    m_picEncoderList[0]->finalizePicture( *pic );
-   
-    if( !pic->encPic )
-    {
-      break;
-    }
-  }
-
-  // write data
-  Picture* pic = encList.front();
-  CHECK( !pic->isReconstructed, "error: try to write picture which hasn't been reconstructed yet" );
-  pic->isFinished = true;
-
-  if( pic->writePic )
-  {
-    xWritePicture( *pic, au, isEncodeLtRef );
-    xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
-  }
-
-  xUpdateAfterPicRC( pic );
-
-  if( m_pcEncCfg->m_useAMaxBT )
-  {
-    m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
-  }
-}
-#endif
 
 void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
 {
@@ -1848,7 +1760,6 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   }
 
   char c = (slice->isIntra() ? 'I' : slice->isInterP() ? 'P' : 'B');
-  // TODO (jb): remove dependency to m_maxParallelFrames
   if ( ! pic->isReferenced && pic->refCounter == 0 && ! m_pcEncCfg->m_maxParallelFrames )
   {
     c += 32;
