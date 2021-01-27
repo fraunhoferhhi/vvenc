@@ -390,16 +390,15 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
 
-    // mark picture as in flight
-    if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
-    {
-      m_numPicsInFlight += 1;
-    }
     m_gopEncListInput.remove( pic );
 
     // compress next picture
     if( pic->encPic )
     {
+      if( m_pcEncCfg->m_numThreads > 0 )
+      {
+        m_numPicsInFlight += 1;
+      }
       picEncoder->compressPicture( *pic, *this );
     }
     else
