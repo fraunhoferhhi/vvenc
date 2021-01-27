@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <deque>
 #include <chrono>
+#include <atomic>
 
 //! \ingroup CommonLib
 //! \{
@@ -213,7 +214,7 @@ public:
 
   bool                          isMctfProcessed;
   bool                          isInitDone;
-  bool                          isReconstructed;
+  std::atomic_bool              isReconstructed;
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
