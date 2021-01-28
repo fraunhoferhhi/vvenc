@@ -632,7 +632,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("HorizontalPadding",                               m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
   ("VerticalPadding",                                 m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
-  ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
 
   ("InputChromaFormat",                               toInputFileCoFormat,                              "input file chroma format (400, 420, 422, 444)")
   ;
@@ -722,22 +721,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("WaveFrontSynchro",                                m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
   ("EntryPointsPresent",                              m_entryPointsPresent,                             "Enable entry points in slice header")
-  ;
-
-  opts.setSubSection("Unused options");
-  opts.addOptions()
-  ("CropOffsetLeft",                                  m_cropOffsetLeft,                                 "Crop Offset Left position")
-  ("CropOffsetTop",                                   m_cropOffsetTop,                                  "Crop Offset Top position")
-  ("CropOffsetRight",                                 m_cropOffsetRight,                                "Crop Offset Right position")
-  ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
-  ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
-
-  ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
-  ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
-  ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
-  ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
-
-  ("isSDR",                                           m_sdr,                                            "compatibility")
   ;
 
   opts.setSubSection("Quad-Tree size and depth");
@@ -980,6 +963,24 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                  "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
   ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
     ;
+
+  opts.setSubSection("Unused options (only for compatiblity to VTM)");
+  opts.addOptions()
+  ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
+
+  ("CropOffsetLeft",                                  m_cropOffsetLeft,                                 "Crop Offset Left position")
+  ("CropOffsetTop",                                   m_cropOffsetTop,                                  "Crop Offset Top position")
+  ("CropOffsetRight",                                 m_cropOffsetRight,                                "Crop Offset Right position")
+  ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
+  ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
+
+  ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
+  ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
+  ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
+  ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
+
+  ("isSDR",                                           m_sdr,                                            "compatibility")
+  ;
 
   po::setDefaults( opts );
   std::ostringstream fullOpts;

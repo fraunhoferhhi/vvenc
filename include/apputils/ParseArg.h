@@ -182,22 +182,6 @@ namespace df
       return oss.str(); 
     }
 
-//    template<>
-//    inline
-//    const std::string Option<std::string>::getDefault( std::string pre, std::string post)
-//    {
-//      std::ostringstream oss;
-//      if( opt_default_val.empty() )
-//      {
-//        oss << pre << "\"\"" << post;
-//      }
-//      else
-//      {
-//        oss << pre << opt_default_val << post;
-//      }
-//      return oss.str();
-//    }
-
     /* Generic parsing */
     template<typename T>
     inline void

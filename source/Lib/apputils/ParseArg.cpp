@@ -800,8 +800,14 @@ namespace df
         return;
       }
 
+      if( value == "empty" || value == "[]" )
+      {
+        //error_reporter.warn(where()) << "ignoring empty value for option " << option << "\n";
+        return;
+      }
+
       // reset empty strings
-      if( value == "\"\"" || value == "''" || value == "empty")
+      if( value == "\"\"" || value == "''")
       {
         value.clear();
       }
