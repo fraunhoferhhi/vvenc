@@ -75,8 +75,6 @@ VVEnc::~VVEnc()
 
 int VVEnc::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
-  if( rcVVEncCfg.m_numWppThreads > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
-
   return m_pcVVEncImpl->checkConfig( rcVVEncCfg );
 }
 

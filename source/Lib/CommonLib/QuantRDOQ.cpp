@@ -620,8 +620,8 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
   double  d64BaseCost         = 0;
   int     iLastScanPos        = -1;
 
-  int ctxBinSampleRatio = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
-  int remRegBins = (uiWidth * uiHeight * ctxBinSampleRatio) >> 4;
+  int ctxBinSampleRatio   = MAX_TU_LEVEL_CTX_CODED_BIN_CONSTRAINT;
+  int remRegBins          = (tu.getTbAreaAfterCoefZeroOut( compID ) * ctxBinSampleRatio) >> 4;
   uint32_t  goRiceParam   = 0;
 
   double *pdCostCoeffGroupSig = m_pdCostCoeffGroupSig;

@@ -242,10 +242,9 @@ void EncLib::initPass( int pass )
   xInitHrdParameters( sps0 );
 
   // thread pool
-  if( m_cEncCfg.m_numWppThreads > 0 || m_cEncCfg.m_numFppThreads > 0 )
+  if( m_cEncCfg.m_numThreads > 0 )
   {
-    const int maxThreads = ( m_cEncCfg.m_numWppThreads > 0 ) ? m_cEncCfg.m_numWppThreads * ( std::max( m_cEncCfg.m_numFppThreads, 1 ) ) + m_cEncCfg.m_numFppThreads: m_cEncCfg.m_numFppThreads;
-    m_threadPool = new NoMallocThreadPool( maxThreads, "EncSliceThreadPool" );
+    m_threadPool = new NoMallocThreadPool( m_cEncCfg.m_numThreads, "EncSliceThreadPool" );
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
@@ -420,16 +419,16 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
   }
 
   // mctf filter
-  int mctfDealy = 0;
+  int mctfDelay = 0;
   if ( m_cEncCfg.m_MCTF )
   {
     m_MCTF.filter( pic );
-    mctfDealy = m_MCTF.getCurDelay();
+    mctfDelay = m_MCTF.getCurDelay();
   }
 
   // encode picture
   if ( m_numPicsInQueue >= m_cEncCfg.m_InputQueueSize
-      || ( m_numPicsInQueue - mctfDealy > 0 && flush ) )
+      || ( m_numPicsInQueue - mctfDelay > 0 && flush ) )
   {
     if ( m_cEncCfg.m_RCRateControlMode )
     {
@@ -443,6 +442,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
         m_cRateCtrl.initRCGOP( m_numPicsInQueue >= m_cEncCfg.m_GOPSize ? m_cEncCfg.m_GOPSize : m_numPicsInQueue );
       }
     }
+
     // update current poc
     m_pocEncode = ( m_pocEncode < 0 ) ? 0 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd );
     std::vector<Picture*> encList;
@@ -467,19 +467,16 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
     }
 
     // encode picture with current poc
-    if( m_cEncCfg.m_maxParallelFrames )
-      m_cGOPEncoder->encodeGOP( encList, m_cListPic, au, false, flush );
-    else
-      m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
+    m_cGOPEncoder->encodePictures( encList, m_cListPic, au, false );
+
     m_numPicsInQueue -= 1;
     m_numPicsCoded   += 1;
     // output reconstructed yuv
     xOutputRecYuv();
   }
-  else if( m_cEncCfg.m_maxParallelFrames && flush && !m_cGOPEncoder->m_gopEncListOutput.empty() )
+  else
   {
-    std::vector<Picture*> encList;
-    m_cGOPEncoder->encodeGOP( encList, m_cListPic, au, false, flush );
+    CHECK( flush && m_cGOPEncoder->m_gopEncListOutput.size() > 0, "internal error: encoder tries to flush ouput queue, but will never be called" );
   }
 
   isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? (  m_numPicsInQueue <= 0 && !m_cGOPEncoder->anyFramesInOutputQueue() ): ( m_numPicsInQueue <= 0 );

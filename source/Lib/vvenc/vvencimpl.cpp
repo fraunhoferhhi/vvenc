@@ -435,7 +435,7 @@ int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorStrin
 
   ROTPARAMS( (rcSrc.m_TicksPerSecond < 90000) && (rcSrc.m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  ROTPARAMS( rcSrc.m_numWppThreads < 0,                                                      "numWppThreads must be >= 0" );
+  ROTPARAMS( rcSrc.m_numThreads < 0,                                                         "Number of threads must be >= 0" );
 
   ROTPARAMS( rcSrc.m_IntraPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
   ROTPARAMS( rcSrc.m_IntraPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
@@ -451,7 +451,7 @@ int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorStrin
 
   ROTPARAMS( rcSrc.m_profile != Profile::MAIN_10 && rcSrc.m_profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_profile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 100000000,           "TargetBitrate must be between 0 - 100000000" );
+  ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 800000000,           "TargetBitrate must be between 0 - 800000000" );
   ROTPARAMS( rcSrc.m_RCTargetBitrate == 0 && rcSrc.m_RCNumPasses != 1,                     "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_RCNumPasses < 1 || rcSrc.m_RCNumPasses > 2,                           "Only one pass or two pass encoding supported"  );
 
