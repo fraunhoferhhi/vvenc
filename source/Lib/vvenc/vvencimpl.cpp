@@ -451,7 +451,7 @@ int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorStrin
 
   ROTPARAMS( rcSrc.m_profile != Profile::MAIN_10 && rcSrc.m_profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_profile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
 
-  ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 100000000,           "TargetBitrate must be between 0 - 100000000" );
+  ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 800000000,           "TargetBitrate must be between 0 - 800000000" );
   ROTPARAMS( rcSrc.m_RCTargetBitrate == 0 && rcSrc.m_RCNumPasses != 1,                     "Only single pass encoding supported, when rate control is disabled" );
   ROTPARAMS( rcSrc.m_RCNumPasses < 1 || rcSrc.m_RCNumPasses > 2,                           "Only one pass or two pass encoding supported"  );
 
