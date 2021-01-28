@@ -311,7 +311,9 @@ void EncGOP::xWaitForFinishedPic()
 {
   CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no multi-threading enabled" );
   std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  if( m_numPicsFinished <= 0 )
+  if( m_numPicsFinished <= 0
+      && ! m_gopEncListOutput.empty()
+      && ! m_gopEncListOutput.front()->isReconstructed )
   {
     m_gopEncCond.wait( _lock );
   }
@@ -359,8 +361,9 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   const int maxPicsInParallel = std::max( 1, m_pcEncCfg->m_maxParallelFrames );
 
-  while( !m_gopEncListInput.empty()
-      && !m_gopEncListOutput.front()->isReconstructed )
+  while( ! m_gopEncListInput.empty()
+      && ! m_gopEncListOutput.empty()
+      && ! m_gopEncListOutput.front()->isReconstructed )
   {
     // get next picture ready to be encoded
     auto it = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
