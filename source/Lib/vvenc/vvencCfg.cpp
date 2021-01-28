@@ -559,8 +559,8 @@ bool VVEncCfg::initCfgParameter()
   if (m_sliceChromaQpOffsetPeriodicity < 0)
   {
     m_sliceChromaQpOffsetPeriodicity = 0;
-    if (m_usePerceptQPA >= 1
-        && m_internChromaFormat != CHROMA_400)
+    if ( m_usePerceptQPA > 0
+        && m_internChromaFormat != CHROMA_400 )
     {
       m_sliceChromaQpOffsetPeriodicity = 1;
     }
