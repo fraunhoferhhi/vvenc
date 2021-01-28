@@ -537,11 +537,11 @@ public:
   bool                m_qtbttSpeedUp                            = false;
 
   int                 m_fastLocalDualTreeMode                   = 0;
-  int                 m_numWppThreads                           = 0;             ///< number of wpp threads
-  int                 m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+
+  int                 m_numThreads                              = 0;             ///< number of worker threads
   int                 m_maxParallelFrames                       = 0;
-  int                 m_numFppThreads                           = 0;
-  bool                m_ensureFppBitEqual                       = false;
+  int                 m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+
   bool                m_picPartitionFlag                        = false;
 public:
 
