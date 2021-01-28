@@ -351,12 +351,13 @@ public:
 
   bool                m_lumaLevelToDeltaQPEnabled               = false;
   WCGChromaQPControl  m_wcgChromaQpControl                      = WCGChromaQPControl();
-  bool                m_sdr                                     = false;
-  bool                m_calculateHdrMetrics                     = false;
-  int                 m_cropOffsetLeft                          = 0;
-  int                 m_cropOffsetTop                           = 0;
-  int                 m_cropOffsetRight                         = 0;
-  int                 m_cropOffsetBottom                        = 0;
+  bool                m_sdr                                     = false;                  // unused, only for conmpatiblity
+  bool                m_calculateHdrMetrics                     = false;                  // unused, only for conmpatiblity
+
+  int                 m_cropOffsetLeft                          = 0;                      // unused, only for conmpatiblity
+  int                 m_cropOffsetTop                           = 0;                      // unused, only for conmpatiblity
+  int                 m_cropOffsetRight                         = 0;                      // unused, only for conmpatiblity
+  int                 m_cropOffsetBottom                        = 0;                      // unused, only for conmpatiblity
 
   ChromaFormat        m_internChromaFormat                      = NUM_CHROMA_FORMAT;
   bool                m_useIdentityTableForNon420Chroma         = true;
@@ -369,11 +370,12 @@ public:
   bool                m_decodingUnitInfoSEIEnabled              = false;
   bool                m_entropyCodingSyncEnabled                = false;
   bool                m_entryPointsPresent                      = true;
-  bool                m_signalledSliceIdFlag                    = false;
-  int                 m_signalledSliceIdLengthMinus1            = 0;
-  std::vector<int>    m_rectSliceBoundary;
-  std::vector<int>    m_signalledSliceId;
-  std::vector<int>    m_sliceId;
+
+  bool                m_signalledSliceIdFlag                    = false;         // unused, only for conmpatiblity
+  int                 m_signalledSliceIdLengthMinus1            = 0;             // unused, only for conmpatiblity
+  std::vector<int>    m_rectSliceBoundary;                                       // unused, only for conmpatiblity
+  std::vector<int>    m_signalledSliceId;                                        // unused, only for conmpatiblity
+  std::vector<int>    m_sliceId;                                                 // unused, only for conmpatiblity
 
   unsigned            m_CTUSize                                 = 128;
   unsigned            m_MinQT[ 3 ]                              = { 8, 8, 4 };                           ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma

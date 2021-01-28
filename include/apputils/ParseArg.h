@@ -99,7 +99,7 @@ namespace df
     };
 
     void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
-    void APPUTILS_DECL doSaveConfig(std::ostream& out, Options& opts, unsigned columns = 120 );
+    void APPUTILS_DECL doSaveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns = 240 );
 
     std::list<const char*> APPUTILS_DECL scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
     void APPUTILS_DECL setDefaults(Options& opts);
@@ -121,6 +121,7 @@ namespace df
       /* set the argument to the default value */
       virtual void setDefault() = 0;
       virtual const std::string getDefault( std::string pre, std::string post ) { return std::string(); }
+      virtual const std::string getValue( std::string pre, std::string post ) { return std::string(); }
 
       std::string opt_string;
       std::string opt_desc;
@@ -141,10 +142,36 @@ namespace df
         opt_storage = opt_default_val;
       }
       virtual const std::string getDefault( std::string pre, std::string post );
+      virtual const std::string getValue  ( std::string pre, std::string post );
 
       T& opt_storage;
       T opt_default_val;
     };
+
+    template<typename T>
+    inline
+    const std::string Option<T>::getValue( std::string pre, std::string post)
+    {
+      std::ostringstream oss;
+      oss << pre << opt_storage << post;
+      return oss.str();
+    }
+
+    template<>
+    inline
+    const std::string Option<std::string>::getValue( std::string pre, std::string post)
+    {
+      std::ostringstream oss;
+      if( opt_storage.empty() )
+      {
+        oss << pre << "\"\"" << post;
+      }
+      else
+      {
+        oss << pre << opt_storage << post;
+      }
+      return oss.str();
+    }
 
     template<typename T>
     inline 
@@ -155,21 +182,21 @@ namespace df
       return oss.str(); 
     }
 
-    template<>
-    inline
-    const std::string Option<std::string>::getDefault( std::string pre, std::string post)
-    {
-      std::ostringstream oss;
-      if( opt_default_val.empty() )
-      {
-        oss << pre << "\"\"" << post;
-      }
-      else
-      {
-        oss << pre << opt_default_val << post;
-      }
-      return oss.str();
-    }
+//    template<>
+//    inline
+//    const std::string Option<std::string>::getDefault( std::string pre, std::string post)
+//    {
+//      std::ostringstream oss;
+//      if( opt_default_val.empty() )
+//      {
+//        oss << pre << "\"\"" << post;
+//      }
+//      else
+//      {
+//        oss << pre << opt_default_val << post;
+//      }
+//      return oss.str();
+//    }
 
     /* Generic parsing */
     template<typename T>

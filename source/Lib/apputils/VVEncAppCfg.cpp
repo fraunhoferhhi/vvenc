@@ -549,6 +549,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FrameRate,-fr",                                   m_FrameRate,                                      "Frame rate")
   ("FrameSkip,-fs",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
   ("TicksPerSecond",                                  m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+
+  ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
+                                                                                                        "first: first segment           \n"
+                                                                                                        "mid  : all segments between first and last segment\n"
+                                                                                                        "last : last segment")
   ;
 
   opts.setSubSection("Output options");
@@ -588,7 +593,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
   ;
-
 
   po::setDefaults( opts );
   std::ostringstream easyOpts;
@@ -699,17 +703,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SliceCrQpOffsetIntraOrPeriodic",                  m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
   ("LumaLevelToDeltaQPMode",                          m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
-  ("isSDR",                                           m_sdr,                                            "compatibility")
   ("WCGPPSEnable",                                    m_wcgChromaQpControl.enabled,                     "1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
   ("WCGPPSCbQpScale",                                 m_wcgChromaQpControl.chromaCbQpScale,             "WCG PPS Chroma Cb QP Scale")
   ("WCGPPSCrQpScale",                                 m_wcgChromaQpControl.chromaCrQpScale,             "WCG PPS Chroma Cr QP Scale")
   ("WCGPPSChromaQpScale",                             m_wcgChromaQpControl.chromaQpScale,               "WCG PPS Chroma QP Scale")
   ("WCGPPSChromaQpOffset",                            m_wcgChromaQpControl.chromaQpOffset,              "WCG PPS Chroma QP Offset")
-  ("CropOffsetLeft",                                  m_cropOffsetLeft,                                 "Crop Offset Left position")
-  ("CropOffsetTop",                                   m_cropOffsetTop,                                  "Crop Offset Top position")
-  ("CropOffsetRight",                                 m_cropOffsetRight,                                "Crop Offset Right position")
-  ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
-  ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
   ;
 
   opts.setSubSection("Misc. options");
@@ -724,10 +722,22 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("WaveFrontSynchro",                                m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
   ("EntryPointsPresent",                              m_entryPointsPresent,                             "Enable entry points in slice header")
+  ;
+
+  opts.setSubSection("Unused options");
+  opts.addOptions()
+  ("CropOffsetLeft",                                  m_cropOffsetLeft,                                 "Crop Offset Left position")
+  ("CropOffsetTop",                                   m_cropOffsetTop,                                  "Crop Offset Top position")
+  ("CropOffsetRight",                                 m_cropOffsetRight,                                "Crop Offset Right position")
+  ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
+  ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
+
   ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
   ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
   ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
   ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
+
+  ("isSDR",                                           m_sdr,                                            "compatibility")
   ;
 
   opts.setSubSection("Quad-Tree size and depth");
@@ -926,7 +936,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MCTFNumTrailFrames",                              m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFFrame",                                       toMCTFFrames,                                     "Frame to filter Strength for frame in GOP based temporal filter")
   ("MCTFStrength",                                    toMCTFStrengths,                                  "Strength for  frame in GOP based temporal filter.")
-  ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -976,12 +985,14 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
 
+  opts.setSubSection("Coding structure paramters");
   for ( int i = 0; i < MAX_GOP; i++ )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), m_GOPList[i], GOPEntry());
   }
+  opts.setSubSection("Decoding options (debugging)");
   opts.addOptions()("decode",                          m_decode,                                         "decode only");
 
   //
@@ -1024,8 +1035,24 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
     else
     {
+      std::list<std::string> ignoreParamsLst;
+      ignoreParamsLst.push_back( "help" );
+      ignoreParamsLst.push_back( "fullhelp" );
+
+      ignoreParamsLst.push_back( "WriteConfig" );
+      ignoreParamsLst.push_back( "SIMD" );
+      //ignoreParamsLst.push_back( "WarnUnknowParameter,w" );
+
+      ignoreParamsLst.push_back( "decode" );
+      for ( int i = 0; i < MAX_GOP; i++ )
+      {
+        std::ostringstream cOSS;
+        cOSS << "Frame" << i+1;
+        ignoreParamsLst.push_back( cOSS.str() );
+      }
+
       std::ostringstream cfgStream;
-      po::doSaveConfig( cfgStream, opts );
+      po::doSaveConfig( cfgStream, opts, ignoreParamsLst );
       cfgFile << cfgStream.str() << std::endl;
       cfgFile.close();
       return false;

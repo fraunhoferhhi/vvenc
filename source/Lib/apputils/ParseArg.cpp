@@ -208,7 +208,7 @@ namespace df
           }
         }
       }
-      out << entry.opt->getDefault( ": ","" );
+      out << entry.opt->getValue( ": ","" );
     }
 
     static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
@@ -332,6 +332,7 @@ namespace df
           /* no need to wrap text, remainder is less than avaliable width */
           line << " # ";
           line << opt_desc.substr(cur_pos);
+          line << entry.opt->getDefault( " [", "] ");
           break;
         }
         /* find a suitable point to split text (avoid spliting in middle of word) */
@@ -427,7 +428,7 @@ namespace df
     }
 
     /* format the help text */
-    void doSaveConfig(std::ostream& out, Options& opts, unsigned columns )
+    void doSaveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns )
     {
       const unsigned pad_short = 0;
       /* first pass: work out the longest option name */
@@ -451,6 +452,7 @@ namespace df
       unsigned max_width_opt_value = max_width; //std::min(max_width+2, 32u + pad_short) + 2;
       unsigned desc_width = columns - max_width_opt_value;
 
+
       /* second pass: write out formatted option and help text.
        *  - align start of help text to start at opt_width
        *  - if the option text is longer than opt_width, place the help
@@ -463,7 +465,7 @@ namespace df
           std::string section = *it;
           if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
           {
-            out << std::endl << "#======== " << section << "================" << std::endl;
+            out << std::endl << "#======== " << section << " ================" << std::endl;
           }
 
           Options::SubSectionNamesListMap::iterator opt_it;
@@ -476,7 +478,20 @@ namespace df
               {
                 if( (*itopt)->opt->opt_string == s )  // names are equal
                 {
-                  doPrintCfgEntry( out, **itopt, desc_width, max_width_opt, max_width_opt_value );
+                  bool bIgnore = false;
+                  for( auto & i : ignoreParamLst )
+                  {
+                    if( i == (*itopt)->opt->opt_string )
+                    {
+                      bIgnore = true; break;
+                    }
+                  }
+
+                  if( !bIgnore )
+                  {
+                    doPrintCfgEntry( out, **itopt, desc_width, max_width_opt, max_width_opt_value );
+                  }
+
                   break;
                 }
               }
@@ -488,7 +503,20 @@ namespace df
       {
         for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
         {
-          doPrintHelpEntry( out, **it, desc_width, max_width_opt, max_width_opt_value );
+          bool bIgnore = false;
+          for( auto & i : ignoreParamLst )
+          {
+            if( i == (*it)->opt->opt_string )
+            {
+              bIgnore = true;
+              break;
+            }
+          }
+
+          if( !bIgnore )
+          {
+            doPrintHelpEntry( out, **it, desc_width, max_width_opt, max_width_opt_value );
+          }
         }
       }
     }
@@ -768,8 +796,14 @@ namespace df
       else
       {
         /* error: no value */
-        error_reporter.warn(where()) << "no value found\n";
+        error_reporter.warn(where()) << "no value found for option " << option << "\n";
         return;
+      }
+
+      // reset empty strings
+      if( value == "\"\"" || value == "''" || value == "empty")
+      {
+        value.clear();
       }
 
       /* store the value in option */
