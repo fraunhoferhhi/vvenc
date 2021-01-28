@@ -283,7 +283,7 @@ int testLibParameterRanges()
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
 
   testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { 0,1000000,20000000 } );
-  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1 }, true );
+  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,100000001 }, true );
 
   vvencParams.m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
   vvencParams.m_RCTargetBitrate = 1;
