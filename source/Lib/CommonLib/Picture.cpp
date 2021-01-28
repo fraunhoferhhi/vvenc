@@ -162,7 +162,6 @@ Picture::Picture()
     , isBorderExtended  ( false )
     , isReferenced      ( false )
     , isNeededForOutput ( false )
-    , isEncPicturePPFinished ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
     , encPic            ( true )
@@ -178,8 +177,14 @@ Picture::Picture()
     , cts               ( 0 )
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
-    , picInitialQP    ( 0 )
-    , useSC           ( 0 )
+    , picInitialQP      ( 0 )
+#if SCC_MCTF
+    , useScMCTF         ( false )
+    , useScTS           ( false )
+    , useScBDPCM        ( false )
+#else
+    , useSC             ( 0 )
+#endif
 {
 }
 

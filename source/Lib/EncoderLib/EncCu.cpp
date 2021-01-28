@@ -91,7 +91,7 @@ void EncCu::initPic( Picture* pic )
   m_cRdCost.setReshapeParams( reshapeData.getReshapeLumaLevelToWeightPLUT(), reshapeData.getChromaWeight() );
   m_cInterSearch.setSearchRange( pic->cs->slice, *m_pcEncCfg );
 
-  m_wppMutex = (m_pcEncCfg->m_numWppThreads > 0 ) ? &pic->wppMutex : nullptr;
+  m_wppMutex = (m_pcEncCfg->m_numThreads > 0 ) ? &pic->wppMutex : nullptr;
 }
 
 void EncCu::initSlice( const Slice* slice )
@@ -183,7 +183,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter
   m_syncPicCtx = syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   m_pcRateCtrl = pRateCtrl;
 
-  m_rcMutex = (encCfg.m_numWppThreads > 0) ? &m_pcRateCtrl->rcMutex : nullptr;
+  m_rcMutex = (encCfg.m_numThreads > 0) ? &m_pcRateCtrl->rcMutex : nullptr;
 
   // Initialise scaling lists: The encoder will only use the SPS scaling lists. The PPS will never be marked present.
   const int maxLog2TrDynamicRange[ MAX_NUM_CH ] = { sps.getMaxLog2TrDynamicRange( CH_L ), sps.getMaxLog2TrDynamicRange( CH_C ) };
@@ -412,7 +412,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   m_modeCtrl.initCTUEncoding( *cs.slice );
 
   // init the partitioning manager
-  Partitioner *partitioner = PartitionerFactory::get( *cs.slice );
+  Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
 
   // init current context pointer
@@ -479,7 +479,6 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   // reset context states and uninit context pointer
   m_CABACEstimator->getCtx() = m_CurrCtx->start;
   m_CurrCtx                  = 0;
-  delete partitioner;
 
   // Ensure that a coding was found
   // Selected mode's RD-cost must be not MAX_DOUBLE.
@@ -979,7 +978,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
   m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
 
-  const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 ) - ( m_pcEncCfg->m_qtbttSpeedUp ? 0.025 : 0.0 ) + ( ( m_pcEncCfg->m_qtbttSpeedUp && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
+  const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 ) - ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.025 : 0.0 ) + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
   const double cost   = m_cRdCost.calcRdCost( uint64_t( m_CABACEstimator->getEstFracBits() + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
 

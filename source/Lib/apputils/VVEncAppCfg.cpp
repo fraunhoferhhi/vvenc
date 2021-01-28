@@ -161,6 +161,7 @@ const std::vector<SVPair<Level>> LevelToEnumMap =
   { "3.0",                     Level::LEVEL3   },
   { "3.1",                     Level::LEVEL3_1 },
   { "4",                       Level::LEVEL4   },
+  { "4.0",                     Level::LEVEL4   },
   { "4.1",                     Level::LEVEL4_1 },
   { "5",                       Level::LEVEL5   },
   { "5.0",                     Level::LEVEL5   },
@@ -337,7 +338,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
   ("qpa",               m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
 
-  ("threads,-t",        m_numWppThreads,          "Number of threads default: [size <= HD: 4, UHD: 6]")
+  ("threads,-t",        m_numThreads,             "Number of threads default: [size <= HD: 4, UHD: 6]")
 
   ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
   ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
@@ -412,15 +413,15 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   //
 
   // set thread count to default threads, if not set by user
-  if( m_numWppThreads < 0 )
+  if( m_numThreads < 0 )
   {
     if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
     {
-      m_numWppThreads = 6;
+      m_numThreads = 6;
     }
     else
     {
-      m_numWppThreads = 4;
+      m_numThreads = 4;
     }
   }
 
@@ -569,7 +570,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Threading, performance");
   opts.addOptions()
-  ("Threads,t",                                       m_numWppThreads,                                  "Number of threads")
+  ("Threads,t",                                       m_numThreads,                                     "Number of threads")
   ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
   ;
 
@@ -602,7 +603,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
   ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ;
-  
+
     if ( vvenc::isTracingEnabled() )
   {
     opts.setSubSection("Tracing");
@@ -612,7 +613,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     ("TraceFile",                                     m_traceFile,                                      "Tracing file")
     ;
   }
-  
+
   // file, i/o and source parameters
   opts.setSubSection("Input options");
   opts.addOptions()
@@ -921,7 +922,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MMVD",                                            m_MMVD,                                           "Enable Merge mode with Motion Vector Difference")
   ("MmvdDisNum",                                      m_MmvdDisNum,                                     "Number of MMVD Distance Entries")
   ("AllowDisFracMMVD",                                m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
-  ("MCTF",                                            m_MCTF,                                           "Enable GOP based temporal filter. (0:off, 1:filter all but the first and last frame, 2:filter all frames")
+  ("MCTF",                                            m_MCTF,                                           "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
   ("MCTFFutureReference",                             m_MCTFFutureReference,                            "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
   ("MCTFNumLeadFrames",                               m_MCTFNumLeadFrames,                              "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFNumTrailFrames",                              m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
@@ -935,27 +936,24 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Threading, performance");
   opts.addOptions()
-  ("NumWppThreads",                                   m_numWppThreads,                                  "Number of parallel wpp threads")
-  ("WppBitEqual",                                     m_ensureWppBitEqual,                              "Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line above, 2:line wise reset)")
-  ("NumFppThreads",                                   m_numFppThreads,                                  "Number of frame parallel processing threads")
   ("MaxParallelFrames",                               m_maxParallelFrames,                              "Maximum number of frames to be processed in parallel(0:off, >=2: enable parallel frames)")
-  ("FppBitEqual",                                     m_ensureFppBitEqual,                              "Ensure bit equality with frame parallel processing case")
+  ("WppBitEqual",                                     m_ensureWppBitEqual,                              "Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line above, 2:line wise reset)")
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
-  ("SbTMVP",                                          m_SbTMVP,                                         "Enable Subblock Temporal Motion Vector Prediction (0: off, 1: on)")
   ;
 
   opts.setSubSection("Coding tools");
   opts.addOptions()
+  ("SbTMVP",                                          m_SbTMVP,                                         "Enable Subblock Temporal Motion Vector Prediction (0: off, 1: on)")
   ("CIIP",                                            m_CIIP,                                           "Enable CIIP mode, 0: off, 1: vtm, 2: fast, 3: faster ")
   ("SBT",                                             m_SBT,                                            "Enable Sub-Block Transform for inter blocks (0: off 1: vtm, 2: fast, 3: faster)" )
   ("LFNST",                                           m_LFNST,                                          "Enable LFNST (0: off, 1: on)" )
   ("MTS",                                             m_MTS,                                            "Multiple Transform Set (MTS)" )
   ("MTSIntraMaxCand",                                 m_MTSIntraMaxCand,                                "Number of additional candidates to test for MTS in intra slices")
   ("ISP",                                             m_ISP,                                            "Intra Sub-Partitions Mode (0: off, 1: vtm, 2: fast, 3: faster)")
-  ("TransformSkip",                                   m_TS,                                             "Intra transform skipping, 0: off, 1: TS, 2: TS with SC detection ")
+  ("TransformSkip",                                   m_TS,                                             "Intra transform skipping, 0: off, 1: TS, 2: TS with SCC detection ")
   ("TransformSkipLog2MaxSize",                        m_TSsize,                                         "Specify transform-skip maximum size. Minimum 2, Maximum 5")
   ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
-  ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma)")
+  ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
   ;
 
   opts.setSubSection("Input options");

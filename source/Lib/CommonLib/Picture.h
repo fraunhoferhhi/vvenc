@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <deque>
 #include <chrono>
+#include <atomic>
 
 //! \ingroup CommonLib
 //! \{
@@ -138,7 +139,6 @@ protected:
   bool     m_bResetAMaxBT;
 };
 
-
 struct Picture : public UnitArea
 {
   uint32_t margin;
@@ -214,11 +214,10 @@ public:
 
   bool                          isMctfProcessed;
   bool                          isInitDone;
-  bool                          isReconstructed;
+  std::atomic_bool              isReconstructed;
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
-  bool                          isEncPicturePPFinished;
   bool                          isFinished;
   bool                          isLongTerm;
   bool                          encPic;
@@ -243,7 +242,13 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   StopClock                     encTime;
+#if SCC_MCTF
+  bool                          useScMCTF;
+  bool                          useScTS;
+  bool                          useScBDPCM;
+#else
   bool                          useSC;
+#endif
 
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];

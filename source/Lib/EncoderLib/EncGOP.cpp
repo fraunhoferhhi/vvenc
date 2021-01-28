@@ -247,11 +247,13 @@ EncGOP::EncGOP()
   , m_pcRateCtrl         ( nullptr )
   , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
-  , m_gopThreadPool      ( nullptr )
   , m_lambda             ( 0.0 )
   , m_actualHeadBits     ( 0 )
   , m_actualTotalBits    ( 0 )
   , m_estimatedBits      ( 0 )
+  , m_threadPool         ( nullptr )
+  , m_numPicsInFlight    ( 0 )
+  , m_numPicsFinished    ( 0 )
 {
 }
 
@@ -272,7 +274,7 @@ EncGOP::~EncGOP()
     }
   }
   m_picEncoderList.clear();
-  m_gopThreadPool = nullptr;
+  m_threadPool = nullptr;
 }
 
 
@@ -280,19 +282,19 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;
-  m_pcEncHRD = &encHrd;
-
+  m_pcEncHRD   = &encHrd;
+  m_threadPool = threadPool;
 
   m_seiEncoder.init( encCfg, encHrd );
   m_Reshaper.init  ( encCfg );
+
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
   m_picEncoderList.resize( maxPicEncoder );
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
-    m_picEncoderList[ i ] = new EncPicturePP;
-    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool, m_picEncoderList[ i ] );
+    m_picEncoderList[ i ] = new EncPicture;
+    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool );
   }
-  m_gopThreadPool = threadPool;
 
   if (encCfg.m_usePerceptQPA)
   {
@@ -307,308 +309,157 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 
 void EncGOP::xWaitForFinishedPic()
 {
+  CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no multi-threading enabled" );
+  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
+  if( m_numPicsFinished <= 0
+      && ! m_gopEncListOutput.empty()
+      && ! m_gopEncListOutput.front()->isReconstructed )
   {
-    std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-    bool isEncPicturePPFinished = false;
-    for( auto picPP : m_gopEncListInFlight )
-    {
-      if( picPP->isEncPicturePPFinished )
-      {
-        isEncPicturePPFinished = true;
-        break;
-      }
-    }
-
-    if( !isEncPicturePPFinished )
-    {
-      m_gopEncCond.wait( _lock );
-    }
+    m_gopEncCond.wait( _lock );
   }
+  CHECK( m_numPicsFinished > m_numPicsInFlight, "more pics currently finished than pics in flight");
+  m_numPicsInFlight -= m_numPicsFinished;
+  m_numPicsFinished = 0;
 }
 
-bool EncGOP::xFinalizePicsPP()
+EncPicture* EncGOP::xGetNextFreePicEncoder()
 {
-  bool isReadyForOutput = false;
-  {
-    std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-    // Remove finished pictures from list
-    for( auto it = m_gopEncListInFlight.begin(); it != m_gopEncListInFlight.end(); )
-    {
-      if( ( *it )->isEncPicturePPFinished )
-      {
-        it = m_gopEncListInFlight.erase( it );
-      }
-      else
-      {
-        ++it;
-      }
-    }
-    isReadyForOutput = m_gopEncListOutput.front()->isReconstructed;
-  }
-  return isReadyForOutput;
-}
-
-EncPicturePP* EncGOP::xGetNextFreePicEncoder()
-{
+  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
   for( int i = 0; i < m_picEncoderList.size(); i++ )
+  {
     if( !m_picEncoderList[ i ]->m_isRunning )
+    {
+      m_picEncoderList[ i ]->m_isRunning = true;
       return m_picEncoderList[ i ];
+    }
+  }
   return nullptr;
 }
 
-void EncPicturePP::start( EncGOP* encGOP, Picture* pic )
+void EncGOP::xFinishPP( EncPicture* picEncoder )
 {
-  m_encGOP = encGOP;
-  m_pic    = pic;
-  m_isRunning = true;
-  pic->isEncPicturePPFinished = false;
+  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
+  picEncoder->m_isRunning = false;
+  m_numPicsFinished += 1;
+  m_gopEncCond.notify_one();
 }
 
-void EncPicturePP::finish()
+void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
 {
-  {
-    std::unique_lock<std::mutex> _lock( m_encGOP->m_gopEncMutex );
-    m_pic->isEncPicturePPFinished = true;
-    m_isRunning = false;
-
-    m_encGOP->m_gopEncCond.notify_one();
-    _lock.unlock();
-  }
-}
-
-static bool compressPic( int taskIdx, EncPicturePP* picEncoder )
-{
-  picEncoder->encodePicture( *picEncoder->m_pic, picEncoder->m_encGOP->getSharedApsMap(), *picEncoder->m_encGOP );
-  picEncoder->finalizePicture( *picEncoder->m_pic );
-  picEncoder->finish();
-  return true;
-}
-
-void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef, bool flush )
-{
-  CHECK( !flush && encList.size() == 0, "error: no pictures to be encoded given" );
+  CHECK( encList.size() == 0 && m_gopEncListOutput.size() == 0, "error: no pictures to be encoded given" );
 
   // init pictures and first slice (in coding order)
-  if( !encList.empty() )
+  if( encList.size() )
   {
-    xInitPicsICO( encList, picList, isEncodeLtRef );
+    xInitPicsInCodingOrder( encList, picList, isEncodeLtRef );
   }
 
-  m_lambda = 0.0;
-  m_actualHeadBits = 0;
+  m_lambda          = 0.0;
+  m_actualHeadBits  = 0;
   m_actualTotalBits = 0;
-  m_estimatedBits = 0;
-  const int maxPicsInFlight = m_pcEncCfg->m_maxParallelFrames;
+  m_estimatedBits   = 0;
 
-  if( !m_gopEncListInput.empty() )
+  const int maxPicsInParallel = std::max( 1, m_pcEncCfg->m_maxParallelFrames );
+
+  while( ! m_gopEncListInput.empty()
+      && ! m_gopEncListOutput.empty()
+      && ! m_gopEncListOutput.front()->isReconstructed )
   {
-    for( auto& pic : m_gopEncListInput )
+    // get next picture ready to be encoded
+    auto it = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+
+    // check free picture encoder as well as picture to be encoded available
+    if( m_numPicsInFlight >= maxPicsInParallel
+        || it == m_gopEncListInput.end() )
     {
-      m_gopEncListToProcess.push_back( pic );
-    }
-    m_gopEncListInput.clear();
-  }
-
-  bool waitForPicFinished = false;
-  bool trySkip = true;
-
-  while( !m_gopEncListToProcess.empty() )
-  {
-    // Test if we can skip the picture entirely or decode instead of encoding (i.e. used for DebugBitstream feature)
-    // Currently this works in sequential mode. In the Frame Parallel mode the decoder bitstream reader would require jumping to AUs inside of debug-bitstream file. 
-    if( trySkip )
-    {
-      Picture* pic = m_gopEncListToProcess.front();
-      pic->encPic = true;
-      pic->writePic = true;
-
-      bool decPic( false ), encPic( false );
-      trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
-      pic->writePic = decPic || encPic;
-      pic->encPic = encPic;
-      trySkip = false;
-
-      if( !pic->encPic )
-      {
-        xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
-        m_picEncoderList[0]->encodePicture( *pic, m_gopApsMap, *this );
-        m_picEncoderList[0]->finalizePicture( *pic );
-
-        m_gopEncListToProcess.remove( pic );
-        break;
-      }
+      xWaitForFinishedPic();
+      continue;
     }
 
-    // Go through the list of pictures to process
-    bool isPicSubmited = false;
-    for( auto it = m_gopEncListToProcess.begin(); it != m_gopEncListToProcess.end(); )
+    EncPicture* picEncoder = xGetNextFreePicEncoder();
+    Picture*    pic        = *it;
+
+    CHECK( picEncoder == nullptr, "no free picture encoder available" );
+    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
+
+    bool decPic = false;
+    bool encPic = false;
+    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
+    pic->writePic = decPic || encPic;
+    pic->encPic   = encPic;
+
+    if( m_pcEncCfg->m_alfTempPred )
     {
-      Picture* pic = *it;
-
-      if( waitForPicFinished || m_gopEncListInFlight.size() >= maxPicsInFlight )
-      {
-        xWaitForFinishedPic();
-        xFinalizePicsPP();
-        waitForPicFinished = false;
-      }
-
-      if( pic->slices[ 0 ]->checkRefPicsReconstructed() ) // all reference pictures are finished?
-      {
-        pic->encPic = true;
-        pic->writePic = true;
-        
-
-        {
-          // Obtain next free encoder for the picture
-          EncPicturePP* picEncoder = nullptr;
-          {
-            std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-            picEncoder = xGetNextFreePicEncoder();
-            CHECK( picEncoder == nullptr, "No free picture encoder available" );
-          }
-          picEncoder->start( this, pic );
-
-          // In case of WPP enabled, perform FPP on CTU-level
-          if( m_pcEncCfg->m_numWppThreads > 0 && !m_pcEncCfg->m_numFppThreads )
-          {
-            picEncoder->encodePicture( *pic, m_gopApsMap, *this );
-          }
-          else
-          {
-            m_gopThreadPool->addBarrierTask<EncPicturePP>( compressPic, picEncoder );
-          }
-        }
-
-        m_gopEncListInFlight.push_back( pic );
-        it = m_gopEncListToProcess.erase( it );
-
-        isPicSubmited = true;
-      }
-      else
-      {
-        ++it;
-      }
+      xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
 
-    bool isReadyForOutput = xFinalizePicsPP();
-    if( isReadyForOutput )
+    m_gopEncListInput.remove( pic );
+
+    // compress next picture
+    if( pic->encPic )
     {
-      break;
+      if( m_pcEncCfg->m_numThreads > 0 )
+      {
+        m_numPicsInFlight += 1;
+      }
+      picEncoder->compressPicture( *pic, *this );
+    }
+    else
+    {
+      picEncoder->skipCompressPicture( *pic, m_gopApsMap );
     }
 
-    // We should wait if no pictures have been submitted in the last pass of the processing list
-    // But we have to ensure that there are some pictures in flight, that can be finished
-    waitForPicFinished = !isPicSubmited && !m_gopEncListInFlight.empty();
+    // finish picture encoding and cleanup
+    if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
+    {
+      static auto finishTask = []( int, FinishTaskParam* param ) {
+        param->picEncoder->finalizePicture( *param->pic );
+        param->gopEncoder->xFinishPP( param->picEncoder );
+        delete param;
+        return true;
+      };
+      FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
+      m_threadPool->addBarrierTask<FinishTaskParam>( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
+    }
+    else
+    {
+      picEncoder->finalizePicture( *pic );
+      picEncoder->m_isRunning = false;
+    }
   }
 
   // AU output
   if( m_gopEncListOutput.size() > 0 )
   {
     Picture* pic = m_gopEncListOutput.front();
-    if( !pic->isReconstructed && m_gopEncListInput.empty() && m_gopEncListToProcess.empty() && !m_gopEncListInFlight.empty() )
+    m_gopEncListOutput.pop_front();
+    CHECK( !pic->isReconstructed && !pic->encPic, "picture not reconstructed and no encoding started" );
+
+    while( !pic->isReconstructed )
     {
-      while( !pic->isReconstructed )
-      {
-        xWaitForFinishedPic();
-        xFinalizePicsPP();
-      }
+      xWaitForFinishedPic();
     }
 
-    if( pic->isReconstructed )
+    if( pic->writePic )
     {
-      if( pic->writePic )
-      {
-        xWritePicture( *pic, au, isEncodeLtRef );
-        m_gopEncListOutput.pop_front();
-      }
-
-      xUpdateAfterPicRC( pic );
-
-      if( m_pcEncCfg->m_useAMaxBT )
-      {
-        m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
-      }
-      pic->isFinished = true;
+      xWritePicture( *pic, au, isEncodeLtRef );
     }
+
+    if( m_pcEncCfg->m_alfTempPred )
+    {
+      xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
+    }
+
+    xUpdateAfterPicRC( pic );
+
+    if( m_pcEncCfg->m_useAMaxBT )
+    {
+      m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
+    }
+
+    pic->isFinished = true;
   }
 }
-
-void EncGOP::encodePicture( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
-{
-  CHECK( encList.size() == 0, "error: no pictures to be encoded given" );
-
-  // init pictures and first slice in coding order
-  xInitPicsICO( encList, picList, isEncodeLtRef );
-
-  m_lambda = 0.0;
-  m_actualHeadBits = 0;
-  m_actualTotalBits = 0;
-  m_estimatedBits = 0;
-
-  std::list<Picture*> processPics;
-  for( auto& pic : m_gopEncListInput )
-  {
-    if( pic->slices[ 0 ]->checkRefPicsReconstructed() )
-    {
-      processPics.push_back( pic );
-    }
-  }
-
-  bool trySkip = true;
-  while( processPics.size() )
-  {
-    Picture* pic = processPics.front();
-    processPics.pop_front();
-    m_gopEncListInput.remove( pic );
-
-    DTRACE_UPDATE( g_trace_ctx, ( std::make_pair( "poc", pic->poc ) ) );
-    DTRACE_UPDATE( g_trace_ctx, ( std::make_pair( "final", 0 ) ) );
-
-    // test if we can skip the picture entirely or decode instead of encoding
-    pic->encPic = true;
-    pic->writePic = true;
-    bool decPic( false );
-    if( trySkip )
-    {
-      bool /*decPic( false ),*/ encPic( false );
-      trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
-      pic->writePic = decPic || encPic;
-      pic->encPic = encPic;
-      trySkip = false;
-    }
-
-    if( decPic || m_pcEncCfg->m_alfTempPred )
-    {
-      xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
-    }
-    m_picEncoderList[0]->encodePicture( *pic, m_gopApsMap, *this );
-    m_picEncoderList[0]->finalizePicture( *pic );
-   
-    if( !pic->encPic )
-    {
-      break;
-    }
-  }
-
-  // write data
-  Picture* pic = encList.front();
-  CHECK( !pic->isReconstructed, "error: try to write picture which hasn't been reconstructed yet" );
-  pic->isFinished = true;
-
-  if( pic->writePic )
-  {
-    xWritePicture( *pic, au, isEncodeLtRef );
-    xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
-  }
-
-  xUpdateAfterPicRC( pic );
-
-  if( m_pcEncCfg->m_useAMaxBT )
-  {
-    m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
-  }
-}
-
 
 void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
 {
@@ -818,15 +669,14 @@ bool EncGOP::xIsSliceTemporalSwitchingPoint( const Slice* slice, PicList& picLis
 }
 
 
-void EncGOP::xInitPicsICO( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef )
+void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef )
 {
-  const int numInit = m_pcEncCfg->m_maxParallelFrames ? (int)encList.size() : 1;
-  for ( int i = 0; i < numInit; i++ )
+  const size_t size = m_pcEncCfg->m_maxParallelFrames > 0 ? encList.size() : 1;
+  for( int i = 0; i < size; i++ )
   {
-    if ( ! encList[ i ]->isInitDone )
+    Picture* pic = encList[ i ];
+    if ( ! pic->isInitDone )
     {
-      Picture* pic = encList[ i ];
-
       pic->encTime.startTimer();
 
       xInitFirstSlice( *pic, picList, isEncodeLtRef );
@@ -1378,13 +1228,6 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
   std::string digestStr;
   xWriteTrailingSEIs( pic, au, digestStr );
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
-  
-  // After picture is written, we have to collect current picture ALF APS set to the global set
-  // In the frame parallel mode, the synchronization is done inside of parallel framework
-  if( !pic.encPic || ( m_pcEncCfg->m_alfTempPred && !m_pcEncCfg->m_maxParallelFrames ) )
-  {
-    xSyncAlfAps( pic, m_gopApsMap, pic.picApsMap );
-  }
 }
 
 

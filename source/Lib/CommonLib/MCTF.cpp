@@ -355,11 +355,13 @@ void MCTF::filter( Picture* pic )
       break;
     }
   }
+#if !SCC_MCTF
   if ( m_MCTFMode == 1 )
   {
     // disable filter for the very first and very last frame of a sequence to use it with parcat
     isFilterThisFrame &= ( process_poc != m_picFifo.front()->poc ) && ( process_poc != m_picFifo.back()->poc );
   }
+#endif
 
   Picture* fltrPic = nullptr;
   for ( int idx = 0; idx < m_picFifo.size(); idx++ )
@@ -370,6 +372,12 @@ void MCTF::filter( Picture* pic )
       break;
     }
   }
+#if SCC_MCTF
+  if( !fltrPic->useScMCTF )
+  {
+    isFilterThisFrame = false;
+  }
+#endif
   CHECK( fltrPic == nullptr || fltrPic->poc != process_poc, "error: picture not found in fifo" );
 
   if ( isFilterThisFrame )

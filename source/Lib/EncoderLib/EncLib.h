@@ -134,7 +134,11 @@ private:
   void     xInitRPL            ( SPS &sps ) const;
   void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
+#if SCC_MCTF
+  void     xDetectScreenC      ( Picture& pic, PelUnitBuf yuvOrgBuf );
+#else
   void     xDetectScreenC      ( Picture& pic , PelUnitBuf yuvOrgBuf, int useTS);
+#endif
 };
 
 } // namespace vvenc

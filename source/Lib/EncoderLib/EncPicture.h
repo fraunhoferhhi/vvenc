@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncSampleAdaptiveOffset.h"
 #include "EncAdaptiveLoopFilter.h"
 #include "CommonLib/LoopFilter.h"
+#include "Utilities/NoMallocThreadPool.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -67,33 +68,41 @@ class EncGOP;
 class EncPicture
 {
   private:
-    const VVEncCfg*         m_pcEncCfg;
-    EncSlice                m_SliceEncoder;
-    LoopFilter              m_LoopFilter;
-    EncAdaptiveLoopFilter   m_ALF;
+    const VVEncCfg*          m_pcEncCfg;
+    EncSlice                 m_SliceEncoder;
+    LoopFilter               m_LoopFilter;
+    EncAdaptiveLoopFilter    m_ALF;
 
-    BitEstimator            m_BitEstimator;
-    CABACWriter             m_CABACEstimator;
-    CtxCache                m_CtxCache;
+    BitEstimator             m_BitEstimator;
+    CABACWriter              m_CABACEstimator;
+    CtxCache                 m_CtxCache;
+
+  public:
+    WaitCounter              m_ctuTasksDoneCounter;
+    bool                     m_isRunning;
 
   public:
     EncPicture()
-      : m_pcEncCfg( nullptr )
-      , m_CABACEstimator   ( m_BitEstimator )
+      : m_pcEncCfg      ( nullptr )
+      , m_CABACEstimator( m_BitEstimator )
+      , m_isRunning     ( false )
     {}
     virtual ~EncPicture() {}
 
-    void      init          ( const VVEncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                              const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP = nullptr );
-    EncSlice* getEncSlice   () { return &m_SliceEncoder; }
-
-    void      encodePicture ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
-
+    void init                   ( const VVEncCfg& encCfg,
+                                  std::vector<int>* const globalCtuQpVector,
+                                  const SPS& sps,
+                                  const PPS& pps,
+                                  RateCtrl& rateCtrl,
+                                  NoMallocThreadPool* threadPool );
+    void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
+    void skipCompressPicture    ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
     void finalizePicture        ( Picture& pic );
+
+    EncSlice* getEncSlice       () { return &m_SliceEncoder; }
+
   protected:
     void xInitPicEncoder        ( Picture& pic );
-    void xCompressPicture       ( Picture& pic );
-    void xSkipCompressPicture   ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
     void xWriteSliceData        ( Picture& pic );
 
     void xInitSliceColFromL0Flag( Slice* slice ) const;

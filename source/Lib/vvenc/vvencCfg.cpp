@@ -113,16 +113,6 @@ bool VVEncCfg::initCfgParameter()
     CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
   }
 
-  if( m_maxParallelFrames > 0 && (m_numWppThreads<=0) && !m_numFppThreads )
-  {
-    // Use picture threads for FPP
-    m_numFppThreads = m_maxParallelFrames;
-  }
-  else if( m_numFppThreads && !m_maxParallelFrames )
-  {
-    m_maxParallelFrames = m_numFppThreads;
-  }
-
   if ( m_InputQueueSize <= 0 )
   {
     m_InputQueueSize = m_maxParallelFrames ? 2*m_GOPSize + 1: m_GOPSize;
@@ -347,7 +337,7 @@ bool VVEncCfg::initCfgParameter()
 
   if( m_ensureWppBitEqual < 0 )
   {
-    m_ensureWppBitEqual = m_numWppThreads > 0 ? 1 : 0;
+    m_ensureWppBitEqual = m_numThreads > 0 ? 1 : 0;
   }
 
 
@@ -441,10 +431,6 @@ bool VVEncCfg::initCfgParameter()
   confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
 
-  confirmParameter( m_numWppThreads < -1,                            "NumWppThreads out of range");
-  confirmParameter( m_ensureWppBitEqual<0 || m_ensureWppBitEqual>1, "WppBitEqual out of range");
-  confirmParameter( (m_numWppThreads>0) && m_ensureWppBitEqual == 0,    "NumWppThreads > 0 requires WppBitEqual > 0");
-
   if (m_lumaReshapeEnable)
   {
     confirmParameter( m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
@@ -471,9 +457,11 @@ bool VVEncCfg::initCfgParameter()
   confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
   confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
   confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
-  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..1]" );
-  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [0..1]" );
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..2]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [2..5]" );
+  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,        "BDPCM out of range [0..2]");
   confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
+  confirmParameter(m_useBDPCM==1  && m_TS==2,               "BDPCM cannot be permanently used when transform skip is auto" );
 
   if( m_alf )
   {
@@ -582,12 +570,19 @@ bool VVEncCfg::initCfgParameter()
   confirmParameter( m_confWinTop    % SPS::getWinUnitY(m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_confWinBottom % SPS::getWinUnitY(m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
 
-  if( m_maxParallelFrames && m_ensureFppBitEqual )
+  confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range");
+  confirmParameter( m_ensureWppBitEqual < 0 || m_ensureWppBitEqual > 1,   "WppBitEqual out of range");
+  confirmParameter( m_numThreads > 0 && m_ensureWppBitEqual == 0,         "NumThreads > 0 requires WppBitEqual > 0");
+  confirmParameter( m_maxParallelFrames < -1,                             "Max parallel frames out of range" );
+  confirmParameter( m_maxParallelFrames > 0 && m_numThreads == 0,         "For frame parallel processing NumThreads > 0 is required" );
+  confirmParameter( m_maxParallelFrames > m_InputQueueSize,               "Max parallel frames should be less than size of input queue" );
+
+  if( m_maxParallelFrames )
   {
-    confirmParameter( m_useAMaxBT,             "FPP bit-equal mode: AMaxBT is not supported (must be disabled)" );
-    confirmParameter( m_cabacInitPresent,      "FPP bit-equal mode: CabacInitPresent is not supported (must be disabled)" );
-    confirmParameter( m_saoEncodingRate > 0.0, "FPP bit-equal mode: SaoEncodingRate is not supported (must be disabled)" );
-    confirmParameter( m_alfTempPred,           "FPP bit-equal mode: ALFTempPred is not supported (must be disabled)" );
+    confirmParameter( m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
+    confirmParameter( m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
+    confirmParameter( m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
+    confirmParameter( m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
 #if ENABLE_TRACING
     confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
@@ -1448,12 +1443,7 @@ bool VVEncCfg::initCfgParameter()
     m_PROF = bool(m_Affine);
     m_AffineType = (m_Affine == 2) ? true : false;
   }
-  if( m_maxParallelFrames )
-  {
-    confirmParameter( m_maxParallelFrames < 2, "maximum number of parallel frames should be greater or equal 2" );
-    confirmParameter( m_numFppThreads && m_maxParallelFrames && m_numFppThreads != m_maxParallelFrames, "NumFppThreads is not equal to MaxParallelFrames" );
-  }
-  confirmParameter( m_maxParallelFrames > m_InputQueueSize, "maximum number of parallel frames should be less than size of input queue" );
+
   /// Experimental settings
   // checkExperimental( experimental combination of parameters, "Description!" );
 
@@ -1475,7 +1465,7 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
   m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
   m_FrameSkip           = 0;                        // number of frames to skip before start encoding
-  m_numWppThreads       = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
+  m_numThreads          = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
   m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   m_inputBitDepth[0]    = 8;                        // input bitdepth
   m_internalBitDepth[0] = 10;                       // internal bitdepth
@@ -1587,7 +1577,7 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_useNonLinearAlfLuma           = 0;
 
   // enable speedups
-  m_qtbttSpeedUp                  = 1;
+  m_qtbttSpeedUp                  = 2;
   m_contentBasedFastQtbt          = 1;
   m_usePbIntraFast                = 1;
   m_useFastMrg                    = 2;
@@ -1610,7 +1600,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
@@ -1631,7 +1621,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_RDOQ                      = 2;
       m_SignDataHidingEnabled     = 1;
 
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
@@ -1654,7 +1644,7 @@ int VVEncCfg::initPreset( PresetMode preset )
 
       m_alf                       = 1;
       m_ccalf                     = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MCTF                      = 2;
@@ -1676,7 +1666,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1713,7 +1703,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1758,7 +1748,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_Affine                    = 1;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
-      m_useBDPCM                  = 1;
+      m_useBDPCM                  = 2;
       m_BDOF                      = 1;
       m_ccalf                     = 1;
       m_DepQuantEnabled           = 1;
@@ -1788,7 +1778,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
 
-      m_qtbttSpeedUp              = 0;
+      m_qtbttSpeedUp              = 1;
       m_contentBasedFastQtbt      = 0;
       m_useFastMrg                = 1;
       m_useFastMIP                = 0;
@@ -2076,10 +2066,8 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   }
 
   css << "\nPARALLEL PROCESSING CFG: ";
+  css << "NumThreads:" << m_numThreads << " ";
   css << "MaxParallelFrames:" << m_maxParallelFrames << " ";
-  css << "NumFppThreads:" << m_numFppThreads << " ";
-  css << "FppBitEqual:" << m_ensureFppBitEqual << " ";
-  css << "WPP:" << m_numWppThreads << " ";
   css << "WppBitEqual:" << m_ensureWppBitEqual << " ";
   css << "WF:" << m_entropyCodingSyncEnabled << "";
   css << "\n";

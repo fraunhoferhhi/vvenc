@@ -183,7 +183,7 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
 //rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
   rcEncCfg.m_TicksPerSecond             = 90000;               // ticks per second e.g. 90000 for dts generation
-  rcEncCfg.m_numWppThreads              = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
+  rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
 //rcEncCfg.quality                      = 0;                   // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
   rcEncCfg.m_usePerceptQPA              = 2;                   // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
@@ -283,7 +283,7 @@ int testLibParameterRanges()
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
 
   testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { 0,1000000,20000000 } );
-  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,100000001 }, true );
+  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,800000001 }, true );
 
   vvencParams.m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
   vvencParams.m_RCTargetBitrate = 1;

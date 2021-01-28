@@ -57,8 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-static_assert( MAX_CU_TILING_PARTITIONS >= 4, "Minimum required number of partitions for the Partitioning type is 4!" );
-typedef std::vector <UnitArea> Partitioning;
+typedef std::vector<UnitArea> Partitioning;
 
 //////////////////////////////////////////////////////////////////////////
 // PartManager class - manages the partitioning tree
@@ -180,11 +179,6 @@ public:
   bool isConsIntra                        () { return modeType == MODE_TYPE_INTRA; }
 
   void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs ) const;
-};
-
-namespace PartitionerFactory
-{
-  Partitioner* get( const Slice& slice );
 };
 
 //////////////////////////////////////////////////////////////////////////
