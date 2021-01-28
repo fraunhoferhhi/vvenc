@@ -524,23 +524,49 @@ bool VVEncCfg::initCfgParameter()
     msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
     msg(WARNING, "***************************************************************************\n");
   }
-  if (m_usePerceptQPA && (m_QP <= MAX_QP_PERCEPT_QPA) && (m_CTUSize == 128) && (m_PadSourceWidth <= 2048) && (m_PadSourceHeight <= 1280) && (m_usePerceptQPA <= 4))
-  {
-    m_cuQpDeltaSubdiv = 2;
-  }
-  if (m_usePerceptQPA >= 1 && m_internChromaFormat != CHROMA_400 && m_sliceChromaQpOffsetPeriodicity == 0)
-  {
-    m_sliceChromaQpOffsetPeriodicity = 1;
-  }
-  const bool QpaTFI = m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8);
-  confirmParameter( QpaTFI, "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
-  if (m_usePerceptQPATempFiltISlice && (m_QP > MAX_QP_PERCEPT_QPA || (m_usePerceptQPA != 2 && m_usePerceptQPA != 4) || m_IntraPeriod < 2 * m_GOPSize))
+  if (m_usePerceptQPATempFiltISlice < 0 )
   {
-    msg(WARNING, "disabling Intra-picture temporal QPA mode due to configuration incompatibility\n");
-    m_usePerceptQPATempFiltISlice = false;
+    m_usePerceptQPATempFiltISlice = 0;
+    if ( (m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
+        && m_RCRateControlMode > 0
+        && m_RCNumPasses == 2
+        && m_QP <= MAX_QP_PERCEPT_QPA
+        && m_GOPSize > 8
+        && m_IntraPeriod >= 2 * m_GOPSize )
+    {
+      m_usePerceptQPATempFiltISlice = 1;
+    }
   }
-  if (m_usePerceptQPATempFiltISlice && (m_RCNumPasses == 2) && (m_CTUSize == 128)) m_cuQpDeltaSubdiv = 2; // use subdiv. 2 even for UHD with 2-pass rate control
+  if (m_cuQpDeltaSubdiv < 0)
+  {
+    m_cuQpDeltaSubdiv = 0;
+    if ( m_usePerceptQPA > 0
+        && m_QP <= MAX_QP_PERCEPT_QPA
+        && m_CTUSize == 128
+        && m_PadSourceWidth <= 2048
+        && m_PadSourceHeight <= 1280 )
+    {
+      m_cuQpDeltaSubdiv = 2;
+    }
+    if ( m_usePerceptQPATempFiltISlice
+        && m_RCNumPasses == 2
+        && m_CTUSize == 128)
+    {
+      m_cuQpDeltaSubdiv = 2; // use subdiv. 2 even for UHD with 2-pass rate control
+    }
+  }
+  if (m_sliceChromaQpOffsetPeriodicity < 0)
+  {
+    m_sliceChromaQpOffsetPeriodicity = 0;
+    if (m_usePerceptQPA >= 1
+        && m_internChromaFormat != CHROMA_400)
+    {
+      m_sliceChromaQpOffsetPeriodicity = 1;
+    }
+  }
+
+  confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
   if ( m_DecodingRefreshType == 2 )

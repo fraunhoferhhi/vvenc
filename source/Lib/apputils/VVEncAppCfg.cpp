@@ -462,10 +462,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     m_RCUseLCUSeparateModel = 1;
     m_RCInitialQP           = 0;
     m_RCForceIntraQP        = 0;
-    if( (m_usePerceptQPA == 2 || m_usePerceptQPA == 4) && (m_QP <= 42) && (m_RCNumPasses == 2) && (m_GOPSize > 8) )
-    {
-      m_usePerceptQPATempFiltISlice = true; // optimized combination of perceptual QPA and 2-pass rate control
-    }
   }
 
   // this has to be set outside
