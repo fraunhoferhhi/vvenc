@@ -1589,7 +1589,7 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_useNonLinearAlfLuma           = 0;
 
   // enable speedups
-  m_qtbttSpeedUp                  = 1;
+  m_qtbttSpeedUp                  = 2;
   m_contentBasedFastQtbt          = 1;
   m_usePbIntraFast                = 1;
   m_useFastMrg                    = 2;
@@ -1790,7 +1790,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_useNonLinearAlfChroma     = 1;
       m_useNonLinearAlfLuma       = 1;
 
-      m_qtbttSpeedUp              = 0;
+      m_qtbttSpeedUp              = 1;
       m_contentBasedFastQtbt      = 0;
       m_useFastMrg                = 1;
       m_useFastMIP                = 0;
