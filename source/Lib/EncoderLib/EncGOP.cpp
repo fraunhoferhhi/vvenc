@@ -865,7 +865,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    // D pointers to previous pictures for QP adaptation
+    // set pointers to previous pictures for QP adaptation
     pic.m_bufsOrigPrev[0] = &pic.m_bufs[PIC_ORIGINAL];
     pic.m_bufsOrigPrev[1] = nullptr;
 
@@ -1621,12 +1621,24 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     m_pcRateCtrl->encRCPic->getLCUInitTargetBits();
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
+    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
+        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && slice->isIntra() && (sliceQP > 0) )
+    {
+      sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
+      m_lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
+    }
   }
   else    // normal case
   {
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
+    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
+        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
+    {
+      sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
+      m_lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP
+    }
   }
 
   sliceQP = Clip3( -slice->sps->qpBDOffset[ CH_L ], MAX_QP, sliceQP );

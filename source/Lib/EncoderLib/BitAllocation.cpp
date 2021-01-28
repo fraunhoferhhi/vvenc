@@ -393,8 +393,8 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
   return savedLumaQP;
 }
 
-int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda, std::vector<int>& ctuPumpRedQP,
-                                          const bool forceFrameWiseQPA,
+int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
+                                          std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
                                           const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, const bool isHDR /*= false*/)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
@@ -406,7 +406,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
   const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
-  const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA) || forceFrameWiseQPA;
+  const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
   const int           sliceQP = (savedQP < 0 ? slice->sliceQp : savedQP);
   const PreCalcValues&    pcv = *pic->cs->pcv;
@@ -497,15 +497,32 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
   else // use CTU-wise QPA
   {
     const int nCtu = int (ctuBoundingAddr - ctuStartAddr);
+    const int dvsr = encCfg->m_IntraPeriod - encCfg->m_GOPSize;
 
     for (uint32_t ctuTsAddr = ctuStartAddr; ctuTsAddr < ctuBoundingAddr; ctuTsAddr++)
     {
       const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
       int adaptedLumaQP = Clip3 (0, MAX_QP, slice->sliceQp + apprI3Log2 (pic->ctuQpaLambda[ctuRsAddr]/*hpEner*/ * hpEnerPic));
+
       if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
       {
-        adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize + ((encCfg->m_IntraPeriod - encCfg->m_GOPSize) >> 1)) / (encCfg->m_IntraPeriod - encCfg->m_GOPSize));
+        if (ctuRCQPMemory != nullptr) // save I-frame QP for second rate control pass
+        {
+          if (ctuRsAddr & 1) ctuRCQPMemory->back() |= (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8) << 4;
+          else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
+          if (slice->isIntra() && (adaptedLumaQP > 0))
+          {
+            adaptedLumaQP--; // this is a first-pass tuning to stabilize rate control
+          }
+        }
+        if (ctuPumpRedQP[ctuRsAddr] < 0) adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize - (dvsr >> 1)) / dvsr);
+        else /*ctuPumpRedQP[addr] >= 0*/ adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize + (dvsr >> 1)) / dvsr);
+
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
+      }
+      if (encCfg->m_usePerceptQPATempFiltISlice && !slice->isIntra() && (slice->TLayer == 0) && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
+      {
+        adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
       meanLuma = MAX_UINT;
       if (isChromaEnabled (pic->chromaFormat) && (adaptedLumaQP < MAX_QP))
@@ -574,7 +591,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       }
     } // end CTU-wise loop
 
-    adaptedSliceQP = ((savedQP < 0) && (ctuBoundingAddr > ctuStartAddr) ? (adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
+    adaptedSliceQP = ((savedQP < 0 || (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
+                      ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
   }
 
   return adaptedSliceQP;

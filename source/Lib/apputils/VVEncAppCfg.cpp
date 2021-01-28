@@ -455,7 +455,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     }
   }
 
-  if(  m_RCTargetBitrate )
+  if( m_RCTargetBitrate )
   {
     m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
     m_RCKeepHierarchicalBit = 2;
