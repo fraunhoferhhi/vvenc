@@ -203,6 +203,8 @@ private:
   // thread stuff
   Ctx*                  m_syncPicCtx;                        ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   PelStorage            m_dbBuffer;
+  
+  Partitioner           m_partitioner;
 
 public:
   EncCu();
