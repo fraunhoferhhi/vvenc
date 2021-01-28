@@ -183,6 +183,8 @@ private:
   OutputBitstream*   m_Bitstream;
   Ctx                m_TestCtx;
   const ScanElement* m_scanOrder;
+
+  Partitioner        m_partitioner[2];
  };
 
 

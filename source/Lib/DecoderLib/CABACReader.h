@@ -165,6 +165,7 @@ private:
 private:
   BinDecoderBase&    m_BinDecoder;
   InputBitstream*    m_Bitstream;
+  Partitioner        m_partitioner[2];
 };
 
 
