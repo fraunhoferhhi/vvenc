@@ -359,6 +359,12 @@ void EncLib::xSetRCEncCfg( int pass )
     // restore MCTF
     m_cBckCfg.m_MCTF              = mctf;
 
+    // clear MaxCuDQPSubdiv
+    if( m_cBckCfg.m_CTUSize < 128 )
+    {
+      m_cBckCfg.m_cuQpDeltaSubdiv = 0;
+    }
+
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
