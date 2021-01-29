@@ -472,6 +472,14 @@ public:
   int                 m_useChromaTS                             = 0;
   int                 m_useBDPCM                                = 0;
 
+#if 1 //RPR_READY
+  bool                m_rprEnabledFlag                          = true;
+  bool                m_rprReady                                = false;
+  bool                m_resChangeInClvsEnabled                  = false;
+  bool                m_craAPSreset                             = false;
+  bool                m_rprRASLtoolSwitch                       = false;
+#endif
+
   bool                m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS                   = true;                                  ///< offset for deblocking filter in 0 = slice header, 1 = PPS
   int                 m_loopFilterBetaOffsetDiv2[3]             = { 0 };                                 ///< beta offset for deblocking filter

@@ -979,6 +979,15 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("isSDR",                                           m_sdr,                                            "compatibility")
   ;
 
+#if 1 //RPR_READY
+  opts.setSubSection("RPR options");
+  opts.addOptions()
+  ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution")
+  ("RPRready",                                        m_rprReady,                                       "Enable CRA APS reset, RASL tool switch and resChangeInClvs")
+  ;
+#endif
+  
+  
   po::setDefaults( opts );
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
@@ -1062,6 +1071,15 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     return !m_confirmFailed;
   }
 
+#if 1 //RPR_READY
+  if( m_rprReady )
+  {
+    m_resChangeInClvsEnabled = true;
+    m_craAPSreset            = true;
+    m_rprRASLtoolSwitch      = true;
+  }
+#endif
+  
   //
   // check own parameters
   //
