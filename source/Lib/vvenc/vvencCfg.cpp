@@ -1696,14 +1696,6 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_maxMTTDepthI              = 1;
       m_maxMTTDepthIChroma        = 1;
 
-      // Q44B21
-      m_MinQT[ 0 ]                = 8;
-      m_MinQT[ 1 ]                = 8;
-      m_MinQT[ 2 ]                = 4;
-      m_maxMTTDepth               = 1;
-      m_maxMTTDepthI              = 2;
-      m_maxMTTDepthIChroma        = 2;
-
       m_Affine                    = 2;
       m_alf                       = 1;
       m_allowDisFracMMVD          = 1;
