@@ -1053,7 +1053,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
       po::doSaveConfig( cfgStream, opts, ignoreParamsLst );
       cfgFile << cfgStream.str() << std::endl;
       cfgFile.close();
-      return false;
     }
   }
 
