@@ -601,7 +601,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.setSubSection("General options");
   opts.addOptions()
   ("c",                                               po::parseConfigFile,                              "configuration file name")
-  ("WriteConfig",                                     writeCfg,                                         "write the current config into cfg file")
+  ("WriteConfig",                                     writeCfg,                                         "write the encoder config into configuration file")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
   ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ;
