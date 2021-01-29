@@ -99,6 +99,8 @@ namespace df
     };
 
     void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
+    void APPUTILS_DECL saveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns = 240 );
+
     std::list<const char*> APPUTILS_DECL scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
     void APPUTILS_DECL setDefaults(Options& opts);
     void APPUTILS_DECL parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
@@ -118,7 +120,8 @@ namespace df
       virtual void parse(const std::string& arg, ErrorReporter&) = 0;
       /* set the argument to the default value */
       virtual void setDefault() = 0;
-      virtual const std::string getDefault() { return std::string(); }
+      virtual const std::string getDefault( ) { return std::string(); }
+      virtual const std::string getValue( ) { return std::string(); }
 
       std::string opt_string;
       std::string opt_desc;
@@ -138,18 +141,44 @@ namespace df
       {
         opt_storage = opt_default_val;
       }
-      virtual const std::string getDefault(); 
+      virtual const std::string getDefault( );
+      virtual const std::string getValue  ( );
 
       T& opt_storage;
       T opt_default_val;
     };
 
     template<typename T>
+    inline
+    const std::string Option<T>::getValue( )
+    {
+      std::ostringstream oss;
+      oss << opt_storage;
+      return oss.str();
+    }
+
+    template<>
+    inline
+    const std::string Option<std::string>::getValue( )
+    {
+      std::ostringstream oss;
+      if( opt_storage.empty() )
+      {
+        oss << "\"\"";
+      }
+      else
+      {
+        oss << opt_storage;
+      }
+      return oss.str();
+    }
+
+    template<typename T>
     inline 
-    const std::string Option<T>::getDefault()
+    const std::string Option<T>::getDefault( )
     { 
       std::ostringstream oss;
-      oss << " [" << opt_default_val << "] ";
+      oss << opt_default_val;
       return oss.str(); 
     }
 

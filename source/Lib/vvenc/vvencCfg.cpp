@@ -210,8 +210,6 @@ bool VVEncCfg::initCfgParameter()
     m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
     m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
 
-  m_sliceId.resize(1,0);
-
   for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
   {
     if (m_saoOffsetBitShift[ch]<0)

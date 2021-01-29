@@ -495,6 +495,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   bool do_expert_help         = false;
   int  warnUnknowParameter    = 0;
 
+  std::string writeCfg = "";
   //
   // link custom formated configuration parameters with istream reader
   //
@@ -548,6 +549,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FrameRate,-fr",                                   m_FrameRate,                                      "Frame rate")
   ("FrameSkip,-fs",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
   ("TicksPerSecond",                                  m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+
+  ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
+                                                                                                        "first: first segment           \n"
+                                                                                                        "mid  : all segments between first and last segment\n"
+                                                                                                        "last : last segment")
   ;
 
   opts.setSubSection("Output options");
@@ -588,7 +594,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
   ;
 
-
   po::setDefaults( opts );
   std::ostringstream easyOpts;
   po::doHelp( easyOpts, opts );
@@ -596,6 +601,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.setSubSection("General options");
   opts.addOptions()
   ("c",                                               po::parseConfigFile,                              "configuration file name")
+  ("WriteConfig",                                     writeCfg,                                         "write the encoder config into configuration file")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                              "warn for unknown configuration parameters instead of failing")
   ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ;
@@ -626,7 +632,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("HorizontalPadding",                               m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
   ("VerticalPadding",                                 m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
-  ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
 
   ("InputChromaFormat",                               toInputFileCoFormat,                              "input file chroma format (400, 420, 422, 444)")
   ;
@@ -697,17 +702,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SliceCrQpOffsetIntraOrPeriodic",                  m_sliceChromaQpOffsetIntraOrPeriodic[1],          "Chroma Cr QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.")
 
   ("LumaLevelToDeltaQPMode",                          m_lumaLevelToDeltaQPEnabled,                      "Luma based Delta QP 0(default): not used. 1: Based on CTU average")
-  ("isSDR",                                           m_sdr,                                            "compatibility")
   ("WCGPPSEnable",                                    m_wcgChromaQpControl.enabled,                     "1: Enable the WCG PPS chroma modulation scheme. 0 (default) disabled")
   ("WCGPPSCbQpScale",                                 m_wcgChromaQpControl.chromaCbQpScale,             "WCG PPS Chroma Cb QP Scale")
   ("WCGPPSCrQpScale",                                 m_wcgChromaQpControl.chromaCrQpScale,             "WCG PPS Chroma Cr QP Scale")
   ("WCGPPSChromaQpScale",                             m_wcgChromaQpControl.chromaQpScale,               "WCG PPS Chroma QP Scale")
   ("WCGPPSChromaQpOffset",                            m_wcgChromaQpControl.chromaQpOffset,              "WCG PPS Chroma QP Offset")
-  ("CropOffsetLeft",                                  m_cropOffsetLeft,                                 "Crop Offset Left position")
-  ("CropOffsetTop",                                   m_cropOffsetTop,                                  "Crop Offset Top position")
-  ("CropOffsetRight",                                 m_cropOffsetRight,                                "Crop Offset Right position")
-  ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
-  ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
   ;
 
   opts.setSubSection("Misc. options");
@@ -722,10 +721,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("WaveFrontSynchro",                                m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
   ("EntryPointsPresent",                              m_entryPointsPresent,                             "Enable entry points in slice header")
-  ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
-  ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
-  ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
-  ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
   ;
 
   opts.setSubSection("Quad-Tree size and depth");
@@ -924,7 +919,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MCTFNumTrailFrames",                              m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFFrame",                                       toMCTFFrames,                                     "Frame to filter Strength for frame in GOP based temporal filter")
   ("MCTFStrength",                                    toMCTFStrengths,                                  "Strength for  frame in GOP based temporal filter.")
-  ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]")
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
@@ -967,6 +961,24 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
     ;
 
+  opts.setSubSection("Unused options (only for compatiblity to VTM)");
+  opts.addOptions()
+  ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
+
+  ("CropOffsetLeft",                                  m_cropOffsetLeft,                                 "Crop Offset Left position")
+  ("CropOffsetTop",                                   m_cropOffsetTop,                                  "Crop Offset Top position")
+  ("CropOffsetRight",                                 m_cropOffsetRight,                                "Crop Offset Right position")
+  ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
+  ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
+
+  ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
+  ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
+  ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
+  ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
+
+  ("isSDR",                                           m_sdr,                                            "compatibility")
+  ;
+
   po::setDefaults( opts );
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
@@ -1008,6 +1020,41 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     return false;
   }
 
+  if( !writeCfg.empty() )
+  {
+    std::ofstream cfgFile;
+    cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
+    if( !cfgFile.is_open() )
+    {
+      std::cout << " [error]: failed to open output config file " << writeCfg << std::endl;
+      return false;
+    }
+    else
+    {
+      std::list<std::string> ignoreParamsLst;
+      ignoreParamsLst.push_back( "help" );
+      ignoreParamsLst.push_back( "fullhelp" );
+
+      ignoreParamsLst.push_back( "WriteConfig" );
+      ignoreParamsLst.push_back( "SIMD" );
+      ignoreParamsLst.push_back( "c" );
+      //ignoreParamsLst.push_back( "WarnUnknowParameter,w" );
+
+      ignoreParamsLst.push_back( "decode" );
+      for ( int i = 0; i < MAX_GOP; i++ )
+      {
+        std::ostringstream cOSS;
+        cOSS << "Frame" << i+1;
+        ignoreParamsLst.push_back( cOSS.str() );
+      }
+
+      std::ostringstream cfgStream;
+      po::saveConfig( cfgStream, opts, ignoreParamsLst );
+      cfgFile << cfgStream.str() << std::endl;
+      cfgFile.close();
+    }
+  }
+
   if( m_decode )
   {
     m_confirmFailed = false;
@@ -1021,6 +1068,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   m_confirmFailed = false;
 
+  confirmParameter( m_inputFileName.empty(),                      "A input file name must be specified (InputFile)" );
   confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (BitstreamFile)" );
   confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
   confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
