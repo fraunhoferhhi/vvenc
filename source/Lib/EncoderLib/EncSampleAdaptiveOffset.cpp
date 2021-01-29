@@ -338,7 +338,7 @@ void EncSampleAdaptiveOffset::decideCtuParams( CodingStructure& cs, const std::v
 
   // reset CABAC estimator
   if( m_EncCfg->m_ensureWppBitEqual
-      && m_EncCfg->m_numWppThreads < 1
+      && m_EncCfg->m_numThreads < 1
       && ctuPosX == 0
       && ctuPosY > 0 )
   {

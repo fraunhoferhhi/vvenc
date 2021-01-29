@@ -71,39 +71,39 @@ static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-void EncPicture::init( const VVEncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                       const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, EncPicturePP* encPicPP )
+void EncPicture::init( const VVEncCfg& encCfg,
+                       std::vector<int>* const globalCtuQpVector,
+                       const SPS& sps,
+                       const PPS& pps,
+                       RateCtrl& rateCtrl,
+                       NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg = &encCfg;
 
   m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
-  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, encPicPP );
+  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
 }
 
 
-void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder )
+void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 {
   ITT_TASKSTART( itt_domain_picEncoder, itt_handle_start );
 
   pic.encTime.startTimer();
 
-  // compress picture
-  if ( pic.encPic )
-  {
-    pic.createTempBuffers( pic.cs->pcv->maxCUSize );
-    pic.cs->createCoeffs();
-    pic.cs->createTempBuffers( true );
-    pic.cs->initStructData();
+  pic.createTempBuffers( pic.cs->pcv->maxCUSize );
+  pic.cs->createCoeffs();
+  pic.cs->createTempBuffers( true );
+  pic.cs->initStructData();
 
-    xInitPicEncoder ( pic );
-    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
-    xCompressPicture( pic );
-  }
-  else
-  {
-    xSkipCompressPicture( pic, shrdApsMap );
-  }
-  
+  // compress picture
+  xInitPicEncoder ( pic );
+  gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
+
+  // compress current slice
+  pic.cs->slice = pic.slices[0];
+  m_SliceEncoder.compressSlice( &pic );
+
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
 }
 
@@ -225,17 +225,7 @@ void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
 }
 
 
-void EncPicture::xCompressPicture( Picture& pic )
-{
-  Slice* slice             = pic.slices[0];
-
-  // set current slice
-  pic.cs->slice = slice;
-
-  m_SliceEncoder.compressSlice( &pic );
-}
-
-void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
+void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
 {
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[ 0 ];

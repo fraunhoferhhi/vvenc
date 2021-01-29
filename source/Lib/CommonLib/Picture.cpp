@@ -162,7 +162,6 @@ Picture::Picture()
     , isBorderExtended  ( false )
     , isReferenced      ( false )
     , isNeededForOutput ( false )
-    , isEncPicturePPFinished ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
     , encPic            ( true )
@@ -184,7 +183,7 @@ Picture::Picture()
     , useScTS           ( false )
     , useScBDPCM        ( false )
 #else
-    , useSC           ( 0 )
+    , useSC             ( 0 )
 #endif
 {
 }
