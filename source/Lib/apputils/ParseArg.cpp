@@ -166,7 +166,7 @@ namespace df
      * using the formatting: "-x, --long",
      * if a short/long option isn't specified, it is not printed
      */
-    static void doHelpOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
+    static void printHelpOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
     {
       pad_short = std::min(pad_short, 8u);
 
@@ -190,10 +190,10 @@ namespace df
       {
         out << "--" << entry.opt_long.front();
       }
-      out << entry.opt->getDefault( " [", "] ");
+      out << " [" << entry.opt->getDefault() << "] ";
     }
 
-    static void doPrintCfgOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
+    static void printCfgOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
     {
       if (!entry.opt_long.empty())
       {
@@ -208,14 +208,14 @@ namespace df
           }
         }
       }
-      out << entry.opt->getValue( ": ","" );
+      out << ": " << entry.opt->getValue();
     }
 
-    static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
+    static void printHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
     {
       std::ostringstream line(std::ios_base::out);
       line << "  ";
-      doHelpOpt(line, entry, pad_short);
+      printHelpOpt(line, entry, pad_short);
 
       const std::string& opt_desc = entry.opt->opt_desc;
       if (opt_desc.empty())
@@ -286,10 +286,10 @@ namespace df
       out << line.str() << std::endl;
     }
 
-    static void doPrintCfgEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned opt_value_width )
+    static void printCfgEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned opt_value_width )
     {
       std::ostringstream line(std::ios_base::out);
-      doPrintCfgOpt(line, entry, opt_width);
+      printCfgOpt(line, entry, opt_width);
 
       const std::string& opt_desc = entry.opt->opt_desc;
       if (opt_desc.empty())
@@ -332,7 +332,7 @@ namespace df
           /* no need to wrap text, remainder is less than avaliable width */
           line << " # ";
           line << opt_desc.substr(cur_pos);
-          line << entry.opt->getDefault( " [", "] ");
+          line << " [" << entry.opt->getDefault( ) << "] ";
           break;
         }
         /* find a suitable point to split text (avoid spliting in middle of word) */
@@ -378,7 +378,7 @@ namespace df
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
         std::ostringstream line(std::ios_base::out);
-        doHelpOpt(line, **it, pad_short);
+        printHelpOpt(line, **it, pad_short);
         max_width = std::max(max_width, (unsigned) line.tellp());
       }
 
@@ -410,7 +410,7 @@ namespace df
               {
                 if( (*itopt)->opt->opt_string == s )  // names are equal
                 {
-                  doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
+                  printHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
                   break;
                 }
               }
@@ -422,13 +422,13 @@ namespace df
       {
         for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
         {
-          doPrintHelpEntry( out, **it, desc_width, opt_width, pad_short );
+          printHelpEntry( out, **it, desc_width, opt_width, pad_short );
         }
       }
     }
 
     /* format the help text */
-    void doSaveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns )
+    void saveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns )
     {
       const unsigned pad_short = 0;
       /* first pass: work out the longest option name */
@@ -436,7 +436,7 @@ namespace df
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
         std::ostringstream line(std::ios_base::out);
-        doPrintCfgOpt(line, **it, pad_short);
+        printCfgOpt(line, **it, pad_short);
         max_width = std::max(max_width, (unsigned) line.tellp());
       }
 
@@ -445,7 +445,7 @@ namespace df
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
         std::ostringstream line(std::ios_base::out);
-        doPrintCfgOpt(line, **it, max_width_opt);
+        printCfgOpt(line, **it, max_width_opt);
         max_width = std::max(max_width, (unsigned) line.tellp());
       }
 
@@ -489,7 +489,7 @@ namespace df
 
                   if( !bIgnore )
                   {
-                    doPrintCfgEntry( out, **itopt, desc_width, max_width_opt, max_width_opt_value );
+                    printCfgEntry( out, **itopt, desc_width, max_width_opt, max_width_opt_value );
                   }
 
                   break;
@@ -515,7 +515,7 @@ namespace df
 
           if( !bIgnore )
           {
-            doPrintHelpEntry( out, **it, desc_width, max_width_opt, max_width_opt_value );
+            printHelpEntry( out, **it, desc_width, max_width_opt, max_width_opt_value );
           }
         }
       }
@@ -797,12 +797,6 @@ namespace df
       {
         /* error: no value */
         error_reporter.warn(where()) << "no value found for option " << option << "\n";
-        return;
-      }
-
-      if( value == "empty" || value == "[]" )
-      {
-        //error_reporter.warn(where()) << "ignoring empty value for option " << option << "\n";
         return;
       }
 

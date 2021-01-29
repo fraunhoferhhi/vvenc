@@ -986,14 +986,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
 
-  opts.setSubSection("Coding structure paramters");
   for ( int i = 0; i < MAX_GOP; i++ )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), m_GOPList[i], GOPEntry());
   }
-  opts.setSubSection("Decoding options (debugging)");
   opts.addOptions()("decode",                          m_decode,                                         "decode only");
 
   //
@@ -1042,6 +1040,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
       ignoreParamsLst.push_back( "WriteConfig" );
       ignoreParamsLst.push_back( "SIMD" );
+      ignoreParamsLst.push_back( "c" );
       //ignoreParamsLst.push_back( "WarnUnknowParameter,w" );
 
       ignoreParamsLst.push_back( "decode" );
@@ -1053,10 +1052,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
       }
 
       std::ostringstream cfgStream;
-      po::doSaveConfig( cfgStream, opts, ignoreParamsLst );
+      po::saveConfig( cfgStream, opts, ignoreParamsLst );
       cfgFile << cfgStream.str() << std::endl;
       cfgFile.close();
-      return false;
     }
   }
 
@@ -1073,6 +1071,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   m_confirmFailed = false;
 
+  confirmParameter( m_inputFileName.empty(),                      "A input file name must be specified (InputFile)" );
   confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (BitstreamFile)" );
   confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
   confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
