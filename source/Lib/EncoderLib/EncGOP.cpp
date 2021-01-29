@@ -311,7 +311,9 @@ void EncGOP::xWaitForFinishedPic()
 {
   CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no multi-threading enabled" );
   std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  if( m_numPicsFinished <= 0 )
+  if( m_numPicsFinished <= 0
+      && ! m_gopEncListOutput.empty()
+      && ! m_gopEncListOutput.front()->isReconstructed )
   {
     m_gopEncCond.wait( _lock );
   }
@@ -359,8 +361,9 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   const int maxPicsInParallel = std::max( 1, m_pcEncCfg->m_maxParallelFrames );
 
-  while( !m_gopEncListInput.empty()
-      && !m_gopEncListOutput.front()->isReconstructed )
+  while( ! m_gopEncListInput.empty()
+      && ! m_gopEncListOutput.empty()
+      && ! m_gopEncListOutput.front()->isReconstructed )
   {
     // get next picture ready to be encoded
     auto it = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
@@ -862,7 +865,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    // D pointers to previous pictures for QP adaptation
+    // set pointers to previous pictures for QP adaptation
     pic.m_bufsOrigPrev[0] = &pic.m_bufs[PIC_ORIGINAL];
     pic.m_bufsOrigPrev[1] = nullptr;
 
@@ -1618,12 +1621,24 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     m_pcRateCtrl->encRCPic->getLCUInitTargetBits();
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
+    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
+        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && slice->isIntra() && (sliceQP > 0) )
+    {
+      sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
+      m_lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
+    }
   }
   else    // normal case
   {
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
+    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
+        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
+    {
+      sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
+      m_lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP
+    }
   }
 
   sliceQP = Clip3( -slice->sps->qpBDOffset[ CH_L ], MAX_QP, sliceQP );

@@ -338,7 +338,7 @@ public:
   std::vector<int>    m_qpOutValsCb                             = { 25, 32, 37 };                        ///< qp output values used to derive the chroma QP mapping table
   std::vector<int>    m_qpOutValsCr                             = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
   std::vector<int>    m_qpOutValsCbCr                           = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
-  int                 m_cuQpDeltaSubdiv                         = 0;                                     ///< Maximum subdiv for CU luma Qp adjustment (0:default)
+  int                 m_cuQpDeltaSubdiv                         = -1;                                    ///< Maximum subdiv for CU luma Qp adjustment (0:default)
   int                 m_cuChromaQpOffsetSubdiv                  = -1;                                    ///< If negative, then do not apply chroma qp offsets.
   int                 m_chromaCbQpOffset                        = 0;                                     ///< Chroma Cb QP Offset (0:default)
   int                 m_chromaCrQpOffset                        = 0;                                     ///< Chroma Cr QP Offset (0:default)
@@ -346,7 +346,7 @@ public:
   int                 m_chromaCrQpOffsetDualTree                = 0;                                     ///< Chroma Cr QP Offset for dual tree (overwrite m_chromaCrQpOffset for dual tree)
   int                 m_chromaCbCrQpOffset                      = -1;                                    ///< QP Offset for joint Cb-Cr mode
   int                 m_chromaCbCrQpOffsetDualTree              = 0;                                     ///< QP Offset for joint Cb-Cr mode (overwrite m_chromaCbCrQpOffset for dual tree)
-  unsigned            m_sliceChromaQpOffsetPeriodicity          = 0;                                     ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
+  int                 m_sliceChromaQpOffsetPeriodicity          = -1;                                    ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
   int                 m_sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { 0, 0};                               ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
 
   bool                m_lumaLevelToDeltaQPEnabled               = false;

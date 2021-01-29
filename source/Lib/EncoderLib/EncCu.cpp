@@ -412,7 +412,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   m_modeCtrl.initCTUEncoding( *cs.slice );
 
   // init the partitioning manager
-  Partitioner *partitioner = PartitionerFactory::get( *cs.slice );
+  Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
 
   // init current context pointer
@@ -479,7 +479,6 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   // reset context states and uninit context pointer
   m_CABACEstimator->getCtx() = m_CurrCtx->start;
   m_CurrCtx                  = 0;
-  delete partitioner;
 
   // Ensure that a coding was found
   // Selected mode's RD-cost must be not MAX_DOUBLE.
