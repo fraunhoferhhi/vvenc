@@ -348,7 +348,6 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
   valVec->clear();
 
   bool fail = false;
-  bool forceEmpty = false;
   // split into multiple lines if any
   while ( ! in.eof() )
   {
@@ -357,7 +356,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
 
     if( line == "[]" || line == "empty"  )
     {
-      forceEmpty = true;
+      return in;    // forcing empty entry
     }
     else
     {
@@ -380,7 +379,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
     }
   }
 
-  if ( fail || (! valVec->size() && !forceEmpty) )
+  if ( fail || (! valVec->size() ) )
   {
     in.setstate( std::ios::failbit );
   }

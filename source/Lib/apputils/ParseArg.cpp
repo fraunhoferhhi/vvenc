@@ -166,7 +166,7 @@ namespace df
      * using the formatting: "-x, --long",
      * if a short/long option isn't specified, it is not printed
      */
-    static void printHelpOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
+    static void doHelpOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
     {
       pad_short = std::min(pad_short, 8u);
 
@@ -193,29 +193,11 @@ namespace df
       out << " [" << entry.opt->getDefault() << "] ";
     }
 
-    static void printCfgOpt(std::ostream& out, const Options::Names& entry, unsigned pad_short = 0)
-    {
-      if (!entry.opt_long.empty())
-      {
-        out << entry.opt_long.front();
-
-        if( pad_short )
-        {
-          size_t spaces = pad_short-entry.opt_long.front().size();
-          for( size_t num_sp = 0 ; num_sp < spaces ; ++num_sp )
-          {
-            out << ' ' ;
-          }
-        }
-      }
-      out << ": " << entry.opt->getValue();
-    }
-
-    static void printHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
+    static void doPrintHelpEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned pad_short = 0 )
     {
       std::ostringstream line(std::ios_base::out);
       line << "  ";
-      printHelpOpt(line, entry, pad_short);
+      doHelpOpt(line, entry, pad_short);
 
       const std::string& opt_desc = entry.opt->opt_desc;
       if (opt_desc.empty())
@@ -286,10 +268,24 @@ namespace df
       out << line.str() << std::endl;
     }
 
-    static void printCfgEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned opt_value_width )
+    /* prints a formated config entry */
+    static void printFormattedConfigEntry( std::ostream& out, const Options::Names& entry, unsigned desc_width, unsigned opt_width, unsigned opt_value_width )
     {
+      // prints a config entry. format:
+      // option       : vaue        # help  [default]
+
       std::ostringstream line(std::ios_base::out);
-      printCfgOpt(line, entry, opt_width);
+
+      if (!entry.opt_long.empty())
+      {
+        out << entry.opt_long.front();
+        out << ": " << entry.opt->getValue();
+      }
+      else if (!entry.opt_short.empty())
+      {
+        out << entry.opt_short.front();
+        out << ": " << entry.opt->getValue();
+      }
 
       const std::string& opt_desc = entry.opt->opt_desc;
       if (opt_desc.empty())
@@ -378,7 +374,7 @@ namespace df
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
         std::ostringstream line(std::ios_base::out);
-        printHelpOpt(line, **it, pad_short);
+        doHelpOpt(line, **it, pad_short);
         max_width = std::max(max_width, (unsigned) line.tellp());
       }
 
@@ -410,7 +406,7 @@ namespace df
               {
                 if( (*itopt)->opt->opt_string == s )  // names are equal
                 {
-                  printHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
+                  doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
                   break;
                 }
               }
@@ -422,36 +418,35 @@ namespace df
       {
         for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
         {
-          printHelpEntry( out, **it, desc_width, opt_width, pad_short );
+          doPrintHelpEntry( out, **it, desc_width, opt_width, pad_short );
         }
       }
     }
 
-    /* format the help text */
+    /* prints a formated configuration of Options into a ostream */
     void saveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns )
     {
-      const unsigned pad_short = 0;
       /* first pass: work out the longest option name */
-      unsigned max_width = 0;
+      unsigned max_width_optname = 0;
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
-        std::ostringstream line(std::ios_base::out);
-        printCfgOpt(line, **it, pad_short);
-        max_width = std::max(max_width, (unsigned) line.tellp());
+        if (!(**it).opt_long.empty())
+        {
+          unsigned int w = (**it).opt_long.front().size();
+          max_width_optname = std::max(max_width_optname, w);
+        }
       }
 
-      /* second pass: work out the longest option name + current value*/
-      unsigned max_width_opt = max_width;
+      /* second pass: work out the longest value*/
+      unsigned max_width_value = 0;
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
-        std::ostringstream line(std::ios_base::out);
-        printCfgOpt(line, **it, max_width_opt);
-        max_width = std::max(max_width, (unsigned) line.tellp());
+        std::string value = (**it).opt->getValue();
+        max_width_value = std::max(max_width_value, (unsigned) value.length() );
       }
 
-      unsigned max_width_opt_value = max_width; //std::min(max_width+2, 32u + pad_short) + 2;
-      unsigned desc_width = columns - max_width_opt_value;
-
+      unsigned max_width_opt_value = max_width_optname + max_width_value +3; // max size of option + " : " + value
+      unsigned desc_width = columns - max_width_opt_value;                   // max. size for description
 
       /* 3rd pass: write out formatted option + current value +  help text + default value.
        * format is:
@@ -490,7 +485,7 @@ namespace df
 
                   if( !bIgnore )
                   {
-                    printCfgEntry( out, **itopt, desc_width, max_width_opt, max_width_opt_value );
+                    printFormattedConfigEntry( out, **itopt, desc_width, max_width_optname, max_width_opt_value );
                   }
 
                   break;
@@ -516,7 +511,7 @@ namespace df
 
           if( !bIgnore )
           {
-            printHelpEntry( out, **it, desc_width, max_width_opt, max_width_opt_value );
+            printFormattedConfigEntry( out, **it, desc_width, max_width_optname, max_width_opt_value );
           }
         }
       }
