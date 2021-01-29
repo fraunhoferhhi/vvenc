@@ -254,7 +254,7 @@ public:
 
   int                 m_QP                             = 32;            ///< QP value of key-picture (integer)
   unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
-  bool                m_usePerceptQPATempFiltISlice    = false;         ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+  int                 m_usePerceptQPATempFiltISlice    = -1;            ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode
   int                 m_RCNumPasses                    = 1;

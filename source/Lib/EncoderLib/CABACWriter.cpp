@@ -159,7 +159,7 @@ void CABACWriter::end_of_slice()
 void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, int (&qps)[2], unsigned ctuRsAddr, bool skipSao /* = false */, bool skipAlf /* = false */ )
 {
   CUCtx cuCtx( qps[CH_L] );
-  Partitioner *partitioner = PartitionerFactory::get( *cs.slice );
+  Partitioner *partitioner = &m_partitioner[0];
 
   partitioner->initCtu( area, CH_L, *cs.slice );
 
@@ -209,13 +209,11 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
   if ( CS::isDualITree(cs) && cs.pcv->chrFormat != CHROMA_400 && cs.pcv->maxCUSize > 64 )
   {
     CUCtx chromaCuCtx(qps[CH_C]);
-    Partitioner *chromaPartitioner = PartitionerFactory::get(*cs.slice);
+    Partitioner *chromaPartitioner = &m_partitioner[1];
     chromaPartitioner->initCtu(area, CH_C, *cs.slice);
     coding_tree(cs, *partitioner, cuCtx, chromaPartitioner, &chromaCuCtx);
     qps[CH_L] = cuCtx.qp;
     qps[CH_C] = chromaCuCtx.qp;
-
-    delete chromaPartitioner;
   }
   else
   {
@@ -229,8 +227,6 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
       qps[CH_C] = cuCtxChroma.qp;
     }
   }
-
-  delete partitioner;
 }
 
 

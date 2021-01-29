@@ -425,7 +425,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 //  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
 //  m_rewriteParamSets        = true;
 
-
 //  // this has to be set outside
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {

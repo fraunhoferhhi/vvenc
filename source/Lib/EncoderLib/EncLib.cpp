@@ -281,7 +281,7 @@ void EncLib::initPass( int pass )
 
     if ( pass == 1 )
     {
-      m_cRateCtrl.processFirstPassData();
+      m_cRateCtrl.processFirstPassData( pps0.pcv->sizeInCtus );
       // update first pass data
       m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
     }
