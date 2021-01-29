@@ -243,23 +243,23 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 //// ====================================================================================================================
 
 
-void setPresets( VVEncCfg* cfg, int preset )
+void setPresets( VVEncAppCfg* cfg, int preset )
 {
   cfg->initPreset( (PresetMode)preset );
 }
 
-void setInputBitDepthAndColorSpace( VVEncCfg* cfg, int dbcs )
+void setInputBitDepthAndColorSpace( VVEncAppCfg* cfg, int dbcs )
 {
   switch( dbcs )
   {
-  case YUV420_8 :  cfg->m_internChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV420_10 : cfg->m_internChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV422_8 :  cfg->m_internChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV422_10 : cfg->m_internChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV444_8 :  cfg->m_internChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV444_10 : cfg->m_internChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV400_8 :  cfg->m_internChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV400_10 : cfg->m_internChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV420_8 :  cfg->m_inputFileChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 : cfg->m_inputFileChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV422_8 :  cfg->m_inputFileChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 : cfg->m_inputFileChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :  cfg->m_inputFileChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 : cfg->m_inputFileChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :  cfg->m_inputFileChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 : cfg->m_inputFileChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
 }
@@ -377,18 +377,30 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   {
     cout << "Unhandled argument ignored: `" << a << "'\n";
   }
-  if ( argc == 1 || do_help )
+  if ( argc == 1 )
   {
+    std::string cAppname = argv[0];
+    std::size_t iPos = (int)cAppname.find_last_of("/");
+    if( std::string::npos != iPos )
+    {
+      cAppname = cAppname.substr(iPos+1 );
+    }
+
     /* argc == 1: no options have been specified */
-    cout <<  easyOpts.str();
+    cout <<  "No input file specified. run " << cAppname << " --help for a list of options." << std::endl;
     return false;
   }
-  if ( argc == 1 || do_full_help )
+  else if ( do_full_help )
   {
-    /* argc == 1: no options have been specified */
     cout << fullOpts.str();
     return false;
   }
+  else if ( do_help )
+  {
+    cout <<  easyOpts.str();
+    return false;
+  }
+
   if ( err.is_errored && ! warnUnknowParameter )
   {
     /* error report has already been printed on stderr */
@@ -399,73 +411,22 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   // check own parameters
   //
 
-  m_confirmFailed = false;
-  confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (--output=bit.266)" );
-
-  if ( m_confirmFailed )
+  if( m_bitstreamFileName.empty() )
   {
+    cout <<  "error: A bitstream file name must be specified (--output=bit.266)" << std::endl;
     return false;
   }
-
 
   //
   // set intern derived parameters (for convenience purposes only)
   //
 
-  // set thread count to default threads, if not set by user
-  if( m_numThreads < 0 )
-  {
-    if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
-    {
-      m_numThreads = 6;
-    }
-    else
-    {
-      m_numThreads = 4;
-    }
-  }
 
-  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
-  m_rewriteParamSets        = true;
+//  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
+//  m_rewriteParamSets        = true;
 
-  // set MCTF Lead/Trail frames
-  if( m_SegmentMode != SEG_OFF )
-  {
-    if( m_MCTF )
-    {
-      switch( m_SegmentMode )
-      {
-        case SEG_FIRST:
-          m_MCTFNumLeadFrames  = 0;
-          m_MCTFNumTrailFrames = MCTF_RANGE;
-          break;
-        case SEG_MID:
-          m_MCTFNumLeadFrames  = MCTF_RANGE;
-          m_MCTFNumTrailFrames = MCTF_RANGE;
-          break;
-        case SEG_LAST:
-          m_MCTFNumLeadFrames  = MCTF_RANGE;
-          m_MCTFNumTrailFrames = 0;
-          break;
-        default:
-          m_MCTFNumLeadFrames  = 0;
-          m_MCTFNumTrailFrames = 0;
-          break;
-      }
-    }
-  }
 
-  if(  m_RCTargetBitrate )
-  {
-    m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
-    m_RCKeepHierarchicalBit = 2;
-    m_RCUseLCUSeparateModel = 1;
-    m_RCInitialQP           = 0;
-    m_RCForceIntraQP        = 0;
-  }
-
-  // this has to be set outside
-
+//  // this has to be set outside
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = m_inputFileChromaFormat;
@@ -475,10 +436,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   // setup encoder configuration
   //
 
-  if ( VVEncCfg::initCfgParameter() )
-  {
-    return false;
-  }
+//  if ( VVEncCfg::initCfgParameter() )
+//  {
+//    return false;
+//  }
 
 
   return true;
@@ -1056,23 +1017,34 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  if( m_decode )
-  {
-    m_confirmFailed = false;
-    confirmParameter( m_bitstreamFileName.empty(), "A bitstream file name must be specified (BitstreamFile)" );
-    return !m_confirmFailed;
-  }
-
   //
   // check own parameters
   //
-
   m_confirmFailed = false;
+  if( m_bitstreamFileName.empty() )
+  {
+    cout <<  "error: A bitstream file name must be specified (BitstreamFile)" << std::endl;
+    m_confirmFailed = true;
+  }
+  else
+  {
+    if( m_decodeBitstreams[0] == m_bitstreamFileName )
+    {
+      cout <<  "error: Debug bitstream and the output bitstream cannot be equal" << std::endl;
+      m_confirmFailed = true;
+    }
+    if( m_decodeBitstreams[1] == m_bitstreamFileName )
+    {
+      cout <<  "error: Decode2 bitstream and the output bitstream cannot be equal" << std::endl;
+      m_confirmFailed = true;
+    }
+  }
 
-  confirmParameter( m_bitstreamFileName.empty(),                  "A bitstream file name must be specified (BitstreamFile)" );
-  confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[0] == m_bitstreamFileName, "Debug bitstream and the output bitstream cannot be equal" );
-  confirmParameter( ! m_bitstreamFileName.empty() && m_decodeBitstreams[1] == m_bitstreamFileName, "Decode2 bitstream and the output bitstream cannot be equal" );
-  confirmParameter( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT,   "Input chroma format must be either 400, 420, 422 or 444" );
+  if( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT )
+  {
+    cout <<  "error: Input chroma format must be either 400, 420, 422 or 444" << std::endl;
+    m_confirmFailed = true;
+  }
 
   if ( m_confirmFailed )
   {
@@ -1083,31 +1055,28 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   // set intern derived parameters (for convenience purposes only)
   //
 
-  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
-  {
-    m_internChromaFormat = m_inputFileChromaFormat;
-  }
-
   //
   // setup encoder configuration
   //
 
-  if ( VVEncCfg::initCfgParameter() )
-  {
-    return false;
-  }
+//  if ( VVEncCfg::initCfgParameter() )
+//  {
+//    return false;
+//  }
 
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
   {
     if( ( m_outputBitDepth[ CH_L ] != 10 && m_outputBitDepth[ CH_L ] != 12 )
         || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) )
     {
-      confirmParameter( true, "Invalid output bit-depth or image width for packed YUV output, aborting\n" );
+      cout <<  "error: Invalid output bit-depth or image width for packed YUV output, aborting" << std::endl;
+      m_confirmFailed = true;
     }
     if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
           || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
     {
-      confirmParameter( true, "Invalid chroma output bit-depth or image width for packed YUV output, aborting\n" );
+      cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
+      m_confirmFailed = true;
     }
     if ( m_confirmFailed )
     {

@@ -92,7 +92,7 @@ int VVEncImpl::getConfig( VVEncCfg& rcVVEncCfg ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
-  rcVVEncCfg = m_cVVEncCfg;
+  rcVVEncCfg = m_cVVEncCfgExt;
   return VVENC_OK;
 }
 
@@ -107,9 +107,8 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
   int iRet = xCheckParameter( rcVVEncCfg, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
-  VVEncCfg cVVVVEncCfg = rcVVEncCfg;
- 
-  if ( cVVVVEncCfg.initCfgParameter() )
+  VVEncCfg cVVEncCfg = rcVVEncCfg;
+  if ( cVVEncCfg.initCfgParameter() )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -125,21 +124,27 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   std::string simdOpt;
   std::string curSimd = setSIMDExtension( simdOpt );
 
-  int iRet = xCheckParameter( rcVVEncCfg, m_cErrorString );
+  m_cVVEncCfgExt   = rcVVEncCfg;
+  m_cVVEncCfgInt   = rcVVEncCfg;
+
+  if ( m_cVVEncCfgInt.initCfgParameter() )
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  int iRet = xCheckParameter( m_cVVEncCfgInt, m_cErrorString );
   if( 0 != iRet ) { return iRet; }
 
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
 
-  m_cVVEncCfg = rcVVEncCfg;
-
   // initialize the encoder
   m_pEncLib = new EncLib;
 
   try
   {
-    m_pEncLib->initEncoderLib( m_cVVEncCfg, pcYUVWriterIf );
+    m_pEncLib->initEncoderLib( m_cVVEncCfgInt, pcYUVWriterIf );
   }
   catch( std::exception& e )
   {
@@ -236,7 +241,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfgInt.m_internChromaFormat != CHROMA_400 )
     {
       if( pcYUVBuffer->planes[1].ptr == nullptr ||
           pcYUVBuffer->planes[2].ptr == nullptr )
@@ -246,13 +251,13 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       }
     }
 
-    if( pcYUVBuffer->planes[0].width != m_cVVEncCfg.m_SourceWidth )
+    if( pcYUVBuffer->planes[0].width != m_cVVEncCfgInt.m_SourceWidth )
     {
       m_cErrorString = "InputPicture: unsupported width";
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( pcYUVBuffer->planes[0].height != m_cVVEncCfg.m_SourceHeight )
+    if( pcYUVBuffer->planes[0].height != m_cVVEncCfgInt.m_SourceHeight )
     {
       m_cErrorString = "InputPicture: unsupported height";
       return VVENC_ERR_UNSPECIFIED;
@@ -264,9 +269,9 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfgInt.m_internChromaFormat != CHROMA_400 )
     {
-      if( m_cVVEncCfg.m_internChromaFormat == CHROMA_444 )
+      if( m_cVVEncCfgInt.m_internChromaFormat == CHROMA_444 )
       {
         if( pcYUVBuffer->planes[1].stride && pcYUVBuffer->planes[0].width > pcYUVBuffer->planes[1].stride )
         {
@@ -392,12 +397,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.m_MCTFNumLeadFrames;
+  return m_cVVEncCfgInt.m_MCTFNumLeadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.m_MCTFNumTrailFrames;
+  return m_cVVEncCfgInt.m_MCTFNumTrailFrames;
 }
 
 int VVEncImpl::printSummary() const

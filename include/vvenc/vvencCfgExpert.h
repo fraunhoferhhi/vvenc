@@ -102,6 +102,7 @@ enum ChromaFormat
 
 enum FastInterSearchMode
 {
+  FASTINTERSEARCH_AUTO     = -1,
   FASTINTERSEARCH_DISABLED = 0,
   FASTINTERSEARCH_MODE1    = 1,
   FASTINTERSEARCH_MODE2    = 2,
@@ -403,7 +404,7 @@ public:
   bool                m_useAMaxBT                               = false;
   bool                m_fastQtBtEnc                             = true;
   bool                m_contentBasedFastQtbt                    = false;
-  int                 m_fastInterSearchMode                     = FASTINTERSEARCH_DISABLED;              ///< Parameter that controls fast encoder settings
+  int                 m_fastInterSearchMode                     = FASTINTERSEARCH_AUTO;              ///< Parameter that controls fast encoder settings
   bool                m_bUseEarlyCU                             = false;                                 ///< flag for using Early CU setting
   bool                m_useFastDecisionForMerge                 = true;                                  ///< flag for using Fast Decision Merge RD-Cost
   bool                m_useEarlySkipDetection                   = false;                                 ///< flag for using Early SKIP Detection
@@ -426,7 +427,7 @@ public:
 //  unsigned            m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
   int                 m_Geo                                     = 0;
   unsigned            m_maxNumGeoCand                           = 5;
-  int                 m_RCKeepHierarchicalBit                   = 0;
+  int                 m_RCKeepHierarchicalBit                   = -1;
   bool                m_RCUseLCUSeparateModel                   = false;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;

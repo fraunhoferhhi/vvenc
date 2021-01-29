@@ -83,13 +83,17 @@ bool VVEncCfg::initCfgParameter()
 {
 #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
-
   m_confirmFailed = false;
-
 
   //
   // set a lot of dependent parameters
   //
+
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  {
+    m_internChromaFormat = CHROMA_420;
+  }
+
   if( m_profile == Profile::PROFILE_AUTO )
   {
     const int maxBitDepth= std::max(m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat==ChromaFormat::CHROMA_400 ? CH_L : CH_C]);
@@ -115,52 +119,76 @@ bool VVEncCfg::initCfgParameter()
 
   if ( m_InputQueueSize <= 0 )
   {
-    m_InputQueueSize = m_maxParallelFrames ? 2*m_GOPSize + 1: m_GOPSize;
+    m_InputQueueSize = m_maxParallelFrames ? 2* m_GOPSize + 1: m_GOPSize;
   }
+
   if ( m_MCTF )
   {
     m_InputQueueSize += MCTF_ADD_QUEUE_DELAY;
   }
 
-  m_framesToBeEncoded = ( m_framesToBeEncoded + m_temporalSubsampleRatio - 1 ) / m_temporalSubsampleRatio;
+  if( m_temporalSubsampleRatio )
+  {
+    int framesSubsampled = (m_framesToBeEncoded + m_temporalSubsampleRatio - 1 ) / m_temporalSubsampleRatio;
+    if( m_framesToBeEncoded != framesSubsampled )
+    {
+      m_framesToBeEncoded = framesSubsampled;
+    }
+  }
+
+  // set MCTF Lead/Trail frames
+  if( m_SegmentMode != SEG_OFF )
+  {
+    if( m_MCTF )
+    {
+      switch( m_SegmentMode )
+      {
+        case SEG_FIRST:
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = m_MCTFNumTrailFrames == 0 ? MCTF_RANGE : m_MCTFNumTrailFrames;
+          break;
+        case SEG_MID:
+          m_MCTFNumLeadFrames  = MCTF_RANGE;
+          m_MCTFNumTrailFrames = m_MCTFNumTrailFrames == 0 ? MCTF_RANGE : m_MCTFNumTrailFrames;
+          break;
+        case SEG_LAST:
+          m_MCTFNumLeadFrames  = m_MCTFNumLeadFrames == 0 ? MCTF_RANGE : m_MCTFNumTrailFrames;
+          m_MCTFNumTrailFrames = 0;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
 
   m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  MCTF_RANGE );
   m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, MCTF_RANGE );
   /* rules for input, output and internal bitdepths as per help text */
   if (m_MSBExtendedBitDepth[CH_L  ] == 0)
-  {
     m_MSBExtendedBitDepth[CH_L  ] = m_inputBitDepth      [CH_L  ];
-  }
   if (m_MSBExtendedBitDepth[CH_C] == 0)
-  {
     m_MSBExtendedBitDepth[CH_C] = m_MSBExtendedBitDepth[CH_L  ];
-  }
   if (m_internalBitDepth   [CH_L  ] == 0)
-  {
     m_internalBitDepth   [CH_L  ] = m_MSBExtendedBitDepth[CH_L  ];
-  }
   if (m_internalBitDepth   [CH_C] == 0)
-  {
     m_internalBitDepth   [CH_C] = m_internalBitDepth   [CH_L  ];
-  }
   if (m_inputBitDepth      [CH_C] == 0)
-  {
     m_inputBitDepth      [CH_C] = m_inputBitDepth      [CH_L  ];
-  }
   if (m_outputBitDepth     [CH_L  ] == 0)
-  {
     m_outputBitDepth     [CH_L  ] = m_internalBitDepth   [CH_L  ];
-  }
   if (m_outputBitDepth     [CH_C] == 0)
-  {
     m_outputBitDepth     [CH_C] = m_outputBitDepth     [CH_L  ];
+
+  if( m_fastInterSearchMode  == FASTINTERSEARCH_AUTO )
+  {
+    m_fastInterSearchMode = FASTINTERSEARCH_MODE1;
   }
 
-  CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<0 || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
-
+  CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
   CONFIRM_PARAMETER_OR_RETURN( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
 
-  switch (m_conformanceWindowMode)
+  switch ( m_conformanceWindowMode)
   {
   case 0:
     {
@@ -207,7 +235,7 @@ bool VVEncCfg::initCfgParameter()
       break;
     }
   }
-    m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
+    m_PadSourceWidth  = m_SourceWidth  + m_aiPad[0];
     m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
 
   for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
@@ -332,12 +360,39 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
+  // set auto threading mode
+  if( m_numThreads < 0 )
+  {
+    if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
+    {
+      m_numThreads = 6;
+    }
+    else
+    {
+      m_numThreads = 4;
+    }
+  }
 
   if( m_ensureWppBitEqual < 0 )
   {
     m_ensureWppBitEqual = m_numThreads > 0 ? 1 : 0;
   }
 
+
+  if(  m_RCTargetBitrate )
+  {
+    if( m_RCRateControlMode == RateControlMode::RCM_OFF )
+    {
+      m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
+    }
+
+    if( m_RCKeepHierarchicalBit < 0 )
+    {
+      m_RCKeepHierarchicalBit = 2;
+    }
+
+    m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
+  }
 
   //
   // do some check and set of parameters next
@@ -477,7 +532,7 @@ bool VVEncCfg::initCfgParameter()
   confirmParameter( m_RCNumPasses == 2 && m_usePerceptQPATempFiltISlice == true, "QPA temporal filtering of I slice not supported with 2-pass rate control" );
   confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2, "Only one pass or two pass encoding supported" );
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
-  confirmParameter(!((m_level==Level::LEVEL1) 
+  confirmParameter(!((m_level==Level::LEVEL1)
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
     || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
     || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
@@ -1447,6 +1502,7 @@ bool VVEncCfg::initCfgParameter()
 
   return( m_confirmFailed );
 }
+
 
 int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, int qp, PresetMode preset )
 {

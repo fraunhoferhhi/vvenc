@@ -256,7 +256,7 @@ public:
   unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
   bool                m_usePerceptQPATempFiltISlice    = false;         ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode 
+  RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode
   int                 m_RCNumPasses                    = 1;
   int                 m_RCTargetBitrate                = 0;
 
@@ -273,14 +273,18 @@ public:
   {
   }
 
-  bool checkExperimental( bool bflag, const char* message );
-  bool confirmParameter ( bool bflag, const char* message );
+
   bool initCfgParameter();
+
 
   int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
 
   virtual std::string getConfigAsString( MsgLevel eMsgLevel ) const;
+
+private:
+  bool checkExperimental( bool bflag, const char* message );
+  bool confirmParameter ( bool bflag, const char* message );
 };
 
 
