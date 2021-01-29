@@ -440,7 +440,7 @@ namespace df
         max_width = std::max(max_width, (unsigned) line.tellp());
       }
 
-      /* second pass: work out the longest option name + default value*/
+      /* second pass: work out the longest option name + current value*/
       unsigned max_width_opt = max_width;
       for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
       {
@@ -453,8 +453,9 @@ namespace df
       unsigned desc_width = columns - max_width_opt_value;
 
 
-      /* second pass: write out formatted option and help text.
-       *  - align start of help text to start at opt_width
+      /* 3rd pass: write out formatted option + current value +  help text + default value.
+       * format is:
+       * option       : vaue        # help  [default]
        *  - if the option text is longer than opt_width, place the help
        *    text at opt_width on the next line.
        */
@@ -479,7 +480,7 @@ namespace df
                 if( (*itopt)->opt->opt_string == s )  // names are equal
                 {
                   bool bIgnore = false;
-                  for( auto & i : ignoreParamLst )
+                  for( auto & i : ignoreParamLst )   // check if entry is in the ignore list and skip if ignoring
                   {
                     if( i == (*itopt)->opt->opt_string )
                     {
@@ -499,12 +500,12 @@ namespace df
           }
         }
       }
-      else
+      else  // options does not contain any sub sections
       {
         for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
         {
           bool bIgnore = false;
-          for( auto & i : ignoreParamLst )
+          for( auto & i : ignoreParamLst ) // check if entry is in the ignore list and skip if ignoring
           {
             if( i == (*it)->opt->opt_string )
             {
