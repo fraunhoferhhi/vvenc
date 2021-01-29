@@ -278,13 +278,18 @@ namespace df
 
       if (!entry.opt_long.empty())
       {
-        out << entry.opt_long.front();
-        out << ": " << entry.opt->getValue();
+        line << entry.opt_long.front();
+
+        for( size_t s = 0 ; s < (opt_width - entry.opt_long.front().length()) ; ++s )
+        {
+          line << ' ' ;
+        }
+
+        line << ": " << entry.opt->getValue();
       }
-      else if (!entry.opt_short.empty())
+      else
       {
-        out << entry.opt_short.front();
-        out << ": " << entry.opt->getValue();
+        return;
       }
 
       const std::string& opt_desc = entry.opt->opt_desc;
@@ -386,39 +391,36 @@ namespace df
        *  - if the option text is longer than opt_width, place the help
        *    text at opt_width on the next line.
        */
-      if( !opts.subSections_list.empty())
+      if( opts.subSections_list.empty())
       {
-        for(Options::subSectionsPtrList::iterator it = opts.subSections_list.begin(); it != opts.subSections_list.end(); it++)
+        for (const auto& opt: opts.opt_list)
         {
-          std::string section = *it;
-          if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
-          {
-            out << std::endl << section << ":" << std::endl;
-          }
+          doPrintHelpEntry( out, *opt, desc_width, opt_width, pad_short );
+        }
+        return;
+      }
 
-          Options::SubSectionNamesListMap::iterator opt_it;
-          opt_it = opts.sub_section_namelist_map.find(section);  // get list of options of subsection
-          if (opt_it != opts.sub_section_namelist_map.end())
+      for (const auto& section: opts.subSections_list)
+      {
+        if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
+        {
+          out << std::endl << "#======== " << section << " ================" << std::endl;
+        }
+
+        Options::SubSectionNamesListMap::const_iterator itSectionMap = opts.sub_section_namelist_map.find(section);  // get list of options in subsection
+        if (itSectionMap != opts.sub_section_namelist_map.end())
+        {
+          for( auto & s : itSectionMap->second ) // iterate over options in subsections and find/print entry in opts list
           {
-            for( auto & s : opt_it->second ) // iterate over options of subsections and find/print entry in opts list
+            for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
             {
-              for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
+              if( (*itopt)->opt->opt_string == s )  // names are equal
               {
-                if( (*itopt)->opt->opt_string == s )  // names are equal
-                {
-                  doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
-                  break;
-                }
-              }
+                doPrintHelpEntry( out, **itopt, desc_width, opt_width, pad_short );
+                break;
+               }
             }
           }
-        }
-      }
-      else
-      {
-        for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
-        {
-          doPrintHelpEntry( out, **it, desc_width, opt_width, pad_short );
         }
       }
     }
@@ -432,7 +434,7 @@ namespace df
       {
         if (!(**it).opt_long.empty())
         {
-          unsigned int w = (**it).opt_long.front().size();
+          unsigned w = (unsigned)(**it).opt_long.front().size();
           max_width_optname = std::max(max_width_optname, w);
         }
       }
@@ -454,67 +456,48 @@ namespace df
        *  - if the option text is longer than opt_width, place the help
        *    text at opt_width on the next line.
        */
-      if( !opts.subSections_list.empty())
+      if( opts.subSections_list.empty())
       {
-        for(Options::subSectionsPtrList::iterator it = opts.subSections_list.begin(); it != opts.subSections_list.end(); it++)
+        for (const auto& opt: opts.opt_list)
         {
-          std::string section = *it;
-          if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
+          std::list<std::string>::iterator iterIgnore = std::find (ignoreParamLst.begin(), ignoreParamLst.end(), opt->opt->opt_string );
+          if( iterIgnore != ignoreParamLst.end() )
           {
-            out << std::endl << "#======== " << section << " ================" << std::endl;
+            printFormattedConfigEntry( out, *opt, desc_width, max_width_optname, max_width_opt_value );
           }
+        }
+        return;
+      }
 
-          Options::SubSectionNamesListMap::iterator opt_it;
-          opt_it = opts.sub_section_namelist_map.find(section);  // get list of options of subsection
-          if (opt_it != opts.sub_section_namelist_map.end())
+      // iterate over all subsections and print all entries for each subsection
+      for (const auto& section: opts.subSections_list)
+      {
+        if( section != "__$PLACEHOLDER$__")  // print sub section name (if not dummy section)
+        {
+          out << std::endl << "#======== " << section << " ================" << std::endl;
+        }
+
+        Options::SubSectionNamesListMap::const_iterator itSectionMap = opts.sub_section_namelist_map.find(section);  // get list of options in subsection
+        if (itSectionMap != opts.sub_section_namelist_map.end())
+        {
+          for( auto & s : itSectionMap->second ) // iterate over options in subsections and find/print entry in opts list
           {
-            for( auto & s : opt_it->second ) // iterate over options of subsections and find/print entry in opts list
+            for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
             {
-              for(Options::NamesPtrList::const_iterator itopt = opts.opt_list.begin(); itopt != opts.opt_list.end(); itopt++)
+              if( (*itopt)->opt->opt_string == s )  // names are equal
               {
-                if( (*itopt)->opt->opt_string == s )  // names are equal
+                std::list<std::string>::const_iterator iterIgnore = std::find (ignoreParamLst.begin(), ignoreParamLst.end(), (*itopt)->opt->opt_string );
+                if( iterIgnore == ignoreParamLst.end() )
                 {
-                  bool bIgnore = false;
-                  for( auto & i : ignoreParamLst )   // check if entry is in the ignore list and skip if ignoring
-                  {
-                    if( i == (*itopt)->opt->opt_string )
-                    {
-                      bIgnore = true; break;
-                    }
-                  }
-
-                  if( !bIgnore )
-                  {
-                    printFormattedConfigEntry( out, **itopt, desc_width, max_width_optname, max_width_opt_value );
-                  }
-
-                  break;
+                  printFormattedConfigEntry( out, **itopt, desc_width, max_width_optname, max_width_opt_value );
                 }
+                break;
               }
             }
           }
         }
       }
-      else  // options does not contain any sub sections
-      {
-        for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
-        {
-          bool bIgnore = false;
-          for( auto & i : ignoreParamLst ) // check if entry is in the ignore list and skip if ignoring
-          {
-            if( i == (*it)->opt->opt_string )
-            {
-              bIgnore = true;
-              break;
-            }
-          }
 
-          if( !bIgnore )
-          {
-            printFormattedConfigEntry( out, **it, desc_width, max_width_optname, max_width_opt_value );
-          }
-        }
-      }
     }
 
     struct OptionWriter
