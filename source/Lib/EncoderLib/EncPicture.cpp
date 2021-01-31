@@ -159,7 +159,6 @@ void EncPicture::finalizePicture( Picture& pic )
   pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
-  pic.isReconstructed = true;
 }
 
 void EncPicture::xInitPicEncoder( Picture& pic )

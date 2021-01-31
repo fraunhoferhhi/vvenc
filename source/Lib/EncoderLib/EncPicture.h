@@ -79,13 +79,11 @@ class EncPicture
 
   public:
     WaitCounter              m_ctuTasksDoneCounter;
-    bool                     m_isRunning;
 
   public:
     EncPicture()
       : m_pcEncCfg      ( nullptr )
       , m_CABACEstimator( m_BitEstimator )
-      , m_isRunning     ( false )
     {}
     virtual ~EncPicture() {}
 
