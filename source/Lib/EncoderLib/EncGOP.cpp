@@ -873,10 +873,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    // set pointers to previous pictures for QP adaptation
-    pic.m_bufsOrigPrev[0] = &pic.m_bufs[PIC_ORIGINAL];
-    pic.m_bufsOrigPrev[1] = nullptr;
-
     // this is needed for chunk-wise parallel RA encoding!
     if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ) || !slice->isIntra())
     {

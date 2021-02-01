@@ -537,8 +537,10 @@ bool VVEncCfg::initCfgParameter()
   {
     m_usePerceptQPATempFiltISlice = 0;
     if ( (m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
+#if 0 // TODO hlm, Feb. 2021: before removing this code, make sure the change doesn't degrade the visual quality on any VVC HD verification test sequence
         && m_RCRateControlMode > 0
         && m_RCNumPasses == 2
+#endif
         && m_QP <= MAX_QP_PERCEPT_QPA
         && m_GOPSize > 8
         && m_IntraPeriod >= 2 * m_GOPSize )
