@@ -537,7 +537,7 @@ cCUSecureTraverser CodingStructure::secureTraverseCUs( const UnitArea& unit, con
   {
     if(lastCU->next)
     {
-      do { lastCU = lastCU->next; } while(  lastCU->next && unit.contains( *lastCU->next ) );
+      while(  lastCU->next && unit.contains( *lastCU->next ) ) { lastCU = lastCU->next; };
     }
   }
 

@@ -609,7 +609,7 @@ void LoopFilter::loopFilterCTU( CodingStructure &cs, const ChannelType chType, c
  \param edgeDir          the direction of the edge in block boundary (horizontal/vertical), which is added newly
 */
 template<DeblockEdgeDir edgeDir>
-void LoopFilter::xDeblockArea( CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picRecoBuf ) const
+void LoopFilter::xDeblockArea( const CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picRecoBuf ) const
 {
   if( cs.slice->deblockingFilterDisable )
   {
@@ -633,7 +633,7 @@ void LoopFilter::xDeblockArea( CodingStructure& cs, const UnitArea& area, const 
 
   const int lfpPtrLOffset = scale.scaleHor( incx );
 
-  LoopFilterParam* lfpPtr = cs.picture->cs->getLFPMapPtr( edgeDir );
+  const LoopFilterParam* lfpPtr = cs.picture->cs->getLFPMapPtr( edgeDir );
   ptrdiff_t lfpStride     = cs.picture->cs->getLFPMapStride();
   OFFSET( lfpPtr, lfpStride, scale.scaleHor( lumaArea.x ), scale.scaleVer( lumaArea.y ) );
 
@@ -1555,7 +1555,7 @@ inline bool xUseStrongFiltering( Pel* piSrc, const ptrdiff_t iOffset, const int 
 }
 
 template<DeblockEdgeDir edgeDir>
-void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
+void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
 {
         PelBuf&    picYuvRec   = picReco.bufs[ COMP_Y ];
         Pel*      piSrc        = picYuvRec.bufAt( pos );
@@ -1604,7 +1604,7 @@ void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, cons
 
   const unsigned uiBs = BsGet( lfp.bs, COMP_Y );
 
-  CHECK( uiBs > 2, "baem" );
+  CHECK( uiBs > 2, "baem0" );
   
   if( !uiBs )
   {
@@ -1705,7 +1705,7 @@ void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, cons
 }
 
 template<DeblockEdgeDir edgeDir>
-void LoopFilter::xEdgeFilterChroma( CodingStructure &cs, const Position &pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
+void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
 {
   const PreCalcValues &pcv               = *cs.pcv;
 
@@ -1747,6 +1747,9 @@ void LoopFilter::xEdgeFilterChroma( CodingStructure &cs, const Position &pos, co
   unsigned tmpBs = lfp.bs;
   bS[0] = BsGet( tmpBs, COMP_Cb );
   bS[1] = BsGet( tmpBs, COMP_Cr );
+
+  CHECK( bS[0] > 2, "baem1" );
+  CHECK( bS[1] > 2, "baem2" );
 
   if( bS[0] <= 0 && bS[1] <= 0 )
   {

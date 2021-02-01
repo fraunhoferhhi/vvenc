@@ -142,7 +142,6 @@ EncSlice::~EncSlice()
   }
   m_CtuTaskRsrc.clear();
 
-  m_processStates.clear();
   m_saoReconParams.clear();
 
   for( int i = 0; i < m_saoStatData.size(); i++ )
@@ -203,7 +202,7 @@ void EncSlice::init( const VVEncCfg& encCfg,
   m_appliedSwitchDQQ = 0;
 
   const int sizeInCtus = pps.pcv->sizeInCtus;
-  m_processStates.resize( sizeInCtus );
+  m_processStates = std::vector<ProcessCtuState>( sizeInCtus );
   m_saoReconParams.resize( sizeInCtus );
 
   ::memset( m_saoDisabledRate, 0, sizeof( m_saoDisabledRate ) );
@@ -812,7 +811,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;
 
-  switch( processStates[ ctuRsAddr ] )
+  switch( processStates[ ctuRsAddr ].load() )
   {
     // encode
     case CTU_ENCODE:
