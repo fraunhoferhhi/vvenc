@@ -123,7 +123,7 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
-  if( m_level == Level::LEVEL_NONE || m_level == Level::LEVEL_AUTO )
+  if( m_level == Level::LEVEL_AUTO )
   {
     std::vector<Level> levelVec = { LEVEL1, LEVEL2, LEVEL2_1, LEVEL3, LEVEL3_1,
                                     LEVEL4, LEVEL4_1, LEVEL5, LEVEL5_1, LEVEL5_2,
@@ -1250,6 +1250,8 @@ bool VVEncCfg::check()
 
   confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                  "Intern chroma format must be either 400, 420, 422 or 444" );
   confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
+  confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
 
   confirmParameter( m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
   confirmParameter( m_TicksPerSecond <= 0 || m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
@@ -1274,6 +1276,11 @@ bool VVEncCfg::check()
 
   confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
   confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 64,                                                             "GOP size must be <= 64" );
+  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
+
+  confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
 
   confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
   confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1,                               "Only single pass encoding supported, when rate control is disabled" );
@@ -1304,8 +1311,10 @@ bool VVEncCfg::checkCfgParameter( )
     return( m_confirmFailed );
   }
 
-  CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
-  CONFIRM_PARAMETER_OR_RETURN(  m_level   == Level::LEVEL_NONE, "can not determin level");
+  CONFIRM_PARAMETER_OR_RETURN( m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
+  CONFIRM_PARAMETER_OR_RETURN( (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+
+  CONFIRM_PARAMETER_OR_RETURN( m_level   == Level::LEVEL_NONE, "can not determin level");
 
   CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
   CONFIRM_PARAMETER_OR_RETURN( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
