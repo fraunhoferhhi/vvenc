@@ -82,6 +82,8 @@ void CacheBlkInfoCtrl::create()
           && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) ) )
           {
             m_codedCUInfo[wIdx][hIdx][x][y] = new CodedCUInfo;
+            m_codedCUInfo[wIdx][hIdx][x][y]->poc       = -1;
+            m_codedCUInfo[wIdx][hIdx][x][y]->ctuRsAddr = -1;
           }
           else
           {
@@ -118,28 +120,6 @@ void CacheBlkInfoCtrl::destroy()
 
 void CacheBlkInfoCtrl::init( const Slice &slice )
 {
-  const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
-
-  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  {
-    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-    {
-      for( unsigned x = 0; x < numPos; x++ )
-      {
-        for( unsigned y = 0; y < numPos; y++ )
-        {
-          if( m_codedCUInfo[wIdx][hIdx][x][y] )
-          {
-            GCC_WARNING_DISABLE_class_memaccess
-            memset( m_codedCUInfo[wIdx][hIdx][x][y], 0, sizeof( CodedCUInfo ) );
-            GCC_WARNING_RESET
-          }
-        }
-      }
-    }
-  }
-
   m_pcv = slice.pps->pcv;
 }
 
@@ -149,6 +129,25 @@ CodedCUInfo& CacheBlkInfoCtrl::getBlkInfo( const UnitArea& area )
   getAreaIdxNew( area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
 //  DTRACE( g_trace_ctx, D_TMP, "%d loc %d %d %d %d\n", g_trace_ctx->getChannelCounter(D_TMP), idx1, idx2, idx3, idx4);
   return *m_codedCUInfo[idx1][idx2][idx3][idx4];
+}
+
+void CacheBlkInfoCtrl::initBlk( const UnitArea& area, int poc )
+{
+  unsigned idx1, idx2, idx3, idx4;
+  getAreaIdxNew( area.Y(), *m_pcv, idx1, idx2, idx3, idx4 );
+
+  const int ctuRsAddr = getCtuAddr( area.lumaPos(), *m_pcv );
+  CodedCUInfo* cuInfo = m_codedCUInfo[idx1][idx2][idx3][idx4];
+
+  if( cuInfo->poc != poc || cuInfo->ctuRsAddr != ctuRsAddr )
+  {
+    GCC_WARNING_DISABLE_class_memaccess
+    memset( cuInfo, 0, sizeof( CodedCUInfo ) );
+    GCC_WARNING_RESET
+
+    cuInfo->poc       = poc;
+    cuInfo->ctuRsAddr = ctuRsAddr;
+  }
 }
 
 void CodedCUInfo::setMv( const RefPicList refPicList, const int iRefIdx, const Mv& rMv )
