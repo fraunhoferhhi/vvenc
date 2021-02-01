@@ -129,7 +129,6 @@ int main( int argc, char* argv[] )
   std::size_t iPos = (int)cAppname.find_last_of("/");
   if( std::string::npos != iPos )
   {
-
     cAppname = cAppname.substr(iPos+1 );
   }
 

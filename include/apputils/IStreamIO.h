@@ -354,25 +354,33 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
   {
     std::string line;
     std::getline( in, line );
-    // treat all whitespaces and commas as valid separators
-    replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
-    std::stringstream tokenStream( line );
-    std::string token;
-    // split into multiple tokens if any
-    while( std::getline( tokenStream, token, ' ' ) )
+
+    if( line == "[]" || line == "empty"  )
     {
-      if ( ! token.length() )
-        continue;
-      // convert to value
-      std::stringstream convStream( token );
-      T val;
-      convStream >> val;
-      fail |= convStream.fail();
-      valVec->push_back( val );
+      return in;    // forcing empty entry
+    }
+    else
+    {
+      // treat all whitespaces and commas as valid separators
+      replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
+      std::stringstream tokenStream( line );
+      std::string token;
+      // split into multiple tokens if any
+      while( std::getline( tokenStream, token, ' ' ) )
+      {
+        if ( ! token.length() )
+          continue;
+        // convert to value
+        std::stringstream convStream( token );
+        T val;
+        convStream >> val;
+        fail |= convStream.fail();
+        valVec->push_back( val );
+      }
     }
   }
 
-  if ( fail || ! valVec->size() )
+  if ( fail || (! valVec->size() ) )
   {
     in.setstate( std::ios::failbit );
   }
@@ -383,6 +391,12 @@ inline std::istream& operator >> ( std::istream& in, IStreamToVec<T>& toVec )
 template<typename T>
 inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVec )
 {
+  if( (*(toVec.valVec)).empty() )
+  {
+    os << "[]";
+    return os;
+  }
+
   bool bfirst = true;
   for( auto& e : (*(toVec.valVec)))
   {
