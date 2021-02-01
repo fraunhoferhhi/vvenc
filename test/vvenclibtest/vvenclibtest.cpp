@@ -188,13 +188,10 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
 
   rcEncCfg.m_internChromaFormat         =  CHROMA_420;
 
-  rcEncCfg.check();
-
   rcEncCfg.initPreset( PresetMode::FASTER  );
   if( callInitCfgParameter )
   {
     rcEncCfg.initCfgParameter();
-    rcEncCfg.checkCfgParameter();
   }
 }
 

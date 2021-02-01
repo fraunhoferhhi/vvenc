@@ -118,8 +118,8 @@ private:
   VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
   bool                   m_bInitialized         = false;
 
-  VVEncCfg               m_cVVEncCfgExt;      // external (user) config
-  VVEncCfg               m_cVVEncCfgInt;      // internal (adapted) config
+  VVEncCfg               m_cVVEncCfgExt;      // external (user) config ( not usd currently)
+  VVEncCfg               m_cVVEncCfg;         // internal (adapted) config
 
   std::string            m_cErrorString;
   std::string            m_sEncoderCapabilities;

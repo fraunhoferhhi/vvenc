@@ -86,7 +86,7 @@ bool VVEncCfg::initCfgParameter()
 
   m_confirmFailed = false;
 
-  m_confirmFailed = check();
+  m_confirmFailed = checkBaseParams();
 
   if ( m_confirmFailed )
   {
@@ -1236,10 +1236,11 @@ bool VVEncCfg::initCfgParameter()
   /// Experimental settings
   // checkExperimental( experimental combination of parameters, "Description!" );
 
+  m_confirmFailed = checkCfgParameter();
   return( m_confirmFailed );
 }
 
-bool VVEncCfg::check()
+bool VVEncCfg::checkBaseParams()
 {
   #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
@@ -1304,7 +1305,7 @@ bool VVEncCfg::checkCfgParameter( )
   #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
   // run base check first
-  m_confirmFailed = check();
+  m_confirmFailed = checkBaseParams();
   if( m_confirmFailed )
   {
     return( m_confirmFailed );

@@ -277,29 +277,11 @@ public:
   }
 
   /**
-    This method checks if the current (base) configuration is valid.
-    Only needed base parameter as resolution and frame rate  are being checked.
-    \param[in]  none
-    \retval     bool true: error, false: ok
-    \pre        none
-  */
-  bool check();
-
-  /**
     This method initializes the configuration depending on set default parameter
     \retval     bool true: error, false: ok
     \pre        none.
   */
   bool initCfgParameter();
-
-  /**
-    This method checks if the current configuration is valid.
-    The method checks all configuration parameter (base and derived/dependent)
-    \param[in]  none
-    \retval     bool true: error, false: ok
-    \pre        The initCfgParameter must be called first.
-  */
-  bool checkCfgParameter( );
 
   int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
@@ -309,6 +291,24 @@ public:
 private:
   bool checkExperimental( bool bflag, const char* message );
   bool confirmParameter ( bool bflag, const char* message );
+
+  /**
+    This method checks if the current (base) configuration is valid.
+    Only needed base parameter as resolution and frame rate  are being checked.
+    \param[in]  none
+    \retval     bool true: error, false: ok
+    \pre        none
+  */
+  bool checkBaseParams();
+
+  /**
+    This method checks if the current configuration is valid.
+    The method checks all configuration parameter (base and derived/dependent)
+    \param[in]  none
+    \retval     bool true: error, false: ok
+    \pre        The initCfgParameter must be called first.
+  */
+  bool checkCfgParameter( );
 };
 
 
