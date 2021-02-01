@@ -253,7 +253,7 @@ public:
   LoopFilterParam      * getLFPMapPtr   ( const DeblockEdgeDir edgeDir )       { return m_lfParam[edgeDir]; }
   ptrdiff_t              getLFPMapStride() const { return ( ptrdiff_t ) m_mapSize[CH_L].width; }
 
-  UnitScale getScaling(const UnitScale::ScaliningType type, const ChannelType chType = CH_L)
+  UnitScale getScaling(const UnitScale::ScaliningType type, const ChannelType chType = CH_L) const
   {
     return type == UnitScale::MI_MAP ? g_miScaling : unitScale[chType];
   }
