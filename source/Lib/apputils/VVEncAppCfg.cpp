@@ -1042,6 +1042,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // set intern derived parameters (for convenience purposes only)
   //
+
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  {
+    m_internChromaFormat = m_inputFileChromaFormat;
+  }
+
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
   {
     if( ( m_outputBitDepth[ CH_L ] != 10 && m_outputBitDepth[ CH_L ] != 12 )

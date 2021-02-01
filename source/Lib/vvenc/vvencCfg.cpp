@@ -287,7 +287,6 @@ bool VVEncCfg::initCfgParameter()
     m_qpOutValsCr = { 0 };
     m_qpOutValsCbCr = { 0 };
   }
-  int qpBdOffsetC = 6 * (m_internalBitDepth[CH_C] - 8);
 
   m_chromaQpMappingTableParams.m_numQpTables = m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag? 1 : (m_JointCbCrMode ? 3 : 2);
   m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0].resize(m_qpInValsCb.size());
