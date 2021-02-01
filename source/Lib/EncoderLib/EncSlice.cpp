@@ -910,9 +910,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
           return false;
 
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY > 0 && processStates[ctuRsAddr + 1 - ctuStride] <= RESHAPE_LF_VER )
-          return false;
-
         if( checkReadyState )
           return true;
 
