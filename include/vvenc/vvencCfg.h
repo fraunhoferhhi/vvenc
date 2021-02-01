@@ -273,8 +273,20 @@ public:
   {
   }
 
-
+  /**
+    This method initializes the configuration depending on set default parameter
+    \retval     bool true: error, false: ok
+    \pre        none.
+  */
   bool initCfgParameter();
+
+  /**
+    This method checks if the current configuration is valid
+    \param[in]  baseCheckOnly in enabled only the base config that has to be set by (default) uses is checked, otherwise config that is set after calling initCfgParameter() is checked
+    \retval     bool true: error, false: ok
+    \pre        The initCfgParameter must be called first.
+  */
+  bool checkCfgParameter( bool baseCheckOnly = true );
 
 
   int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );

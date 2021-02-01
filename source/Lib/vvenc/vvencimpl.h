@@ -112,8 +112,6 @@ public:
 
 private:
 
-  int xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const;
-
   int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:
