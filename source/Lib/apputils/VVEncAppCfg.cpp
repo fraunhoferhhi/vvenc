@@ -944,6 +944,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("TransformSkipLog2MaxSize",                        m_TSsize,                                         "Specify transform-skip maximum size. Minimum 2, Maximum 5")
   ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
   ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
+#if 1 //RPR_READY
+  ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
+#endif
   ;
 
   opts.setSubSection("Input options");
@@ -978,13 +981,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("isSDR",                                           m_sdr,                                            "compatibility")
   ;
-
-#if 1 //RPR_READY
-  opts.setSubSection("RPR options");
-  opts.addOptions()
-  ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution")
-  ;
-#endif
   
   
   po::setDefaults( opts );
@@ -1070,20 +1066,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     return !m_confirmFailed;
   }
 
-#if 1 //RPR_READY
-  if( m_rprEnabledFlag == 2 )
-  {
-    m_resChangeInClvsEnabled = true;
-    m_craAPSreset            = true;
-    m_rprRASLtoolSwitch      = true;
-  }
-  
-  m_confirmFailed = false;
-  confirmParameter( m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
-  
-  if( m_confirmFailed ) return false;
-#endif
-  
   //
   // check own parameters
   //
