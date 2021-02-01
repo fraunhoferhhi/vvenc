@@ -323,8 +323,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   m_actualTotalBits = 0;
   m_estimatedBits   = 0;
 
-  const int maxPicsInParallel = std::max( 1, m_pcEncCfg->m_maxParallelFrames );
-
   while( true )
   {
     Picture* pic           = nullptr;
@@ -342,13 +340,15 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       }
 
       // get next picture ready to be encoded
-      auto picItr = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+      auto picItr             = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+      const bool nextPicReady = picItr != m_gopEncListInput.end();
 
       // check at least one picture and one pic encoder ready
       if( m_freePicEncoderList.empty()
-          || picItr == m_gopEncListInput.end() )
+          || ! nextPicReady )
       {
         CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
         m_gopEncCond.wait( lock );
         continue;
       }
