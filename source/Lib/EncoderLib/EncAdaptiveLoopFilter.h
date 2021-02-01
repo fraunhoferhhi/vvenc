@@ -84,8 +84,9 @@ struct AlfCovariance
   {
     numCoeff = size;
     numBins = num_bins;
-    std::memset( y, 0, sizeof( y ) );
-    std::memset( E, 0, sizeof( E ) );
+    // will be done be reset either way
+    //std::memset( y, 0, sizeof( y ) );
+    //std::memset( E, 0, sizeof( E ) );
   }
 
   void destroy()
