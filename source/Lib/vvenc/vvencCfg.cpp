@@ -305,7 +305,17 @@ bool VVEncCfg::initCfgParameter()
   m_reshapeCW.adpOption  = m_adpOption;
   m_reshapeCW.initialCW  = m_initialCW;
 
+#if RPR_READY
+  confirmParameter( m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
 
+  if( m_rprEnabledFlag == 2 )
+  {
+    m_resChangeInClvsEnabled = true;
+    m_craAPSreset            = true;
+    m_rprRASLtoolSwitch      = true;
+  }  
+#endif
+    
   if( m_IntraPeriod == 0 &&  m_IntraPeriodSec > 0 )
   {
     if ( m_FrameRate % m_GOPSize == 0 )

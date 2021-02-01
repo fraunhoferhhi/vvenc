@@ -814,6 +814,14 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   xInitSliceTMVPFlag ( pic.cs->picHeader, slice, gopId );
   xInitSliceMvdL1Zero( pic.cs->picHeader, slice );
 
+#if RPR_READY
+  if( slice->nalUnitType == NAL_UNIT_CODED_SLICE_RASL && sliceType == B_SLICE && m_pcEncCfg->m_rprRASLtoolSwitch )
+  {
+    xUpdateRPRtmvp( pic.cs->picHeader, slice );
+    xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
+  }
+#endif
+
   // update RAS
   xUpdateRasInit( slice );
 
@@ -957,6 +965,100 @@ void EncGOP::xInitSliceTMVPFlag( PicHeader* picHeader, const Slice* slice, int g
   }
 }
 
+#if RPR_READY
+void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
+{
+  if( slice->sliceType != I_SLICE && picHeader->enableTMVP && m_pcEncCfg->m_rprRASLtoolSwitch )
+  {
+    int colRefIdxL0 = -1, colRefIdxL1 = -1;
+
+    for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
+    {
+      if( !( slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
+             slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc < m_pocCRA ) )
+      {
+        colRefIdxL0 = refIdx;
+        break;
+      }
+    }
+
+    if( slice->sliceType == B_SLICE )
+    {
+      for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
+      {
+        if( !( slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
+               slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc < m_pocCRA ) )
+        {
+          colRefIdxL1 = refIdx;
+          break;
+        }
+      }
+    }
+
+    if( colRefIdxL0 >= 0 && colRefIdxL1 >= 0 )
+    {
+      const Picture *refPicL0 = slice->getRefPic( REF_PIC_LIST_0, colRefIdxL0 );
+      const Picture *refPicL1 = slice->getRefPic( REF_PIC_LIST_1, colRefIdxL1 );
+
+      CHECK( !refPicL0->slices.size(), "Wrong L0 reference picture" );
+      CHECK( !refPicL1->slices.size(), "Wrong L1 reference picture" );
+
+      const uint32_t uiColFromL0 = refPicL0->slices[0]->sliceQp > refPicL1->slices[0]->sliceQp;
+      picHeader->picColFromL0 = uiColFromL0;
+      slice->colFromL0Flag = uiColFromL0;
+      slice->colRefIdx = uiColFromL0 ? colRefIdxL0 : colRefIdxL1;
+      picHeader->colRefIdx = uiColFromL0 ? colRefIdxL0 : colRefIdxL1;
+    }
+    else if( colRefIdxL0 < 0 && colRefIdxL1 >= 0 )
+    {
+      picHeader->picColFromL0 = false;
+      slice->colFromL0Flag = false;
+      slice->colRefIdx = colRefIdxL1;
+      picHeader->colRefIdx = colRefIdxL1;
+    }
+    else if( colRefIdxL0 >= 0 && colRefIdxL1 < 0 )
+    {
+      picHeader->picColFromL0 = true;
+      slice->colFromL0Flag = true;
+      slice->colRefIdx = colRefIdxL0;
+      picHeader->colRefIdx = colRefIdxL0;
+    }
+    else
+    {
+      picHeader->enableTMVP = false;
+    }
+  }
+}
+
+void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
+{
+  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
+  {
+    if( slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc < m_pocCRA &&
+        slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
+    {
+      picHeader->disBdofFlag = true;
+      picHeader->disDmvrFlag = true;
+      picHeader->disProfFlag = true;
+
+      return;
+    }
+}
+
+  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
+  {
+    if( slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc < m_pocCRA &&
+        slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
+    {
+      picHeader->disBdofFlag = true;
+      picHeader->disDmvrFlag = true;
+      picHeader->disProfFlag = true;
+
+      return;
+    }
+  }
+}
+#endif
 
 void EncGOP::xInitSliceMvdL1Zero( PicHeader* picHeader, const Slice* slice )
 {
