@@ -106,7 +106,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
   VVEncCfg cVVEncCfgCopy = rcVVEncCfg;
 
-  if ( cVVEncCfgCopy.checkCfgParameter() )
+  if ( cVVEncCfgCopy.check() )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -116,7 +116,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
     return VVENC_ERR_INITIALIZE;
   }
 
-  if ( cVVEncCfgCopy.checkCfgParameter( false ) )
+  if ( cVVEncCfgCopy.checkCfgParameter() )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -135,7 +135,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   m_cVVEncCfgExt   = rcVVEncCfg;
   m_cVVEncCfgInt   = rcVVEncCfg;
 
-  if ( m_cVVEncCfgInt.checkCfgParameter() )
+  if ( m_cVVEncCfgInt.check() )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -145,7 +145,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
     return VVENC_ERR_INITIALIZE;
   }
 
-  if ( m_cVVEncCfgInt.checkCfgParameter( false ) )
+  if ( m_cVVEncCfgInt.checkCfgParameter() )
   {
     return VVENC_ERR_INITIALIZE;
   }

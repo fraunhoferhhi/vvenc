@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
+#include "CommonLib/ProfileLevelTier.h"
 
 #include <math.h>
 
@@ -85,6 +86,13 @@ bool VVEncCfg::initCfgParameter()
 
   m_confirmFailed = false;
 
+  m_confirmFailed = check();
+
+  if ( m_confirmFailed )
+  {
+    return m_confirmFailed;
+  }
+
   //
   // set a lot of dependent parameters
   //
@@ -111,6 +119,25 @@ bool VVEncCfg::initCfgParameter()
       if (maxBitDepth<=10)
       {
         m_profile=Profile::MAIN_10_444;
+      }
+    }
+  }
+
+  if( m_level == Level::LEVEL_NONE || m_level == Level::LEVEL_AUTO )
+  {
+    std::vector<Level> levelVec = { LEVEL1, LEVEL2, LEVEL2_1, LEVEL3, LEVEL3_1,
+                                    LEVEL4, LEVEL4_1, LEVEL5, LEVEL5_1, LEVEL5_2,
+                                    LEVEL6, LEVEL6_1, LEVEL6_2, LEVEL6_3,
+                                    LEVEL15_5 };
+
+    for( auto & l : levelVec )
+    {
+      const LevelTierFeatures* lvl = LevelTierFeatures::getLevelTierFeatures(l);
+      if ( m_SourceWidth <= (int)lvl->getMaxPicWidthInLumaSamples() &&
+           m_SourceHeight <= (int)lvl->getMaxPicHeightInLumaSamples() )
+      {
+        m_level = (Level)l;
+        break;
       }
     }
   }
@@ -1213,7 +1240,7 @@ bool VVEncCfg::initCfgParameter()
   return( m_confirmFailed );
 }
 
-bool VVEncCfg::checkCfgParameter( bool baseCheckOnly )
+bool VVEncCfg::check()
 {
   #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
@@ -1263,7 +1290,16 @@ bool VVEncCfg::checkCfgParameter( bool baseCheckOnly )
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
-  if( baseCheckOnly )
+  return m_confirmFailed;
+}
+
+bool VVEncCfg::checkCfgParameter( )
+{
+  #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
+
+  // run base check first
+  m_confirmFailed = check();
+  if( m_confirmFailed )
   {
     return( m_confirmFailed );
   }
@@ -1843,26 +1879,6 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   m_inputBitDepth[0]    = 8;                        // input bitdepth
   m_internalBitDepth[0] = 10;                       // internal bitdepth
-  m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
-  m_level               = vvenc::Level::LEVEL4_1;   // level
-  m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
-  m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
-
-// th this has to go into initcfg
-  if( targetbitrate )
-  {
-    m_RCTargetBitrate       = targetbitrate;        // target bitrate
-    m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
-    m_RCKeepHierarchicalBit = 2;
-    m_RCUseLCUSeparateModel = 1;
-    m_RCInitialQP           = 0;
-    m_RCForceIntraQP        = 0;
-  }
-  else
-  {
-    m_RCTargetBitrate       = 0;
-    m_RCRateControlMode     = RateControlMode::RCM_OFF;
-  }
 
   iRet = initPreset( preset );
 
@@ -2233,6 +2249,7 @@ static inline std::string getLevelStr( int level )
   std::string cT;
   switch( level )
   {
+    case Level::LEVEL_AUTO: cT = "auto";    break;
     case Level::LEVEL_NONE: cT = "none";    break;
     case Level::LEVEL1    : cT = "1";       break;
     case Level::LEVEL2    : cT = "2";       break;

@@ -151,27 +151,28 @@ const std::vector<SVPair<Profile>> ProfileToEnumMap =
 
 const std::vector<SVPair<Level>> LevelToEnumMap =
 {
+  { "auto",                    Level::LEVEL_AUTO},
   { "none",                    Level::LEVEL_NONE},
-  { "1",                       Level::LEVEL1   },
-  { "1.0",                     Level::LEVEL1   },
-  { "2",                       Level::LEVEL2   },
-  { "2.0",                     Level::LEVEL2   },
-  { "2.1",                     Level::LEVEL2_1 },
-  { "3",                       Level::LEVEL3   },
-  { "3.0",                     Level::LEVEL3   },
-  { "3.1",                     Level::LEVEL3_1 },
-  { "4",                       Level::LEVEL4   },
-  { "4.0",                     Level::LEVEL4   },
-  { "4.1",                     Level::LEVEL4_1 },
-  { "5",                       Level::LEVEL5   },
-  { "5.0",                     Level::LEVEL5   },
-  { "5.1",                     Level::LEVEL5_1 },
-  { "5.2",                     Level::LEVEL5_2 },
-  { "6",                       Level::LEVEL6   },
-  { "6.0",                     Level::LEVEL6   },
-  { "6.1",                     Level::LEVEL6_1 },
-  { "6.2",                     Level::LEVEL6_2 },
-  { "6.3",                     Level::LEVEL6_3 },
+  { "1",                       Level::LEVEL1    },
+  { "1.0",                     Level::LEVEL1    },
+  { "2",                       Level::LEVEL2    },
+  { "2.0",                     Level::LEVEL2    },
+  { "2.1",                     Level::LEVEL2_1  },
+  { "3",                       Level::LEVEL3    },
+  { "3.0",                     Level::LEVEL3    },
+  { "3.1",                     Level::LEVEL3_1  },
+  { "4",                       Level::LEVEL4    },
+  { "4.0",                     Level::LEVEL4    },
+  { "4.1",                     Level::LEVEL4_1  },
+  { "5",                       Level::LEVEL5    },
+  { "5.0",                     Level::LEVEL5    },
+  { "5.1",                     Level::LEVEL5_1  },
+  { "5.2",                     Level::LEVEL5_2  },
+  { "6",                       Level::LEVEL6    },
+  { "6.0",                     Level::LEVEL6    },
+  { "6.1",                     Level::LEVEL6_1  },
+  { "6.2",                     Level::LEVEL6_2  },
+  { "6.3",                     Level::LEVEL6_3  },
   { "15.5",                    Level::LEVEL15_5 },
 };
 
@@ -421,25 +422,14 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   // set intern derived parameters (for convenience purposes only)
   //
 
-
-//  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
-//  m_rewriteParamSets        = true;
+  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
+  m_rewriteParamSets        = true;
 
 //  // this has to be set outside
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = m_inputFileChromaFormat;
   }
-
-  //
-  // setup encoder configuration
-  //
-
-//  if ( VVEncCfg::initCfgParameter() )
-//  {
-//    return false;
-//  }
-
 
   return true;
 }
@@ -1052,16 +1042,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // set intern derived parameters (for convenience purposes only)
   //
-
-  //
-  // setup encoder configuration
-  //
-
-//  if ( VVEncCfg::initCfgParameter() )
-//  {
-//    return false;
-//  }
-
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
   {
     if( ( m_outputBitDepth[ CH_L ] != 10 && m_outputBitDepth[ CH_L ] != 12 )

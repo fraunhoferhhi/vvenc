@@ -142,6 +142,7 @@ enum Tier
 */
 enum Level
 {
+  LEVEL_AUTO = -1,
   LEVEL_NONE = 0,
   LEVEL1   = 16,
   LEVEL2   = 32,
@@ -243,11 +244,11 @@ public:
   int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
   bool                m_AccessUnitDelimiter            = false;         ///< add Access Unit Delimiter NAL units
 
-  Profile             m_profile                        = Profile::MAIN_10;
+  Profile             m_profile                        = Profile::PROFILE_AUTO;
   Tier                m_levelTier                      = Tier::TIER_MAIN ;
-  Level               m_level                          = Level::LEVEL4_1;
+  Level               m_level                          = Level::LEVEL_AUTO;
 
-  int                 m_IntraPeriod                    = 32;            ///< period of I-slice (random access period)
+  int                 m_IntraPeriod                    = 0;             ///< period of I-slice (random access period)
   int                 m_IntraPeriodSec                 = 1;             ///< period of I-slice in seconds (random access period)
   DecodingRefreshType m_DecodingRefreshType            = DRT_CRA;       ///< random access type
   int                 m_GOPSize                        = 32;            ///< GOP size of hierarchical structure
@@ -268,10 +269,21 @@ public:
 
   VVEncCfg()
   {
+    initPreset( PresetMode::MEDIUM );
   }
+
   virtual ~VVEncCfg()
   {
   }
+
+  /**
+    This method checks if the current (base) configuration is valid.
+    Only needed base parameter as resolution and frame rate  are being checked.
+    \param[in]  none
+    \retval     bool true: error, false: ok
+    \pre        none
+  */
+  bool check();
 
   /**
     This method initializes the configuration depending on set default parameter
@@ -281,13 +293,13 @@ public:
   bool initCfgParameter();
 
   /**
-    This method checks if the current configuration is valid
-    \param[in]  baseCheckOnly in enabled only the base config that has to be set by (default) uses is checked, otherwise config that is set after calling initCfgParameter() is checked
+    This method checks if the current configuration is valid.
+    The method checks all configuration parameter (base and derived/dependent)
+    \param[in]  none
     \retval     bool true: error, false: ok
     \pre        The initCfgParameter must be called first.
   */
-  bool checkCfgParameter( bool baseCheckOnly = true );
-
+  bool checkCfgParameter( );
 
   int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
