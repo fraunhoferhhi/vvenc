@@ -1604,7 +1604,7 @@ void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, cons
 
   const unsigned uiBs = BsGet( lfp.bs, COMP_Y );
 
-  CHECK( uiBs > 2, "baem" );
+  CHECK( uiBs > 2, "baem0" );
   
   if( !uiBs )
   {
@@ -1747,6 +1747,9 @@ void LoopFilter::xEdgeFilterChroma( CodingStructure &cs, const Position &pos, co
   unsigned tmpBs = lfp.bs;
   bS[0] = BsGet( tmpBs, COMP_Cb );
   bS[1] = BsGet( tmpBs, COMP_Cr );
+
+  CHECK( bS[0] > 2, "baem1" );
+  CHECK( bS[1] > 2, "baem2" );
 
   if( bS[0] <= 0 && bS[1] <= 0 )
   {

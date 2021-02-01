@@ -54,6 +54,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "InterSearch.h"
 
+#include <atomic>
+
 //! \ingroup EncoderLib
 //! \{
 
@@ -75,7 +77,7 @@ struct LineEncRsrc;
 struct PerThreadRsrc;
 struct CtuEncParam;
 
-enum ProcessCtuState {
+enum TaskType {
   CTU_ENCODE     = 0,
   RESHAPE_LF_VER,
   LF_HOR,
@@ -86,6 +88,8 @@ enum ProcessCtuState {
   FINISH_SLICE,
   PROCESS_DONE
 };
+
+using ProcessCtuState = std::atomic<TaskType>;
 
 /// slice encoder class
 class EncSlice
