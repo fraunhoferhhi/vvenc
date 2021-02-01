@@ -473,8 +473,7 @@ public:
   int                 m_useBDPCM                                = 0;
 
 #if 1 //RPR_READY
-  bool                m_rprEnabledFlag                          = true;
-  bool                m_rprReady                                = false;
+  int                 m_rprEnabledFlag                          = 1;
   bool                m_resChangeInClvsEnabled                  = false;
   bool                m_craAPSreset                             = false;
   bool                m_rprRASLtoolSwitch                       = false;

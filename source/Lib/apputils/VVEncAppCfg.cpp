@@ -983,7 +983,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.setSubSection("RPR options");
   opts.addOptions()
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution")
-  ("RPRready",                                        m_rprReady,                                       "Enable CRA APS reset, RASL tool switch and resChangeInClvs")
   ;
 #endif
   
@@ -1072,12 +1071,17 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   }
 
 #if 1 //RPR_READY
-  if( m_rprReady )
+  if( m_rprEnabledFlag == 2 )
   {
     m_resChangeInClvsEnabled = true;
     m_craAPSreset            = true;
     m_rprRASLtoolSwitch      = true;
   }
+  
+  m_confirmFailed = false;
+  confirmParameter( m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
+  
+  if( m_confirmFailed ) return false;
 #endif
   
   //

@@ -888,7 +888,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.partitionOverrideEnabled      = m_cEncCfg.m_useAMaxBT;
 #if RPR_READY
   sps.resChangeInClvsEnabled        = m_cEncCfg.m_resChangeInClvsEnabled;
-  sps.rprEnabled                    = m_cEncCfg.m_rprEnabledFlag;
+  sps.rprEnabled                    = m_cEncCfg.m_rprEnabledFlag != 0;
 #else
   sps.rprEnabled                    = true; //as in vtm
 #endif
