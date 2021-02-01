@@ -122,6 +122,20 @@ const ProfileFeatures *ProfileFeatures::getProfileFeatures(const Profile p)
   return &validProfiles[i];
 }
 
+const LevelTierFeatures *LevelTierFeatures::getLevelTierFeatures(const Level l)
+{
+  int i;
+  for (i = 0; mainLevelTierInfo[i].level != Level::LEVEL15_5; i++)
+  {
+    if (mainLevelTierInfo[i].level == l)
+    {
+      return &mainLevelTierInfo[i];
+    }
+  }
+
+  return &mainLevelTierInfo[i];
+}
+
 void ProfileLevelTierFeatures::extractPTLInformation(const SPS &sps)
 {
   const ProfileTierLevel &spsPtl = sps.profileTierLevel;
