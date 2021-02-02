@@ -159,7 +159,6 @@ void EncPicture::finalizePicture( Picture& pic )
   pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
-  pic.isReconstructed = true;
 }
 
 void EncPicture::xInitPicEncoder( Picture& pic )
@@ -183,6 +182,13 @@ void EncPicture::xInitPicEncoder( Picture& pic )
 
 void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
 {
+#if RPR_READY
+  if( m_pcEncCfg->m_rprRASLtoolSwitch )
+  {
+    return;
+  }
+#endif
+  
   if ( slice->sliceType == B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed

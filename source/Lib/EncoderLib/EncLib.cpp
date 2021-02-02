@@ -359,6 +359,12 @@ void EncLib::xSetRCEncCfg( int pass )
     // restore MCTF
     m_cBckCfg.m_MCTF              = mctf;
 
+    // clear MaxCuDQPSubdiv
+    if( m_cBckCfg.m_CTUSize < 128 )
+    {
+      m_cBckCfg.m_cuQpDeltaSubdiv = 0;
+    }
+
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
@@ -886,7 +892,12 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.BdofPresent                   = m_cEncCfg.m_BDOF;
   sps.DmvrPresent                   = m_cEncCfg.m_DMVR;
   sps.partitionOverrideEnabled      = m_cEncCfg.m_useAMaxBT;
+#if RPR_READY
+  sps.resChangeInClvsEnabled        = m_cEncCfg.m_resChangeInClvsEnabled;
+  sps.rprEnabled                    = m_cEncCfg.m_rprEnabledFlag != 0;
+#else
   sps.rprEnabled                    = true; //as in vtm
+#endif
   sps.log2MinCodingBlockSize        = 2;
   sps.log2MaxTbSize                 = m_cEncCfg.m_log2MaxTbSize;
   sps.temporalMVPEnabled            = m_cEncCfg.m_TMVPModeId == 2 || m_cEncCfg.m_TMVPModeId == 1;

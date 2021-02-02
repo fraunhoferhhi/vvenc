@@ -252,8 +252,6 @@ EncGOP::EncGOP()
   , m_actualTotalBits    ( 0 )
   , m_estimatedBits      ( 0 )
   , m_threadPool         ( nullptr )
-  , m_numPicsInFlight    ( 0 )
-  , m_numPicsFinished    ( 0 )
 {
 }
 
@@ -266,14 +264,14 @@ EncGOP::~EncGOP()
     tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap );
   }
 
-  for( auto& picEncoder : m_picEncoderList )
+  for( auto& picEncoder : m_freePicEncoderList )
   {
     if( picEncoder )
     {
       delete picEncoder;
     }
   }
-  m_picEncoderList.clear();
+  m_freePicEncoderList.clear();
   m_threadPool = nullptr;
 }
 
@@ -289,12 +287,14 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
   m_Reshaper.init  ( encCfg );
 
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
-  m_picEncoderList.resize( maxPicEncoder );
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
-    m_picEncoderList[ i ] = new EncPicture;
-    m_picEncoderList[ i ]->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool );
+    EncPicture* picEncoder = new EncPicture;
+    picEncoder->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool );
+    m_freePicEncoderList.push_back( picEncoder );
   }
+  // TODO (jb): deprecated, to be removed
+  m_picEncoder0 = m_freePicEncoderList.front();
 
   if (encCfg.m_usePerceptQPA)
   {
@@ -307,42 +307,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 // Class interface
 // ====================================================================================================================
 
-void EncGOP::xWaitForFinishedPic()
-{
-  CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no multi-threading enabled" );
-  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  if( m_numPicsFinished <= 0
-      && ! m_gopEncListOutput.empty()
-      && ! m_gopEncListOutput.front()->isReconstructed )
-  {
-    m_gopEncCond.wait( _lock );
-  }
-  CHECK( m_numPicsFinished > m_numPicsInFlight, "more pics currently finished than pics in flight");
-  m_numPicsInFlight -= m_numPicsFinished;
-  m_numPicsFinished = 0;
-}
-
-EncPicture* EncGOP::xGetNextFreePicEncoder()
-{
-  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  for( int i = 0; i < m_picEncoderList.size(); i++ )
-  {
-    if( !m_picEncoderList[ i ]->m_isRunning )
-    {
-      m_picEncoderList[ i ]->m_isRunning = true;
-      return m_picEncoderList[ i ];
-    }
-  }
-  return nullptr;
-}
-
-void EncGOP::xFinishPP( EncPicture* picEncoder )
-{
-  std::unique_lock<std::mutex> _lock( m_gopEncMutex );
-  picEncoder->m_isRunning = false;
-  m_numPicsFinished += 1;
-  m_gopEncCond.notify_one();
-}
 
 void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
 {
@@ -359,25 +323,40 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   m_actualTotalBits = 0;
   m_estimatedBits   = 0;
 
-  const int maxPicsInParallel = std::max( 1, m_pcEncCfg->m_maxParallelFrames );
-
-  while( ! m_gopEncListInput.empty()
-      && ! m_gopEncListOutput.empty()
-      && ! m_gopEncListOutput.front()->isReconstructed )
+  while( true )
   {
-    // get next picture ready to be encoded
-    auto it = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+    Picture* pic           = nullptr;
+    EncPicture* picEncoder = nullptr;
 
-    // check free picture encoder as well as picture to be encoded available
-    if( m_numPicsInFlight >= maxPicsInParallel
-        || it == m_gopEncListInput.end() )
     {
-      xWaitForFinishedPic();
-      continue;
-    }
+      std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
+      if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
-    EncPicture* picEncoder = xGetNextFreePicEncoder();
-    Picture*    pic        = *it;
+      // check encoding of output picture done
+      if( m_gopEncListOutput.empty()
+          || m_gopEncListOutput.front()->isReconstructed )
+      {
+        break;
+      }
+
+      // get next picture ready to be encoded
+      auto picItr             = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+      const bool nextPicReady = picItr != m_gopEncListInput.end();
+
+      // check at least one picture and one pic encoder ready
+      if( m_freePicEncoderList.empty()
+          || ! nextPicReady )
+      {
+        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
+        m_gopEncCond.wait( lock );
+        continue;
+      }
+
+      pic        = *picItr;
+      picEncoder = m_freePicEncoderList.front();
+      m_freePicEncoderList.pop_front();
+    }
 
     CHECK( picEncoder == nullptr, "no free picture encoder available" );
     CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
@@ -398,10 +377,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     // compress next picture
     if( pic->encPic )
     {
-      if( m_pcEncCfg->m_numThreads > 0 )
-      {
-        m_numPicsInFlight += 1;
-      }
       picEncoder->compressPicture( *pic, *this );
     }
     else
@@ -414,7 +389,12 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       static auto finishTask = []( int, FinishTaskParam* param ) {
         param->picEncoder->finalizePicture( *param->pic );
-        param->gopEncoder->xFinishPP( param->picEncoder );
+        {
+          std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+          param->pic->isReconstructed = true;
+          param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+          param->gopEncoder->m_gopEncCond.notify_one();
+        }
         delete param;
         return true;
       };
@@ -424,41 +404,36 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     else
     {
       picEncoder->finalizePicture( *pic );
-      picEncoder->m_isRunning = false;
+      pic->isReconstructed = true;
+      m_freePicEncoderList.push_back( picEncoder );
     }
   }
+
+  CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
+  CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
 
   // AU output
-  if( m_gopEncListOutput.size() > 0 )
+  Picture* pic = m_gopEncListOutput.front();
+  m_gopEncListOutput.pop_front();
+
+  if( pic->writePic )
   {
-    Picture* pic = m_gopEncListOutput.front();
-    m_gopEncListOutput.pop_front();
-    CHECK( !pic->isReconstructed && !pic->encPic, "picture not reconstructed and no encoding started" );
-
-    while( !pic->isReconstructed )
-    {
-      xWaitForFinishedPic();
-    }
-
-    if( pic->writePic )
-    {
-      xWritePicture( *pic, au, isEncodeLtRef );
-    }
-
-    if( m_pcEncCfg->m_alfTempPred )
-    {
-      xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
-    }
-
-    xUpdateAfterPicRC( pic );
-
-    if( m_pcEncCfg->m_useAMaxBT )
-    {
-      m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
-    }
-
-    pic->isFinished = true;
+    xWritePicture( *pic, au, isEncodeLtRef );
   }
+
+  if( m_pcEncCfg->m_alfTempPred )
+  {
+    xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
+  }
+
+  xUpdateAfterPicRC( pic );
+
+  if( m_pcEncCfg->m_useAMaxBT )
+  {
+    m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
+  }
+
+  pic->isFinished = true;
 }
 
 void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
@@ -814,6 +789,14 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   xInitSliceTMVPFlag ( pic.cs->picHeader, slice, gopId );
   xInitSliceMvdL1Zero( pic.cs->picHeader, slice );
 
+#if RPR_READY
+  if( slice->nalUnitType == NAL_UNIT_CODED_SLICE_RASL && sliceType == B_SLICE && m_pcEncCfg->m_rprRASLtoolSwitch )
+  {
+    xUpdateRPRtmvp( pic.cs->picHeader, slice );
+    xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
+  }
+#endif
+
   // update RAS
   xUpdateRasInit( slice );
 
@@ -957,6 +940,100 @@ void EncGOP::xInitSliceTMVPFlag( PicHeader* picHeader, const Slice* slice, int g
   }
 }
 
+#if RPR_READY
+void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
+{
+  if( slice->sliceType != I_SLICE && picHeader->enableTMVP && m_pcEncCfg->m_rprRASLtoolSwitch )
+  {
+    int colRefIdxL0 = -1, colRefIdxL1 = -1;
+
+    for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
+    {
+      if( !( slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
+             slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc < m_pocCRA ) )
+      {
+        colRefIdxL0 = refIdx;
+        break;
+      }
+    }
+
+    if( slice->sliceType == B_SLICE )
+    {
+      for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
+      {
+        if( !( slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
+               slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc < m_pocCRA ) )
+        {
+          colRefIdxL1 = refIdx;
+          break;
+        }
+      }
+    }
+
+    if( colRefIdxL0 >= 0 && colRefIdxL1 >= 0 )
+    {
+      const Picture *refPicL0 = slice->getRefPic( REF_PIC_LIST_0, colRefIdxL0 );
+      const Picture *refPicL1 = slice->getRefPic( REF_PIC_LIST_1, colRefIdxL1 );
+
+      CHECK( !refPicL0->slices.size(), "Wrong L0 reference picture" );
+      CHECK( !refPicL1->slices.size(), "Wrong L1 reference picture" );
+
+      const uint32_t uiColFromL0 = refPicL0->slices[0]->sliceQp > refPicL1->slices[0]->sliceQp;
+      picHeader->picColFromL0 = uiColFromL0;
+      slice->colFromL0Flag = uiColFromL0;
+      slice->colRefIdx = uiColFromL0 ? colRefIdxL0 : colRefIdxL1;
+      picHeader->colRefIdx = uiColFromL0 ? colRefIdxL0 : colRefIdxL1;
+    }
+    else if( colRefIdxL0 < 0 && colRefIdxL1 >= 0 )
+    {
+      picHeader->picColFromL0 = false;
+      slice->colFromL0Flag = false;
+      slice->colRefIdx = colRefIdxL1;
+      picHeader->colRefIdx = colRefIdxL1;
+    }
+    else if( colRefIdxL0 >= 0 && colRefIdxL1 < 0 )
+    {
+      picHeader->picColFromL0 = true;
+      slice->colFromL0Flag = true;
+      slice->colRefIdx = colRefIdxL0;
+      picHeader->colRefIdx = colRefIdxL0;
+    }
+    else
+    {
+      picHeader->enableTMVP = false;
+    }
+  }
+}
+
+void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
+{
+  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
+  {
+    if( slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc < m_pocCRA &&
+        slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
+    {
+      picHeader->disBdofFlag = true;
+      picHeader->disDmvrFlag = true;
+      picHeader->disProfFlag = true;
+
+      return;
+    }
+}
+
+  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
+  {
+    if( slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc < m_pocCRA &&
+        slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
+    {
+      picHeader->disBdofFlag = true;
+      picHeader->disDmvrFlag = true;
+      picHeader->disProfFlag = true;
+
+      return;
+    }
+  }
+}
+#endif
 
 void EncGOP::xInitSliceMvdL1Zero( PicHeader* picHeader, const Slice* slice )
 {
@@ -1645,7 +1722,9 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
 
   if ( m_pcRateCtrl->encRCSeq->isQpResetRequired( gopId ) )
   {
-    m_picEncoderList[ 0 ]->getEncSlice()->resetQP( &pic, sliceQP, m_lambda );
+    // TODO (jb): deprecated, to be removed
+    CHECK( m_pcEncCfg->m_maxParallelFrames > 0, "deprecated, FPP and RC not supported yet" );
+    m_picEncoder0->getEncSlice()->resetQP( &pic, sliceQP, m_lambda );
   }
 }
 
