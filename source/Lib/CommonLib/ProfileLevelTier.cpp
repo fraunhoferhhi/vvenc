@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Fï¿½rderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -85,7 +85,7 @@ static const LevelTierFeatures mainLevelTierInfo[] =
     { Level::LEVEL6_2, 35651584, {   180000,   800000 },      600,      440,       20, 4278190080ULL, {  240000,   800000 }, { 8, 4} },
     { Level::LEVEL6_3, 80216064, {   240000,   800000 },     1000,      990,       30, 4812963840ULL, {  320000,   800000 }, { 8, 4} },
     { Level::LEVEL15_5, MAX_UINT,{ MAX_UINT, MAX_UINT }, MAX_UINT, MAX_UINT, MAX_UINT, MAX_CNFUINT64, {MAX_UINT, MAX_UINT }, { 0, 0} },
-    { Level::LEVEL_NONE    }
+    { Level::LEVEL_AUTO    }
 };
 
 static const ProfileFeatures validProfiles[] = {
@@ -105,13 +105,13 @@ static const ProfileFeatures validProfiles[] = {
   { Profile::MAIN_10_444, "Main_444_10", 10, CHROMA_444, false, 2500, 2750, 3750, 75, mainLevelTierInfo, false },
   { Profile::MULTILAYER_MAIN_10_444, "Multilayer_Main_444_10", 10, CHROMA_444, false, 2500, 2750, 3750, 75,
     mainLevelTierInfo, false },
-  { Profile::PROFILE_NONE, 0 },
+  { Profile::PROFILE_AUTO, 0 }
 };
 
 const ProfileFeatures *ProfileFeatures::getProfileFeatures(const Profile p)
 {
   int i;
-  for (i = 0; validProfiles[i].profile != Profile::PROFILE_NONE; i++)
+  for (i = 0; validProfiles[i].profile != Profile::PROFILE_AUTO; i++)
   {
     if (validProfiles[i].profile == p)
     {
@@ -122,18 +122,20 @@ const ProfileFeatures *ProfileFeatures::getProfileFeatures(const Profile p)
   return &validProfiles[i];
 }
 
-const LevelTierFeatures *LevelTierFeatures::getLevelTierFeatures(const Level l)
+Level LevelTierFeatures::getLevelForInput( uint32_t width, uint32_t height )
 {
-  int i;
-  for (i = 0; mainLevelTierInfo[i].level != Level::LEVEL15_5; i++)
+  for (const auto& info: mainLevelTierInfo )
   {
-    if (mainLevelTierInfo[i].level == l)
+    if ( width <= info.getMaxPicWidthInLumaSamples() &&
+        height <=  info.getMaxPicHeightInLumaSamples() &&
+        info.level != LEVEL_AUTO )
     {
-      return &mainLevelTierInfo[i];
+      return info.level;
+      break;
     }
   }
 
-  return &mainLevelTierInfo[i];
+  return NUMBER_OF_LEVELS;
 }
 
 void ProfileLevelTierFeatures::extractPTLInformation(const SPS &sps)
@@ -145,7 +147,7 @@ void ProfileLevelTierFeatures::extractPTLInformation(const SPS &sps)
   m_tier = spsPtl.tierFlag;
 
   // Identify the profile from the profile Idc, and possibly other constraints.
-  for(int32_t i=0; validProfiles[i].profile != Profile::PROFILE_NONE; i++)
+  for(int32_t i=0; validProfiles[i].profile != Profile::PROFILE_AUTO; i++)
   {
     if (spsPtl.profileIdc == validProfiles[i].profile)
     {
@@ -161,7 +163,7 @@ void ProfileLevelTierFeatures::extractPTLInformation(const SPS &sps)
     const Level spsLevelName = spsPtl.levelIdc;
     if (spsLevelName!=Level::LEVEL15_5 || m_pProfile->canUseLevel15p5)
     {
-      for(int i=0; pLTF[i].level!=Level::LEVEL_NONE; i++)
+      for(int i=0; pLTF[i].level!=Level::LEVEL_AUTO; i++)
       {
         if (pLTF[i].level == spsLevelName)
         {

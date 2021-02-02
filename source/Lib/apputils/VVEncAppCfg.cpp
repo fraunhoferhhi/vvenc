@@ -137,7 +137,6 @@ const std::vector<SVPair<SegmentMode>> SegmentToEnumMap =
 
 const std::vector<SVPair<Profile>> ProfileToEnumMap =
 {
-  { "none",                                  Profile::PROFILE_NONE },
   { "main_10",                               Profile::MAIN_10 },
   { "main_10_444",                           Profile::MAIN_10_444 },
   { "main_10_still_picture",                 Profile::MAIN_10_STILL_PICTURE },
@@ -152,7 +151,6 @@ const std::vector<SVPair<Profile>> ProfileToEnumMap =
 const std::vector<SVPair<Level>> LevelToEnumMap =
 {
   { "auto",                    Level::LEVEL_AUTO},
-  { "none",                    Level::LEVEL_NONE},
   { "1",                       Level::LEVEL1    },
   { "1.0",                     Level::LEVEL1    },
   { "2",                       Level::LEVEL2    },
@@ -378,27 +376,15 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   {
     cout << "Unhandled argument ignored: `" << a << "'\n";
   }
-  if ( argc == 1 )
-  {
-    std::string cAppname = argv[0];
-    std::size_t iPos = (int)cAppname.find_last_of("/");
-    if( std::string::npos != iPos )
-    {
-      cAppname = cAppname.substr(iPos+1 );
-    }
 
-    /* argc == 1: no options have been specified */
-    cout <<  "No input file specified. run " << cAppname << " --help for a list of options." << std::endl;
+  if ( argc == 1 || do_help )
+  {
+    cout <<  easyOpts.str();
     return false;
   }
   else if ( do_full_help )
   {
     cout << fullOpts.str();
-    return false;
-  }
-  else if ( do_help )
-  {
-    cout <<  easyOpts.str();
     return false;
   }
 

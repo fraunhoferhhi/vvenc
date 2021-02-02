@@ -68,7 +68,7 @@ struct LevelTierFeatures
   uint32_t      getMaxPicWidthInLumaSamples()  const;
   uint32_t      getMaxPicHeightInLumaSamples() const;
 
-  static const LevelTierFeatures *getLevelTierFeatures(const Level l) ;
+  static Level getLevelForInput( uint32_t width, uint32_t height );
 };
 
 

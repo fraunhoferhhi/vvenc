@@ -110,7 +110,7 @@ enum SliceType
 */
 enum Profile
 {
-  PROFILE_NONE                         = 0,
+  PROFILE_AUTO                         = 0,
   MAIN_10                              = 1,
   MAIN_10_STILL_PICTURE                = 2,
   MAIN_10_444                          = 3,
@@ -119,7 +119,7 @@ enum Profile
   MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
   MULTILAYER_MAIN_10_444               = 7,
   MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
-  PROFILE_AUTO
+  NUMBER_OF_PROFILES
 };
 
 
@@ -142,8 +142,7 @@ enum Tier
 */
 enum Level
 {
-  LEVEL_AUTO = -1,
-  LEVEL_NONE = 0,
+  LEVEL_AUTO = 0,
   LEVEL1   = 16,
   LEVEL2   = 32,
   LEVEL2_1 = 35,
@@ -159,6 +158,7 @@ enum Level
   LEVEL6_2 = 102,
   LEVEL6_3 = 105,
   LEVEL15_5 = 255,
+  NUMBER_OF_LEVELS
 };
 
 
@@ -283,15 +283,6 @@ public:
 private:
   bool checkExperimental( bool bflag, const char* message );
   bool confirmParameter ( bool bflag, const char* message );
-
-  /**
-    This method checks if the current (base) configuration is valid.
-    Only needed base parameter as resolution and frame rate  are being checked.
-    \param[in]  none
-    \retval     bool true: error, false: ok
-    \pre        none
-  */
-  bool checkBaseParams();
 
   /**
     This method checks if the current configuration is valid.

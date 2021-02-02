@@ -239,13 +239,13 @@ int testLibParameterRanges()
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4 }, true );
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
-  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 0,15,31,256, }, true );
+  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 15,31,256, }, true );
 
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
 
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 1,2,9 } );
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,3,4,5,6,7,8,10 }, true );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,1,2 } );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 3,4,5,6,7,8,9,10 }, true );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 

@@ -86,7 +86,57 @@ bool VVEncCfg::initCfgParameter()
 
   m_confirmFailed = false;
 
-  m_confirmFailed = checkBaseParams();
+  // check for valid base parameter
+  CONFIRM_PARAMETER_OR_RETURN(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input sesolution not set");
+
+  confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                  "Intern chroma format must be either 400, 420, 422 or 444" );
+  confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
+  confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
+
+  confirmParameter( m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
+  confirmParameter( m_TicksPerSecond <= 0 || m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
+
+  int temporalRate   = m_FrameRate;
+  int temporalScale  = 1;
+
+  switch( m_FrameRate )
+  {
+  case 23: temporalRate = 24000; temporalScale = 1001; break;
+  case 29: temporalRate = 30000; temporalScale = 1001; break;
+  case 59: temporalRate = 60000; temporalScale = 1001; break;
+  default: break;
+  }
+
+  confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+
+  confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
+
+  confirmParameter( m_IntraPeriod < 0,              "IDR period (in frames) must be >= 0");
+  confirmParameter( m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
+
+  confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 64,                                                             "GOP size must be <= 64" );
+  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
+
+  confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
+
+  confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
+  confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1,                               "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,                                     "Only one pass or two pass encoding supported" );
+
+  if( 0 == m_RCTargetBitrate )
+   {
+     confirmParameter( m_hrdParametersPresent,              "hrdParameters present requires rate control" );
+     confirmParameter( m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+     confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+   }
+
+  confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
+
+  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
   if ( m_confirmFailed )
   {
@@ -105,7 +155,6 @@ bool VVEncCfg::initCfgParameter()
   if( m_profile == Profile::PROFILE_AUTO )
   {
     const int maxBitDepth= std::max(m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat==ChromaFormat::CHROMA_400 ? CH_L : CH_C]);
-    m_profile=Profile::PROFILE_NONE;
 
     if (m_internChromaFormat==ChromaFormat::CHROMA_400 || m_internChromaFormat==ChromaFormat::CHROMA_420)
     {
@@ -125,21 +174,7 @@ bool VVEncCfg::initCfgParameter()
 
   if( m_level == Level::LEVEL_AUTO )
   {
-    std::vector<Level> levelVec = { LEVEL1, LEVEL2, LEVEL2_1, LEVEL3, LEVEL3_1,
-                                    LEVEL4, LEVEL4_1, LEVEL5, LEVEL5_1, LEVEL5_2,
-                                    LEVEL6, LEVEL6_1, LEVEL6_2, LEVEL6_3,
-                                    LEVEL15_5 };
-
-    for( auto & l : levelVec )
-    {
-      const LevelTierFeatures* lvl = LevelTierFeatures::getLevelTierFeatures(l);
-      if ( m_SourceWidth <= (int)lvl->getMaxPicWidthInLumaSamples() &&
-           m_SourceHeight <= (int)lvl->getMaxPicHeightInLumaSamples() )
-      {
-        m_level = (Level)l;
-        break;
-      }
-    }
+    m_level = LevelTierFeatures::getLevelForInput( m_SourceWidth, m_SourceHeight );
   }
 
   if ( m_InputQueueSize <= 0 )
@@ -1240,81 +1275,15 @@ bool VVEncCfg::initCfgParameter()
   return( m_confirmFailed );
 }
 
-bool VVEncCfg::checkBaseParams()
-{
-  #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
-
-  m_confirmFailed = false;
-
-  CONFIRM_PARAMETER_OR_RETURN(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input sesolution not set");
-
-  confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                  "Intern chroma format must be either 400, 420, 422 or 444" );
-  confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
-  confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
-  confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
-
-  confirmParameter( m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
-  confirmParameter( m_TicksPerSecond <= 0 || m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
-
-  int temporalRate   = m_FrameRate;
-  int temporalScale  = 1;
-
-  switch( m_FrameRate )
-  {
-  case 23: temporalRate = 24000; temporalScale = 1001; break;
-  case 29: temporalRate = 30000; temporalScale = 1001; break;
-  case 59: temporalRate = 60000; temporalScale = 1001; break;
-  default: break;
-  }
-
-  confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
-
-  confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
-
-  confirmParameter( m_IntraPeriod < 0,              "IDR period (in frames) must be >= 0");
-  confirmParameter( m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
-
-  confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
-  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( m_GOPSize > 64,                                                             "GOP size must be <= 64" );
-  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
-
-  confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
-
-  confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
-  confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1,                               "Only single pass encoding supported, when rate control is disabled" );
-  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,                                     "Only one pass or two pass encoding supported" );
-
-  if( 0 == m_RCTargetBitrate )
-   {
-     confirmParameter( m_hrdParametersPresent,              "hrdParameters present requires rate control" );
-     confirmParameter( m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
-     confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
-   }
-
-  confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
-
-  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
-
-  return m_confirmFailed;
-}
-
 bool VVEncCfg::checkCfgParameter( )
 {
   #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
 
   // run base check first
-  m_confirmFailed = checkBaseParams();
-  if( m_confirmFailed )
-  {
-    return( m_confirmFailed );
-  }
-
-  CONFIRM_PARAMETER_OR_RETURN( m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
+  CONFIRM_PARAMETER_OR_RETURN( m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
   CONFIRM_PARAMETER_OR_RETURN( (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
 
-  CONFIRM_PARAMETER_OR_RETURN( m_level   == Level::LEVEL_NONE, "can not determin level");
+  CONFIRM_PARAMETER_OR_RETURN( m_level   == Level::LEVEL_AUTO, "can not determin level");
 
   CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
   CONFIRM_PARAMETER_OR_RETURN( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
@@ -2238,7 +2207,6 @@ static inline std::string getProfileStr( int profile )
   std::string cT;
   switch( profile )
   {
-    case Profile::PROFILE_NONE                         : cT = "none"; break;
     case Profile::MAIN_10                              : cT = "main_10"; break;
     case Profile::MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
     case Profile::MAIN_10_444                          : cT = "main_10_444"; break;
@@ -2259,7 +2227,6 @@ static inline std::string getLevelStr( int level )
   switch( level )
   {
     case Level::LEVEL_AUTO: cT = "auto";    break;
-    case Level::LEVEL_NONE: cT = "none";    break;
     case Level::LEVEL1    : cT = "1";       break;
     case Level::LEVEL2    : cT = "2";       break;
     case Level::LEVEL2_1  : cT = "2.1";     break;
