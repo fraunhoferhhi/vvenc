@@ -89,7 +89,6 @@ bool VVEncCfg::initCfgParameter()
   // check for valid base parameter
   CONFIRM_PARAMETER_OR_RETURN(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input sesolution not set");
 
-  confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                  "Intern chroma format must be either 400, 420, 422 or 444" );
   confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
   confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
   confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
@@ -1297,6 +1296,7 @@ bool VVEncCfg::checkCfgParameter( )
 
   CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
   CONFIRM_PARAMETER_OR_RETURN( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
+  CONFIRM_PARAMETER_OR_RETURN( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
 
   switch ( m_conformanceWindowMode)
   {
