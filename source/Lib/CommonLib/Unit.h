@@ -502,19 +502,6 @@ typedef UnitTraverser<TransformUnit>  TUTraverser;
 typedef UnitTraverser<const CodingUnit>     cCUTraverser;
 typedef UnitTraverser<const TransformUnit>  cTUTraverser;
 
-template<typename T>
-struct SecureUnitTraverser
-{
-  T* begin;
-  T* last;
-
-  SecureUnitTraverser(                     ) : begin( nullptr ), last( nullptr ) { }
-  SecureUnitTraverser( T* _begin, T* _last ) : begin( _begin  ), last( _last   ) { }
-};
-
-typedef SecureUnitTraverser< const CodingUnit>     cCUSecureTraverser;
-typedef SecureUnitTraverser< const TransformUnit>  cTUSecureTraverser;
-
 } // namespace vvenc
 
 //! \}

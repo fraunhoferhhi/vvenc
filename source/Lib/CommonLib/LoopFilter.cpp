@@ -560,14 +560,11 @@ void LoopFilter::calcFilterStrengthsCTU( CodingStructure& cs, const UnitArea& ct
   for( int ch = 0; ch < maxNumChannelType; ch++ )
   {
     const ChannelType chType = ChannelType( ch );
-    cCUSecureTraverser trv = cs.secureTraverseCUs( CS::getArea( cs, ctuArea, chType, TREE_D ), chType );
-    const auto *cuLf = trv.begin;
 
-    if( cuLf ) do
+    for( const auto& cuLf : cs.traverseCUs( CS::getArea( cs, ctuArea, chType, TREE_D ), chType ) )
     {
-      LoopFilter::calcFilterStrengths( *cuLf );
+      LoopFilter::calcFilterStrengths( cuLf );
     }
-    while( cuLf != trv.last && (0 != ( cuLf = cuLf->next )) );
   }
 }
 
