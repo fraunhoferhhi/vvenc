@@ -171,14 +171,6 @@ enum DecodingRefreshType
   DRT_RECOVERY_POINT_SEI = 3
 };
 
-enum RateControlMode
-{
-  RCM_OFF           = 0,
-  RCM_CTU_LEVEL     = 1,
-  RCM_PICTURE_LEVEL = 2,
-  RCM_GOP_LEVEL     = 3
-};
-
 enum SegmentMode
 {
   SEG_OFF,
@@ -255,13 +247,13 @@ public:
 
   int                 m_QP                             = 32;            ///< QP value of key-picture (integer)
   unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
-  int                 m_usePerceptQPATempFiltISlice    = -1;            ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode
-  int                 m_RCNumPasses                    = 1;
   int                 m_RCTargetBitrate                = 0;
+  int                 m_RCNumPasses                    = 1;
 
   SegmentMode         m_SegmentMode                    = SEG_OFF;
+
+  int                 m_numThreads                              = 0;    ///< number of worker threads
 
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
