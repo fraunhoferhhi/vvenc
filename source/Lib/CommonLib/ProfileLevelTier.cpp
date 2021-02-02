@@ -131,7 +131,6 @@ Level LevelTierFeatures::getLevelForInput( uint32_t width, uint32_t height )
         info.level != LEVEL_AUTO )
     {
       return info.level;
-      break;
     }
   }
 
