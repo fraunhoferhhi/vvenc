@@ -536,8 +536,10 @@ bool VVEncCfg::initCfgParameter()
   if (m_usePerceptQPATempFiltISlice < 0 )
   {
     m_usePerceptQPATempFiltISlice = 0;
-    if ( (m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
-#if 0 // TODO hlm, Feb. 2021: before removing this code, make sure the change doesn't degrade the visual quality on any VVC HD verification test sequence
+    if ( ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
+#if 1
+        && m_QP >= 17 // synchronized with the MCTF activation condition, see below
+#else // TODO hlm, Feb. 2021: before removing this code, make sure the change doesn't degrade the visual quality on any VVC HD verification test sequence
         && m_RCRateControlMode > 0
         && m_RCNumPasses == 2
 #endif
@@ -1663,6 +1665,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
+      if (m_MCTF == 0) m_usePerceptQPATempFiltISlice = 0;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
