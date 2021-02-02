@@ -82,12 +82,10 @@ bool VVEncCfg::checkExperimental( bool bflag, const char* message )
 
 bool VVEncCfg::initCfgParameter()
 {
-#define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
-
   m_confirmFailed = false;
 
   // check for valid base parameter
-  CONFIRM_PARAMETER_OR_RETURN(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input sesolution not set");
+  confirmParameter(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input resolution not set");
 
   confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
   confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
@@ -1286,17 +1284,15 @@ bool VVEncCfg::initCfgParameter()
 
 bool VVEncCfg::checkCfgParameter( )
 {
-  #define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
-
   // run base check first
-  CONFIRM_PARAMETER_OR_RETURN( m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
-  CONFIRM_PARAMETER_OR_RETURN( (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+  confirmParameter( m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
+  confirmParameter( (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
 
-  CONFIRM_PARAMETER_OR_RETURN( m_level   == Level::LEVEL_AUTO, "can not determin level");
+  confirmParameter( m_level   == Level::LEVEL_AUTO, "can not determin level");
 
-  CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
-  CONFIRM_PARAMETER_OR_RETURN( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  CONFIRM_PARAMETER_OR_RETURN( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
+  confirmParameter( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
+  confirmParameter( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
+  confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
 
   switch ( m_conformanceWindowMode)
   {
@@ -1304,8 +1300,8 @@ bool VVEncCfg::checkCfgParameter( )
       break;
   case 1:
       // automatic padding to minimum CU size
-      CONFIRM_PARAMETER_OR_RETURN( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
-      CONFIRM_PARAMETER_OR_RETURN( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
+      confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
+      confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
       break;
   case 2:
       break;
@@ -1322,34 +1318,39 @@ bool VVEncCfg::checkCfgParameter( )
       break;
   }
 
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
+  confirmParameter(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
+  confirmParameter(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
+  confirmParameter(m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
+
+  if ( m_confirmFailed )
+  {
+    return m_confirmFailed;
+  }
 
   int qpBdOffsetC = 6 * (m_internalBitDepth[CH_C] - 8);
 
-  CONFIRM_PARAMETER_OR_RETURN(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.")
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
-  for (int i = 0; i < m_qpInValsCb.size() - 1; i++)
+  confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+  confirmParameter(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
+  for (size_t i = 0; i < m_qpInValsCb.size() - 1; i++)
   {
-    CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
-    CONFIRM_PARAMETER_OR_RETURN(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    confirmParameter(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    confirmParameter(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
   }
   if (!m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
   {
-    CONFIRM_PARAMETER_OR_RETURN(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.")
-    CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
-    for (int i = 0; i < m_qpInValsCr.size() - 1; i++)
+    confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    confirmParameter(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
+    for (size_t i = 0; i < m_qpInValsCr.size() - 1; i++)
     {
-      CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      CONFIRM_PARAMETER_OR_RETURN(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      confirmParameter(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      confirmParameter(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
-    CONFIRM_PARAMETER_OR_RETURN(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.")
-    CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
-    for (int i = 0; i < m_qpInValsCbCr.size() - 1; i++)
+    confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    confirmParameter(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
+    for (size_t i = 0; i < m_qpInValsCbCr.size() - 1; i++)
     {
-      CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      CONFIRM_PARAMETER_OR_RETURN(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      confirmParameter(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      confirmParameter(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
   }
 
@@ -1363,7 +1364,7 @@ bool VVEncCfg::checkCfgParameter( )
     confirmParameter( m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
   }
 
-  confirmParameter( (m_MSBExtendedBitDepth[CH_L  ] < m_inputBitDepth[CH_L  ]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
+  confirmParameter( (m_MSBExtendedBitDepth[CH_L] < m_inputBitDepth[CH_L]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
   confirmParameter( (m_MSBExtendedBitDepth[CH_C] < m_inputBitDepth[CH_C]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
 
   const uint32_t maxBitDepth=(m_internChromaFormat==CHROMA_400) ? m_internalBitDepth[CH_L] : std::max(m_internalBitDepth[CH_L], m_internalBitDepth[CH_C]);
@@ -1493,7 +1494,7 @@ bool VVEncCfg::checkCfgParameter( )
 
   if (m_lumaLevelToDeltaQPEnabled)
   {
-    CONFIRM_PARAMETER_OR_RETURN(m_usePerceptQPA != 0 && m_usePerceptQPA != 5, "LumaLevelToDeltaQP and PerceptQPA conflict");
+    confirmParameter(m_usePerceptQPA != 0 && m_usePerceptQPA != 5, "LumaLevelToDeltaQP and PerceptQPA conflict");
     msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
   }
 

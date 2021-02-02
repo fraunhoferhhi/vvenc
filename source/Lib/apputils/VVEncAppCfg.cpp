@@ -998,33 +998,33 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // check own parameters
   //
-  m_confirmFailed = false;
+  bool error = false;
   if( m_bitstreamFileName.empty() )
   {
     cout <<  "error: A bitstream file name must be specified (BitstreamFile)" << std::endl;
-    m_confirmFailed = true;
+    error = true;
   }
   else
   {
     if( m_decodeBitstreams[0] == m_bitstreamFileName )
     {
       cout <<  "error: Debug bitstream and the output bitstream cannot be equal" << std::endl;
-      m_confirmFailed = true;
+      error = true;
     }
     if( m_decodeBitstreams[1] == m_bitstreamFileName )
     {
       cout <<  "error: Decode2 bitstream and the output bitstream cannot be equal" << std::endl;
-      m_confirmFailed = true;
+      error = true;
     }
   }
 
   if( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT )
   {
     cout <<  "error: Input chroma format must be either 400, 420, 422 or 444" << std::endl;
-    m_confirmFailed = true;
+    error = true;
   }
 
-  if ( m_confirmFailed )
+  if ( error )
   {
     return false;
   }
@@ -1044,20 +1044,25 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
         || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) )
     {
       cout <<  "error: Invalid output bit-depth or image width for packed YUV output, aborting" << std::endl;
-      m_confirmFailed = true;
+      error = true;
     }
     if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
           || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
     {
       cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
-      m_confirmFailed = true;
+      error = true;
     }
-    if ( m_confirmFailed )
+
+    if ( error )
     {
       return false;
     }
   }
 
+  if ( VVEncCfg::initCfgParameter() )
+  {
+    return false;
+  }
 
   return true;
 }

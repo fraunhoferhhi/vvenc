@@ -253,7 +253,7 @@ public:
 
   SegmentMode         m_SegmentMode                    = SEG_OFF;
 
-  int                 m_numThreads                              = 0;    ///< number of worker threads
+  int                 m_numThreads                     = 0;             ///< number of worker threads
 
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
