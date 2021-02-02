@@ -282,10 +282,11 @@ struct CodedCUInfo
   bool isSkip;
   bool isMMVDSkip;
   bool isIBC;
+  uint8_t BcwIdx;
   bool validMv[NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
   Mv   saveMv [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  int  ctuRsAddr, poc;
 
-  uint8_t BcwIdx;
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
   void setMv  ( const RefPicList refPicList, const int iRefIdx, const Mv& rMv );
 };
@@ -307,6 +308,7 @@ public:
   virtual ~CacheBlkInfoCtrl() {}
 
   CodedCUInfo& getBlkInfo( const UnitArea& area );
+  void         initBlk( const UnitArea& area, int poc );
 };
 
 struct BestEncodingInfo
