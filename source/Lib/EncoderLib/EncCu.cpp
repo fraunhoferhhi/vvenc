@@ -3410,6 +3410,13 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
     cu.tileIdx  = 0;
     cu.mmvdSkip = false;
 
+#if CB_DEB
+    if( cu.slice->poc == DEB_POC && cu.lwidth() == DEB_WIDTH && cu.lheight() == DEB_HEIGHT && cu.lx() == DEB_POSX && cu.ly() == DEB_POSY )
+    {
+      printf("\nbase");
+    }
+#endif
+
     cu.regularMergeFlag = false;
     CU::getAffineMergeCand(cu, affineMergeCtx);
     cu.regularMergeFlag = true;
@@ -3518,10 +3525,25 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
           CU::spanMotionInfo(cu);
         }
 
+#if CB_DEB
+        if( cu.slice->poc == DEB_POC && cu.lwidth() == DEB_WIDTH && cu.lheight() == DEB_HEIGHT && cu.lx() == DEB_POSX && cu.ly() == DEB_POSY )
+        {
+          printf("\nbase");
+        }
+#endif
+
         distParam.cur.buf = m_SortedPelUnitBufs.getTestBuf().Y().buf;
         cu.mcControl = 2;
         m_cInterSearch.motionCompensation(cu, m_SortedPelUnitBufs.getTestBuf(), REF_PIC_LIST_X);
         cu.mcControl = 0;
+
+#if CB_DEB
+        if( uiMergeCand == 0 && cu.slice->poc == DEB_POC && cu.lwidth() == DEB_WIDTH && cu.lheight() == DEB_HEIGHT && cu.lx() == DEB_POSX && cu.ly() == DEB_POSY )
+        {
+//          printf("\nbase");
+          m_SortedPelUnitBufs.getTestBuf().Y().printBlock();
+        }
+#endif
 
         Distortion uiSad = distParam.distFunc(distParam);
         uint32_t   uiBitsCand = uiMergeCand + 1;

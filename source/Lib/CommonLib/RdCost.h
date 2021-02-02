@@ -118,7 +118,9 @@ private:
   double                  m_DistScaleUnadjusted;
 
   const uint32_t*         m_reshapeLumaLevelToWeightPLUT;
+#if !OLDMC
   const double*           m_lumaLevelToWeightPLUT; //ALF
+#endif
 
   uint32_t                m_signalType;
   double                  m_chromaWeight;
@@ -133,7 +135,9 @@ private:
   double                  m_motionLambda;
   int                     m_iCostScale;
 
+#if !OLDMC
   double                  m_dCost; // for ibc
+#endif
 public:
   RdCost();
   virtual ~RdCost();

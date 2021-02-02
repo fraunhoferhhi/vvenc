@@ -78,6 +78,17 @@ namespace vvenc {
 
 #define SCC_MCTF 1
 
+#define OLDMC                                             0
+
+#define CB_DEB                                            0
+#if CB_DEB
+#define DEB_POC                                           16
+#define DEB_POSX                                          88
+#define DEB_POSY                                          8
+#define DEB_WIDTH                                         8
+#define DEB_HEIGHT                                        8
+#endif
+
 // ====================================================================================================================
 // General settings
 // ====================================================================================================================
@@ -128,7 +139,7 @@ namespace vvenc {
 #endif
 
 // SIMD optimizations
-#define SIMD_ENABLE                                       1
+#define SIMD_ENABLE                                       1 && !OLDMC
 #define ENABLE_SIMD_OPT                                 ( SIMD_ENABLE && !RExt__HIGH_BIT_DEPTH_SUPPORT )    ///< SIMD optimizations, no impact on RD performance
 #define ENABLE_SIMD_OPT_MCIF                            ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for the interpolation filter, no impact on RD performance
 #define ENABLE_SIMD_OPT_BUFFER                          ( 1 && ENABLE_SIMD_OPT )                            ///< SIMD optimization for the buffer operations, no impact on RD performance

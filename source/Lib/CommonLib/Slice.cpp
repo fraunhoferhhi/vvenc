@@ -438,12 +438,19 @@ void Slice::constructRefPicList(PicList& rcListPic, bool extBorder)
 
 void Slice::updateRefPicCounter( int step )
 {
+#if CB_DEB && 0
+  printf( "\nbase poc: %2d  step= %d\n", poc, step );
+#endif
   for ( int refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
   {
     int numOfActiveRef = numRefIdx[ refList ];
     for ( int i = 0; i < numOfActiveRef; i++ )
     {
       refPicList[ refList ][ i ]->refCounter += step;
+#if CB_DEB && 0
+//      refPicList[ refList ][ i ]->unscaledPic->refCounter += step;
+      printf("list: %d  poc: %d  refCounter: %d  unscaledRefCounter: %d\n", refList, refPicList[ refList ][ i ]->poc, refPicList[ refList ][ i ]->refCounter, refPicList[ refList ][ i ]->unscaledPic->refCounter );
+#endif
     }
   }
 }

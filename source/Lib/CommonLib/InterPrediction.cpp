@@ -372,6 +372,13 @@ void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, c
     if( cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 )
     {
       xPredInterUni ( cu, refPicList, puBuf[refList], true, bdofApplied );
+#if CB_DEB && 0
+      if( cu.slice->poc == 2 && cu.lwidth() == 32 && cu.lheight() == 16 && cu.lx() == 544 && cu.ly() == 0 )
+      {
+        puBuf[refList].Y().printBlock();
+        printf("\nbase");
+      }
+#endif
     }
     else
     {
@@ -632,6 +639,12 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
                                            , const int32_t srcPadStride
                                           )
 {
+#if CB_DEB && 0
+  if( cu.slice->poc == 2 && cu.lwidth() == 32 && cu.lheight() == 16 && cu.lx() == 544 && cu.ly() == 0 && compID == COMP_Y )
+  {
+    printf("\nbase");
+  }
+#endif
   const ChromaFormat  chFmt = cu.chromaFormat;
   const bool          rndRes = !bi;
 

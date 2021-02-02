@@ -161,6 +161,10 @@ struct AreaBuf : public Size
   void scaleSignal          ( const int scale, const bool dir , const ClpRng& clpRng);
   bool compare              ( const AreaBuf<const T>& other ) const;
 
+#if CB_DEB
+  void printBlock           () const;
+#endif
+  
         T& at( const int& x, const int& y )          { return buf[y * stride + x]; }
   const T& at( const int& x, const int& y ) const    { return buf[y * stride + x]; }
 
