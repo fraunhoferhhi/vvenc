@@ -1468,15 +1468,10 @@ void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const Un
 
   bool anyCoded = false;
   int numberOfSkipPixel = 0;
-  cCUSecureTraverser trv = cs.secureTraverseCUs( ctuArea, CH_L );
+  for( const auto& cu : cs.traverseCUs( ctuArea, CH_L ) )
   {
-    const auto *cu = trv.begin;
-    do
-    {
-      numberOfSkipPixel += cu->skip * cu->lumaSize().area();
-      anyCoded          |= !cu->skip || cu->rootCbf;
-    }
-    while( cu != trv.last && (0!=(cu = cu->next)) );
+    numberOfSkipPixel +=  cu.skip *  cu.lumaSize().area();
+    anyCoded          |= !cu.skip || cu.rootCbf;
   }
   double skipRatio = (double)numberOfSkipPixel / ctuArea.lumaSize().area();
   CodingUnit* cu = cs.getCU( ctuArea.lumaPos(), CH_L, TREE_D );
