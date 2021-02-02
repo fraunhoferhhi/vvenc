@@ -538,12 +538,15 @@ bool VVEncCfg::initCfgParameter()
     m_usePerceptQPATempFiltISlice = 0;
     if ( ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
         && m_QP >= 17 // synchronized with the MCTF activation condition, see below
-        && m_QP <= MAX_QP_PERCEPT_QPA
-        && m_GOPSize > 8
-        && m_IntraPeriod >= 2 * m_GOPSize )
+        && m_GOPSize > 8 )
     {
-      m_usePerceptQPATempFiltISlice = (m_RCRateControlMode > 0 && m_RCNumPasses == 2 ? 2 : 1);
+      m_usePerceptQPATempFiltISlice = (m_RCRateControlMode > 0 && m_RCNumPasses == 2 && m_QP <= MAX_QP_PERCEPT_QPA && m_IntraPeriod >= 2 * m_GOPSize ? 2 : 1);
     }
+  }
+  if ( m_usePerceptQPATempFiltISlice == 2
+      && (m_QP < 27 || m_QP > MAX_QP_PERCEPT_QPA || m_GOPSize <= 8 || m_IntraPeriod < 2 * m_GOPSize) )
+  {
+    m_usePerceptQPATempFiltISlice = (m_QP < 17 ? 0 : 1); // disable temp. pump. red
   }
   if (m_cuQpDeltaSubdiv < 0)
   {
