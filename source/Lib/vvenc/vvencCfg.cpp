@@ -459,6 +459,33 @@ bool VVEncCfg::initCfgParameter()
     msg( WARNING, "disable MCTF for QP < 17\n");
     m_MCTF = 0;
   }
+  if( m_MCTF )
+  {
+    if( m_MCTFFrames.empty() )
+    {
+      if( m_GOPSize == 32 )
+      {
+        m_MCTFStrengths.push_back(0.28125); //  9/32
+        m_MCTFFrames.push_back(8);
+        m_MCTFStrengths.push_back(0.5625);  // 18/32
+        m_MCTFFrames.push_back(16);
+        m_MCTFStrengths.push_back(0.84375); // 27/32
+        m_MCTFFrames.push_back(32);
+      }
+      else if( m_GOPSize == 16 )
+      {
+        m_MCTFStrengths.push_back(0.4); // ~12.75/32
+        m_MCTFFrames.push_back(8);
+        m_MCTFStrengths.push_back(0.8); // ~25.50/32
+        m_MCTFFrames.push_back(16);
+      }
+      else if( m_GOPSize == 8 )
+      {
+        m_MCTFStrengths.push_back(0.65625); // 21/32
+        m_MCTFFrames.push_back(8);
+      }
+    }
+  }
 
   if (m_lumaLevelToDeltaQPEnabled)
   {
@@ -1219,34 +1246,6 @@ bool VVEncCfg::initCfgParameter()
   if(m_maxNumReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
   {
     m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
-  }
-
-  if( m_MCTF )
-  {
-    if( m_MCTFFrames.empty() )
-    {
-      if( m_GOPSize == 32 )
-      {
-        m_MCTFStrengths.push_back(0.28125); //  9/32
-        m_MCTFFrames.push_back(8);
-        m_MCTFStrengths.push_back(0.5625);  // 18/32
-        m_MCTFFrames.push_back(16);
-        m_MCTFStrengths.push_back(0.84375); // 27/32
-        m_MCTFFrames.push_back(32);
-      }
-      else if( m_GOPSize == 16 )
-      {
-        m_MCTFStrengths.push_back(0.4);
-        m_MCTFFrames.push_back(8);
-        m_MCTFStrengths.push_back(0.8);
-        m_MCTFFrames.push_back(16);
-      }
-      else if( m_GOPSize == 8 )
-      {
-        m_MCTFStrengths.push_back(0.65625); // 21/32
-        m_MCTFFrames.push_back(8);
-      }
-    }
   }
 
   if ( ! m_MMVD && m_allowDisFracMMVD )
