@@ -454,9 +454,7 @@ bool VVEncCfg::initCfgParameter()
     m_JointCbCrMode = false;
   }
 
-  confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
-
-  if( m_MCTF && m_QP < 17 )
+  if ( m_MCTF && m_QP < 17 )
   {
     msg( WARNING, "disable MCTF for QP < 17\n");
     m_MCTF = 0;
@@ -468,7 +466,7 @@ bool VVEncCfg::initCfgParameter()
     m_usePerceptQPA = 5; // force QPA mode
   }
 
-  if (m_usePerceptQPATempFiltISlice < 0 )
+  if ( m_usePerceptQPATempFiltISlice < 0 )
   {
     m_usePerceptQPATempFiltISlice = 0;
     if ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 ) // auto mode for temp.filt.
@@ -1513,6 +1511,7 @@ bool VVEncCfg::checkCfgParameter( )
     msg(WARNING, "***************************************************************************\n");
   }
 
+  confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
   confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
