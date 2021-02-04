@@ -132,6 +132,7 @@ bool VVEncCfg::initCfgParameter()
    }
 
   confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
+  confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_HLG,  "HdrMode must be in the range 0 - 2 (off,hdr10,hlg)" );
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
@@ -240,6 +241,67 @@ bool VVEncCfg::initCfgParameter()
   if( m_fastInterSearchMode  == FASTINTERSEARCH_AUTO )
   {
     m_fastInterSearchMode = FASTINTERSEARCH_MODE1;
+  }
+
+  if( m_HdrMode == HDRMode::HDR_HDR10_PQ )
+  {
+    m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
+    m_LMCSOffset = 1;
+    m_useSameChromaQPTables   = false;
+    m_verCollocatedChromaFlag = true;
+    m_calculateHdrMetrics     = true;
+
+    if( !m_wcgChromaQpControl.enabled )
+    {
+      m_wcgChromaQpControl.enabled = true;
+      m_wcgChromaQpControl.chromaQpScale   = -0.46;
+      m_wcgChromaQpControl.chromaQpOffset  = 9.26;
+      m_wcgChromaQpControl.chromaCbQpScale = 1.14;
+      m_wcgChromaQpControl.chromaCrQpScale = 1.79;
+    }
+
+    VVEncCfg cBaseCfg;
+    if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    {
+      m_qpInValsCb = { 13,20,36,38,43,54 };
+    }
+    if( m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    {
+      m_qpOutValsCb = { 13,21,29,29,32,37 };
+    }
+    if( m_qpInValsCr == cBaseCfg.m_qpInValsCr )
+    {
+      m_qpInValsCr = { 13,20,37,41,44,54 };
+    }
+    if( m_qpOutValsCr == cBaseCfg.m_qpOutValsCr )
+    {
+      m_qpOutValsCr = { 13,21,27,29,32,37 };
+    }
+    if( m_qpInValsCbCr == cBaseCfg.m_qpInValsCbCr )
+    {
+      m_qpInValsCbCr = { 12,21,41,43,54 };
+    }
+    if( m_qpOutValsCbCr == cBaseCfg.m_qpOutValsCbCr )
+    {
+      m_qpOutValsCbCr = { 12,22,30,32,37 };
+    }
+  }
+  else if( m_HdrMode == HDRMode::HDR_HLG )
+  {
+    m_reshapeSignalType = RESHAPE_SIGNAL_HLG;
+    m_LMCSOffset = 0;
+    m_useSameChromaQPTables = true;
+    m_verCollocatedChromaFlag = true;
+
+    VVEncCfg cBaseCfg;
+    if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    {
+      m_qpInValsCb = { 9, 23, 33, 42 };
+    }
+    if( m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    {
+      m_qpOutValsCb = { 9, 24, 33, 37 };
+    }
   }
 
   switch ( m_conformanceWindowMode)
@@ -1854,15 +1916,21 @@ bool VVEncCfg::checkCfgParameter( )
 int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, int qp, PresetMode preset )
 {
   int iRet = 0;
-  m_QP                  = qp;                       // quantization parameter 0-63
   m_SourceWidth         = width;                    // luminance width of input picture
   m_SourceHeight        = height;                   // luminance height of input picture
+
   m_FrameRate           = framerate;                // temporal rate (fps)
   m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
-  m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
-  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+
   m_inputBitDepth[0]    = 8;                        // input bitdepth
   m_internalBitDepth[0] = 10;                       // internal bitdepth
+
+  m_QP                  = qp;                       // quantization parameter 0-63
+  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+
+  m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
+
+  m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
 
   iRet = initPreset( preset );
 
@@ -1871,16 +1939,8 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
 
 int VVEncCfg::initPreset( PresetMode preset )
 {
-  m_qpInValsCb.clear();
-  m_qpInValsCb.push_back( 17 );
-  m_qpInValsCb.push_back( 22 );
-  m_qpInValsCb.push_back( 34 );
-  m_qpInValsCb.push_back( 42 );
-  m_qpOutValsCb.clear();
-  m_qpOutValsCb.push_back( 17 );
-  m_qpOutValsCb.push_back( 23 );
-  m_qpOutValsCb.push_back( 35 );
-  m_qpOutValsCb.push_back( 39 );
+  m_qpInValsCb  = { 17, 22, 34, 42 };
+  m_qpOutValsCb = { 17, 23, 35, 39};
 
   // basic settings
   m_intraQPOffset                 = -3;

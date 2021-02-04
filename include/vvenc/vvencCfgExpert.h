@@ -339,10 +339,10 @@ public:
   double              m_adLambdaModifier[ MAX_TLAYER ]          = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }; ///< Lambda modifier array for each temporal layer
   std::vector<double> m_adIntraLambdaModifier;                                                           ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
   double              m_dIntraQpFactor                          = -1.0;                                  ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
-  std::vector<int>    m_qpInValsCb                              = { 25, 33, 43 };                        ///< qp input values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpInValsCb                              = { 17, 22, 34, 42 };                    ///< qp input values used to derive the chroma QP mapping table
   std::vector<int>    m_qpInValsCr                              = { 0 };                                 ///< qp input values used to derive the chroma QP mapping table
   std::vector<int>    m_qpInValsCbCr                            = { 0 };                                 ///< qp input values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpOutValsCb                             = { 25, 32, 37 };                        ///< qp output values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpOutValsCb                             = { 17, 23, 35, 39 };                    ///< qp output values used to derive the chroma QP mapping table
   std::vector<int>    m_qpOutValsCr                             = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
   std::vector<int>    m_qpOutValsCbCr                           = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
   int                 m_cuQpDeltaSubdiv                         = -1;                                    ///< Maximum subdiv for CU luma Qp adjustment (0:default)

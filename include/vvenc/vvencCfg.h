@@ -179,6 +179,14 @@ enum SegmentMode
   SEG_LAST
 };
 
+
+enum HDRMode
+{
+  HDR_OFF      = 0,
+  HDR_HDR10_PQ,
+  HDR_HLG
+};
+
 enum NalUnitType
 {
   NAL_UNIT_CODED_SLICE_TRAIL = 0,   // 0
@@ -257,6 +265,8 @@ public:
 
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
+
+  HDRMode             m_HdrMode                        = HDR_OFF;
 public:
 
   VVEncCfg()

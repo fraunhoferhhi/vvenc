@@ -237,6 +237,18 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 };
 
 
+const std::vector<SVPair<HDRMode>> HdrModeToIntMap =
+{
+  { "off",                 HDR_OFF },
+  { "hdr",                 HDR_HDR10_PQ },
+  { "hdr10",               HDR_HDR10_PQ },
+  { "pq",                  HDR_HDR10_PQ },
+  { "hlg",                 HDR_HDR10_PQ },
+  { "0",                   HDR_OFF },
+  { "1",                   HDR_HDR10_PQ },
+  { "2",                   HDR_HLG },
+};
+
 //// ====================================================================================================================
 //// string <-> enum
 //// ====================================================================================================================
@@ -291,10 +303,12 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
   IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
   IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
-  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap );
+  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
+  IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                      &HdrModeToIntMap       );
 
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
-  IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
+  IStreamToEnum<DecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,              &DecodingRefreshTypeToEnumMap );
+
 
   //
   // setup configuration parameters
@@ -343,17 +357,25 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
   ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
   ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
+  ;
 
-
+  opts.setSubSection("Profile, Level, Tier");
+  opts.addOptions()
   ("profile",           toProfile,                "select profile (main10, main10_stillpic)")
   ("level",             toLevel,                  "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3 15.5)")
   ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
+  ;
+
+  opts.setSubSection("HDR Options");
+  opts.addOptions()
+  ("hdr",               toHDRMode,                "enabled HDR mode (+SEI messages). If max-cll or master-display is set, HDR10/PQ is enabled (use 0,1 (hdr,hdr10,pq), 2 (hlg)")
    ;
 
   po::setDefaults( opts );
   std::ostringstream easyOpts;
   po::doHelp( easyOpts, opts );
 
+  opts.setSubSection("Encoder Options");
   opts.addOptions()
   ("internal-bitdepth",   m_internalBitDepth[0],       "internal bitdepth (8,10)")
   ("aud",                 m_AccessUnitDelimiter,       "Enable Access Unit Delimiter NALUs")
@@ -460,6 +482,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToVec<int>            toMCTFFrames                 ( &m_MCTFFrames   );
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode, &SegmentToEnumMap );
+  IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,     &HdrModeToIntMap       );
+
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
   IStreamToEnum<RateControlMode>     toRateControlMode      ( &m_RCRateControlMode, &RateControlModeToEnumMap );
 
@@ -529,6 +553,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for I Pictures (0:off, 1:on)")
   ;
+
+
+  opts.setSubSection("VUI and SEI options");
+  opts.addOptions()
+  ("hdr",                                             toHDRMode,                                        "enabled HDR mode (+SEI messages). If max-cll or master-display is set, HDR10/PQ is enabled (use 0,1 (hdr,hdr10,pq), 2 (hlg)")
+   ;
 
   po::setDefaults( opts );
   std::ostringstream easyOpts;

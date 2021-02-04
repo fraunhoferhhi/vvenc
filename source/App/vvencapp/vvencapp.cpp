@@ -138,7 +138,7 @@ int main( int argc, char* argv[] )
   std::string cOutputfile = "";
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-  vvencappCfg.initDefault( 1920, 1080, 60, 0, 32, vvenc::PresetMode::MEDIUM );
+  vvencappCfg.initDefault( 1920, 1080, 60 );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
