@@ -1857,16 +1857,9 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_QP                  = qp;                       // quantization parameter 0-63
   m_SourceWidth         = width;                    // luminance width of input picture
   m_SourceHeight        = height;                   // luminance height of input picture
-  m_GOPSize             = 32;                       //  gop size (1: intra only, 16, 32: hierarchical b frames)
-  m_DecodingRefreshType = vvenc::DRT_CRA;           // intra period refresh type
-  m_IntraPeriodSec      = 1;                        // intra period in seconds for IDR/CDR intra refresh/RAP flag (should be > 0)
-  m_IntraPeriod         = 0;                        // intra period in frames for IDR/CDR intra refresh/RAP flag (should be a factor of GopSize)
-  m_verbosity           = vvenc::VERBOSE;           // log level > 4 (VERBOSE) enables psnr/rate output
   m_FrameRate           = framerate;                // temporal rate (fps)
   m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
-  m_framesToBeEncoded   = 0;                        // max number of frames to be encoded
-  m_FrameSkip           = 0;                        // number of frames to skip before start encoding
-  m_numThreads          = -1;                       // number of worker threads (should not exceed the number of physical cpu's)
+  m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
   m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   m_inputBitDepth[0]    = 8;                        // input bitdepth
   m_internalBitDepth[0] = 10;                       // internal bitdepth

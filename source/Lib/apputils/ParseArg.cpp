@@ -114,7 +114,10 @@ namespace df
         else
         {
           names->opt_long.push_back(opt_name);
-          opt_long_map[opt_name].push_back(names);
+
+          std::string optLongLower = opt_name;
+          std::transform( optLongLower.begin(), optLongLower.end(), optLongLower.begin(), ::tolower );
+          opt_long_map[optLongLower].push_back(names);
         }
         opt_start += opt_end + 1;
       }
@@ -526,7 +529,10 @@ namespace df
       Options::NamesMap::iterator opt_it;
       if (allow_long)
       {
-        opt_it = opts.opt_long_map.find(name);
+        std::string optLongLower = name;
+        std::transform( optLongLower.begin(), optLongLower.end(), optLongLower.begin(), ::tolower );
+
+        opt_it = opts.opt_long_map.find(optLongLower);
         if (opt_it != opts.opt_long_map.end())
         {
           found = true;
@@ -579,6 +585,8 @@ namespace df
       size_t arg_opt_start = arg.find_first_not_of('-');
       size_t arg_opt_sep = arg.find_first_of('=');
       std::string option = arg.substr(arg_opt_start, arg_opt_sep - arg_opt_start);
+
+      std::transform( option.begin(), option.end(), option.begin(), ::tolower ); // compare option always in lower case
 
       unsigned extra_argc_consumed = 0;
       if (arg_opt_sep == std::string::npos)
