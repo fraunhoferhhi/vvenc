@@ -2007,7 +2007,6 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_useBDPCM                  = 2;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
-      if (m_MCTF == 0) m_usePerceptQPATempFiltISlice = 0;
       m_MTSImplicit               = 1;
       m_bUseSAO                   = 1;
       m_TMVPModeId                = 1;
