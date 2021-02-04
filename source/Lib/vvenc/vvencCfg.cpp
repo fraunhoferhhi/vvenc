@@ -454,6 +454,14 @@ bool VVEncCfg::initCfgParameter()
     m_JointCbCrMode = false;
   }
 
+  confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
+
+  if( m_MCTF && m_QP < 17 )
+  {
+    msg( WARNING, "disable MCTF for QP < 17\n");
+    m_MCTF = 0;
+  }
+
   if (m_lumaLevelToDeltaQPEnabled)
   {
     msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
@@ -463,18 +471,22 @@ bool VVEncCfg::initCfgParameter()
   if (m_usePerceptQPATempFiltISlice < 0 )
   {
     m_usePerceptQPATempFiltISlice = 0;
-    if ( ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
-        && m_QP >= 17 // synchronized with the MCTF activation condition, see below
-        && m_GOPSize > 8 )
+    if ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 ) // auto mode for temp.filt.
     {
-      m_usePerceptQPATempFiltISlice = (m_RCRateControlMode > 0 && m_RCNumPasses == 2 && m_QP <= MAX_QP_PERCEPT_QPA && m_IntraPeriod >= 2 * m_GOPSize ? 2 : 1);
+      m_usePerceptQPATempFiltISlice = ( m_RCRateControlMode > 0 && m_RCNumPasses == 2 ? 2 : 1 );
     }
   }
-  if ( m_usePerceptQPATempFiltISlice > 0
-      && (m_MCTF == 0 || m_QP < 27 || m_QP > MAX_QP_PERCEPT_QPA || m_GOPSize <= 8 || m_IntraPeriod < 2 * m_GOPSize) )
+  if ( m_usePerceptQPATempFiltISlice == 2
+      && (m_QP <= 27 || m_QP > MAX_QP_PERCEPT_QPA || m_GOPSize <= 8 || m_IntraPeriod < 2 * m_GOPSize) )
   {
-    m_usePerceptQPATempFiltISlice = (m_QP < 17 || m_MCTF == 0 ? 0 : 1); // disable temp. pump. red
+    m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
+  if ( m_usePerceptQPATempFiltISlice > 0
+      && (m_MCTF == 0 || m_usePerceptQPA == 0) )
+  {
+    m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
+  }
+
   if (m_cuQpDeltaSubdiv < 0)
   {
     m_cuQpDeltaSubdiv = 0;
@@ -1209,12 +1221,6 @@ bool VVEncCfg::initCfgParameter()
   if(m_maxNumReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
   {
     m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
-  }
-
-  if( m_MCTF && m_QP < 17 )
-  {
-    msg( WARNING, "disable MCTF for QP < 17\n");
-    m_MCTF = 0;
   }
 
   if( m_MCTF )
