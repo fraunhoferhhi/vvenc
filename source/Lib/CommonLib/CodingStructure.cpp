@@ -310,7 +310,13 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
 
   if( prevCU )
   {
-    prevCU->next = cu;
+    const int prevCuCtuRsAddr = getCtuAddr( recalcPosition( area.chromaFormat, prevCU->chType, CH_L, prevCU->blocks[prevCU->chType] ), *pcv );
+    const int currCuCtuRsAddr = getCtuAddr( recalcPosition( area.chromaFormat,         chType, CH_L,     cu->blocks[        chType] ), *pcv );
+
+    if( prevCuCtuRsAddr == currCuCtuRsAddr )
+    {
+      prevCU->next = cu;
+    }
   }
 
   cus.push_back( cu );
@@ -497,51 +503,6 @@ CUTraverser CodingStructure::traverseCUs( const UnitArea& unit, const ChannelTyp
   }
 
   return CUTraverser( firstCU, lastCU );
-}
-
-cCUSecureTraverser CodingStructure::secureTraverseCUs( const UnitArea& unit, const ChannelType effChType ) const
-{
-//  CHECK( _treeType != treeType, "not good");
-  const CodingUnit* firstCU = getCU( isLuma( effChType ) ? unit.lumaPos() : unit.chromaPos(), effChType, TREE_D );
-  const CodingUnit* lastCU = firstCU;
-  if( !CS::isDualITree( *this ) ) //for a more generalized separate tree
-  {
-    bool bContinue = true;
-    const CodingUnit* currCU = firstCU;
-    while( bContinue )
-    {
-      if( currCU == nullptr )
-      {
-        bContinue = false;
-      }
-      else if( currCU->chType != effChType )
-      {
-        lastCU = currCU;
-        currCU = currCU->next;
-      }
-      else
-      {
-        if( unit.contains( *currCU ) )
-        {
-          lastCU = currCU;
-          currCU = currCU->next;
-        }
-        else
-        {
-          bContinue = false;
-        }
-      }
-    }
-  }
-  else
-  {
-    if(lastCU->next)
-    {
-      while(  lastCU->next && unit.contains( *lastCU->next ) ) { lastCU = lastCU->next; };
-    }
-  }
-
-  return cCUSecureTraverser( firstCU, lastCU );
 }
 
 TUTraverser CodingStructure::traverseTUs( const UnitArea& unit, const ChannelType effChType )

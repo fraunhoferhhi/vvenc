@@ -99,10 +99,17 @@ enum ChromaFormat
   NUM_CHROMA_FORMAT = 4
 };
 
+enum RateControlMode
+{
+  RCM_OFF           = 0,
+  RCM_CTU_LEVEL     = 1,
+  RCM_PICTURE_LEVEL = 2,
+  RCM_GOP_LEVEL     = 3
+};
 
 enum FastInterSearchMode
 {
-  FASTINTERSEARCH_DISABLED = 0,
+  FASTINTERSEARCH_AUTO     = 0,
   FASTINTERSEARCH_MODE1    = 1,
   FASTINTERSEARCH_MODE2    = 2,
   FASTINTERSEARCH_MODE3    = 3
@@ -349,6 +356,8 @@ public:
   int                 m_sliceChromaQpOffsetPeriodicity          = -1;                                    ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
   int                 m_sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { 0, 0};                               ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
 
+  int                 m_usePerceptQPATempFiltISlice             = -1;            ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+
   bool                m_lumaLevelToDeltaQPEnabled               = false;
   WCGChromaQPControl  m_wcgChromaQpControl                      = WCGChromaQPControl();
   bool                m_sdr                                     = false;                  // unused, only for conmpatiblity
@@ -403,7 +412,7 @@ public:
   bool                m_useAMaxBT                               = false;
   bool                m_fastQtBtEnc                             = true;
   bool                m_contentBasedFastQtbt                    = false;
-  int                 m_fastInterSearchMode                     = FASTINTERSEARCH_DISABLED;              ///< Parameter that controls fast encoder settings
+  int                 m_fastInterSearchMode                     = FASTINTERSEARCH_AUTO;              ///< Parameter that controls fast encoder settings
   bool                m_bUseEarlyCU                             = false;                                 ///< flag for using Early CU setting
   bool                m_useFastDecisionForMerge                 = true;                                  ///< flag for using Fast Decision Merge RD-Cost
   bool                m_useEarlySkipDetection                   = false;                                 ///< flag for using Early SKIP Detection
@@ -426,10 +435,13 @@ public:
 //  unsigned            m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
   int                 m_Geo                                     = 0;
   unsigned            m_maxNumGeoCand                           = 5;
-  int                 m_RCKeepHierarchicalBit                   = 0;
+
+  RateControlMode     m_RCRateControlMode                       = RCM_OFF;       ///< RateControlMode
+  int                 m_RCKeepHierarchicalBit                   = -1;
   bool                m_RCUseLCUSeparateModel                   = false;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;
+
   int                 m_motionEstimationSearchMethod            = MESEARCH_DIAMOND;
   bool                m_bRestrictMESampling                     = false;                                 ///< Restrict sampling for the Selective ME
   int                 m_SearchRange                             = 96;                                    ///< ME search range
@@ -547,7 +559,6 @@ public:
 
   int                 m_fastLocalDualTreeMode                   = 0;
 
-  int                 m_numThreads                              = 0;             ///< number of worker threads
   int                 m_maxParallelFrames                       = 0;
   int                 m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 

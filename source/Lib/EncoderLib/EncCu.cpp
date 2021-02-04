@@ -529,6 +529,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const uint32_t uiLPelX  = tempCS->area.Y().lumaPos().x;
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
 
+  m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
+
   const UnitArea currCsArea = clipArea (CS::getArea (*bestCS, bestCS->area, partitioner.chType, partitioner.treeType), *bestCS->picture);
 
   if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable() && (int)m_pcEncCfg->m_RCRateControlMode != 1)
@@ -1467,15 +1469,10 @@ void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const Un
 
   bool anyCoded = false;
   int numberOfSkipPixel = 0;
-  cCUSecureTraverser trv = cs.secureTraverseCUs( ctuArea, CH_L );
+  for( const auto& cu : cs.traverseCUs( ctuArea, CH_L ) )
   {
-    const auto *cu = trv.begin;
-    do
-    {
-      numberOfSkipPixel += cu->skip * cu->lumaSize().area();
-      anyCoded          |= !cu->skip || cu->rootCbf;
-    }
-    while( cu != trv.last && (0!=(cu = cu->next)) );
+    numberOfSkipPixel +=  cu.skip *  cu.lumaSize().area();
+    anyCoded          |= !cu.skip || cu.rootCbf;
   }
   double skipRatio = (double)numberOfSkipPixel / ctuArea.lumaSize().area();
   CodingUnit* cu = cs.getCU( ctuArea.lumaPos(), CH_L, TREE_D );

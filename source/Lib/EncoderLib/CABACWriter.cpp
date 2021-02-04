@@ -2431,21 +2431,18 @@ void CABACWriter::residual_lfnst_mode( const CodingUnit& cu, CUCtx& cuCtx )
 
     bool isTrSkip = false;
 
-    cTUSecureTraverser trv( cu.firstTU, cu.lastTU );
-    const auto* currTU = trv.begin;
-    do
+    for( const auto& currTU : cTUTraverser( cu.firstTU, cu.lastTU->next ) )
     {
       const uint32_t numValidComp = getNumberValidComponents(cu.chromaFormat);
       for (uint32_t compID = COMP_Y; compID < numValidComp; compID++)
       {
-        if (currTU->blocks[compID].valid() && TU::getCbf(*currTU, (ComponentID)compID) && currTU->mtsIdx[compID] == MTS_SKIP)
+        if (currTU.blocks[compID].valid() && TU::getCbf(currTU, (ComponentID)compID) && currTU.mtsIdx[compID] == MTS_SKIP)
         {
           isTrSkip = true;
           break;
         }
       }
     }
-    while( currTU != trv.last && (0!=(currTU = currTU->next)));
 
     if( (!cuCtx.lfnstLastScanPos && !cu.ispMode) || nonZeroCoeffNonTsCorner8x8 || isTrSkip )
     {

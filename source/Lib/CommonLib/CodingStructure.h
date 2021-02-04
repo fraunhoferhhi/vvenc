@@ -150,7 +150,6 @@ public:
   CUTraverser     traverseCUs(const UnitArea& _unit, const ChannelType _chType);
   TUTraverser     traverseTUs(const UnitArea& _unit, const ChannelType _chType);
 
-  cCUSecureTraverser secureTraverseCUs(const UnitArea& _unit, const ChannelType _chType) const;
   cCUTraverser    traverseCUs(const UnitArea& _unit, const ChannelType _chType) const;
   cTUTraverser    traverseTUs(const UnitArea& _unit, const ChannelType _chType) const;
   // ---------------------------------------------------------------------------

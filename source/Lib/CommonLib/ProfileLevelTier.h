@@ -67,6 +67,8 @@ struct LevelTierFeatures
   uint32_t      minCrBase[NUMBER_OF_TIERS];
   uint32_t      getMaxPicWidthInLumaSamples()  const;
   uint32_t      getMaxPicHeightInLumaSamples() const;
+
+  static Level getLevelForInput( uint32_t width, uint32_t height );
 };
 
 

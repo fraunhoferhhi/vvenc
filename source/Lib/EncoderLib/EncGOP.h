@@ -144,8 +144,10 @@ private:
   EncHRD*                   m_pcEncHRD;
   ParameterSetMap<APS>      m_gopApsMap;
 
-  std::vector<EncPicture*>  m_picEncoderList;
+  std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
+  // TODO (jb): deprecated, to be removed
+  EncPicture*               m_picEncoder0;
 
   double                    m_lambda;
   int                       m_actualHeadBits;
@@ -156,8 +158,6 @@ private:
   NoMallocThreadPool*       m_threadPool;
   std::mutex                m_gopEncMutex;
   std::condition_variable   m_gopEncCond;
-  int                       m_numPicsInFlight;
-  int                       m_numPicsFinished;
 
 public:
   std::list<Picture*>       m_gopEncListOutput;
@@ -213,9 +213,6 @@ private:
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
-  void xWaitForFinishedPic            ();
-  EncPicture* xGetNextFreePicEncoder  ();
-  void xFinishPP                      ( EncPicture* picEncoder );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc
