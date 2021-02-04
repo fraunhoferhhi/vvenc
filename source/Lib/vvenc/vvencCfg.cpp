@@ -1511,6 +1511,7 @@ bool VVEncCfg::checkCfgParameter( )
   }
 
   confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
   confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
