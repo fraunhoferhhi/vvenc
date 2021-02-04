@@ -173,7 +173,6 @@ void fillEncoderParameters( VVEncParameter& cVVEncParameter )
 */
 void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true )
 {
-  rcEncCfg.m_QP                         = 32;                  // quantization parameter 0-51
   rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
   rcEncCfg.m_SourceHeight               = 144;                 // luminance height of input picture
   rcEncCfg.m_GOPSize                    = 16;                  // gop size (1: intra only, 16, 32: hierarchical b frames)
@@ -182,21 +181,13 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_verbosity                  = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
 //rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
-  rcEncCfg.m_TicksPerSecond             = 90000;               // ticks per second e.g. 90000 for dts generation
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
-//rcEncCfg.quality                      = 0;                   // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
   rcEncCfg.m_usePerceptQPA              = 2;                   // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
   rcEncCfg.m_internalBitDepth[0]        = 10;                  // 10bit internal
-  rcEncCfg.m_profile                    = Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
-  rcEncCfg.m_level                      = Level::LEVEL4_1;     // level
-  rcEncCfg.m_levelTier                  = Tier::TIER_MAIN;     // tier
-  rcEncCfg.m_AccessUnitDelimiter        = false;
-  rcEncCfg.m_hrdParametersPresent       = false;
-  rcEncCfg.m_bufferingPeriodSEIEnabled  = false;
-  rcEncCfg.m_pictureTimingSEIEnabled    = false;
 
   rcEncCfg.m_internChromaFormat         =  CHROMA_420;
+
   rcEncCfg.initPreset( PresetMode::FASTER  );
   if( callInitCfgParameter )
   {
@@ -248,13 +239,13 @@ int testLibParameterRanges()
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4 }, true );
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
-  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { -1,0,15,31,256, }, true );
+  testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 15,31,256, }, true );
 
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
 
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 1,2,9 } );
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { -1,0,3,4,5,6,7,8,10 }, true );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,1,2 } );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 3,4,5,6,7,8,9,10 }, true );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 
@@ -277,7 +268,7 @@ int testLibParameterRanges()
   testParamList( "PerceptualQPA",                          vvencParams.m_usePerceptQPA,              vvencParams, { -1,6 }, true );
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
-  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,52 }, true );
+  testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );
 
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );

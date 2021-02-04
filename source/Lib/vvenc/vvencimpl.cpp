@@ -104,12 +104,9 @@ int VVEncImpl::reconfig( const VVEncCfg& rcVVEncCfg )
 
 int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
-  int iRet = xCheckParameter( rcVVEncCfg, m_cErrorString );
-  if( 0 != iRet ) { return iRet; }
+  VVEncCfg cVVEncCfgCopy = rcVVEncCfg;
 
-  VVEncCfg cVVVVEncCfg = rcVVEncCfg;
- 
-  if ( cVVVVEncCfg.initCfgParameter() )
+  if ( cVVEncCfgCopy.initCfgParameter() )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -125,14 +122,16 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   std::string simdOpt;
   std::string curSimd = setSIMDExtension( simdOpt );
 
-  int iRet = xCheckParameter( rcVVEncCfg, m_cErrorString );
-  if( 0 != iRet ) { return iRet; }
+  m_cVVEncCfgExt = rcVVEncCfg;
+  m_cVVEncCfg    = rcVVEncCfg;
+  if ( m_cVVEncCfg.initCfgParameter() ) // init auto/dependent options
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
 
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
-
-  m_cVVEncCfg = rcVVEncCfg;
 
   // initialize the encoder
   m_pEncLib = new EncLib;
@@ -406,69 +405,6 @@ int VVEncImpl::printSummary() const
   if( nullptr == m_pEncLib )  { return -1; }
 
   m_pEncLib->printSummary();
-  return 0;
-}
-
-
-/* converting sdk params to internal (wrapper) params*/
-int VVEncImpl::xCheckParameter( const VVEncCfg& rcSrc, std::string& rcErrorString ) const
-{
-  // check src params
-  ROTPARAMS( rcSrc.m_QP < 0 || rcSrc.m_QP > 51,                                             "qp must be between 0 - 51."  );
-
-  ROTPARAMS( ( rcSrc.m_SourceWidth == 0 )   || ( rcSrc.m_SourceHeight == 0 ),               "specify input picture dimension"  );
-
-  ROTPARAMS( rcSrc.m_FrameRate < 1 || rcSrc.m_FrameRate > 120,                              "fps specified by temporal rate and scale must result in 1Hz < fps < 120Hz" );
-
-  ROTPARAMS( rcSrc.m_TicksPerSecond <= 0 || rcSrc.m_TicksPerSecond > 27000000,              "TicksPerSecond must be in range from 1 to 27000000" );
-
-  int temporalRate   = rcSrc.m_FrameRate;
-  int temporalScale  = 1;
-
-  switch( rcSrc.m_FrameRate )
-  {
-  case 23: temporalRate = 24000; temporalScale = 1001; break;
-  case 29: temporalRate = 30000; temporalScale = 1001; break;
-  case 59: temporalRate = 60000; temporalScale = 1001; break;
-  default: break;
-  }
-
-  ROTPARAMS( (rcSrc.m_TicksPerSecond < 90000) && (rcSrc.m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
-
-  ROTPARAMS( rcSrc.m_numThreads < 0,                                                         "Number of threads must be >= 0" );
-
-  ROTPARAMS( rcSrc.m_IntraPeriod < 0,                                                        "IDR period (in frames) must be >= 0" );
-  ROTPARAMS( rcSrc.m_IntraPeriodSec < 0,                                                     "IDR period (in seconds) must be > 0" );
-
-  ROTPARAMS( rcSrc.m_GOPSize != 1 && rcSrc.m_GOPSize != 16 && rcSrc.m_GOPSize != 32,         "GOP size 1, 16, 32 supported" );
-
-  if( 1 != rcSrc.m_GOPSize && ( rcSrc.m_IntraPeriod > 0  ))
-  {
-    ROTPARAMS( (rcSrc.m_DecodingRefreshType == DRT_IDR || rcSrc.m_DecodingRefreshType == DRT_CRA )&& (0 != rcSrc.m_IntraPeriod % rcSrc.m_GOPSize),          "IDR period must be multiple of GOPSize" );
-  }
-
-  ROTPARAMS( rcSrc.m_usePerceptQPA < 0 || rcSrc.m_usePerceptQPA > 5,                        "Perceptual QPA must be in the range 0 - 5" );
-
-  ROTPARAMS( rcSrc.m_profile != Profile::MAIN_10 && rcSrc.m_profile != Profile::MAIN_10_STILL_PICTURE && rcSrc.m_profile != Profile::PROFILE_AUTO, "unsupported profile, use main_10, main_10_still_picture or auto" );
-
-  ROTPARAMS( rcSrc.m_RCTargetBitrate < 0 || rcSrc.m_RCTargetBitrate > 800000000,           "TargetBitrate must be between 0 - 800000000" );
-  ROTPARAMS( rcSrc.m_RCTargetBitrate == 0 && rcSrc.m_RCNumPasses != 1,                     "Only single pass encoding supported, when rate control is disabled" );
-  ROTPARAMS( rcSrc.m_RCNumPasses < 1 || rcSrc.m_RCNumPasses > 2,                           "Only one pass or two pass encoding supported"  );
-
-  ROTPARAMS( rcSrc.m_verbosity < 0 || rcSrc.m_verbosity > DETAILS,                         "log message level range 0 - 6" );
-
-  ROTPARAMS( rcSrc.m_SegmentMode != SEG_OFF && rcSrc.m_framesToBeEncoded < MCTF_RANGE,     "When using segment parallel encoding more then 2 frames have to be encoded" );
-
-  if( 0 == rcSrc.m_RCTargetBitrate )
-  {
-    ROTPARAMS( rcSrc.m_hrdParametersPresent,              "hrdParameters present requires rate control" );
-    ROTPARAMS( rcSrc.m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
-    ROTPARAMS( rcSrc.m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
-  }
-
-  ROTPARAMS( rcSrc.m_inputBitDepth[0] != 8 && rcSrc.m_inputBitDepth[0] != 10,                   "Input bitdepth must be 8 or 10 bit" );
-  ROTPARAMS( rcSrc.m_internalBitDepth[0] != 8 && rcSrc.m_internalBitDepth[0] != 10,             "Internal bitdepth must be 8 or 10 bit" );
-
   return 0;
 }
 

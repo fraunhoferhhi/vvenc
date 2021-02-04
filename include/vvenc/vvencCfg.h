@@ -110,7 +110,7 @@ enum SliceType
 */
 enum Profile
 {
-  PROFILE_NONE                         = 0,
+  PROFILE_AUTO                         = 0,
   MAIN_10                              = 1,
   MAIN_10_STILL_PICTURE                = 2,
   MAIN_10_444                          = 3,
@@ -119,7 +119,7 @@ enum Profile
   MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
   MULTILAYER_MAIN_10_444               = 7,
   MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
-  PROFILE_AUTO
+  NUMBER_OF_PROFILES
 };
 
 
@@ -142,7 +142,7 @@ enum Tier
 */
 enum Level
 {
-  LEVEL_NONE = 0,
+  LEVEL_AUTO = 0,
   LEVEL1   = 16,
   LEVEL2   = 32,
   LEVEL2_1 = 35,
@@ -158,6 +158,7 @@ enum Level
   LEVEL6_2 = 102,
   LEVEL6_3 = 105,
   LEVEL15_5 = 255,
+  NUMBER_OF_LEVELS
 };
 
 
@@ -168,14 +169,6 @@ enum DecodingRefreshType
   DRT_CRA                = 1,
   DRT_IDR                = 2,
   DRT_RECOVERY_POINT_SEI = 3
-};
-
-enum RateControlMode
-{
-  RCM_OFF           = 0,
-  RCM_CTU_LEVEL     = 1,
-  RCM_PICTURE_LEVEL = 2,
-  RCM_GOP_LEVEL     = 3
 };
 
 enum SegmentMode
@@ -243,24 +236,24 @@ public:
   int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
   bool                m_AccessUnitDelimiter            = false;         ///< add Access Unit Delimiter NAL units
 
-  Profile             m_profile                        = Profile::MAIN_10;
+  Profile             m_profile                        = Profile::PROFILE_AUTO;
   Tier                m_levelTier                      = Tier::TIER_MAIN ;
-  Level               m_level                          = Level::LEVEL4_1;
+  Level               m_level                          = Level::LEVEL_AUTO;
 
-  int                 m_IntraPeriod                    = 32;            ///< period of I-slice (random access period)
+  int                 m_IntraPeriod                    = 0;             ///< period of I-slice (random access period)
   int                 m_IntraPeriodSec                 = 1;             ///< period of I-slice in seconds (random access period)
   DecodingRefreshType m_DecodingRefreshType            = DRT_CRA;       ///< random access type
   int                 m_GOPSize                        = 32;            ///< GOP size of hierarchical structure
 
   int                 m_QP                             = 32;            ///< QP value of key-picture (integer)
   unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
-  int                 m_usePerceptQPATempFiltISlice    = -1;            ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
-  RateControlMode     m_RCRateControlMode              = RCM_OFF;       ///< RateControlMode 
-  int                 m_RCNumPasses                    = 1;
   int                 m_RCTargetBitrate                = 0;
+  int                 m_RCNumPasses                    = 1;
 
   SegmentMode         m_SegmentMode                    = SEG_OFF;
+
+  int                 m_numThreads                     = 0;             ///< number of worker threads
 
   int                 m_inputBitDepth   [ MAX_NUM_CH ] = { 8, 0};       ///< bit-depth of input file
   int                 m_internalBitDepth[ MAX_NUM_CH ] = { 10, 0};      ///< bit-depth codec operates at (input/output files will be converted)
@@ -268,19 +261,37 @@ public:
 
   VVEncCfg()
   {
+    initPreset( PresetMode::MEDIUM );
   }
+
   virtual ~VVEncCfg()
   {
   }
 
-  bool checkExperimental( bool bflag, const char* message );
-  bool confirmParameter ( bool bflag, const char* message );
+  /**
+    This method initializes the configuration depending on set default parameter
+    \retval     bool true: error, false: ok
+    \pre        none.
+  */
   bool initCfgParameter();
 
   int initDefault( int width, int height, int framerate, int targetbitrate = 0, int qp = 32, PresetMode preset = PresetMode::MEDIUM );
   int initPreset( PresetMode preset );
 
   virtual std::string getConfigAsString( MsgLevel eMsgLevel ) const;
+
+private:
+  bool checkExperimental( bool bflag, const char* message );
+  bool confirmParameter ( bool bflag, const char* message );
+
+  /**
+    This method checks if the current configuration is valid.
+    The method checks all configuration parameter (base and derived/dependent)
+    \param[in]  none
+    \retval     bool true: error, false: ok
+    \pre        The initCfgParameter must be called first.
+  */
+  bool checkCfgParameter( );
 };
 
 

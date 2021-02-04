@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
+#include "CommonLib/ProfileLevelTier.h"
 
 #include <math.h>
 
@@ -81,19 +82,76 @@ bool VVEncCfg::checkExperimental( bool bflag, const char* message )
 
 bool VVEncCfg::initCfgParameter()
 {
-#define CONFIRM_PARAMETER_OR_RETURN( _f, _m ) { if ( confirmParameter( _f, _m ) ) return true; }
-
-
   m_confirmFailed = false;
 
+  // check for valid base parameter
+  confirmParameter(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input resolution not set");
+
+  confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
+  confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
+
+  confirmParameter( m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
+  confirmParameter( m_TicksPerSecond <= 0 || m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
+
+  int temporalRate   = m_FrameRate;
+  int temporalScale  = 1;
+
+  switch( m_FrameRate )
+  {
+  case 23: temporalRate = 24000; temporalScale = 1001; break;
+  case 29: temporalRate = 30000; temporalScale = 1001; break;
+  case 59: temporalRate = 60000; temporalScale = 1001; break;
+  default: break;
+  }
+
+  confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+
+  confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
+
+  confirmParameter( m_IntraPeriod < 0,              "IDR period (in frames) must be >= 0");
+  confirmParameter( m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
+
+  confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 64,                                                             "GOP size must be <= 64" );
+  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
+
+  confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
+
+  confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
+  confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1,                               "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,                                     "Only one pass or two pass encoding supported" );
+
+  if( 0 == m_RCTargetBitrate )
+   {
+     confirmParameter( m_hrdParametersPresent,              "hrdParameters present requires rate control" );
+     confirmParameter( m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+     confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+   }
+
+  confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
+
+  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
+
+  if ( m_confirmFailed )
+  {
+    return m_confirmFailed;
+  }
 
   //
   // set a lot of dependent parameters
   //
+
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  {
+    m_internChromaFormat = CHROMA_420;
+  }
+
   if( m_profile == Profile::PROFILE_AUTO )
   {
     const int maxBitDepth= std::max(m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat==ChromaFormat::CHROMA_400 ? CH_L : CH_C]);
-    m_profile=Profile::PROFILE_NONE;
 
     if (m_internChromaFormat==ChromaFormat::CHROMA_400 || m_internChromaFormat==ChromaFormat::CHROMA_420)
     {
@@ -109,58 +167,82 @@ bool VVEncCfg::initCfgParameter()
         m_profile=Profile::MAIN_10_444;
       }
     }
+  }
 
-    CONFIRM_PARAMETER_OR_RETURN(  m_profile == Profile::PROFILE_NONE, "can not determin auto profile");
+  if( m_level == Level::LEVEL_AUTO )
+  {
+    m_level = LevelTierFeatures::getLevelForInput( m_SourceWidth, m_SourceHeight );
   }
 
   if ( m_InputQueueSize <= 0 )
   {
-    m_InputQueueSize = m_maxParallelFrames ? 2*m_GOPSize + 1: m_GOPSize;
-  }
-  if ( m_MCTF )
-  {
-    m_InputQueueSize += MCTF_ADD_QUEUE_DELAY;
+    m_InputQueueSize = m_maxParallelFrames ? 2* m_GOPSize + 1: m_GOPSize;
+
+    if ( m_MCTF )
+    {
+      m_InputQueueSize += MCTF_ADD_QUEUE_DELAY;
+    }
   }
 
-  m_framesToBeEncoded = ( m_framesToBeEncoded + m_temporalSubsampleRatio - 1 ) / m_temporalSubsampleRatio;
+  if( m_temporalSubsampleRatio )
+  {
+    int framesSubsampled = (m_framesToBeEncoded + m_temporalSubsampleRatio - 1 ) / m_temporalSubsampleRatio;
+    if( m_framesToBeEncoded != framesSubsampled )
+    {
+      m_framesToBeEncoded = framesSubsampled;
+    }
+  }
+
+  // set MCTF Lead/Trail frames
+  if( m_SegmentMode != SEG_OFF )
+  {
+    if( m_MCTF )
+    {
+      switch( m_SegmentMode )
+      {
+        case SEG_FIRST:
+          m_MCTFNumLeadFrames  = 0;
+          m_MCTFNumTrailFrames = m_MCTFNumTrailFrames == 0 ? MCTF_RANGE : m_MCTFNumTrailFrames;
+          break;
+        case SEG_MID:
+          m_MCTFNumLeadFrames  = MCTF_RANGE;
+          m_MCTFNumTrailFrames = m_MCTFNumTrailFrames == 0 ? MCTF_RANGE : m_MCTFNumTrailFrames;
+          break;
+        case SEG_LAST:
+          m_MCTFNumLeadFrames  = m_MCTFNumLeadFrames == 0 ? MCTF_RANGE : m_MCTFNumTrailFrames;
+          m_MCTFNumTrailFrames = 0;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
 
   m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  MCTF_RANGE );
   m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, MCTF_RANGE );
   /* rules for input, output and internal bitdepths as per help text */
   if (m_MSBExtendedBitDepth[CH_L  ] == 0)
-  {
     m_MSBExtendedBitDepth[CH_L  ] = m_inputBitDepth      [CH_L  ];
-  }
   if (m_MSBExtendedBitDepth[CH_C] == 0)
-  {
     m_MSBExtendedBitDepth[CH_C] = m_MSBExtendedBitDepth[CH_L  ];
-  }
   if (m_internalBitDepth   [CH_L  ] == 0)
-  {
     m_internalBitDepth   [CH_L  ] = m_MSBExtendedBitDepth[CH_L  ];
-  }
   if (m_internalBitDepth   [CH_C] == 0)
-  {
     m_internalBitDepth   [CH_C] = m_internalBitDepth   [CH_L  ];
-  }
   if (m_inputBitDepth      [CH_C] == 0)
-  {
     m_inputBitDepth      [CH_C] = m_inputBitDepth      [CH_L  ];
-  }
   if (m_outputBitDepth     [CH_L  ] == 0)
-  {
     m_outputBitDepth     [CH_L  ] = m_internalBitDepth   [CH_L  ];
-  }
   if (m_outputBitDepth     [CH_C] == 0)
-  {
     m_outputBitDepth     [CH_C] = m_outputBitDepth     [CH_L  ];
+
+  if( m_fastInterSearchMode  == FASTINTERSEARCH_AUTO )
+  {
+    m_fastInterSearchMode = FASTINTERSEARCH_MODE1;
   }
 
-  CONFIRM_PARAMETER_OR_RETURN( m_fastInterSearchMode<0 || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
-
-  CONFIRM_PARAMETER_OR_RETURN( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-
-  switch (m_conformanceWindowMode)
+  switch ( m_conformanceWindowMode)
   {
   case 0:
     {
@@ -181,8 +263,6 @@ bool VVEncCfg::initCfgParameter()
       {
         m_aiPad[1] = m_confWinBottom = ((m_SourceHeight / minCuSize) + 1) * minCuSize - m_SourceHeight;
       }
-      CONFIRM_PARAMETER_OR_RETURN( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
-      CONFIRM_PARAMETER_OR_RETURN( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
       break;
     }
   case 2:
@@ -207,7 +287,7 @@ bool VVEncCfg::initCfgParameter()
       break;
     }
   }
-    m_PadSourceWidth  = m_SourceWidth + m_aiPad[0];
+    m_PadSourceWidth  = m_SourceWidth  + m_aiPad[0];
     m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
 
   for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
@@ -229,9 +309,6 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
   if (m_useIdentityTableForNon420Chroma && m_internChromaFormat != CHROMA_420)
   {
     m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = true;
@@ -242,19 +319,14 @@ bool VVEncCfg::initCfgParameter()
     m_qpOutValsCr = { 0 };
     m_qpOutValsCbCr = { 0 };
   }
-  int qpBdOffsetC = 6 * (m_internalBitDepth[CH_C] - 8);
 
   m_chromaQpMappingTableParams.m_numQpTables = m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag? 1 : (m_JointCbCrMode ? 3 : 2);
   m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0].resize(m_qpInValsCb.size());
   m_chromaQpMappingTableParams.m_deltaQpOutVal[0].resize(m_qpOutValsCb.size());
   m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (m_qpOutValsCb.size() > 1) ? (int)m_qpOutValsCb.size() - 2 : 0;
   m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = (m_qpOutValsCb.size() > 1) ? -26 + m_qpInValsCb[0] : 0;
-  CONFIRM_PARAMETER_OR_RETURN(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.")
-  CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
   for (int i = 0; i < m_qpInValsCb.size() - 1; i++)
   {
-    CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
-    CONFIRM_PARAMETER_OR_RETURN(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
     m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0][i] = m_qpInValsCb[i + 1] - m_qpInValsCb[i] - 1;
     m_chromaQpMappingTableParams.m_deltaQpOutVal[0][i] = m_qpOutValsCb[i + 1] - m_qpOutValsCb[i];
   }
@@ -264,12 +336,8 @@ bool VVEncCfg::initCfgParameter()
     m_chromaQpMappingTableParams.m_deltaQpOutVal[1].resize(m_qpOutValsCr.size());
     m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (m_qpOutValsCr.size() > 1) ? (int)m_qpOutValsCr.size() - 2 : 0;
     m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = (m_qpOutValsCr.size() > 1) ? -26 + m_qpInValsCr[0] : 0;
-    CONFIRM_PARAMETER_OR_RETURN(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.")
-    CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
     for (int i = 0; i < m_qpInValsCr.size() - 1; i++)
     {
-      CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      CONFIRM_PARAMETER_OR_RETURN(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
       m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1][i] = m_qpInValsCr[i + 1] - m_qpInValsCr[i] - 1;
       m_chromaQpMappingTableParams.m_deltaQpOutVal[1][i] = m_qpOutValsCr[i + 1] - m_qpOutValsCr[i];
     }
@@ -277,12 +345,8 @@ bool VVEncCfg::initCfgParameter()
     m_chromaQpMappingTableParams.m_deltaQpOutVal[2].resize(m_qpOutValsCbCr.size());
     m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (m_qpOutValsCbCr.size() > 1) ? (int)m_qpOutValsCbCr.size() - 2 : 0;
     m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = (m_qpOutValsCbCr.size() > 1) ? -26 + m_qpInValsCbCr[0] : 0;
-    CONFIRM_PARAMETER_OR_RETURN(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.")
-    CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
     for (int i = 0; i < m_qpInValsCbCr.size() - 1; i++)
     {
-      CONFIRM_PARAMETER_OR_RETURN(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      CONFIRM_PARAMETER_OR_RETURN(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
       m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = m_qpInValsCbCr[i + 1] - m_qpInValsCbCr[i] - 1;
       m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = m_qpInValsCbCr[i + 1] - m_qpInValsCbCr[i];
     }
@@ -342,6 +406,18 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
+  // set auto threading mode
+  if( m_numThreads < 0 )
+  {
+    if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
+    {
+      m_numThreads = 6;
+    }
+    else
+    {
+      m_numThreads = 4;
+    }
+  }
 
   if( m_ensureWppBitEqual < 0 )
   {
@@ -349,188 +425,39 @@ bool VVEncCfg::initCfgParameter()
   }
 
 
+  if(  m_RCTargetBitrate )
+  {
+    if( m_RCRateControlMode == RateControlMode::RCM_OFF )
+    {
+      m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
+    }
+
+    if( m_RCKeepHierarchicalBit < 0 )
+    {
+      m_RCKeepHierarchicalBit = 2;
+    }
+
+    m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
+  }
+
   //
   // do some check and set of parameters next
   //
 
-
-  msg( NOTICE, "\n" );
-  if ( m_decodedPictureHashSEIType == HASHTYPE_NONE )
-  {
-    msg( DETAILS, "******************************************************************\n");
-    msg( DETAILS, "** WARNING: --SEIDecodedPictureHash is now disabled by default. **\n");
-    msg( DETAILS, "**          Automatic verification of decoded pictures by a     **\n");
-    msg( DETAILS, "**          decoder requires this option to be enabled.         **\n");
-    msg( DETAILS, "******************************************************************\n");
-  }
-  if( m_profile == Profile::PROFILE_NONE )
-  {
-    msg( DETAILS, "***************************************************************************\n");
-    msg( DETAILS, "** WARNING: For conforming bitstreams a valid Profile value must be set! **\n");
-    msg( DETAILS, "***************************************************************************\n");
-  }
-  if( m_level == Level::LEVEL_NONE )
-  {
-    msg( DETAILS, "***************************************************************************\n");
-    msg( DETAILS, "** WARNING: For conforming bitstreams a valid Level value must be set!   **\n");
-    msg( DETAILS, "***************************************************************************\n");
-  }
-
-  if( m_DepQuantEnabled )
-  {
-    confirmParameter( !m_RDOQ || !m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
-    confirmParameter( m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
-  }
-
-  confirmParameter( (m_MSBExtendedBitDepth[CH_L  ] < m_inputBitDepth[CH_L  ]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
-  confirmParameter( (m_MSBExtendedBitDepth[CH_C] < m_inputBitDepth[CH_C]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
-
-  const uint32_t maxBitDepth=(m_internChromaFormat==CHROMA_400) ? m_internalBitDepth[CH_L] : std::max(m_internalBitDepth[CH_L], m_internalBitDepth[CH_C]);
-  confirmParameter(m_bitDepthConstraintValue<maxBitDepth, "The internalBitDepth must not be greater than the bitDepthConstraint value");
-
-  confirmParameter(m_bitDepthConstraintValue!=10, "BitDepthConstraint must be 8 for MAIN profile and 10 for MAIN10 profile.");
-  confirmParameter(m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
-
-  // check range of parameters
-  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
-  confirmParameter( m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
-
-#if !RExt__HIGH_BIT_DEPTH_SUPPORT
-  for (uint32_t channelType = 0; channelType < MAX_NUM_CH; channelType++)
-  {
-    confirmParameter((m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
-  }
-#endif
-
-  confirmParameter( m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
-  confirmParameter( m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
-
-  confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                  "Intern chroma format must be either 400, 420, 422 or 444" );
-  confirmParameter( m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
-  confirmParameter( m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
-  confirmParameter( m_framesToBeEncoded < m_switchPOC,                                          "debug POC out of range" );
-
-  confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
-  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
-  confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
-  confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
-  confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-#if IDR_FIX
-  confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#else
-  confirmParameter( m_IntraPeriod > 0 && m_DecodingRefreshType !=1,                             "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#endif
-  confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
-  confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
-  for( int comp = 0; comp < 3; comp++)
-  {
-    confirmParameter( m_loopFilterBetaOffsetDiv2[comp] < -12 || m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
-    confirmParameter( m_loopFilterTcOffsetDiv2[comp] < -12 || m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
-  }
-  confirmParameter( m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
-  confirmParameter( m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
-  confirmParameter( m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
-
-  confirmParameter( m_MCTFFrames.size() != m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
-  confirmParameter( m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  confirmParameter( m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  confirmParameter( m_MCTFNumLeadFrames  > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
-
   if (m_lumaReshapeEnable)
   {
-    confirmParameter( m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
-    confirmParameter(m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
-    confirmParameter(m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
-    confirmParameter(m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
-    confirmParameter(m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
-    confirmParameter(m_initialCW < 0,     "Min. Initial Total Codeword is 0");
-    confirmParameter(m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
-    confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
-    confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
     if (m_updateCtrl > 0 && m_adpOption > 2) { m_adpOption -= 2; }
   }
-  confirmParameter( m_EDO && m_bLoopFilterDisable,          "no EDO support with LoopFilter disabled" );
-  confirmParameter( m_EDO < 0 || m_EDO > 2,                 "EDO out of range [0..2]" );
-  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,   "TMVPMode out of range [0..2]" );
-  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,     "AMVR/IMV out of range [0..7]" );
-  confirmParameter( m_Affine < 0 || m_Affine > 2,           "Affine out of range [0..2]" );
-  confirmParameter( m_MMVD < 0 || m_MMVD > 4,               "MMVD out of range [0..4]" );
-  confirmParameter( m_SMVD < 0 || m_SMVD > 3,               "SMVD out of range [0..3]" );
-  confirmParameter( m_Geo  < 0 || m_Geo  > 3,               "Geo out of range [0..3]" );
-  confirmParameter( m_CIIP < 0 || m_CIIP > 3,               "CIIP out of range [0..3]" );
-  confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
-  confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
-  confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
-  confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
-  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..2]" );
-  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [2..5]" );
-  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,        "BDPCM out of range [0..2]");
-  confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
-  confirmParameter(m_useBDPCM==1  && m_TS==2,               "BDPCM cannot be permanently used when transform skip is auto" );
 
-  if( m_alf )
-  {
-    confirmParameter( m_maxNumAlfAlternativesChroma < 1 || m_maxNumAlfAlternativesChroma > MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
-  }
-
-  confirmParameter( m_useFastMrg < 0 || m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
-  confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
-  confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
-
-
-  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
-  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
-  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2, "Only one pass or two pass encoding supported" );
-  confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
-  confirmParameter(!((m_level==Level::LEVEL1) 
-    || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
-    || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
-    || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
-    || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
-    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
-    || (m_level==Level::LEVEL15_5)), "invalid level selected");
-  confirmParameter(!((m_levelTier==Tier::TIER_MAIN) || (m_levelTier==Tier::TIER_HIGH)), "invalid tier selected");
-
-
-  confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
-  confirmParameter( m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );
-  confirmParameter( m_chromaCrQpOffset < -12,           "Min. Chroma Cr QP Offset is -12" );
-  confirmParameter( m_chromaCrQpOffset >  12,           "Max. Chroma Cr QP Offset is  12" );
-  confirmParameter( m_chromaCbQpOffsetDualTree < -12,   "Min. Chroma Cb QP Offset for dual tree is -12" );
-  confirmParameter( m_chromaCbQpOffsetDualTree >  12,   "Max. Chroma Cb QP Offset for dual tree is  12" );
-  confirmParameter( m_chromaCrQpOffsetDualTree < -12,   "Min. Chroma Cr QP Offset for dual tree is -12" );
-  confirmParameter( m_chromaCrQpOffsetDualTree >  12,   "Max. Chroma Cr QP Offset for dual tree is  12" );
   if ( m_JointCbCrMode && (m_internChromaFormat == CHROMA_400) )
   {
-    msg( WARNING, "****************************************************************************\n");
-    msg( WARNING, "** WARNING: --JointCbCr has been disabled because the chromaFormat is 400 **\n");
-    msg( WARNING, "****************************************************************************\n");
     m_JointCbCrMode = false;
-  }
-  if ( m_JointCbCrMode )
-  {
-    confirmParameter( m_chromaCbCrQpOffset < -12, "Min. Joint Cb-Cr QP Offset is -12");
-    confirmParameter( m_chromaCbCrQpOffset >  12, "Max. Joint Cb-Cr QP Offset is  12");
-    confirmParameter( m_chromaCbCrQpOffsetDualTree < -12, "Min. Joint Cb-Cr QP Offset for dual tree is -12");
-    confirmParameter( m_chromaCbCrQpOffsetDualTree >  12, "Max. Joint Cb-Cr QP Offset for dual tree is  12");
   }
 
   if (m_lumaLevelToDeltaQPEnabled)
   {
-    CONFIRM_PARAMETER_OR_RETURN(m_usePerceptQPA != 0 && m_usePerceptQPA != 5, "LumaLevelToDeltaQP and PerceptQPA conflict");
     msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
     m_usePerceptQPA = 5; // force QPA mode
-  }
-
-  if (m_usePerceptQPA && m_dualITree && (m_internChromaFormat != CHROMA_400) && (m_chromaCbQpOffsetDualTree != 0 || m_chromaCrQpOffsetDualTree != 0 || m_chromaCbCrQpOffsetDualTree != 0))
-  {
-    msg(WARNING, "***************************************************************************\n");
-    msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
-    msg(WARNING, "***************************************************************************\n");
   }
 
   if (m_usePerceptQPATempFiltISlice < 0 )
@@ -571,82 +498,6 @@ bool VVEncCfg::initCfgParameter()
         && m_internChromaFormat != CHROMA_400 )
     {
       m_sliceChromaQpOffsetPeriodicity = 1;
-    }
-  }
-
-  confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
-
-  confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
-  if ( m_DecodingRefreshType == 2 )
-  {
-    confirmParameter( m_IntraPeriod > 0 && m_IntraPeriod <= m_GOPSize ,                                   "Intra period must be larger than GOP size for periodic IDR pictures");
-  }
-  confirmParameter( m_MaxCodingDepth > MAX_CU_DEPTH,                                                      "MaxPartitionDepth exceeds predefined MAX_CU_DEPTH limit");
-  confirmParameter( m_MinQT[0] < 1<<MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
-  confirmParameter( m_MinQT[1] < 1<<MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
-  confirmParameter( m_CTUSize < 32,                                                                       "CTUSize must be greater than or equal to 32");
-  confirmParameter( m_CTUSize > 128,                                                                      "CTUSize must be less than or equal to 128");
-  confirmParameter( m_CTUSize != 32 && m_CTUSize != 64 && m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
-  confirmParameter( m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
-  confirmParameter( (m_CTUSize  >> ( m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
-  confirmParameter( (m_PadSourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
-  confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
-  confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
-
-  confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
-
-  confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
-
-  confirmParameter( m_confWinLeft   % SPS::getWinUnitX(m_internChromaFormat) != 0, "Left conformance window offset must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_confWinRight  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Right conformance window offset must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_confWinTop    % SPS::getWinUnitY(m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_confWinBottom % SPS::getWinUnitY(m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
-
-  confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range");
-  confirmParameter( m_ensureWppBitEqual < 0 || m_ensureWppBitEqual > 1,   "WppBitEqual out of range");
-  confirmParameter( m_numThreads > 0 && m_ensureWppBitEqual == 0,         "NumThreads > 0 requires WppBitEqual > 0");
-  confirmParameter( m_maxParallelFrames < -1,                             "Max parallel frames out of range" );
-  confirmParameter( m_maxParallelFrames > 0 && m_numThreads == 0,         "For frame parallel processing NumThreads > 0 is required" );
-  confirmParameter( m_maxParallelFrames > m_InputQueueSize,               "Max parallel frames should be less than size of input queue" );
-
-  if( m_maxParallelFrames )
-  {
-    confirmParameter( m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
-    confirmParameter( m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
-    confirmParameter( m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
-    confirmParameter( m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
-#if ENABLE_TRACING
-    confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
-#endif
-  }
-
-  confirmParameter(((m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
-  confirmParameter(((m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
-
-
-  confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
-  confirmParameter( m_maxNumMergeCand > MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
-  confirmParameter( m_maxNumGeoCand > GEO_MAX_NUM_UNI_CANDS,            "MaxNumGeoCand must be no more than GEO_MAX_NUM_UNI_CANDS." );
-  confirmParameter( m_maxNumGeoCand > m_maxNumMergeCand,                "MaxNumGeoCand must be no more than MaxNumMergeCand." );
-  confirmParameter( 0 < m_maxNumGeoCand && m_maxNumGeoCand < 2,         "MaxNumGeoCand must be no less than 2 unless MaxNumGeoCand is 0." );
-  confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
-  confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
-
-
-  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
-  confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
-
-  // max CU width and height should be power of 2
-  uint32_t ui = m_CTUSize;
-  while(ui)
-  {
-    ui >>= 1;
-    if( (ui & 1) == 1)
-    {
-      confirmParameter( ui != 1 , "CTU Size should be 2^n");
     }
   }
 
@@ -1003,8 +854,6 @@ bool VVEncCfg::initCfgParameter()
         }
       }
     }
-
-    confirmParameter( m_intraOnlyConstraintFlag, "IntraOnlyConstraintFlag cannot be 1 for inter sequences");
   }
 
   for (int i = 0; m_GOPList[i].m_POC != -1 && i < MAX_GOP + 1; i++)
@@ -1038,42 +887,6 @@ bool VVEncCfg::initCfgParameter()
     isOK[i]=false;
   }
   int numOK=0;
-  confirmParameter( m_IntraPeriod >=0&&(m_IntraPeriod%m_GOPSize!=0), "Intra period must be a multiple of GOPSize, or -1" );
-  confirmParameter( m_temporalSubsampleRatio < 1, "TemporalSubsampleRatio must be greater than 0");
-
-  for(int i=0; i<m_GOPSize; i++)
-  {
-    if (m_GOPList[i].m_POC == m_GOPSize * multipleFactor)
-    {
-      confirmParameter( m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
-    }
-  }
-
-  if ( (m_IntraPeriod != 1) && !m_loopFilterOffsetInPPS && (!m_bLoopFilterDisable) )
-  {
-    for(int i=0; i<m_GOPSize; i++)
-    {
-      for( int comp = 0; comp < 3; comp++ )
-      {
-        confirmParameter( (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2[comp]) < -12 || (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2[comp]) > 12, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
-        confirmParameter( (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2[comp]) < -12 || (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2[comp]) > 12, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
-      }
-    }
-  }
-
-  for(int i=0; i<m_GOPSize; i++)
-  {
-    confirmParameter( abs(m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
-    confirmParameter( abs(m_GOPList[i].m_CbQPoffset + m_chromaCbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
-    confirmParameter( abs(m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
-    confirmParameter( abs(m_GOPList[i].m_CrQPoffset + m_chromaCrQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
-  }
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]                 ) > 12, "Intra/periodic Cb QP Offset exceeds supported range (-12 to 12)" );
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]  + m_chromaCbQpOffset ) > 12, "Intra/periodic Cb QP Offset, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]                 ) > 12, "Intra/periodic Cr QP Offset exceeds supported range (-12 to 12)" );
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]  + m_chromaCrQpOffset ) > 12, "Intra/periodic Cr QP Offset, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
-
-  confirmParameter( m_fastLocalDualTreeMode < 0 || m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
 
   int extraRPLs = 0;
   int numRefs   = 1;
@@ -1317,7 +1130,6 @@ bool VVEncCfg::initCfgParameter()
     }
     checkGOP++;
   }
-  confirmParameter(errorGOP, "Invalid GOP structure given");
 
   m_maxTempLayer = 1;
 
@@ -1327,7 +1139,6 @@ bool VVEncCfg::initCfgParameter()
     {
       m_maxTempLayer = m_GOPList[i].m_temporalId+1;
     }
-    confirmParameter(m_GOPList[i].m_sliceType!='B' && m_GOPList[i].m_sliceType!='P' && m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
   }
   for(int i=0; i<MAX_TLAYER; i++)
   {
@@ -1398,8 +1209,6 @@ bool VVEncCfg::initCfgParameter()
     m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
-  confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
-
   if( m_MCTF && m_QP < 17 )
   {
     msg( WARNING, "disable MCTF for QP < 17\n");
@@ -1431,25 +1240,13 @@ bool VVEncCfg::initCfgParameter()
         m_MCTFStrengths.push_back(0.65625); // 21/32
         m_MCTFFrames.push_back(8);
       }
-      else
-      {
-        msg( WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
-      }
     }
-
-    confirmParameter( m_MCTFFrames.size() != m_MCTFStrengths.size(), "MCTFFrames and MCTFStrengths do not match");
   }
 
   if ( ! m_MMVD && m_allowDisFracMMVD )
   {
     msg( WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
     m_allowDisFracMMVD = false;
-  }
-
-  if( m_fastForwardToPOC != -1 )
-  {
-    if( m_cabacInitPresent )  { msg( WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); }
-    if( m_alf )               { msg( WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
   }
 
   //
@@ -1481,8 +1278,578 @@ bool VVEncCfg::initCfgParameter()
   /// Experimental settings
   // checkExperimental( experimental combination of parameters, "Description!" );
 
+  m_confirmFailed = checkCfgParameter();
   return( m_confirmFailed );
 }
+
+bool VVEncCfg::checkCfgParameter( )
+{
+  // run base check first
+  confirmParameter( m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
+  confirmParameter( (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+
+  confirmParameter( m_level   == Level::LEVEL_AUTO, "can not determin level");
+
+  confirmParameter( m_fastInterSearchMode<FASTINTERSEARCH_AUTO || m_fastInterSearchMode>FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
+  confirmParameter( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
+  confirmParameter( m_internChromaFormat >= NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
+
+  switch ( m_conformanceWindowMode)
+  {
+  case 0:
+      break;
+  case 1:
+      // automatic padding to minimum CU size
+      confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
+      confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
+      break;
+  case 2:
+      break;
+  case 3:
+      // conformance
+      if ((m_confWinLeft == 0) && (m_confWinRight == 0) && (m_confWinTop == 0) && (m_confWinBottom == 0))
+      {
+        msg( ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+      }
+      if ((m_aiPad[1] != 0) || (m_aiPad[0]!=0))
+      {
+        msg( ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+      }
+      break;
+  }
+
+  confirmParameter(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
+  confirmParameter(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
+  confirmParameter(m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
+
+  if ( m_confirmFailed )
+  {
+    return m_confirmFailed;
+  }
+
+  int qpBdOffsetC = 6 * (m_internalBitDepth[CH_C] - 8);
+
+  confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+  confirmParameter(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
+  for (size_t i = 0; i < m_qpInValsCb.size() - 1; i++)
+  {
+    confirmParameter(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    confirmParameter(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+  }
+  if (!m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
+  {
+    confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    confirmParameter(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
+    for (size_t i = 0; i < m_qpInValsCr.size() - 1; i++)
+    {
+      confirmParameter(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      confirmParameter(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    }
+    confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    confirmParameter(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
+    for (size_t i = 0; i < m_qpInValsCbCr.size() - 1; i++)
+    {
+      confirmParameter(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      confirmParameter(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    }
+  }
+
+  //
+  // do some check and set of parameters next
+  //
+
+  if( m_DepQuantEnabled )
+  {
+    confirmParameter( !m_RDOQ || !m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
+    confirmParameter( m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
+  }
+
+  confirmParameter( (m_MSBExtendedBitDepth[CH_L] < m_inputBitDepth[CH_L]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
+  confirmParameter( (m_MSBExtendedBitDepth[CH_C] < m_inputBitDepth[CH_C]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
+
+  const uint32_t maxBitDepth=(m_internChromaFormat==CHROMA_400) ? m_internalBitDepth[CH_L] : std::max(m_internalBitDepth[CH_L], m_internalBitDepth[CH_C]);
+  confirmParameter(m_bitDepthConstraintValue<maxBitDepth, "The internalBitDepth must not be greater than the bitDepthConstraint value");
+
+  confirmParameter(m_bitDepthConstraintValue!=10, "BitDepthConstraint must be 8 for MAIN profile and 10 for MAIN10 profile.");
+  confirmParameter(m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
+
+  // check range of parameters
+  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
+
+#if !RExt__HIGH_BIT_DEPTH_SUPPORT
+  for (uint32_t channelType = 0; channelType < MAX_NUM_CH; channelType++)
+  {
+    confirmParameter((m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
+  }
+#endif
+
+  confirmParameter( m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
+  confirmParameter( m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
+
+  confirmParameter( m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
+  confirmParameter( m_framesToBeEncoded < m_switchPOC,                                          "debug POC out of range" );
+
+  confirmParameter( (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
+  confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
+  confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
+  confirmParameter( m_MCTF && m_maxParallelFrames && m_InputQueueSize < 2* m_GOPSize + 1 + MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to 2*gop size + N frames for MCTF" );
+
+  confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+#if IDR_FIX
+  confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#else
+  confirmParameter( m_IntraPeriod > 0 && m_DecodingRefreshType !=1,                             "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#endif
+  confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
+  confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
+  for( int comp = 0; comp < 3; comp++)
+  {
+    confirmParameter( m_loopFilterBetaOffsetDiv2[comp] < -12 || m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
+    confirmParameter( m_loopFilterTcOffsetDiv2[comp] < -12 || m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
+  }
+  confirmParameter( m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
+  confirmParameter( m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
+  confirmParameter( m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
+
+  confirmParameter( m_MCTFFrames.size() != m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
+  confirmParameter( m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
+  confirmParameter( m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
+  confirmParameter( m_MCTFNumLeadFrames  > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
+  confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
+  confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
+  confirmParameter( m_SegmentMode != SEG_OFF && m_framesToBeEncoded < MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
+
+  if (m_lumaReshapeEnable)
+  {
+    confirmParameter( m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
+    confirmParameter(m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
+    confirmParameter(m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
+    confirmParameter(m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
+    confirmParameter(m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
+    confirmParameter(m_initialCW < 0,     "Min. Initial Total Codeword is 0");
+    confirmParameter(m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
+    confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
+    confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
+  }
+  confirmParameter( m_EDO && m_bLoopFilterDisable,          "no EDO support with LoopFilter disabled" );
+  confirmParameter( m_EDO < 0 || m_EDO > 2,                 "EDO out of range [0..2]" );
+  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,   "TMVPMode out of range [0..2]" );
+  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,     "AMVR/IMV out of range [0..7]" );
+  confirmParameter( m_Affine < 0 || m_Affine > 2,           "Affine out of range [0..2]" );
+  confirmParameter( m_MMVD < 0 || m_MMVD > 4,               "MMVD out of range [0..4]" );
+  confirmParameter( m_SMVD < 0 || m_SMVD > 3,               "SMVD out of range [0..3]" );
+  confirmParameter( m_Geo  < 0 || m_Geo  > 3,               "Geo out of range [0..3]" );
+  confirmParameter( m_CIIP < 0 || m_CIIP > 3,               "CIIP out of range [0..3]" );
+  confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
+  confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
+  confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
+  confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
+  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..2]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [2..5]" );
+  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,        "BDPCM out of range [0..2]");
+  confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
+  confirmParameter(m_useBDPCM==1  && m_TS==2,               "BDPCM cannot be permanently used when transform skip is auto" );
+
+  if( m_alf )
+  {
+    confirmParameter( m_maxNumAlfAlternativesChroma < 1 || m_maxNumAlfAlternativesChroma > MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
+  }
+
+  confirmParameter( m_useFastMrg < 0 || m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
+  confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
+  confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
+
+
+  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
+  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+
+  confirmParameter(!((m_level==Level::LEVEL1)
+    || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
+    || (m_level==Level::LEVEL3) || (m_level==Level::LEVEL3_1)
+    || (m_level==Level::LEVEL4) || (m_level==Level::LEVEL4_1)
+    || (m_level==Level::LEVEL5) || (m_level==Level::LEVEL5_1) || (m_level==Level::LEVEL5_2)
+    || (m_level==Level::LEVEL6) || (m_level==Level::LEVEL6_1) || (m_level==Level::LEVEL6_2) || (m_level==Level::LEVEL6_3)
+    || (m_level==Level::LEVEL15_5)), "invalid level selected");
+  confirmParameter(!((m_levelTier==Tier::TIER_MAIN) || (m_levelTier==Tier::TIER_HIGH)), "invalid tier selected");
+
+
+  confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
+  confirmParameter( m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );
+  confirmParameter( m_chromaCrQpOffset < -12,           "Min. Chroma Cr QP Offset is -12" );
+  confirmParameter( m_chromaCrQpOffset >  12,           "Max. Chroma Cr QP Offset is  12" );
+  confirmParameter( m_chromaCbQpOffsetDualTree < -12,   "Min. Chroma Cb QP Offset for dual tree is -12" );
+  confirmParameter( m_chromaCbQpOffsetDualTree >  12,   "Max. Chroma Cb QP Offset for dual tree is  12" );
+  confirmParameter( m_chromaCrQpOffsetDualTree < -12,   "Min. Chroma Cr QP Offset for dual tree is -12" );
+  confirmParameter( m_chromaCrQpOffsetDualTree >  12,   "Max. Chroma Cr QP Offset for dual tree is  12" );
+
+  if ( m_JointCbCrMode )
+  {
+    confirmParameter( m_chromaCbCrQpOffset < -12, "Min. Joint Cb-Cr QP Offset is -12");
+    confirmParameter( m_chromaCbCrQpOffset >  12, "Max. Joint Cb-Cr QP Offset is  12");
+    confirmParameter( m_chromaCbCrQpOffsetDualTree < -12, "Min. Joint Cb-Cr QP Offset for dual tree is -12");
+    confirmParameter( m_chromaCbCrQpOffsetDualTree >  12, "Max. Joint Cb-Cr QP Offset for dual tree is  12");
+  }
+
+  if (m_lumaLevelToDeltaQPEnabled)
+  {
+    confirmParameter(m_usePerceptQPA != 0 && m_usePerceptQPA != 5, "LumaLevelToDeltaQP and PerceptQPA conflict");
+    msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
+  }
+
+  if (m_usePerceptQPA && m_dualITree && (m_internChromaFormat != CHROMA_400) && (m_chromaCbQpOffsetDualTree != 0 || m_chromaCrQpOffsetDualTree != 0 || m_chromaCbCrQpOffsetDualTree != 0))
+  {
+    msg(WARNING, "***************************************************************************\n");
+    msg(WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
+    msg(WARNING, "***************************************************************************\n");
+  }
+
+  confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
+
+  confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
+  if ( m_DecodingRefreshType == 2 )
+  {
+    confirmParameter( m_IntraPeriod > 0 && m_IntraPeriod <= m_GOPSize ,                                   "Intra period must be larger than GOP size for periodic IDR pictures");
+  }
+  confirmParameter( m_MaxCodingDepth > MAX_CU_DEPTH,                                                      "MaxPartitionDepth exceeds predefined MAX_CU_DEPTH limit");
+  confirmParameter( m_MinQT[0] < 1<<MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
+  confirmParameter( m_MinQT[1] < 1<<MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
+  confirmParameter( m_CTUSize < 32,                                                                       "CTUSize must be greater than or equal to 32");
+  confirmParameter( m_CTUSize > 128,                                                                      "CTUSize must be less than or equal to 128");
+  confirmParameter( m_CTUSize != 32 && m_CTUSize != 64 && m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
+  confirmParameter( m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
+  confirmParameter( (m_CTUSize  >> ( m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
+  confirmParameter( (m_PadSourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
+  confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
+  confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
+
+  confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
+
+  confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
+
+  confirmParameter( m_confWinLeft   % SPS::getWinUnitX(m_internChromaFormat) != 0, "Left conformance window offset must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_confWinRight  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Right conformance window offset must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_confWinTop    % SPS::getWinUnitY(m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
+  confirmParameter( m_confWinBottom % SPS::getWinUnitY(m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
+
+  confirmParameter( m_ensureWppBitEqual < 0 || m_ensureWppBitEqual > 1,   "WppBitEqual out of range");
+  confirmParameter( m_numThreads > 0 && m_ensureWppBitEqual == 0,         "NumThreads > 0 requires WppBitEqual > 0");
+  confirmParameter( m_maxParallelFrames < -1,                             "Max parallel frames out of range" );
+  confirmParameter( m_maxParallelFrames > 0 && m_numThreads == 0,         "For frame parallel processing NumThreads > 0 is required" );
+  confirmParameter( m_maxParallelFrames > m_InputQueueSize,               "Max parallel frames should be less than size of input queue" );
+
+  if( m_maxParallelFrames )
+  {
+    confirmParameter( m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
+    confirmParameter( m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
+    confirmParameter( m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
+    confirmParameter( m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
+#if ENABLE_TRACING
+    confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
+#endif
+  }
+
+  confirmParameter(((m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
+  confirmParameter(((m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
+
+
+  confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
+  confirmParameter( m_maxNumMergeCand > MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
+  confirmParameter( m_maxNumGeoCand > GEO_MAX_NUM_UNI_CANDS,            "MaxNumGeoCand must be no more than GEO_MAX_NUM_UNI_CANDS." );
+  confirmParameter( m_maxNumGeoCand > m_maxNumMergeCand,                "MaxNumGeoCand must be no more than MaxNumMergeCand." );
+  confirmParameter( 0 < m_maxNumGeoCand && m_maxNumGeoCand < 2,         "MaxNumGeoCand must be no less than 2 unless MaxNumGeoCand is 0." );
+  confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
+  confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
+
+
+  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
+
+  // max CU width and height should be power of 2
+  uint32_t ui = m_CTUSize;
+  while(ui)
+  {
+    ui >>= 1;
+    if( (ui & 1) == 1)
+    {
+      confirmParameter( ui != 1 , "CTU Size should be 2^n");
+    }
+  }
+
+  if ( m_IntraPeriod == 1 && m_GOPList[0].m_POC == -1 )
+  {
+  }
+  else
+  {
+    confirmParameter( m_intraOnlyConstraintFlag, "IntraOnlyConstraintFlag cannot be 1 for inter sequences");
+  }
+
+  int multipleFactor = /*m_compositeRefEnabled ? 2 :*/ 1;
+  bool verifiedGOP=false;
+  bool errorGOP=false;
+  int checkGOP=1;
+  int refList[MAX_NUM_REF_PICS+1] = {0};
+  bool isOK[MAX_GOP];
+  for(int i=0; i<MAX_GOP; i++)
+  {
+    isOK[i]=false;
+  }
+  int numOK=0;
+  confirmParameter( m_IntraPeriod >=0&&(m_IntraPeriod%m_GOPSize!=0), "Intra period must be a multiple of GOPSize, or -1" );
+  confirmParameter( m_temporalSubsampleRatio < 1, "TemporalSubsampleRatio must be greater than 0");
+
+  for(int i=0; i<m_GOPSize; i++)
+  {
+    if (m_GOPList[i].m_POC == m_GOPSize * multipleFactor)
+    {
+      confirmParameter( m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
+    }
+  }
+
+  if ( (m_IntraPeriod != 1) && !m_loopFilterOffsetInPPS && (!m_bLoopFilterDisable) )
+  {
+    for(int i=0; i<m_GOPSize; i++)
+    {
+      for( int comp = 0; comp < 3; comp++ )
+      {
+        confirmParameter( (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2[comp]) < -12 || (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2[comp]) > 12, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+        confirmParameter( (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2[comp]) < -12 || (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2[comp]) > 12, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+      }
+    }
+  }
+
+  for(int i=0; i<m_GOPSize; i++)
+  {
+    confirmParameter( abs(m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+    confirmParameter( abs(m_GOPList[i].m_CbQPoffset + m_chromaCbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+    confirmParameter( abs(m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+    confirmParameter( abs(m_GOPList[i].m_CrQPoffset + m_chromaCrQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+  }
+  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]                 ) > 12, "Intra/periodic Cb QP Offset exceeds supported range (-12 to 12)" );
+  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]  + m_chromaCbQpOffset ) > 12, "Intra/periodic Cb QP Offset, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]                 ) > 12, "Intra/periodic Cr QP Offset exceeds supported range (-12 to 12)" );
+  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]  + m_chromaCrQpOffset ) > 12, "Intra/periodic Cr QP Offset, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+
+  confirmParameter( m_fastLocalDualTreeMode < 0 || m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
+
+  int extraRPLs = 0;
+  int numRefs   = 1;
+  //start looping through frames in coding order until we can verify that the GOP structure is correct.
+  while (!verifiedGOP && !errorGOP)
+  {
+    int curGOP = (checkGOP - 1) % m_GOPSize;
+    int curPOC = ((checkGOP - 1) / m_GOPSize)*m_GOPSize * multipleFactor + m_RPLList0[curGOP].m_POC;
+    if (m_RPLList0[curGOP].m_POC < 0 || m_RPLList1[curGOP].m_POC < 0)
+    {
+      msg(WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      errorGOP = true;
+    }
+    else
+    {
+      //check that all reference pictures are available, or have a POC < 0 meaning they might be available in the next GOP.
+      bool beforeI = false;
+      for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+      {
+        int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+        if (absPOC < 0)
+        {
+          beforeI = true;
+        }
+        else
+        {
+          bool found = false;
+          for (int j = 0; j<numRefs; j++)
+          {
+            if (refList[j] == absPOC)
+            {
+              found = true;
+            }
+          }
+          if (!found)
+          {
+            msg(WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            errorGOP = true;
+          }
+        }
+      }
+      if (!beforeI && !errorGOP)
+      {
+        //all ref frames were present
+        if (!isOK[curGOP])
+        {
+          numOK++;
+          isOK[curGOP] = true;
+          if (numOK == m_GOPSize)
+          {
+            verifiedGOP = true;
+          }
+        }
+      }
+      else
+      {
+        //create a new RPLEntry for this frame containing all the reference pictures that were available (POC > 0)
+        int newRefs0 = 0;
+        for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+        {
+          int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+          if (absPOC >= 0)
+          {
+            newRefs0++;
+          }
+        }
+        int numPrefRefs0 = m_RPLList0[curGOP].m_numRefPicsActive;
+
+        int newRefs1 = 0;
+        for (int i = 0; i< m_RPLList1[curGOP].m_numRefPics; i++)
+        {
+          int absPOC = curPOC - m_RPLList1[curGOP].m_deltaRefPics[i];
+          if (absPOC >= 0)
+          {
+            newRefs1++;
+          }
+        }
+        int numPrefRefs1 = m_RPLList1[curGOP].m_numRefPicsActive;
+
+        for (int offset = -1; offset>-checkGOP; offset--)
+        {
+          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
+          int offGOP = (checkGOP - 1 + offset) % m_GOPSize;
+          int offPOC = ((checkGOP - 1 + offset) / m_GOPSize)*(m_GOPSize * multipleFactor) + m_RPLList0[offGOP].m_POC;
+          if (offPOC >= 0 && m_RPLList0[offGOP].m_temporalId <= m_RPLList0[curGOP].m_temporalId)
+          {
+            bool newRef = false;
+            for (int i = 0; i<(newRefs0 + newRefs1); i++)
+            {
+              if (refList[i] == offPOC)
+              {
+                newRef = true;
+              }
+            }
+            for (int i = 0; i<newRefs0; i++)
+            {
+              if (m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
+              {
+                newRef = false;
+              }
+            }
+            if (newRef)
+            {
+              newRefs0++;
+            }
+          }
+          if (newRefs0 >= numPrefRefs0)
+          {
+            break;
+          }
+        }
+
+        for (int offset = -1; offset>-checkGOP; offset--)
+        {
+          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
+          int offGOP = (checkGOP - 1 + offset) % m_GOPSize;
+          int offPOC = ((checkGOP - 1 + offset) / m_GOPSize)*(m_GOPSize * multipleFactor) + m_RPLList1[offGOP].m_POC;
+          if (offPOC >= 0 && m_RPLList1[offGOP].m_temporalId <= m_RPLList1[curGOP].m_temporalId)
+          {
+            bool newRef = false;
+            for (int i = 0; i<(newRefs0 + newRefs1); i++)
+            {
+              if (refList[i] == offPOC)
+              {
+                newRef = true;
+              }
+            }
+            for (int i = 0; i<newRefs1; i++)
+            {
+              if (m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
+              {
+                newRef = false;
+              }
+            }
+            if (newRef)
+            {
+              newRefs1++;
+            }
+          }
+          if (newRefs1 >= numPrefRefs1)
+          {
+            break;
+          }
+        }
+
+        curGOP = m_GOPSize + extraRPLs;
+        extraRPLs++;
+      }
+      numRefs = 0;
+      for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+      {
+        int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+        if (absPOC >= 0)
+        {
+          refList[numRefs] = absPOC;
+          numRefs++;
+        }
+      }
+      for (int i = 0; i< m_RPLList1[curGOP].m_numRefPics; i++)
+      {
+        int absPOC = curPOC - m_RPLList1[curGOP].m_deltaRefPics[i];
+        if (absPOC >= 0)
+        {
+          bool alreadyExist = false;
+          for (int j = 0; !alreadyExist && j < numRefs; j++)
+          {
+            if (refList[j] == absPOC)
+            {
+              alreadyExist = true;
+            }
+          }
+          if (!alreadyExist)
+          {
+            refList[numRefs] = absPOC;
+            numRefs++;
+          }
+        }
+      }
+      refList[numRefs] = curPOC;
+      numRefs++;
+    }
+    checkGOP++;
+  }
+  confirmParameter(errorGOP, "Invalid GOP structure given");
+
+  for(int i=0; i<m_GOPSize; i++)
+  {
+    confirmParameter(m_GOPList[i].m_sliceType!='B' && m_GOPList[i].m_sliceType!='P' && m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
+  }
+
+  confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
+
+  if( m_MCTF )
+  {
+    if( m_MCTFFrames.empty() )
+    {
+      msg( WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
+    }
+
+    confirmParameter( m_MCTFFrames.size() != m_MCTFStrengths.size(), "MCTFFrames and MCTFStrengths do not match");
+  }
+
+  if( m_fastForwardToPOC != -1 )
+  {
+    if( m_cabacInitPresent )  { msg( WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); }
+    if( m_alf )               { msg( WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
+  }
+
+
+  /// Experimental settings
+  // checkExperimental( experimental combination of parameters, "Description!" );
+
+  return( m_confirmFailed );
+}
+
 
 int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, int qp, PresetMode preset )
 {
@@ -1503,26 +1870,6 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
   m_inputBitDepth[0]    = 8;                        // input bitdepth
   m_internalBitDepth[0] = 10;                       // internal bitdepth
-  m_profile             = vvenc::Profile::MAIN_10;  // profile: use main_10 or main_10_still_picture
-  m_level               = vvenc::Level::LEVEL4_1;   // level
-  m_levelTier           = vvenc::Tier::TIER_MAIN;   // tier
-  m_SegmentMode         = vvenc::SEG_OFF;           // segment mode
-
-// th this has to go into initcfg
-  if( targetbitrate )
-  {
-    m_RCTargetBitrate       = targetbitrate;        // target bitrate
-    m_RCRateControlMode     = RateControlMode::RCM_PICTURE_LEVEL;
-    m_RCKeepHierarchicalBit = 2;
-    m_RCUseLCUSeparateModel = 1;
-    m_RCInitialQP           = 0;
-    m_RCForceIntraQP        = 0;
-  }
-  else
-  {
-    m_RCTargetBitrate       = 0;
-    m_RCRateControlMode     = RateControlMode::RCM_OFF;
-  }
 
   iRet = initPreset( preset );
 
@@ -1886,7 +2233,6 @@ static inline std::string getProfileStr( int profile )
   std::string cT;
   switch( profile )
   {
-    case Profile::PROFILE_NONE                         : cT = "none"; break;
     case Profile::MAIN_10                              : cT = "main_10"; break;
     case Profile::MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
     case Profile::MAIN_10_444                          : cT = "main_10_444"; break;
@@ -1906,7 +2252,7 @@ static inline std::string getLevelStr( int level )
   std::string cT;
   switch( level )
   {
-    case Level::LEVEL_NONE: cT = "none";    break;
+    case Level::LEVEL_AUTO: cT = "auto";    break;
     case Level::LEVEL1    : cT = "1";       break;
     case Level::LEVEL2    : cT = "2";       break;
     case Level::LEVEL2_1  : cT = "2.1";     break;

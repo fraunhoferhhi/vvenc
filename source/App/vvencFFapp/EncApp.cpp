@@ -105,11 +105,6 @@ bool EncApp::parseCfg( int argc, char* argv[])
     return false;
   }
 
-  if( ! m_cEncAppCfg.m_decode )
-  {
-    msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
-  }
-
   return true;
 }
 
@@ -124,15 +119,19 @@ void EncApp::encode()
     return;
   }
 
-  if( ! openFileIO() )
-  {
-    return;
-  }
-
   // initialize encoder lib
   if( 0 != m_cVVEnc.init( m_cEncAppCfg, this ) )
   {
     msgApp( ERROR, m_cVVEnc.getLastError().c_str() );
+    return;
+  }
+
+  m_cVVEnc.getConfig( m_cEncAppCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
+
+  msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
+
+  if( ! openFileIO() )
+  {
     return;
   }
 

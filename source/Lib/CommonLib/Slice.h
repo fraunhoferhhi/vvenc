@@ -277,10 +277,10 @@ struct ProfileTierLevel
 
   ProfileTierLevel()
     : tierFlag        ( TIER_MAIN )
-    , profileIdc      ( PROFILE_NONE )
+    , profileIdc      ( PROFILE_AUTO )
     , numSubProfile   (0)
     , subProfileIdc   (0)
-    , levelIdc        ( LEVEL_NONE )
+    , levelIdc        ( LEVEL_AUTO )
     , frameOnlyConstraintFlag ( true )
     , multiLayerEnabledFlag   ( false )
   {

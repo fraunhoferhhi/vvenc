@@ -466,7 +466,9 @@ void scaleYuvPlane( YUVBuffer::Plane& yuvPlaneOut, const YUVBuffer::Plane& yuvPl
 
 // ====================================================================================================================
 
-int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth, const int MSBExtendedBitDepth, const int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode )
+int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth, const int MSBExtendedBitDepth,
+                     const int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt,
+                     bool clipToRec709, bool packedYUVMode )
 {
   //NOTE: files cannot have bit depth greater than 16
   m_fileBitdepth        = std::min<unsigned>( fileBitDepth, 16 );

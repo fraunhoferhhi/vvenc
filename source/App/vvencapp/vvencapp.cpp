@@ -118,8 +118,6 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     return false;
   }
 
-  msgApp( vvenc::INFO, "%s", rcVVEncAppCfg.getConfigAsString( rcVVEncAppCfg.m_verbosity ).c_str() );
-
   return true;
 }
 
@@ -179,6 +177,13 @@ int main( int argc, char* argv[] )
   {
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
     return iRet;
+  }
+
+  cVVEnc.getConfig( vvencappCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
+
+  if( vvencappCfg.m_verbosity >= vvenc::INFO )
+  {
+    std::cout << vvencappCfg.getConfigAsString( vvencappCfg.m_verbosity ) << std::endl;
   }
 
   if( vvencappCfg.m_verbosity > vvenc::WARNING )

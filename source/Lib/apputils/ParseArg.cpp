@@ -460,8 +460,8 @@ namespace df
       {
         for (const auto& opt: opts.opt_list)
         {
-          std::list<std::string>::iterator iterIgnore = std::find (ignoreParamLst.begin(), ignoreParamLst.end(), opt->opt->opt_string );
-          if( iterIgnore != ignoreParamLst.end() )
+          bool ignore = ignoreParamLst.end() != std::find(ignoreParamLst.begin(), ignoreParamLst.end(), opt->opt->opt_string);
+          if( !ignore)
           {
             printFormattedConfigEntry( out, *opt, desc_width, max_width_optname, max_width_opt_value );
           }
@@ -486,11 +486,12 @@ namespace df
             {
               if( (*itopt)->opt->opt_string == s )  // names are equal
               {
-                std::list<std::string>::const_iterator iterIgnore = std::find (ignoreParamLst.begin(), ignoreParamLst.end(), (*itopt)->opt->opt_string );
-                if( iterIgnore == ignoreParamLst.end() )
+                bool ignore = ignoreParamLst.end() != std::find(ignoreParamLst.begin(), ignoreParamLst.end(), (*itopt)->opt->opt_string);
+                if( !ignore)
                 {
                   printFormattedConfigEntry( out, **itopt, desc_width, max_width_optname, max_width_opt_value );
                 }
+
                 break;
               }
             }
