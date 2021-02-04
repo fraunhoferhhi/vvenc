@@ -473,7 +473,7 @@ bool VVEncCfg::initCfgParameter()
   if ( m_usePerceptQPATempFiltISlice > 0
       && (m_MCTF == 0 || m_QP < 27 || m_QP > MAX_QP_PERCEPT_QPA || m_GOPSize <= 8 || m_IntraPeriod < 2 * m_GOPSize) )
   {
-    m_usePerceptQPATempFiltISlice = (m_QP < 17 ? 0 : 1); // disable temp. pump. red
+    m_usePerceptQPATempFiltISlice = (m_QP < 17 || m_MCTF == 0 ? 0 : 1); // disable temp. pump. red
   }
   if (m_cuQpDeltaSubdiv < 0)
   {
