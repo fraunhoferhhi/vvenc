@@ -406,7 +406,7 @@ void BestEncInfoCache::init( const Slice &slice )
   }
 }
 
-bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& partitioner )
+bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner )
 {
   if( cs.cus.size() != 1 || cs.tus.size() != 1 || partitioner.maxBTD <= 1 )
   {
@@ -426,7 +426,7 @@ bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const Partitioner& 
   {
     if( blk.valid() ) encInfo.tu.copyComponentFrom( *cs.tus.front(), blk.compID );
   }
-  encInfo.testMode       = getCSEncMode( cs );
+  encInfo.testMode       = testMode;
   encInfo.dist           = cs.dist;
   encInfo.costEDO        = cs.costDbOffset;
 
@@ -526,15 +526,6 @@ void EncModeCtrl::destroy()
   CacheBlkInfoCtrl::destroy();
   BestEncInfoCache::destroy();
   SaveLoadEncInfoSbt::destroy();
-}
-
-void EncModeCtrl::xExtractFeatures( const EncTestMode& encTestmode, CodingStructure& cs )
-{
-  CHECK( cs.features.size() < NUM_ENC_FEATURES, "Features vector is not initialized" );
-
-  cs.features[ENC_FT_RD_COST        ] = double( cs.cost              );
-  cs.features[ENC_FT_ENC_MODE_TYPE  ] = double( encTestmode.type     );
-  cs.features[ENC_FT_ENC_MODE_OPTS  ] = double( encTestmode.opts     );
 }
 
 void EncModeCtrl::initCTUEncoding( const Slice &slice )
@@ -987,7 +978,7 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
   CodedCUInfo    &relatedCU   = getBlkInfo( partitioner.currArea() );
   const CodingUnit&  bestCU   = *cuECtx.bestCU;
 
-  setFromCs( *cuECtx.bestCS, partitioner );
+  setFromCs( *cuECtx.bestCS, cuECtx.bestMode, partitioner );
 
   if( bestCU.skip )
   {
@@ -1017,8 +1008,6 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
 
 bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure*& tempCS, Partitioner& partitioner, const bool useEDO )
 {
-  xExtractFeatures( encTestmode, *tempCS );
-
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
 
@@ -1101,11 +1090,12 @@ bool EncModeCtrl::useModeResult( const EncTestMode& encTestmode, CodingStructure
   }
 
   // for now just a simple decision based on RD-cost or choose tempCS if bestCS is not yet coded
-  if( tempCS->features[ENC_FT_RD_COST] != MAX_DOUBLE && ( !cuECtx.bestCS || ( ( tempCS->features[ENC_FT_RD_COST] + ( useEDO ? tempCS->costDbOffset : 0 ) ) < ( cuECtx.bestCS->features[ENC_FT_RD_COST] + ( useEDO ? cuECtx.bestCS->costDbOffset : 0 ) ) ) ) )
+  if( tempCS->cost != MAX_DOUBLE && ( !cuECtx.bestCS || ( ( tempCS->cost + ( useEDO ? tempCS->costDbOffset : 0 ) ) < ( cuECtx.bestCS->cost + ( useEDO ? cuECtx.bestCS->costDbOffset : 0 ) ) ) ) )
   {
-    cuECtx.bestCS = tempCS;
-    cuECtx.bestCU = tempCS->cus[0];
-    cuECtx.bestTU = cuECtx.bestCU->firstTU;
+    cuECtx.bestCS   = tempCS;
+    cuECtx.bestCU   = tempCS->cus[0];
+    cuECtx.bestTU   = cuECtx.bestCU->firstTU;
+    cuECtx.bestMode = encTestmode;
 
     if( isModeInter( encTestmode ) )
     {

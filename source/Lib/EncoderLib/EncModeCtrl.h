@@ -163,15 +163,6 @@ inline PartSplit getPartSplit( const EncTestMode& encTestmode )
   }
 }
 
-inline EncTestMode getCSEncMode( const CodingStructure& cs )
-{
-  return EncTestMode( EncTestModeType( (unsigned)cs.features[ENC_FT_ENC_MODE_TYPE] ),
-                      EncTestModeOpts( (unsigned)cs.features[ENC_FT_ENC_MODE_OPTS] ),
-                      false);
-}
-
-
-
 //////////////////////////////////////////////////////////////////////////
 // EncModeCtrl controls if specific modes should be tested
 //////////////////////////////////////////////////////////////////////////
@@ -188,6 +179,7 @@ struct ComprCUCtx
     , bestCS        ( nullptr    )
     , bestCU        ( nullptr    )
     , bestTU        ( nullptr    )
+    , bestMode      ()
     , bestInterCost             ( MAX_DOUBLE )
     , bestCostVertSplit     (MAX_DOUBLE)
     , bestCostHorzSplit     (MAX_DOUBLE)
@@ -219,6 +211,7 @@ struct ComprCUCtx
   CodingStructure*  bestCS;
   CodingUnit*       bestCU;
   TransformUnit*    bestTU;
+  EncTestMode       bestMode;
   double            bestInterCost;
   double            bestCostVertSplit;
   double            bestCostHorzSplit;
@@ -341,8 +334,8 @@ public:
   virtual ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );
-  bool setCsFrom        ( CodingStructure& cs, EncTestMode& testMode, const Partitioner& partitioner ) const;
-  bool setFromCs        ( const CodingStructure& cs, const Partitioner& partitioner );
+  bool setCsFrom        (       CodingStructure& cs,       EncTestMode& testMode, const Partitioner& partitioner ) const;
+  bool setFromCs        ( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner );
   bool isReusingCuValid ( const CodingStructure &cs, const Partitioner &partitioner, int qp );
 };
 
@@ -376,10 +369,6 @@ public:
   bool useModeResult      ( const EncTestMode& encTestmode, CodingStructure*& tempCS,  Partitioner& partitioner, const bool useEDO );
 
   void beforeSplit        ( Partitioner& partitioner );
-
-private:
-  void xExtractFeatures   ( const EncTestMode& encTestmode, CodingStructure& cs );
-
 };
 
 } // namespace vvenc

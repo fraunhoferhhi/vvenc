@@ -156,8 +156,6 @@ public:
   // encoding search utilities
   // ---------------------------------------------------------------------------
 
-  static_vector<double, NUM_ENC_FEATURES> features;
-
   double      cost;
   double      costDbOffset;
   double      lumaCost;
