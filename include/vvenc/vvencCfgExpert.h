@@ -527,6 +527,12 @@ public:
   bool                m_videoSignalTypePresent                  = false;                                 ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
   bool                m_videoFullRangeFlag                      = false;                                 ///< Indicates the black level and range of luma and chroma signals
 
+  std::vector<uint32_t> m_masteringDisplay;                                                              ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
+                                                                                                         ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
+                                                                                                         ///< min/max luminance value in units of 1/10000 candela per square metre
+  std::vector<uint32_t> m_contentLightLevel                     = {0,10000};                             ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+ int                  m_preferredTransferCharacteristics        = -1;                                    ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
+
   std::string         m_summaryOutFilename                      = "";                                    ///< filename to use for producing summary output file.
   std::string         m_summaryPicFilenameBase                  = "";                                    ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   unsigned            m_summaryVerboseness                      = 0;                                     ///< Specifies the level of the verboseness of the text output.

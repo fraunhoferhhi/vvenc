@@ -240,14 +240,82 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 const std::vector<SVPair<HDRMode>> HdrModeToIntMap =
 {
   { "off",                 HDR_OFF },
-  { "hdr",                 HDR_HDR10_PQ },
-  { "hdr10",               HDR_HDR10_PQ },
-  { "pq",                  HDR_HDR10_PQ },
-  { "hlg",                 HDR_HDR10_PQ },
-  { "0",                   HDR_OFF },
-  { "1",                   HDR_HDR10_PQ },
-  { "2",                   HDR_HLG },
+  { "pq",                  HDR_PQ_BT2020},
+  { "hlg",                 HDR_HLG_2020},
+  { "pq709",               HDR_PQ_BT709},
+  { "hlg709",              HDR_HLG_709},
 };
+
+
+const std::vector<SVPair<int>> ColorPrimariesToIntMap =
+{
+  { "reserved",            0 },
+  { "bt709",               1 },
+  { "unknown",             2 },
+  { "empty",               3 },
+  { "bt470m",              4 },
+  { "bt470bg",             5 },
+  { "smpte170m",           6 },
+  { "smpte240m",           7 },
+  { "film",                8 },
+  { "bt2020",              9 },
+  { "smpte428",           10 },
+  { "smpte431",           11 },
+  { "smpte432",           12 },
+  { "0", 0 }, { "1", 1 }, { "2", 2 }, { "3", 3 }, { "4", 4 }, { "5", 5 },
+  { "6", 6 }, { "7", 7 }, { "8", 8 }, { "9", 9 }, { "10",10 }, { "11",11 }, { "12",12 }
+};
+
+const std::vector<SVPair<int>> TransferCharacteristicsToIntMap =
+{
+  { "reserved",            0 },
+  { "bt709",               1 },
+  { "unknown",             2 },
+  { "empty",               3 },
+  { "bt470m",              4 },
+  { "bt470bg",             5 },
+  { "smpte170m",           6 },
+  { "smpte240m",           7 },
+  { "linear",              8 },
+  { "log100",              9 },
+  { "log316",             10 },
+  { "iec61966",           11 },
+  { "bt1361e",            12 },
+  { "iec61966-2-1",       13 },
+  { "bt2020-10",          14 },
+  { "bt2020-12",          15 },
+  { "smpte2084",          16 },
+  { "smpte428",           17 },
+  { "arib-std-b67",       18 },
+  { "0", 0 }, { "1", 1 }, { "2", 2 }, { "3", 3 }, { "4", 4 }, { "5", 5 },
+  { "6", 6 }, { "7", 7 }, { "8", 8 }, { "9", 9 }, { "10",10 }, { "11",11 },
+  { "12",12 },{ "13",13 },{ "14",14 },{ "15",15 },{ "16",16 },{ "17",17 },{ "18",18 }
+};
+
+const std::vector<SVPair<int>> ColorMatrixToIntMap =
+{
+  { "gbr",              0 },
+  { "bt709",            1 },
+  { "unknown",          2 },
+  { "empty",            3 },
+  { "fcc",              4 },
+  { "bt470bg",          5 },
+  { "smpte170m",        6 },
+  { "smpte240m",        7 },
+  { "ycgco",            8 },
+  { "bt2020nc",         9 },
+  { "bt2020c",          10 },
+  { "smpte2085",        11 },
+  { "chroma-derived-nc",12 },
+  { "chroma-derived-c", 13 },
+  { "ictcp",            14 },
+  { "0", 0 }, { "1", 1 }, { "2", 2 }, { "3", 3 }, { "4", 4 }, { "5", 5 },
+  { "6", 6 }, { "7", 7 }, { "8", 8 }, { "9", 9 }, { "10",10 }, { "11",11 },
+  { "12",12 },{ "13",13 },{ "14",14 }
+};
+
+
+
 
 //// ====================================================================================================================
 //// string <-> enum
@@ -304,7 +372,12 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
   IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
-  IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                      &HdrModeToIntMap       );
+  IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
+
+  IStreamToRef<int>            toColorPrimaries             ( &m_colourPrimaries,             &ColorPrimariesToIntMap );
+  IStreamToRef<int>            toTransferCharacteristics    ( &m_transferCharacteristics,     &TransferCharacteristicsToIntMap );
+  IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
+  IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
 
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,              &DecodingRefreshTypeToEnumMap );
@@ -368,7 +441,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 
   opts.setSubSection("HDR Options");
   opts.addOptions()
-  ("hdr",               toHDRMode,                "enabled HDR mode (+SEI messages). If max-cll or master-display is set, HDR10/PQ is enabled (use 0,1 (hdr,hdr10,pq), 2 (hlg)")
+  ("hdr",               toHDRMode,                "enabled HDR mode (+SEI messages). If maxcll or masteringdisplay is set, HDR10/PQ is enabled (use 0,1 (hdr,hdr10,pq), 2 (hlg)")
    ;
 
   po::setDefaults( opts );
@@ -381,6 +454,20 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("aud",                 m_AccessUnitDelimiter,       "Enable Access Unit Delimiter NALUs")
   ("vui",                 m_vuiParametersPresent,      "Enable generation of vui_parameters")
   ("hrd",                 m_hrdParametersPresent,      "Enable generation of hrd_parameters")
+  ;
+
+  opts.setSubSection("VUI and SEI Options");
+  opts.addOptions()
+  ("colorprim",           toColorPrimaries,            "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                       "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
+  ("transfer",            toTransferCharacteristics,   "Specify transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                       "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+                                                       "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
+  ("masterdisplay,-mdcv",toMasteringDisplay,          "SMPTE ST 2086 mastering display color volume info SEI (HDR), "
+                                                       "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
+                                                       "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
+  ("maxcll,-cll",        toContentLightLevel,         "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
+                                                       "max. picture average light, range: 1 <= cll,fall <= 65535'")
   ;
 
   po::setDefaults( opts );

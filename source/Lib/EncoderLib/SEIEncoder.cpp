@@ -492,6 +492,15 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
 }
 
 
+void SEIEncoder::initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *seiAltTransCharacteristics)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiAltTransCharacteristics!=NULL), "Unspecified error");
+  //  Set SEI message parameters read from command line options
+  seiAltTransCharacteristics->preferredTransferCharacteristics = m_pcEncCfg->m_preferredTransferCharacteristics;
+}
+
+
 } // namespace vvenc
 
 //! \}

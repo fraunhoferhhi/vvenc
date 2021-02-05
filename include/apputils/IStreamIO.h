@@ -415,6 +415,88 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 }
 
 
+// ====================================================================================================================
+// string -> base type
+// ====================================================================================================================
+
+
+
+template<typename T>
+class APPUTILS_DECL IStreamToRef
+{
+  public:
+    IStreamToRef( T* d, const std::vector<SVPair<T>>* m )
+      : dstVal ( d )
+      , toMap( m )
+    {
+    }
+
+    ~IStreamToRef()
+    {
+    }
+
+    template<typename F>
+    friend std::ostream& operator << ( std::ostream& os, const IStreamToRef<F>& toValue );
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToRef<F>& toValue );
+
+    const char* to_string() const
+    {
+      for ( const auto& map : *toMap )
+      {
+        if ( *dstVal == map.value )
+        {
+          return map.str;
+        }
+      }
+      //msgApp( ERROR, "Unknown enum \"%s\" in to_string", *dstVal );
+      return "";
+    }
+
+  private:
+    T*                            dstVal;
+    const std::vector<SVPair<T>>* toMap;
+};
+
+template<typename E>
+inline std::istream& operator >> ( std::istream& in, IStreamToRef<E>& toValue )
+{
+  std::string str;
+  in >> str;
+
+  for ( const auto& map : *toValue.toMap )
+  {
+    if ( str == map.str )
+    {
+      *toValue.dstVal = map.value;
+      return in;
+    }
+  }
+
+  /* not found */
+  in.setstate( std::ios::failbit );
+  return in;
+}
+
+template<typename E>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToRef<E>& toValue )
+{
+  for ( const auto& map : *toValue.toMap )
+  {
+    if ( *toValue.dstVal == map.value )
+    {
+      os << map.str;
+      return os;
+    }
+  }
+
+  /* not found */
+  os.setstate( std::ios::failbit );
+  return os;
+}
+
+
 } // namespace
 
 //! \}

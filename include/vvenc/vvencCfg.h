@@ -182,9 +182,12 @@ enum SegmentMode
 
 enum HDRMode
 {
-  HDR_OFF      = 0,
-  HDR_HDR10_PQ,
-  HDR_HLG
+  HDR_OFF     = 0, // SDR
+  HDR_PQ_BT709,    // HDR10, Dolby BT.709
+  HDR_PQ_BT2020,   // HDR10, Dolby BT.2020
+  HDR_HLG_709,     // Hybrid Log Gamma BT.709
+  HDR_HLG_2020,    // Hybrid Log Gamma BT.2020
+  HDR_USER_DEFINED // user defined HDR mode (to provide old HDR modes, HDR is set individually)
 };
 
 enum NalUnitType

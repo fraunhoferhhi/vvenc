@@ -85,6 +85,9 @@ public:
   void initPictureTimingSEI       ( SEIMessages& seiMessages, SEIMessages& nestedSeiMessages, SEIMessages& duInfoSeiMessages, const Slice *slice, const uint32_t numDU, const bool bpPresentInAU);
   void initDrapSEI                ( SEIDependentRAPIndication& drapSei) {};
 
+
+  void initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *seiAltTransCharacteristics);
+
 private:
   const VVEncCfg* m_pcEncCfg;
   EncHRD*         m_pcEncHRD;

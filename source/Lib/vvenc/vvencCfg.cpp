@@ -132,7 +132,22 @@ bool VVEncCfg::initCfgParameter()
    }
 
   confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
-  confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_HLG,  "HdrMode must be in the range 0 - 2 (off,hdr10,hlg)" );
+  confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
+  confirmParameter( !m_contentLightLevel.empty() &&  m_contentLightLevel.size() != 2, "content light level must contain 2 values max light level and max avg light level");
+  if( !m_masteringDisplay.empty() )
+  {
+    confirmParameter( !m_masteringDisplay.empty() &&  m_masteringDisplay.size() != 10,  "mastering display colour volume must contain 10 values G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)");
+
+    bool outOfRGBRange = false;
+    for( size_t i = 0; i < m_masteringDisplay.size(); i++ )
+    {
+      if( i < 8 && m_masteringDisplay[i] > 50000 )
+      {
+        outOfRGBRange = true; break;
+      }
+    }
+    confirmParameter( outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
+  }
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
@@ -243,7 +258,14 @@ bool VVEncCfg::initCfgParameter()
     m_fastInterSearchMode = FASTINTERSEARCH_MODE1;
   }
 
-  if( m_HdrMode == HDRMode::HDR_HDR10_PQ )
+  if( m_HdrMode == HDRMode::HDR_OFF && ( !m_masteringDisplay.empty() ||
+     ( m_contentLightLevel.empty() && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 10000) ) )
+  {
+    // enable hdr pq bt2020/bt709 mode (depending on set colour primaries)
+    m_HdrMode = (m_colourPrimaries == 9) ? HDR_PQ_BT2020 : HDR_HLG_709;
+  }
+
+  if( m_HdrMode == HDRMode::HDR_HLG_709 || m_HdrMode == HDRMode::HDR_HLG_2020 )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
     m_LMCSOffset = 1;
@@ -285,8 +307,27 @@ bool VVEncCfg::initCfgParameter()
     {
       m_qpOutValsCbCr = { 12,22,30,32,37 };
     }
+
+    // VUI and SEI options
+    m_vuiParametersPresent     = true;
+    m_colourDescriptionPresent = true;  // enable colour_primaries, transfer_characteristics and matrix_coefficients
+
+    m_colourPrimaries    = (m_HdrMode == HDR_PQ_BT709) ? 1 : 9; // bt709 : bt2020
+    m_matrixCoefficients = (m_HdrMode == HDR_PQ_BT709) ? 1 : 9; // bt709 : bt2020nc
+    m_transferCharacteristics = 16; // smpte2084
+
+    if( m_contentLightLevel.empty() )
+    {
+      m_contentLightLevel = { 0, 10000 };
+    }
+
+    if( m_masteringDisplay.empty() )
+    {
+      //m_masteringDisplay = { 0, 10000 };  // init default mastering display info
+    }
+
   }
-  else if( m_HdrMode == HDRMode::HDR_HLG )
+  else if( m_HdrMode == HDRMode::HDR_HLG_709 || m_HdrMode == HDRMode::HDR_HLG_2020 )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_HLG;
     m_LMCSOffset = 0;
@@ -302,6 +343,23 @@ bool VVEncCfg::initCfgParameter()
     {
       m_qpOutValsCb = { 9, 24, 33, 37 };
     }
+
+    // VUI and SEI options
+    m_vuiParametersPresent     = true;
+
+    if( m_HdrMode == HDR_HLG_709 )
+    {
+      m_colourPrimaries         = 1; // bt709
+      m_transferCharacteristics = 1;
+      m_matrixCoefficients      = 1;
+    }
+    else
+    {
+      m_colourPrimaries         = 9;  // bt2020
+      m_transferCharacteristics = 14; // bt2020-10
+      m_matrixCoefficients      = 9;  // bt2020nc
+    }
+    m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
   }
 
   switch ( m_conformanceWindowMode)
@@ -1379,6 +1437,10 @@ bool VVEncCfg::checkCfgParameter( )
       }
       break;
   }
+
+  confirmParameter(  m_colourPrimaries < 0 || m_colourPrimaries > 12,                 "colourPrimaries must be in range 0 <= x <= 12" );
+  confirmParameter(  m_transferCharacteristics < 0 || m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
+  confirmParameter(  m_matrixCoefficients < 0 || m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
 
   confirmParameter(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
   confirmParameter(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
