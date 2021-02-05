@@ -424,7 +424,9 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
     }
   }
 
-  // mctf filter
+  // MCTF process
+  if ( m_cEncCfg.m_usePerceptQPA ) m_MCTF.assignQpaBufs( pic );
+
   int mctfDelay = 0;
   if ( m_cEncCfg.m_MCTF )
   {
