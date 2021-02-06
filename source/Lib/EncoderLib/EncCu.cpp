@@ -473,7 +473,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_pcEncCfg->m_RCRateControlMode )
   {
-    m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
+    encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
   }
 
   // reset context states and uninit context pointer
@@ -547,9 +547,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         if (rateCtrlFrame)
         {
           // frame-level or GOP-level RC + QPA
-          pic->ctuAdaptedQP[ ctuRsAddr ] += m_pcRateCtrl->encRCPic->picQPOffsetQPA;
+          pic->ctuAdaptedQP[ ctuRsAddr ] += encRCPic->picQPOffsetQPA;
           pic->ctuAdaptedQP[ ctuRsAddr ] = Clip3( 0, MAX_QP, (int)pic->ctuAdaptedQP[ ctuRsAddr ] );
-          pic->ctuQpaLambda[ ctuRsAddr ] *= m_pcRateCtrl->encRCPic->picLambdaOffsetQPA;
+          pic->ctuQpaLambda[ ctuRsAddr ] *= encRCPic->picLambdaOffsetQPA;
           pic->ctuQpaLambda[ ctuRsAddr ] = Clip3( m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, pic->ctuQpaLambda[ ctuRsAddr ] );
         }
         m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcEncCfg->m_usePerceptQPA > 2);
