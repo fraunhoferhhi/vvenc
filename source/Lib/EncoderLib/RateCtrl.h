@@ -117,7 +117,7 @@ namespace vvenc {
     void initGOPID2Level( int GOPID2Level[] );
     void initPicPara( TRCParameter* picPara = NULL );    // NULL to initial with default value
     void initLCUPara( TRCParameter** LCUPara = NULL );    // NULL to initial with default value
-    void updateAfterPic( int bits );
+    void updateAfterPic( int bits, int tgtBits );
     void setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB );
     void setQpInGOP( int gopId, int gopQp, int &qp );
     bool isQpResetRequired( int gopId );
@@ -127,6 +127,7 @@ namespace vvenc {
   public:
     int             rcMode;
     bool            twoPass;
+    int             fppParFrames;
     int             totalFrames;
     int             targetRate;
     int             frameRate;
@@ -196,7 +197,7 @@ namespace vvenc {
     EncRCPic();
     ~EncRCPic();
 
-    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, std::list<EncRCPic*>& listPreviousPictures );
+    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, int framePoc, std::list<EncRCPic*>& listPreviousPictures );
     void destroy();
 
     void   calCostSliceI( Picture* pic );
@@ -233,10 +234,12 @@ namespace vvenc {
   public:
     TRCLCU* lcu;
     int     targetBits;
+    int     tmpTargetBits;
     int     bitsLeft;
     int     numberOfLCU;
     int     lcuLeft;
     int     picQPOffsetQPA;
+    int     poc;
     double  picLambdaOffsetQPA;
     double  picEstLambda;
   
@@ -266,7 +269,7 @@ namespace vvenc {
 
     void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ] );
     void destroy();
-    void initRCPic( int frameLevel );
+    void initRCPic( int frameLevel, int framePoc );
     void initRCGOP( int numberOfPictures );
     void destroyRCGOP();
 
@@ -284,6 +287,7 @@ namespace vvenc {
     std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
 
   public:
+    std::list<EncRCPic*>    m_listRCPictures;
     EncRCSeq*   encRCSeq;
     EncRCGOP*   encRCGOP;
     EncRCPic*   encRCPic;
@@ -295,7 +299,6 @@ namespace vvenc {
     bool        rcIsFinalPass;
 
   private:
-    std::list<EncRCPic*>    m_listRCPictures;
     std::list<TRCPassStats> m_listRCFirstPassStats;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
   };

@@ -218,6 +218,7 @@ public:
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
+  bool                          isEncPicturePPFinished;
   bool                          isFinished;
   bool                          isLongTerm;
   bool                          encPic;
@@ -249,7 +250,7 @@ public:
 #else
   bool                          useSC;
 #endif
-
+  int                           picEncoderIdx;
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

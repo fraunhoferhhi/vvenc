@@ -81,7 +81,12 @@ void EncPicture::init( const VVEncCfg& encCfg,
   m_pcEncCfg = &encCfg;
 
   m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
+#if FPP_CLEAN_UP
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
+#else
+  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, dynamic_cast<EncPicturePP*>( this ) );
+#endif
+  m_pcRateCtrl = &rateCtrl;
 }
 
 
@@ -98,11 +103,16 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
   // compress picture
   xInitPicEncoder ( pic );
-  gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
+  if( m_pcEncCfg->m_RCRateControlMode > 0 )
+  {
+    m_encRCPic = new EncRCPic;
+    m_encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, m_pcRateCtrl->m_listRCPictures );
+    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], m_encRCPic, this );
+  }
 
   // compress current slice
   pic.cs->slice = pic.slices[0];
-  m_SliceEncoder.compressSlice( &pic );
+  m_SliceEncoder.compressSlice( &pic, m_encRCPic );
 
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
 }

@@ -76,9 +76,13 @@ class EncPicture
     BitEstimator             m_BitEstimator;
     CABACWriter              m_CABACEstimator;
     CtxCache                 m_CtxCache;
+    RateCtrl*                m_pcRateCtrl;
+    EncRCPic*                m_encRCPic;
 
   public:
+#if FPP_CLEAN_UP
     WaitCounter              m_ctuTasksDoneCounter;
+#endif
 
   public:
     EncPicture()
@@ -98,6 +102,7 @@ class EncPicture
     void finalizePicture        ( Picture& pic );
 
     EncSlice* getEncSlice       () { return &m_SliceEncoder; }
+    EncRCPic* getEncRCPic       () { return m_encRCPic; }
 
   protected:
     void xInitPicEncoder        ( Picture& pic );

@@ -279,6 +279,7 @@ void EncLib::initPass( int pass )
     m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight,
       m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
 
+    m_cRateCtrl.encRCSeq->fppParFrames = m_cEncCfg.m_maxParallelFrames;
     if ( pass == 1 )
     {
       m_cRateCtrl.processFirstPassData( pps0.pcv->sizeInCtus );
@@ -363,6 +364,15 @@ void EncLib::xSetRCEncCfg( int pass )
     if( m_cBckCfg.m_CTUSize < 128 )
     {
       m_cBckCfg.m_cuQpDeltaSubdiv = 0;
+    }
+
+    if ( m_cEncCfg.m_maxParallelFrames > 0 )
+    {
+      m_cBckCfg.m_useAMaxBT = 0;
+      m_cBckCfg.m_cabacInitPresent = 0;
+      m_cBckCfg.m_saoEncodingRate = 0.0;
+      m_cBckCfg.m_alfTempPred = 0;
+      m_cBckCfg.m_maxParallelFrames = m_cEncCfg.m_maxParallelFrames;
     }
 
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
@@ -475,17 +485,32 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
     }
 
     // encode picture with current poc
+#if FPP_CLEAN_UP
     m_cGOPEncoder->encodePictures( encList, m_cListPic, au, false );
+#else
+    if( m_cEncCfg.m_maxParallelFrames )
+      m_cGOPEncoder->encodeGOP( encList, m_cListPic, au, false, flush );
+    else
+      m_cGOPEncoder->encodePicture( encList, m_cListPic, au, false );
+#endif
 
     m_numPicsInQueue -= 1;
     m_numPicsCoded   += 1;
     // output reconstructed yuv
     xOutputRecYuv();
   }
+#if FPP_CLEAN_UP
   else
   {
     CHECK( flush && m_cGOPEncoder->m_gopEncListOutput.size() > 0, "internal error: encoder tries to flush ouput queue, but will never be called" );
   }
+#else
+  else if( m_cEncCfg.m_maxParallelFrames && flush && !m_cGOPEncoder->m_gopEncListOutput.empty() )
+  {
+    std::vector<Picture*> encList;
+    m_cGOPEncoder->encodeGOP( encList, m_cListPic, au, false, flush );
+  }
+#endif
 
   isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? (  m_numPicsInQueue <= 0 && !m_cGOPEncoder->anyFramesInOutputQueue() ): ( m_numPicsInQueue <= 0 );
   if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )

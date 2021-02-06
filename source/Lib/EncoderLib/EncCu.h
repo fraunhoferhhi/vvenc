@@ -203,6 +203,7 @@ private:
   // thread stuff
   Ctx*                  m_syncPicCtx;                        ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   PelStorage            m_dbBuffer;
+  int                   m_ctuRcQP;
   
   Partitioner           m_partitioner;
 
@@ -221,15 +222,15 @@ public:
   void  setUpLambda           ( Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted, const bool useRC = false);
   void  updateLambda          ( const Slice& slice, const double ctuLambda, const int ctuQP, const int newQP, const bool saveUnadjusted);
 
-  void encodeCtu              ( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus );
+  void encodeCtu              ( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus, EncRCPic* encRCPic );
 
 private:
-  void  xCompressCtu          ( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] );
+  void  xCompressCtu          ( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[], EncRCPic* encRCPic );
 
   void xCalDebCost            ( CodingStructure& cs, Partitioner& partitioner );
   Distortion xGetDistortionDb ( CodingStructure& cs, CPelBuf& org, CPelBuf& reco, const CompArea& compArea, bool beforeDb );
 
-  void xCompressCU            ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm );
+  void xCompressCU            ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, EncRCPic* encRCPic );
   bool xCheckBestMode         ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestmode, const bool useEDO = false );
 
   void xCheckRDCostIntra      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
@@ -238,12 +239,12 @@ private:
   void xCheckRDCostAffineMerge( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostMerge      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm,       EncTestMode& encTestMode );
   void xCheckRDCostMergeGeo   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
-  void xCheckModeSplit        ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
-  void xCheckModeSplitInternal( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass );
+  void xCheckModeSplit        ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, EncRCPic* encRCPic );
+  void xCheckModeSplitInternal( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass, EncRCPic* encRCPic );
   void xReuseCachedResult     ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm );
 
-  void xSetCtuQPRC            ( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr );
-  void xUpdateAfterCtuRC      ( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr );
+  void xSetCtuQPRC            ( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr, EncRCPic* encRCPic );
+  void xUpdateAfterCtuRC      ( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr, EncRCPic* encRCPic );
 
   void xCheckDQP              ( CodingStructure& cs, Partitioner& partitioner, bool bKeepCtx = false);
   void xEncodeDontSplit       ( CodingStructure& cs, Partitioner& partitioner);

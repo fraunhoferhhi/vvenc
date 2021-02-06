@@ -162,6 +162,7 @@ Picture::Picture()
     , isBorderExtended  ( false )
     , isReferenced      ( false )
     , isNeededForOutput ( false )
+    , isEncPicturePPFinished ( false )
     , isFinished        ( false )
     , isLongTerm        ( false )
     , encPic            ( true )
@@ -185,6 +186,7 @@ Picture::Picture()
 #else
     , useSC             ( 0 )
 #endif
+    , picEncoderIdx   ( 0 )
 {
 }
 

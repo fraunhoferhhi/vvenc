@@ -110,6 +110,21 @@ struct CtuEncParam
   CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y ) : pic( _p ), encSlice( _s ), ctuRsAddr( _r ), ctuPosX( _x ), ctuPosY( _y ) {}
 };
 
+#if !FPP_CLEAN_UP
+struct CompressCtusFinishedParam
+{
+  Picture*      pic;
+  EncSlice*     encSlice;
+  Slice*        slice;
+  WaitCounter*  waitCounter;
+  EncPicturePP* encPicPP;
+  int           boundingCtuTsAddr;
+
+  CompressCtusFinishedParam() : pic( nullptr ), encSlice( nullptr ), slice( nullptr ), waitCounter( nullptr ), encPicPP( nullptr ), boundingCtuTsAddr( 0 ) {}
+  CompressCtusFinishedParam( Picture* _p, EncSlice* _es, Slice* _s, WaitCounter* _w, EncPicturePP* _e, int _b ) :
+    pic( _p ), encSlice( _es ), slice( _s ), waitCounter( _w ), encPicPP( _e ), boundingCtuTsAddr( _b ) {}
+};
+#endif
 // ====================================================================================================================
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
@@ -117,7 +132,9 @@ struct CtuEncParam
 EncSlice::EncSlice()
   : m_pcEncCfg           ( nullptr)
   , m_threadPool         ( nullptr )
+#if FPP_CLEAN_UP
   , m_ctuTasksDoneCounter( nullptr )
+#endif
   , m_pLoopFilter        ( nullptr )
   , m_pALF               ( nullptr )
   , m_pcRateCtrl         ( nullptr )
@@ -163,14 +180,22 @@ void EncSlice::init( const VVEncCfg& encCfg,
                      EncAdaptiveLoopFilter& alf,
                      RateCtrl& rateCtrl,
                      NoMallocThreadPool* threadPool,
+#if FPP_CLEAN_UP
                      WaitCounter* ctuTasksDoneCounter )
+#else
+                     EncPicturePP* encPicPP )
+#endif
 {
   m_pcEncCfg            = &encCfg;
   m_pLoopFilter         = &loopFilter;
   m_pALF                = &alf;
   m_pcRateCtrl          = &rateCtrl;
   m_threadPool          = threadPool;
+#if FPP_CLEAN_UP
   m_ctuTasksDoneCounter = ctuTasksDoneCounter;
+#else
+  m_encPicPP            = encPicPP;
+#endif
   m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.pcv->heightInCtus : 0 );
 
   const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.pcv->heightInCtus : 1;
@@ -348,7 +373,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
 }
 
-void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
+void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda, EncRCPic* encRCPic )
 {
   Slice* slice = pic->cs->slice;
   if ( RCM_GOP_LEVEL == m_pcEncCfg->m_RCRateControlMode )
@@ -359,8 +384,8 @@ void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
 
   if ( m_pcEncCfg->m_usePerceptQPA )
   {
-    m_pcRateCtrl->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
-    m_pcRateCtrl->encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
+    encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
+    encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
   }
 
   // store lambda
@@ -505,7 +530,7 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
 
 /** \param pic   picture class
  */
-void EncSlice::compressSlice( Picture* pic )
+void EncSlice::compressSlice( Picture* pic, EncRCPic* encRCPic )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_COMPRESS_SLICE );
   CodingStructure& cs         = *pic->cs;
@@ -513,6 +538,7 @@ void EncSlice::compressSlice( Picture* pic )
   uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
   uint32_t  boundingCtuTsAddr = pic->cs->pcv->sizeInCtus;
 
+  m_encRCPic = encRCPic;
   cs.pcv      = slice->pps->pcv;
   cs.fracBits = 0;
 
@@ -705,6 +731,19 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   pic->getFilteredOrigBuffer().destroy();
 }
 
+#if !FPP_CLEAN_UP
+bool EncSlice::xProcessCtusFinishingTask( int taskIdx, CompressCtusFinishedParam* param )
+{
+  //param->waitCounter->wait();
+  CHECK( param->encSlice->m_processStates[ param->boundingCtuTsAddr - 1 ] != PROCESS_DONE, "ctu tasks not finished yet, but main task continues" );
+  //param->encSlice->xFinishCompressSlice( param->pic, *param->slice );
+  param->encPicPP->finalizePicture( *param->pic );
+  param->encPicPP->finish();
+  delete param;
+  return true;
+}
+#endif
+
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
 {
   CodingStructure& cs      = *pic->cs;
@@ -753,6 +792,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   CHECK( idx != pcv.sizeInCtus, "array index out of bounds" );
 
   // process ctu's until last ctu is done
+#if FPP_CLEAN_UP
   if( m_pcEncCfg->m_numThreads > 0 )
   {
     for( auto& ctuEncParam : ctuEncParams )
@@ -765,6 +805,32 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
                                                  EncSlice::xProcessCtuTask<true> );
     }
   }
+#else
+  if( m_pcEncCfg->m_numThreads > 0 )
+  {
+    WaitCounter* ctuTaskCounter = new WaitCounter;
+    for( auto& ctuEncParam : ctuEncParams )
+    {
+      m_threadPool->addBarrierTask<CtuEncParam>( EncSlice::xProcessCtuTask<false>,
+                                                 &ctuEncParam,
+                                                 ctuTaskCounter,
+                                                 nullptr,
+                                                 {},
+                                                 EncSlice::xProcessCtuTask<true> );
+    }
+    if( m_pcEncCfg->m_maxParallelFrames )
+    {
+      CompressCtusFinishedParam* param = new CompressCtusFinishedParam( pic, this, &slice, ctuTaskCounter, m_encPicPP, boundingCtuTsAddr );
+      m_threadPool->addBarrierTask<CompressCtusFinishedParam>( EncSlice::xProcessCtusFinishingTask, param, nullptr, nullptr, { &ctuTaskCounter->done } );
+    }
+    else
+    {
+      ctuTaskCounter->wait();
+      delete ctuTaskCounter;
+      CHECK( m_processStates[ boundingCtuTsAddr - 1 ] != PROCESS_DONE, "ctu tasks not finished yet, but main task continues" );
+    }
+  }
+#endif
   else
   {
     do
@@ -838,7 +904,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         EncCu& encCu             = lineEncRsrc->m_encCu;
 
         encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList );
-        encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
+        encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY, encSlice->m_encRCPic );
 
         // cleanup line memory when last ctu in line done to reduce overall memory consumption
         if( encSlice->m_pcEncCfg->m_ensureWppBitEqual && ctuPosX == pcv.widthInCtus - 1 )
