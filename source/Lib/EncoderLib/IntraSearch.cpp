@@ -480,20 +480,32 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   {
     int numTotalPartsHor = (int)width >> floorLog2(CU::getISPSplitDim(width, height, TU_1D_VERT_SPLIT));
     int numTotalPartsVer = (int)height >> floorLog2(CU::getISPSplitDim(width, height, TU_1D_HORZ_SPLIT));
+#if SPEED_INTRAT
+    m_ispTestedModes[0].init(numTotalPartsHor, numTotalPartsVer, 0);
+#else
     m_ispTestedModes[0].init(numTotalPartsHor, numTotalPartsVer);
+#endif
     // the total number of subpartitions is modified to take into account the cases where LFNST cannot be combined with
     // ISP due to size restrictions
     numTotalPartsHor = sps.LFNST && CU::canUseLfnstWithISP(cu.Y(), HOR_INTRA_SUBPARTITIONS) ? numTotalPartsHor : 0;
     numTotalPartsVer = sps.LFNST && CU::canUseLfnstWithISP(cu.Y(), VER_INTRA_SUBPARTITIONS) ? numTotalPartsVer : 0;
     for (int j = 1; j < NUM_LFNST_NUM_PER_SET; j++)
     {
+#if SPEED_INTRAT
+      m_ispTestedModes[j].init(numTotalPartsHor, numTotalPartsVer, 0);
+#else
       m_ispTestedModes[j].init(numTotalPartsHor, numTotalPartsVer);
+#endif
     }
     testISP = m_ispTestedModes[0].numTotalParts[0];
   }
   else
   {
+#if SPEED_INTRAT
+    m_ispTestedModes[0].init(0, 0, 0);
+#else
     m_ispTestedModes[0].init(0, 0);
+#endif
   }
 
   xEstimateLumaRdModeList(numModesForFullRD, RdModeList, HadModeList, CandCostList, CandHadList, cu, testMip);
@@ -567,6 +579,26 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   bool  useISPlfnst   = testISP && sps.LFNST;
   bool  noLFNST_ts    = false;
   double bestCostIsp[2] = { MAX_DOUBLE, MAX_DOUBLE };
+#if SPEED_INTRAT
+  bool MTSnuse = false;
+  bool LFNSTnuse = false;
+  bool ISPnuse = false;
+  bool DCT2ntest = false;
+  if (m_pcEncCfg->m_FastIntraTools)
+  {
+    int speedIntra = 0;
+    xSpeedUpIntra(bestCost, EndMode, speedIntra, cu);
+    MTSnuse = (speedIntra >> 2 ) & 0x1;
+    LFNSTnuse = (speedIntra >> 1) & 0x1;
+    ISPnuse = speedIntra & 0x1;
+    DCT2ntest = speedIntra>>3;
+    if (LFNSTnuse)
+    {
+      noLFNST_ts = true;
+      useISPlfnst = false;
+    }
+  }
+#endif
 
   for (int mode_cur = 0; mode_cur < EndMode + NumBDPCMCand; mode_cur++)
   {
@@ -581,6 +613,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     int noISP = 0;
     int endISP = testISP ? 2 : 0;
     bool noLFNST = false || noLFNST_ts;
+#if SPEED_INTRAT
+    if (ISPnuse)
+    {
+      testISP = false;
+      endISP = 0;
+    }
+#endif
     if (mode && useISPlfnst)
     {
       noLFNST |= (bestCostIsp[0] > (bestCostIsp[1] * 1.4));
@@ -594,8 +633,16 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     {
       xSpeedUpISP(1, testISP, mode, noISP, endISP, cu, RdModeList, bestPUMode, bestISP, bestLfnstIdx);
     }
-
+#if SPEED_INTRAT
+    int startISP = 0;
+    if (DCT2ntest && mode && (bestISP))
+    {
+      startISP = endISP ? 1 : 0;
+    }
+    for (int ispM = startISP; ispM <= endISP; ispM++)
+#else
     for (int ispM = 0; ispM <= endISP; ispM++)
+#endif
     {
       if (ispM && (ispM == noISP))
       {
@@ -622,6 +669,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
       {
         continue;
       }
+#if SPEED_INTRAT
+      if (m_pcEncCfg->m_FastIntraTools && (cu.ispMode || sps.LFNST || sps.MTS))
+      {
+        m_ispTestedModes[0].iWasTested = true;
+      }
+#endif
       CHECK(cu.mipFlag && cu.multiRefIdx, "Error: combination of MIP and MRL not supported");
       CHECK(cu.multiRefIdx && (cu.intraDir[0] == PLANAR_IDX), "Error: combination of MRL and Planar mode not supported");
       CHECK(cu.ispMode && cu.mipFlag, "Error: combination of ISP and MIP not supported");
@@ -629,8 +682,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
       // determine residual for partition
       cs.initSubStructure(*csTemp, partitioner.chType, cs.area, true);
+#if SPEED_INTRAT
+      int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0)) || LFNSTnuse) ? -mode : mode;
+      xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, MTSnuse);
+#else
       int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0))) ?-mode :mode;
       xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP);
+#endif
 
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraCost T [x=%d,y=%d,w=%d,h=%d] %f (%d,%d,%d,%d,%d,%d) \n", cu.blocks[0].x,
         cu.blocks[0].y, width, height, csTemp->cost, testMode.modeId, testMode.ispMod,
@@ -686,6 +744,15 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     }
   } // Mode loop
 
+#if SPEED_INTRAT 
+  if (m_pcEncCfg->m_FastIntraTools && (sps.ISP|| sps.LFNST || sps.MTS))
+  {
+    int bestIdx = csBest->getTU(partitioner.chType)->mtsIdx[COMP_Y] ? 4 : 0;
+    bestIdx |= bestLfnstIdx ? 2 : 0;
+    bestIdx |= bestISP ? 1 : 0;
+    m_ispTestedModes[0].dbestIdx = bestIdx;
+  }
+#endif
   cu.ispMode = bestISP;
   if (validReturn)
   {
@@ -1494,7 +1561,11 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
 }
 
+#if SPEED_INTRAT
+void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool MTSuse)
+#else
 void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode)
+#endif
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 0, g_timeProfiler, P_INTRA_RD_SEARCH_LUMA, &cs, partitioner.chType );
   const UnitArea& currArea  = partitioner.currArea();
@@ -1503,7 +1574,11 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
   uint32_t   numSig         = 0;
   const SPS &sps            = *cs.sps;
   CodingUnit &cu            = *cs.cus[0];
+#if SPEED_INTRAT
+  bool mtsAllowed = (numMode < 0) || MTSuse ? false : CU::isMTSAllowed(cu, COMP_Y);
+#else
   bool mtsAllowed           = CU::isMTSAllowed(cu, COMP_Y);
+#endif
   uint64_t singleFracBits   = 0;
   bool   splitCbfLumaSum    = false;
   double bestCostForISP     = bestCostSoFar;
@@ -2977,6 +3052,53 @@ int IntraSearch::xSpeedUpISP(int speed, bool& testISP, int mode, int& noISP, int
   }
   return 0;
 }
+#if SPEED_INTRAT
+void IntraSearch::xSpeedUpIntra(double bestcost, int& EndMode, int& speedIntra, CodingUnit& cu)
+{
+  int bestIdxbefore = m_ispTestedModes[0].dbestIdx;
+  if (m_ispTestedModes[0].isIntra)
+  {
+    if (bestIdxbefore == 1)//ISP
+    {
+      speedIntra = 14;
+    }
+    if (bestIdxbefore == 4)//MTS
+    {
+      speedIntra = 3;
+    }
+  }
+  else if (!cu.cs->slice->isIntra())
+  {
+    if (bestcost != MAX_DOUBLE)
+    {
+      speedIntra = 10;
+    }
+  }
+  if (m_ispTestedModes[0].bestBIdx[0] == -1)
+  {
+    speedIntra |= 7;
+    if (m_pcEncCfg->m_FastIntraTools == 2)
+    {
+      EndMode = 1;
+    }
+  }
+  if (!cu.cs->slice->isIntra())
+  {
+    if ((m_ispTestedModes[0].bestBIdx[1] == 1) || (m_ispTestedModes[0].bestBIdx[2] == 1))
+    {
+      speedIntra |= 2;
+    }
+    if ((m_ispTestedModes[0].bestBIdx[1] == 4) || (m_ispTestedModes[0].bestBIdx[2] == 4))
+    {
+      speedIntra |= 3;
+    }
+    if ((m_ispTestedModes[0].bestBIdx[1] == 2) || (m_ispTestedModes[0].bestBIdx[2] == 2))
+    {
+      speedIntra |= 1;
+    }
+  }
+}
+#endif
 
 } // namespace vvenc
 

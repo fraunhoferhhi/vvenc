@@ -203,6 +203,12 @@ struct ComprCUCtx
     , didVertSplit          (false)
     , isBestNoSplitSkip     (false)
     , skipSecondMTSPass     (false)
+#if SPEED_INTRAT
+    , iWasTested            (false)
+    , relatedCuIsValid      (false)
+    , dbestIdx              (0)
+    , isIntra               (false)
+#endif
   {
   }
 
@@ -236,6 +242,12 @@ struct ComprCUCtx
   bool              didVertSplit;
   bool              isBestNoSplitSkip;
   bool              skipSecondMTSPass;
+#if SPEED_INTRAT
+  bool              iWasTested;
+  bool              relatedCuIsValid;
+  int               dbestIdx;
+  bool              isIntra;
+#endif
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -258,6 +270,11 @@ struct CodedCUInfo
   Mv   saveMv   [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
   uint32_t puSse[SBT_NUM_SL];
   uint8_t  puSbt[SBT_NUM_SL];
+#if SPEED_INTRAT
+  double bestCost;
+  bool   relatedCuIsValid;
+  int    dbestIdx;
+#endif
 
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
   void setMv  ( const RefPicList refPicList, const int iRefIdx, const Mv& rMv );
