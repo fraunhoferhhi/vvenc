@@ -247,10 +247,13 @@ bool VVEncCfg::initCfgParameter()
      ( m_contentLightLevel.size() == 2 && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 0 ) ) )
   {
     // enable hdr pq bt2020/bt709 mode (depending on set colour primaries)
-    m_HdrMode = HDR_PQ; //(m_colourPrimaries == 9) ? HDR_PQ_BT2020 : HDR_HLG_709;
+    if( m_colourPrimaries == 9 )
+    {
+      m_HdrMode = (m_colourPrimaries==9) ? HDR_PQ_BT2020 : HDR_PQ;
+    }
   }
 
-  if( m_HdrMode == HDRMode::HDR_PQ )
+  if( m_HdrMode == HDRMode::HDR_PQ || m_HdrMode == HDRMode::HDR_PQ_BT2020 )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
     m_LMCSOffset = 1;
@@ -297,17 +300,17 @@ bool VVEncCfg::initCfgParameter()
     m_vuiParametersPresent     = (m_vuiParametersPresent != 0) ? 1:0; // enable vui only if not explicitly disabled
     m_colourDescriptionPresent = 1;  // enable colour_primaries, transfer_characteristics and matrix_coefficients
 
-    m_transferCharacteristics = 16; // smpte2084
+    m_transferCharacteristics = 16; // smpte2084 - HDR10
     if( m_colourPrimaries == 2 )
     {
-      m_colourPrimaries = 1; // bt709  set to 9 for bt2020
+      m_colourPrimaries = (m_HdrMode == HDRMode::HDR_PQ_BT2020) ? 9 : 1; //  bt2020(9) : bt709 (1)
     }
     if( m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = (m_colourPrimaries == 9) ? 9 : 1; // bt2020nc : bt709
+      m_matrixCoefficients = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; // bt2020nc : bt709
     }
   }
-  else if( m_HdrMode == HDRMode::HDR_HLG )
+  else if( m_HdrMode == HDRMode::HDR_HLG || m_HdrMode == HDRMode::HDR_HLG_BT2020 )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_HLG;
     m_LMCSOffset = 0;
@@ -325,26 +328,25 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-#if 0
     m_vuiParametersPresent = (m_vuiParametersPresent != 0) ? 1:0;
 
+    m_colourDescriptionPresent = true;
     if( m_colourPrimaries == 2 )
     {
-      m_colourPrimaries = 1; // bt709  set to 9 for bt2020
+      m_colourPrimaries = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; //  bt2020(9) : bt709 (1)
     }
 
     if( m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = (m_colourPrimaries == 9) ? 9 : 1; // bt2020nc : bt709
+      m_matrixCoefficients = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; // bt2020nc : bt709
     }
 
     if( m_transferCharacteristics == 2 )
     {
-      m_transferCharacteristics = (m_colourPrimaries == 9) ? 14 : 1; // bt2020-10 : bt709
+      m_transferCharacteristics = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 14 : 1; // bt2020-10 : bt709
     }
-#endif
 
-    m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
+    m_preferredTransferCharacteristics = (m_preferredTransferCharacteristics < 0) ? 18 : 0; // ARIB STD-B67 (HLG)
   }
 
   if( m_preferredTransferCharacteristics < 0 )

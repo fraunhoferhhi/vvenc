@@ -1462,14 +1462,31 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
     uint32_t numDU = 1;
     m_seiEncoder.initPictureTimingSEI( leadingSeiMessages, nestedSeiMessages, duInfoSeiMessages, slice, numDU, bpPresentInAU );
   }
-
-
+  
   if( m_pcEncCfg->m_preferredTransferCharacteristics )
   {
     SEIAlternativeTransferCharacteristics *seiAlternativeTransferCharacteristics = new SEIAlternativeTransferCharacteristics;
     m_seiEncoder.initSEIAlternativeTransferCharacteristics( seiAlternativeTransferCharacteristics );
     leadingSeiMessages.push_back(seiAlternativeTransferCharacteristics);
   }
+
+  // mastering display colour volume
+  if (m_pcEncCfg->m_masteringDisplay.size() == 10 )
+  {
+    SEIMasteringDisplayColourVolume *sei = new SEIMasteringDisplayColourVolume;
+    m_seiEncoder.initSEIMasteringDisplayColourVolume(sei);
+    leadingSeiMessages.push_back(sei);
+  }
+
+  // content light level
+  if( m_pcEncCfg->m_contentLightLevel.size() == 2 &&
+      m_pcEncCfg->m_contentLightLevel[0] != 0 && m_pcEncCfg->m_contentLightLevel[1] != 0 )
+  {
+    SEIContentLightLevelInfo *seiCLL = new SEIContentLightLevelInfo;
+    m_seiEncoder.initSEIContentLightLevel(seiCLL);
+    leadingSeiMessages.push_back(seiCLL);
+  }
+
 
   // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
   AccessUnitList::iterator pos = accessUnit.end();

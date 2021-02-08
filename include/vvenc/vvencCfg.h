@@ -185,6 +185,8 @@ enum HDRMode
   HDR_OFF     = 0, // SDR
   HDR_PQ,          // HDR10, Dolby
   HDR_HLG,         // Hybrid Log Gamma
+  HDR_PQ_BT2020,   // HDR10, Dolby + BT.2020
+  HDR_HLG_BT2020,  // Hybrid Log Gamma + BT.2020
   HDR_USER_DEFINED // user defined HDR mode (to provide old HDR modes, HDR is set individually)
 };
 

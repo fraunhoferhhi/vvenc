@@ -241,8 +241,11 @@ const std::vector<SVPair<HDRMode>> HdrModeToIntMap =
 {
   { "off",                 HDR_OFF },
   { "pq",                  HDR_PQ},
-  { "hlg",                 HDR_HLG},
   { "hdr10",               HDR_PQ},
+  { "pq_2020",             HDR_PQ_BT2020},
+  { "hdr10_2020",          HDR_PQ_BT2020},
+  { "hlg",                 HDR_HLG},
+  { "hlg_2020",            HDR_HLG_BT2020},
 };
 
 
@@ -267,6 +270,7 @@ const std::vector<SVPair<int>> ColorPrimariesToIntMap =
 
 const std::vector<SVPair<int>> TransferCharacteristicsToIntMap =
 {
+  { "auto",               -1 },
   { "reserved",            0 },
   { "bt709",               1 },
   { "unknown",             2 },
@@ -376,6 +380,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToRef<int>            toColorPrimaries             ( &m_colourPrimaries,             &ColorPrimariesToIntMap );
   IStreamToRef<int>            toTransferCharacteristics    ( &m_transferCharacteristics,     &TransferCharacteristicsToIntMap );
   IStreamToRef<int>            toColorMatrix                ( &m_matrixCoefficients,          &ColorMatrixToIntMap );
+  //IStreamToRef<int>            toPrefTransferCharacteristics( &m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
   IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
   IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
@@ -440,9 +445,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
   ;
 
-  opts.setSubSection("HDR Options");
+  opts.setSubSection("HDR and Color Options");
   opts.addOptions()
-  ("hdr",               toHDRMode,                "enabled HDR mode (+SEI messages). If maxcll or masteringdisplay is set, HDR10/PQ is enabled (use 0 (off), 1 (pq|,hdr10), 2 (hlg)")
+  ("hdr",               toHDRMode,                "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+                                                  "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
    ;
 
   po::setDefaults( opts );
@@ -471,6 +477,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
                                                        "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
   ("maxcll,-cll",         toContentLightLevel,         "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
                                                        "max. frame average light level, range: 1 <= cll,fall <= 65535'")
+
+//  ("alttransfer,-atc",   toPrefTransferCharacteristics, "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+//                                                       "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+//                                                       "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
   ;
 
   po::setDefaults( opts );
@@ -576,6 +586,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToRef<int>            toColorPrimaries             ( &m_colourPrimaries,        &ColorPrimariesToIntMap );
   IStreamToRef<int>            toTransferCharacteristics    ( &m_transferCharacteristics,&TransferCharacteristicsToIntMap );
   IStreamToRef<int>            toColorMatrix                ( &m_matrixCoefficients,     &ColorMatrixToIntMap );
+  IStreamToRef<int>            toPrefTransferCharacteristics( &m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
   IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
   IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
@@ -653,7 +664,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("VUI and SEI options");
   opts.addOptions()
-  ("hdr",               toHDRMode,                                                                      "enabled HDR mode (+SEI messages). If maxcll or masteringdisplay is set, HDR10/PQ is enabled (use 0 (off), 1 (pq|,hdr10), 2 (hlg)")
+  ("hdr",               toHDRMode,                "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+                                                  "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
    ;
 
   po::setDefaults( opts );
@@ -933,7 +945,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
                                                                                                         "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
   ("maxcll,-cll",                                    toContentLightLevel,                               "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
                                                                                                         "max. frame average light level, range: 1 <= cll,fall <= 65535'")
-  ;
+  ("alttransfer,-atc",                               toPrefTransferCharacteristics,                     "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+                                                                                                        "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
+                                                                                                        "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
   ;
 
   opts.setSubSection("Summary options (debugging)");
