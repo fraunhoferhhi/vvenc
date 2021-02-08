@@ -617,7 +617,12 @@ void InterPredInterpolation::init()
   {
     const int MVBUFFER_SIZE = MAX_CU_SIZE / MIN_PU_SIZE;
     m_storedMv = new Mv[MVBUFFER_SIZE*MVBUFFER_SIZE];
-    VALGRIND_MEMCLEAR( m_storedMv, sizeof( Mv ) * MVBUFFER_SIZE * MVBUFFER_SIZE );
+#if ENABLE_VALGRIND_CODE
+    for( int i = 0; i < MVBUFFER_SIZE * MVBUFFER_SIZE; i++ )
+    {
+      m_storedMv[i].setZero();
+    }
+#endif
   }
 }
 

@@ -251,6 +251,8 @@ EncGOP::EncGOP()
   , m_actualHeadBits     ( 0 )
   , m_actualTotalBits    ( 0 )
   , m_estimatedBits      ( 0 )
+  , m_nextCON            ( 0 )
+  , m_curGopNum          ( 0 )
   , m_threadPool         ( nullptr )
 {
 }
@@ -853,7 +855,8 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
   }
 
-  xUpdateAfterPicRC( pic );
+  CHECK( m_pcEncCfg->m_RCRateControlMode && m_pcEncCfg->m_maxParallelFrames, "In the current set-up, RC+FPP is broken" )
+  xUpdateAfterPicRC( pic, nullptr );
 
   if( m_pcEncCfg->m_useAMaxBT )
   {
