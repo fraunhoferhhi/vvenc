@@ -493,7 +493,7 @@ static const int GEO_MAX_TRY_WEIGHTED_SAD = 60;
 static const int GEO_MAX_TRY_WEIGHTED_SATD = 8;
 
 static const int SBT_MAX_SIZE =                                    64; ///< maximum CU size for using SBT
-static const int SBT_NUM_SL =                                      10; ///< maximum number of historical PU decision saved for a CU
+static const int SBT_NUM_SL =                                       4; ///< maximum number of historical PU decision saved for a CU
 static const int SBT_NUM_RDO =                                      2; ///< maximum number of SBT mode tried for a PU
 static const int SBT_FAST64_WIDTH_THRESHOLD =                    1920;
 
