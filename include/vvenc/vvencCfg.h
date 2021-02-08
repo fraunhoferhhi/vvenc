@@ -183,10 +183,8 @@ enum SegmentMode
 enum HDRMode
 {
   HDR_OFF     = 0, // SDR
-  HDR_PQ_BT709,    // HDR10, Dolby BT.709
-  HDR_PQ_BT2020,   // HDR10, Dolby BT.2020
-  HDR_HLG_709,     // Hybrid Log Gamma BT.709
-  HDR_HLG_2020,    // Hybrid Log Gamma BT.2020
+  HDR_PQ,          // HDR10, Dolby
+  HDR_HLG,         // Hybrid Log Gamma
   HDR_USER_DEFINED // user defined HDR mode (to provide old HDR modes, HDR is set individually)
 };
 
@@ -245,7 +243,6 @@ public:
   int                 m_SourceWidth                    = 0;             ///< source width in pixel
   int                 m_SourceHeight                   = 0;             ///< source height in pixel (when interlaced = field height)
   int                 m_TicksPerSecond                 = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
-  bool                m_AccessUnitDelimiter            = false;         ///< add Access Unit Delimiter NAL units
 
   Profile             m_profile                        = Profile::PROFILE_AUTO;
   Tier                m_levelTier                      = Tier::TIER_MAIN ;

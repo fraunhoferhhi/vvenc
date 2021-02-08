@@ -308,7 +308,7 @@ public:
 
   int                 m_aiPad[ 2 ]                              = { 0, 0 };                              ///< number of padded pixels for width and height
   bool                m_enablePictureHeaderInSliceHeader        = true;
-  bool                m_AccessUnitDelimiter                     = false;                                 ///< add Access Unit Delimiter NAL units
+  int                 m_AccessUnitDelimiter                     = -1;                                    ///< add Access Unit Delimiter NAL units, default: auto (only enable if needed by dependent options)
 
   bool                m_printMSEBasedSequencePSNR               = false;
   bool                m_printHexPsnr                            = false;
@@ -373,10 +373,12 @@ public:
   int                 m_outputBitDepth[ MAX_NUM_CH ]            = { 0, 0 };                              ///< bit-depth of output file
   int                 m_MSBExtendedBitDepth[ MAX_NUM_CH ]       = { 0, 0 };                              ///< bit-depth of input samples after MSB extension
   CostMode            m_costMode                                = COST_STANDARD_LOSSY;                   ///< Cost mode to use
+
   HashType            m_decodedPictureHashSEIType               = HASHTYPE_NONE;                         ///< Checksum mode for decoded picture hash SEI message
   bool                m_bufferingPeriodSEIEnabled               = false;
   bool                m_pictureTimingSEIEnabled                 = false;
   bool                m_decodingUnitInfoSEIEnabled              = false;
+
   bool                m_entropyCodingSyncEnabled                = false;
   bool                m_entryPointsPresent                      = true;
 
@@ -508,8 +510,8 @@ public:
   int                 m_saoOffsetBitShift[ MAX_NUM_CH ]         = { 0, 0 };
 
   bool                m_decodingParameterSetEnabled             = false;                                 ///< enable decoding parameter set
-  bool                m_vuiParametersPresent                    = false;                                 ///< enable generation of VUI parameters
-  bool                m_hrdParametersPresent                    = false;                                 ///< enable generation or HRD parameters
+  int                 m_vuiParametersPresent                    = -1;                                    ///< enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
+  int                 m_hrdParametersPresent                    = -1;                                    ///< enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
   bool                m_aspectRatioInfoPresent                  = false;                                 ///< Signals whether aspect_ratio_idc is present
   int                 m_aspectRatioIdc                          = 0;                                     ///< aspect_ratio_idc
   int                 m_sarWidth                                = 0;                                     ///< horizontal size of the sample aspect ratio
@@ -530,7 +532,7 @@ public:
   std::vector<uint32_t> m_masteringDisplay;                                                              ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
                                                                                                          ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
                                                                                                          ///< min/max luminance value in units of 1/10000 candela per square metre
-  std::vector<uint32_t> m_contentLightLevel                     = {0,10000};                             ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+  std::vector<uint32_t> m_contentLightLevel                     = {0,0};                                 ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
  int                  m_preferredTransferCharacteristics        = -1;                                    ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
 
   std::string         m_summaryOutFilename                      = "";                                    ///< filename to use for producing summary output file.

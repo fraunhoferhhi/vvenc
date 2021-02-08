@@ -126,28 +126,13 @@ bool VVEncCfg::initCfgParameter()
 
   if( 0 == m_RCTargetBitrate )
    {
-     confirmParameter( m_hrdParametersPresent,              "hrdParameters present requires rate control" );
+     confirmParameter( m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
      confirmParameter( m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
      confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
 
   confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
   confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
-  confirmParameter( !m_contentLightLevel.empty() &&  m_contentLightLevel.size() != 2, "content light level must contain 2 values max light level and max avg light level");
-  if( !m_masteringDisplay.empty() )
-  {
-    confirmParameter( !m_masteringDisplay.empty() &&  m_masteringDisplay.size() != 10,  "mastering display colour volume must contain 10 values G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)");
-
-    bool outOfRGBRange = false;
-    for( size_t i = 0; i < m_masteringDisplay.size(); i++ )
-    {
-      if( i < 8 && m_masteringDisplay[i] > 50000 )
-      {
-        outOfRGBRange = true; break;
-      }
-    }
-    confirmParameter( outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
-  }
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
@@ -259,13 +244,13 @@ bool VVEncCfg::initCfgParameter()
   }
 
   if( m_HdrMode == HDRMode::HDR_OFF && ( !m_masteringDisplay.empty() ||
-     ( m_contentLightLevel.empty() && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 10000) ) )
+     ( m_contentLightLevel.size() == 2 && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 0 ) ) )
   {
     // enable hdr pq bt2020/bt709 mode (depending on set colour primaries)
-    m_HdrMode = (m_colourPrimaries == 9) ? HDR_PQ_BT2020 : HDR_HLG_709;
+    m_HdrMode = HDR_PQ; //(m_colourPrimaries == 9) ? HDR_PQ_BT2020 : HDR_HLG_709;
   }
 
-  if( m_HdrMode == HDRMode::HDR_HLG_709 || m_HdrMode == HDRMode::HDR_HLG_2020 )
+  if( m_HdrMode == HDRMode::HDR_HLG )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
     m_LMCSOffset = 1;
@@ -309,25 +294,20 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent     = true;
-    m_colourDescriptionPresent = true;  // enable colour_primaries, transfer_characteristics and matrix_coefficients
+    m_vuiParametersPresent     = (m_vuiParametersPresent != 0) ? 1:0; // enable vui only if not explicitly disabled
+    m_colourDescriptionPresent = 1;  // enable colour_primaries, transfer_characteristics and matrix_coefficients
 
-    m_colourPrimaries    = (m_HdrMode == HDR_PQ_BT709) ? 1 : 9; // bt709 : bt2020
-    m_matrixCoefficients = (m_HdrMode == HDR_PQ_BT709) ? 1 : 9; // bt709 : bt2020nc
     m_transferCharacteristics = 16; // smpte2084
-
-    if( m_contentLightLevel.empty() )
+    if( m_colourPrimaries == 2 )
     {
-      m_contentLightLevel = { 0, 10000 };
+      m_colourPrimaries = 1; // bt709  set to 9 for bt2020
     }
-
-    if( m_masteringDisplay.empty() )
+    if( m_matrixCoefficients == 2 )
     {
-      //m_masteringDisplay = { 0, 10000 };  // init default mastering display info
+      m_matrixCoefficients = (m_colourPrimaries == 9) ? 9 : 1; // bt2020nc : bt709
     }
-
   }
-  else if( m_HdrMode == HDRMode::HDR_HLG_709 || m_HdrMode == HDRMode::HDR_HLG_2020 )
+  else if( m_HdrMode == HDRMode::HDR_HLG )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_HLG;
     m_LMCSOffset = 0;
@@ -345,20 +325,23 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent     = true;
+    m_vuiParametersPresent     = (m_vuiParametersPresent != 0) ? 1:0;
 
-    if( m_HdrMode == HDR_HLG_709 )
+    if( m_colourPrimaries == 2 )
     {
-      m_colourPrimaries         = 1; // bt709
-      m_transferCharacteristics = 1;
-      m_matrixCoefficients      = 1;
+      m_colourPrimaries = 1; // bt709  set to 9 for bt2020
     }
-    else
+
+    if( m_matrixCoefficients == 2 )
     {
-      m_colourPrimaries         = 9;  // bt2020
-      m_transferCharacteristics = 14; // bt2020-10
-      m_matrixCoefficients      = 9;  // bt2020nc
+      m_matrixCoefficients = (m_colourPrimaries == 9) ? 9 : 1; // bt2020nc : bt709
     }
+
+    if( m_transferCharacteristics == 2 )
+    {
+      m_transferCharacteristics = (m_colourPrimaries == 9) ? 14 : 1; // bt2020-10 : bt709
+    }
+
     m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
   }
 
@@ -1508,6 +1491,28 @@ bool VVEncCfg::checkCfgParameter( )
   }
 #endif
 
+
+  confirmParameter( (m_HdrMode != HDR_OFF && m_internalBitDepth[CH_L] < 10 )     ,               "internalBitDepth must be at least 10 bit for HDR");
+  confirmParameter( (m_HdrMode != HDR_OFF && m_internChromaFormat != CHROMA_420 ) ,              "internChromaFormat must YCbCr 4:2:0 for HDR");
+  confirmParameter( !m_contentLightLevel.empty() &&  m_contentLightLevel.size() != 2,            "content light level must contain 2 values max light level and max avg light level");
+  confirmParameter( m_contentLightLevel.size() == 2 && (m_contentLightLevel[0] < 0 || m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
+  confirmParameter( m_contentLightLevel.size() == 2 && (m_contentLightLevel[1] < 0 || m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
+
+  if( !m_masteringDisplay.empty() )
+  {
+    confirmParameter( !m_masteringDisplay.empty() &&  m_masteringDisplay.size() != 10,  "mastering display colour volume must contain 10 values G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)");
+
+    bool outOfRGBRange = false;
+    for( size_t i = 0; i < m_masteringDisplay.size(); i++ )
+    {
+      if( i < 8 && m_masteringDisplay[i] > 50000 )
+      {
+        outOfRGBRange = true; break;
+      }
+    }
+    confirmParameter( outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
+  }
+
   confirmParameter( m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   confirmParameter( m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
@@ -1689,9 +1694,9 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
-  confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
+  confirmParameter( (m_hrdParametersPresent>0) && (0 == m_RCRateControlMode),  "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( m_bufferingPeriodSEIEnabled && (m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  confirmParameter( m_pictureTimingSEIEnabled && (m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = m_CTUSize;
