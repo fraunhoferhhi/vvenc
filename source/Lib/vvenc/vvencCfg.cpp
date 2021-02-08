@@ -426,6 +426,8 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
+    m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = m_useSameChromaQPTables;
+
   if (m_useIdentityTableForNon420Chroma && m_internChromaFormat != CHROMA_420)
   {
     m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = true;
