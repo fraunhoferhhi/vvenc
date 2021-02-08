@@ -1464,7 +1464,7 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   }
 
 
-  if( m_pcEncCfg->m_preferredTransferCharacteristics > 0 )
+  if( m_pcEncCfg->m_preferredTransferCharacteristics )
   {
     SEIAlternativeTransferCharacteristics *seiAlternativeTransferCharacteristics = new SEIAlternativeTransferCharacteristics;
     m_seiEncoder.initSEIAlternativeTransferCharacteristics( seiAlternativeTransferCharacteristics );

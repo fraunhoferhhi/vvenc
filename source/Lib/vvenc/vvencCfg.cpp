@@ -250,7 +250,7 @@ bool VVEncCfg::initCfgParameter()
     m_HdrMode = HDR_PQ; //(m_colourPrimaries == 9) ? HDR_PQ_BT2020 : HDR_HLG_709;
   }
 
-  if( m_HdrMode == HDRMode::HDR_HLG )
+  if( m_HdrMode == HDRMode::HDR_PQ )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
     m_LMCSOffset = 1;
@@ -325,7 +325,8 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent     = (m_vuiParametersPresent != 0) ? 1:0;
+#if 0
+    m_vuiParametersPresent = (m_vuiParametersPresent != 0) ? 1:0;
 
     if( m_colourPrimaries == 2 )
     {
@@ -341,8 +342,19 @@ bool VVEncCfg::initCfgParameter()
     {
       m_transferCharacteristics = (m_colourPrimaries == 9) ? 14 : 1; // bt2020-10 : bt709
     }
+#endif
 
     m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
+  }
+
+  if( m_preferredTransferCharacteristics < 0 )
+  {
+    m_preferredTransferCharacteristics = 0;
+  }
+
+  if ( m_vuiParametersPresent < 0 )
+  {
+    m_vuiParametersPresent = 0;
   }
 
   switch ( m_conformanceWindowMode)
