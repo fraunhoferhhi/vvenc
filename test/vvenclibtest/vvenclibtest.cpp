@@ -71,6 +71,15 @@ int g_numTests = 0;
 int g_numFails = 0;
 int g_verbose = 0;
 
+void msgFnc( int level, const char* fmt, va_list args )
+{
+  vfprintf( level == 1 ? stderr : stdout, fmt, args );
+}
+
+void msgFncNoOutput( int level, const char* fmt, va_list args )
+{
+}
+
 int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
@@ -106,11 +115,13 @@ int main( int argc, char* argv[] )
   {
   case 1:
   {
+    vvenc::VVEnc::registerMsgCbf( msgFncNoOutput );
     testLibParameterRanges(); 
     break;
   }
   case 2: 
   {
+    vvenc::VVEnc::registerMsgCbf( msgFnc );
     testLibCallingOrder(); 
     break;
   }
@@ -120,8 +131,13 @@ int main( int argc, char* argv[] )
     break;
   }
   default:
+    vvenc::VVEnc::registerMsgCbf( msgFncNoOutput );
     testLibParameterRanges();
+
+    vvenc::VVEnc::registerMsgCbf( msgFnc );
     testLibCallingOrder();
+    
+    vvenc::VVEnc::registerMsgCbf( msgFncNoOutput );
     testInvalidInputParams();
     break;
   }
@@ -309,7 +325,7 @@ int testLibParameterRanges()
   testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 0;
-  testParamList<bool, bool>( "useHrdParametersPresent",       vvencParams.m_hrdParametersPresent,       vvencParams, { true }, true );
+  testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 1 }, true );
   testParamList<bool, bool>( "useBufferingPeriodSEIEnabled",  vvencParams.m_bufferingPeriodSEIEnabled,  vvencParams, { true }, true );
   testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.m_pictureTimingSEIEnabled,    vvencParams, { true }, true );
 
@@ -330,7 +346,7 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
     ERROR("\nCaught Exception " << w << " expected " << (expectedFail ? "failure" : "success")); //fail due to exception 
   }
 
-  return numFails == g_numFails ? 0 : 1;
+  return (numFails == g_numFails) ? 0 : 1;
 }
 
 int callingOrderInvalidUninit()
@@ -402,12 +418,14 @@ int callingOrderRegular()
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
+    std::cerr << "error during encode in callingOrderRegular(): " << cVVEnc.getLastError();
     return -1;
   }
 
   YUVBuffer* pcYUVBuffer = nullptr;
   if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
   {
+    std::cerr << "error during flush in callingOrderRegular(): " << cVVEnc.getLastError();
     return -1;
   }
 
@@ -512,21 +530,25 @@ int callingOrderRegularInit2Pass()
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
+    std::cerr << "error during encode in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
 
   if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
   {
+    std::cerr << "error during flush in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
 
   if( 0 != cVVEnc.initPass( 1 ) )
   {
+    std::cerr << "error during iniPass in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
 
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
+    std::cerr << "error during encode in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
   if( 0 != cVVEnc.uninit())
