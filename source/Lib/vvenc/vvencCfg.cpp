@@ -176,7 +176,7 @@ bool VVEncCfg::initCfgParameter()
 
   if ( m_InputQueueSize <= 0 )
   {
-    m_InputQueueSize = m_maxParallelFrames ? 2* m_GOPSize + 1: m_GOPSize;
+    m_InputQueueSize = m_GOPSize;
 
     if ( m_MCTF )
     {

@@ -69,7 +69,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#define FPP_CLEAN_UP                                      0
+#define FPP_CLEAN_UP                                      1
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 

@@ -363,7 +363,7 @@ bool EncGOP::xFinalizePicsPP()
         {
           const Picture* pic = *it;
           m_actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-          xUpdateAfterPicRC( pic, m_freePicEncoderList[pic->picEncoderIdx]->getEncRCPic() );
+          xUpdateAfterPicRC( pic, pic->encRCPic );
         }
         m_gopEncListInFlight.clear();
       }
@@ -424,8 +424,9 @@ static bool compressPic( int taskIdx, EncPicturePP* picEncoder )
   picEncoder->finish();
   return true;
 }
+#endif
 
-void EncGOP::xUpdateProcessingPicListForRC( std::list<Picture*>& inputList )
+void EncGOP::xFillProcessingPicListForRC( std::list<Picture*>& inputList )
 {
   // Constraints:
   // 1. Stay within a GOP
@@ -465,6 +466,7 @@ void EncGOP::xUpdateProcessingPicListForRC( std::list<Picture*>& inputList )
   CHECK( m_gopEncListToProcess.empty(), "Empty processing list is not expected" );
 }
 
+#if !FPP_CLEAN_UP
 void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef, bool flush )
 {
   CHECK( !flush && encList.size() == 0, "error: no pictures to be encoded given" );
@@ -546,7 +548,7 @@ void EncGOP::encodeGOP( const std::vector<Picture*>& encList, PicList& picList, 
 
         if( canUpdateProcListRC )
         {
-          xUpdateProcessingPicListForRC( m_gopEncListInput );
+          xFillProcessingPicListForRC( m_gopEncListInput );
         }
       }
     }
@@ -729,7 +731,7 @@ void EncGOP::encodePicture( const std::vector<Picture*>& encList, PicList& picLi
     xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
   }
 
-  xUpdateAfterPicRC( pic, m_freePicEncoderList[0]->getEncRCPic() );
+  xUpdateAfterPicRC( pic, pic->encRCPic );
 
   if( m_pcEncCfg->m_useAMaxBT )
   {
@@ -752,6 +754,11 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   m_actualTotalBits = 0;
   m_estimatedBits   = 0;
 
+  if( !( m_pcEncCfg->m_RCRateControlMode && m_pcEncCfg->m_maxParallelFrames ) )
+  {
+    m_gopEncListToProcess.splice( m_gopEncListToProcess.end(), m_gopEncListInput );
+  }
+
   while( true )
   {
     Picture* pic           = nullptr;
@@ -761,6 +768,31 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
       if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
+      // Rate Control requires specific scheduling for encoding and evaluation
+      if( m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames )
+      {
+        if( m_gopEncListToProcess.empty() && m_freePicEncoderList.size() == m_pcEncCfg->m_maxParallelFrames )
+        {
+          // Evaluate last coded pictures before starting the next ones
+          if( !m_gopEncListRCEvalutaion.empty() )
+          {
+            for( auto pic : m_gopEncListRCEvalutaion )
+            {
+              m_actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+              xUpdateAfterPicRC( pic, pic->encRCPic );
+            }
+            m_gopEncListRCEvalutaion.clear();
+          }
+
+          // Determine next pictures to encode
+          if( !m_gopEncListInput.empty() )
+          {
+            xFillProcessingPicListForRC( m_gopEncListInput );
+            m_gopEncListRCEvalutaion = m_gopEncListToProcess;
+          }
+        }
+      }
+
       // check encoding of output picture done
       if( m_gopEncListOutput.empty()
           || m_gopEncListOutput.front()->isReconstructed )
@@ -769,8 +801,8 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       }
 
       // get next picture ready to be encoded
-      auto picItr             = find_if( m_gopEncListInput.begin(), m_gopEncListInput.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
-      const bool nextPicReady = picItr != m_gopEncListInput.end();
+      auto picItr             = find_if( m_gopEncListToProcess.begin(), m_gopEncListToProcess.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+      const bool nextPicReady = picItr != m_gopEncListToProcess.end();
 
       // check at least one picture and one pic encoder ready
       if( m_freePicEncoderList.empty()
@@ -801,7 +833,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
 
-    m_gopEncListInput.remove( pic );
+    m_gopEncListToProcess.remove( pic );
 
     // compress next picture
     if( pic->encPic )
@@ -855,8 +887,10 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
   }
 
-  CHECK( m_pcEncCfg->m_RCRateControlMode && m_pcEncCfg->m_maxParallelFrames, "In the current set-up, RC+FPP is broken" )
-  xUpdateAfterPicRC( pic, nullptr );
+  if( !m_pcEncCfg->m_maxParallelFrames )
+  {
+    xUpdateAfterPicRC( pic, pic->encRCPic );
+  }
 
   if( m_pcEncCfg->m_useAMaxBT )
   {

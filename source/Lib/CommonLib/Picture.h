@@ -56,6 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "BitStream.h"
 #include "Reshape.h"
+#include "RateCtrl.h"
 
 #include <deque>
 #include <chrono>
@@ -250,7 +251,11 @@ public:
 #else
   bool                          useSC;
 #endif
+#if !FPP_CLEAN_UP
   int                           picEncoderIdx;
+#endif
+  EncRCPic*                     encRCPic;
+
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

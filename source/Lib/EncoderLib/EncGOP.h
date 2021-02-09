@@ -168,6 +168,9 @@ private:
 #if !FPP_CLEAN_UP
   std::list<Picture*>       m_gopEncListToProcess;
   std::list<Picture*>       m_gopEncListInFlight;
+#else
+  std::list<Picture*>       m_gopEncListToProcess;
+  std::list<Picture*>       m_gopEncListRCEvalutaion;
 #endif
   // TODO (jb): deprecated, to be removed
   EncPicture*               m_picEncoder0;
@@ -253,8 +256,8 @@ private:
   void xWaitForFinishedPic            ();
   EncPicturePP* xGetNextFreePicEncoder();
   bool xFinalizePicsPP                ();
-  void xUpdateProcessingPicListForRC  ( std::list<Picture *>& inputList );
 #endif
+  void xFillProcessingPicListForRC  ( std::list<Picture*>& inputList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc
