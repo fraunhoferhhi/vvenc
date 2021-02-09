@@ -80,6 +80,7 @@ private:
   int                       m_pocRecOut;
   int                       m_GOPSizeLog2;
   int                       m_TicksPerFrameMul4;
+  int                       m_numPassInitialized;
 
   const VVEncCfg            m_cEncCfg;
   VVEncCfg                  m_cBckCfg;
