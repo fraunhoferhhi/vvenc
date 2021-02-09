@@ -104,7 +104,6 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   }
 
   m_motionBuf = nullptr;
-  features.resize( NUM_ENC_FEATURES );
 }
 
 void CodingStructure::destroy()

@@ -573,25 +573,64 @@ bool VVEncCfg::initCfgParameter()
     m_JointCbCrMode = false;
   }
 
+  if ( m_MCTF && m_QP < 17 )
+  {
+    msg( WARNING, "disable MCTF for QP < 17\n");
+    m_MCTF = 0;
+  }
+  if( m_MCTF )
+  {
+    if( m_MCTFFrames.empty() )
+    {
+      if( m_GOPSize == 32 )
+      {
+        m_MCTFStrengths.push_back(0.28125); //  9/32
+        m_MCTFFrames.push_back(8);
+        m_MCTFStrengths.push_back(0.5625);  // 18/32
+        m_MCTFFrames.push_back(16);
+        m_MCTFStrengths.push_back(0.84375); // 27/32
+        m_MCTFFrames.push_back(32);
+      }
+      else if( m_GOPSize == 16 )
+      {
+        m_MCTFStrengths.push_back(0.4); // ~12.75/32
+        m_MCTFFrames.push_back(8);
+        m_MCTFStrengths.push_back(0.8); // ~25.50/32
+        m_MCTFFrames.push_back(16);
+      }
+      else if( m_GOPSize == 8 )
+      {
+        m_MCTFStrengths.push_back(0.65625); // 21/32
+        m_MCTFFrames.push_back(8);
+      }
+    }
+  }
+
   if (m_lumaLevelToDeltaQPEnabled)
   {
     msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
     m_usePerceptQPA = 5; // force QPA mode
   }
 
-  if (m_usePerceptQPATempFiltISlice < 0 )
+  if ( m_usePerceptQPATempFiltISlice < 0 )
   {
     m_usePerceptQPATempFiltISlice = 0;
-    if ( (m_usePerceptQPA == 2 || m_usePerceptQPA == 4 )
-        && m_RCRateControlMode > 0
-        && m_RCNumPasses == 2
-        && m_QP <= MAX_QP_PERCEPT_QPA
-        && m_GOPSize > 8
-        && m_IntraPeriod >= 2 * m_GOPSize )
+    if ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 ) // auto mode for temp.filt.
     {
-      m_usePerceptQPATempFiltISlice = 1;
+      m_usePerceptQPATempFiltISlice = ( m_RCRateControlMode > 0 && m_RCNumPasses == 2 ? 2 : 1 );
     }
   }
+  if ( m_usePerceptQPATempFiltISlice == 2
+      && (m_QP <= 27 || m_QP > MAX_QP_PERCEPT_QPA || m_GOPSize <= 8 || m_IntraPeriod < 2 * m_GOPSize) )
+  {
+    m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
+  }
+  if ( m_usePerceptQPATempFiltISlice > 0
+      && (m_MCTF == 0 || m_usePerceptQPA == 0) )
+  {
+    m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
+  }
+
   if (m_cuQpDeltaSubdiv < 0)
   {
     m_cuQpDeltaSubdiv = 0;
@@ -1328,40 +1367,6 @@ bool VVEncCfg::initCfgParameter()
     m_maxDecPicBuffering[MAX_TLAYER-1] = m_maxNumReorderPics[MAX_TLAYER-1] + 1;
   }
 
-  if( m_MCTF && m_QP < 17 )
-  {
-    msg( WARNING, "disable MCTF for QP < 17\n");
-    m_MCTF = 0;
-  }
-
-  if( m_MCTF )
-  {
-    if( m_MCTFFrames.empty() )
-    {
-      if( m_GOPSize == 32 )
-      {
-        m_MCTFStrengths.push_back(0.28125); //  9/32
-        m_MCTFFrames.push_back(8);
-        m_MCTFStrengths.push_back(0.5625);  // 18/32
-        m_MCTFFrames.push_back(16);
-        m_MCTFStrengths.push_back(0.84375); // 27/32
-        m_MCTFFrames.push_back(32);
-      }
-      else if( m_GOPSize == 16 )
-      {
-        m_MCTFStrengths.push_back(0.4);
-        m_MCTFFrames.push_back(8);
-        m_MCTFStrengths.push_back(0.8);
-        m_MCTFFrames.push_back(16);
-      }
-      else if( m_GOPSize == 8 )
-      {
-        m_MCTFStrengths.push_back(0.65625); // 21/32
-        m_MCTFFrames.push_back(8);
-      }
-    }
-  }
-
   if ( ! m_MMVD && m_allowDisFracMMVD )
   {
     msg( WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
@@ -1650,6 +1655,8 @@ bool VVEncCfg::checkCfgParameter( )
     msg(WARNING, "***************************************************************************\n");
   }
 
+  confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
   confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );

@@ -298,7 +298,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 
   if (encCfg.m_usePerceptQPA)
   {
-    m_globalCtuQpVector.resize( pps.useDQP && encCfg.m_usePerceptQPATempFiltISlice ? pps.picWidthInCtu * pps.picHeightInCtu + 1 : 1 );
+    m_globalCtuQpVector.resize( pps.useDQP && (encCfg.m_usePerceptQPATempFiltISlice == 2) ? pps.picWidthInCtu * pps.picHeightInCtu + 1 : 1 );
   }
 }
 
@@ -848,10 +848,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    // set pointers to previous pictures for QP adaptation
-    pic.m_bufsOrigPrev[0] = &pic.m_bufs[PIC_ORIGINAL];
-    pic.m_bufsOrigPrev[1] = nullptr;
-
     // this is needed for chunk-wise parallel RA encoding!
     if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ) || !slice->isIntra())
     {
@@ -1724,7 +1720,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
-        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && slice->isIntra() && (sliceQP > 0) )
+        (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && slice->isIntra() && (sliceQP > 0) )
     {
       sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
       m_lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
@@ -1736,7 +1732,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice )
     m_lambda = m_pcRateCtrl->encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = m_pcRateCtrl->encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
-        (slice->pps->useDQP && m_pcEncCfg->m_usePerceptQPATempFiltISlice) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
+        (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
     {
       sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
       m_lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP

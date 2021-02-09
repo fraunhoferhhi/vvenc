@@ -309,6 +309,26 @@ void MCTF::addTrailFrame( const YUVBuffer& yuvInBuf )
   m_picFifo.push_back( pic );
 }
 
+void MCTF::assignQpaBufs( Picture* pic )
+{
+  if ( pic == nullptr ) return;
+
+  // set pointers to previous pictures for QP adaptation
+  pic->m_bufsOrigPrev[0] = &pic->m_bufs[PIC_ORIGINAL];
+  pic->m_bufsOrigPrev[1] = nullptr;
+  // and optimize if MCTF related pictures are available
+  if ( m_picFifo.size() > 0 )
+  {
+    auto it_end = m_picFifo.rbegin();
+    pic->m_bufsOrigPrev[0] = &(*it_end)->m_bufs[PIC_ORIGINAL];
+    if ( m_picFifo.size() > 1 )
+    {
+      it_end++;
+      pic->m_bufsOrigPrev[1] = &(*it_end)->m_bufs[PIC_ORIGINAL];
+    }
+  }
+}
+
 void MCTF::filter( Picture* pic )
 {
   CHECK( m_picFifo.size() > 0 && pic && m_picFifo.back()->poc + 1 != pic->poc, "mctf filter requires input pictures with increasing poc values" );

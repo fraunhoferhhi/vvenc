@@ -504,7 +504,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
       int adaptedLumaQP = Clip3 (0, MAX_QP, slice->sliceQp + apprI3Log2 (pic->ctuQpaLambda[ctuRsAddr]/*hpEner*/ * hpEnerPic));
 
-      if (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
+      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
       {
         if (ctuRCQPMemory != nullptr) // save I-frame QP for second rate control pass
         {
@@ -520,7 +520,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
-      if (encCfg->m_usePerceptQPATempFiltISlice && !slice->isIntra() && (slice->TLayer == 0) && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
+      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
       {
         adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
@@ -591,7 +591,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       }
     } // end CTU-wise loop
 
-    adaptedSliceQP = ((savedQP < 0 || (encCfg->m_usePerceptQPATempFiltISlice && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
+    adaptedSliceQP = ((savedQP < 0 || ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
                       ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
   }
 

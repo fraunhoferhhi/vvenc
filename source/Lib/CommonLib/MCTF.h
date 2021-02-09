@@ -147,6 +147,7 @@ public:
 
   int getCurDelay() const { return m_cur_delay; }
 
+  void assignQpaBufs( Picture* pic );
   void filter( Picture* pic );
  
 private:
