@@ -164,8 +164,7 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
   }
 }
 
-void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter,
-                  std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
+void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
   m_cRdCost.create     ();
@@ -190,7 +189,6 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter
   m_cTrQuant.getQuant()->setFlatScalingList( maxLog2TrDynamicRange, sps.bitDepths );
 
   m_pcEncCfg       = &encCfg;
-  m_pcLoopFilter   = LoopFilter;
 
   m_GeoCostList.init(GEO_NUM_PARTITION_MODE, encCfg.m_maxNumGeoCand );
   m_AFFBestSATDCost = MAX_DOUBLE;
@@ -264,7 +262,9 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter
   const unsigned maxDepth = 2*maxSizeIdx;
   m_CtxBuffer.resize( maxDepth );
   m_CurrCtx = 0;
-  m_dbBuffer.create( chromaFormat, Area( 0, 0, encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight ) );
+
+  if( encCfg.m_EDO )
+    m_dbBuffer.create( chromaFormat, Area( 0, 0, uiMaxSize, uiMaxSize ), 0, 8 );
 }
 
 
@@ -2831,7 +2831,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
 
   if( m_pcEncCfg->m_EDO == 2 && CS::isDualITree( cs ) && isLuma( partitioner.chType ) )
   {
-    m_pcLoopFilter->getMaxFilterLength( *cu, verOffset, horOffset );
+    m_cLoopFilter.getMaxFilterLength( *cu, verOffset, horOffset );
 
     if( 0== (verOffset + horOffset) )
     {
@@ -2852,7 +2852,10 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     //Copy current CU's reco to Deblock Pic Buffer
     const ReshapeData& reshapeData = cs.picture->reshapeData;
     const CompArea&  compArea = currCsArea.block( compId );
-    PelBuf dbReco = picDbBuf.getBuf( compArea );
+    CompArea         locArea  = compArea;
+    locArea.x -= cu->blocks[compIdx].x;
+    locArea.y -= cu->blocks[compIdx].y;
+    PelBuf dbReco = picDbBuf.getBuf( locArea );
     if (cs.slice->lmcsEnabled && isLuma(compId) )
     {
       if ((!cs.sps->LFNST) && (!cs.sps->MTS) && (!cs.sps->ISP)&& reshapeData.getCTUFlag())
@@ -2875,7 +2878,10 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     if ( leftEdgeAvai )
     {
       const CompArea&  compArea = areaLeft.block(compId);
-      PelBuf dbReco = picDbBuf.getBuf( compArea );
+      CompArea         locArea = compArea;
+      locArea.x -= cu->blocks[compIdx].x;
+      locArea.y -= cu->blocks[compIdx].y;
+      PelBuf dbReco = picDbBuf.getBuf( locArea );
       if (cs.slice->lmcsEnabled && isLuma(compId))
       {
         dbReco.rspSignal( cs.picture->getRecoBuf( compArea ), reshapeData.getInvLUT() );
@@ -2889,7 +2895,10 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     if ( topEdgeAvai )
     {
       const CompArea&  compArea = areaTop.block( compId );
-      PelBuf dbReco = picDbBuf.getBuf( compArea );
+      CompArea         locArea = compArea;
+      locArea.x -= cu->blocks[compIdx].x;
+      locArea.y -= cu->blocks[compIdx].y;
+      PelBuf dbReco = picDbBuf.getBuf( locArea );
       if (cs.slice->lmcsEnabled && isLuma(compId))
       {
         dbReco.rspSignal( cs.picture->getRecoBuf( compArea ), reshapeData.getInvLUT() );
@@ -2905,15 +2914,18 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
 
   CHECK( CU::isSepTree(*cu) && !cu->Y().valid() && partitioner.chType == CH_L, "xxx" );
 
+  if( cu->Y() .valid() ) m_cLoopFilter.setOrigin( CH_L, cu->lumaPos() );
+  if( cu->Cb().valid() ) m_cLoopFilter.setOrigin( CH_C, cu->chromaPos() );
+
   //deblock
   if( leftEdgeAvai )
   {
-    m_pcLoopFilter->loopFilterCu( *cu, dbChType, EDGE_VER, m_dbBuffer );
+    m_cLoopFilter.loopFilterCu( *cu, dbChType, EDGE_VER, m_dbBuffer );
   }
 
   if( topEdgeAvai )
   {
-    m_pcLoopFilter->loopFilterCu( *cu, dbChType, EDGE_HOR, m_dbBuffer );
+    m_cLoopFilter.loopFilterCu( *cu, dbChType, EDGE_HOR, m_dbBuffer );
   }
 
   //calculate difference between DB_before_SSE and DB_after_SSE for neighbouring CUs
@@ -2922,22 +2934,27 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   {
     ComponentID compId = (ComponentID)compIdx;
     {
-      const CompArea&  compArea = currCsArea.block( compId );
-      CPelBuf reco = picDbBuf.getBuf( compArea );
-      CPelBuf org  = cs.getOrgBuf( compId );
+      CompArea compArea = currCsArea.block( compId );
+      compArea.x -= cu->blocks[compIdx].x;
+      compArea.y -= cu->blocks[compIdx].y;
+      CPelBuf reco      = picDbBuf.getBuf( compArea );
+      CPelBuf org       = cs.getOrgBuf( compId );
       distCur += xGetDistortionDb( cs, org, reco, compArea, false );
     }
 
     if ( leftEdgeAvai )
     {
       const CompArea&  compArea = areaLeft.block( compId );
+      CompArea         locArea  = compArea;
+      locArea.x -= cu->blocks[compIdx].x;
+      locArea.y -= cu->blocks[compIdx].y;
       CPelBuf org    = cs.picture->getOrigBuf( compArea );
       if ( cs.picture->getFilteredOrigBuffer().valid() )
       {
         org = cs.picture->getRspOrigBuf( compArea );
       }
       CPelBuf reco   = cs.picture->getRecoBuf( compArea );
-      CPelBuf recoDb = picDbBuf.getBuf( compArea );
+      CPelBuf recoDb = picDbBuf.getBuf( locArea );
       distBeforeDb  += xGetDistortionDb( cs, org, reco,   compArea, true );
       distAfterDb   += xGetDistortionDb( cs, org, recoDb, compArea, false  );
     }
@@ -2945,13 +2962,16 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     if ( topEdgeAvai )
     {
       const CompArea&  compArea = areaTop.block( compId );
+      CompArea         locArea  = compArea;
+      locArea.x -= cu->blocks[compIdx].x;
+      locArea.y -= cu->blocks[compIdx].y;
       CPelBuf org    = cs.picture->getOrigBuf( compArea );
       if ( cs.picture->getFilteredOrigBuffer().valid() )
       {
         org = cs.picture->getRspOrigBuf( compArea );
       }
       CPelBuf reco   = cs.picture->getRecoBuf( compArea );
-      CPelBuf recoDb = picDbBuf.getBuf( compArea );
+      CPelBuf recoDb = picDbBuf.getBuf( locArea );
       distBeforeDb  += xGetDistortionDb( cs, org, reco,   compArea, true );
       distAfterDb   += xGetDistortionDb( cs, org, recoDb, compArea, false  );
     }

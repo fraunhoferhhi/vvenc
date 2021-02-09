@@ -363,6 +363,9 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
 
 LoopFilter::LoopFilter()
 {
+  m_origin[0] = Position{ 0, 0 };
+  m_origin[1] = Position{ 0, 0 };
+
   xPelFilterLuma  = xPelFilterLumaCore;
   xFilteringPandQ = xFilteringPandQCore;
 
@@ -1555,7 +1558,7 @@ template<DeblockEdgeDir edgeDir>
 void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
 {
         PelBuf&    picYuvRec   = picReco.bufs[ COMP_Y ];
-        Pel*      piSrc        = picYuvRec.bufAt( pos );
+        Pel*      piSrc        = picYuvRec.bufAt( pos.offset( -m_origin[0].x, -m_origin[0].y ) );
   const ptrdiff_t iStride      = picYuvRec.stride;
   const SPS &     sps          = *cs.sps;
   const Slice &   slice        = *cs.slice;
@@ -1713,8 +1716,8 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
 
   PelBuf             picYuvRecCb         = picReco.bufs[ COMP_Cb ];
   PelBuf             picYuvRecCr         = picReco.bufs[ COMP_Cr ];
-  Pel *              piSrcCb             = picYuvRecCb.bufAt( pos );
-  Pel *              piSrcCr             = picYuvRecCr.bufAt( pos );
+  Pel *              piSrcCb             = picYuvRecCb.bufAt( pos.offset( -m_origin[1].x, -m_origin[1].y ) );
+  Pel *              piSrcCr             = picYuvRecCr.bufAt( pos.offset( -m_origin[1].x, -m_origin[1].y ) );
   const ptrdiff_t    iStride             = picYuvRecCb.stride;
   const SPS &        sps                 = *cs.sps;
   const Slice &      slice               = *cs.slice;

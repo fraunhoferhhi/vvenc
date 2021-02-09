@@ -181,7 +181,7 @@ private:
   IntraSearch           m_cIntraSearch;
   InterSearch           m_cInterSearch;
   RdCost                m_cRdCost;
-  LoopFilter*           m_pcLoopFilter;
+  LoopFilter            m_cLoopFilter;
 
   CABACWriter*          m_CABACEstimator;
   EncModeCtrl           m_modeCtrl;
@@ -210,7 +210,7 @@ public:
   EncCu();
   virtual ~EncCu();
 
-  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, LoopFilter* LoopFilter, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
+  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
   void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
   void  destroy               ();
 
