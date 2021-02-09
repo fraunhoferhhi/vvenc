@@ -68,7 +68,7 @@ namespace vvenc {
 void CacheBlkInfoCtrl::create()
 {
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
+  const int maxSizeIdx  = MAX_CU_SIZE_IDX - MIN_CU_LOG2;
 
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
@@ -78,8 +78,15 @@ void CacheBlkInfoCtrl::create()
       {
         for( unsigned x = 0; x < numPos; x++ )
         {
+          // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
+          // W = 1 << ( wIdx + 2 )
+          // 1/2 W = 1 << ( wIdx + 1 )
+          // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
+
           if(( x + (1<<(wIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-          && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) ) )
+          && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+          && ( ( ( x << MIN_CU_LOG2 ) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
+          && ( ( ( y << MIN_CU_LOG2 ) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
           {
             m_codedCUInfo[wIdx][hIdx][x][y] = new CodedCUInfo;
             m_codedCUInfo[wIdx][hIdx][x][y]->poc       = -1;
@@ -98,7 +105,7 @@ void CacheBlkInfoCtrl::create()
 void CacheBlkInfoCtrl::destroy()
 {
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
+  const int maxSizeIdx  = MAX_CU_SIZE_IDX- MIN_CU_LOG2;
 
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
@@ -269,7 +276,7 @@ static bool isTheSameNbHood( const CodingUnit &cu, const CodingStructure& cs, co
 void BestEncInfoCache::create( const ChromaFormat chFmt )
 {
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
+  const int maxSizeIdx  = MAX_CU_SIZE_IDX - MIN_CU_LOG2;
 
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
@@ -284,8 +291,15 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
       {
         for( unsigned y = 0; y < numPos; y++ )
         {
-          if(( x + (1<<(wIdx) ) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-           &&( y + (1<<(hIdx) ) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) ))
+          // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
+          // W = 1 << ( wIdx + 2 )
+          // 1/2 W = 1 << ( wIdx + 1 )
+          // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
+
+          if(( x + (1<<(wIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+          && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+          && ( ( ( x << MIN_CU_LOG2 )  & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
+          && ( ( ( y << MIN_CU_LOG2 )  & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
           {
             m_bestEncInfo[wIdx][hIdx][x][y] = new BestEncodingInfo(dmvrSize);
 
