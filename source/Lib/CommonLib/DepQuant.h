@@ -61,7 +61,7 @@ namespace vvenc {
 class DepQuant : public QuantRDOQ2
 {
 public:
-  DepQuant( const Quant* other, bool enc );
+  DepQuant( const Quant* other, bool enc, bool useScalingLists );
   virtual ~DepQuant();
 
   virtual void quant  ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx );

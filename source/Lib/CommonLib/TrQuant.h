@@ -84,6 +84,7 @@ public:
              const int  rdoq                 = 0,
              const bool bUseRDOQTS           = false,
              const bool useSelectiveRDOQ     = false,
+             const bool scalingListsEnabled  = false,
              const bool bEnc                 = false,
              const bool useTransformSkipFast = false,
              const int  dqThrValue           = 8

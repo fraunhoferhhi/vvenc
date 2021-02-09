@@ -125,7 +125,7 @@ int quantCGWise( short* piQCoef, short* piCbf, const short* piCoef, const int* p
 
 //! \}
 
-QuantRDOQ2::QuantRDOQ2( const Quant* other ) : QuantRDOQ( other ), m_isErrScaleListOwner( false ), m_iLambda( 0 )
+QuantRDOQ2::QuantRDOQ2( const Quant* other, bool useScalingLists ) : QuantRDOQ( other, useScalingLists ), m_isErrScaleListOwner( false ), m_iLambda( 0 )
 {
   const QuantRDOQ2 *rdoq2 = dynamic_cast<const QuantRDOQ2*>( other );
   CHECK( other && !rdoq2, "The RDOQ cast must be successfull!" );
@@ -153,6 +153,8 @@ void QuantRDOQ2::xInitScalingList( const QuantRDOQ2* other )
 {
   m_isErrScaleListOwner = other == nullptr;
 
+  const bool useScalingLists = getScalingListEnabled();
+
   for(uint32_t sizeIdX = 0; sizeIdX < SCALING_LIST_SIZE_NUM; sizeIdX++)
   {
     for(uint32_t sizeIdY = 0; sizeIdY < SCALING_LIST_SIZE_NUM; sizeIdY++)
@@ -163,7 +165,7 @@ void QuantRDOQ2::xInitScalingList( const QuantRDOQ2* other )
         {
           if( m_isErrScaleListOwner )
           {
-            m_errScale[sizeIdX][sizeIdY][listId][qp] = new int[g_scalingListSizeX[sizeIdX] * g_scalingListSizeX[sizeIdY]];
+            m_errScale[sizeIdX][sizeIdY][listId][qp] = useScalingLists ? new int[g_scalingListSizeX[sizeIdX] * g_scalingListSizeX[sizeIdY]] : nullptr;
           }
           else
           {
@@ -226,18 +228,22 @@ void QuantRDOQ2::xSetErrScaleCoeff( unsigned list, unsigned sizeX, unsigned size
   const int channelBitDepth     = bitDepths.recon[channelType];
   const int iTransformShift     = getTransformShift( channelBitDepth, Size( width, height ), maxLog2TrDynamicRange[channelType] );
   const double dTransShift      = (double)iTransformShift;
-  const unsigned uiMaxNumCoeff  = g_scalingListSizeX[sizeX] * g_scalingListSizeX[sizeY];
-  const int *piQuantCoeff       = getQuantCoeff( list, qp, sizeX, sizeY );
-  int *piErrScale               = xGetErrScaleCoeffSL( list, sizeX, sizeY, qp );
 
   double dErrScale = pow( 2.0, ( (double)SCALE_BITS / 2.0 ) );    // Compensate for scaling of bitcount in Lagrange cost function
   dErrScale = dErrScale*pow( 2.0, ( -/*2.0**/( dTransShift ) ) );   // Compensate for scaling through forward transform
 
-  for( unsigned i = 0; i < uiMaxNumCoeff; i++ )
+  if( getScalingListEnabled() )
   {
-    int QStep = piQuantCoeff[i];
-    double errScale = dErrScale / QStep / (1 << (DISTORTION_PRECISION_ADJUSTMENT( channelBitDepth ) /*<< 1*/)); // (1 << ( /*2 **/ (bitDepths.recon[channelType] - 8)));
-    piErrScale[i] = (int)( errScale * (double)( 1 << COEFF_ERR_SCALE_PRECISION_BITS ) );
+    const unsigned uiMaxNumCoeff  = g_scalingListSizeX[sizeX] * g_scalingListSizeX[sizeY];
+    const int *piQuantCoeff       = getQuantCoeff( list, qp, sizeX, sizeY );
+    int *piErrScale               = xGetErrScaleCoeffSL( list, sizeX, sizeY, qp );
+
+    for( unsigned i = 0; i < uiMaxNumCoeff; i++ )
+    {
+      int QStep = piQuantCoeff[i];
+      double errScale = dErrScale / QStep / (1 << (DISTORTION_PRECISION_ADJUSTMENT( channelBitDepth ) /*<< 1*/)); // (1 << ( /*2 **/ (bitDepths.recon[channelType] - 8)));
+      piErrScale[i] = ( int ) (errScale * ( double ) (1 << COEFF_ERR_SCALE_PRECISION_BITS));
+    }
   }
 
   xSetErrScaleCoeffNoScalingList( list, sizeX, sizeY, qp, maxLog2TrDynamicRange, bitDepths );

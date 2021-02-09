@@ -237,6 +237,7 @@ void TrQuant::init( const Quant* otherQuant,
                     const int  rdoq,
                     const bool bUseRDOQTS,
                     const bool useSelectiveRDOQ,
+                    const bool scalingListsEnabled,
                     const bool bEnc,
                     const bool useTransformSkipFast,
                     const int  dqThrVal
@@ -248,7 +249,7 @@ void TrQuant::init( const Quant* otherQuant,
   m_quant = nullptr;
 
   {
-    m_quant = new DepQuant( otherQuant, bEnc );
+    m_quant = new DepQuant( otherQuant, bEnc, scalingListsEnabled );
   }
 
   if( m_quant )

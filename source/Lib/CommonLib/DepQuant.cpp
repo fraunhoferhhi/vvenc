@@ -1656,7 +1656,7 @@ namespace DQIntern
 
 
 //===== interface class =====
-DepQuant::DepQuant( const Quant* other, bool enc ) : QuantRDOQ2( other )
+DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists )
 {
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );
