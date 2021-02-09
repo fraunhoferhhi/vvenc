@@ -261,14 +261,7 @@ bool VVEncCfg::initCfgParameter()
     m_verCollocatedChromaFlag = true;
     m_calculateHdrMetrics     = true;
 
-    if( !m_wcgChromaQpControl.enabled )
-    {
-      m_wcgChromaQpControl.enabled = true;
-      m_wcgChromaQpControl.chromaQpScale   = -0.46;
-      m_wcgChromaQpControl.chromaQpOffset  = 9.26;
-      m_wcgChromaQpControl.chromaCbQpScale = 1.14;
-      m_wcgChromaQpControl.chromaCrQpScale = 1.79;
-    }
+    m_wcgChromaQpControl.enabled = false;
 
     VVEncCfg cBaseCfg;
     if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
@@ -546,17 +539,21 @@ bool VVEncCfg::initCfgParameter()
 
   if(  m_RCTargetBitrate )
   {
-    if( m_RCRateControlMode == RateControlMode::RCM_OFF )
+    if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
     {
       m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
-    }
 
-    if( m_RCKeepHierarchicalBit < 0 )
-    {
-      m_RCKeepHierarchicalBit = 2;
-    }
+      if( m_RCKeepHierarchicalBit < 0 )
+      {
+        m_RCKeepHierarchicalBit = 2;
+      }
 
-    m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
+      m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
+    }
+  }
+  else if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
+  {
+    m_RCRateControlMode = RateControlMode::RCM_OFF;
   }
 
   //

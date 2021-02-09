@@ -101,6 +101,7 @@ enum ChromaFormat
 
 enum RateControlMode
 {
+  RCM_AUTO          = -1,
   RCM_OFF           = 0,
   RCM_CTU_LEVEL     = 1,
   RCM_PICTURE_LEVEL = 2,
@@ -438,8 +439,8 @@ public:
   int                 m_Geo                                     = 0;
   unsigned            m_maxNumGeoCand                           = 5;
 
-  RateControlMode     m_RCRateControlMode                       = RCM_OFF;       ///< RateControlMode
-  int              m_RCKeepHierarchicalBit                   = -1;
+  RateControlMode     m_RCRateControlMode                       = RCM_AUTO;       ///< RateControlMode
+  int                 m_RCKeepHierarchicalBit                   = -1;
   bool                m_RCUseLCUSeparateModel                   = false;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;

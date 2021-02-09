@@ -224,6 +224,7 @@ const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
 
 const std::vector<SVPair<RateControlMode>> RateControlModeToEnumMap =
 {
+  { "-1",                    RCM_AUTO },
   { "0",                     RCM_OFF },
   { "1",                     RCM_CTU_LEVEL },
   { "2",                     RCM_PICTURE_LEVEL },
