@@ -92,7 +92,7 @@ struct coeffGroupRDStats
 // ====================================================================================================================
 
 
-QuantRDOQ::QuantRDOQ( const Quant* other ) : Quant( other )
+QuantRDOQ::QuantRDOQ( const Quant* other, bool useScalingLists ) : Quant( other, useScalingLists )
 {
 
   const QuantRDOQ *rdoq = dynamic_cast<const QuantRDOQ*>( other );
@@ -383,22 +383,23 @@ void QuantRDOQ::xSetErrScaleCoeff( uint32_t list, uint32_t sizeX, uint32_t sizeY
   const int channelBitDepth = bitDepths[channelType];
   const int iTransformShift = getTransformShift( channelBitDepth, Size( g_scalingListSizeX[sizeX], g_scalingListSizeX[sizeY] ), maxLog2TrDynamicRange[channelType] );  // Represents scaling through forward transform
 
-  uint32_t i, uiMaxNumCoeff = width * height;
-  int *piQuantcoeff;
-  double *pdErrScale;
-  piQuantcoeff = getQuantCoeff( list, qp, sizeX, sizeY );
-  pdErrScale   = xGetErrScaleCoeffSL( list, sizeX, sizeY, qp);
-
   double dErrScale = (double)( 1 << SCALE_BITS );                                // Compensate for scaling of bitcount in Lagrange cost function
 
   const bool needsSqrt2 = ((Log2(width*height)) & 1) == 1;
   double dTransShift = (double)iTransformShift + ( needsSqrt2 ? -0.5 : 0.0 );
   dErrScale = dErrScale*pow( 2.0, ( -2.0*dTransShift ) );                     // Compensate for scaling through forward transform
 
-  for( i = 0; i < uiMaxNumCoeff; i++ )
+  if( getScalingListEnabled() )
   {
-    pdErrScale[i] = dErrScale / piQuantcoeff[i] / piQuantcoeff[i]
-                    / (1 << (DISTORTION_PRECISION_ADJUSTMENT(bitDepths[channelType]) << 1));
+    uint32_t i, uiMaxNumCoeff = width * height;
+
+    int*  piQuantcoeff = getQuantCoeff( list, qp, sizeX, sizeY );
+    double* pdErrScale = xGetErrScaleCoeffSL( list, sizeX, sizeY, qp );
+
+    for( i = 0; i < uiMaxNumCoeff; i++ )
+    {
+      pdErrScale[i] = dErrScale / piQuantcoeff[i] / piQuantcoeff[i] / (1 << (DISTORTION_PRECISION_ADJUSTMENT( bitDepths[channelType] ) << 1));
+    }
   }
 
   int QStep = g_quantScales[needsSqrt2][qp];
@@ -437,6 +438,8 @@ void QuantRDOQ::xInitScalingList( const QuantRDOQ* other )
 {
   m_isErrScaleListOwner = other == nullptr;
 
+  bool useScalingLists = getScalingListEnabled();
+
   for(uint32_t sizeIdX = 0; sizeIdX < SCALING_LIST_SIZE_NUM; sizeIdX++)
   {
     for(uint32_t sizeIdY = 0; sizeIdY < SCALING_LIST_SIZE_NUM; sizeIdY++)
@@ -447,7 +450,7 @@ void QuantRDOQ::xInitScalingList( const QuantRDOQ* other )
         {
           if( m_isErrScaleListOwner )
           {
-            m_errScale[sizeIdX][sizeIdY][listId][qp] = new double[g_scalingListSizeX[sizeIdX] * g_scalingListSizeX[sizeIdY]];
+            m_errScale[sizeIdX][sizeIdY][listId][qp] = useScalingLists ? new double[g_scalingListSizeX[sizeIdX] * g_scalingListSizeX[sizeIdY]] : nullptr;
           }
           else
           {

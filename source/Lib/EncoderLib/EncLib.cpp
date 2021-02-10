@@ -82,13 +82,14 @@ EncLib::~EncLib()
 
 void EncLib::xResetLib()
 {
-  m_numPicsRcvd       = 0;
-  m_numPicsInQueue    = 0;
-  m_numPicsCoded      = 0;
-  m_pocEncode         = -1;
-  m_pocRecOut         = 0;
-  m_GOPSizeLog2       = -1;
-  m_TicksPerFrameMul4 = 0;
+  m_numPicsRcvd        = 0;
+  m_numPicsInQueue     = 0;
+  m_numPicsCoded       = 0;
+  m_pocEncode          = -1;
+  m_pocRecOut          = 0;
+  m_GOPSizeLog2        = -1;
+  m_TicksPerFrameMul4  = 0;
+  m_numPassInitialized = -1;
 }
 
 void EncLib::initEncoderLib( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf )
@@ -217,6 +218,13 @@ void EncLib::uninitEncoderLib()
 
 void EncLib::initPass( int pass )
 {
+  CHECK( m_numPassInitialized != pass && m_numPassInitialized + 1 != pass, "initialization of passes only in successive order possible" );
+
+  if( m_numPassInitialized + 1 != pass )
+  {
+    return;
+  }
+
   xUninitLib();
 
   // set rate control pass
@@ -304,6 +312,8 @@ void EncLib::initPass( int pass )
     }
     m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
   }
+
+  m_numPassInitialized = pass;
 }
 
 void EncLib::xUninitLib()
