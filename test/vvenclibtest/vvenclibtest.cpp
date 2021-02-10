@@ -296,7 +296,7 @@ int testLibParameterRanges()
   vvencParams.m_RCTargetBitrate = 1;
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { -1,0,3 }, true );
-  vvencParams.m_RCRateControlMode = RateControlMode::RCM_OFF;
+  vvencParams.m_RCRateControlMode = RateControlMode::RCM_AUTO;
   vvencParams.m_RCTargetBitrate = 0;
 
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1 } );
@@ -510,10 +510,10 @@ int callingOrderRegularInit2Pass()
 {
   VVEnc cVVEnc;
   VVEncCfg vvencParams;
-  fillEncoderParameters( vvencParams );
-
   vvencParams.m_RCNumPasses = 2;
   vvencParams.m_RCTargetBitrate = 500000;
+
+  fillEncoderParameters( vvencParams );
 
   if( 0 != cVVEnc.init( vvencParams ) )
   {
