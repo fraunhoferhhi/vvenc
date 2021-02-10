@@ -108,14 +108,10 @@ bool EncApp::parseCfg( int argc, char* argv[])
   return true;
 }
 
-/**
- * main encode function
- */
-void EncApp::encode()
+void EncApp::init()
 {
   if( m_cEncAppCfg.m_decode )
   {
-    vvenc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
     return;
   }
 
@@ -127,7 +123,6 @@ void EncApp::encode()
   }
 
   m_cVVEnc.getConfig( m_cEncAppCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
-
   msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
 
   if( ! openFileIO() )
@@ -136,6 +131,19 @@ void EncApp::encode()
   }
 
   printChromaFormat();
+}
+
+
+/**
+ * main encode function
+ */
+void EncApp::encode()
+{
+  if( m_cEncAppCfg.m_decode )
+  {
+    vvenc::decodeBitstream( m_cEncAppCfg.m_bitstreamFileName );
+    return;
+  }
 
   // create buffer for input YUV pic
   YUVBufferStorage yuvInBuf( m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_SourceWidth, m_cEncAppCfg.m_SourceHeight );

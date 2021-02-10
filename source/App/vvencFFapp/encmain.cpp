@@ -106,6 +106,26 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  // call init function
+#if HANDLE_EXCEPTION
+  try
+  {
+#endif
+    pcEncApp->init();
+#if HANDLE_EXCEPTION
+  }
+  catch( std::exception &e )
+  {
+    msgApp( vvenc::ERROR, "%s\n", e.what() );
+    return 1;
+  }
+  catch( ... )
+  {
+    msgApp( vvenc::ERROR, "Unspecified error occurred\n" );
+    return 1;
+  }
+#endif
+
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
