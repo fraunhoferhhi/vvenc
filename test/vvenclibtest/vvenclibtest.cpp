@@ -77,8 +77,9 @@ void msgFnc( int level, const char* fmt, va_list args )
   vfprintf( level == 1 ? stderr : stdout, fmt, args );
 }
 
-void msgFncNoOutput( int level, const char* fmt, va_list args )
+void msgFncNoOutput( int , const char* , va_list )
 {
+	
 }
 
 int testLibCallingOrder();     // check invalid caling order
