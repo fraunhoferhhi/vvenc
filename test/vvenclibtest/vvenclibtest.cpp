@@ -57,6 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fstream>
 #include <cstring>
 #include <vector>
+#include <stdarg.h>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
