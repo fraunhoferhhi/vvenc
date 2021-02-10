@@ -2195,14 +2195,15 @@ void EncGOP::xUpdateAfterPicRC( const Picture* pic, EncRCPic* encRCPic )
     return;
   }
 
-  double avgQP = encRCPic->calAverageQP();
+  //double avgQP = encRCPic->calAverageQP();
   double avgLambda = encRCPic->calAverageLambda();
   if ( avgLambda < 0.0 )
   {
     avgLambda = m_lambda;
   }
 
-  encRCPic->updateAfterPicture( m_actualHeadBits, m_actualTotalBits, avgQP, avgLambda, pic->slices[ 0 ]->isIRAP() );
+  encRCPic->updateAfterPicture( m_actualHeadBits, m_actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->slices[ 0 ]->lambdas[ COMP_Y ], pic->slices[ 0 ]->isIRAP() );
+  //encRCPic->updateAfterPicture( m_actualHeadBits, m_actualTotalBits, avgQP, avgLambda, pic->slices[ 0 ]->isIRAP() );
   encRCPic->addToPictureList( m_pcRateCtrl->getPicList() );
 
   m_pcRateCtrl->encRCSeq->updateAfterPic( m_actualTotalBits, encRCPic->tmpTargetBits );
