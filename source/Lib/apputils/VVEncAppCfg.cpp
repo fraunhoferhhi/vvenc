@@ -319,7 +319,19 @@ const std::vector<SVPair<int>> ColorMatrixToIntMap =
 };
 
 
+const std::vector<SVPair<int8_t>> FlagToIntMap =
+{
+  { "auto",        -1 },
+  { "-1",          -1 },
 
+  { "off",          0 },
+  { "disable",      0 },
+  { "0",            0 },
+
+  { "on",           1 },
+  { "enable",       1 },
+  { "1",            1 },
+};
 
 //// ====================================================================================================================
 //// string <-> enum
@@ -381,13 +393,16 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToRef<int>            toColorPrimaries             ( &m_colourPrimaries,             &ColorPrimariesToIntMap );
   IStreamToRef<int>            toTransferCharacteristics    ( &m_transferCharacteristics,     &TransferCharacteristicsToIntMap );
   IStreamToRef<int>            toColorMatrix                ( &m_matrixCoefficients,          &ColorMatrixToIntMap );
-  //IStreamToRef<int>            toPrefTransferCharacteristics( &m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
   IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
   IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
 
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,              &DecodingRefreshTypeToEnumMap );
+
+  IStreamToRef<int8_t>         toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToRef<int8_t>         toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToRef<int8_t>         toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
 
   //
@@ -459,13 +474,13 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.setSubSection("Encoder Options");
   opts.addOptions()
   ("internal-bitdepth",   m_internalBitDepth[0],       "internal bitdepth (8,10)")
-  ("aud",                 m_AccessUnitDelimiter,       "Enable Access Unit Delimiter NALUs (default: auto - enable only if needed by dependent options)")
-  ("vui",                 m_vuiParametersPresent,      "Enable generation of vui_parameters (default: auto - enable only if needed by dependent options)")
-  ("hrd",                 m_hrdParametersPresent,      "Enable generation of hrd_parameters (default: auto - enable only if needed by dependent options)")
+  ("aud",                 toAud,                       "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)")
+  ("hrd",                 toHrd,                       "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)")
   ;
 
   opts.setSubSection("VUI and SEI Options");
   opts.addOptions()
+  ("vui",                 toVui,                       "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)")
   ("colorprim",           toColorPrimaries,            "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                        "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
   ("transfer",            toTransferCharacteristics,   "Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
@@ -478,10 +493,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
                                                        "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
   ("maxcll,-cll",         toContentLightLevel,         "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
                                                        "max. frame average light level, range: 1 <= cll,fall <= 65535'")
-
-//  ("alttransfer,-atc",   toPrefTransferCharacteristics, "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
-//                                                       "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
-//                                                       "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
   ;
 
   po::setDefaults( opts );
@@ -594,6 +605,13 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
   IStreamToEnum<RateControlMode>     toRateControlMode      ( &m_RCRateControlMode, &RateControlModeToEnumMap );
+
+  IStreamToRef<int8_t>         toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToRef<int8_t>         toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToRef<int8_t>         toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+
+
+
 
   //
   // setup configuration parameters
@@ -910,9 +928,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SEIPictureTiming",                                m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
   ("SEIDecodingUnitInfo",                             m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
   ("EnableDecodingParameterSet",                      m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
-  ("AccessUnitDelimiter,-aud",                        m_AccessUnitDelimiter,                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)")
-  ("VuiParametersPresent,-vui",                       m_vuiParametersPresent,                           "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)")
-  ("HrdParametersPresent,-hrd",                       m_hrdParametersPresent,                           "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)")
+  ("AccessUnitDelimiter,-aud",                        toAud,                                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)")
+  ("VuiParametersPresent,-vui",                       toVui,                                            "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)")
+  ("HrdParametersPresent,-hrd",                       toHrd,                                            "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)")
   ("AspectRatioInfoPresent",                          m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
   ("AspectRatioIdc",                                  m_aspectRatioIdc,                                 "aspect_ratio_idc")
   ("SarWidth",                                        m_sarWidth,                                       "horizontal size of the sample aspect ratio")
