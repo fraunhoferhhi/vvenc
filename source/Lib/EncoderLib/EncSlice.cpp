@@ -904,7 +904,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         EncCu& encCu             = lineEncRsrc->m_encCu;
 
         encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList );
-        encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY, encSlice->m_encRCPic );
+        encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
 
         // cleanup line memory when last ctu in line done to reduce overall memory consumption
         if( encSlice->m_pcEncCfg->m_ensureWppBitEqual && ctuPosX == pcv.widthInCtus - 1 )

@@ -330,7 +330,7 @@ EncCu::~EncCu()
 // Public member functions
 // ====================================================================================================================
 
-void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus, EncRCPic* encRCPic )
+void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus )
 {
   CodingStructure&     cs          = *pic->cs;
   Slice*               slice       = cs.slice;
@@ -384,10 +384,10 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   }
 
   const double oldLambda = m_cRdCost.getLambda();
-  xSetCtuQPRC( cs, slice, pic, ctuRsAddr, encRCPic );
+  xSetCtuQPRC( cs, slice, pic, ctuRsAddr );
 
   {
-    xCompressCtu( cs, ctuArea, ctuRsAddr, prevQP, encRCPic );
+    xCompressCtu( cs, ctuArea, ctuRsAddr, prevQP );
   }
 
   m_CABACEstimator->resetBits();
@@ -400,14 +400,14 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   }
 
   const int numberOfWrittenBits = int( m_CABACEstimator->getEstFracBits() >> SCALE_BITS );
-  xUpdateAfterCtuRC( cs, slice, ctuArea, oldLambda, numberOfWrittenBits, ctuRsAddr, encRCPic );
+  xUpdateAfterCtuRC( cs, slice, ctuArea, oldLambda, numberOfWrittenBits, ctuRsAddr );
 }
 
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
 
-void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[], EncRCPic* encRCPic )
+void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] )
 {
   m_modeCtrl.initCTUEncoding( *cs.slice );
 
@@ -440,7 +440,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   tempCS->baseQP       = bestCS->baseQP       = cs.slice->sliceQp;
   tempCS->prevQP[CH_L] = bestCS->prevQP[CH_L] = prevQP[CH_L];
 
-  xCompressCU( tempCS, bestCS, *partitioner, encRCPic );
+  xCompressCU( tempCS, bestCS, *partitioner );
   // all signals were already copied during compression if the CTU was split - at this point only the structures are copied to the top level CS
 
   if ( m_wppMutex ) m_wppMutex->lock();
@@ -462,7 +462,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     tempCS->baseQP       = bestCS->baseQP       = cs.slice->sliceQp;
     tempCS->prevQP[CH_C] = bestCS->prevQP[CH_C] = prevQP[CH_C];
 
-    xCompressCU( tempCS, bestCS, *partitioner, encRCPic );
+    xCompressCU( tempCS, bestCS, *partitioner );
 
     if ( m_wppMutex ) m_wppMutex->lock();
 
@@ -473,7 +473,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_pcEncCfg->m_RCRateControlMode )
   {
-    encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
+    cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
   }
 
   // reset context states and uninit context pointer
@@ -518,7 +518,7 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 }
 
-void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner, EncRCPic* encRCPic )
+void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner )
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_COMPRESS_CU, tempCS, partitioner.chType );
   const Area& lumaArea = tempCS->area.Y();
@@ -547,9 +547,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         if (rateCtrlFrame)
         {
           // frame-level or GOP-level RC + QPA
-          pic->ctuAdaptedQP[ ctuRsAddr ] += encRCPic->picQPOffsetQPA;
+          pic->ctuAdaptedQP[ ctuRsAddr ] += pic->encRCPic->picQPOffsetQPA;
           pic->ctuAdaptedQP[ ctuRsAddr ] = Clip3( 0, MAX_QP, (int)pic->ctuAdaptedQP[ ctuRsAddr ] );
-          pic->ctuQpaLambda[ ctuRsAddr ] *= encRCPic->picLambdaOffsetQPA;
+          pic->ctuQpaLambda[ ctuRsAddr ] *= pic->encRCPic->picLambdaOffsetQPA;
           pic->ctuQpaLambda[ ctuRsAddr ] = Clip3( m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, pic->ctuQpaLambda[ ctuRsAddr ] );
         }
         m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcEncCfg->m_usePerceptQPA > 2);
@@ -781,7 +781,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode, encRCPic );
+        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
 
@@ -792,7 +792,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode, encRCPic );
+        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
 
@@ -803,7 +803,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode, encRCPic );
+        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
 
@@ -814,7 +814,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode, encRCPic );
+        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
 
@@ -825,7 +825,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode, encRCPic );
+        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
 
@@ -835,7 +835,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       if( m_modeCtrl.trySplit( encTestMode, cs, partitioner, lastTestMode ) )
       {
         lastTestMode = encTestMode;
-        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode, encRCPic );
+        xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
   }
@@ -894,7 +894,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 }
 
 
-void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode, EncRCPic* encRCPic )
+void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode )
 {
   const ModeType modeTypeParent  = partitioner.modeType;
   const TreeType treeTypeParent  = partitioner.treeType;
@@ -937,7 +937,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
       }
     }
 
-    xCheckModeSplitInternal( tempCS, bestCS, partitioner, encTestMode, modeTypeParent, skipInterPass, encRCPic );
+    xCheckModeSplitInternal( tempCS, bestCS, partitioner, encTestMode, modeTypeParent, skipInterPass );
     //recover cons modes
     partitioner.modeType = modeTypeParent;
     partitioner.treeType = treeTypeParent;
@@ -957,7 +957,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
   }
 }
 
-void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass, EncRCPic* encRCPic )
+void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass )
 {
   const int qp                   = encTestMode.qp;
   const int oldPrevQp            = tempCS->prevQP[partitioner.chType];
@@ -1054,7 +1054,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
       tempSubCS->bestParent = bestSubCS->bestParent = bestCS;
 
-      xCompressCU(tempSubCS, bestSubCS, partitioner, encRCPic );
+      xCompressCU(tempSubCS, bestSubCS, partitioner );
 
       tempSubCS->bestParent = bestSubCS->bestParent = nullptr;
 
@@ -1204,7 +1204,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     m_CABACEstimator->determineNeighborCus( *bestCSChroma, partitioner.currArea(), partitioner.chType, partitioner.treeType );
     tempCSChroma->refCS = tempCS;
     bestCSChroma->refCS = tempCS;
-    xCompressCU( tempCSChroma, bestCSChroma, partitioner, encRCPic );
+    xCompressCU( tempCSChroma, bestCSChroma, partitioner );
 
     //attach chromaCS to luma CS and update cost
     tempCS->useSubStructure( *bestCSChroma, partitioner.chType, TREE_D, CS::getArea( *bestCSChroma, partitioner.currArea(), partitioner.chType, partitioner.treeType ), true );
@@ -1400,7 +1400,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
 }
 
-void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr, EncRCPic* encRCPic )
+void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr )
 {
   if ( !m_pcEncCfg->m_RCRateControlMode )
   {
@@ -1410,6 +1410,8 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
   int estQP = slice->sliceQp;
   double estLambda = -1.0;
   double bpp = -1.0;
+
+  EncRCPic* encRCPic = pic->encRCPic;
 
   if ( ( pic->slices[ 0 ]->isIRAP() && m_pcEncCfg->m_RCForceIntraQP ) || m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL )
   {
@@ -1457,7 +1459,7 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
   return;
 }
 
-void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr, EncRCPic* encRCPic )
+void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr )
 {
   if ( !m_pcEncCfg->m_RCRateControlMode )
   {
@@ -1497,7 +1499,7 @@ void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const Un
 
   if ( m_rcMutex ) m_rcMutex->lock();
 
-  encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualQP, actualLambda, skipRatio,
+  slice->pic->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualQP, actualLambda, skipRatio,
     slice->isIRAP() ? 0 : m_pcEncCfg->m_RCRateControlMode == RCM_CTU_LEVEL );
 
   if ( m_rcMutex ) m_rcMutex->unlock();
