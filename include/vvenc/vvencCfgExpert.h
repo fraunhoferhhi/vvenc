@@ -309,7 +309,7 @@ public:
 
   int                 m_aiPad[ 2 ]                              = { 0, 0 };                              ///< number of padded pixels for width and height
   bool                m_enablePictureHeaderInSliceHeader        = true;
-  int8_t              m_AccessUnitDelimiter                     = -1;                                    ///< add Access Unit Delimiter NAL units, default: auto (only enable if needed by dependent options)
+  int                 m_AccessUnitDelimiter                     = -1;                                    ///< add Access Unit Delimiter NAL units, default: auto (only enable if needed by dependent options)
 
   bool                m_printMSEBasedSequencePSNR               = false;
   bool                m_printHexPsnr                            = false;
@@ -357,7 +357,7 @@ public:
   int                 m_sliceChromaQpOffsetPeriodicity          = -1;                                    ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
   int                 m_sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { 0, 0};                               ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
 
-  int8_t              m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+  int                 m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   bool                m_lumaLevelToDeltaQPEnabled               = false;
   WCGChromaQPControl  m_wcgChromaQpControl                      = WCGChromaQPControl();
@@ -440,7 +440,7 @@ public:
   unsigned            m_maxNumGeoCand                           = 5;
 
   RateControlMode     m_RCRateControlMode                       = RCM_AUTO;       ///< RateControlMode
-  int8_t              m_RCKeepHierarchicalBit                   = -1;
+  int                 m_RCKeepHierarchicalBit                   = -1;
   bool                m_RCUseLCUSeparateModel                   = false;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;
@@ -511,8 +511,8 @@ public:
   int                 m_saoOffsetBitShift[ MAX_NUM_CH ]         = { 0, 0 };
 
   bool                m_decodingParameterSetEnabled             = false;                                 ///< enable decoding parameter set
-  int8_t              m_vuiParametersPresent                    = -1;                                    ///< enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
-  int8_t              m_hrdParametersPresent                    = -1;                                    ///< enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
+  int                 m_vuiParametersPresent                    = -1;                                    ///< enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
+  int                 m_hrdParametersPresent                    = -1;                                    ///< enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
   bool                m_aspectRatioInfoPresent                  = false;                                 ///< Signals whether aspect_ratio_idc is present
   int                 m_aspectRatioIdc                          = 0;                                     ///< aspect_ratio_idc
   int                 m_sarWidth                                = 0;                                     ///< horizontal size of the sample aspect ratio
@@ -569,7 +569,7 @@ public:
   int                 m_fastLocalDualTreeMode                   = 0;
 
   int                 m_maxParallelFrames                       = 0;
-  int8_t              m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+  int                 m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 
   bool                m_picPartitionFlag                        = false;
 public:

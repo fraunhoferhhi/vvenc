@@ -319,7 +319,7 @@ const std::vector<SVPair<int>> ColorMatrixToIntMap =
 };
 
 
-const std::vector<SVPair<int8_t>> FlagToIntMap =
+const std::vector<SVPair<int>> FlagToIntMap =
 {
   { "auto",        -1 },
   { "-1",          -1 },
@@ -400,9 +400,9 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,              &DecodingRefreshTypeToEnumMap );
 
-  IStreamToRef<int8_t>         toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToRef<int8_t>         toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToRef<int8_t>         toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToRef<int>            toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToRef<int>            toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToRef<int>            toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
 
   //
@@ -606,9 +606,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
   IStreamToEnum<RateControlMode>     toRateControlMode      ( &m_RCRateControlMode, &RateControlModeToEnumMap );
 
-  IStreamToRef<int8_t>         toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToRef<int8_t>         toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToRef<int8_t>         toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToRef<int>            toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToRef<int>            toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToRef<int>            toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
 
 
