@@ -247,21 +247,16 @@ bool VVEncCfg::initCfgParameter()
      ( m_contentLightLevel.size() == 2 && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 0 ) ) )
   {
     // enable hdr pq bt2020/bt709 mode (depending on set colour primaries)
-    if( m_colourPrimaries == 9 )
-    {
-      m_HdrMode = (m_colourPrimaries==9) ? HDR_PQ_BT2020 : HDR_PQ;
-    }
+    m_HdrMode = (m_colourPrimaries==9) ? HDR_PQ_BT2020 : HDR_PQ;
   }
 
   if( m_HdrMode == HDRMode::HDR_PQ || m_HdrMode == HDRMode::HDR_PQ_BT2020 )
   {
     m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
-    m_LMCSOffset = 1;
+    m_LMCSOffset              = 1;
     m_useSameChromaQPTables   = false;
     m_verCollocatedChromaFlag = true;
     m_calculateHdrMetrics     = true;
-
-    m_wcgChromaQpControl.enabled = false;
 
     VVEncCfg cBaseCfg;
     if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
@@ -291,7 +286,7 @@ bool VVEncCfg::initCfgParameter()
 
     // VUI and SEI options
     m_vuiParametersPresent     = (m_vuiParametersPresent != 0) ? 1:0; // enable vui only if not explicitly disabled
-    m_colourDescriptionPresent = 1;  // enable colour_primaries, transfer_characteristics and matrix_coefficients
+    m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
 
     m_transferCharacteristics = 16; // smpte2084 - HDR10
     if( m_colourPrimaries == 2 )
@@ -305,9 +300,9 @@ bool VVEncCfg::initCfgParameter()
   }
   else if( m_HdrMode == HDRMode::HDR_HLG || m_HdrMode == HDRMode::HDR_HLG_BT2020 )
   {
-    m_reshapeSignalType = RESHAPE_SIGNAL_HLG;
-    m_LMCSOffset = 0;
-    m_useSameChromaQPTables = true;
+    m_reshapeSignalType       = RESHAPE_SIGNAL_HLG;
+    m_LMCSOffset              = 0;
+    m_useSameChromaQPTables   = true;
     m_verCollocatedChromaFlag = true;
 
     VVEncCfg cBaseCfg;
@@ -321,9 +316,9 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent = (m_vuiParametersPresent != 0) ? 1:0;
+    m_vuiParametersPresent = (m_vuiParametersPresent != 0) ? 1:0; // enable vui only if not explicitly disabled
+    m_colourDescriptionPresent = true;                            // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
 
-    m_colourDescriptionPresent = true;
     if( m_colourPrimaries == 2 )
     {
       m_colourPrimaries = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; //  bt2020(9) : bt709 (1)
@@ -339,7 +334,10 @@ bool VVEncCfg::initCfgParameter()
       m_transferCharacteristics = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 14 : 1; // bt2020-10 : bt709
     }
 
-    m_preferredTransferCharacteristics = (m_preferredTransferCharacteristics < 0) ? 18 : 0; // ARIB STD-B67 (HLG)
+    if( m_preferredTransferCharacteristics < 0 )
+    {
+      m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
+    }
   }
 
   if( m_preferredTransferCharacteristics < 0 )
@@ -2427,14 +2425,69 @@ static inline std::string getCostFunctionStr( int cost )
   return cT;
 }
 
+static inline std::string getDynamicRangeStr( int dynamicRange )
+{
+  std::string cT;
+  switch( dynamicRange )
+  {
+    case HDRMode::HDR_OFF            : cT = "SDR"; break;
+    case HDRMode::HDR_PQ             : cT = "HDR10/PQ"; break;
+    case HDRMode::HDR_HLG            : cT = "HDR HLG"; break;
+    case HDRMode::HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
+    case HDRMode::HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
+    case HDRMode::HDR_USER_DEFINED   : cT = "HDR user defined"; break;
+    default                          : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getMasteringDisplayStr(  std::vector<uint32_t> md )
+{
+  std::stringstream css;
+
+  if(  md.size() != 10 )
+  {
+    return "unspecified";
+  }
+
+  css << "G(" << md[0] << "," << md[1] << ")";
+  css << "B(" << md[2] << "," << md[3] << ")";
+  css << "R(" << md[4] << "," << md[5] << ")";
+  css << "WP("<< md[6] << "," << md[7] << ")";
+  css << "L(" << md[8] << "," << md[9] << ")";
+
+  css << " (= nits: ";
+  css << "G(" << md[0]/50000.0 << "," << md[1]/50000.0 << ")";
+  css << "B(" << md[2]/50000.0 << "," << md[3]/50000.0 << ")";
+  css << "R(" << md[4]/50000.0 << "," << md[5]/50000.0 << ")";
+  css << "WP("<< md[6]/50000.0 << "," << md[7]/50000.0 << ")";
+  css << "L(" << md[8]/10000.0 << "," << md[9]/10000.0 << ")";
+  css << ")";
+  return css.str();
+}
+
+static inline std::string getContentLightLevel(  std::vector<uint32_t> cll )
+{
+  std::stringstream css;
+
+  if(  cll.size() != 2 )
+  {
+    return "unspecified";
+  }
+
+  css << cll[0] << "," << cll[1] << " (cll,fall)";
+  return css.str();
+}
+
 std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
 {
   std::stringstream css;
 
   if( eMsgLevel >= DETAILS )
   {
-  css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " << (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
-  css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
+  css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " <<
+                                                        (double)m_FrameRate / m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(m_HdrMode) << "\n";
+  css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(m_HdrMode) << "\n";
   css << "Sequence PSNR output                   : " << (m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
   css << "Hexadecimal PSNR output                : " << (m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
   css << "Sequence MSE output                    : " << (m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
@@ -2470,6 +2523,15 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
     css << "log2_sao_offset_scale_chroma           : " << m_log2SaoOffsetScale[ CH_C ] << "\n";
   }
   css << "Cost function:                         : " << getCostFunctionStr( m_costMode ) << "\n";
+
+  if( !m_masteringDisplay.empty() )
+  {
+    css << "Mastering display color volume         : " << getMasteringDisplayStr( m_masteringDisplay ) << "\n";
+  }
+  if( !m_contentLightLevel.empty() )
+  {
+    css << "Content light level                    : " << getContentLightLevel( m_contentLightLevel ) << "\n";
+  }
   css << "\n";
   }
 
