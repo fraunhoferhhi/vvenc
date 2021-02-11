@@ -106,6 +106,12 @@ public:
   void xDeblockArea                   ( const CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picReco ) const;
 
   void loopFilterCu                   ( const CodingUnit& cu, ChannelType chType, DeblockEdgeDir edgeDir, PelUnitBuf& dbBuffer );
+
+  void setOrigin( const ChannelType chType, const Position& pos ) { m_origin[chType] = pos; }
+
+private:
+
+  Position m_origin[2];
 };
 
 } // namespace vvenc

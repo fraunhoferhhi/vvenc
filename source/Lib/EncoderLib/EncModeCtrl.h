@@ -241,30 +241,6 @@ struct ComprCUCtx
 //////////////////////////////////////////////////////////////////////////
 // some utility interfaces that expose some functionality that can be used without concerning about which particular controller is used
 //////////////////////////////////////////////////////////////////////////
-struct SaveLoadStructSbt
-{
-  uint8_t  numPuInfoStored;
-  uint32_t puSse[SBT_NUM_SL];
-  uint8_t  puSbt[SBT_NUM_SL];
-};
-
-class SaveLoadEncInfoSbt
-{
-protected:
-  void init( const Slice &slice );
-  void create();
-  void destroy();
-
-private:
-  SaveLoadStructSbt m_saveLoadSbt[6][6][32][32];
-  const PreCalcValues* m_pcv;
-
-public:
-  virtual  ~SaveLoadEncInfoSbt() { }
-  void     resetSaveloadSbt   ( int maxSbtSize );
-  uint8_t  findBestSbt        ( const UnitArea& area, const uint32_t curPuSse );
-  bool     saveBestSbt        ( const UnitArea& area, const uint32_t curPuSse, const uint8_t curPuSbt );
-};
 
 static const int MAX_STORED_CU_INFO_REFS = 4;
 
@@ -276,9 +252,12 @@ struct CodedCUInfo
   bool isMMVDSkip;
   bool isIBC;
   uint8_t BcwIdx;
-  bool validMv[NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
-  Mv   saveMv [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
   int  ctuRsAddr, poc;
+  uint8_t  numPuInfoStored;
+  bool validMv  [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  Mv   saveMv   [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  uint32_t puSse[SBT_NUM_SL];
+  uint8_t  puSbt[SBT_NUM_SL];
 
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
   void setMv  ( const RefPicList refPicList, const int iRefIdx, const Mv& rMv );
@@ -298,10 +277,13 @@ protected:
   void init     ( const Slice &slice );
 
 public:
-  virtual ~CacheBlkInfoCtrl() {}
+  virtual ~CacheBlkInfoCtrl () {}
 
-  CodedCUInfo& getBlkInfo( const UnitArea& area );
-  void         initBlk( const UnitArea& area, int poc );
+  CodedCUInfo& getBlkInfo   ( const UnitArea& area );
+  void         initBlk      ( const UnitArea& area, int poc );
+
+  uint8_t      findBestSbt  ( const UnitArea& area, const uint32_t curPuSse );
+  bool         saveBestSbt  ( const UnitArea& area, const uint32_t curPuSse, const uint8_t curPuSbt );
 };
 
 struct BestEncodingInfo
@@ -344,7 +326,7 @@ public:
 //                    - only 2Nx2N, no RQT, additional binary/triary CU splits
 //////////////////////////////////////////////////////////////////////////
 
-class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache, public SaveLoadEncInfoSbt
+class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache
 {
 protected:
 

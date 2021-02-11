@@ -189,7 +189,6 @@ void EncSlice::init( const VVEncCfg& encCfg,
     lnRsc = new LineEncRsrc( encCfg );
     lnRsc->m_encCu.init( encCfg,
                          sps,
-                         &loopFilter,
                          globalCtuQpVector,
                          m_syncPicCtx.data(),
                          &rateCtrl );

@@ -165,9 +165,9 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
   }
 }
 
-Quant::Quant( const Quant* other ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
+Quant::Quant( const Quant* other, bool useScalingLists ) : m_RDOQ( 0 ), m_useRDOQTS( false ), m_useSelectiveRDOQ( false ), m_dLambda( 0.0 )
 {
-  xInitScalingList( other );
+  xInitScalingList( other, useScalingLists );
   DeQuant=DeQuantCore;
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_QUANT
   initQuantX86();
@@ -501,8 +501,10 @@ void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrDqVal
 
 /** set flat matrix value to quantized coefficient
  */
-void Quant::setFlatScalingList(const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths)
+void Quant::setFlatScalingList(const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths )
 {
+  if( !m_scalingListEnabled ) return;
+
   const int minimumQp = 0;
   const int maximumQp = SCALING_LIST_REM_NUM;
 
@@ -527,7 +529,7 @@ void Quant::setFlatScalingList(const int maxLog2TrDynamicRange[MAX_NUM_CH], cons
  * \param qp Quantization parameter
  * \param format chroma format
  */
-void Quant::xSetFlatScalingList(uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp)
+void Quant::xSetFlatScalingList(uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp )
 {
   uint32_t i,num = g_scalingListSizeX[sizeX]*g_scalingListSizeX[sizeY];
   int *quantcoeff;
@@ -550,10 +552,10 @@ void Quant::xSetFlatScalingList(uint32_t list, uint32_t sizeX, uint32_t sizeY, i
 
 /** initialization process of scaling list array
  */
-void Quant::xInitScalingList( const Quant* other )
+void Quant::xInitScalingList( const Quant* other, bool useScalingLists )
 {
   m_isScalingListOwner = other == nullptr;
-  m_scalingListEnabled = false;
+  m_scalingListEnabled = useScalingLists;
 
   for(uint32_t sizeIdX = 0; sizeIdX < SCALING_LIST_SIZE_NUM; sizeIdX++)
   {
@@ -565,8 +567,10 @@ void Quant::xInitScalingList( const Quant* other )
         {
           if( m_isScalingListOwner )
           {
-            m_quantCoef   [sizeIdX][sizeIdY][listId][qp] = new int    [g_scalingListSizeX[sizeIdX]*g_scalingListSizeX[sizeIdY]];
-            m_dequantCoef [sizeIdX][sizeIdY][listId][qp] = new int    [g_scalingListSizeX[sizeIdX]*g_scalingListSizeX[sizeIdY]];
+            const size_t scalingListSize = g_scalingListSizeX[sizeIdX] * g_scalingListSizeX[sizeIdY];
+
+            m_quantCoef   [sizeIdX][sizeIdY][listId][qp] = useScalingLists ? new int[scalingListSize] : nullptr;
+            m_dequantCoef [sizeIdX][sizeIdY][listId][qp] = useScalingLists ? new int[scalingListSize] : nullptr;
           }
           else
           {

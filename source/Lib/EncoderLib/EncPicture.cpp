@@ -80,7 +80,9 @@ void EncPicture::init( const VVEncCfg& encCfg,
 {
   m_pcEncCfg = &encCfg;
 
-  m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
+  if( encCfg.m_alf || encCfg.m_ccalf )
+    m_ALF       .init( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
+
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
   m_pcRateCtrl = &rateCtrl;
 }
