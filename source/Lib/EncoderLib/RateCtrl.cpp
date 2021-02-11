@@ -698,6 +698,8 @@ EncRCPic::EncRCPic()
   picMSE              = 0.0;
   validPixelsInPic    = 0;
   isNewScene          = false;
+  finalLambda         = 0.0;
+  estimatedBits       = 0;
 }
 
 EncRCPic::~EncRCPic()
@@ -817,6 +819,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int
   targetBits       = tgtBits;
   estHeaderBits    = estHeadBits;
   bitsLeft         = targetBits;
+  estimatedBits    = targetBits;
   int picWidth       = encRcSeq->picWidth;
   int picHeight      = encRcSeq->picHeight;
   int LCUWidth       = encRcSeq->lcuWidth;

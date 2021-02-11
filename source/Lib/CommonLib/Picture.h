@@ -250,6 +250,8 @@ public:
 #else
   bool                          useSC;
 #endif
+  int                           actualHeadBits;
+  int                           actualTotalBits;
   EncRCPic*                     encRCPic;
 
 private:

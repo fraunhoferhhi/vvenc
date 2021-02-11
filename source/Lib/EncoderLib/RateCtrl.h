@@ -242,6 +242,8 @@ namespace vvenc {
     int     poc;
     double  picLambdaOffsetQPA;
     double  picEstLambda;
+    double  finalLambda;
+    int     estimatedBits;
   
   private:
     EncRCSeq* encRCSeq;

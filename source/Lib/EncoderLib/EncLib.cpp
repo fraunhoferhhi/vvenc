@@ -606,6 +606,8 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
   pic->encPic            = false;
   pic->refCounter        = 0;
   pic->poc               = -1;
+  pic->actualHeadBits    = 0;
+  pic->actualTotalBits   = 0;
 
   pic->encTime.resetTimer();
 

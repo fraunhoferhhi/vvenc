@@ -247,10 +247,6 @@ EncGOP::EncGOP()
   , m_pcRateCtrl         ( nullptr )
   , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
-  , m_lambda             ( 0.0 )
-  , m_actualHeadBits     ( 0 )
-  , m_actualTotalBits    ( 0 )
-  , m_estimatedBits      ( 0 )
   , m_threadPool         ( nullptr )
 {
 }
@@ -359,11 +355,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     xInitPicsInCodingOrder( encList, picList, isEncodeLtRef );
   }
 
-  m_lambda          = 0.0;
-  m_actualHeadBits  = 0;
-  m_actualTotalBits = 0;
-  m_estimatedBits   = 0;
-
   if( !( m_pcEncCfg->m_RCRateControlMode && m_pcEncCfg->m_maxParallelFrames ) )
   {
     m_gopEncListToProcess.splice( m_gopEncListToProcess.end(), m_gopEncListInput );
@@ -389,8 +380,9 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
           {
             for( auto pic : m_gopEncListRCEvalutaion )
             {
-              m_actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-              xUpdateAfterPicRC( pic, pic->encRCPic );
+              pic->actualHeadBits  = 0;
+              pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+              xUpdateAfterPicRC( pic );
               pic->slices[0]->updateRefPicCounter( -1 );
             }
             m_gopEncListRCEvalutaion.clear();
@@ -501,7 +493,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   if( !m_pcEncCfg->m_maxParallelFrames )
   {
-    xUpdateAfterPicRC( pic, pic->encRCPic );
+    xUpdateAfterPicRC( pic );
   }
 
   if( m_pcEncCfg->m_useAMaxBT )
@@ -1369,9 +1361,9 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
     au.sliceType = pic.slices[ 0 ]->sliceType;
   }
 
-  m_actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
+  pic.actualTotalBits += xWriteParameterSets( pic, au, m_HLSWriter );
   xWriteLeadingSEIs( pic, au );
-  m_actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
+  pic.actualTotalBits += xWritePictureSlices( pic, au, m_HLSWriter );
 
   pic.encTime.stopTimer();
 
@@ -1488,7 +1480,7 @@ int EncGOP::xWritePictureSlices( Picture& pic, AccessUnitList& accessUnit, HLSWr
     // slice header and data
     int bitsBeforeWriting = hlsWriter.getNumberOfWrittenBits();
     hlsWriter.codeSliceHeader( slice );
-    m_actualHeadBits += ( hlsWriter.getNumberOfWrittenBits() - bitsBeforeWriting );
+    pic.actualHeadBits += ( hlsWriter.getNumberOfWrittenBits() - bitsBeforeWriting );
     hlsWriter.codeTilesWPPEntryPoint( slice );
     xAttachSliceDataToNalUnit( nalu, &pic.sliceDataStreams[ sliceIdx ] );
 
@@ -1729,10 +1721,10 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
   {
     frameLevel = 0;
   }
-  //m_pcRateCtrl->initRCPic( frameLevel, slice->poc );
-  m_estimatedBits = encRCPic->targetBits;
 
+  double lambda = encRCPic->finalLambda;
   int sliceQP = m_pcEncCfg->m_RCInitialQP;
+
   if( ( slice->poc == 0 && m_pcEncCfg->m_RCInitialQP > 0 ) || ( frameLevel == 0 && m_pcEncCfg->m_RCForceIntraQP ) ) // QP is specified
   {
     int    NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
@@ -1742,7 +1734,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
     int bitdepth_luma_qp_scale = 6 * ( slice->sps->bitDepths[CH_L] - 8
       - DISTORTION_PRECISION_ADJUSTMENT( slice->sps->bitDepths[CH_L] ) );
     double qp_temp = (double)sliceQP + bitdepth_luma_qp_scale - SHIFT_QP;
-    m_lambda = dQPFactor * pow( 2.0, qp_temp / 3.0 );
+    lambda = dQPFactor * pow( 2.0, qp_temp / 3.0 );
   }
   else if( frameLevel == 0 )   // intra case, but use the model
   {
@@ -1771,25 +1763,25 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
 
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
     encRCPic->getLCUInitTargetBits();
-    m_lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
-    sliceQP = encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
+    lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
+    sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
         (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && slice->isIntra() && (sliceQP > 0) )
     {
       sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
-      m_lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
+      lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
     }
   }
   else    // normal case
   {
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
-    m_lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
-    sliceQP = encRCPic->estimatePicQP( m_lambda, listPreviousPicture );
+    lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
+    sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
     if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
         (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
     {
       sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
-      m_lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP
+      lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP
     }
   }
 
@@ -1797,12 +1789,14 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
 
   if( m_pcRateCtrl->encRCSeq->isQpResetRequired( gopId ) )
   {
-    picEncoder->getEncSlice()->resetQP( &pic, sliceQP, m_lambda );
+    picEncoder->getEncSlice()->resetQP( &pic, sliceQP, lambda );
   }
+  encRCPic->finalLambda = lambda;
 }
 
-void EncGOP::xUpdateAfterPicRC( const Picture* pic, EncRCPic* encRCPic )
+void EncGOP::xUpdateAfterPicRC( const Picture* pic )
 {
+  EncRCPic* encRCPic = pic->encRCPic;
   if ( m_pcEncCfg->m_RCRateControlMode < 1 )
   {
     return;
@@ -1812,21 +1806,21 @@ void EncGOP::xUpdateAfterPicRC( const Picture* pic, EncRCPic* encRCPic )
   double avgLambda = encRCPic->calAverageLambda();
   if ( avgLambda < 0.0 )
   {
-    avgLambda = m_lambda;
+    avgLambda = encRCPic->finalLambda;
   }
 
-  encRCPic->updateAfterPicture( m_actualHeadBits, m_actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->slices[ 0 ]->lambdas[ COMP_Y ], pic->slices[ 0 ]->isIRAP() );
+  encRCPic->updateAfterPicture( pic->actualHeadBits, pic->actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->slices[ 0 ]->lambdas[ COMP_Y ], pic->slices[ 0 ]->isIRAP() );
   //encRCPic->updateAfterPicture( m_actualHeadBits, m_actualTotalBits, avgQP, avgLambda, pic->slices[ 0 ]->isIRAP() );
   encRCPic->addToPictureList( m_pcRateCtrl->getPicList() );
 
-  m_pcRateCtrl->encRCSeq->updateAfterPic( m_actualTotalBits, encRCPic->tmpTargetBits );
+  m_pcRateCtrl->encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
   if ( !pic->slices[ 0 ]->isIRAP() )
   {
-    m_pcRateCtrl->encRCGOP->updateAfterPicture( m_actualTotalBits );
+    m_pcRateCtrl->encRCGOP->updateAfterPicture( pic->actualTotalBits );
   }
   else    // for intra picture, the estimated bits are used to update the current status in the GOP
   {
-    m_pcRateCtrl->encRCGOP->updateAfterPicture( m_estimatedBits );
+    m_pcRateCtrl->encRCGOP->updateAfterPicture( encRCPic->estimatedBits );
   }
 
   return;

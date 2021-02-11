@@ -151,10 +151,6 @@ private:
   // TODO (jb): deprecated, to be removed
   EncPicture*               m_picEncoder0;
 
-  double                    m_lambda;
-  int                       m_actualHeadBits;
-  int                       m_actualTotalBits;
-  int                       m_estimatedBits;
   std::vector<int>          m_globalCtuQpVector;
 
   NoMallocThreadPool*       m_threadPool;
@@ -211,7 +207,7 @@ private:
   void xAttachSliceDataToNalUnit      ( OutputNALUnit& rNalu, const OutputBitstream* pcBitstreamRedirect );
   void xCabacZeroWordPadding          ( const Picture& pic, const Slice* slice, uint32_t binCountsInNalUnits, uint32_t numBytesInVclNalUnits, std::ostringstream &nalUnitData );
 
-  void xUpdateAfterPicRC              ( const Picture* pic, EncRCPic* encRCPic );
+  void xUpdateAfterPicRC              ( const Picture* pic );
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
