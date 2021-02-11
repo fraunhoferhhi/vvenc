@@ -192,13 +192,6 @@ namespace df
       if( is_bool_switch )
       {
         if( arg.empty() ) { param = "1"; }
-        else if( arg.at(0) == '-' )
-        {
-          if( arg.find("-1") != 0)
-          {
-            param = "1";
-          }
-        }
       }
 
       std::istringstream arg_ss (param,std::istringstream::in);
