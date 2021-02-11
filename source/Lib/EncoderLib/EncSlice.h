@@ -133,7 +133,6 @@ private:
 #if !FPP_CLEAN_UP
   EncPicturePP*                m_encPicPP;
 #endif
-  EncRCPic*                    m_encRCPic;
   std::vector<CtuEncParam>     ctuEncParams;
 
 public:
@@ -157,12 +156,12 @@ public:
   void    initPic             ( Picture* pic, int gopId );
 
   // compress and encode slice
-  void    compressSlice       ( Picture* pic, EncRCPic* encRCPic );      ///< analysis stage of slice                     s
+  void    compressSlice       ( Picture* pic );      ///< analysis stage of slice                     s
   void    encodeSliceData     ( Picture* pic );
   void    saoDisabledRate     ( CodingStructure& cs, SAOBlkParam* reconParams );
   void    finishCompressSlice ( Picture* pic, Slice& slice );
 
-  void    resetQP              ( Picture* pic, int sliceQP, double lambda, EncRCPic* encRCPic );
+  void    resetQP              ( Picture* pic, int sliceQP, double lambda );
 
 private:
   void    xInitSliceLambdaQP   ( Slice* slice, int gopId );

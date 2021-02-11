@@ -208,7 +208,7 @@ public:
   void encodePicture      ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
 #endif
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
-  void picInitRateControl ( int gopId, Picture& pic, Slice* slice, EncRCPic* encRCPic, EncPicture *picEncoder );
+  void picInitRateControl ( int gopId, Picture& pic, Slice* slice, EncPicture *picEncoder );
   ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
   const ParameterSetMap<APS>& getSharedApsMap() const { return m_gopApsMap; }
   bool                        anyFramesInOutputQueue() { return !m_gopEncListOutput.empty(); }

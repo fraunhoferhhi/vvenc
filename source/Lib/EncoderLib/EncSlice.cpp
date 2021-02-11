@@ -373,7 +373,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
 }
 
-void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda, EncRCPic* encRCPic )
+void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
 {
   Slice* slice = pic->cs->slice;
   if ( RCM_GOP_LEVEL == m_pcEncCfg->m_RCRateControlMode )
@@ -384,8 +384,8 @@ void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda, EncRCPic* encR
 
   if ( m_pcEncCfg->m_usePerceptQPA )
   {
-    encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
-    encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
+    pic->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
+    pic->encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
   }
 
   // store lambda
@@ -530,7 +530,7 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
 
 /** \param pic   picture class
  */
-void EncSlice::compressSlice( Picture* pic, EncRCPic* encRCPic )
+void EncSlice::compressSlice( Picture* pic )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_COMPRESS_SLICE );
   CodingStructure& cs         = *pic->cs;
@@ -538,7 +538,6 @@ void EncSlice::compressSlice( Picture* pic, EncRCPic* encRCPic )
   uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
   uint32_t  boundingCtuTsAddr = pic->cs->pcv->sizeInCtus;
 
-  m_encRCPic = encRCPic;
   cs.pcv      = slice->pps->pcv;
   cs.fracBits = 0;
 
@@ -739,6 +738,7 @@ bool EncSlice::xProcessCtusFinishingTask( int taskIdx, CompressCtusFinishedParam
   //param->encSlice->xFinishCompressSlice( param->pic, *param->slice );
   param->encPicPP->finalizePicture( *param->pic );
   param->encPicPP->finish();
+  delete param->ctuTaskCounter;
   delete param;
   return true;
 }

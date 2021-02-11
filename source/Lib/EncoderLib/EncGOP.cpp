@@ -2105,12 +2105,14 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
   }
 }
 
-void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncRCPic* encRCPic, EncPicture* picEncoder )
+void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPicture* picEncoder )
 {
   if( m_pcEncCfg->m_RCRateControlMode < 1 ) // TODO: does this work with multiple slices and slice-segments?
   {
     return;
   }
+
+  EncRCPic* encRCPic = pic.encRCPic;
   int frameLevel = m_pcRateCtrl->encRCSeq->gopID2Level[gopId];
   if( pic.slices[0]->isIRAP() )
   {
@@ -2184,7 +2186,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncRCPic
 
   if( m_pcRateCtrl->encRCSeq->isQpResetRequired( gopId ) )
   {
-    picEncoder->getEncSlice()->resetQP( &pic, sliceQP, m_lambda, encRCPic );
+    picEncoder->getEncSlice()->resetQP( &pic, sliceQP, m_lambda );
   }
 }
 

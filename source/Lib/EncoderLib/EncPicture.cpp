@@ -107,12 +107,12 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   {
     pic.encRCPic = new EncRCPic;
     pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, m_pcRateCtrl->m_listRCPictures );
-    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], pic.encRCPic, this );
+    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], this );
   }
 
   // compress current slice
   pic.cs->slice = pic.slices[0];
-  m_SliceEncoder.compressSlice( &pic, pic.encRCPic );
+  m_SliceEncoder.compressSlice( &pic );
 
   ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
 }
