@@ -929,12 +929,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("VideoFullRange",                                  m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
 
 
-  ("masterdisplay,-mdcv",                            toMasteringDisplay,                                "SMPTE ST 2086 mastering display color volume info SEI (HDR), "
+  ("MasteringDisplayColourVolume",                    toMasteringDisplay,                               "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
                                                                                                         "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
                                                                                                         "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
-  ("maxcll,-cll",                                    toContentLightLevel,                               "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
+  ("MaxContentLightLevel",                            toContentLightLevel,                              "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
                                                                                                         "max. frame average light level, range: 1 <= cll,fall <= 65535'")
-  ("alttransfer,-atc",                               toPrefTransferCharacteristics,                     "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+  ("PreferredTransferCharacteristics",                toPrefTransferCharacteristics,                    "Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                         "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
                                                                                                         "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
   ;

@@ -56,6 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <algorithm>
 #include <regex>
+#include <cctype>
 
 //! \ingroup Interface
 //! \{
