@@ -507,7 +507,7 @@ bool VVEncCfg::initCfgParameter()
     m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
   if ( m_usePerceptQPATempFiltISlice > 0
-      && (m_MCTF == 0 || m_usePerceptQPA == 0) )
+      && ((m_MCTF == 0 && m_RCNumPasses != 2) || m_usePerceptQPA == 0) )
   {
     m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
   }
