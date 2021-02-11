@@ -79,9 +79,7 @@ class EncPicture
     RateCtrl*                m_pcRateCtrl;
 
   public:
-#if FPP_CLEAN_UP
     WaitCounter              m_ctuTasksDoneCounter;
-#endif
 
   public:
     EncPicture()

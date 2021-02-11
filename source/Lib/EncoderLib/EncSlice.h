@@ -66,13 +66,8 @@ struct SAOStatData;
 class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
 class EncPicture;
-#if !FPP_CLEAN_UP
-class EncPicturePP;
-#endif
 class NoMallocThreadPool;
-#if FPP_CLEAN_UP
 struct WaitCounter;
-#endif
 
 // ====================================================================================================================
 // Class definition
@@ -81,9 +76,6 @@ struct WaitCounter;
 struct LineEncRsrc;
 struct PerThreadRsrc;
 struct CtuEncParam;
-#if !FPP_CLEAN_UP
-struct CompressCtusFinishedParam;
-#endif
 
 enum TaskType {
   CTU_ENCODE     = 0,
@@ -109,9 +101,7 @@ private:
   std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
   std::vector<LineEncRsrc*>    m_LineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
-#if FPP_CLEAN_UP
   WaitCounter*                 m_ctuTasksDoneCounter;
-#endif
   std::vector<ProcessCtuState> m_processStates;
 
   LoopFilter*                  m_pLoopFilter;
@@ -130,9 +120,6 @@ private:
   bool                         m_saoAllDisabled;
   std::vector<SAOBlkParam>     m_saoReconParams;
   std::vector<SAOStatData**>   m_saoStatData;
-#if !FPP_CLEAN_UP
-  EncPicturePP*                m_encPicPP;
-#endif
   std::vector<CtuEncParam>     ctuEncParams;
 
 public:
@@ -147,11 +134,7 @@ public:
                                 EncAdaptiveLoopFilter& alf,
                                 RateCtrl& rateCtrl,
                                 NoMallocThreadPool* threadPool,
-#if FPP_CLEAN_UP
                                 WaitCounter* ctuTasksDoneCounter );
-#else
-                                EncPicturePP* encPicPP = nullptr );
-#endif
 
   void    initPic             ( Picture* pic, int gopId );
 
@@ -169,9 +152,6 @@ private:
   void    xProcessCtus         ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
   template<bool checkReadyState=false>
   static bool xProcessCtuTask  ( int taskIdx, CtuEncParam* ctuEncParam );
-#if !FPP_CLEAN_UP
-  static bool xProcessCtusFinishingTask( int taskIdx, CompressCtusFinishedParam* ctuTaskCounter );
-#endif
 
   int     xGetQPForPicture     ( const Slice* slice, unsigned gopId );
 };

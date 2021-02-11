@@ -186,9 +186,6 @@ Picture::Picture()
 #else
     , useSC             ( 0 )
 #endif
-#if !FPP_CLEAN_UP
-    , picEncoderIdx   ( 0 )
-#endif
     , encRCPic          ( nullptr )
 {
 }

@@ -81,11 +81,7 @@ void EncPicture::init( const VVEncCfg& encCfg,
   m_pcEncCfg = &encCfg;
 
   m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
-#if FPP_CLEAN_UP
   m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
-#else
-  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, dynamic_cast<EncPicturePP*>( this ) );
-#endif
   m_pcRateCtrl = &rateCtrl;
 }
 

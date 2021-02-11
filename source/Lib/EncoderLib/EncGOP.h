@@ -106,7 +106,6 @@ struct FFwdDecoder
 // ====================================================================================================================
 
 class EncGOP;
-#if FPP_CLEAN_UP
 struct FinishTaskParam {
   EncGOP*     gopEncoder;
   EncPicture* picEncoder;
@@ -114,20 +113,6 @@ struct FinishTaskParam {
   FinishTaskParam()                                          : gopEncoder( nullptr ), picEncoder( nullptr ), pic( nullptr ) {}
   FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p )      {}
 };
-#else
-class EncPicturePP : public EncPicture
-{
-public:
-  EncPicturePP( int idx ) : m_idx( idx ), m_isRunning( false ), m_pic( nullptr ), m_encGOP( nullptr ) {}
-  int      m_idx;
-  bool     m_isRunning;
-  Picture* m_pic;
-  EncGOP*  m_encGOP;
-
-  void start( EncGOP* encGOP, Picture* pic );
-  void finish();
-};
-#endif
 
 // ====================================================================================================================
 
@@ -159,19 +144,10 @@ private:
   EncHRD*                   m_pcEncHRD;
   ParameterSetMap<APS>      m_gopApsMap;
 
-#if !FPP_CLEAN_UP
-  std::vector<EncPicturePP*> m_freePicEncoderList;
-#else
   std::list<EncPicture*>    m_freePicEncoderList;
-#endif
   std::list<Picture*>       m_gopEncListInput;
-#if !FPP_CLEAN_UP
-  std::list<Picture*>       m_gopEncListToProcess;
-  std::list<Picture*>       m_gopEncListInFlight;
-#else
   std::list<Picture*>       m_gopEncListToProcess;
   std::list<Picture*>       m_gopEncListRCEvalutaion;
-#endif
   // TODO (jb): deprecated, to be removed
   EncPicture*               m_picEncoder0;
 
@@ -179,34 +155,21 @@ private:
   int                       m_actualHeadBits;
   int                       m_actualTotalBits;
   int                       m_estimatedBits;
-  int64_t                   m_nextCON;
-  int64_t                   m_curGopNum;
   std::vector<int>          m_globalCtuQpVector;
 
   NoMallocThreadPool*       m_threadPool;
-#if FPP_CLEAN_UP
   std::mutex                m_gopEncMutex;
   std::condition_variable   m_gopEncCond;
-#endif
 
 public:
   std::list<Picture*>       m_gopEncListOutput;
-#if !FPP_CLEAN_UP
-  std::mutex                m_gopEncMutex;
-  std::condition_variable   m_gopEncCond;
-#endif
 
 public:
   EncGOP();
   virtual ~EncGOP();
 
   void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
-#if FPP_CLEAN_UP
   void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
-#else
-  void encodeGOP          ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef, bool flush );
-  void encodePicture      ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
-#endif
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
   void picInitRateControl ( int gopId, Picture& pic, Slice* slice, EncPicture *picEncoder );
   ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
@@ -252,12 +215,7 @@ private:
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
-#if !FPP_CLEAN_UP
-  void xWaitForFinishedPic            ();
-  EncPicturePP* xGetNextFreePicEncoder();
-  bool xFinalizePicsPP                ();
-#endif
-  void xFillProcessingPicListForRC  ( std::list<Picture*>& inputList );
+  void xFillProcessingPicListForRC    ( std::list<Picture*>& inputList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

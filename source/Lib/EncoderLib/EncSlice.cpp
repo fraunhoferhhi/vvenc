@@ -110,21 +110,6 @@ struct CtuEncParam
   CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y ) : pic( _p ), encSlice( _s ), ctuRsAddr( _r ), ctuPosX( _x ), ctuPosY( _y ) {}
 };
 
-#if !FPP_CLEAN_UP
-struct CompressCtusFinishedParam
-{
-  Picture*      pic;
-  EncSlice*     encSlice;
-  Slice*        slice;
-  WaitCounter*  waitCounter;
-  EncPicturePP* encPicPP;
-  int           boundingCtuTsAddr;
-
-  CompressCtusFinishedParam() : pic( nullptr ), encSlice( nullptr ), slice( nullptr ), waitCounter( nullptr ), encPicPP( nullptr ), boundingCtuTsAddr( 0 ) {}
-  CompressCtusFinishedParam( Picture* _p, EncSlice* _es, Slice* _s, WaitCounter* _w, EncPicturePP* _e, int _b ) :
-    pic( _p ), encSlice( _es ), slice( _s ), waitCounter( _w ), encPicPP( _e ), boundingCtuTsAddr( _b ) {}
-};
-#endif
 // ====================================================================================================================
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
@@ -132,9 +117,7 @@ struct CompressCtusFinishedParam
 EncSlice::EncSlice()
   : m_pcEncCfg           ( nullptr)
   , m_threadPool         ( nullptr )
-#if FPP_CLEAN_UP
   , m_ctuTasksDoneCounter( nullptr )
-#endif
   , m_pLoopFilter        ( nullptr )
   , m_pALF               ( nullptr )
   , m_pcRateCtrl         ( nullptr )
@@ -180,22 +163,14 @@ void EncSlice::init( const VVEncCfg& encCfg,
                      EncAdaptiveLoopFilter& alf,
                      RateCtrl& rateCtrl,
                      NoMallocThreadPool* threadPool,
-#if FPP_CLEAN_UP
                      WaitCounter* ctuTasksDoneCounter )
-#else
-                     EncPicturePP* encPicPP )
-#endif
 {
   m_pcEncCfg            = &encCfg;
   m_pLoopFilter         = &loopFilter;
   m_pALF                = &alf;
   m_pcRateCtrl          = &rateCtrl;
   m_threadPool          = threadPool;
-#if FPP_CLEAN_UP
   m_ctuTasksDoneCounter = ctuTasksDoneCounter;
-#else
-  m_encPicPP            = encPicPP;
-#endif
   m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.pcv->heightInCtus : 0 );
 
   const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.pcv->heightInCtus : 1;
@@ -730,19 +705,6 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   pic->getFilteredOrigBuffer().destroy();
 }
 
-#if !FPP_CLEAN_UP
-bool EncSlice::xProcessCtusFinishingTask( int taskIdx, CompressCtusFinishedParam* param )
-{
-  //param->waitCounter->wait();
-  CHECK( param->encSlice->m_processStates[ param->boundingCtuTsAddr - 1 ] != PROCESS_DONE, "ctu tasks not finished yet, but main task continues" );
-  //param->encSlice->xFinishCompressSlice( param->pic, *param->slice );
-  param->encPicPP->finalizePicture( *param->pic );
-  param->encPicPP->finish();
-  delete param->ctuTaskCounter;
-  delete param;
-  return true;
-}
-#endif
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
 {
@@ -792,7 +754,6 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   CHECK( idx != pcv.sizeInCtus, "array index out of bounds" );
 
   // process ctu's until last ctu is done
-#if FPP_CLEAN_UP
   if( m_pcEncCfg->m_numThreads > 0 )
   {
     for( auto& ctuEncParam : ctuEncParams )
@@ -805,32 +766,6 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
                                                  EncSlice::xProcessCtuTask<true> );
     }
   }
-#else
-  if( m_pcEncCfg->m_numThreads > 0 )
-  {
-    WaitCounter* ctuTaskCounter = new WaitCounter;
-    for( auto& ctuEncParam : ctuEncParams )
-    {
-      m_threadPool->addBarrierTask<CtuEncParam>( EncSlice::xProcessCtuTask<false>,
-                                                 &ctuEncParam,
-                                                 ctuTaskCounter,
-                                                 nullptr,
-                                                 {},
-                                                 EncSlice::xProcessCtuTask<true> );
-    }
-    if( m_pcEncCfg->m_maxParallelFrames )
-    {
-      CompressCtusFinishedParam* param = new CompressCtusFinishedParam( pic, this, &slice, ctuTaskCounter, m_encPicPP, boundingCtuTsAddr );
-      m_threadPool->addBarrierTask<CompressCtusFinishedParam>( EncSlice::xProcessCtusFinishingTask, param, nullptr, nullptr, { &ctuTaskCounter->done } );
-    }
-    else
-    {
-      ctuTaskCounter->wait();
-      delete ctuTaskCounter;
-      CHECK( m_processStates[ boundingCtuTsAddr - 1 ] != PROCESS_DONE, "ctu tasks not finished yet, but main task continues" );
-    }
-  }
-#endif
   else
   {
     do

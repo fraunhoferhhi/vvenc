@@ -251,9 +251,6 @@ public:
 #else
   bool                          useSC;
 #endif
-#if !FPP_CLEAN_UP
-  int                           picEncoderIdx;
-#endif
   EncRCPic*                     encRCPic;
 
 private:
