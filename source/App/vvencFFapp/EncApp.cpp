@@ -104,7 +104,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
     msgApp( vvenc::ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-
+  g_verbosity = m_cEncAppCfg.m_verbosity;
   return true;
 }
 

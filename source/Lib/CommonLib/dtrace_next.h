@@ -260,8 +260,7 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
 
   if( !sTracingFile.empty() || !sTracingRule.empty() )
   {
-    msg( VERBOSE, "\n" );
-    msg( VERBOSE, "Tracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
+    msg( VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
   }
 
   CDTrace *pDtrace = new CDTrace( sTracingFile, sTracingRule, channels );
