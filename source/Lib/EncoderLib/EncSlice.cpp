@@ -705,7 +705,6 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   pic->getFilteredOrigBuffer().destroy();
 }
 
-
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
 {
   CodingStructure& cs      = *pic->cs;

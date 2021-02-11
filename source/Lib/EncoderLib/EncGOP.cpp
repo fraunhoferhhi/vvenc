@@ -318,11 +318,12 @@ void EncGOP::xFillProcessingPicListForRC( std::list<Picture*>& inputList )
   CHECK( inputList.empty(), "Empty input list is not expected" );
   CHECK( !m_gopEncListToProcess.empty(), "Expecting the empty processing list" );
 
-  // Find the picture with the lowest CON by LUT mapping of POC to CON
   for( int i = 0; i < m_pcEncCfg->m_maxParallelFrames; i++ )
   {
     uint64_t minCON = MAX_UINT64;
     auto minCON_it = inputList.begin();
+
+    // Find the picture with the lowest CON by LUT mapping of POC to CON
     for( auto it = inputList.begin(); it != inputList.end(); ++it )
     {
       Picture* pic = *it;
@@ -339,6 +340,7 @@ void EncGOP::xFillProcessingPicListForRC( std::list<Picture*>& inputList )
     if( minCON != MAX_UINT64 && ( m_gopEncListToProcess.empty() || ( ( *minCON_it )->TLayer == m_gopEncListToProcess.back()->TLayer && ( *minCON_it )->TLayer > 0 ) ) )
     {
       m_gopEncListToProcess.push_back( ( *minCON_it ) );
+      ( *minCON_it )->slices[0]->updateRefPicCounter( +1 );
       inputList.erase( minCON_it );
     }
   }
@@ -379,15 +381,17 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       // Rate Control requires specific scheduling for encoding and evaluation
       if( m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames )
       {
+        // NOTE: Proceed with next pictures only if all last are done
         if( m_gopEncListToProcess.empty() && m_freePicEncoderList.size() == m_pcEncCfg->m_maxParallelFrames )
         {
-          // Evaluate last coded pictures before starting the next ones
+          // evaluate last coded pictures before starting the next ones
           if( !m_gopEncListRCEvalutaion.empty() )
           {
             for( auto pic : m_gopEncListRCEvalutaion )
             {
               m_actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
               xUpdateAfterPicRC( pic, pic->encRCPic );
+              pic->slices[0]->updateRefPicCounter( -1 );
             }
             m_gopEncListRCEvalutaion.clear();
           }

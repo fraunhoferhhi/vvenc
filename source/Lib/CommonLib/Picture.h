@@ -219,7 +219,6 @@ public:
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
-  bool                          isEncPicturePPFinished;
   bool                          isFinished;
   bool                          isLongTerm;
   bool                          encPic;
