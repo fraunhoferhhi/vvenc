@@ -90,7 +90,6 @@ public:
   }
 
   bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
-  void  init();                                       ///< init encoding function
   void  encode();                                     ///< main encoding function
   void  outputAU ( const vvenc::AccessUnit& au );            ///< write encoded access units to bitstream
   void  outputYuv( const vvenc::YUVBuffer& yuvOutBuf );      ///< write reconstructed yuv output

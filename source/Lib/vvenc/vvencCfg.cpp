@@ -247,7 +247,7 @@ bool VVEncCfg::initCfgParameter()
      ( m_contentLightLevel.size() == 2 && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 0 ) ) )
   {
     // enable hdr pq bt2020/bt709 mode (depending on set colour primaries)
-    m_HdrMode = (m_colourPrimaries==9) ? HDR_PQ_BT2020 : HDR_PQ;
+    m_HdrMode = m_colourPrimaries==9 ? HDR_PQ_BT2020 : HDR_PQ;
   }
 
   if( m_HdrMode == HDRMode::HDR_PQ || m_HdrMode == HDRMode::HDR_PQ_BT2020 )
@@ -285,17 +285,17 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent     = (m_vuiParametersPresent != 0) ? 1:0; // enable vui only if not explicitly disabled
+    m_vuiParametersPresent     = m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
     m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
 
     m_transferCharacteristics = 16; // smpte2084 - HDR10
     if( m_colourPrimaries == 2 )
     {
-      m_colourPrimaries = (m_HdrMode == HDRMode::HDR_PQ_BT2020) ? 9 : 1; //  bt2020(9) : bt709 (1)
+      m_colourPrimaries = m_HdrMode == HDRMode::HDR_PQ_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
     }
     if( m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; // bt2020nc : bt709
+      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
     }
   }
   else if( m_HdrMode == HDRMode::HDR_HLG || m_HdrMode == HDRMode::HDR_HLG_BT2020 )
@@ -316,22 +316,22 @@ bool VVEncCfg::initCfgParameter()
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent = (m_vuiParametersPresent != 0) ? 1:0; // enable vui only if not explicitly disabled
+    m_vuiParametersPresent = m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
     m_colourDescriptionPresent = true;                            // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
 
     if( m_colourPrimaries == 2 )
     {
-      m_colourPrimaries = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; //  bt2020(9) : bt709 (1)
+      m_colourPrimaries = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
     }
 
     if( m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 9 : 1; // bt2020nc : bt709
+      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
     }
 
     if( m_transferCharacteristics == 2 )
     {
-      m_transferCharacteristics = (m_HdrMode == HDRMode::HDR_HLG_BT2020) ? 14 : 1; // bt2020-10 : bt709
+      m_transferCharacteristics = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 14 : 1; // bt2020-10 : bt709
     }
 
     if( m_preferredTransferCharacteristics < 0 )
@@ -345,9 +345,19 @@ bool VVEncCfg::initCfgParameter()
     m_preferredTransferCharacteristics = 0;
   }
 
+  if( m_AccessUnitDelimiter < 0 )
+  {
+    m_AccessUnitDelimiter = 0;
+  }
+
   if ( m_vuiParametersPresent < 0 )
   {
     m_vuiParametersPresent = 0;
+  }
+
+  if ( m_hrdParametersPresent < 0 )
+  {
+    m_hrdParametersPresent = 0;
   }
 
   switch ( m_conformanceWindowMode)
@@ -552,6 +562,11 @@ bool VVEncCfg::initCfgParameter()
   else if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
   {
     m_RCRateControlMode = RateControlMode::RCM_OFF;
+  }
+
+  if( m_RCKeepHierarchicalBit < 0 )
+  {
+    m_RCKeepHierarchicalBit = 0;
   }
 
   //
@@ -1480,6 +1495,14 @@ bool VVEncCfg::checkCfgParameter( )
   //
   // do some check and set of parameters next
   //
+
+  confirmParameter( m_AccessUnitDelimiter < 0,  "AccessUnitDelimiter must be >= 0" );
+  confirmParameter( m_vuiParametersPresent < 0, "vuiParametersPresent must be >= 0" );
+  confirmParameter( m_hrdParametersPresent < 0, "hrdParametersPresent must be >= 0" );
+
+  confirmParameter( m_RCKeepHierarchicalBit < 0, "RCKeepHierarchicalBit must be >= 0" );
+  confirmParameter( m_ensureWppBitEqual < 0,     "ensureWppBitEqual must be >= 0" );
+
 
   if( m_DepQuantEnabled )
   {

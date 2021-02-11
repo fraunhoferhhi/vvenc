@@ -390,19 +390,12 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
   IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
 
-  IStreamToRef<int>            toColorPrimaries             ( &m_colourPrimaries,             &ColorPrimariesToIntMap );
-  IStreamToRef<int>            toTransferCharacteristics    ( &m_transferCharacteristics,     &TransferCharacteristicsToIntMap );
-  IStreamToRef<int>            toColorMatrix                ( &m_matrixCoefficients,          &ColorMatrixToIntMap );
-
-  IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
-  IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
-
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<DecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,              &DecodingRefreshTypeToEnumMap );
 
-  IStreamToRef<int>            toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToRef<int>            toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToRef<int>            toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
 
   //
@@ -464,7 +457,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.setSubSection("HDR and Color Options");
   opts.addOptions()
   ("hdr",               toHDRMode,                "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
-                                                  "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
+                                                  "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
    ;
 
   po::setDefaults( opts );
@@ -473,26 +466,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 
   opts.setSubSection("Encoder Options");
   opts.addOptions()
-  ("internal-bitdepth",   m_internalBitDepth[0],       "internal bitdepth (8,10)")
-  ("aud",                 toAud,                       "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)")
-  ("hrd",                 toHrd,                       "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)")
-  ;
-
-  opts.setSubSection("VUI and SEI Options");
-  opts.addOptions()
-  ("vui",                 toVui,                       "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)")
-  ("colorprim",           toColorPrimaries,            "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
-                                                       "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
-  ("transfer",            toTransferCharacteristics,   "Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
-                                                       "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
-                                                       "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
-  ("colormatrix",         toColorMatrix,               "Specify color matrix setting (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
-                                                       "smpte240m, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp")
-  ("masterdisplay,-mdcv", toMasteringDisplay,          "SMPTE ST 2086 mastering display color volume info SEI (HDR), "
-                                                       "vec(uint) size 10, x,y,x,y,x,y,x,y,max,min where: \"G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)\""
-                                                       "range: 0 <= GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000, min/max luminance in units of 1/10000 cd/m2" )
-  ("maxcll,-cll",         toContentLightLevel,         "Specify content light level info SEI as \"cll,fall\" (HDR) max. content light level, "
-                                                       "max. frame average light level, range: 1 <= cll,fall <= 65535'")
+  ("internal-bitdepth",         m_internalBitDepth[0], "internal bitdepth (8,10)")
+  ("accessunitdelimiter,-aud",  toAud,                 "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
+  ("vuiparameterspresent,-vui", toVui,                 "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
+  ("hrdParameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
   ;
 
   po::setDefaults( opts );
@@ -595,10 +572,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
   IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,            &SegmentToEnumMap );
   IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                &HdrModeToIntMap       );
-  IStreamToRef<int>            toColorPrimaries             ( &m_colourPrimaries,        &ColorPrimariesToIntMap );
-  IStreamToRef<int>            toTransferCharacteristics    ( &m_transferCharacteristics,&TransferCharacteristicsToIntMap );
-  IStreamToRef<int>            toColorMatrix                ( &m_matrixCoefficients,     &ColorMatrixToIntMap );
-  IStreamToRef<int>            toPrefTransferCharacteristics( &m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
+  IStreamToEnum<int>           toColorPrimaries             ( &m_colourPrimaries,        &ColorPrimariesToIntMap );
+  IStreamToEnum<int>           toTransferCharacteristics    ( &m_transferCharacteristics,&TransferCharacteristicsToIntMap );
+  IStreamToEnum<int>           toColorMatrix                ( &m_matrixCoefficients,     &ColorMatrixToIntMap );
+  IStreamToEnum<int>           toPrefTransferCharacteristics( &m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
   IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
   IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
@@ -606,12 +583,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
   IStreamToEnum<RateControlMode>     toRateControlMode      ( &m_RCRateControlMode, &RateControlModeToEnumMap );
 
-  IStreamToRef<int>            toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToRef<int>            toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToRef<int>            toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
-
-
-
+  IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
   //
   // setup configuration parameters
@@ -683,8 +657,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("VUI and SEI options");
   opts.addOptions()
-  ("hdr",               toHDRMode,                "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
-                                                  "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
+  ("Hdr",                                             toHDRMode,                                        "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
+                                                                                                        "If maxcll or masteringdisplay is set, HDR10/PQ is enabled. use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
    ;
 
   po::setDefaults( opts );
@@ -928,25 +902,21 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SEIPictureTiming",                                m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
   ("SEIDecodingUnitInfo",                             m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
   ("EnableDecodingParameterSet",                      m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
-  ("AccessUnitDelimiter,-aud",                        toAud,                                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)")
-  ("VuiParametersPresent,-vui",                       toVui,                                            "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)")
-  ("HrdParametersPresent,-hrd",                       toHrd,                                            "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)")
+  ("AccessUnitDelimiter,-aud",                        toAud,                                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)" , true)
+  ("VuiParametersPresent,-vui",                       toVui,                                            "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)", true)
+  ("HrdParametersPresent,-hrd",                       toHrd,                                            "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)", true)
   ("AspectRatioInfoPresent",                          m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
   ("AspectRatioIdc",                                  m_aspectRatioIdc,                                 "aspect_ratio_idc")
   ("SarWidth",                                        m_sarWidth,                                       "horizontal size of the sample aspect ratio")
   ("SarHeight",                                       m_sarHeight,                                      "vertical size of the sample aspect ratio")
   ("ColourDescriptionPresent",                        m_colourDescriptionPresent,                       "Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present")
-  ("ColourPrimaries",                                 m_colourPrimaries,                                "Indicates chromaticity coordinates of the source primaries")
-  ("colorprim",                                       toColorPrimaries,                                  "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+  ("ColourPrimaries",                                 toColorPrimaries,                                 "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                         "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
 
-  ("TransferCharacteristics",                         m_transferCharacteristics,                        "Indicates the opto-electronic transfer characteristics of the source")
-  ("transfer",                                        toTransferCharacteristics,                        "Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
+  ("TransferCharacteristics",                         toTransferCharacteristics,                        "Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                         "smpte240m, linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, "
                                                                                                         "bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67")
-
-  ("MatrixCoefficients",                              m_matrixCoefficients,                             "Describes the matrix coefficients used in deriving luma and chroma from RGB primaries")
-  ("colormatrix",                                     toColorMatrix,                                    "Specify color matrix setting (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
+  ("MatrixCoefficients",                              toColorMatrix,                                    "Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
                                                                                                         "smpte240m, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp")
 
   ("ChromaLocInfoPresent",                            m_chromaLocInfoPresent,                           "Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present")
