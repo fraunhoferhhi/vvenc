@@ -948,7 +948,7 @@ void EncLib::xInitSPS(SPS &sps) const
     sps.numReorderPics[i]           = m_cEncCfg.m_maxNumReorderPics[i];
   }
 
-  sps.vuiParametersPresent          = m_cEncCfg.m_vuiParametersPresent > 0 ? true : false;
+  sps.vuiParametersPresent          = m_cEncCfg.m_vuiParametersPresent;
 
   if (sps.vuiParametersPresent)
   {
@@ -970,7 +970,7 @@ void EncLib::xInitSPS(SPS &sps) const
     vui.videoFullRangeFlag            = m_cEncCfg.m_videoFullRangeFlag;
   }
 
-  sps.hrdParametersPresent            = m_cEncCfg.m_hrdParametersPresent ? true : false;
+  sps.hrdParametersPresent            = m_cEncCfg.m_hrdParametersPresent;
 
   sps.numLongTermRefPicSPS            = NUM_LONG_TERM_REF_PIC_SPS;
   CHECK(!(NUM_LONG_TERM_REF_PIC_SPS <= MAX_NUM_LONG_TERM_REF_PICS), "Unspecified error");

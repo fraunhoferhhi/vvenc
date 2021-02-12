@@ -343,7 +343,7 @@ namespace df
        * handle evaluating the option's value.
        */
       OptionSpecific&
-      operator()(const std::string& name, OptionFunc::Func *func, const std::string desc = "")
+      operator()(const std::string& name, OptionFunc::Func *func, const std::string& desc = "")
       {
         parent.addOption(new OptionFunc(name, parent, func, desc));
         return *this;
