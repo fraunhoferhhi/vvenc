@@ -117,6 +117,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     msgApp( vvenc::ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
+  g_verbosity = rcVVEncAppCfg.m_verbosity;
 
   return true;
 }
