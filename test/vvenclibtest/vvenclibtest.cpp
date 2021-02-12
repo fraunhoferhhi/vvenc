@@ -57,7 +57,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fstream>
 #include <cstring>
 #include <vector>
-#include <stdarg.h>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -71,16 +70,6 @@ using namespace vvenc;
 int g_numTests = 0; 
 int g_numFails = 0;
 int g_verbose = 0;
-
-void msgFnc( int level, const char* fmt, va_list args )
-{
-  vfprintf( level == 1 ? stderr : stdout, fmt, args );
-}
-
-void msgFncNoOutput( int , const char* , va_list )
-{
-	
-}
 
 int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
@@ -117,13 +106,11 @@ int main( int argc, char* argv[] )
   {
   case 1:
   {
-    vvenc::VVEnc::registerMsgCbf( msgFncNoOutput );
     testLibParameterRanges(); 
     break;
   }
   case 2: 
   {
-    vvenc::VVEnc::registerMsgCbf( msgFnc );
     testLibCallingOrder(); 
     break;
   }
@@ -133,13 +120,8 @@ int main( int argc, char* argv[] )
     break;
   }
   default:
-    vvenc::VVEnc::registerMsgCbf( msgFncNoOutput );
     testLibParameterRanges();
-
-    vvenc::VVEnc::registerMsgCbf( msgFnc );
     testLibCallingOrder();
-    
-    vvenc::VVEnc::registerMsgCbf( msgFncNoOutput );
     testInvalidInputParams();
     break;
   }
@@ -420,14 +402,12 @@ int callingOrderRegular()
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
-    std::cerr << "error during encode in callingOrderRegular(): " << cVVEnc.getLastError();
     return -1;
   }
 
   YUVBuffer* pcYUVBuffer = nullptr;
   if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
   {
-    std::cerr << "error during flush in callingOrderRegular(): " << cVVEnc.getLastError();
     return -1;
   }
 
@@ -532,25 +512,21 @@ int callingOrderRegularInit2Pass()
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
   {
-    std::cerr << "error during encode in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
 
   if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
   {
-    std::cerr << "error during flush in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
 
   if( 0 != cVVEnc.initPass( 1 ) )
   {
-    std::cerr << "error during iniPass in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
 
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
-    std::cerr << "error during encode in callingOrderRegularInit2Pass(): " << cVVEnc.getLastError();
     return -1;
   }
   if( 0 != cVVEnc.uninit())
@@ -564,15 +540,15 @@ int callingOrderRegularInit2Pass()
 
 int testLibCallingOrder()
 {
-  testfunc( "callingOrderInvalidUninit",   &callingOrderInvalidUninit,   true  );
-  testfunc( "callingOrderInitNoUninit",    &callingOrderInitNoUninit           ); // not calling uninit seems to be valid
-  testfunc( "callingOrderInitTwice",       &callingOrderInitTwice,       true  );
-  testfunc( "callingOrderNoInit",          &callingOrderNoInit,          true  );
-  testfunc( "callingOrderRegular",         &callingOrderRegular,         false );
-  testfunc( "callingOrderRegularInitPass", &callingOrderRegularInitPass, false );
+  testfunc( "callingOrderInvalidUninit",    &callingOrderInvalidUninit,    true  );
+  testfunc( "callingOrderInitNoUninit",     &callingOrderInitNoUninit            ); // not calling uninit seems to be valid
+  testfunc( "callingOrderInitTwice",        &callingOrderInitTwice,        true  );
+  testfunc( "callingOrderNoInit",           &callingOrderNoInit,           true  );
+  testfunc( "callingOrderRegular",          &callingOrderRegular,          false );
+  testfunc( "callingOrderRegularInitPass",  &callingOrderRegularInitPass,  false );
   testfunc( "callingOrderRegularInit2Pass", &callingOrderRegularInit2Pass, false );
 
-  testfunc( "callingOrderNotRegular",       &callingOrderNotRegular,         true );
+  testfunc( "callingOrderNotRegular",       &callingOrderNotRegular,       true );
 
   return 0;
 }
