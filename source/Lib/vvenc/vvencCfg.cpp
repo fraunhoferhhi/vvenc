@@ -1454,6 +1454,9 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,        "BDPCM out of range [0..2]");
   confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
   confirmParameter(m_useBDPCM==1  && m_TS==2,               "BDPCM cannot be permanently used when transform skip is auto" );
+#if SPEED_INTRAT
+  confirmParameter(m_FastIntraTools <0 || m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
+#endif
 
   if( m_alf )
   {
@@ -2440,6 +2443,9 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   {
     css << "FastMIP:" << m_useFastMIP << " ";
   }
+#if SPEED_INTRAT
+  css << "FastIntraTools:" << m_FastIntraTools << " ";
+#endif
   css << "FastLocalDualTree:" << m_fastLocalDualTreeMode << " ";
   css << "FastSubPel:" << m_fastSubPel << " ";
   css << "QtbttExtraFast:" << m_qtbttSpeedUp << " ";

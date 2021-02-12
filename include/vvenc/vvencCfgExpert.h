@@ -435,6 +435,9 @@ public:
 //  unsigned            m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
   int                 m_Geo                                     = 0;
   unsigned            m_maxNumGeoCand                           = 5;
+#if 1//SPEED_INTRAT
+  int                 m_FastIntraTools                          = 0;
+#endif
 
   RateControlMode     m_RCRateControlMode                       = RCM_OFF;       ///< RateControlMode
   int                 m_RCKeepHierarchicalBit                   = -1;
