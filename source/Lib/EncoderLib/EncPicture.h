@@ -76,6 +76,7 @@ class EncPicture
     BitEstimator             m_BitEstimator;
     CABACWriter              m_CABACEstimator;
     CtxCache                 m_CtxCache;
+    RateCtrl*                m_pcRateCtrl;
 
   public:
     WaitCounter              m_ctuTasksDoneCounter;

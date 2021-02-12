@@ -285,7 +285,7 @@ void EncLib::initPass( int pass )
   if ( m_cEncCfg.m_RCRateControlMode )
   {
     m_cRateCtrl.init( m_cEncCfg.m_RCRateControlMode, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight,
-      m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList );
+      m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_RCKeepHierarchicalBit, m_cEncCfg.m_RCUseLCUSeparateModel, m_cEncCfg.m_GOPList, m_cEncCfg.m_maxParallelFrames );
 
     if ( pass == 1 )
     {
@@ -373,6 +373,15 @@ void EncLib::xSetRCEncCfg( int pass )
     if( m_cBckCfg.m_CTUSize < 128 )
     {
       m_cBckCfg.m_cuQpDeltaSubdiv = 0;
+    }
+
+    if ( m_cEncCfg.m_maxParallelFrames > 0 )
+    {
+      m_cBckCfg.m_useAMaxBT = 0;
+      m_cBckCfg.m_cabacInitPresent = 0;
+      m_cBckCfg.m_saoEncodingRate = 0.0;
+      m_cBckCfg.m_alfTempPred = 0;
+      m_cBckCfg.m_maxParallelFrames = m_cEncCfg.m_maxParallelFrames;
     }
 
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
@@ -596,6 +605,8 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
   pic->encPic            = false;
   pic->refCounter        = 0;
   pic->poc               = -1;
+  pic->actualHeadBits    = 0;
+  pic->actualTotalBits   = 0;
 
   pic->encTime.resetTimer();
 

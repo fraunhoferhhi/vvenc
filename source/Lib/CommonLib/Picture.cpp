@@ -185,6 +185,9 @@ Picture::Picture()
 #else
     , useSC             ( 0 )
 #endif
+    , actualHeadBits    ( 0 )
+    , actualTotalBits   ( 0 )
+    , encRCPic          ( nullptr )
 {
 }
 

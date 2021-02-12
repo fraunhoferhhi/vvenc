@@ -339,8 +339,8 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr || encCfg->m_usePerceptQPA > 4) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
-  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRBasedQPA;
   const int          bitDepth = slice->sps->bitDepths[CH_L];
 
   optChromaQPOffset[0] = optChromaQPOffset[1] = 0;
@@ -404,8 +404,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
-  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRBasedQPA;
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
   const int           sliceQP = (savedQP < 0 ? slice->sliceQp : savedQP);
@@ -607,8 +607,8 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
-  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRBasedQPA;
   const int         bitDepth  = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);
   const Position    pos       = lumaArea.pos();
@@ -683,8 +683,8 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr) return 0.0;
 
-  const bool isXPSNRQPA = (encCfg->m_usePerceptQPA & 1) == 0 && (encCfg->m_RCRateControlMode == 0 || encCfg->m_RCNumPasses != 2);
-  const bool isHighRes  = ( encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280 ) && ( encCfg->m_usePerceptQPA & 1 ) == 0;
+  const bool isXPSNRQPA = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isHighRes  = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRQPA;
   const CPelBuf picOrig = (origBuf != nullptr ? *origBuf : pic->getOrigBuf (COMP_Y));
   const CPelBuf picPrv1 = (isXPSNRQPA ? pic->getOrigBufPrev (COMP_Y, false) : picOrig);
   const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, true );

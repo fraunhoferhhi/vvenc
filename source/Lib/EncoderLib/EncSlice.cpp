@@ -358,8 +358,8 @@ void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
 
   if ( m_pcEncCfg->m_usePerceptQPA )
   {
-    m_pcRateCtrl->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
-    m_pcRateCtrl->encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
+    pic->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
+    pic->encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
   }
 
   // store lambda

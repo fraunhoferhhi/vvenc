@@ -68,6 +68,7 @@ namespace vvenc {
 
 class SEI;
 class SEIDecodedPictureHash;
+class EncRCPic;
 
 typedef std::list<SEI*> SEIMessages;
 
@@ -249,6 +250,9 @@ public:
 #else
   bool                          useSC;
 #endif
+  int                           actualHeadBits;
+  int                           actualTotalBits;
+  EncRCPic*                     encRCPic;
 
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];

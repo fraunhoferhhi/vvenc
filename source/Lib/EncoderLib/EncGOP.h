@@ -146,13 +146,9 @@ private:
 
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
-  // TODO (jb): deprecated, to be removed
-  EncPicture*               m_picEncoder0;
+  std::list<Picture*>       m_gopEncListToProcess;
+  std::list<Picture*>       m_gopEncListRCEvalutaion;
 
-  double                    m_lambda;
-  int                       m_actualHeadBits;
-  int                       m_actualTotalBits;
-  int                       m_estimatedBits;
   std::vector<int>          m_globalCtuQpVector;
 
   NoMallocThreadPool*       m_threadPool;
@@ -169,7 +165,7 @@ public:
   void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
   void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
-  void picInitRateControl ( int gopId, Picture& pic, Slice* slice );
+  void picInitRateControl ( int gopId, Picture& pic, Slice* slice, EncPicture *picEncoder );
   ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
   const ParameterSetMap<APS>& getSharedApsMap() const { return m_gopApsMap; }
   bool                        anyFramesInOutputQueue() { return !m_gopEncListOutput.empty(); }
@@ -213,6 +209,7 @@ private:
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
+  void xFillProcessingPicListForRC    ( std::list<Picture*>& inputList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

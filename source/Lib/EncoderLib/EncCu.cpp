@@ -473,7 +473,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_pcEncCfg->m_RCRateControlMode )
   {
-    m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)m_pcRateCtrl->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
+    cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
   }
 
   // reset context states and uninit context pointer
@@ -547,9 +547,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         if (rateCtrlFrame)
         {
           // frame-level or GOP-level RC + QPA
-          pic->ctuAdaptedQP[ ctuRsAddr ] += m_pcRateCtrl->encRCPic->picQPOffsetQPA;
+          pic->ctuAdaptedQP[ ctuRsAddr ] += pic->encRCPic->picQPOffsetQPA;
           pic->ctuAdaptedQP[ ctuRsAddr ] = Clip3( 0, MAX_QP, (int)pic->ctuAdaptedQP[ ctuRsAddr ] );
-          pic->ctuQpaLambda[ ctuRsAddr ] *= m_pcRateCtrl->encRCPic->picLambdaOffsetQPA;
+          pic->ctuQpaLambda[ ctuRsAddr ] *= pic->encRCPic->picLambdaOffsetQPA;
           pic->ctuQpaLambda[ ctuRsAddr ] = Clip3( m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, pic->ctuQpaLambda[ ctuRsAddr ] );
         }
         m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcEncCfg->m_usePerceptQPA > 2);
@@ -634,7 +634,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
     const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
     const bool lossless           = false;
-    int qp                        = (m_pcEncCfg->m_RCRateControlMode != RateControlMode::RCM_OFF) ? m_pcRateCtrl->rcQP : cs.baseQP;
+    int qp                        = (m_pcEncCfg->m_RCRateControlMode != RateControlMode::RCM_OFF) ? m_ctuRcQP : cs.baseQP;
 
     if( ! isBoundary )
     {
@@ -1411,22 +1411,24 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
   double estLambda = -1.0;
   double bpp = -1.0;
 
+  EncRCPic* encRCPic = pic->encRCPic;
+
   if ( ( pic->slices[ 0 ]->isIRAP() && m_pcEncCfg->m_RCForceIntraQP ) || m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL )
   {
     estQP = slice->sliceQp;
-    estLambda = m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ? m_cRdCost.getLambda() : m_pcRateCtrl->encRCPic->picEstLambda;
+    estLambda = m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ? m_cRdCost.getLambda() : encRCPic->picEstLambda;
   }
   else
   {
-    bpp = m_pcRateCtrl->encRCPic->getLCUTargetBpp( slice->isIRAP(), ctuRsAddr );
+    bpp = encRCPic->getLCUTargetBpp( slice->isIRAP(), ctuRsAddr );
     if ( pic->slices[ 0 ]->isIRAP() )
     {
-      estLambda = m_pcRateCtrl->encRCPic->getLCUEstLambdaAndQP( bpp, slice->sliceQp, &estQP, ctuRsAddr );
+      estLambda = encRCPic->getLCUEstLambdaAndQP( bpp, slice->sliceQp, &estQP, ctuRsAddr );
     }
     else
     {
-      estLambda = m_pcRateCtrl->encRCPic->getLCUEstLambda( bpp, ctuRsAddr );
-      estQP = m_pcRateCtrl->encRCPic->getLCUEstQP( estLambda, slice->sliceQp, ctuRsAddr );
+      estLambda = encRCPic->getLCUEstLambda( bpp, ctuRsAddr );
+      estQP = encRCPic->getLCUEstQP( estLambda, slice->sliceQp, ctuRsAddr );
     }
 
     estQP = Clip3( -slice->sps->qpBDOffset[ CH_L ], MAX_QP, estQP );
@@ -1452,7 +1454,7 @@ void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture*
                                                 estLambda / m_cRdCost.getDistortionWeight( COMP_Cr ) };
   m_cTrQuant.setLambdas( lambdaArray );
 
-  m_pcRateCtrl->rcQP = estQP;
+  m_ctuRcQP = estQP;
 
   return;
 }
@@ -1497,7 +1499,7 @@ void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const Un
 
   if ( m_rcMutex ) m_rcMutex->lock();
 
-  m_pcRateCtrl->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualQP, actualLambda, skipRatio,
+  slice->pic->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualQP, actualLambda, skipRatio,
     slice->isIRAP() ? 0 : m_pcEncCfg->m_RCRateControlMode == RCM_CTU_LEVEL );
 
   if ( m_rcMutex ) m_rcMutex->unlock();
