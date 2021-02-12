@@ -280,7 +280,7 @@ int testLibParameterRanges()
   vvencParams.m_RCTargetBitrate = 1;
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { -1,0,3 }, true );
-  vvencParams.m_RCRateControlMode = RateControlMode::RCM_OFF;
+  vvencParams.m_RCRateControlMode = RateControlMode::RCM_AUTO;
   vvencParams.m_RCTargetBitrate = 0;
 
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1 } );
@@ -309,7 +309,7 @@ int testLibParameterRanges()
   testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 0;
-  testParamList<bool, bool>( "useHrdParametersPresent",       vvencParams.m_hrdParametersPresent,       vvencParams, { true }, true );
+  testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 1 }, true );
   testParamList<bool, bool>( "useBufferingPeriodSEIEnabled",  vvencParams.m_bufferingPeriodSEIEnabled,  vvencParams, { true }, true );
   testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.m_pictureTimingSEIEnabled,    vvencParams, { true }, true );
 
@@ -330,7 +330,7 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
     ERROR("\nCaught Exception " << w << " expected " << (expectedFail ? "failure" : "success")); //fail due to exception 
   }
 
-  return numFails == g_numFails ? 0 : 1;
+  return (numFails == g_numFails) ? 0 : 1;
 }
 
 int callingOrderInvalidUninit()
@@ -492,10 +492,10 @@ int callingOrderRegularInit2Pass()
 {
   VVEnc cVVEnc;
   VVEncCfg vvencParams;
-  fillEncoderParameters( vvencParams );
-
   vvencParams.m_RCNumPasses = 2;
   vvencParams.m_RCTargetBitrate = 500000;
+
+  fillEncoderParameters( vvencParams );
 
   if( 0 != cVVEnc.init( vvencParams ) )
   {
@@ -540,15 +540,15 @@ int callingOrderRegularInit2Pass()
 
 int testLibCallingOrder()
 {
-  testfunc( "callingOrderInvalidUninit",   &callingOrderInvalidUninit,   true  );
-  testfunc( "callingOrderInitNoUninit",    &callingOrderInitNoUninit           ); // not calling uninit seems to be valid
-  testfunc( "callingOrderInitTwice",       &callingOrderInitTwice,       true  );
-  testfunc( "callingOrderNoInit",          &callingOrderNoInit,          true  );
-  testfunc( "callingOrderRegular",         &callingOrderRegular,         false );
-  testfunc( "callingOrderRegularInitPass", &callingOrderRegularInitPass, false );
+  testfunc( "callingOrderInvalidUninit",    &callingOrderInvalidUninit,    true  );
+  testfunc( "callingOrderInitNoUninit",     &callingOrderInitNoUninit            ); // not calling uninit seems to be valid
+  testfunc( "callingOrderInitTwice",        &callingOrderInitTwice,        true  );
+  testfunc( "callingOrderNoInit",           &callingOrderNoInit,           true  );
+  testfunc( "callingOrderRegular",          &callingOrderRegular,          false );
+  testfunc( "callingOrderRegularInitPass",  &callingOrderRegularInitPass,  false );
   testfunc( "callingOrderRegularInit2Pass", &callingOrderRegularInit2Pass, false );
 
-  testfunc( "callingOrderNotRegular",       &callingOrderNotRegular,         true );
+  testfunc( "callingOrderNotRegular",       &callingOrderNotRegular,       true );
 
   return 0;
 }

@@ -126,12 +126,13 @@ bool VVEncCfg::initCfgParameter()
 
   if( 0 == m_RCTargetBitrate )
    {
-     confirmParameter( m_hrdParametersPresent,              "hrdParameters present requires rate control" );
+     confirmParameter( m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
      confirmParameter( m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
      confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
 
   confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
+  confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
@@ -242,6 +243,123 @@ bool VVEncCfg::initCfgParameter()
     m_fastInterSearchMode = FASTINTERSEARCH_MODE1;
   }
 
+  if( m_HdrMode == HDRMode::HDR_OFF && ( !m_masteringDisplay.empty() ||
+     ( m_contentLightLevel.size() == 2 && m_contentLightLevel[0] != 0 && m_contentLightLevel[1] != 0 ) ) )
+  {
+    // enable hdr pq bt2020/bt709 mode (depending on set colour primaries)
+    m_HdrMode = m_colourPrimaries==9 ? HDR_PQ_BT2020 : HDR_PQ;
+  }
+
+  if( m_HdrMode == HDRMode::HDR_PQ || m_HdrMode == HDRMode::HDR_PQ_BT2020 )
+  {
+    m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
+    m_LMCSOffset              = 1;
+    m_useSameChromaQPTables   = false;
+    m_verCollocatedChromaFlag = true;
+    m_calculateHdrMetrics     = true;
+
+    VVEncCfg cBaseCfg;
+    if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    {
+      m_qpInValsCb = { 13,20,36,38,43,54 };
+    }
+    if( m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    {
+      m_qpOutValsCb = { 13,21,29,29,32,37 };
+    }
+    if( m_qpInValsCr == cBaseCfg.m_qpInValsCr )
+    {
+      m_qpInValsCr = { 13,20,37,41,44,54 };
+    }
+    if( m_qpOutValsCr == cBaseCfg.m_qpOutValsCr )
+    {
+      m_qpOutValsCr = { 13,21,27,29,32,37 };
+    }
+    if( m_qpInValsCbCr == cBaseCfg.m_qpInValsCbCr )
+    {
+      m_qpInValsCbCr = { 12,21,41,43,54 };
+    }
+    if( m_qpOutValsCbCr == cBaseCfg.m_qpOutValsCbCr )
+    {
+      m_qpOutValsCbCr = { 12,22,30,32,37 };
+    }
+
+    // VUI and SEI options
+    m_vuiParametersPresent     = m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
+    m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
+
+    m_transferCharacteristics = 16; // smpte2084 - HDR10
+    if( m_colourPrimaries == 2 )
+    {
+      m_colourPrimaries = m_HdrMode == HDRMode::HDR_PQ_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
+    }
+    if( m_matrixCoefficients == 2 )
+    {
+      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
+    }
+  }
+  else if( m_HdrMode == HDRMode::HDR_HLG || m_HdrMode == HDRMode::HDR_HLG_BT2020 )
+  {
+    m_reshapeSignalType       = RESHAPE_SIGNAL_HLG;
+    m_LMCSOffset              = 0;
+    m_useSameChromaQPTables   = true;
+    m_verCollocatedChromaFlag = true;
+
+    VVEncCfg cBaseCfg;
+    if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    {
+      m_qpInValsCb = { 9, 23, 33, 42 };
+    }
+    if( m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    {
+      m_qpOutValsCb = { 9, 24, 33, 37 };
+    }
+
+    // VUI and SEI options
+    m_vuiParametersPresent = m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
+    m_colourDescriptionPresent = true;                            // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
+
+    if( m_colourPrimaries == 2 )
+    {
+      m_colourPrimaries = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
+    }
+
+    if( m_matrixCoefficients == 2 )
+    {
+      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
+    }
+
+    if( m_transferCharacteristics == 2 )
+    {
+      m_transferCharacteristics = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 14 : 1; // bt2020-10 : bt709
+    }
+
+    if( m_preferredTransferCharacteristics < 0 )
+    {
+      m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
+    }
+  }
+
+  if( m_preferredTransferCharacteristics < 0 )
+  {
+    m_preferredTransferCharacteristics = 0;
+  }
+
+  if( m_AccessUnitDelimiter < 0 )
+  {
+    m_AccessUnitDelimiter = 0;
+  }
+
+  if ( m_vuiParametersPresent < 0 )
+  {
+    m_vuiParametersPresent = 0;
+  }
+
+  if ( m_hrdParametersPresent < 0 )
+  {
+    m_hrdParametersPresent = 0;
+  }
+
   switch ( m_conformanceWindowMode)
   {
   case 0:
@@ -308,6 +426,8 @@ bool VVEncCfg::initCfgParameter()
       m_log2SaoOffsetScale[ch]=uint32_t(m_saoOffsetBitShift[ch]);
     }
   }
+
+  m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = m_useSameChromaQPTables;
 
   if (m_useIdentityTableForNon420Chroma && m_internChromaFormat != CHROMA_420)
   {
@@ -427,17 +547,26 @@ bool VVEncCfg::initCfgParameter()
 
   if(  m_RCTargetBitrate )
   {
-    if( m_RCRateControlMode == RateControlMode::RCM_OFF )
+    if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
     {
       m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
-    }
 
-    if( m_RCKeepHierarchicalBit < 0 )
-    {
-      m_RCKeepHierarchicalBit = 2;
-    }
+      if( m_RCKeepHierarchicalBit < 0 )
+      {
+        m_RCKeepHierarchicalBit = 2;
+      }
 
-    m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
+      m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
+    }
+  }
+  else if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
+  {
+    m_RCRateControlMode = RateControlMode::RCM_OFF;
+  }
+
+  if( m_RCKeepHierarchicalBit < 0 )
+  {
+    m_RCKeepHierarchicalBit = 0;
   }
 
   //
@@ -1323,6 +1452,10 @@ bool VVEncCfg::checkCfgParameter( )
       break;
   }
 
+  confirmParameter(  m_colourPrimaries < 0 || m_colourPrimaries > 12,                 "colourPrimaries must be in range 0 <= x <= 12" );
+  confirmParameter(  m_transferCharacteristics < 0 || m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
+  confirmParameter(  m_matrixCoefficients < 0 || m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
+
   confirmParameter(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
   confirmParameter(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
   confirmParameter(m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
@@ -1363,6 +1496,14 @@ bool VVEncCfg::checkCfgParameter( )
   // do some check and set of parameters next
   //
 
+  confirmParameter( m_AccessUnitDelimiter < 0,  "AccessUnitDelimiter must be >= 0" );
+  confirmParameter( m_vuiParametersPresent < 0, "vuiParametersPresent must be >= 0" );
+  confirmParameter( m_hrdParametersPresent < 0, "hrdParametersPresent must be >= 0" );
+
+  confirmParameter( m_RCKeepHierarchicalBit < 0, "RCKeepHierarchicalBit must be >= 0" );
+  confirmParameter( m_ensureWppBitEqual < 0,     "ensureWppBitEqual must be >= 0" );
+
+
   if( m_DepQuantEnabled )
   {
     confirmParameter( !m_RDOQ || !m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
@@ -1388,6 +1529,28 @@ bool VVEncCfg::checkCfgParameter( )
     confirmParameter((m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
   }
 #endif
+
+
+  confirmParameter( (m_HdrMode != HDR_OFF && m_internalBitDepth[CH_L] < 10 )     ,               "internalBitDepth must be at least 10 bit for HDR");
+  confirmParameter( (m_HdrMode != HDR_OFF && m_internChromaFormat != CHROMA_420 ) ,              "internChromaFormat must YCbCr 4:2:0 for HDR");
+  confirmParameter( !m_contentLightLevel.empty() &&  m_contentLightLevel.size() != 2,            "content light level must contain 2 values max light level and max avg light level");
+  confirmParameter( m_contentLightLevel.size() == 2 && (m_contentLightLevel[0] < 0 || m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
+  confirmParameter( m_contentLightLevel.size() == 2 && (m_contentLightLevel[1] < 0 || m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
+
+  if( !m_masteringDisplay.empty() )
+  {
+    confirmParameter( !m_masteringDisplay.empty() &&  m_masteringDisplay.size() != 10,  "mastering display colour volume must contain 10 values G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)");
+
+    bool outOfRGBRange = false;
+    for( size_t i = 0; i < m_masteringDisplay.size(); i++ )
+    {
+      if( i < 8 && m_masteringDisplay[i] > 50000 )
+      {
+        outOfRGBRange = true; break;
+      }
+    }
+    confirmParameter( outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
+  }
 
   confirmParameter( m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   confirmParameter( m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
@@ -1573,9 +1736,9 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  confirmParameter( m_hrdParametersPresent && (0 == m_RCRateControlMode),   "HrdParametersPresent requires RateControl enabled");
-  confirmParameter( m_bufferingPeriodSEIEnabled && !m_hrdParametersPresent, "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  confirmParameter( m_pictureTimingSEIEnabled && !m_hrdParametersPresent,   "PictureTimingSEI requires HrdParametersPresent enabled");
+  confirmParameter( (m_hrdParametersPresent>0) && (0 == m_RCRateControlMode),  "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( m_bufferingPeriodSEIEnabled && (m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  confirmParameter( m_pictureTimingSEIEnabled && (m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = m_CTUSize;
@@ -1862,15 +2025,21 @@ bool VVEncCfg::checkCfgParameter( )
 int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitrate, int qp, PresetMode preset )
 {
   int iRet = 0;
-  m_QP                  = qp;                       // quantization parameter 0-63
   m_SourceWidth         = width;                    // luminance width of input picture
   m_SourceHeight        = height;                   // luminance height of input picture
+
   m_FrameRate           = framerate;                // temporal rate (fps)
   m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
-  m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
-  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+
   m_inputBitDepth[0]    = 8;                        // input bitdepth
   m_internalBitDepth[0] = 10;                       // internal bitdepth
+
+  m_QP                  = qp;                       // quantization parameter 0-63
+  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+
+  m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
+
+  m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
 
   iRet = initPreset( preset );
 
@@ -1879,16 +2048,8 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
 
 int VVEncCfg::initPreset( PresetMode preset )
 {
-  m_qpInValsCb.clear();
-  m_qpInValsCb.push_back( 17 );
-  m_qpInValsCb.push_back( 22 );
-  m_qpInValsCb.push_back( 34 );
-  m_qpInValsCb.push_back( 42 );
-  m_qpOutValsCb.clear();
-  m_qpOutValsCb.push_back( 17 );
-  m_qpOutValsCb.push_back( 23 );
-  m_qpOutValsCb.push_back( 35 );
-  m_qpOutValsCb.push_back( 39 );
+  m_qpInValsCb  = { 17, 22, 34, 42 };
+  m_qpOutValsCb = { 17, 23, 35, 39};
 
   // basic settings
   m_intraQPOffset                 = -3;
@@ -2288,14 +2449,69 @@ static inline std::string getCostFunctionStr( int cost )
   return cT;
 }
 
+static inline std::string getDynamicRangeStr( int dynamicRange )
+{
+  std::string cT;
+  switch( dynamicRange )
+  {
+    case HDRMode::HDR_OFF            : cT = "SDR"; break;
+    case HDRMode::HDR_PQ             : cT = "HDR10/PQ"; break;
+    case HDRMode::HDR_HLG            : cT = "HDR HLG"; break;
+    case HDRMode::HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
+    case HDRMode::HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
+    case HDRMode::HDR_USER_DEFINED   : cT = "HDR user defined"; break;
+    default                          : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getMasteringDisplayStr(  std::vector<uint32_t> md )
+{
+  std::stringstream css;
+
+  if(  md.size() != 10 )
+  {
+    return "unspecified";
+  }
+
+  css << "G(" << md[0] << "," << md[1] << ")";
+  css << "B(" << md[2] << "," << md[3] << ")";
+  css << "R(" << md[4] << "," << md[5] << ")";
+  css << "WP("<< md[6] << "," << md[7] << ")";
+  css << "L(" << md[8] << "," << md[9] << ")";
+
+  css << " (= nits: ";
+  css << "G(" << md[0]/50000.0 << "," << md[1]/50000.0 << ")";
+  css << "B(" << md[2]/50000.0 << "," << md[3]/50000.0 << ")";
+  css << "R(" << md[4]/50000.0 << "," << md[5]/50000.0 << ")";
+  css << "WP("<< md[6]/50000.0 << "," << md[7]/50000.0 << ")";
+  css << "L(" << md[8]/10000.0 << "," << md[9]/10000.0 << ")";
+  css << ")";
+  return css.str();
+}
+
+static inline std::string getContentLightLevel(  std::vector<uint32_t> cll )
+{
+  std::stringstream css;
+
+  if(  cll.size() != 2 )
+  {
+    return "unspecified";
+  }
+
+  css << cll[0] << "," << cll[1] << " (cll,fall)";
+  return css.str();
+}
+
 std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
 {
   std::stringstream css;
 
   if( eMsgLevel >= DETAILS )
   {
-  css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " << (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
-  css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz\n";
+  css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " <<
+                                                        (double)m_FrameRate / m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(m_HdrMode) << "\n";
+  css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(m_HdrMode) << "\n";
   css << "Sequence PSNR output                   : " << (m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
   css << "Hexadecimal PSNR output                : " << (m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
   css << "Sequence MSE output                    : " << (m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
@@ -2331,6 +2547,15 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
     css << "log2_sao_offset_scale_chroma           : " << m_log2SaoOffsetScale[ CH_C ] << "\n";
   }
   css << "Cost function:                         : " << getCostFunctionStr( m_costMode ) << "\n";
+
+  if( !m_masteringDisplay.empty() )
+  {
+    css << "Mastering display color volume         : " << getMasteringDisplayStr( m_masteringDisplay ) << "\n";
+  }
+  if( !m_contentLightLevel.empty() )
+  {
+    css << "Content light level                    : " << getContentLightLevel( m_contentLightLevel ) << "\n";
+  }
   css << "\n";
   }
 

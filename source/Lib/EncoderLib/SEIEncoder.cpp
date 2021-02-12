@@ -491,6 +491,50 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
   }
 }
 
+void SEIEncoder::initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *seiAltTransCharacteristics)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiAltTransCharacteristics!=NULL), "Unspecified error");
+  //  Set SEI message parameters read from command line options
+  seiAltTransCharacteristics->preferredTransferCharacteristics = m_pcEncCfg->m_preferredTransferCharacteristics;
+}
+
+void SEIEncoder::initSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourVolume *seiMDCV)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiMDCV != NULL), "Unspecified error");
+
+  CHECK((m_pcEncCfg->m_masteringDisplay.size() != 10), "masteringDisplay must contain 10 values");
+
+  //  Set SEI message parameters read from command line options
+  seiMDCV->values.primaries[0][0] = m_pcEncCfg->m_masteringDisplay[0];
+  seiMDCV->values.primaries[0][1] = m_pcEncCfg->m_masteringDisplay[1];
+
+  seiMDCV->values.primaries[1][0] = m_pcEncCfg->m_masteringDisplay[2];
+  seiMDCV->values.primaries[1][1] = m_pcEncCfg->m_masteringDisplay[3];
+
+  seiMDCV->values.primaries[2][0] = m_pcEncCfg->m_masteringDisplay[4];
+  seiMDCV->values.primaries[2][1] = m_pcEncCfg->m_masteringDisplay[5];
+
+  seiMDCV->values.whitePoint[0] = m_pcEncCfg->m_masteringDisplay[6];
+  seiMDCV->values.whitePoint[1] = m_pcEncCfg->m_masteringDisplay[7];
+
+  seiMDCV->values.maxLuminance = m_pcEncCfg->m_masteringDisplay[8];
+  seiMDCV->values.minLuminance = m_pcEncCfg->m_masteringDisplay[9];
+}
+
+void SEIEncoder::initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL)
+{
+  CHECK(!(m_isInitialized), "Unspecified error");
+  CHECK(!(seiCLL != NULL), "Unspecified error");
+
+  CHECK((m_pcEncCfg->m_contentLightLevel.size() != 2), "contentLightLevel must contain 2 values");
+
+  //  Set SEI message parameters read from command line options
+  seiCLL->maxContentLightLevel    = m_pcEncCfg->m_contentLightLevel[0];
+  seiCLL->maxPicAverageLightLevel = m_pcEncCfg->m_contentLightLevel[1];
+}
+
 
 } // namespace vvenc
 

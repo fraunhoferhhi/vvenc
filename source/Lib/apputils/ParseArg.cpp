@@ -56,6 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <map>
 #include <algorithm>
 #include <regex>
+#include <cctype>
 
 //! \ingroup Interface
 //! \{
@@ -638,10 +639,31 @@ namespace df
       /* xxx, need to handle case where option isn't required */
       if (argc == 1)
       {
-        error_reporter.error(where())
-          << "Not processing option `" << option << "' without argument\n";
-        return 0; /* run out of argv for argument */
+        storePair(false, true, option, std::string(""));
+        return 1;
       }
+
+      std::string argNext = argv[1];
+      if( !argNext.empty() && argNext[0] == '-' )
+      {
+        // check if bool switch and check if next param is not an option
+        if( argNext.size() > 1 )
+        {
+          if( argNext[1] == '-' ) // is long option --
+          {
+            storePair(false, true, option, std::string(""));
+            return 0;
+          }
+
+          // check if argv is an digit number
+          if( !std::isdigit(argNext[1]) )
+          {
+            storePair(false, true, option, std::string(""));
+            return 0;
+          }
+        }
+      }
+
       storePair(false, true, option, std::string(argv[1]));
 
       return 1;

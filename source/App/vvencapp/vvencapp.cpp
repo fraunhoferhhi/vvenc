@@ -139,7 +139,7 @@ int main( int argc, char* argv[] )
   std::string cOutputfile = "";
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-  vvencappCfg.initDefault( 1920, 1080, 60, 0, 32, vvenc::PresetMode::MEDIUM );
+  vvencappCfg.initDefault( 1920, 1080, 60 );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
@@ -180,16 +180,16 @@ int main( int argc, char* argv[] )
     return iRet;
   }
 
+  if( vvencappCfg.m_verbosity > vvenc::WARNING )
+  {
+    std::cout << cAppname << ": " << cVVEnc.getEncoderInfo() << std::endl;
+  }
+
   cVVEnc.getConfig( vvencappCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
 
   if( vvencappCfg.m_verbosity >= vvenc::INFO )
   {
     std::cout << vvencappCfg.getConfigAsString( vvencappCfg.m_verbosity ) << std::endl;
-  }
-
-  if( vvencappCfg.m_verbosity > vvenc::WARNING )
-  {
-    std::cout << "VVEnc info: " << cVVEnc.getEncoderInfo() << std::endl;
   }
 
   // open output file

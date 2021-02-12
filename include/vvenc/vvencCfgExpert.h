@@ -101,6 +101,7 @@ enum ChromaFormat
 
 enum RateControlMode
 {
+  RCM_AUTO          = -1,
   RCM_OFF           = 0,
   RCM_CTU_LEVEL     = 1,
   RCM_PICTURE_LEVEL = 2,
@@ -308,7 +309,7 @@ public:
 
   int                 m_aiPad[ 2 ]                              = { 0, 0 };                              ///< number of padded pixels for width and height
   bool                m_enablePictureHeaderInSliceHeader        = true;
-  bool                m_AccessUnitDelimiter                     = false;                                 ///< add Access Unit Delimiter NAL units
+  int                 m_AccessUnitDelimiter                     = -1;                                    ///< add Access Unit Delimiter NAL units, default: auto (only enable if needed by dependent options)
 
   bool                m_printMSEBasedSequencePSNR               = false;
   bool                m_printHexPsnr                            = false;
@@ -339,10 +340,10 @@ public:
   double              m_adLambdaModifier[ MAX_TLAYER ]          = { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 }; ///< Lambda modifier array for each temporal layer
   std::vector<double> m_adIntraLambdaModifier;                                                           ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
   double              m_dIntraQpFactor                          = -1.0;                                  ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
-  std::vector<int>    m_qpInValsCb                              = { 25, 33, 43 };                        ///< qp input values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpInValsCb                              = { 17, 22, 34, 42 };                    ///< qp input values used to derive the chroma QP mapping table
   std::vector<int>    m_qpInValsCr                              = { 0 };                                 ///< qp input values used to derive the chroma QP mapping table
   std::vector<int>    m_qpInValsCbCr                            = { 0 };                                 ///< qp input values used to derive the chroma QP mapping table
-  std::vector<int>    m_qpOutValsCb                             = { 25, 32, 37 };                        ///< qp output values used to derive the chroma QP mapping table
+  std::vector<int>    m_qpOutValsCb                             = { 17, 23, 35, 39 };                    ///< qp output values used to derive the chroma QP mapping table
   std::vector<int>    m_qpOutValsCr                             = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
   std::vector<int>    m_qpOutValsCbCr                           = { 0 };                                 ///< qp output values used to derive the chroma QP mapping table
   int                 m_cuQpDeltaSubdiv                         = -1;                                    ///< Maximum subdiv for CU luma Qp adjustment (0:default)
@@ -356,7 +357,7 @@ public:
   int                 m_sliceChromaQpOffsetPeriodicity          = -1;                                    ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
   int                 m_sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { 0, 0};                               ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
 
-  int                 m_usePerceptQPATempFiltISlice             = -1;            ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+  int                 m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
 
   bool                m_lumaLevelToDeltaQPEnabled               = false;
   WCGChromaQPControl  m_wcgChromaQpControl                      = WCGChromaQPControl();
@@ -373,10 +374,12 @@ public:
   int                 m_outputBitDepth[ MAX_NUM_CH ]            = { 0, 0 };                              ///< bit-depth of output file
   int                 m_MSBExtendedBitDepth[ MAX_NUM_CH ]       = { 0, 0 };                              ///< bit-depth of input samples after MSB extension
   CostMode            m_costMode                                = COST_STANDARD_LOSSY;                   ///< Cost mode to use
+
   HashType            m_decodedPictureHashSEIType               = HASHTYPE_NONE;                         ///< Checksum mode for decoded picture hash SEI message
   bool                m_bufferingPeriodSEIEnabled               = false;
   bool                m_pictureTimingSEIEnabled                 = false;
   bool                m_decodingUnitInfoSEIEnabled              = false;
+
   bool                m_entropyCodingSyncEnabled                = false;
   bool                m_entryPointsPresent                      = true;
 
@@ -439,7 +442,7 @@ public:
   int                 m_FastIntraTools                          = 0;
 #endif
 
-  RateControlMode     m_RCRateControlMode                       = RCM_OFF;       ///< RateControlMode
+  RateControlMode     m_RCRateControlMode                       = RCM_AUTO;       ///< RateControlMode
   int                 m_RCKeepHierarchicalBit                   = -1;
   bool                m_RCUseLCUSeparateModel                   = false;
   int                 m_RCInitialQP                             = 0;
@@ -511,8 +514,8 @@ public:
   int                 m_saoOffsetBitShift[ MAX_NUM_CH ]         = { 0, 0 };
 
   bool                m_decodingParameterSetEnabled             = false;                                 ///< enable decoding parameter set
-  bool                m_vuiParametersPresent                    = false;                                 ///< enable generation of VUI parameters
-  bool                m_hrdParametersPresent                    = false;                                 ///< enable generation or HRD parameters
+  int                 m_vuiParametersPresent                    = -1;                                    ///< enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
+  int                 m_hrdParametersPresent                    = -1;                                    ///< enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
   bool                m_aspectRatioInfoPresent                  = false;                                 ///< Signals whether aspect_ratio_idc is present
   int                 m_aspectRatioIdc                          = 0;                                     ///< aspect_ratio_idc
   int                 m_sarWidth                                = 0;                                     ///< horizontal size of the sample aspect ratio
@@ -529,6 +532,12 @@ public:
   bool                m_overscanAppropriateFlag                 = false;                                 ///< Indicates whether conformant decoded pictures are suitable for display using overscan
   bool                m_videoSignalTypePresent                  = false;                                 ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
   bool                m_videoFullRangeFlag                      = false;                                 ///< Indicates the black level and range of luma and chroma signals
+
+  std::vector<uint32_t> m_masteringDisplay;                                                              ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
+                                                                                                         ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
+                                                                                                         ///< min/max luminance value in units of 1/10000 candela per square metre
+  std::vector<uint32_t> m_contentLightLevel;                                                             ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+  int                 m_preferredTransferCharacteristics        = -1;                                    ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
 
   std::string         m_summaryOutFilename                      = "";                                    ///< filename to use for producing summary output file.
   std::string         m_summaryPicFilenameBase                  = "";                                    ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.

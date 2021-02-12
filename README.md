@@ -52,6 +52,7 @@ The standard encoder (**vvencapp**) can be used in one of four predefined preset
 | --qpa <int>            | 2                                | Perceptual QP adaptation (0: off, on for 1: SDR(WPSNR), 2: SDR(XPSNR), 3: HDR(WPSNR), 4: HDR(XPSNR)) |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
 | --threads ,-t <int>    | size<=HD: 4 <br> else : 6        | Number of threads (1-N)                                                                              |
+| --hdr <str>            | off                              | Set HDR mode (+SEI messages) + BT.709 or BT.2020 color space (off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020 |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels, the following call will encode the input file with the medium speedup preset:
 

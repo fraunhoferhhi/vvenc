@@ -110,8 +110,8 @@ namespace df
      * information should be stored in a derived class. */
     struct OptionBase
     {
-      OptionBase(const std::string& name, const std::string& desc)
-      : opt_string(name), opt_desc(desc)
+      OptionBase(const std::string& name, const std::string& desc, const bool bool_switch )
+      : opt_string(name), opt_desc(desc), is_bool_switch(bool_switch)
       {};
 
       virtual ~OptionBase() {}
@@ -125,14 +125,15 @@ namespace df
 
       std::string opt_string;
       std::string opt_desc;
+      bool        is_bool_switch = false;
     };
 
     /** Type specific option storage */
     template<typename T>
     struct Option : public OptionBase
     {
-      Option(const std::string& name, T& storage, T default_val, const std::string& desc)
-      : OptionBase(name, desc), opt_storage(storage), opt_default_val(default_val)
+      Option(const std::string& name, T& storage, T default_val, const std::string& desc, const bool bool_switch )
+      : OptionBase(name, desc, bool_switch), opt_storage(storage), opt_default_val(default_val)
       {}
 
       void parse(const std::string& arg, ErrorReporter&);
@@ -187,7 +188,13 @@ namespace df
     inline void
     Option<T>::parse(const std::string& arg, ErrorReporter&)
     {
-      std::istringstream arg_ss (arg,std::istringstream::in);
+      std::string param = arg;
+      if( is_bool_switch )
+      {
+        if( arg.empty() ) { param = "1"; }
+      }
+
+      std::istringstream arg_ss (param,std::istringstream::in);
       arg_ss.exceptions(std::ios::failbit);
       try
       {
@@ -195,7 +202,7 @@ namespace df
       }
       catch (...)
       {
-        throw ParseFailure(opt_string, arg);
+        throw ParseFailure(opt_string, param);
       }
     }
 
@@ -237,7 +244,7 @@ namespace df
       typedef void (Func)(Options&, const std::string&, ErrorReporter&);
 
       OptionFunc(const std::string& name, Options& parent_, Func *func_, const std::string& desc)
-      : OptionBase(name, desc), parent(parent_), func(func_)
+      : OptionBase(name, desc, false), parent(parent_), func(func_)
       {}
 
       void parse(const std::string& arg, ErrorReporter& error_reporter)
@@ -310,9 +317,9 @@ namespace df
        */
       template<typename T>
       OptionSpecific&
-      operator()(const std::string& name, T& storage, T default_val, const std::string& desc = "")
+      operator()(const std::string& name, T& storage, T default_val, const std::string& desc = "", bool bool_switch = false)
       {
-        parent.addOption(new Option<T>(name, storage, default_val, desc));
+        parent.addOption(new Option<T>(name, storage, default_val, desc, bool_switch));
         return *this;
       }
 
@@ -322,9 +329,9 @@ namespace df
        */
       template<typename T>
       OptionSpecific&
-      operator()(const std::string& name, T& storage, const std::string& desc = "")
+      operator()(const std::string& name, T& storage, const std::string& desc = "", bool bool_switch = false )
       {
-        parent.addOption(new Option<T>(name, storage, storage, desc));
+        parent.addOption(new Option<T>(name, storage, storage, desc, bool_switch));
         return *this;
       }
 
