@@ -1319,13 +1319,13 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   m_cIntraSearch.m_ispTestedModes[0].init(0, 0, 1);
   if (m_pcEncCfg->m_FastIntraTools)
   {
-    m_modeCtrl.comprCUCtx->iWasTested = false;
+    m_modeCtrl.comprCUCtx->intraWasTested = false;
     m_cIntraSearch.m_ispTestedModes[0].relatedCuIsValid = m_modeCtrl.comprCUCtx->relatedCuIsValid;
     if (!bestCS->cus.empty())
     {
       if ((bestCS->cus[0]->mergeFlag || bestCS->cus[0]->imv || bestCS->cus[0]->affine) && (!bestCS->cus[0]->ciip))
       {
-        m_cIntraSearch.m_ispTestedModes[0].bestBIdx[0] = -1;
+        m_cIntraSearch.m_ispTestedModes[0].bestBefore[0] = -1;
       }
     }
     if (!bestCS->slice->isIntra())
@@ -1335,13 +1335,13 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
       for (int i = 0; i < 2; i++)
       {
         const CodingUnit* neigh = i ? cu.cs->getCURestricted(posTR.offset(0, -1), cu, CH_L) :cu.cs->getCURestricted(posBL.offset(-1, 0), cu, CH_L);
-        m_cIntraSearch.m_ispTestedModes[0].bestBIdx[i+1] = -1;
+        m_cIntraSearch.m_ispTestedModes[0].bestBefore[i+1] = -1;
         if (neigh != nullptr)
         {
-          int bestIdx = neigh->firstTU->mtsIdx[0] ? 4 : 0;
-          bestIdx |= neigh->lfnstIdx ? 2 : 0;
-          bestIdx |= neigh->ispMode ? 1 : 0;
-          m_cIntraSearch.m_ispTestedModes[0].bestBIdx[i+1] = bestIdx;
+          int bestMode = neigh->firstTU->mtsIdx[0] ? 4 : 0;
+          bestMode |= neigh->lfnstIdx ? 2 : 0;
+          bestMode |= neigh->ispMode ? 1 : 0;
+          m_cIntraSearch.m_ispTestedModes[0].bestBefore[i+1] = bestMode;
         }
       }
     }
@@ -1363,10 +1363,10 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 #if SPEED_INTRAT
     if (m_pcEncCfg->m_FastIntraTools)
     {
-      m_modeCtrl.comprCUCtx->dbestIdx = m_cIntraSearch.m_ispTestedModes[0].dbestIdx;
-      if (m_cIntraSearch.m_ispTestedModes[0].iWasTested)
+      m_modeCtrl.comprCUCtx->bestIntraMode = m_cIntraSearch.m_ispTestedModes[0].bestIntraMode;
+      if (m_cIntraSearch.m_ispTestedModes[0].intraWasTested)
       {
-        m_modeCtrl.comprCUCtx->iWasTested = m_cIntraSearch.m_ispTestedModes[0].iWasTested;
+        m_modeCtrl.comprCUCtx->intraWasTested = m_cIntraSearch.m_ispTestedModes[0].intraWasTested;
       }
     }
 #endif

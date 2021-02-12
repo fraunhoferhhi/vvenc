@@ -726,7 +726,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("Geo",                                             m_Geo,                                            "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                  "Maximum number of geometric partitioning mode candidates")
 #if 1//SPEED_INTRAT
-  ("FastIntraTools",                                  m_FastIntraTools,                                 "SpeedUPIntraTools:LFNSt,ISP;MTS")
+  ("FastIntraTools",                                  m_FastIntraTools,                                 "SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)")
 #endif
   ;
 

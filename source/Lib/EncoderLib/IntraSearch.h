@@ -162,10 +162,10 @@ public:
     PartSplit                                   IspType;
 #if SPEED_INTRAT
     bool                                        relatedCuIsValid;
-    bool                                        iWasTested;
-    int                                         dbestIdx;
+    bool                                        intraWasTested;
+    int                                         bestIntraMode;
     bool                                        isIntra;
-    int                                         bestBIdx[3];
+    int                                         bestBefore[3];
 #endif
     // set everything to default values
     void clear()
@@ -190,11 +190,11 @@ public:
 #if SPEED_INTRAT
       if (n)
       {
-        iWasTested = false;
+        intraWasTested = false;
         relatedCuIsValid = false;
-        dbestIdx  = 0;
+        bestIntraMode = 0;
         isIntra   = false;
-        std::memset(bestBIdx,0, sizeof(bestBIdx));
+        std::memset(bestBefore,0, sizeof(bestBefore));
 #endif
         clear();
 #if SPEED_INTRAT
@@ -256,7 +256,7 @@ private:
   void      xIntraCodingTUBlock       ( TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig = nullptr, PelUnitBuf *pPred = nullptr, const bool loadTr = false);
   ChromaCbfs xIntraChromaCodingQT     ( CodingStructure& cs, Partitioner& pm );
 #if SPEED_INTRAT
-  void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode, bool MTSuse);
+  void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode, bool disableMTS);
 #else 
   void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode );
 #endif

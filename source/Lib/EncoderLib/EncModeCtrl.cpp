@@ -908,7 +908,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       }
       if (relatedCU.isIntra)
       {
-        cuECtx.dbestIdx = relatedCU.dbestIdx;
+        cuECtx.bestIntraMode = relatedCU.bestIntraMode;
         cuECtx.isIntra = relatedCU.isIntra;
       }
     }
@@ -998,9 +998,9 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
     {
       if (cuECtx.bestCS->cost < relatedCU.bestCost)
       {
-        relatedCU.dbestIdx = cuECtx.dbestIdx;
+        relatedCU.bestIntraMode = cuECtx.bestIntraMode;
       }
-      if ( cuECtx.iWasTested && (!relatedCU.relatedCuIsValid || cuECtx.bestCS->cost < relatedCU.bestCost))
+      if ( cuECtx.intraWasTested && (!relatedCU.relatedCuIsValid || cuECtx.bestCS->cost < relatedCU.bestCost))
       {
         relatedCU.bestCost = cuECtx.bestCS->cost;
         relatedCU.relatedCuIsValid = true;

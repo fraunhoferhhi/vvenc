@@ -204,9 +204,9 @@ struct ComprCUCtx
     , isBestNoSplitSkip     (false)
     , skipSecondMTSPass     (false)
 #if SPEED_INTRAT
-    , iWasTested            (false)
+    , intraWasTested        (false)
     , relatedCuIsValid      (false)
-    , dbestIdx              (0)
+    , bestIntraMode         (0)
     , isIntra               (false)
 #endif
   {
@@ -243,9 +243,9 @@ struct ComprCUCtx
   bool              isBestNoSplitSkip;
   bool              skipSecondMTSPass;
 #if SPEED_INTRAT
-  bool              iWasTested;
+  bool              intraWasTested;
   bool              relatedCuIsValid;
-  int               dbestIdx;
+  int               bestIntraMode;
   bool              isIntra;
 #endif
 };
@@ -273,7 +273,7 @@ struct CodedCUInfo
 #if SPEED_INTRAT
   double bestCost;
   bool   relatedCuIsValid;
-  int    dbestIdx;
+  int    bestIntraMode;
 #endif
 
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
