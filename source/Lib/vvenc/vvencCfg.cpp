@@ -652,12 +652,6 @@ bool VVEncCfg::initCfgParameter()
     {
       m_cuQpDeltaSubdiv = 2;
     }
-    if ( m_usePerceptQPATempFiltISlice
-        && m_RCNumPasses == 2
-        && m_CTUSize == 128)
-    {
-      m_cuQpDeltaSubdiv = 2; // use subdiv. 2 even for UHD with 2-pass rate control
-    }
   }
   if (m_sliceChromaQpOffsetPeriodicity < 0)
   {
@@ -1676,6 +1670,7 @@ bool VVEncCfg::checkCfgParameter( )
   }
 
   confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0 && m_RCNumPasses != 2,               "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
   confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
