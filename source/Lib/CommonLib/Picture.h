@@ -56,7 +56,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "BitStream.h"
 #include "Reshape.h"
-#include "RateCtrl.h"
 
 #include <deque>
 #include <chrono>
@@ -69,6 +68,7 @@ namespace vvenc {
 
 class SEI;
 class SEIDecodedPictureHash;
+class EncRCPic;
 
 typedef std::list<SEI*> SEIMessages;
 

@@ -2020,7 +2020,7 @@ void RateCtrl::destroy()
   }
 }
 
-void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry  GOPList[ MAX_GOP ] )
+void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry  GOPList[ MAX_GOP ], int maxParallelFrames )
 {
   destroy();
 
@@ -2335,6 +2335,8 @@ void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRa
   encRCSeq->initGOPID2Level( GOPID2Level );
   encRCSeq->bitDepth = bitDepth;
   encRCSeq->initPicPara();
+  encRCSeq->fppParFrames = maxParallelFrames;
+
   if ( useLCUSeparateModel )
   {
     encRCSeq->initLCUPara();

@@ -269,7 +269,7 @@ namespace vvenc {
     RateCtrl();
     ~RateCtrl();
 
-    void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ] );
+    void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ], int maxParallelFrames );
     void destroy();
     void initRCPic( int frameLevel, int framePoc );
     void initRCGOP( int numberOfPictures );

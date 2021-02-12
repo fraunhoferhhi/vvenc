@@ -1398,7 +1398,6 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
   confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
-  confirmParameter( m_MCTF && m_maxParallelFrames && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to 2*gop size + N frames for MCTF" );
 
   confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
 #if IDR_FIX
@@ -1511,7 +1510,6 @@ bool VVEncCfg::checkCfgParameter( )
   }
 
   confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
-  //confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0,                                   "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
   confirmParameter( m_usePerceptQPATempFiltISlice && (m_IntraPeriod <= 16 || m_GOPSize <= 8),             "invalid combination of PerceptQPATempFiltIPic, IntraPeriod, and GOPSize" );
 
   confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );

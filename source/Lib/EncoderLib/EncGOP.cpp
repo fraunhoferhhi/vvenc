@@ -289,8 +289,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
     picEncoder->init( encCfg, &m_globalCtuQpVector, sps, pps, rateCtrl, threadPool );
     m_freePicEncoderList.push_back( picEncoder );
   }
-  // TODO (jb): deprecated, to be removed
-  m_picEncoder0 = m_freePicEncoderList.front();
 
   if (encCfg.m_usePerceptQPA)
   {

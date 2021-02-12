@@ -148,8 +148,6 @@ private:
   std::list<Picture*>       m_gopEncListInput;
   std::list<Picture*>       m_gopEncListToProcess;
   std::list<Picture*>       m_gopEncListRCEvalutaion;
-  // TODO (jb): deprecated, to be removed
-  EncPicture*               m_picEncoder0;
 
   std::vector<int>          m_globalCtuQpVector;
 
