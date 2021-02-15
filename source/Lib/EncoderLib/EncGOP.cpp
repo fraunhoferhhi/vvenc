@@ -1812,7 +1812,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
 
   if( m_pcRateCtrl->encRCSeq->isQpResetRequired( gopId ) )
   {
-    picEncoder->getEncSlice()->resetQP( &pic, sliceQP, lambda );
+    lambda = picEncoder->getEncSlice()->resetQP( &pic, sliceQP, lambda );
   }
   encRCPic->finalLambda = lambda;
 }
