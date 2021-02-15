@@ -801,6 +801,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   const int ctuStride            = pcv.widthInCtus;
   ProcessCtuState* processStates = encSlice->m_processStates.data();
   const UnitArea ctuArea( pcv.chrFormat, Area( x, y, width, height ) );
+  const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "poc", cs.slice->poc ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
@@ -818,7 +819,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // general wpp conditions, top and top-right ctu have to be encoded
         if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE )
+        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
           return false;
 
         if( checkReadyState )
