@@ -856,10 +856,14 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   xInitSliceMvdL1Zero( pic.cs->picHeader, slice );
 
 #if RPR_READY
-  if( slice->nalUnitType == NAL_UNIT_CODED_SLICE_RASL && sliceType == B_SLICE && m_pcEncCfg->m_rprRASLtoolSwitch )
+  if( slice->nalUnitType == NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
-    xUpdateRPRtmvp( pic.cs->picHeader, slice );
-    xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
+    slice->lmChromaCheckDisable = true;
+    if( sliceType == B_SLICE )
+    {
+      xUpdateRPRtmvp( pic.cs->picHeader, slice );
+      xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
+    }
   }
 #endif
 
@@ -1013,7 +1017,7 @@ void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
     for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
     {
       if( !( slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
-             slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc < m_pocCRA ) )
+             slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc <= m_pocCRA ) )
       {
         colRefIdxL0 = refIdx;
         break;
@@ -1025,7 +1029,7 @@ void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
       for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
       {
         if( !( slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL &&
-               slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc < m_pocCRA ) )
+               slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc <= m_pocCRA ) )
         {
           colRefIdxL1 = refIdx;
           break;
@@ -1072,7 +1076,7 @@ void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
 {
   for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
   {
-    if( slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc < m_pocCRA &&
+    if( slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc <= m_pocCRA &&
         slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
     {
       picHeader->disBdofFlag = true;
@@ -1085,7 +1089,7 @@ void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
 
   for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
   {
-    if( slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc < m_pocCRA &&
+    if( slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc <= m_pocCRA &&
         slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
     {
       picHeader->disBdofFlag = true;
