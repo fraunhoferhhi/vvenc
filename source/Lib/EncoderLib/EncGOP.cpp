@@ -238,6 +238,7 @@ EncGOP::EncGOP()
   : m_bFirstInit         ( true )
   , m_bFirstWrite        ( true )
   , m_bRefreshPending    ( false )
+  , m_coNum              ( 0 )
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
   , m_pocCRA             ( 0 )
@@ -314,24 +315,23 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   // in lockstep mode, process only pics of same temporal layer
   const bool lockStepMode  = m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
   std::list<Picture*> procList;
-  std::list<Picture*> procListLockStep;
+  std::list<Picture*> rcUpdateList;
   if( lockStepMode )
   {
     const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer                      : -1;
     const int gopId          = m_gopEncListInput.size() ? m_gopEncListInput.front()->poc / m_pcEncCfg->m_GOPSize : -1;
-    const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up this temporal layer encode pictures only in serial mode
-    const int minForceDepth  = m_pcEncCfg->m_GOPSize > 16 ? 3 : 2;           // starting from this temporal layer force parallel encoding of all pictures of same TL
-    const bool forceTl       = m_pcEncCfg->m_maxParallelFrames > 2 && m_gopEncListInput.size() && m_gopEncListInput.front()->TLayer >= minForceDepth;
-    const int maxSize        = procTL <= minSerialDepth ? 1 : ( ! forceTl ? m_pcEncCfg->m_maxParallelFrames : (int)m_gopEncListInput.size() );
+    const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
+    const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
     for( auto pic : m_gopEncListInput )
     {
       if( pic->poc / m_pcEncCfg->m_GOPSize == gopId
           && pic->TLayer == procTL
           && pic->slices[ 0 ]->checkRefPicsReconstructed() )
       {
-        procListLockStep.push_back( pic );
+        procList.push_back    ( pic );
+        rcUpdateList.push_back( pic );
       }
-      if( (int)procListLockStep.size() >= maxSize )
+      if( (int)procList.size() >= maxSize )
         break;
     }
   }
@@ -340,42 +340,21 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     procList = m_gopEncListInput;
   }
 
-  std::list<Picture*> rcUpdateList;
+  // encode one picture in serial mode / multiple pictures in FPP mode
   while( true )
   {
     Picture* pic           = nullptr;
     EncPicture* picEncoder = nullptr;
 
+    // fetch next picture to be encoded and next free picture encoder
     {
       std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
       if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
-      // refill process list in lockstep mode and update pending RC
-      if( lockStepMode && procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames )
-      {
-        for( auto pic : rcUpdateList )
-        {
-          pic->actualHeadBits  = 0;
-          pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-          xUpdateAfterPicRC( pic );
-        }
-        rcUpdateList.clear();
-        while( ! procListLockStep.empty()
-            && (int)procList.size() < m_pcEncCfg->m_maxParallelFrames )
-        {
-          procList.push_back(     procListLockStep.front() );
-          rcUpdateList.push_back( procListLockStep.front() );
-          procListLockStep.pop_front();
-        }
-      }
-
-      // in non lockstep mode check encoding of output picture done
-      if( ! lockStepMode && ( m_gopEncListOutput.empty() || m_gopEncListOutput.front()->isReconstructed ) )
-      {
-        break;
-      }
-      // in lockstep mode check all pictures encoded
-      if( lockStepMode && procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames )
+      // in non-lockstep mode, check encoding of output picture done
+      // in lockstep mode, check all pictures encoded
+      if( ( ! lockStepMode && ( m_gopEncListOutput.empty() || m_gopEncListOutput.front()->isReconstructed ) )
+          || ( lockStepMode && procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
       {
         break;
       }
@@ -402,6 +381,11 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     CHECK( picEncoder == nullptr, "no free picture encoder available" );
     CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
 
+    // picture will be encoded -> remove from input list
+    m_gopEncListInput.remove( pic );
+    procList.remove( pic );
+
+    // decoder in encoder
     bool decPic = false;
     bool encPic = false;
     trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
@@ -412,9 +396,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
-
-    m_gopEncListInput.remove( pic );
-    procList.remove( pic );
 
     // compress next picture
     if( pic->encPic )
@@ -453,6 +434,14 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
   CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+
+  // update pending RC
+  for( auto pic : rcUpdateList )
+  {
+    pic->actualHeadBits  = 0;
+    pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+    xUpdateAfterPicRC( pic );
+  }
 
   // AU output
   Picture* pic = m_gopEncListOutput.front();
@@ -699,6 +688,11 @@ void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, PicLi
     if ( ! pic->isInitDone )
     {
       pic->encTime.startTimer();
+
+      if( pic->poc % m_pcEncCfg->m_GOPSize == 0 )
+        m_coNum = 0;
+      pic->coNum = m_coNum;
+      m_coNum += 1;
 
       xInitFirstSlice( *pic, picList, isEncodeLtRef );
 

@@ -127,6 +127,7 @@ private:
   bool                      m_bFirstInit;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
+  int                       m_coNum;
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;

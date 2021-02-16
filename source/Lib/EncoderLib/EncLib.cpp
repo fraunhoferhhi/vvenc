@@ -279,7 +279,7 @@ void EncLib::initPass( int pass )
   }
   for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
   {
-    CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
+    CHECK( m_pocToGopId[ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
   }
 
   if ( m_cEncCfg.m_RCRateControlMode )
