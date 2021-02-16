@@ -872,7 +872,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       int mode = chromaCandModes[idx];
       satdModeList[idx] = mode;
 #if RPR_READY
-      if (CU::isLMCMode(mode) && ( !CU::isLMCModeEnabled(cu, mode) || cu.slice->lmChromaDisable ) )
+      if (CU::isLMCMode(mode) && ( !CU::isLMCModeEnabled(cu, mode) || cu.slice->lmChromaCheckDisable ) )
 #else
       if (CU::isLMCMode(mode) && !CU::isLMCModeEnabled(cu, mode))
 #endif
@@ -967,7 +967,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
         cu.bdpcmM[CH_C] = 0;
         chromaIntraMode = chromaCandModes[mode];
 #if RPR_READY
-        if (CU::isLMCMode(chromaIntraMode) && ( !CU::isLMCModeEnabled(cu, chromaIntraMode) || cu.slice->lmChromaDisable ) )
+        if (CU::isLMCMode(chromaIntraMode) && ( !CU::isLMCModeEnabled(cu, chromaIntraMode) || cu.slice->lmChromaCheckDisable ) )
 #else
         if (CU::isLMCMode(chromaIntraMode) && !CU::isLMCModeEnabled(cu, chromaIntraMode))
 #endif

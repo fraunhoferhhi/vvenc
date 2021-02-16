@@ -858,7 +858,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 #if RPR_READY
   if( slice->nalUnitType == NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
-    slice->lmChromaDisable = true;
+    slice->lmChromaCheckDisable = true;
     if( sliceType == B_SLICE )
     {
       xUpdateRPRtmvp( pic.cs->picHeader, slice );

@@ -1215,11 +1215,10 @@ NalUnitType                 nalUnitType;         ///< Nal unit type for the slic
   bool                        pendingRasInit;
   bool                        checkLDC;
   bool                        biDirPred;
-  int                         symRefIdx[2];
-
 #if RPR_READY
-  bool                        lmChromaDisable;
+  bool                        lmChromaCheckDisable;
 #endif
+  int                         symRefIdx[2];
   
   //  Data
   int                         sliceChromaQpDelta[MAX_NUM_COMP+1];

@@ -92,10 +92,10 @@ Slice::Slice()
   , pendingRasInit                      ( false )
   , checkLDC                            ( false )
   , biDirPred                           ( false )
-  , symRefIdx                           { -1, -1 }
 #if RPR_READY
-  , lmChromaDisable                     { false }
+  , lmChromaCheckDisable                { false }
 #endif
+  , symRefIdx                           { -1, -1 }
   , depth                               ( 0 )
   , vps                                 ( nullptr )
   , dci                                 ( nullptr )
