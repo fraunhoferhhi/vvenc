@@ -93,6 +93,9 @@ Slice::Slice()
   , checkLDC                            ( false )
   , biDirPred                           ( false )
   , symRefIdx                           { -1, -1 }
+#if RPR_READY
+  , lmChromaDisable                     { false }
+#endif
   , depth                               ( 0 )
   , vps                                 ( nullptr )
   , dci                                 ( nullptr )

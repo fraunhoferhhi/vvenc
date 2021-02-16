@@ -1217,6 +1217,10 @@ NalUnitType                 nalUnitType;         ///< Nal unit type for the slic
   bool                        biDirPred;
   int                         symRefIdx[2];
 
+#if RPR_READY
+  bool                        lmChromaDisable;
+#endif
+  
   //  Data
   int                         sliceChromaQpDelta[MAX_NUM_COMP+1];
   Picture*                    refPicList [NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
