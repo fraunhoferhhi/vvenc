@@ -155,7 +155,6 @@ void EncPicture::finalizePicture( Picture& pic )
 
   // finalize
   pic.extendPicBorder();
-  pic.slices[ 0 ]->updateRefPicCounter( -1 );
   if ( m_pcEncCfg->m_useAMaxBT )
   {
     pic.picBlkStat.storeBlkSize( pic );

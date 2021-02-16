@@ -301,48 +301,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 // Class interface
 // ====================================================================================================================
 
-void EncGOP::xFillProcessingPicListForRC( std::list<Picture*>& inputList )
-{
-  // Constraints:
-  // 1. Stay within a GOP
-  // 2. The processing list should contain only pictures of same TID
-  // 2. The max number of pictures in the processing list should be equal to MaxParallelFrames
-  // 3. Pictures are chosen with respect to the Coding Order Number (CON)
-
-  CHECK( inputList.empty(), "Empty input list is not expected" );
-  CHECK( !m_gopEncListToProcess.empty(), "Expecting the empty processing list" );
-
-  for( int i = 0; i < m_pcEncCfg->m_maxParallelFrames; i++ )
-  {
-    uint64_t minCON = MAX_UINT64;
-    auto minCON_it = inputList.begin();
-
-    // Find the picture with the lowest CON by LUT mapping of POC to CON
-    for( auto it = inputList.begin(); it != inputList.end(); ++it )
-    {
-      Picture* pic = *it;
-      int picPocInGop = ( ( pic->poc - 1 ) % m_pcEncCfg->m_GOPSize ) + 1;
-      int picConInGop = m_pcEncCfg->m_GOPSize == 32 ? RC_POC_2_CON_32[m_pcEncCfg->m_maxParallelFrames][picPocInGop] : RC_POC_2_CON_16[m_pcEncCfg->m_maxParallelFrames][picPocInGop];
-      int gopOffset = pic->poc == 0 ? 0 : ( ( pic->poc - 1 ) / m_pcEncCfg->m_GOPSize ) * m_pcEncCfg->m_GOPSize;
-
-      if( picConInGop + (uint64_t)gopOffset < minCON )
-      {
-        minCON = picConInGop + (uint64_t)gopOffset;
-        minCON_it = it;
-      }
-    }
-    if( minCON != MAX_UINT64 && ( m_gopEncListToProcess.empty() || ( ( *minCON_it )->TLayer == m_gopEncListToProcess.back()->TLayer && ( *minCON_it )->TLayer > 0 ) ) )
-    {
-      m_gopEncListToProcess.push_back( ( *minCON_it ) );
-      ( *minCON_it )->slices[0]->updateRefPicCounter( +1 );
-      inputList.erase( minCON_it );
-    }
-  }
-
-  // Check the processing list
-  CHECK( m_gopEncListToProcess.empty(), "Empty processing list is not expected" );
-}
-
 void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
 {
   CHECK( encList.size() == 0 && m_gopEncListOutput.size() == 0, "error: no pictures to be encoded given" );
@@ -353,11 +311,36 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     xInitPicsInCodingOrder( encList, picList, isEncodeLtRef );
   }
 
-  if( !( m_pcEncCfg->m_RCRateControlMode && m_pcEncCfg->m_maxParallelFrames ) )
+  // in lockstep mode, process only pics of same temporal layer
+  const bool lockStepMode  = m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
+  std::list<Picture*> procList;
+  std::list<Picture*> procListLockStep;
+  if( lockStepMode )
   {
-    m_gopEncListToProcess.splice( m_gopEncListToProcess.end(), m_gopEncListInput );
+    const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer                      : -1;
+    const int gopId          = m_gopEncListInput.size() ? m_gopEncListInput.front()->poc / m_pcEncCfg->m_GOPSize : -1;
+    const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up this temporal layer encode pictures only in serial mode
+    const int minForceDepth  = m_pcEncCfg->m_GOPSize > 16 ? 3 : 2;           // starting from this temporal layer force parallel encoding of all pictures of same TL
+    const bool forceTl       = m_pcEncCfg->m_maxParallelFrames > 2 && m_gopEncListInput.size() && m_gopEncListInput.front()->TLayer >= minForceDepth;
+    const int maxSize        = procTL <= minSerialDepth ? 1 : ( ! forceTl ? m_pcEncCfg->m_maxParallelFrames : (int)m_gopEncListInput.size() );
+    for( auto pic : m_gopEncListInput )
+    {
+      if( pic->poc / m_pcEncCfg->m_GOPSize == gopId
+          && pic->TLayer == procTL
+          && pic->slices[ 0 ]->checkRefPicsReconstructed() )
+      {
+        procListLockStep.push_back( pic );
+      }
+      if( (int)procListLockStep.size() >= maxSize )
+        break;
+    }
+  }
+  else
+  {
+    procList = m_gopEncListInput;
   }
 
+  std::list<Picture*> rcUpdateList;
   while( true )
   {
     Picture* pic           = nullptr;
@@ -367,44 +350,39 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
       if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
-      // Rate Control requires specific scheduling for encoding and evaluation
-      if( m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames )
+      // refill process list in lockstep mode and update pending RC
+      if( lockStepMode && procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames )
       {
-        // NOTE: Proceed with next pictures only if all last are done
-        if( m_gopEncListToProcess.empty() && m_freePicEncoderList.size() == m_pcEncCfg->m_maxParallelFrames )
+        for( auto pic : rcUpdateList )
         {
-          // evaluate last coded pictures before starting the next ones
-          if( !m_gopEncListRCEvalutaion.empty() )
-          {
-            for( auto pic : m_gopEncListRCEvalutaion )
-            {
-              pic->actualHeadBits  = 0;
-              pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-              xUpdateAfterPicRC( pic );
-              pic->slices[0]->updateRefPicCounter( -1 );
-            }
-            m_gopEncListRCEvalutaion.clear();
-          }
-
-          // Determine next pictures to encode
-          if( !m_gopEncListInput.empty() )
-          {
-            xFillProcessingPicListForRC( m_gopEncListInput );
-            m_gopEncListRCEvalutaion = m_gopEncListToProcess;
-          }
+          pic->actualHeadBits  = 0;
+          pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+          xUpdateAfterPicRC( pic );
+        }
+        rcUpdateList.clear();
+        while( ! procListLockStep.empty()
+            && (int)procList.size() < m_pcEncCfg->m_maxParallelFrames )
+        {
+          procList.push_back(     procListLockStep.front() );
+          rcUpdateList.push_back( procListLockStep.front() );
+          procListLockStep.pop_front();
         }
       }
 
-      // check encoding of output picture done
-      if( m_gopEncListOutput.empty()
-          || m_gopEncListOutput.front()->isReconstructed )
+      // in non lockstep mode check encoding of output picture done
+      if( ! lockStepMode && ( m_gopEncListOutput.empty() || m_gopEncListOutput.front()->isReconstructed ) )
+      {
+        break;
+      }
+      // in lockstep mode check all pictures encoded
+      if( lockStepMode && procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames )
       {
         break;
       }
 
       // get next picture ready to be encoded
-      auto picItr             = find_if( m_gopEncListToProcess.begin(), m_gopEncListToProcess.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
-      const bool nextPicReady = picItr != m_gopEncListToProcess.end();
+      auto picItr             = find_if( procList.begin(), procList.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+      const bool nextPicReady = picItr != procList.end();
 
       // check at least one picture and one pic encoder ready
       if( m_freePicEncoderList.empty()
@@ -435,7 +413,8 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
 
-    m_gopEncListToProcess.remove( pic );
+    m_gopEncListInput.remove( pic );
+    procList.remove( pic );
 
     // compress next picture
     if( pic->encPic )
@@ -499,6 +478,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
   }
 
+  pic->slices[ 0 ]->updateRefPicCounter( -1 );
   pic->isFinished = true;
 }
 

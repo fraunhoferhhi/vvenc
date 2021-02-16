@@ -146,8 +146,6 @@ private:
 
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
-  std::list<Picture*>       m_gopEncListToProcess;
-  std::list<Picture*>       m_gopEncListRCEvalutaion;
 
   std::vector<int>          m_globalCtuQpVector;
 
@@ -209,7 +207,6 @@ private:
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
-  void xFillProcessingPicListForRC    ( std::list<Picture*>& inputList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc
