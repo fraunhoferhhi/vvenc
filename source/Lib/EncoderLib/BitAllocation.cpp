@@ -361,7 +361,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       if (savedLumaQP < 0)
       {
-        int averageAdaptedLumaQP = ((encCfg->m_RCRateControlMode > 0) && (encCfg->m_RCRateControlMode < 3) ? Clip3 (0, MAX_QP, sliceQP) :
+        int averageAdaptedLumaQP = ((encCfg->m_RCRateControlMode == RCM_CTU_LEVEL) ? Clip3 (0, MAX_QP, sliceQP) :
                                    Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
                                                                                                                   encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
                                                                                                                   (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()) && isXPSNRBasedQPA, bitDepth))));
@@ -437,7 +437,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
     hpEnerAvg /= double (ctuBoundingAddr - ctuStartAddr);
   }
 
-  if ((encCfg->m_RCRateControlMode > 0) && (encCfg->m_RCRateControlMode < 3) && (!useFrameWiseQPA || (savedQP < 0)))
+  if ((encCfg->m_RCRateControlMode == RCM_CTU_LEVEL) && (!useFrameWiseQPA || (savedQP < 0)))
   {
     hpEnerPic = 1.0 / hpEnerAvg;
   }
@@ -510,7 +510,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
         {
           if (ctuRsAddr & 1) ctuRCQPMemory->back() |= (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8) << 4;
           else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
-          if (slice->isIntra() && (adaptedLumaQP > 0))
+          if (adaptedLumaQP > 0)
           {
             adaptedLumaQP--; // this is a first-pass tuning to stabilize rate control
           }
@@ -520,7 +520,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
-      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
+      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
       {
         adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
@@ -591,7 +591,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       }
     } // end CTU-wise loop
 
-    adaptedSliceQP = ((savedQP < 0 || ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
+    adaptedSliceQP = ((savedQP < 0 || ((encCfg->m_usePerceptQPATempFiltISlice == 2) && (slice->isIntra() || slice->TLayer == 0))) && (ctuBoundingAddr > ctuStartAddr)
                       ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
   }
 
