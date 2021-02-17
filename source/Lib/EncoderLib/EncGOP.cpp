@@ -689,11 +689,6 @@ void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, PicLi
     {
       pic->encTime.startTimer();
 
-      if( pic->poc % m_pcEncCfg->m_GOPSize == 0 )
-        m_coNum = 0;
-      pic->coNum = m_coNum;
-      m_coNum += 1;
-
       xInitFirstSlice( *pic, picList, isEncodeLtRef );
 
       pic->encTime.stopTimer();
@@ -716,6 +711,9 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   const SPS& sps        = *(slice->sps);
   SliceType sliceType   = ( curPoc % (unsigned)(m_pcEncCfg->m_IntraPeriod) == 0 || m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'I' ) ? ( I_SLICE ) : ( m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? P_SLICE : B_SLICE );
   NalUnitType naluType  = xGetNalUnitType( curPoc, m_lastIDR );
+
+  pic.posInGop = std::max( 0, m_coNum - 1 ) % m_pcEncCfg->m_GOPSize;
+  m_coNum += 1;
 
   // update IRAP
   if ( naluType == NAL_UNIT_CODED_SLICE_IDR_W_RADL

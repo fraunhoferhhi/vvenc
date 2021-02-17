@@ -104,7 +104,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   if( m_pcEncCfg->m_RCRateControlMode > 0 )
   {
     pic.encRCPic = new EncRCPic;
-    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, pic.coNum, m_pcRateCtrl->m_listRCPictures );
+    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, pic.posInGop, m_pcRateCtrl->m_listRCPictures );
     gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], this );
   }
 
