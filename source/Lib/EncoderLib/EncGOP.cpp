@@ -318,21 +318,28 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   std::list<Picture*> rcUpdateList;
   if( lockStepMode )
   {
-    const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer                      : -1;
-    const int gopId          = m_gopEncListInput.size() ? m_gopEncListInput.front()->poc / m_pcEncCfg->m_GOPSize : -1;
-    const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
-    const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
-    for( auto pic : m_gopEncListInput )
+    // start new parallel chunk only, if next output picture is not reconstructed
+    if( m_gopEncListOutput.empty() || ! m_gopEncListOutput.front()->isReconstructed )
     {
-      if( pic->poc / m_pcEncCfg->m_GOPSize == gopId
-          && pic->TLayer == procTL
-          && pic->slices[ 0 ]->checkRefPicsReconstructed() )
+      const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer                      : -1;
+      const int gopId          = m_gopEncListInput.size() ? m_gopEncListInput.front()->poc / m_pcEncCfg->m_GOPSize : -1;
+      const int posInGop       = m_gopEncListInput.size() ? m_gopEncListInput.front()->posInGop                    : -1;
+      const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
+      const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
+      for( auto pic : m_gopEncListInput )
       {
-        procList.push_back    ( pic );
-        rcUpdateList.push_back( pic );
+        if( pic->poc / m_pcEncCfg->m_GOPSize == gopId
+            && pic->TLayer == procTL
+            && pic->slices[ 0 ]->checkRefPicsReconstructed() )
+        {
+          procList.push_back    ( pic );
+          rcUpdateList.push_back( pic );
+          // map all pics in a parallel chunk to the same posInGop, improves RC performance
+          pic->posInGop = posInGop;
+        }
+        if( (int)procList.size() >= maxSize )
+          break;
       }
-      if( (int)procList.size() >= maxSize )
-        break;
     }
   }
   else
