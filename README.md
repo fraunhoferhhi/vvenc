@@ -87,6 +87,6 @@ Please see [LICENSE.txt](./LICENSE.txt) file for the terms of use of the content
 
 For more information, please contact: vvc@hhi.fraunhofer.de
 
-**Copyright (c) 2019-2020 Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.**
+**Copyright (c) 2019-2021 Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.**
 
 **All rights reserved.**
