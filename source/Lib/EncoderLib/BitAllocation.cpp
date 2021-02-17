@@ -330,16 +330,19 @@ static int getLumaLevelBasedDeltaQP (const Pel avgLumaValue, const uint32_t bitD
 // public functions
 
 int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
-                                            int optChromaQPOffset[2], const bool isHDR /*= false*/)
+                                            int optChromaQPOffset[2] )
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEner[MAX_NUM_COMP] = {0.0, 0.0, 0.0};
   int    savedLumaQP          = -1;
   uint32_t meanLuma           = MAX_UINT;
 
-  if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr || encCfg->m_usePerceptQPA > 4) return -1;
+  if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr ) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0;
+  // TODO: qpa cleanup for code != XPSNR based
+
+  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA != 0);
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRBasedQPA;
   const int          bitDepth = slice->sps->bitDepths[CH_L];
 
@@ -395,7 +398,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
 int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
                                           std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
-                                          const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, const bool isHDR /*= false*/)
+                                          const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr )
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerAvg = 0.0;
@@ -404,7 +407,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA != 0);
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRBasedQPA;
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
@@ -446,6 +450,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
     hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
                                                  (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()) && isXPSNRBasedQPA, bitDepth);
   }
+
+  CHECK (encCfg->m_usePerceptQPA > 1, "deprecated QPA mode");  // TODO: cleanup non XPSNR based qpa methods
 
   if (encCfg->m_usePerceptQPA > 4) // only set CTU-level QPs based on CTU mean luma value (Sharp)
   {
@@ -598,7 +604,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
   return adaptedSliceQP;
 }
 
-int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea, const bool isHDR /*= false*/)
+int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea )
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerSub = 0.0;
@@ -607,7 +613,8 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr) return -1;
 
-  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isXPSNRBasedQPA  = (encCfg->m_usePerceptQPA != 0);
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRBasedQPA;
   const int         bitDepth  = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);
@@ -620,10 +627,10 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   const CPelBuf     picPrv1   = (isXPSNRBasedQPA ? pic->getOrigBufPrev (fltArea, false) : picOrig);
   const CPelBuf     picPrv2   = pic->getOrigBufPrev (fltArea, true );
 
+  CHECK (encCfg->m_usePerceptQPA > 1, "deprecated QPA mode");  // TODO: cleanup non XPSNR based qpa methods
+
   if (encCfg->m_usePerceptQPA > 4) // only set CTU-level QPs based on CTU mean luma value (Sharp)
   {
-    CHECK (!isHDR, "HDR configuration error in perceptual QPA function");
-
     return Clip3 (0, MAX_QP, pic->picInitialQP + getLumaLevelBasedDeltaQP (pic->getOrigBuf (subArea).getAvg(), bitDepth));
   }
 
@@ -683,7 +690,7 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr) return 0.0;
 
-  const bool isXPSNRQPA = (encCfg->m_usePerceptQPA & 1) == 0;
+  const bool isXPSNRQPA  = (encCfg->m_usePerceptQPA != 0);
   const bool isHighRes  = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280) && isXPSNRQPA;
   const CPelBuf picOrig = (origBuf != nullptr ? *origBuf : pic->getOrigBuf (COMP_Y));
   const CPelBuf picPrv1 = (isXPSNRQPA ? pic->getOrigBufPrev (COMP_Y, false) : picOrig);

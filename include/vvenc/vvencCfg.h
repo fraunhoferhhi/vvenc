@@ -256,7 +256,7 @@ public:
   int                 m_GOPSize                        = 32;            ///< GOP size of hierarchical structure
 
   int                 m_QP                             = 32;            ///< QP value of key-picture (integer)
-  unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on for SDR, 2 = on for HDR)
+  unsigned            m_usePerceptQPA                  = 0;             ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA). (0 = off, 1 = on)
 
   int                 m_RCTargetBitrate                = 0;
   int                 m_RCNumPasses                    = 1;

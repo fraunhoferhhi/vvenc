@@ -259,7 +259,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                            sliceChromaQpOffsetIntraOrPeriodic, m_pcEncCfg->m_usePerceptQPA > 2); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
+                                                            sliceChromaQpOffsetIntraOrPeriodic ); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
@@ -290,7 +290,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 
     if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                      (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
-                                                     startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_usePerceptQPA > 2)) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
+                                                     startCtuTsAddr, boundingCtuTsAddr )) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
     }

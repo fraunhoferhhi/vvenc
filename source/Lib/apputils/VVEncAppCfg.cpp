@@ -333,6 +333,21 @@ const std::vector<SVPair<int>> FlagToIntMap =
   { "1",            1 },
 };
 
+const std::vector<SVPair<unsigned>> QPAToIntMap =
+{
+  { "off",          0 },
+  { "disable",      0 },
+  { "0",            0 },
+
+  { "on",           1 },
+  { "enable",       1 },
+  { "1",            1 },
+  { "2",            1 }, // map deprecated modes 2-5 to qpa enabled
+  { "3",            1 },
+  { "4",            1 },
+  { "5",            1 },
+};
+
 //// ====================================================================================================================
 //// string <-> enum
 //// ====================================================================================================================
@@ -396,6 +411,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
   IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>           toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<unsigned>      toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
 
 
   //
@@ -437,7 +453,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("bitrate,b",         m_RCTargetBitrate,        "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
   ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2) " )
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
-  ("qpa",               m_usePerceptQPA,          "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
+  ("qpa",               toQPA,                    "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
 
   ("threads,-t",        m_numThreads,             "Number of threads default: [size <= HD: 4, UHD: 6]")
 
@@ -650,8 +666,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("NumPasses",                                       m_RCNumPasses,                                    "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
 
-  ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Mode of perceptually motivated QP adaptation (0:off, 1:SDR-WPSNR, 2:SDR-XPSNR, 3:HDR-WPSNR, 4:HDR-XPSNR 5:HDR-MeanLuma)")
-  ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
+  ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
   ;
 
 
@@ -730,6 +745,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("RCLCUSeparateModel",                              m_RCUseLCUSeparateModel,                          "Rate control: use CTU level separate R-lambda model" )
   ("InitialQP",                                       m_RCInitialQP,                                    "Rate control: initial QP" )
   ("RCForceIntraQP",                                  m_RCForceIntraQP,                                 "Rate control: force intra QP to be equal to initial QP" )
+
+  ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
   ;
 
   // Coding structure paramters

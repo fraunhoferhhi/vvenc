@@ -837,14 +837,14 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   {
     const uint32_t cuLumaQpSubdiv = (m_pcEncCfg->m_cuQpDeltaSubdiv > 0 ? (uint32_t) m_pcEncCfg->m_cuQpDeltaSubdiv : 0);
 
-    slice->picHeader->cuQpDeltaSubdivInter = (m_pcEncCfg->m_usePerceptQPA > 0 ? 0 : cuLumaQpSubdiv);
+    slice->picHeader->cuQpDeltaSubdivInter = m_pcEncCfg->m_usePerceptQPA ? 0 : cuLumaQpSubdiv;
     slice->picHeader->cuQpDeltaSubdivIntra = cuLumaQpSubdiv;
   }
   if( slice->pps->chromaQpOffsetListLen > 0)
   {
     const uint32_t cuChromaQpSubdiv = (m_pcEncCfg->m_cuChromaQpOffsetSubdiv > 0 ? (uint32_t) m_pcEncCfg->m_cuChromaQpOffsetSubdiv : 0);
 
-    slice->picHeader->cuChromaQpOffsetSubdivInter = (m_pcEncCfg->m_usePerceptQPA > 0 ? 0 : cuChromaQpSubdiv);
+    slice->picHeader->cuChromaQpOffsetSubdivInter = m_pcEncCfg->m_usePerceptQPA ? 0 : cuChromaQpSubdiv;
     slice->picHeader->cuChromaQpOffsetSubdivIntra = cuChromaQpSubdiv;
   }
 
