@@ -309,24 +309,6 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
   return 0;
 }
 
-static int getLumaLevelBasedDeltaQP (const Pel avgLumaValue, const uint32_t bitDepth)
-{
-  if (bitDepth > 16 || avgLumaValue < 0 || avgLumaValue >= (1 << bitDepth)) return 0;
-
-  const int meanLumaIndex = (bitDepth <= 10 ? avgLumaValue << (10 - bitDepth) : avgLumaValue >> (bitDepth - 10));
-
-  if (meanLumaIndex >= 834) return -6; // Sharp's default curve with stepping of 66.67
-  if (meanLumaIndex >= 767) return -5;
-  if (meanLumaIndex >= 701) return -4;
-  if (meanLumaIndex >= 634) return -3;
-  if (meanLumaIndex >= 567) return -2;
-  if (meanLumaIndex >= 501) return -1;
-  if (meanLumaIndex >= 434) return  0;
-  if (meanLumaIndex >= 367) return  1;
-  if (meanLumaIndex >= 301) return  2;
-  /* (meanLumaIndex >= 0) */return  3;
-}
-
 // public functions
 
 int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
