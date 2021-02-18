@@ -131,7 +131,6 @@ bool VVEncCfg::initCfgParameter()
      confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
 
-  confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 1,  "Perceptual QPA must be in the range 0 - 1" );
   confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );

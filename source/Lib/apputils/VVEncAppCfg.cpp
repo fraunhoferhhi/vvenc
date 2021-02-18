@@ -333,7 +333,8 @@ const std::vector<SVPair<int>> FlagToIntMap =
   { "1",            1 },
 };
 
-const std::vector<SVPair<unsigned>> QPAToIntMap =
+// this is only needed for backward compatibility and will be removed in the next release
+const std::vector<SVPair<bool>> QPAToIntMap =
 {
   { "off",          0 },
   { "disable",      0 },
@@ -411,7 +412,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
   IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>           toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
-  IStreamToEnum<unsigned>      toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
+  IStreamToEnum<bool>          toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
 
 
   //
