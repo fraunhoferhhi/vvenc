@@ -294,7 +294,7 @@ bool VVEncCfg::initCfgParameter()
     }
     if( m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
+      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_PQ_BT2020 ? 9 : 1; // bt2020nc : bt709
     }
   }
   else if( m_HdrMode == HDRMode::HDR_HLG || m_HdrMode == HDRMode::HDR_HLG_BT2020 )
