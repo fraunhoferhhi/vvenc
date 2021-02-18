@@ -127,7 +127,7 @@ private:
   bool                      m_bFirstInit;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
-  int                       m_coNum;
+  int                       m_codingOrderIdx;
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
@@ -177,6 +177,7 @@ private:
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, PicList& picList, int gopId ) const;
 
   void xInitPicsInCodingOrder         ( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef );
+  void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
   void xInitFirstSlice                ( Picture& pic, PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
 #if RPR_READY

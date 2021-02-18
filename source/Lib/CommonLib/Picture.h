@@ -228,7 +228,7 @@ public:
   int                           refCounter;
   int                           poc;
   int                           gopId;
-  int                           posInGop;
+  int                           rcIdxInGop;
   unsigned                      TLayer;
   int                           layerId;
   bool                          isSubPicBorderSaved;

@@ -238,7 +238,7 @@ EncGOP::EncGOP()
   : m_bFirstInit         ( true )
   , m_bFirstWrite        ( true )
   , m_bRefreshPending    ( false )
-  , m_coNum              ( 0 )
+  , m_codingOrderIdx     ( 0 )
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
   , m_pocCRA             ( 0 )
@@ -302,20 +302,10 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 // Class interface
 // ====================================================================================================================
 
-void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
+void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList )
 {
-  CHECK( encList.size() == 0 && m_gopEncListOutput.size() == 0, "error: no pictures to be encoded given" );
-
-  // init pictures and first slice (in coding order)
-  if( encList.size() )
-  {
-    xInitPicsInCodingOrder( encList, picList, isEncodeLtRef );
-  }
-
   // in lockstep mode, process only pics of same temporal layer
   const bool lockStepMode  = m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
-  std::list<Picture*> procList;
-  std::list<Picture*> rcUpdateList;
   if( lockStepMode )
   {
     // start new parallel chunk only, if next output picture is not reconstructed
@@ -323,7 +313,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer                      : -1;
       const int gopId          = m_gopEncListInput.size() ? m_gopEncListInput.front()->poc / m_pcEncCfg->m_GOPSize : -1;
-      const int posInGop       = m_gopEncListInput.size() ? m_gopEncListInput.front()->posInGop                    : -1;
+      const int rcIdxInGop     = m_gopEncListInput.size() ? m_gopEncListInput.front()->rcIdxInGop                  : -1;
       const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
       const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
       for( auto pic : m_gopEncListInput )
@@ -334,8 +324,8 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
         {
           procList.push_back    ( pic );
           rcUpdateList.push_back( pic );
-          // map all pics in a parallel chunk to the same posInGop, improves RC performance
-          pic->posInGop = posInGop;
+          // map all pics in a parallel chunk to the same index, improves RC performance
+          pic->rcIdxInGop = rcIdxInGop;
         }
         if( (int)procList.size() >= maxSize )
           break;
@@ -346,6 +336,25 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   {
     procList = m_gopEncListInput;
   }
+}
+
+void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
+{
+  CHECK( encList.size() == 0 && m_gopEncListOutput.size() == 0, "error: no pictures to be encoded given" );
+
+  // init pictures and first slice (in coding order)
+  if( encList.size() )
+  {
+    xInitPicsInCodingOrder( encList, picList, isEncodeLtRef );
+  }
+
+  // get list of pictures to be encoded and used for RC update
+  std::list<Picture*> procList;
+  std::list<Picture*> rcUpdateList;
+  xGetProcessingLists( procList, rcUpdateList );
+
+  // in lockstep mode, process all pictures in processing list
+  const bool lockStepMode = m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
   // encode one picture in serial mode / multiple pictures in FPP mode
   while( true )
@@ -442,40 +451,50 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
   CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
 
-  // update pending RC
-  for( auto pic : rcUpdateList )
-  {
-    pic->actualHeadBits  = 0;
-    pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-    xUpdateAfterPicRC( pic );
-  }
-
   // AU output
-  Picture* pic = m_gopEncListOutput.front();
+  Picture* outPic = m_gopEncListOutput.front();
   m_gopEncListOutput.pop_front();
 
-  if( pic->writePic )
+  if( outPic->writePic )
   {
-    xWritePicture( *pic, au, isEncodeLtRef );
+    xWritePicture( *outPic, au, isEncodeLtRef );
   }
 
   if( m_pcEncCfg->m_alfTempPred )
   {
-    xSyncAlfAps( *pic, m_gopApsMap, pic->picApsMap );
+    xSyncAlfAps( *outPic, m_gopApsMap, outPic->picApsMap );
   }
 
-  if( !m_pcEncCfg->m_maxParallelFrames )
+  // update pending RC
+  if( lockStepMode )
   {
-    xUpdateAfterPicRC( pic );
+    // first pic has been written to bitstream
+    // therefore we have at least for this picture a valid total bit and head bit count
+    if( ! rcUpdateList.empty() )
+    {
+      CHECK( rcUpdateList.front() != outPic, "first picture in RC update and output picture have to be the same" );
+      rcUpdateList.pop_front();
+      xUpdateAfterPicRC( outPic );
+      for( auto pic : rcUpdateList )
+      {
+        pic->actualHeadBits  = outPic->actualHeadBits;
+        pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+        xUpdateAfterPicRC( pic );
+      }
+    }
+  }
+  else
+  {
+    xUpdateAfterPicRC( outPic );
   }
 
   if( m_pcEncCfg->m_useAMaxBT )
   {
-    m_BlkStat.updateMaxBT( *pic->slices[0], pic->picBlkStat );
+    m_BlkStat.updateMaxBT( *outPic->slices[0], outPic->picBlkStat );
   }
 
-  pic->slices[ 0 ]->updateRefPicCounter( -1 );
-  pic->isFinished = true;
+  outPic->slices[ 0 ]->updateRefPicCounter( -1 );
+  outPic->isFinished = true;
 }
 
 void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
@@ -719,8 +738,8 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   SliceType sliceType   = ( curPoc % (unsigned)(m_pcEncCfg->m_IntraPeriod) == 0 || m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'I' ) ? ( I_SLICE ) : ( m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? P_SLICE : B_SLICE );
   NalUnitType naluType  = xGetNalUnitType( curPoc, m_lastIDR );
 
-  pic.posInGop = std::max( 0, m_coNum - 1 ) % m_pcEncCfg->m_GOPSize;
-  m_coNum += 1;
+  pic.rcIdxInGop = std::max( 0, m_codingOrderIdx - 1 ) % m_pcEncCfg->m_GOPSize;
+  m_codingOrderIdx += 1;
 
   // update IRAP
   if ( naluType == NAL_UNIT_CODED_SLICE_IDR_W_RADL
