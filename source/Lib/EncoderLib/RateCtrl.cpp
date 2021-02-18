@@ -64,16 +64,6 @@ static const int    RC_GOP_ID_QP_OFFSET[ 6 ] =           { 0, 0, 0, 3, 1, 1 };
 static const int    RC_GOP_ID_QP_OFFSET_GOP32[ 7 ] =     { 0, 0, 0, 0, 3, 1, 1 };
 static const int    RC_GOP_ID_QP_OFFSET_GRC[ 6 ] =       { 0, 3, 0, 3, 1, 1 };
 static const int    RC_GOP_ID_QP_OFFSET_GRC_GOP32[ 7 ] = { 0, 0, 3, 0, 3, 1, 1 };
-static const int    RC_FPP_PROC_ORDER_TO_SEQ_32[ 5 ][ 32 ] = { { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 },
-                                                               { 0, 1, 2, 3, 10, 4, 7, 5, 6, 8, 9, 11, 14, 12, 13, 15, 16, 17, 18, 25, 19, 22, 20, 21, 23, 24, 26, 29, 27, 28, 30, 31 },
-                                                               { 0, 1, 2, 3, 10, 4, 7, 5, 6, 8, 9, 11, 14, 12, 13, 15, 16, 17, 18, 25, 19, 22, 20, 21, 23, 24, 26, 29, 27, 28, 30, 31 },
-                                                               { 0, 1, 2, 17, 3, 10, 18, 25, 4, 7, 11, 14, 19, 22, 26, 29, 5, 6, 8, 9, 12, 13, 15, 16, 20, 21, 23, 24, 27, 28, 30, 31 },
-                                                               { 0, 1, 2, 17, 3, 10, 18, 25, 4, 7, 11, 14, 19, 22, 26, 29, 5, 6, 8, 9, 12, 13, 15, 16, 20, 21, 23, 24, 27, 28, 30, 31 } };
-static const int    RC_FPP_PROC_ORDER_TO_SEQ_16[ 5 ][ 16 ] = { { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
-                                                               { 0, 1, 2, 3, 6, 4, 5, 7, 8, 9, 10, 13, 11, 12, 14, 15 },
-                                                               { 0, 1, 2, 3, 6, 4, 5, 7, 8, 9, 10, 13, 11, 12, 14, 15 },
-                                                               { 0, 1, 2, 9, 3, 6, 10, 13, 4, 5, 7, 8, 11, 12, 14, 15 },
-                                                               { 0, 1, 2, 9, 3, 6, 10, 13, 4, 5, 7, 8, 11, 12, 14, 15 } };
 
 static const double RC_WEIGHT_PIC_TARGET_BIT_IN_GOP =                0.9;
 static const double RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER =             1.0 - RC_WEIGHT_PIC_TARGET_BIT_IN_GOP;
@@ -709,13 +699,12 @@ EncRCPic::~EncRCPic()
 
 int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
 {
-  int targetBits        = 0;
-  int GOPbitsLeft       = encRcGOP->bitsLeft;
+  int targetBits    = 0;
+  int GOPbitsLeft   = encRcGOP->bitsLeft;
+  int currPicRatio  = encRcSeq->bitsRatio[ rcIdxInGop ];
+  int totalPicRatio = 0;
 
-  int currPicPosition = encRcSeq->gopSize == 32 ? RC_FPP_PROC_ORDER_TO_SEQ_32[ encRcSeq->fppParFrames ][ encRcGOP->numPics - encRcGOP->picsLeft ] : RC_FPP_PROC_ORDER_TO_SEQ_16[ encRcSeq->fppParFrames ][ encRcGOP->numPics - encRcGOP->picsLeft ];
-  int currPicRatio    = encRcSeq->bitsRatio[ currPicPosition ];
-  int totalPicRatio   = 0;
-  for ( int i = currPicPosition; i < encRcGOP->numPics; i++ )
+  for ( int i = rcIdxInGop; i < encRcGOP->numPics; i++ )
   {
     totalPicRatio += encRcSeq->bitsRatio[ i ];
   }
@@ -729,7 +718,7 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
 
   if ( encRcSeq->framesLeft > encRcSeq->gopSize || encRcSeq->totalFrames < 1 )
   {
-    targetBits = int( RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER * targetBits + RC_WEIGHT_PIC_TARGET_BIT_IN_GOP * encRCGOP->picTargetBitInGOP[ currPicPosition ] );
+    targetBits = int( RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER * targetBits + RC_WEIGHT_PIC_TARGET_BIT_IN_GOP * encRCGOP->picTargetBitInGOP[ rcIdxInGop ] );
   }
 
   // bit allocation for 2-pass RC
@@ -797,12 +786,13 @@ void EncRCPic::addToPictureList( std::list<EncRCPic*>& listPreviousPictures )
   listPreviousPictures.push_back( this );
 }
 
-void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int framePoc, std::list<EncRCPic*>& listPreviousPictures )
+void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int framePoc, int frameRcIdxInGop, std::list<EncRCPic*>& listPreviousPictures )
 {
   destroy();
-  encRCSeq = encRcSeq;
-  encRCGOP = encRcGOP;
-  poc = framePoc;
+  encRCSeq   = encRcSeq;
+  encRCGOP   = encRcGOP;
+  poc        = framePoc;
+  rcIdxInGop = frameRcIdxInGop;
 
   int tgtBits    = xEstPicTargetBits( encRcSeq, encRcGOP );
   int estHeadBits = xEstPicHeaderBits( listPreviousPictures, frameLvl );
@@ -2346,10 +2336,10 @@ void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRa
   delete[] GOPID2Level;
 }
 
-void RateCtrl::initRCPic( int frameLevel, int framePoc )
+void RateCtrl::initRCPic( int frameLevel, int framePoc, int frameRcIdxInGop )
 {
   encRCPic = new EncRCPic;
-  encRCPic->create( encRCSeq, encRCGOP, frameLevel, framePoc, m_listRCPictures );
+  encRCPic->create( encRCSeq, encRCGOP, frameLevel, framePoc, frameRcIdxInGop, m_listRCPictures );
 }
 
 void RateCtrl::initRCGOP( int numberOfPictures )

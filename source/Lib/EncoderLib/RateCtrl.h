@@ -197,7 +197,7 @@ namespace vvenc {
     EncRCPic();
     ~EncRCPic();
 
-    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, int framePoc, std::list<EncRCPic*>& listPreviousPictures );
+    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, int framePoc, int frameRcIdxInGop, std::list<EncRCPic*>& listPreviousPictures );
     void destroy();
 
     void   calCostSliceI( Picture* pic );
@@ -240,6 +240,7 @@ namespace vvenc {
     int     lcuLeft;
     int     picQPOffsetQPA;
     int     poc;
+    int     rcIdxInGop;
     double  picLambdaOffsetQPA;
     double  picEstLambda;
     double  finalLambda;
@@ -271,7 +272,7 @@ namespace vvenc {
 
     void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ], int maxParallelFrames );
     void destroy();
-    void initRCPic( int frameLevel, int framePoc );
+    void initRCPic( int frameLevel, int framePoc, int frameRcIdxInGop );
     void initRCGOP( int numberOfPictures );
     void destroyRCGOP();
 

@@ -127,6 +127,7 @@ private:
   bool                      m_bFirstInit;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
+  int                       m_codingOrderIdx;
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
@@ -146,8 +147,6 @@ private:
 
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
-  std::list<Picture*>       m_gopEncListToProcess;
-  std::list<Picture*>       m_gopEncListRCEvalutaion;
 
   std::vector<int>          m_globalCtuQpVector;
 
@@ -178,6 +177,7 @@ private:
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, PicList& picList, int gopId ) const;
 
   void xInitPicsInCodingOrder         ( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef );
+  void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
   void xInitFirstSlice                ( Picture& pic, PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
 #if RPR_READY
@@ -209,7 +209,6 @@ private:
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
-  void xFillProcessingPicListForRC    ( std::list<Picture*>& inputList );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc
