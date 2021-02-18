@@ -335,7 +335,11 @@ void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Pictu
   else
   {
     procList = m_gopEncListInput;
+    if( ! m_gopEncListOutput.empty() )
+      rcUpdateList.push_back( m_gopEncListOutput.front() );
   }
+  CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(),                                                         "first picture in RC update and in output list have to be the same" );
+  CHECK( ! rcUpdateList.empty() && ! m_gopEncListOutput.empty() && rcUpdateList.front() != m_gopEncListOutput.front(), "first picture in RC update and in output list have to be the same" );
 }
 
 void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef )
@@ -466,26 +470,16 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   }
 
   // update pending RC
-  if( lockStepMode )
+  // first pic has been written to bitstream
+  // therefore we have at least for this picture a valid total bit and head bit count
+  for( auto pic : rcUpdateList )
   {
-    // first pic has been written to bitstream
-    // therefore we have at least for this picture a valid total bit and head bit count
-    if( ! rcUpdateList.empty() )
+    if( pic != outPic )
     {
-      CHECK( rcUpdateList.front() != outPic, "first picture in RC update and output picture have to be the same" );
-      rcUpdateList.pop_front();
-      xUpdateAfterPicRC( outPic );
-      for( auto pic : rcUpdateList )
-      {
-        pic->actualHeadBits  = outPic->actualHeadBits;
-        pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-        xUpdateAfterPicRC( pic );
-      }
+      pic->actualHeadBits  = outPic->actualHeadBits;
+      pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
     }
-  }
-  else
-  {
-    xUpdateAfterPicRC( outPic );
+    xUpdateAfterPicRC( pic );
   }
 
   if( m_pcEncCfg->m_useAMaxBT )
