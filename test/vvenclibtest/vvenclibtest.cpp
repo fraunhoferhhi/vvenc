@@ -264,9 +264,6 @@ int testLibParameterRanges()
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 16,32,48, 0 } );
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 1,-1,17,24 }, true );
 
-  testParamList( "PerceptualQPA",                          vvencParams.m_usePerceptQPA,              vvencParams, { 0,1 } );
-  testParamList( "PerceptualQPA",                          vvencParams.m_usePerceptQPA,              vvencParams, { -1,2 }, true );
-
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );
 
