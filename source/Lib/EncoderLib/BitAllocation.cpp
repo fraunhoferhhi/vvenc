@@ -312,14 +312,14 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
 // public functions
 
 int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
-                                            int optChromaQPOffset[2] )
+                                            int optChromaQPOffset[2])
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEner[MAX_NUM_COMP] = {0.0, 0.0, 0.0};
   int    savedLumaQP          = -1;
   uint32_t meanLuma           = MAX_UINT;
 
-  if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr ) return -1;
+  if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr) return -1;
 
   const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
@@ -377,7 +377,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
 int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
                                           std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
-                                          const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr )
+                                          const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerAvg = 0.0;
@@ -563,7 +563,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
   return adaptedSliceQP;
 }
 
-int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea )
+int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerSub = 0.0;

@@ -359,7 +359,6 @@ double EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
   if ( m_pcEncCfg->m_usePerceptQPA )
   {
     pic->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
-  //pic->encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ]; <- hlm: I don't understand why it has to be that complicated here. Can't we just use the initial slice lambda and offset it proportionally to the change in slice QP? As follows:
     pic->encRCPic->picLambdaOffsetQPA = pow (2.0, (double) pic->encRCPic->picQPOffsetQPA / 3.0);
     lambda = slice->getLambdas()[0] * pic->encRCPic->picLambdaOffsetQPA;
   }
