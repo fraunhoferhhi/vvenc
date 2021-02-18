@@ -104,7 +104,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   if( m_pcEncCfg->m_RCRateControlMode > 0 )
   {
     pic.encRCPic = new EncRCPic;
-    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, m_pcRateCtrl->m_listRCPictures );
+    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, pic.rcIdxInGop, m_pcRateCtrl->m_listRCPictures );
     gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], this );
   }
 
@@ -155,7 +155,6 @@ void EncPicture::finalizePicture( Picture& pic )
 
   // finalize
   pic.extendPicBorder();
-  pic.slices[ 0 ]->updateRefPicCounter( -1 );
   if ( m_pcEncCfg->m_useAMaxBT )
   {
     pic.picBlkStat.storeBlkSize( pic );

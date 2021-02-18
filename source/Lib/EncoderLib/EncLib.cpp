@@ -279,7 +279,7 @@ void EncLib::initPass( int pass )
   }
   for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
   {
-    CHECK( m_pocToGopId   [ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
+    CHECK( m_pocToGopId[ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
   }
 
   if ( m_cEncCfg.m_RCRateControlMode )
@@ -506,7 +506,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
     CHECK( flush && m_cGOPEncoder->m_gopEncListOutput.size() > 0, "internal error: encoder tries to flush ouput queue, but will never be called" );
   }
 
-  isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? (  m_numPicsInQueue <= 0 && !m_cGOPEncoder->anyFramesInOutputQueue() ): ( m_numPicsInQueue <= 0 );
+  isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? ( m_numPicsInQueue <= 0 && ! m_cGOPEncoder->anyFramesInOutputQueue() ) : ( m_numPicsInQueue <= 0 );
   if( m_cEncCfg.m_RCRateControlMode && isQueueEmpty )
   {
     m_cRateCtrl.destroyRCGOP();
@@ -1071,7 +1071,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_cEncCfg.m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_cEncCfg.m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled     |= ((m_cEncCfg.m_usePerceptQPA > 0 && m_cEncCfg.m_usePerceptQPA <= 4) || m_cEncCfg.m_sliceChromaQpOffsetPeriodicity > 0) && (m_cEncCfg.m_internChromaFormat != CHROMA_400);
+    bChromaDeltaQPEnabled     |= (m_cEncCfg.m_usePerceptQPA || m_cEncCfg.m_sliceChromaQpOffsetPeriodicity > 0) && (m_cEncCfg.m_internChromaFormat != CHROMA_400);
     if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_cEncCfg.m_internChromaFormat != CHROMA_400) )
     {
       bChromaDeltaQPEnabled = (m_cEncCfg.m_chromaCbQpOffsetDualTree != 0 || m_cEncCfg.m_chromaCrQpOffsetDualTree != 0 || m_cEncCfg.m_chromaCbCrQpOffsetDualTree != 0);

@@ -552,7 +552,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           pic->ctuQpaLambda[ ctuRsAddr ] *= pic->encRCPic->picLambdaOffsetQPA;
           pic->ctuQpaLambda[ ctuRsAddr ] = Clip3( m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, pic->ctuQpaLambda[ ctuRsAddr ] );
         }
-        m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcEncCfg->m_usePerceptQPA > 2);
+        m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea );
       }
 
       if ((!slice.isIntra() || slice.sps->IBC) && // Museum fix
@@ -561,10 +561,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         const uint32_t h = lumaArea.height >> 1;
         const uint32_t w = lumaArea.width  >> 1;
-        const int adQPTL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + 0, w, h), m_pcEncCfg->m_usePerceptQPA > 2);
-        const int adQPTR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + 0, w, h), m_pcEncCfg->m_usePerceptQPA > 2);
-        const int adQPBL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + h, w, h), m_pcEncCfg->m_usePerceptQPA > 2);
-        const int adQPBR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + h, w, h), m_pcEncCfg->m_usePerceptQPA > 2);
+        const int adQPTL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + 0, w, h));
+        const int adQPTR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + 0, w, h));
+        const int adQPBL = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + 0, uiTPelY + h, w, h));
+        const int adQPBR = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, Area (uiLPelX + w, uiTPelY + h, w, h));
 
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = std::min (std::min (adQPTL, adQPTR), std::min (adQPBL, adQPBR));
@@ -586,19 +586,19 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         tempCS->currQP[partitioner.chType] = tempCS->baseQP =
         bestCS->currQP[partitioner.chType] = bestCS->baseQP = pic->ctuAdaptedQP[ctuRsAddr];
       }
-      setUpLambda ( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, m_pcEncCfg->m_usePerceptQPA <= 4);
+      setUpLambda ( slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], false, true );
     }
     else if (slice.isIntra() && !slice.sps->IBC) // sub-CTU QPA
     {
       CHECK ((partitioner.currArea().lwidth() >= pcv.maxCUSize) || (partitioner.currArea().lheight() >= pcv.maxCUSize), "sub-CTU delta-QP error");
-      tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea, m_pcEncCfg->m_usePerceptQPA > 2);
+      tempCS->currQP[partitioner.chType] = tempCS->baseQP = BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea);
 
       if ((m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) || rateCtrlFrame)
       {
         tempCS->currQP[partitioner.chType] = tempCS->baseQP = Clip3 (0, MAX_QP, tempCS->baseQP + m_tempQpDiff);
       }
 
-      updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, m_pcEncCfg->m_usePerceptQPA <= 4);
+      updateLambda (slice, pic->ctuQpaLambda[ctuRsAddr], pic->ctuAdaptedQP[ctuRsAddr], tempCS->baseQP, true );
     }
   }
 

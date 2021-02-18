@@ -131,7 +131,6 @@ bool VVEncCfg::initCfgParameter()
      confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
 
-  confirmParameter( m_usePerceptQPA < 0 || m_usePerceptQPA > 5,  "Perceptual QPA must be in the range 0 - 5" );
   confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
@@ -295,7 +294,7 @@ bool VVEncCfg::initCfgParameter()
     }
     if( m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
+      m_matrixCoefficients = m_HdrMode == HDRMode::HDR_PQ_BT2020 ? 9 : 1; // bt2020nc : bt709
     }
   }
   else if( m_HdrMode == HDRMode::HDR_HLG || m_HdrMode == HDRMode::HDR_HLG_BT2020 )
@@ -616,16 +615,10 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
-  if (m_lumaLevelToDeltaQPEnabled)
-  {
-    msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
-    m_usePerceptQPA = 5; // force QPA mode
-  }
-
   if ( m_usePerceptQPATempFiltISlice < 0 )
   {
     m_usePerceptQPATempFiltISlice = 0;
-    if ( m_usePerceptQPA == 2 || m_usePerceptQPA == 4 ) // auto mode for temp.filt.
+    if ( m_usePerceptQPA ) // auto mode for temp.filt.
     {
       m_usePerceptQPATempFiltISlice = ( m_RCRateControlMode > 0 && m_RCNumPasses == 2 ? 2 : 1 );
     }
@@ -644,7 +637,7 @@ bool VVEncCfg::initCfgParameter()
   if (m_cuQpDeltaSubdiv < 0)
   {
     m_cuQpDeltaSubdiv = 0;
-    if ( m_usePerceptQPA > 0
+    if ( m_usePerceptQPA
         && m_QP <= MAX_QP_PERCEPT_QPA
         && m_CTUSize == 128
         && m_PadSourceWidth <= 2048
@@ -656,8 +649,7 @@ bool VVEncCfg::initCfgParameter()
   if (m_sliceChromaQpOffsetPeriodicity < 0)
   {
     m_sliceChromaQpOffsetPeriodicity = 0;
-    if ( m_usePerceptQPA > 0
-        && m_internChromaFormat != CHROMA_400 )
+    if ( m_usePerceptQPA && m_internChromaFormat != CHROMA_400 )
     {
       m_sliceChromaQpOffsetPeriodicity = 1;
     }
@@ -1626,8 +1618,8 @@ bool VVEncCfg::checkCfgParameter( )
 
 
   confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
-  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA > 0, "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA,          "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1,       "Only single pass encoding supported, when rate control is disabled" );
 
   confirmParameter(!((m_level==Level::LEVEL1)
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
@@ -1656,12 +1648,6 @@ bool VVEncCfg::checkCfgParameter( )
     confirmParameter( m_chromaCbCrQpOffsetDualTree >  12, "Max. Joint Cb-Cr QP Offset for dual tree is  12");
   }
 
-  if (m_lumaLevelToDeltaQPEnabled)
-  {
-    confirmParameter(m_usePerceptQPA != 0 && m_usePerceptQPA != 5, "LumaLevelToDeltaQP and PerceptQPA conflict");
-    msg( WARNING, "\n using deprecated LumaLevelToDeltaQP to force PerceptQPA mode 5" );
-  }
-
   if (m_usePerceptQPA && m_dualITree && (m_internChromaFormat != CHROMA_400) && (m_chromaCbQpOffsetDualTree != 0 || m_chromaCrQpOffsetDualTree != 0 || m_chromaCbCrQpOffsetDualTree != 0))
   {
     msg(WARNING, "***************************************************************************\n");
@@ -1672,7 +1658,7 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
   confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
 
-  confirmParameter( (m_usePerceptQPA > 0) && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
+  confirmParameter( m_usePerceptQPA && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
   if ( m_DecodingRefreshType == 2 )
   {
     confirmParameter( m_IntraPeriod > 0 && m_IntraPeriod <= m_GOPSize ,                                   "Intra period must be larger than GOP size for periodic IDR pictures");
@@ -2029,7 +2015,7 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_internalBitDepth[0] = 10;                       // internal bitdepth
 
   m_QP                  = qp;                       // quantization parameter 0-63
-  m_usePerceptQPA       = 2;                        // percepual qpa adaptation, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  m_usePerceptQPA       = 1;                        // percepual qpa adaptation, 0 off, 1 on
 
   m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
 

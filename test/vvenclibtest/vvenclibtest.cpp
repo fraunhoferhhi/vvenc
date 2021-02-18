@@ -182,7 +182,7 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
 //rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
-  rcEncCfg.m_usePerceptQPA              = 2;                   // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
+  rcEncCfg.m_usePerceptQPA              = 1;                   // percepual qpa adaption, 0 off, 1 on
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
   rcEncCfg.m_internalBitDepth[0]        = 10;                  // 10bit internal
 
@@ -263,9 +263,6 @@ int testLibParameterRanges()
 
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 16,32,48, 0 } );
   testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 1,-1,17,24 }, true );
-
-  testParamList( "PerceptualQPA",                          vvencParams.m_usePerceptQPA,              vvencParams, { 0,1,2,3,4,5 } );
-  testParamList( "PerceptualQPA",                          vvencParams.m_usePerceptQPA,              vvencParams, { -1,6 }, true );
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );
