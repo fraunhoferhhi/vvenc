@@ -847,7 +847,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   xInitSliceTMVPFlag ( pic.cs->picHeader, slice, gopId );
   xInitSliceMvdL1Zero( pic.cs->picHeader, slice );
 
-#if RPR_READY
   if( slice->nalUnitType == NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
     slice->lmChromaCheckDisable = true;
@@ -857,7 +856,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
       xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
     }
   }
-#endif
 
   // update RAS
   xUpdateRasInit( slice );
@@ -999,7 +997,6 @@ void EncGOP::xInitSliceTMVPFlag( PicHeader* picHeader, const Slice* slice, int g
   }
 }
 
-#if RPR_READY
 void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
 {
   if( slice->sliceType != I_SLICE && picHeader->enableTMVP && m_pcEncCfg->m_rprRASLtoolSwitch )
@@ -1092,7 +1089,6 @@ void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
     }
   }
 }
-#endif
 
 void EncGOP::xInitSliceMvdL1Zero( PicHeader* picHeader, const Slice* slice )
 {

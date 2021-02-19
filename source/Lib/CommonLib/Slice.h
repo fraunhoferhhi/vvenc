@@ -1215,9 +1215,7 @@ NalUnitType                 nalUnitType;         ///< Nal unit type for the slic
   bool                        pendingRasInit;
   bool                        checkLDC;
   bool                        biDirPred;
-#if RPR_READY
   bool                        lmChromaCheckDisable;
-#endif
   int                         symRefIdx[2];
   
   //  Data

@@ -1046,9 +1046,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("TransformSkipLog2MaxSize",                        m_TSsize,                                         "Specify transform-skip maximum size. Minimum 2, Maximum 5")
   ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
   ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
-#if 1 //RPR_READY
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
-#endif
   ;
 
   opts.setSubSection("Input options");

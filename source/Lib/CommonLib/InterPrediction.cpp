@@ -1496,9 +1496,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const bool subblkMVSpreadOverLimit = isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
 
   bool enablePROF = sps.PROF && (!m_skipPROF) && (compID == COMP_Y);
-#if RPR_READY
   enablePROF &= (!cu.cs->picHeader->disProfFlag);
-#endif
   enablePROF &= !((cu.affineType == AFFINEMODEL_6PARAM && _mv[0] == _mv[1] && _mv[0] == _mv[2]) || (cu.affineType == AFFINEMODEL_4PARAM && _mv[0] == _mv[1]));
   enablePROF &= !subblkMVSpreadOverLimit;
   const int profThres = 1 << (iBit + (m_isBi ? 1 : 0));
