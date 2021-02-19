@@ -1221,11 +1221,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
   // On TL0 and pending RAS: reset APS
   int layerIdx = cs.vps == nullptr ? 0 : cs.vps->generalLayerIdx[ cs.slice->pic->layerId ];
-#if RPR_READY
   if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA() || ( cs.slice->nalUnitType == NAL_UNIT_CODED_SLICE_CRA && m_encCfg->m_craAPSreset ) ) )
-#else
-  if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA()))
-#endif
   {
     memset(cs.slice->alfAps, 0, sizeof(*cs.slice->alfAps)*ALF_CTB_MAX_NUM_APS);
     m_apsIdStart = ALF_CTB_MAX_NUM_APS;

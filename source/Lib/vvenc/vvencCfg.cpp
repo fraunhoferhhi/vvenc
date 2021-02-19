@@ -488,7 +488,6 @@ bool VVEncCfg::initCfgParameter()
   m_reshapeCW.adpOption  = m_adpOption;
   m_reshapeCW.initialCW  = m_initialCW;
 
-#if RPR_READY
   confirmParameter( m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
 
   if( m_rprEnabledFlag == 2 )
@@ -497,7 +496,6 @@ bool VVEncCfg::initCfgParameter()
     m_craAPSreset            = true;
     m_rprRASLtoolSwitch      = true;
   }  
-#endif
     
   if( m_IntraPeriod == 0 &&  m_IntraPeriodSec > 0 )
   {
@@ -1549,11 +1547,7 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
   confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-#if IDR_FIX
   confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#else
-  confirmParameter( m_IntraPeriod > 0 && m_DecodingRefreshType !=1,                             "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#endif
   confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
   confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
