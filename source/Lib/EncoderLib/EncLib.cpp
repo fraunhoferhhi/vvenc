@@ -375,15 +375,6 @@ void EncLib::xSetRCEncCfg( int pass )
       m_cBckCfg.m_cuQpDeltaSubdiv = 0;
     }
 
-    if ( m_cEncCfg.m_maxParallelFrames > 0 )
-    {
-      m_cBckCfg.m_useAMaxBT = 0;
-      m_cBckCfg.m_cabacInitPresent = 0;
-      m_cBckCfg.m_saoEncodingRate = 0.0;
-      m_cBckCfg.m_alfTempPred = 0;
-      m_cBckCfg.m_maxParallelFrames = m_cEncCfg.m_maxParallelFrames;
-    }
-
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
 }
@@ -809,7 +800,7 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noActConstraintFlag                      = false;
   ci.noLmcsConstraintFlag                     = false;
   ci.noQtbttDualTreeIntraConstraintFlag           = ! m_cEncCfg.m_dualITree;
-  ci.noPartitionConstraintsOverrideConstraintFlag = ! m_cEncCfg.m_useAMaxBT;
+  ci.noPartitionConstraintsOverrideConstraintFlag = m_cEncCfg.m_useAMaxBT == 0;
   ci.noSaoConstraintFlag                          = ! m_cEncCfg.m_bUseSAO;
   ci.noAlfConstraintFlag                          = ! m_cEncCfg.m_alf;
   ci.noCCAlfConstraintFlag                        = ! m_cEncCfg.m_ccalf;
@@ -910,7 +901,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.MRL                           = m_cEncCfg.m_MRL;
   sps.BdofPresent                   = m_cEncCfg.m_BDOF;
   sps.DmvrPresent                   = m_cEncCfg.m_DMVR;
-  sps.partitionOverrideEnabled      = m_cEncCfg.m_useAMaxBT;
+  sps.partitionOverrideEnabled      = m_cEncCfg.m_useAMaxBT != 0;
   sps.resChangeInClvsEnabled        = m_cEncCfg.m_resChangeInClvsEnabled;
   sps.rprEnabled                    = m_cEncCfg.m_rprEnabledFlag != 0;
   sps.log2MinCodingBlockSize        = 2;
@@ -1102,7 +1093,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
                                           pps.deblockingFilterTcOffsetDiv2  [COMP_Cr] != 0;
 
   pps.deblockingFilterControlPresent    = deblockingFilterControlPresent;
-  pps.cabacInitPresent                  = m_cEncCfg.m_cabacInitPresent;
+  pps.cabacInitPresent                  = m_cEncCfg.m_cabacInitPresent != 0;
   pps.loopFilterAcrossSlicesEnabled     = m_cEncCfg.m_bLFCrossSliceBoundaryFlag;
   pps.rpl1IdxPresent                    = sps.rpl1IdxPresent;
 

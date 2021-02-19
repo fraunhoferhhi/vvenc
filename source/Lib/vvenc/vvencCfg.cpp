@@ -218,9 +218,29 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
+  // threading
+  if( m_numThreads < 0 )              m_numThreads            = m_SourceWidth > 832 && m_SourceHeight > 480 ? 8 : 4;
+  if( m_ensureWppBitEqual < 0 )       m_ensureWppBitEqual     = m_numThreads ? 1   : 0   ;
+  if( m_useAMaxBT < 0 )               m_useAMaxBT             = m_numThreads ? 0   : 1   ;
+  if( m_cabacInitPresent < 0 )        m_cabacInitPresent      = m_numThreads ? 0   : 1   ;
+  if( m_alfTempPred < 0 )             m_alfTempPred           = m_numThreads ? 0   : 1   ;
+  if( m_saoEncodingRate < 0.0 )       m_saoEncodingRate       = m_numThreads ? 0.0 : 0.75;
+  if( m_saoEncodingRateChroma < 0.0 ) m_saoEncodingRateChroma = m_numThreads ? 0.0 : 0.5 ;
+  if( m_maxParallelFrames < 0 )
+  {
+    m_maxParallelFrames = std::min( m_numThreads, 4 );
+    if( m_RCRateControlMode != RCM_OFF
+        && m_RCNumPasses == 1
+        && m_maxParallelFrames > 2 )
+    {
+      m_maxParallelFrames = 2;
+    }
+  }
 
+  // MCTF
   m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  MCTF_RANGE );
   m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, MCTF_RANGE );
+
   /* rules for input, output and internal bitdepths as per help text */
   if (m_MSBExtendedBitDepth[CH_L  ] == 0)
     m_MSBExtendedBitDepth[CH_L  ] = m_inputBitDepth      [CH_L  ];
@@ -522,25 +542,6 @@ bool VVEncCfg::initCfgParameter()
       }
     }
   }
-
-  // set auto threading mode
-  if( m_numThreads < 0 )
-  {
-    if( m_SourceWidth > 1920 || m_SourceHeight > 1080)
-    {
-      m_numThreads = 6;
-    }
-    else
-    {
-      m_numThreads = 4;
-    }
-  }
-
-  if( m_ensureWppBitEqual < 0 )
-  {
-    m_ensureWppBitEqual = m_numThreads > 0 ? 1 : 0;
-  }
-
 
   if(  m_RCTargetBitrate )
   {
@@ -1480,13 +1481,10 @@ bool VVEncCfg::checkCfgParameter( )
   // do some check and set of parameters next
   //
 
-  confirmParameter( m_AccessUnitDelimiter < 0,  "AccessUnitDelimiter must be >= 0" );
-  confirmParameter( m_vuiParametersPresent < 0, "vuiParametersPresent must be >= 0" );
-  confirmParameter( m_hrdParametersPresent < 0, "hrdParametersPresent must be >= 0" );
-
+  confirmParameter( m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
+  confirmParameter( m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
+  confirmParameter( m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
   confirmParameter( m_RCKeepHierarchicalBit < 0, "RCKeepHierarchicalBit must be >= 0" );
-  confirmParameter( m_ensureWppBitEqual < 0,     "ensureWppBitEqual must be >= 0" );
-
 
   if( m_DepQuantEnabled )
   {
@@ -1678,14 +1676,20 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_confWinTop    % SPS::getWinUnitY(m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_confWinBottom % SPS::getWinUnitY(m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
 
-  confirmParameter( m_ensureWppBitEqual < 0 || m_ensureWppBitEqual > 1,   "WppBitEqual out of range");
-  confirmParameter( m_numThreads > 0 && m_ensureWppBitEqual == 0,         "NumThreads > 0 requires WppBitEqual > 0");
-  confirmParameter( m_maxParallelFrames < -1,                             "Max parallel frames out of range" );
-  confirmParameter( m_maxParallelFrames > 0 && m_numThreads == 0,         "For frame parallel processing NumThreads > 0 is required" );
-  confirmParameter( m_maxParallelFrames > m_InputQueueSize,               "Max parallel frames should be less than size of input queue" );
+  confirmParameter( m_numThreads < 0,                                               "NumThreads out of range" );
+  confirmParameter( m_ensureWppBitEqual < 0       || m_ensureWppBitEqual > 1,       "WppBitEqual out of range (0,1)");
+  confirmParameter( m_useAMaxBT < 0               || m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
+  confirmParameter( m_cabacInitPresent < 0        || m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
+  confirmParameter( m_alfTempPred < 0             || m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
+  confirmParameter( m_saoEncodingRate < 0.0       || m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
+  confirmParameter( m_saoEncodingRateChroma < 0.0 || m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
+  confirmParameter( m_maxParallelFrames < 0,                                        "MaxParallelFrames out of range" );
+
+  confirmParameter( m_numThreads > 0 && m_ensureWppBitEqual == 0, "NumThreads > 0 requires WppBitEqual > 0");
 
   if( m_maxParallelFrames )
   {
+    confirmParameter( m_numThreads == 0,       "For frame parallel processing NumThreads > 0 is required" );
     confirmParameter( m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
     confirmParameter( m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
     confirmParameter( m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
@@ -1693,6 +1697,7 @@ bool VVEncCfg::checkCfgParameter( )
 #if ENABLE_TRACING
     confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
+    confirmParameter( m_maxParallelFrames > m_InputQueueSize, "Max parallel frames should be less than size of input queue" );
   }
 
   confirmParameter(((m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
@@ -2032,7 +2037,6 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_bUseHADME                     = true;
   m_useRDOQTS                     = true;
   m_useSelectiveRDOQ              = false;
-  m_cabacInitPresent              = true;
   m_fastQtBtEnc                   = true;
   m_fastInterSearchMode           = FASTINTERSEARCH_MODE1;
   m_motionEstimationSearchMethod  = MESEARCH_DIAMOND_FAST;
@@ -2097,7 +2101,6 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_contentBasedFastQtbt          = 1;
   m_usePbIntraFast                = 1;
   m_useFastMrg                    = 2;
-  m_useAMaxBT                     = 1;
   m_useFastMIP                    = 4;
   m_fastLocalDualTreeMode         = 1;
   m_fastSubPel                    = 1;
