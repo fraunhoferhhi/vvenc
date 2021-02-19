@@ -2795,14 +2795,12 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
       {
         for( int l = 0; l < k; l++ )
         {
-          // NOTE: Diagnostic is disabled due to a GCC bug (7.4.0).
-          //       GCC is trying to optimize the loop and complains about the possible exceeding of array bounds
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && GCC_VERSION_AT_LEAST(7,3)
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
           alfCovariance[classIdx].E[0][0][k][l] = alfCovariance[classIdx].E[0][0][l][k];
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && GCC_VERSION_AT_LEAST(7,3)
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
 #pragma GCC diagnostic pop
 #endif
         }
