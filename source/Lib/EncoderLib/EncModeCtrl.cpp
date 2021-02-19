@@ -899,7 +899,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
         cuECtx.interHad = distParam.distFunc( distParam );
       }
     }
-#if SPEED_INTRAT
     if (m_pcEncCfg->m_FastIntraTools)
     {
       if (relatedCU.relatedCuIsValid)
@@ -912,7 +911,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
         cuECtx.isIntra = relatedCU.isIntra;
       }
     }
-#endif
   }
   else if( isModeInter( encTestmode ) )
   {
@@ -993,7 +991,6 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
   else if( CU::isIntra( bestCU ) )
   {
     relatedCU.isIntra     = true;
-#if SPEED_INTRAT
     if (m_pcEncCfg->m_FastIntraTools)
     {
       if (cuECtx.bestCS->cost < relatedCU.bestCost)
@@ -1006,7 +1003,6 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
         relatedCU.relatedCuIsValid = true;
       }
     }
-#endif
   }
   cuECtx.isBestNoSplitSkip = bestCU.skip;
 }

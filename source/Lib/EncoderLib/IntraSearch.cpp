@@ -480,32 +480,20 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   {
     int numTotalPartsHor = (int)width >> floorLog2(CU::getISPSplitDim(width, height, TU_1D_VERT_SPLIT));
     int numTotalPartsVer = (int)height >> floorLog2(CU::getISPSplitDim(width, height, TU_1D_HORZ_SPLIT));
-#if SPEED_INTRAT
     m_ispTestedModes[0].init(numTotalPartsHor, numTotalPartsVer, 0);
-#else
-    m_ispTestedModes[0].init(numTotalPartsHor, numTotalPartsVer);
-#endif
     // the total number of subpartitions is modified to take into account the cases where LFNST cannot be combined with
     // ISP due to size restrictions
     numTotalPartsHor = sps.LFNST && CU::canUseLfnstWithISP(cu.Y(), HOR_INTRA_SUBPARTITIONS) ? numTotalPartsHor : 0;
     numTotalPartsVer = sps.LFNST && CU::canUseLfnstWithISP(cu.Y(), VER_INTRA_SUBPARTITIONS) ? numTotalPartsVer : 0;
     for (int j = 1; j < NUM_LFNST_NUM_PER_SET; j++)
     {
-#if SPEED_INTRAT
       m_ispTestedModes[j].init(numTotalPartsHor, numTotalPartsVer, 0);
-#else
-      m_ispTestedModes[j].init(numTotalPartsHor, numTotalPartsVer);
-#endif
     }
     testISP = m_ispTestedModes[0].numTotalParts[0];
   }
   else
   {
-#if SPEED_INTRAT
     m_ispTestedModes[0].init(0, 0, 0);
-#else
-    m_ispTestedModes[0].init(0, 0);
-#endif
   }
 
   xEstimateLumaRdModeList(numModesForFullRD, RdModeList, HadModeList, CandCostList, CandHadList, cu, testMip);
@@ -565,12 +553,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   csBest->initStructData();
 
   int   bestLfnstIdx  = 0;
-#if SCC_MCTF
   const bool useBDPCM = cs.picture->useScBDPCM;
-  int   NumBDPCMCand = (useBDPCM && sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType))) ? 2 : 0;
-#else
-  int   NumBDPCMCand  = (cs.picture->useSC && sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType))) ? 2 : 0;
-#endif
+  int   NumBDPCMCand  = (useBDPCM && sps.BDPCM && CU::bdpcmAllowed(cu, ComponentID(partitioner.chType))) ? 2 : 0;
   int   bestbdpcmMode = 0;
   int   bestISP       = 0;
   int   bestMrl       = 0;
@@ -579,7 +563,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   bool  useISPlfnst   = testISP && sps.LFNST;
   bool  noLFNST_ts    = false;
   double bestCostIsp[2] = { MAX_DOUBLE, MAX_DOUBLE };
-#if SPEED_INTRAT
   bool disableMTS = false;
   bool disableLFNST = false;
   bool disableDCT2test = false;
@@ -600,7 +583,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
       testISP = false;
     }
   }
-#endif
 
   for (int mode_cur = 0; mode_cur < EndMode + NumBDPCMCand; mode_cur++)
   {
@@ -628,16 +610,12 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     {
       xSpeedUpISP(1, testISP, mode, noISP, endISP, cu, RdModeList, bestPUMode, bestISP, bestLfnstIdx);
     }
-#if SPEED_INTRAT
     int startISP = 0;
     if (disableDCT2test && mode && bestISP)
     {
       startISP = endISP ? 1 : 0;
     }
     for (int ispM = startISP; ispM <= endISP; ispM++)
-#else
-    for (int ispM = 0; ispM <= endISP; ispM++)
-#endif
     {
       if (ispM && (ispM == noISP))
       {
@@ -664,12 +642,10 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
       {
         continue;
       }
-#if SPEED_INTRAT
       if (m_pcEncCfg->m_FastIntraTools && (cu.ispMode || sps.LFNST || sps.MTS))
       {
         m_ispTestedModes[0].intraWasTested = true;
       }
-#endif
       CHECK(cu.mipFlag && cu.multiRefIdx, "Error: combination of MIP and MRL not supported");
       CHECK(cu.multiRefIdx && (cu.intraDir[0] == PLANAR_IDX), "Error: combination of MRL and Planar mode not supported");
       CHECK(cu.ispMode && cu.mipFlag, "Error: combination of ISP and MIP not supported");
@@ -677,13 +653,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
       // determine residual for partition
       cs.initSubStructure(*csTemp, partitioner.chType, cs.area, true);
-#if SPEED_INTRAT
       int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0)) || disableLFNST) ? -mode : mode;
       xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP, disableMTS);
-#else
-      int doISP = (((cu.ispMode == 0) && noLFNST) || (useISPlfnst && mode && cu.ispMode && (bestLfnstIdx == 0))) ?-mode :mode;
-      xIntraCodingLumaQT(*csTemp, partitioner, m_SortedPelUnitBufs->getBufFromSortedList(mode), bestCost, doISP);
-#endif
 
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraCost T [x=%d,y=%d,w=%d,h=%d] %f (%d,%d,%d,%d,%d,%d) \n", cu.blocks[0].x,
         cu.blocks[0].y, width, height, csTemp->cost, testMode.modeId, testMode.ispMod,
@@ -739,7 +710,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     }
   } // Mode loop
 
-#if SPEED_INTRAT 
   if (m_pcEncCfg->m_FastIntraTools && (sps.ISP|| sps.LFNST || sps.MTS))
   {
     int bestMode = csBest->getTU(partitioner.chType)->mtsIdx[COMP_Y] ? 4 : 0;
@@ -747,7 +717,6 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
     bestMode |= bestISP ? 1 : 0;
     m_ispTestedModes[0].bestIntraMode = bestMode;
   }
-#endif
   cu.ispMode = bestISP;
   if (validReturn)
   {
@@ -785,9 +754,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
   PartSplit ispType     = lumaUsesISP ? CU::getISPType(cu, COMP_Y) : TU_NO_ISP;
   double bestCostSoFar  = maxCostAllowed;
   const uint32_t numberValidComponents = getNumberValidComponents( cu.chromaFormat );
-#if SCC_MCTF
-  const bool useBDPCM = cs.picture->useScBDPCM;
-#endif
+  const bool useBDPCM   = cs.picture->useScBDPCM;
 
   uint32_t   uiBestMode = 0;
   Distortion uiBestDist = 0;
@@ -938,13 +905,8 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
     // save the dist
     Distortion baseDist = cs.dist;
     int32_t bestbdpcmMode = 0;
-#if SCC_MCTF
-    uint32_t numbdpcmModes = ( useBDPCM && CU::bdpcmAllowed(cu, COMP_Cb) &&
-      ((partitioner.chType == CH_C) || (cu.ispMode == 0 && cu.lfnstIdx == 0 && cu.firstTU->mtsIdx[COMP_Y] == MTS_SKIP))) ? 2 : 0;
-#else
-    uint32_t numbdpcmModes = (cs.picture->useSC && CU::bdpcmAllowed(cu, COMP_Cb) && 
-                             ((partitioner.chType == CH_C) || (cu.ispMode == 0  && cu.lfnstIdx == 0 && cu.firstTU->mtsIdx[COMP_Y] == MTS_SKIP) )) ? 2 : 0;
-#endif
+    uint32_t numbdpcmModes = ( useBDPCM && CU::bdpcmAllowed(cu, COMP_Cb)
+        && ((partitioner.chType == CH_C) || (cu.ispMode == 0 && cu.lfnstIdx == 0 && cu.firstTU->mtsIdx[COMP_Y] == MTS_SKIP))) ? 2 : 0;
     for (int mode_cur = uiMinMode; mode_cur < (int)(uiMaxMode + numbdpcmModes); mode_cur++)
     {
       int mode = mode_cur;
@@ -1564,11 +1526,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
 }
 
-#if SPEED_INTRAT
 void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode, bool disableMTS)
-#else
-void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partitioner, PelUnitBuf* predBuf, const double bestCostSoFar, int numMode)
-#endif
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 0, g_timeProfiler, P_INTRA_RD_SEARCH_LUMA, &cs, partitioner.chType );
   const UnitArea& currArea  = partitioner.currArea();
@@ -1577,20 +1535,14 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
   uint32_t   numSig         = 0;
   const SPS &sps            = *cs.sps;
   CodingUnit &cu            = *cs.cus[0];
-#if SPEED_INTRAT
   bool mtsAllowed = (numMode < 0) || disableMTS ? false : CU::isMTSAllowed(cu, COMP_Y);
-#else
-  bool mtsAllowed           = CU::isMTSAllowed(cu, COMP_Y);
-#endif
   uint64_t singleFracBits   = 0;
   bool   splitCbfLumaSum    = false;
   double bestCostForISP     = bestCostSoFar;
   double dSingleCost        = MAX_DOUBLE;
   int endLfnstIdx           = (partitioner.isSepTree(cs) && partitioner.chType == CH_C && (currArea.lwidth() < 8 || currArea.lheight() < 8))
                            || (currArea.lwidth() > sps.getMaxTbSize() || currArea.lheight() > sps.getMaxTbSize()) || !sps.LFNST || (numMode < 0) ? 0 : 2;
-#if SCC_MCTF
   const bool useTS          = cs.picture->useScTS;
-#endif
   numMode                   = (numMode < 0) ? -numMode : numMode;
 
   if (cu.mipFlag && !allowLfnstWithMip(cu.lumaSize()))
@@ -1616,15 +1568,8 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
   bool checkTransformSkip = sps.transformSkip;
 
   SizeType transformSkipMaxSize = 1 << sps.log2MaxTransformSkipBlockSize;
-#if SCC_MCTF
   bool tsAllowed = useTS  && cu.cs->sps->transformSkip && (!cu.ispMode) && (!cu.bdpcmM[CH_L]) && (!cu.sbtInfo);
-#else
-  bool tsAllowed = cu.cs->sps->transformSkip && (!cu.ispMode) && (!cu.bdpcmM[CH_L]) &&(!cu.sbtInfo);
-#endif
   tsAllowed &= cu.blocks[COMP_Y].width <= transformSkipMaxSize && cu.blocks[COMP_Y].height <= transformSkipMaxSize;
-#if !SCC_MCTF
-  tsAllowed &= cs.picture->useSC;
-#endif
   if (tsAllowed)
   {
     EndMTS += 1;
@@ -2075,9 +2020,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
   const CodingUnit& cu  = *cs.getCU( currArea.chromaPos(), CH_C, TREE_D );
   ChromaCbfs cbfs(false);
   uint32_t   currDepth = partitioner.currTrDepth;
-#if SCC_MCTF
   const bool useTS = cs.picture->useScTS;
-#endif
   if (currDepth == currTU.depth)
   {
     if (!currArea.Cb().valid() || !currArea.Cr().valid())
@@ -2252,18 +2195,11 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         double     dSingleCost = MAX_DOUBLE;
         Distortion singleDistCTmp = 0;
         double     singleCostTmp = 0;
-#if SCC_MCTF
         bool tsAllowed = useTS && TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx && !cu.bdpcmM[CH_C];
-#else
-        bool tsAllowed = TU::isTSAllowed(currTU, compID) && m_pcEncCfg->m_useChromaTS && !currTU.cu->lfnstIdx && !cu.bdpcmM[CH_C];
-#endif
         if ((partitioner.chType == CH_L) && (!ts_used))
         {
           tsAllowed = false;
         }
-#if !SCC_MCTF
-        tsAllowed &= cs.picture->useSC;
-#endif
         uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests       
         std::vector<TrMode> trModes;
         if (nNumTransformCands > 1)
@@ -2481,18 +2417,11 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
           currTU.jointCbCr = (uint8_t)cbfMask;
           ComponentID codeCompId = ((currTU.jointCbCr >> 1) ? COMP_Cb : COMP_Cr);
           ComponentID otherCompId = ((codeCompId == COMP_Cb) ? COMP_Cr : COMP_Cb);
-#if SCC_MCTF
           bool tsAllowed = useTS && TU::isTSAllowed(currTU, codeCompId) && (m_pcEncCfg->m_useChromaTS) && !currTU.cu->lfnstIdx && !cu.bdpcmM[CH_C];
-#else
-          bool tsAllowed = TU::isTSAllowed(currTU, codeCompId) && (m_pcEncCfg->m_useChromaTS) && !currTU.cu->lfnstIdx && !cu.bdpcmM[CH_C];
-#endif
           if ((partitioner.chType == CH_L)&& tsAllowed && (currTU.mtsIdx[COMP_Y] != MTS_SKIP))
           {
             tsAllowed = false;
           }
-#if !SCC_MCTF
-          tsAllowed &= cs.picture->useSC;
-#endif
           if (!tsAllowed)
           {
             checkTSOnly = false;
@@ -3055,7 +2984,7 @@ int IntraSearch::xSpeedUpISP(int speed, bool& testISP, int mode, int& noISP, int
   }
   return 0;
 }
-#if SPEED_INTRAT
+
 void IntraSearch::xSpeedUpIntra(double bestcost, int& EndMode, int& speedIntra, CodingUnit& cu)
 {
   int bestIdxbefore = m_ispTestedModes[0].bestIntraMode;
@@ -3101,7 +3030,6 @@ void IntraSearch::xSpeedUpIntra(double bestcost, int& EndMode, int& speedIntra, 
     }
   }
 }
-#endif
 
 } // namespace vvenc
 
