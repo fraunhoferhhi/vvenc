@@ -3576,9 +3576,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   const uint32_t numTBlocks    = getNumberValidTBlocks   ( *cs.pcv );
   CodingUnit& cu               = *cs.getCU(partitioner.chType, partitioner.treeType);
   const unsigned currDepth = partitioner.currTrDepth;
-#if SCC_MCTF
   const bool useTS = cs.picture->useScTS;
-#endif
 
   bool bCheckFull  = !partitioner.canSplit( TU_MAX_TR_SPLIT, cs );
   if( cu.sbtInfo && partitioner.canSplit( CU::getSbtTuSplit( cu.sbtInfo ), cs ) )
@@ -3651,18 +3649,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       {
         continue;
       }
-#if SCC_MCTF
       bool tsAllowed = useTS && TU::isTSAllowed(tu, compID) && (isLuma(compID) || (isChroma(compID) && m_pcEncCfg->m_useChromaTS));
-#else
-      bool tsAllowed = TU::isTSAllowed(tu, compID) && (isLuma(compID) || (isChroma(compID) && m_pcEncCfg->m_useChromaTS));
-#endif
       if (isChroma(compID) && tsAllowed && (tu.mtsIdx[COMP_Y] != MTS_SKIP))
       {
         tsAllowed = false;
       }
-#if !SCC_MCTF
-      tsAllowed &= cs.picture->useSC;
-#endif
       uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests
       std::vector<TrMode> trModes;
 
@@ -3897,18 +3888,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       {
         ComponentID codeCompId = (cbfMask >> 1 ? COMP_Cb : COMP_Cr);
         ComponentID otherCompId = (codeCompId == COMP_Cr ? COMP_Cb : COMP_Cr);
-#if SCC_MCTF
         bool tsAllowed = useTS && TU::isTSAllowed(tu, codeCompId) && (m_pcEncCfg->m_useChromaTS);
-#else
-        bool        tsAllowed = TU::isTSAllowed(tu, codeCompId) && (m_pcEncCfg->m_useChromaTS);
-#endif
         if (tsAllowed && (tu.mtsIdx[COMP_Y] != MTS_SKIP))
         {
           tsAllowed = false;
         }
-#if !SCC_MCTF
-        tsAllowed &= cs.picture->useSC;
-#endif
         if (!tsAllowed)
         {
           checkTSOnly = false;

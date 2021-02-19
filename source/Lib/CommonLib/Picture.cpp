@@ -179,13 +179,9 @@ Picture::Picture()
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
     , picInitialQP      ( 0 )
-#if SCC_MCTF
     , useScMCTF         ( false )
     , useScTS           ( false )
     , useScBDPCM        ( false )
-#else
-    , useSC             ( 0 )
-#endif
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )

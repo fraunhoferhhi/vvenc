@@ -433,11 +433,7 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
       }
 
       xInitPicture( *pic, m_numPicsRcvd, pps, sps, m_cVPS, m_cDCI );
-#if SCC_MCTF
       xDetectScreenC(*pic, pic->getOrigBuf());
-#else
-      xDetectScreenC(*pic, pic->getOrigBuf(), m_cEncCfg.m_TS);
-#endif
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
     }
@@ -1282,7 +1278,6 @@ void EncLib::xInitHrdParameters(SPS &sps)
   }
 }
 
-#if SCC_MCTF
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
 {
   bool useScMCTF = false;
@@ -1290,29 +1285,13 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
 
   if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_MCTF == 2)
   {
-#else
-void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
-{
-  if (useTS < 2)
-  {
-    pic.useSC = useTS;
-  }
-  else
-  {
-#endif
     int SIZE_BL = 4;
-#if SCC_MCTF
     int K_SC = 25;
-#else
-    int K_SC = 5;
-    int TH_SC = 6;
-#endif
     const Pel* piSrc = yuvOrgBuf.Y().buf;
     uint32_t   uiStride = yuvOrgBuf.Y().stride;
     uint32_t   uiWidth = yuvOrgBuf.Y().width;
     uint32_t   uiHeight = yuvOrgBuf.Y().height;
     int size = SIZE_BL;
-#if SCC_MCTF
     unsigned   hh, ww;
     int SizeS = SIZE_BL << 1;
     int sR[4] = { 0,0,0,0 };
@@ -1333,14 +1312,6 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
         {
           for (i = ww; (i < ww + SizeS) && (i < uiWidth); i++)
           {
-#else
-    unsigned   i, j;
-    std::vector<int> Vall;
-    for (j = 0; j < uiHeight;)
-    {
-      for (i = 0; i < uiWidth;)
-      {
-#endif
             int sum = 0;
             int Mit = 0;
             int V = 0;
@@ -1364,17 +1335,12 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
             }
             // Variance in Block (SIZE_BL*SIZE_BL)
             V = V / sizeEnd;
-#if SCC_MCTF
             Var[n] = V;
             n++;
-#else
-            Vall.push_back(V);
-#endif
             i += size;
           }
           j += size;
         }
-#if SCC_MCTF
         for (int i = 0; i < 2; i++)
         {
           if (Var[i] == Var[i + 2])
@@ -1390,9 +1356,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
       }
       hh += SizeS;
     }
-#endif
     int s = 0;
-#if SCC_MCTF
     useScMCTF = false; // for SCC no MCTF
     for (int r = 0; r < 4; r++)
     {
@@ -1403,32 +1367,10 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf, int useTS)
       }
     }
     useScTools = ((s * 100 / AmountBlock) > K_SC);
-#else
-    for (auto it = Vall.begin(); it != Vall.end(); ++it)
-    {
-      if (*it < TH_SC)
-      {
-        s++;
-      }
-    }
-    if (s > (Vall.size() / K_SC))
-    {
-      pic.useSC = true;
-    }
-    else
-    {
-      pic.useSC = false;
-    }
-    Vall.clear();
-  }
-#endif
-
-#if SCC_MCTF
   }
   pic.useScTS    = m_cEncCfg.m_TS == 1       || (m_cEncCfg.m_TS == 2 && useScTools);
   pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1 || (m_cEncCfg.m_useBDPCM == 2 && useScTools);
   pic.useScMCTF  = m_cEncCfg.m_MCTF == 1     || (m_cEncCfg.m_MCTF == 2 && useScMCTF);
-#endif
 }
 
 } // namespace vvenc

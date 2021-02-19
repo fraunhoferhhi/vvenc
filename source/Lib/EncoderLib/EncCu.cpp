@@ -1315,7 +1315,7 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   cu.qp               = encTestMode.qp;
   cu.ispMode          = NOT_INTRA_SUBPARTITIONS;
   cu.initPuData();
-#if SPEED_INTRAT
+
   m_cIntraSearch.m_ispTestedModes[0].init(0, 0, 1);
   if (m_pcEncCfg->m_FastIntraTools)
   {
@@ -1346,7 +1346,6 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
       }
     }
   }
-#endif
 
   tempCS->interHad    = m_modeCtrl.comprCUCtx->interHad;
   double maxCostAllowedForChroma = MAX_DOUBLE;
@@ -1360,7 +1359,6 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
     {
       m_cIntraSearch.estIntraPredLumaQT(cu, partitioner);
     }
-#if SPEED_INTRAT
     if (m_pcEncCfg->m_FastIntraTools)
     {
       m_modeCtrl.comprCUCtx->bestIntraMode = m_cIntraSearch.m_ispTestedModes[0].bestIntraMode;
@@ -1369,7 +1367,6 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
         m_modeCtrl.comprCUCtx->intraWasTested = m_cIntraSearch.m_ispTestedModes[0].intraWasTested;
       }
     }
-#endif
 
     if( !partitioner.isSepTree( *tempCS ) )
     {

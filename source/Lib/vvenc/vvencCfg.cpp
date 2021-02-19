@@ -1585,27 +1585,25 @@ bool VVEncCfg::checkCfgParameter( )
     confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
     confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
   }
-  confirmParameter( m_EDO && m_bLoopFilterDisable,          "no EDO support with LoopFilter disabled" );
-  confirmParameter( m_EDO < 0 || m_EDO > 2,                 "EDO out of range [0..2]" );
-  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,   "TMVPMode out of range [0..2]" );
-  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,     "AMVR/IMV out of range [0..7]" );
-  confirmParameter( m_Affine < 0 || m_Affine > 2,           "Affine out of range [0..2]" );
-  confirmParameter( m_MMVD < 0 || m_MMVD > 4,               "MMVD out of range [0..4]" );
-  confirmParameter( m_SMVD < 0 || m_SMVD > 3,               "SMVD out of range [0..3]" );
-  confirmParameter( m_Geo  < 0 || m_Geo  > 3,               "Geo out of range [0..3]" );
-  confirmParameter( m_CIIP < 0 || m_CIIP > 3,               "CIIP out of range [0..3]" );
-  confirmParameter( m_SBT  < 0 || m_SBT  > 3,               "SBT out of range [0..3]" );
-  confirmParameter( m_LFNST< 0 || m_LFNST> 3,               "LFNST out of range [0..3]" );
-  confirmParameter( m_MCTF < 0 || m_MCTF > 2,               "MCTF out of range [0..2]" );
-  confirmParameter( m_ISP < 0 || m_ISP > 3,                 "ISP out of range [0..3]" );
-  confirmParameter(m_TS < 0 || m_TS > 2,                    "TS out of range [0..2]" );
-  confirmParameter(m_TSsize < 2 || m_TSsize > 5,            "TSsize out of range [2..5]" );
-  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,        "BDPCM out of range [0..2]");
-  confirmParameter(m_useBDPCM  && m_TS==0,                  "BDPCM cannot be used when transform skip is disabled" );
-  confirmParameter(m_useBDPCM==1  && m_TS==2,               "BDPCM cannot be permanently used when transform skip is auto" );
-#if SPEED_INTRAT
+  confirmParameter( m_EDO && m_bLoopFilterDisable,             "no EDO support with LoopFilter disabled" );
+  confirmParameter( m_EDO < 0 || m_EDO > 2,                    "EDO out of range [0..2]" );
+  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
+  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,        "AMVR/IMV out of range [0..7]" );
+  confirmParameter( m_Affine < 0 || m_Affine > 2,              "Affine out of range [0..2]" );
+  confirmParameter( m_MMVD < 0 || m_MMVD > 4,                  "MMVD out of range [0..4]" );
+  confirmParameter( m_SMVD < 0 || m_SMVD > 3,                  "SMVD out of range [0..3]" );
+  confirmParameter( m_Geo  < 0 || m_Geo  > 3,                  "Geo out of range [0..3]" );
+  confirmParameter( m_CIIP < 0 || m_CIIP > 3,                  "CIIP out of range [0..3]" );
+  confirmParameter( m_SBT  < 0 || m_SBT  > 3,                  "SBT out of range [0..3]" );
+  confirmParameter( m_LFNST< 0 || m_LFNST> 3,                  "LFNST out of range [0..3]" );
+  confirmParameter( m_MCTF < 0 || m_MCTF > 2,                  "MCTF out of range [0..2]" );
+  confirmParameter( m_ISP < 0 || m_ISP > 3,                    "ISP out of range [0..3]" );
+  confirmParameter(m_TS < 0 || m_TS > 2,                       "TS out of range [0..2]" );
+  confirmParameter(m_TSsize < 2 || m_TSsize > 5,               "TSsize out of range [2..5]" );
+  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,           "BDPCM out of range [0..2]");
+  confirmParameter(m_useBDPCM  && m_TS==0,                     "BDPCM cannot be used when transform skip is disabled" );
+  confirmParameter(m_useBDPCM==1  && m_TS==2,                  "BDPCM cannot be permanently used when transform skip is auto" );
   confirmParameter(m_FastIntraTools <0 || m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
-#endif
 
   if( m_alf )
   {
@@ -2109,6 +2107,7 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_useFastMIP                    = 4;
   m_fastLocalDualTreeMode         = 1;
   m_fastSubPel                    = 1;
+  m_FastIntraTools                = 0;
 
   switch( preset )
   {
@@ -2648,9 +2647,7 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   {
     css << "FastMIP:" << m_useFastMIP << " ";
   }
-#if SPEED_INTRAT
   css << "FastIntraTools:" << m_FastIntraTools << " ";
-#endif
   css << "FastLocalDualTree:" << m_fastLocalDualTreeMode << " ";
   css << "FastSubPel:" << m_fastSubPel << " ";
   css << "QtbttExtraFast:" << m_qtbttSpeedUp << " ";
