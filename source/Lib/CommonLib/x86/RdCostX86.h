@@ -2058,8 +2058,8 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
     m1[15] = _mm256_sub_epi32( m2[14], m2[15] );
 
     // transpose
-    constexpr int perm_unpacklo_epi128 = ( 0 << 0 ) + ( 2 << 4 );
-    constexpr int perm_unpackhi_epi128 = ( 1 << 0 ) + ( 3 << 4 );
+    #define perm_unpacklo_epi128 ( ( 0 << 0 ) + ( 2 << 4 ) )
+    #define perm_unpackhi_epi128 ( ( 1 << 0 ) + ( 3 << 4 ) )
 
     // 1. 8x8
     m2[0] = _mm256_unpacklo_epi32( m1[0], m1[1] );
@@ -2116,6 +2116,9 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
     m2[5+8] = _mm256_permute2x128_si256( m1[4+8], m1[6+8], perm_unpackhi_epi128 );
     m2[6+8] = _mm256_permute2x128_si256( m1[5+8], m1[7+8], perm_unpacklo_epi128 );
     m2[7+8] = _mm256_permute2x128_si256( m1[5+8], m1[7+8], perm_unpackhi_epi128 );
+    
+    #undef perm_unpacklo_epi128    
+    #undef perm_unpackhi_epi128
 
     // horizontal
     m1[0] = _mm256_add_epi32( m2[0], m2[4] );

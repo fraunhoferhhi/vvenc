@@ -2469,7 +2469,7 @@ void RateCtrl::detectNewScene()
         gopFeature[ counter[ 0 ] ] /= meanFeatureValueInter; // normalize GOP feature values
         if ( counter[ 0 ] > 0 )
         {
-          if ( abs( gopFeature[ counter[ 0 ] ] - gopFeature[ counter[ 0 ] - 1 ] ) > newSceneDetectionTH && it->poc - encRCSeq->gopSize > pocOfLastSceneChange[ 1 ] ) // detect scene cut
+          if ( std::abs( gopFeature[ counter[ 0 ] ] - gopFeature[ counter[ 0 ] - 1 ] ) > newSceneDetectionTH && it->poc - encRCSeq->gopSize > pocOfLastSceneChange[ 1 ] ) // detect scene cut
           {
             it->isNewScene = true;
             pocOfLastSceneChange[ 0 ] = it->poc;
@@ -2482,7 +2482,7 @@ void RateCtrl::detectNewScene()
         gopFeatureIntra[ counter[ 1 ] ] /= meanFeatureValueIntra; // normalize GOP feature values
         if ( counter[ 1 ] > 0 )
         {
-          if ( abs( gopFeatureIntra[ counter[ 1 ] ] - gopFeatureIntra[ counter[ 1 ] - 1 ] ) > newSceneDetectionTHIntra && it->poc - encRCSeq->intraPeriod > pocOfLastSceneChange[ 0 ] ) // detect scene cut
+          if ( std::abs( gopFeatureIntra[ counter[ 1 ] ] - gopFeatureIntra[ counter[ 1 ] - 1 ] ) > newSceneDetectionTHIntra && it->poc - encRCSeq->intraPeriod > pocOfLastSceneChange[ 0 ] ) // detect scene cut
           {
             it->isNewScene = true;
             pocOfLastSceneChange[ 1 ] = it->poc;
@@ -2767,10 +2767,10 @@ static int xCalcHADs8x8_ISlice( const Pel *piOrg, const int iStrideOrg )
   {
     for ( j = 0; j < 8; j++ )
     {
-      iSumHad += abs( m2[ i ][ j ] );
+      iSumHad += std::abs( m2[ i ][ j ] );
     }
   }
-  iSumHad -= abs( m2[ 0 ][ 0 ] );
+  iSumHad -= std::abs( m2[ 0 ][ 0 ] );
   iSumHad = ( iSumHad + 2 ) >> 2;
   return( iSumHad );
 }
