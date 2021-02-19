@@ -629,7 +629,7 @@ bool VVEncCfg::initCfgParameter()
     m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
   if ( m_usePerceptQPATempFiltISlice > 0
-      && ((m_MCTF == 0 && m_RCNumPasses != 2) || m_usePerceptQPA == 0) )
+      && (m_MCTF == 0 || m_usePerceptQPA == 0) )
   {
     m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
   }
@@ -644,12 +644,6 @@ bool VVEncCfg::initCfgParameter()
         && m_PadSourceHeight <= 1280 )
     {
       m_cuQpDeltaSubdiv = 2;
-    }
-    if ( m_usePerceptQPATempFiltISlice
-        && m_RCNumPasses == 2
-        && m_CTUSize == 128)
-    {
-      m_cuQpDeltaSubdiv = 2; // use subdiv. 2 even for UHD with 2-pass rate control
     }
   }
   if (m_sliceChromaQpOffsetPeriodicity < 0)
@@ -1662,6 +1656,7 @@ bool VVEncCfg::checkCfgParameter( )
   }
 
   confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
 
   confirmParameter( m_usePerceptQPA && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
   if ( m_DecodingRefreshType == 2 )

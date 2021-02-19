@@ -312,14 +312,14 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
 // public functions
 
 int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
-                                            int optChromaQPOffset[2] )
+                                            int optChromaQPOffset[2])
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEner[MAX_NUM_COMP] = {0.0, 0.0, 0.0};
   int    savedLumaQP          = -1;
   uint32_t meanLuma           = MAX_UINT;
 
-  if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr ) return -1;
+  if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr) return -1;
 
   const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
@@ -343,7 +343,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       if (savedLumaQP < 0)
       {
-        int averageAdaptedLumaQP = ((encCfg->m_RCRateControlMode > 0) && (encCfg->m_RCRateControlMode < 3) ? Clip3 (0, MAX_QP, sliceQP) :
+        int averageAdaptedLumaQP = ((encCfg->m_RCRateControlMode == RCM_CTU_LEVEL) ? Clip3 (0, MAX_QP, sliceQP) :
                                    Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
                                                                                                                   encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
                                                                                                                   (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth))));
@@ -377,7 +377,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
 int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
                                           std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
-                                          const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr )
+                                          const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerAvg = 0.0;
@@ -419,7 +419,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
     hpEnerAvg /= double (ctuBoundingAddr - ctuStartAddr);
   }
 
-  if ((encCfg->m_RCRateControlMode > 0) && (encCfg->m_RCRateControlMode < 3) && (!useFrameWiseQPA || (savedQP < 0)))
+  if ((encCfg->m_RCRateControlMode == RCM_CTU_LEVEL) && (!useFrameWiseQPA || (savedQP < 0)))
   {
     hpEnerPic = 1.0 / hpEnerAvg;
   }
@@ -475,7 +475,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
         {
           if (ctuRsAddr & 1) ctuRCQPMemory->back() |= (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8) << 4;
           else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
-          if (slice->isIntra() && (adaptedLumaQP > 0))
+          if (adaptedLumaQP > 0)
           {
             adaptedLumaQP--; // this is a first-pass tuning to stabilize rate control
           }
@@ -485,7 +485,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
         ctuPumpRedQP[ctuRsAddr] = 0; // reset QP memory for temporal pumping analysis
       }
-      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && (encCfg->m_RCNumPasses == 2) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
+      if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && !slice->isIntra() && (slice->TLayer == 0) && (ctuRCQPMemory != nullptr) && (adaptedLumaQP < MAX_QP))
       {
         adaptedLumaQP++; // this is a first-pass tuning to stabilize the rate control
       }
@@ -556,14 +556,14 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       }
     } // end CTU-wise loop
 
-    adaptedSliceQP = ((savedQP < 0 || ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
+    adaptedSliceQP = ((savedQP < 0 || ((encCfg->m_usePerceptQPATempFiltISlice == 2) && (slice->isIntra() || slice->TLayer == 0))) && (ctuBoundingAddr > ctuStartAddr)
                       ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
   }
 
   return adaptedSliceQP;
 }
 
-int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea )
+int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerSub = 0.0;
