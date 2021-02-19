@@ -408,11 +408,11 @@ public:
   bool                m_useSelectiveRDOQ                        = false;                                 ///< flag for using selective RDOQ
 
   bool                m_JointCbCrMode                           = false;
-  bool                m_cabacInitPresent                        = true;
+  int                 m_cabacInitPresent                        = -1;
   bool                m_useFastLCTU                             = false;
   bool                m_usePbIntraFast                          = false;
   int                 m_useFastMrg                              = 0;
-  bool                m_useAMaxBT                               = false;
+  int                 m_useAMaxBT                               = -1;
   bool                m_fastQtBtEnc                             = true;
   bool                m_contentBasedFastQtbt                    = false;
   int                 m_fastInterSearchMode                     = FASTINTERSEARCH_AUTO;              ///< Parameter that controls fast encoder settings
@@ -504,8 +504,8 @@ public:
   bool                m_loopFilterAcrossSlicesEnabled           = false;
 
   bool                m_bUseSAO                                 = true;
-  double              m_saoEncodingRate                         = 0.75;                                  ///< When >0 SAO early picture termination is enabled for luma and chroma
-  double              m_saoEncodingRateChroma                   = 0.5;                                   ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
+  double              m_saoEncodingRate                         = -1.0;                                  ///< When >0 SAO early picture termination is enabled for luma and chroma
+  double              m_saoEncodingRateChroma                   = -1.0;                                  ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
   unsigned            m_log2SaoOffsetScale[ MAX_NUM_CH ]        = { 0, 0 };                              ///< n umber of bits for the upward bit shift operation on the decoded SAO offsets
   int                 m_saoOffsetBitShift[ MAX_NUM_CH ]         = { 0, 0 };
 
@@ -553,7 +553,7 @@ public:
   unsigned            m_maxNumAlfAlternativesChroma             = MAX_NUM_ALF_ALTERNATIVES_CHROMA;
   bool                m_ccalf                                   = false;
   int                 m_ccalfQpThreshold                        = 37;
-  bool                m_alfTempPred                             = true;                                  ///> Indicates using of temporal filter data prediction through APS
+  int                 m_alfTempPred                             = -1;                                    ///> Indicates using of temporal filter data prediction through APS
 
   int                 m_MCTF                                    = 0;
   bool                m_MCTFFutureReference                     = true;
@@ -567,7 +567,7 @@ public:
 
   int                 m_fastLocalDualTreeMode                   = 0;
 
-  int                 m_maxParallelFrames                       = 0;
+  int                 m_maxParallelFrames                       = -1;
   int                 m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 
   bool                m_picPartitionFlag                        = false;
