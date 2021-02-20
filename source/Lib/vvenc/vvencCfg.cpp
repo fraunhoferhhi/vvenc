@@ -2109,27 +2109,6 @@ int VVEncCfg::initPreset( PresetMode preset )
   switch( preset )
   {
     case PresetMode::FIRSTPASS:
-      // CTUSize64 QT44MTT00
-      m_CTUSize                   = 64;
-      m_MinQT[ 0 ]                = 4;
-      m_MinQT[ 1 ]                = 4;
-      m_MinQT[ 2 ]                = 2;
-      m_maxMTTDepth               = 0;
-      m_maxMTTDepthI              = 0;
-      m_maxMTTDepthIChroma        = 0;
-
-      m_RDOQ                      = 2;
-      m_SignDataHidingEnabled     = 1;
-
-      m_useBDPCM                  = 2;
-      m_DMVR                      = 1;
-      m_LMChroma                  = 1;
-      m_MTSImplicit               = 1;
-      m_bUseSAO                   = 1;
-      m_TMVPModeId                = 1;
-      m_TS                        = 2;
-      break;
-
     case PresetMode::FASTER:
       // CTUSize64 QT44MTT00
       m_CTUSize                   = 64;
@@ -2182,14 +2161,14 @@ int VVEncCfg::initPreset( PresetMode preset )
       break;
 
     case PresetMode::MEDIUM:
-      // CTUSize128 QT44MTT11
+      // CTUSize128 QT44MTT21
       m_CTUSize                   = 128;
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 8;
       m_MinQT[ 2 ]                = 4;
       m_maxMTTDepth               = 1;
-      m_maxMTTDepthI              = 1;
-      m_maxMTTDepthIChroma        = 1;
+      m_maxMTTDepthI              = 2;
+      m_maxMTTDepthIChroma        = 2;
 
       m_Affine                    = 2;
       m_alf                       = 1;
@@ -2218,6 +2197,8 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_SMVD                      = 3;
       m_TMVPModeId                = 1;
       m_TS                        = 2;
+
+      m_FastIntraTools            = 1;
       break;
 
     case PresetMode::SLOW:
