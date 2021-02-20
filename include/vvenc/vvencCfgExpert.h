@@ -442,7 +442,7 @@ public:
 
   RateControlMode     m_RCRateControlMode                       = RCM_AUTO;       ///< RateControlMode
   int                 m_RCKeepHierarchicalBit                   = -1;
-  bool                m_RCUseLCUSeparateModel                   = false;
+  int                 m_RCUseLCUSeparateModel                   = -1;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;
 
