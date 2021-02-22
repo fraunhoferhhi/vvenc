@@ -1581,7 +1581,7 @@ void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos
     srcStep  = 1;
   }
 
-#if ENABLE_SIMD_OPT 
+#if ENABLE_SIMD_DBLF && defined( TARGET_SIMD_X86 )
   if( offset == 1 )
   {
     _mm_prefetch( (char *) &piSrc[0 * srcStep - 4], _MM_HINT_T0 );

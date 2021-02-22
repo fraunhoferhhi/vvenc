@@ -3994,7 +3994,7 @@ void EncAdaptiveLoopFilter::determineControlIdcValues(CodingStructure &cs, const
   {
     std::copy_n(curFilterEnabled, MAX_NUM_CC_ALF_FILTERS, filterEnabled);
 
-    std::sort(filterIdxCount, filterIdxCount + MAX_NUM_CC_ALF_FILTERS, compareCounts);
+    std::stable_sort(filterIdxCount, filterIdxCount + MAX_NUM_CC_ALF_FILTERS, compareCounts);
 
     int filterIdc = 1;
     ccAlfFilterCount = 0;
