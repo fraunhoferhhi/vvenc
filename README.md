@@ -4,7 +4,7 @@ Versatile Video Coding (VVC) is the most recent international video coding stand
 
 The Fraunhofer Versatile Video Encoder (VVenC) is a fast and efficient "real-world" VVC encoder implementation with the following main features:
 - Easy to use encoder implementation with five predefined quality/speed presets;
-- Perceptual optimization to improve subjective video quality;
+- Perceptual optimization to improve subjective video quality, based on the XPSNR visual model;
 - Frame-level single-pass and two-pass rate control supporting variable bit-rate (VBR) encoding;
 - Expert mode encoder interface available, allowing fine-grained control of the encoding process.
 
@@ -49,7 +49,7 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                       |
 | --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
 | --passes,-p <int>      | 1                                | Set number of rate control passes (1: one-pass rate control, 2: two-pass rate control).              |
-| --qpa <int>            | 2                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
+| --qpa <int>            | 1                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
 | --threads ,-t <int>    | size<=HD: 4 <br> else : 6        | Number of threads (1-N)                                                                              |
 | --hdr <str>            | off                              | Set HDR mode (+SEI messages) + BT.709 or BT.2020 color space (off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020 |
