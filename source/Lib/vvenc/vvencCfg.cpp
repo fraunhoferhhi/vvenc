@@ -218,6 +218,11 @@ bool VVEncCfg::initCfgParameter()
     }
   }
 
+  // rate control
+  if( m_RCRateControlMode == RateControlMode::RCM_AUTO ) m_RCRateControlMode     = m_RCTargetBitrate > 0 ? RateControlMode::RCM_PICTURE_LEVEL : RateControlMode::RCM_OFF;
+  if( m_RCKeepHierarchicalBit < 0 )                      m_RCKeepHierarchicalBit = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 2 : 0;
+  if( m_RCUseLCUSeparateModel < 0 )                      m_RCUseLCUSeparateModel = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 1 : 0;
+
   // threading
   if( m_numThreads < 0 )              m_numThreads            = m_SourceWidth > 832 && m_SourceHeight > 480 ? 8 : 4;
   if( m_ensureWppBitEqual < 0 )       m_ensureWppBitEqual     = m_numThreads ? 1   : 0   ;
@@ -541,30 +546,6 @@ bool VVEncCfg::initCfgParameter()
         m_IntraPeriod = iIDRPeriod + m_GOPSize - iDiff;
       }
     }
-  }
-
-  if(  m_RCTargetBitrate )
-  {
-    if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
-    {
-      m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
-
-      if( m_RCKeepHierarchicalBit < 0 )
-      {
-        m_RCKeepHierarchicalBit = 2;
-      }
-
-      m_RCUseLCUSeparateModel = true;   // must be signalized! TODO
-    }
-  }
-  else if( m_RCRateControlMode == RateControlMode::RCM_AUTO )
-  {
-    m_RCRateControlMode = RateControlMode::RCM_OFF;
-  }
-
-  if( m_RCKeepHierarchicalBit < 0 )
-  {
-    m_RCKeepHierarchicalBit = 0;
   }
 
   //
@@ -1606,10 +1587,11 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
   confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
 
-
-  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2, "Invalid rate control mode. Only the frame-level rate control is currently supported" );
-  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA,          "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1,       "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2,       "Invalid rate control mode. Only the frame-level rate control is currently supported" );
+  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA,                "CTU-level rate control cannot be combined with QPA" );
+  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1,             "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCUseLCUSeparateModel < 0 || m_RCUseLCUSeparateModel > 1, "RCLCUSeparateModel out of range" );
+  confirmParameter( m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL && m_RCUseLCUSeparateModel <= 0,  "If rate control enabled RCLCUSeparateModel has to be enabled too" );
 
   confirmParameter(!((m_level==Level::LEVEL1)
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
@@ -2109,27 +2091,6 @@ int VVEncCfg::initPreset( PresetMode preset )
   switch( preset )
   {
     case PresetMode::FIRSTPASS:
-      // CTUSize64 QT44MTT00
-      m_CTUSize                   = 64;
-      m_MinQT[ 0 ]                = 4;
-      m_MinQT[ 1 ]                = 4;
-      m_MinQT[ 2 ]                = 2;
-      m_maxMTTDepth               = 0;
-      m_maxMTTDepthI              = 0;
-      m_maxMTTDepthIChroma        = 0;
-
-      m_RDOQ                      = 2;
-      m_SignDataHidingEnabled     = 1;
-
-      m_useBDPCM                  = 2;
-      m_DMVR                      = 1;
-      m_LMChroma                  = 1;
-      m_MTSImplicit               = 1;
-      m_bUseSAO                   = 1;
-      m_TMVPModeId                = 1;
-      m_TS                        = 2;
-      break;
-
     case PresetMode::FASTER:
       // CTUSize64 QT44MTT00
       m_CTUSize                   = 64;
@@ -2182,14 +2143,14 @@ int VVEncCfg::initPreset( PresetMode preset )
       break;
 
     case PresetMode::MEDIUM:
-      // CTUSize128 QT44MTT11
+      // CTUSize128 QT44MTT21
       m_CTUSize                   = 128;
       m_MinQT[ 0 ]                = 8;
       m_MinQT[ 1 ]                = 8;
       m_MinQT[ 2 ]                = 4;
       m_maxMTTDepth               = 1;
-      m_maxMTTDepthI              = 1;
-      m_maxMTTDepthIChroma        = 1;
+      m_maxMTTDepthI              = 2;
+      m_maxMTTDepthIChroma        = 2;
 
       m_Affine                    = 2;
       m_alf                       = 1;
@@ -2218,6 +2179,8 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_SMVD                      = 3;
       m_TMVPModeId                = 1;
       m_TS                        = 2;
+
+      m_FastIntraTools            = 1;
       break;
 
     case PresetMode::SLOW:
