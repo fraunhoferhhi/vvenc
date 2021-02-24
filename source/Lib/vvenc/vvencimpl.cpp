@@ -311,7 +311,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
   AccessUnitList cAu;
   try
   {
-    m_pEncLib->encodePicture( bFlush, *pcYUVBuffer, cAu, rbEncodeDone );
+    m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, rbEncodeDone );
   }
   catch( std::exception& e )
   {

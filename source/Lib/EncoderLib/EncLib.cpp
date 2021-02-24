@@ -383,7 +383,7 @@ void EncLib::xSetRCEncCfg( int pass )
 // Public member functions
 // ====================================================================================================================
 
-void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
+void EncLib::encodePicture( bool flush, const YUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
@@ -395,14 +395,15 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
   if ( ! flush )
   {
     CHECK( m_ppsMap.getFirstPS() == nullptr || m_spsMap.getPS( m_ppsMap.getFirstPS()->spsId ) == nullptr, "picture set not initialised" );
+    CHECK( yuvInBuf == nullptr, "no input picture given" );
 
     if ( m_cEncCfg.m_MCTF && m_numPicsRcvd <= 0 && m_MCTF.getNumLeadFrames() < m_cEncCfg.m_MCTFNumLeadFrames )
     {
-      m_MCTF.addLeadFrame( yuvInBuf );
+      m_MCTF.addLeadFrame( *yuvInBuf );
     }
     else if ( m_cEncCfg.m_MCTF && m_cEncCfg.m_framesToBeEncoded > 0 && m_numPicsRcvd >= m_cEncCfg.m_framesToBeEncoded )
     {
-      m_MCTF.addTrailFrame( yuvInBuf );
+      m_MCTF.addTrailFrame( *yuvInBuf );
     }
     else
     {
@@ -411,15 +412,11 @@ void EncLib::encodePicture( bool flush, const YUVBuffer& yuvInBuf, AccessUnitLis
 
       pic = xGetNewPicBuffer( pps, sps );
 
-      copyPadToPelUnitBuf( pic->getOrigBuf(), yuvInBuf, m_cEncCfg.m_internChromaFormat );
-//      PelUnitBuf yuvOrgBuf;
-//      setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_cEncCfg.m_internChromaFormat );
-//
-//      pic->getOrigBuf().copyFrom( yuvOrgBuf );
+      copyPadToPelUnitBuf( pic->getOrigBuf(), *yuvInBuf, m_cEncCfg.m_internChromaFormat );
 
-      if( yuvInBuf.ctsValid )
+      if( yuvInBuf->ctsValid )
       {
-        pic->cts = yuvInBuf.cts;
+        pic->cts = yuvInBuf->cts;
         pic->ctsValid = true;
       }
 
