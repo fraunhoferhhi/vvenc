@@ -331,7 +331,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   slice->sliceQp       = iQP;
   slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen>0;
 
-  if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && (m_pcEncCfg->m_usePerceptQPA == 0) && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
+  if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && (!m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
     // overwrite chroma qp offset for dual tree
     slice->sliceChromaQpDelta[ COMP_Cb ] = m_pcEncCfg->m_chromaCbQpOffsetDualTree;
