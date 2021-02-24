@@ -609,7 +609,7 @@ bool VVEncCfg::initCfgParameter()
     m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
   if ( m_usePerceptQPATempFiltISlice > 0
-      && (m_MCTF == 0 || m_usePerceptQPA == 0) )
+      && (m_MCTF == 0 || !m_usePerceptQPA) )
   {
     m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
   }
@@ -1994,7 +1994,7 @@ int VVEncCfg::initDefault( int width, int height, int framerate, int targetbitra
   m_internalBitDepth[0] = 10;                       // internal bitdepth
 
   m_QP                  = qp;                       // quantization parameter 0-63
-  m_usePerceptQPA       = 1;                        // percepual qpa adaptation, 0 off, 1 on
+  m_usePerceptQPA       = true;                     // perceptual QP adaptation (false: off, true: on)
 
   m_RCTargetBitrate     = targetbitrate;            // target bitrate in bps
 

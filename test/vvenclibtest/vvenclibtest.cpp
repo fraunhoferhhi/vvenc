@@ -144,33 +144,6 @@ int main( int argc, char* argv[] )
 }
 
 
-/*
-void fillEncoderParameters( VVEncParameter& cVVEncParameter )
-{
-  cVVEncParameter.qp               = 32;                         // quantization parameter 0-51
-  cVVEncParameter.width            = 176;                        // luminance width of input picture
-  cVVEncParameter.height           = 144;                        // luminance height of input picture
-  cVVEncParameter.gopSize          = 16;                         // gop size (1: intra only, 16, 32: hierarchical b frames)
-  cVVEncParameter.decodingRefreshType = DRT_CRA;          // intra period refresh type
-  cVVEncParameter.idrPeriod           = 32;                         // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  cVVEncParameter.msgLevel         = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
-  cVVEncParameter.temporalRate     = 60;                         // temporal rate (fps)
-  cVVEncParameter.temporalScale    = 1;                          // temporal scale (fps)
-  cVVEncParameter.ticksPerSecond   = 90000;                      // ticks per second e.g. 90000 for dts generation
-  cVVEncParameter.threadCount      = 0;                          // number of worker threads (should not exceed the number of physical cpu's)
-  cVVEncParameter.quality          = 0;                          // encoding quality (vs speed) 0: faster, 1: fast, 2: medium, 3: slow, 4: slower
-  cVVEncParameter.perceptualQPA    = 2;                          // percepual qpa adaption, 0 off, 1 on for sdr(wpsnr), 2 on for sdr(xpsnr), 3 on for hdr(wpsrn), 4 on for hdr(xpsnr), on for hdr(MeanLuma)
-  cVVEncParameter.inputBitDepth    = 8;                          // 8bit input
-  cVVEncParameter.internalBitDepth = 10;                         // 10bit internal
-  cVVEncParameter.profile          = Profile::MAIN_10;    // profile: use main_10 or main_10_still_picture
-  cVVEncParameter.level            = Level::LEVEL4_1;     // level
-  cVVEncParameter.tier             = Tier::TIER_MAIN;     // tier
-  cVVEncParameter.useAccessUnitDelimiter       = false;
-  cVVEncParameter.useHrdParametersPresent      = false;
-  cVVEncParameter.useBufferingPeriodSEIEnabled = false;
-  cVVEncParameter.usePictureTimingSEIEnabled   = false;
-}
-*/
 void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true )
 {
   rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
@@ -182,7 +155,7 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
 //rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
-  rcEncCfg.m_usePerceptQPA              = 1;                   // percepual qpa adaption, 0 off, 1 on
+  rcEncCfg.m_usePerceptQPA              = true;                // perceptual QP adaptation (false: off, true: on)
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
   rcEncCfg.m_internalBitDepth[0]        = 10;                  // 10bit internal
 
