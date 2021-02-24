@@ -68,8 +68,8 @@ struct AlfCovariance
   static constexpr int MaxAlfNumClippingValues = AdaptiveLoopFilter::MaxAlfNumClippingValues;
   using TE = double[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
   using Ty = double[MAX_NUM_ALF_LUMA_COEFF];
-  using TKE = TE[AdaptiveLoopFilter::MaxAlfNumClippingValues][AdaptiveLoopFilter::MaxAlfNumClippingValues];
-  using TKy = Ty[AdaptiveLoopFilter::MaxAlfNumClippingValues];
+  using TKE = TE**;
+  using TKy = Ty*;
 
   int numCoeff;
   int numBins;
@@ -77,13 +77,24 @@ struct AlfCovariance
   TKE E;
   double pixAcc;
 
-  AlfCovariance() {}
-  ~AlfCovariance() {}
+  AlfCovariance() : numBins( -1 ), y( nullptr ), E( nullptr ) {}
+  ~AlfCovariance() { }
 
   void create( int size, int num_bins )
   {
+    if( y ) destroy();
+
     numCoeff = size;
     numBins = num_bins;
+
+    y = new Ty[numBins];
+    E = new TE*[numBins];
+
+    for( int i = 0; i < numBins; i++ )
+    {
+      E[i] = new TE[numBins];
+    }
+
     // will be done be reset either way
     //std::memset( y, 0, sizeof( y ) );
     //std::memset( E, 0, sizeof( E ) );
@@ -91,25 +102,63 @@ struct AlfCovariance
 
   void destroy()
   {
+    delete[] y;
+    y = nullptr;
+
+    if( E )
+    {
+      for( int i = 0; i < numBins; i++ )
+      {
+        delete[] E[i];
+        E[i] = nullptr;
+      }
+
+      delete[] E;
+      E = nullptr;
+    }
   }
 
   void reset()
   {
     pixAcc = 0;
-    std::memset( y, 0, sizeof( y ) );
-    std::memset( E, 0, sizeof( E ) );
+
+    for( int i = 0; i < numBins; i++ )
+    {
+      for( int j = 0; j < numBins; j++ )
+      {
+        std::memset( E[i][j], 0, sizeof( TE ) );
+      }
+
+      std::memset( y[i], 0, sizeof( Ty ) );
+    }
   }
 
   const AlfCovariance& operator=( const AlfCovariance& src )
   {
+    if( src.numBins != numBins || src.numCoeff != numCoeff )
+    {
+      destroy();
+      create( src.numCoeff, src.numBins );
+    }
+
     numCoeff = src.numCoeff;
     numBins = src.numBins;
-    std::memcpy( E, src.E, sizeof( E ) );
-    std::memcpy( y, src.y, sizeof( y ) );
+
+    for( int i = 0; i < numBins; i++ )
+    {
+      for( int j = 0; j < numBins; j++ )
+      {
+        std::memcpy( E[i][j], src.E[i][j], sizeof( TE ) );
+      }
+
+      std::memcpy( y[i], src.y[i], sizeof( Ty ) );
+    }
+
     pixAcc = src.pixAcc;
 
     return *this;
   }
+
 #if ENABLE_TRACING
   void trace()
   {
@@ -141,12 +190,13 @@ struct AlfCovariance
     }
     DTRACE( g_trace_ctx, D_ALF, "PixAcc=%f\n", pixAcc );
   }
-#endif
 
+#endif
   void add( const AlfCovariance& lhs, const AlfCovariance& rhs )
   {
-    numCoeff = lhs.numCoeff;
-    numBins = lhs.numBins;
+    CHECKD( numCoeff != lhs.numCoeff, "Incompatible covariance matrices!" );
+    CHECKD( numBins  != lhs.numBins,  "Incompatible covariance matrices!" );
+
     for( int b0 = 0; b0 < numBins; b0++ )
     {
       for( int b1 = 0; b1 < numBins; b1++ )
@@ -160,6 +210,7 @@ struct AlfCovariance
         }
       }
     }
+
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -167,6 +218,7 @@ struct AlfCovariance
         y[b][j] = lhs.y[b][j] + rhs.y[b][j];
       }
     }
+
     pixAcc = lhs.pixAcc + rhs.pixAcc;
   }
 
@@ -185,6 +237,7 @@ struct AlfCovariance
         }
       }
     }
+
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -192,6 +245,7 @@ struct AlfCovariance
         y[b][j] += src.y[b][j];
       }
     }
+
     pixAcc += src.pixAcc;
 
     return *this;
@@ -212,6 +266,7 @@ struct AlfCovariance
         }
       }
     }
+
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -219,6 +274,7 @@ struct AlfCovariance
         y[b][j] -= src.y[b][j];
       }
     }
+
     pixAcc -= src.pixAcc;
 
     return *this;
@@ -226,10 +282,10 @@ struct AlfCovariance
 
   void setEyFromClip(const int* clip, TE _E, Ty _y, int size) const
   {
-    for (int k=0; k<size; k++)
+    for( int k = 0; k < size; k++ )
     {
       _y[k] = y[clip[k]][k];
-      for (int l=0; l<size; l++)
+      for( int l = 0; l < size; l++ )
       {
         _E[k][l] = E[clip[k]][clip[l]][k][l];
       }
