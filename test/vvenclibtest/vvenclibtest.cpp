@@ -249,7 +249,7 @@ int testLibParameterRanges()
   vvencParams.m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
   vvencParams.m_RCTargetBitrate = 1;
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { -1,0,3 }, true );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,3 }, true );
   vvencParams.m_RCRateControlMode = RateControlMode::RCM_AUTO;
   vvencParams.m_RCTargetBitrate = 0;
 

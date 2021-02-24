@@ -121,8 +121,6 @@ bool VVEncCfg::initCfgParameter()
   confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
 
   confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
-  confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1,                               "Only single pass encoding supported, when rate control is disabled" );
-  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,                                     "Only one pass or two pass encoding supported" );
 
   if( 0 == m_RCTargetBitrate )
    {
@@ -220,6 +218,7 @@ bool VVEncCfg::initCfgParameter()
 
   // rate control
   if( m_RCRateControlMode == RateControlMode::RCM_AUTO ) m_RCRateControlMode     = m_RCTargetBitrate > 0 ? RateControlMode::RCM_PICTURE_LEVEL : RateControlMode::RCM_OFF;
+  if( m_RCNumPasses < 0 )                                m_RCNumPasses           = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 2 : 1;
   if( m_RCKeepHierarchicalBit < 0 )                      m_RCKeepHierarchicalBit = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 2 : 0;
   if( m_RCUseLCUSeparateModel < 0 )                      m_RCUseLCUSeparateModel = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 1 : 0;
 
@@ -1590,6 +1589,7 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2,       "Invalid rate control mode. Only the frame-level rate control is currently supported" );
   confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA,                "CTU-level rate control cannot be combined with QPA" );
   confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1,             "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,                     "Only one pass or two pass encoding supported" );
   confirmParameter( m_RCUseLCUSeparateModel < 0 || m_RCUseLCUSeparateModel > 1, "RCLCUSeparateModel out of range" );
   confirmParameter( m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL && m_RCUseLCUSeparateModel <= 0,  "If rate control enabled RCLCUSeparateModel has to be enabled too" );
 
