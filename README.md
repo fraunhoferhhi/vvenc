@@ -42,17 +42,17 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --help,-h              | -                                | Show basic help                                                                                      |
 | --input,-i <str>       | -                                | Raw yuv input file                                                                                   |
 | --size,-s <wxh>        | 1920x1080                        | Input file resolution (width x height)                                                               |
-| --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. Also recommended for perceptual QP adaptation modes 2 and 4 (see `--qpa` option below). |
+| --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. Also recommended with perceptual QP adaptation (see `--qpa` option below). |
 | --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
 | --output,-o <str>      | not set                          | Bit-stream output file                                                                               |
-| --preset <str>         | medium                           | Select preset for specific encoding setting (faster, fast, medium, slow, slower)                     |
+| --preset <str>         | medium                           | Preset for specific encoding setting (faster, fast, medium, slow, slower)                            |
 | --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                       |
-| --bitrate <int>        | 0                                | Bitrate for rate control (0 constant QP encoding rate control off, otherwise bits per second). Rate control requires correct framerate. |
-| --passes,-p <int>      | 1                                | Set number of rate control passes (1: one-pass rate control, 2: two-pass rate control).              |
+| --bitrate <int>        | 0                                | Bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits per second). Rate control requires correct `--framerate`. |
+| --passes,-p <int>      | 1                                | Number of rate control passes (1: single-pass rate control, 2: two-pass rate control)                |
 | --qpa <int>            | 1                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
 | --threads ,-t <int>    | size<=HD: 4 <br> else : 6        | Number of threads (1-N)                                                                              |
-| --hdr <str>            | off                              | Set HDR mode (+SEI messages) + BT.709 or BT.2020 color space (off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020 |
+| --hdr <str>            | off                              | HDR mode (+ SEI messages) + BT.709 or BT.2020 color space (off, pq, pq_2020, hlg, hlg_2020)          |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels, the following call will encode the input file with the medium speedup preset:
 
