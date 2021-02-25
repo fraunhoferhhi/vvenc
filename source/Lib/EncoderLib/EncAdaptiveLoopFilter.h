@@ -198,8 +198,9 @@ public:
 #endif
   void add( const AlfCovariance& lhs, const AlfCovariance& rhs )
   {
-    CHECKD( numCoeff     != lhs.numCoeff,      "Incompatible covariance matrices!" );
-    CHECKD( _numBinsAlloc != lhs._numBinsAlloc,  "Incompatible covariance matrices!" );
+    CHECKD( numCoeff      != lhs.numCoeff,      "Incompatible covariance matrices!" );
+    CHECKD( numBins       != lhs.numBins,       "Incompatible covariance matrices!" );
+    CHECKD( _numBinsAlloc != lhs._numBinsAlloc, "Incompatible covariance matrices!" );
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
