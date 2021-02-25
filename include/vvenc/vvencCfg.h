@@ -259,7 +259,7 @@ public:
   bool                m_usePerceptQPA                  = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
 
   int                 m_RCTargetBitrate                = 0;
-  int                 m_RCNumPasses                    = 1;
+  int                 m_RCNumPasses                    = -1;
 
   SegmentMode         m_SegmentMode                    = SEG_OFF;
 
