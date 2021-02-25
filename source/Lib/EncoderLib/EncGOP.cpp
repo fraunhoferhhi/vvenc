@@ -852,6 +852,8 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
     slice->lmChromaCheckDisable = true;
     if( sliceType == B_SLICE )
     {
+      pic.cs->picHeader->disDmvrFlag = true;
+
       xUpdateRPRtmvp( pic.cs->picHeader, slice );
       xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
     }
@@ -1069,7 +1071,6 @@ void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
         slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
     {
       picHeader->disBdofFlag = true;
-      picHeader->disDmvrFlag = true;
       picHeader->disProfFlag = true;
 
       return;
@@ -1082,7 +1083,6 @@ void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
         slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != NAL_UNIT_CODED_SLICE_RASL )
     {
       picHeader->disBdofFlag = true;
-      picHeader->disDmvrFlag = true;
       picHeader->disProfFlag = true;
 
       return;
