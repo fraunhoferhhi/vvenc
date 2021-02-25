@@ -89,7 +89,7 @@ public:
     if( y ) destroy();
 
     numCoeff = size;
-    numBins = _numBinsAlloc = num_bins;
+    numBins  = _numBinsAlloc = num_bins;
 
     y = new Ty[_numBinsAlloc];
     E = new TE*[_numBinsAlloc];
@@ -126,9 +126,9 @@ public:
   {
     pixAcc = 0;
 
-    for( int i = 0; i < numBins; i++ )
+    for( int i = 0; i < _numBinsAlloc; i++ )
     {
-      for( int j = 0; j < numBins; j++ )
+      for( int j = 0; j < _numBinsAlloc; j++ )
       {
         std::memset( E[i][j], 0, sizeof( TE ) );
       }
@@ -139,14 +139,14 @@ public:
 
   const AlfCovariance& operator=( const AlfCovariance& src )
   {
-    if( src.numBins != numBins || src.numCoeff != numCoeff )
+    if( _numBinsAlloc < src.numBins )
     {
       destroy();
       create( src.numCoeff, src.numBins );
     }
 
     numCoeff = src.numCoeff;
-    numBins = src.numBins;
+    numBins  = src.numBins;
 
     for( int i = 0; i < numBins; i++ )
     {
@@ -198,9 +198,14 @@ public:
 #endif
   void add( const AlfCovariance& lhs, const AlfCovariance& rhs )
   {
-    CHECKD( numCoeff      != lhs.numCoeff,      "Incompatible covariance matrices!" );
-    CHECKD( numBins       != lhs.numBins,       "Incompatible covariance matrices!" );
-    CHECKD( _numBinsAlloc != lhs._numBinsAlloc, "Incompatible covariance matrices!" );
+    if( _numBinsAlloc < lhs.numBins )
+    {
+      destroy();
+      create( lhs.numCoeff, lhs.numBins );
+    }
+
+    numCoeff = lhs.numCoeff;
+    numBins  = lhs.numBins;
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
