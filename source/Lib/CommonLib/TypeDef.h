@@ -844,9 +844,9 @@ public:
     }
   }
 
-  void cache( T* vel )
+  void cache( T* el )
   {
-    m_cache.push_back( vel );
+    m_cache.push_back( el );
   }
 
   void cache( std::vector<T*>& vel )
