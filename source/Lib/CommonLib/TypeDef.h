@@ -777,7 +777,7 @@ public:
 
 static constexpr size_t DYN_CACHE_CHUNK_SIZE = 1024;
 
-template<typename T>
+template<typename T, bool chunked = true>
 class dynamic_cache
 {
   std::vector<T*> m_cache;
@@ -812,45 +812,52 @@ public:
     }
     else
     {
-      T* chunk = ( T* ) malloc( DYN_CACHE_CHUNK_SIZE * sizeof( T ) );
-
-      //GCC_WARNING_DISABLE_class_memaccess
-      //memset( chunk, 0, DYN_CACHE_CHUNK_SIZE * sizeof( T ) );
-      //GCC_WARNING_RESET
-
-      m_cacheChunks.push_back( chunk );
-      m_cache.reserve( m_cache.size() + DYN_CACHE_CHUNK_SIZE );
-
-      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      if( chunked )
       {
-        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
-        m_cache.push_back( &chunk[p] );
-      }
+        T* chunk = ( T* ) malloc( DYN_CACHE_CHUNK_SIZE * sizeof( T ) );
 
-      ret = m_cache.back();
-      m_cache.pop_back();
+        //GCC_WARNING_DISABLE_class_memaccess
+        //memset( chunk, 0, DYN_CACHE_CHUNK_SIZE * sizeof( T ) );
+        //GCC_WARNING_RESET
+
+        m_cacheChunks.push_back( chunk );
+        m_cache.reserve( m_cache.size() + DYN_CACHE_CHUNK_SIZE );
+
+        for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+        {
+          //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+          m_cache.push_back( &chunk[p] );
+        }
+
+        ret = m_cache.back();
+        m_cache.pop_back();
+      }
+      else
+      {
+        return new T;
+      }
     }
 
     return ret;
   }
 
-  void defragment()
-  {
-    m_cache.clear();
-
-    for( T* chunk : m_cacheChunks )
-    {
-      //GCC_WARNING_DISABLE_class_memaccess
-      //memset( chunk, 0, DYN_CACHE_CHUNK_SIZE * sizeof( T ) );
-      //GCC_WARNING_RESET
-
-      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
-      {
-        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
-        m_cache.push_back( &chunk[p] );
-      }
-    }
-  }
+  //void defragment()
+  //{
+  //  m_cache.clear();
+  //
+  //  for( T* chunk : m_cacheChunks )
+  //  {
+  //    //GCC_WARNING_DISABLE_class_memaccess
+  //    //memset( chunk, 0, DYN_CACHE_CHUNK_SIZE * sizeof( T ) );
+  //    //GCC_WARNING_RESET
+  //
+  //    for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+  //    {
+  //      //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+  //      m_cache.push_back( &chunk[p] );
+  //    }
+  //  }
+  //}
 
   void cache( T* vel )
   {

@@ -380,7 +380,7 @@ private:
 
 
 
-typedef dynamic_cache<Ctx> CtxCache;
+typedef dynamic_cache<Ctx, false> CtxCache;
 
 class TempCtx
 {
