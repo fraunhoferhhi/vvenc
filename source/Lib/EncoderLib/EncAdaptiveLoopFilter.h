@@ -73,11 +73,15 @@ struct AlfCovariance
 
   int numCoeff;
   int numBins;
+private:
+  int _numBinsAlloc;
+public:
+
   TKy y;
   TKE E;
   double pixAcc;
 
-  AlfCovariance() : numBins( -1 ), y( nullptr ), E( nullptr ) {}
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ) {}
   ~AlfCovariance() { }
 
   void create( int size, int num_bins )
@@ -85,14 +89,14 @@ struct AlfCovariance
     if( y ) destroy();
 
     numCoeff = size;
-    numBins = num_bins;
+    numBins = _numBinsAlloc = num_bins;
 
-    y = new Ty[numBins];
-    E = new TE*[numBins];
+    y = new Ty[_numBinsAlloc];
+    E = new TE*[_numBinsAlloc];
 
-    for( int i = 0; i < numBins; i++ )
+    for( int i = 0; i < _numBinsAlloc; i++ )
     {
-      E[i] = new TE[numBins];
+      E[i] = new TE[_numBinsAlloc];
     }
 
     // will be done be reset either way
@@ -107,7 +111,7 @@ struct AlfCovariance
 
     if( E )
     {
-      for( int i = 0; i < numBins; i++ )
+      for( int i = 0; i < _numBinsAlloc; i++ )
       {
         delete[] E[i];
         E[i] = nullptr;
@@ -194,8 +198,8 @@ struct AlfCovariance
 #endif
   void add( const AlfCovariance& lhs, const AlfCovariance& rhs )
   {
-    CHECKD( numCoeff != lhs.numCoeff, "Incompatible covariance matrices!" );
-    CHECKD( numBins  != lhs.numBins,  "Incompatible covariance matrices!" );
+    CHECKD( numCoeff     != lhs.numCoeff,      "Incompatible covariance matrices!" );
+    CHECKD( _numBinsAlloc != lhs._numBinsAlloc,  "Incompatible covariance matrices!" );
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
