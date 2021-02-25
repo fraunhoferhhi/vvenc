@@ -711,7 +711,7 @@ void EncAdaptiveLoopFilter::destroy()
     if( m_alfCovarianceFrame[channelIdx] )
     {
       ChannelType chType = (ChannelType)channelIdx;
-      int numClasses = channelIdx ? 1 : MAX_NUM_ALF_CLASSES;
+      int numClasses = channelIdx ? MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
       for( int i = 0; i != m_filterShapes[chType].size(); i++ )
       {
         for( int k = 0; k < numClasses; k++ )
