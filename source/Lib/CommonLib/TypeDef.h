@@ -792,9 +792,19 @@ public:
 
   void deleteEntries()
   {
-    for( auto& chunk : m_cacheChunks )
+    if( chunked )
     {
-      free( chunk );
+      for( auto& chunk : m_cacheChunks )
+      {
+        free( chunk );
+      }
+    }
+    else
+    {
+      for( auto el : m_cache )
+      {
+        delete el;
+      }
     }
 
     m_cache.clear();
