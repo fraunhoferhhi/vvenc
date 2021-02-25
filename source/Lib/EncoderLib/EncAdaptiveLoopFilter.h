@@ -73,11 +73,15 @@ struct AlfCovariance
 
   int numCoeff;
   int numBins;
+private:
+  int _numBinsAlloc;
+public:
+
   TKy y;
   TKE E;
   double pixAcc;
 
-  AlfCovariance() : numBins( -1 ), y( nullptr ), E( nullptr ) {}
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ) {}
   ~AlfCovariance() { }
 
   void create( int size, int num_bins )
@@ -85,14 +89,14 @@ struct AlfCovariance
     if( y ) destroy();
 
     numCoeff = size;
-    numBins = num_bins;
+    numBins  = _numBinsAlloc = num_bins;
 
-    y = new Ty[numBins];
-    E = new TE*[numBins];
+    y = new Ty[_numBinsAlloc];
+    E = new TE*[_numBinsAlloc];
 
-    for( int i = 0; i < numBins; i++ )
+    for( int i = 0; i < _numBinsAlloc; i++ )
     {
-      E[i] = new TE[numBins];
+      E[i] = new TE[_numBinsAlloc];
     }
 
     // will be done be reset either way
@@ -107,7 +111,7 @@ struct AlfCovariance
 
     if( E )
     {
-      for( int i = 0; i < numBins; i++ )
+      for( int i = 0; i < _numBinsAlloc; i++ )
       {
         delete[] E[i];
         E[i] = nullptr;
@@ -122,9 +126,9 @@ struct AlfCovariance
   {
     pixAcc = 0;
 
-    for( int i = 0; i < numBins; i++ )
+    for( int i = 0; i < _numBinsAlloc; i++ )
     {
-      for( int j = 0; j < numBins; j++ )
+      for( int j = 0; j < _numBinsAlloc; j++ )
       {
         std::memset( E[i][j], 0, sizeof( TE ) );
       }
@@ -135,14 +139,14 @@ struct AlfCovariance
 
   const AlfCovariance& operator=( const AlfCovariance& src )
   {
-    if( src.numBins != numBins || src.numCoeff != numCoeff )
+    if( _numBinsAlloc < src.numBins )
     {
       destroy();
       create( src.numCoeff, src.numBins );
     }
 
     numCoeff = src.numCoeff;
-    numBins = src.numBins;
+    numBins  = src.numBins;
 
     for( int i = 0; i < numBins; i++ )
     {
@@ -194,8 +198,14 @@ struct AlfCovariance
 #endif
   void add( const AlfCovariance& lhs, const AlfCovariance& rhs )
   {
-    CHECKD( numCoeff != lhs.numCoeff, "Incompatible covariance matrices!" );
-    CHECKD( numBins  != lhs.numBins,  "Incompatible covariance matrices!" );
+    if( _numBinsAlloc < lhs.numBins )
+    {
+      destroy();
+      create( lhs.numCoeff, lhs.numBins );
+    }
+
+    numCoeff = lhs.numCoeff;
+    numBins  = lhs.numBins;
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
