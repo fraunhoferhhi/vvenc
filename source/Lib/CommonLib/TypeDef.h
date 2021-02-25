@@ -774,10 +774,15 @@ public:
 // dynamic cache
 // ---------------------------------------------------------------------------
 
+
+static constexpr size_t DYN_CACHE_CHUNK_SIZE = 512;
+
 template<typename T>
 class dynamic_cache
 {
   std::vector<T*> m_cache;
+  std::vector<T*> m_cacheChunks;
+
 public:
 
   ~dynamic_cache()
@@ -787,13 +792,13 @@ public:
 
   void deleteEntries()
   {
-    for( auto &p : m_cache )
+    for( auto& chunk : m_cacheChunks )
     {
-      delete p;
-      p = nullptr;
+      delete[] chunk;
     }
 
     m_cache.clear();
+    m_cacheChunks.clear();
   }
 
   T* get()
@@ -807,10 +812,36 @@ public:
     }
     else
     {
-      ret = new T;
+      T* chunk = new T[DYN_CACHE_CHUNK_SIZE];
+
+      m_cacheChunks.push_back( chunk );
+      m_cache.reserve( m_cache.size() + DYN_CACHE_CHUNK_SIZE );
+
+      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      {
+        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+        m_cache.push_back( &chunk[p] );
+      }
+
+      ret = m_cache.back();
+      m_cache.pop_back();
     }
 
     return ret;
+  }
+
+  void defragment()
+  {
+    m_cache.clear();
+  
+    for( T* chunk : m_cacheChunks )
+    {
+      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      {
+        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+        m_cache.push_back( &chunk[p] );
+      }
+    }
   }
 
   void cache( T* el )
