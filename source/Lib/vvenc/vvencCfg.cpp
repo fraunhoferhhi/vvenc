@@ -2510,6 +2510,7 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   {
   // verbose output
   css << "CODING TOOL CFG: ";
+  css << "CTU" << m_CTUSize << " QT" << Log2( m_CTUSize / m_MinQT[0] ) << Log2( m_CTUSize / m_MinQT[1] ) << "BTT" << m_maxMTTDepthI << m_maxMTTDepth << " ";
   css << "IBD:" << ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])) << " ";
   css << "CIP:" << m_bUseConstrainedIntraPred << " ";
   css << "SAO:" << (m_bUseSAO ? 1 : 0) << " ";
