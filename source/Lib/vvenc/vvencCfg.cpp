@@ -85,17 +85,17 @@ bool VVEncCfg::initCfgParameter()
   m_confirmFailed = false;
 
   // check for valid base parameter
-  confirmParameter( (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input resolution not set" );
+  confirmParameter(  (m_SourceWidth <= 0 || m_SourceHeight <= 0), "Error: input resolution not set");
 
-  confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16, "InputBitDepth must be at least 8" );
-  confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10, "Input bitdepth must be 8 or 10 bit" );
-  confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10, "Internal bitdepth must be 8 or 10 bit" );
+  confirmParameter( m_inputBitDepth[CH_L] < 8 || m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
+  confirmParameter( m_inputBitDepth[CH_L] != 8 && m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
+  confirmParameter( m_internalBitDepth[0] != 8 && m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
 
-  confirmParameter( m_FrameRate <= 0, "Frame rate must be more than 1" );
-  confirmParameter( m_TicksPerSecond <= 0 || m_TicksPerSecond > 27000000, "TicksPerSecond must be in range from 1 to 27000000" );
+  confirmParameter( m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
+  confirmParameter( m_TicksPerSecond <= 0 || m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
 
-  int temporalRate = m_FrameRate;
-  int temporalScale = 1;
+  int temporalRate   = m_FrameRate;
+  int temporalScale  = 1;
 
   switch( m_FrameRate )
   {
@@ -104,36 +104,36 @@ bool VVEncCfg::initCfgParameter()
   case 59: temporalRate = 60000; temporalScale = 1001; break;
   default: break;
   }
+  
+  confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond * temporalScale) % temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
-  confirmParameter( m_numThreads < -1 || m_numThreads > 256, "Number of threads out of range (-1 <= t <= 256)" );
+  confirmParameter( m_IntraPeriod < 0,                 "IDR period (in frames) must be >= 0");
+  confirmParameter( m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
 
-  confirmParameter( m_IntraPeriod < 0, "IDR period (in frames) must be >= 0" );
-  confirmParameter( m_IntraPeriodSec < 0, "IDR period (in seconds) must be >= 0" );
+  confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  confirmParameter( m_GOPSize > 64,                                                             "GOP size must be <= 64" );
+  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
 
-  confirmParameter( m_GOPSize < 1, "GOP Size must be greater or equal to 1" );
-  confirmParameter( m_GOPSize > 1 && m_GOPSize % 2, "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( m_GOPSize > 1 && m_GOPSize % 2, "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( m_GOPSize > 64, "GOP size must be <= 64" );
-  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32, "GOP size only supporting: 1, 16, 32" );
+  confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
 
-  confirmParameter( m_QP < 0 || m_QP > MAX_QP, "QP exceeds supported range (0 to 63)" );
-
-  confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000, "TargetBitrate must be between 0 - 800000000" );
+  confirmParameter( m_RCTargetBitrate < 0 || m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
 
   if( 0 == m_RCTargetBitrate )
-  {
-    confirmParameter( m_hrdParametersPresent > 0, "hrdParameters present requires rate control" );
-    confirmParameter( m_bufferingPeriodSEIEnabled, "bufferingPeriod SEI enabled requires rate control" );
-    confirmParameter( m_pictureTimingSEIEnabled, "pictureTiming SEI enabled requires rate control" );
-  }
+   {
+     confirmParameter( m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
+     confirmParameter( m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+     confirmParameter( m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+   }
 
-  confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED, "HdrMode must be in the range 0 - 5" );
+  confirmParameter( m_HdrMode < HDR_OFF || m_HdrMode > HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
 
   confirmParameter( m_verbosity < SILENT || m_verbosity > DETAILS, "verbosity is out of range[0..6]" );
 
-  if( m_confirmFailed )
+  if ( m_confirmFailed )
   {
     return m_confirmFailed;
   }
@@ -142,27 +142,27 @@ bool VVEncCfg::initCfgParameter()
   // set a lot of dependent parameters
   //
 
-  if( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = CHROMA_420;
   }
 
   if( m_profile == Profile::PROFILE_AUTO )
   {
-    const int maxBitDepth = std::max( m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat == ChromaFormat::CHROMA_400 ? CH_L : CH_C] );
+    const int maxBitDepth= std::max(m_internalBitDepth[CH_L], m_internalBitDepth[m_internChromaFormat==ChromaFormat::CHROMA_400 ? CH_L : CH_C]);
 
-    if( m_internChromaFormat == ChromaFormat::CHROMA_400 || m_internChromaFormat == ChromaFormat::CHROMA_420 )
+    if (m_internChromaFormat==ChromaFormat::CHROMA_400 || m_internChromaFormat==ChromaFormat::CHROMA_420)
     {
-      if( maxBitDepth <= 10 )
+      if (maxBitDepth<=10)
       {
-        m_profile = Profile::MAIN_10;
+        m_profile=Profile::MAIN_10;
       }
     }
-    else if( m_internChromaFormat == ChromaFormat::CHROMA_422 || m_internChromaFormat == ChromaFormat::CHROMA_444 )
+    else if (m_internChromaFormat==ChromaFormat::CHROMA_422 || m_internChromaFormat==ChromaFormat::CHROMA_444)
     {
-      if( maxBitDepth <= 10 )
+      if (maxBitDepth<=10)
       {
-        m_profile = Profile::MAIN_10_444;
+        m_profile=Profile::MAIN_10_444;
       }
     }
   }
@@ -172,11 +172,11 @@ bool VVEncCfg::initCfgParameter()
     m_level = LevelTierFeatures::getLevelForInput( m_SourceWidth, m_SourceHeight );
   }
 
-  if( m_InputQueueSize <= 0 )
+  if ( m_InputQueueSize <= 0 )
   {
     m_InputQueueSize = m_GOPSize;
 
-    if( m_MCTF )
+    if ( m_MCTF )
     {
       m_InputQueueSize += MCTF_ADD_QUEUE_DELAY;
     }
