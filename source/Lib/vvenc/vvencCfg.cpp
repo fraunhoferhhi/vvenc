@@ -104,12 +104,12 @@ bool VVEncCfg::initCfgParameter()
   case 59: temporalRate = 60000; temporalScale = 1001; break;
   default: break;
   }
-
+  
   confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
-  confirmParameter( m_IntraPeriod < 0,              "IDR period (in frames) must be >= 0");
+  confirmParameter( m_IntraPeriod < 0,                 "IDR period (in frames) must be >= 0");
   confirmParameter( m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
 
   confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
@@ -184,12 +184,20 @@ bool VVEncCfg::initCfgParameter()
 
   if( m_temporalSubsampleRatio )
   {
-    int framesSubsampled = (m_framesToBeEncoded + m_temporalSubsampleRatio - 1 ) / m_temporalSubsampleRatio;
+    int framesSubsampled = (m_framesToBeEncoded + m_temporalSubsampleRatio - 1) / m_temporalSubsampleRatio;
     if( m_framesToBeEncoded != framesSubsampled )
     {
       m_framesToBeEncoded = framesSubsampled;
     }
   }
+
+  m_maxBT[0] = std::min( m_CTUSize, m_maxBT[0] );
+  m_maxBT[1] = std::min( m_CTUSize, m_maxBT[1] );
+  m_maxBT[2] = std::min( m_CTUSize, m_maxBT[2] );
+
+  m_maxTT[0] = std::min( m_CTUSize, m_maxTT[0] );
+  m_maxTT[1] = std::min( m_CTUSize, m_maxTT[1] );
+  m_maxTT[2] = std::min( m_CTUSize, m_maxTT[2] );
 
   // set MCTF Lead/Trail frames
   if( m_SegmentMode != SEG_OFF )
@@ -2502,6 +2510,7 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   {
   // verbose output
   css << "CODING TOOL CFG: ";
+  css << "CTU" << m_CTUSize << " QT" << Log2( m_CTUSize / m_MinQT[0] ) << Log2( m_CTUSize / m_MinQT[1] ) << "BTT" << m_maxMTTDepthI << m_maxMTTDepth << " ";
   css << "IBD:" << ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])) << " ";
   css << "CIP:" << m_bUseConstrainedIntraPred << " ";
   css << "SAO:" << (m_bUseSAO ? 1 : 0) << " ";
