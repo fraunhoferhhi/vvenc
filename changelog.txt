@@ -2,10 +2,10 @@
 tag 0.3.0.0
 
 * new:
-- support for HDR metadata (--hdr off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020)
-  - if using an HDR mode the encoder decision is depening on used mode + metadate is enabled by default (VUI,SEI)
-  - PQ: set vui parameter (transfer characteristics 16(smpte2084))
-  - HLG: set vui parameter (transfer characteristics 1|14(bt709|bt2020-10)) + SEI AlternativeTransferCharacteristics 18
+ - support for HDR metadata (--hdr off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020)
+   - if using an HDR mode the encoder decision is depening on used mode + metadate is enabled by default (VUI,SEI)
+   - PQ: set vui parameter (transfer characteristics 16(smpte2084))
+   - HLG: set vui parameter (transfer characteristics 1|14(bt709|bt2020-10)) + SEI AlternativeTransferCharacteristics 18
  - support for support MasteringDisplayColourVolume (SMPTE ST 2086) and MaxContentLightLevel (HDR10/PQ)
    - MasteringDisplayColourVolume can be set by vector of 10 values:
      x,y,x,y,x,y,x,y,max,min  where: "G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)
@@ -22,27 +22,33 @@ tag 0.3.0.0
      range: 1 <= cll,fall <= 65535
     
 * changes:
-- align usage of vvenc interface for vvencapp and vvencFFapp ( both apps are now using the lib in the same manner)
-- vvencapp is now using the command line parser of the vvencFFapp, 
-  but the command line params haven´t changed to prev. version for legacy support
-- help dialog re-designed, params are now sorted into categories
-
-
-- perceptually motivated QP adaptation (qpa) changed to on/off (mode 0-5 before) and uses XPSNR depending on HDR mode
-  vvencapp: use --qpa  or --qpa 0|1 to enable/disable (enabled by default
-  vvencFFapp:  use -qpa|--PerceptQPA   or -qpa|--PerceptQPA 0|1 to enable/disable (enabled by default
-- Level is set to auto per default. If not set it will be automatically detected by given resolution
+ - align usage of vvenc interface for vvencapp and vvencFFapp (both apps are now using the lib in the same manner)
+ - vvencapp is now using the command line parser of the vvencFFapp, 
+   but the command line params haven´t changed to prev. version for legacy support
+ - help dialog re-designed, params are now sorted into categories
+ 
+ - perceptually motivated QP adaptation (qpa) changed to on/off (mode 0-5 before) and uses XPSNR depending on HDR mode
+   vvencapp: use --qpa  or --qpa 0|1 to enable/disable (enabled by default
+   vvencFFapp:  use -qpa|--PerceptQPA   or -qpa|--PerceptQPA 0|1 to enable/disable (enabled by default
+ - Level is set to auto per default. In this mode it will be automatically detected by given resolution
 
 
 * bugfixes:
+ - #18: setting of max number CABAC-coded coefficients for the floating point scalar RDOQ
  
 
 * libvvenc:
+ - changed preset configuration to reflect current Pareto-Optimal trade-offs. The new presets are much better harmonized between different
+   resolutions and content types.
  - auto config initialization. The configuration to init the vvenc library now only needs required 
-  parameter (width,height,framerate), everything else is set to default config
-  some parameter are set to -1 per default. params set to -1 will be set to default, auto config params:
-  profile,level, threads, aud, vui, hrd, PerceptQPATempFiltIPic, RateControl, KeepHierarchicalBit, WppBitEqual, FEN
- - medium preset is now uses as default (this has quit a big impact on default params in the vvencFFapp)
+   parameter (width, height, framerate), everything else is set to default config
+   some parameter are set to -1 per default. Params set to -1 will be set to default, auto config params:
+   profile, level, threads, aud, vui, hrd, PerceptQPATempFiltIPic, RateControl, KeepHierarchicalBit, WppBitEqual, FEN
+ - medium preset is now used as default (this has quite a big impact on default params in the vvencFFapp)
+ - decreased memory usage
+ - improved multi-threading (now can utilize up to 10 threads for HD and up to 24 for UHD, efficiency depends on preset and other parameters)
+ - added the possibility to generate bitstreams for minimal drift in open-GOP adaptive switching.
+ - various optimizations and speed-ups.
 
 * vvencapp:
  - new parameter     -aud, --accessunitdelimiter [auto] Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); 
@@ -58,9 +64,8 @@ tag 0.3.0.0
  - changed parameter --qpa [on] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
                              as legacy support the previous modes 1-5 are now mapped to on/1
 
-
 * vvencFFapp:
- - new parameter      --MaxParallelFrames [0] Maximum number of frames to be processed in parallel
+ - new parameter     --MaxParallelFrames [0] Maximum number of frames to be processed in parallel
                                      (0:off, >=2: enable parallel frames)
                      --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
                              use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
@@ -114,78 +119,8 @@ tag 0.3.0.0
                                      Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr,
                                      bt709, unknown, empty, fcc, bt470bg, smpte170m, smpte240m, ycgco, bt2020nc,
                                      bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp
-                                     
-  changes parameter due to usage of preset medium as default:
-
-                     ======== Quantization paramters ================
-                     --IntraQPOffset [-3]         Qp offset value for intra slice, typically determined based on GOP size
-                     --LambdaFromQpEnable [1]     Enable flag for derivation of lambda from QP
-                     --QpInValCb [17,22,34,42]    Input coordinates for the QP table for Cb component
-                     --QpOutValCb [17,23,35,39]   Output coordinates for the QP table for Cb component
-                     --MaxCuDQPSubdiv [-1]        Maximum subdiv for CU luma Qp adjustment
-                     ======== Quad-Tree size and depth ================
-                     --MaxMTTDepth [1]            maxMTTDepth
-                     --MaxMTTDepthI [1]           maxMTTDepthI
-                     --MaxMTTDepthISliceL [1]     maxMTTDepthISliceL
-                     --MaxMTTDepthISliceC [1]     maxMTTDepthISliceC
-                     --MaxMTTHierarchyDepth [1]   maxMTTDepth
-                     --MaxMTTHierarchyDepthI [1]  maxMTTDepthI
-                     --MaxMTTHierarchyDepthISliceL [1] maxMTTDepthISliceL
-                     --MaxMTTHierarchyDepthISliceC [1] maxMTTDepthISliceC
-                      ======== Coding tools ================
-                     --ASR [1]                    Adaptive motion search range          
-                     --JointCbCr [1]              Enable joint coding of chroma residuals (0:off, 1:on)
-                     --LCTUFast [1]               Fast methods for large CTU
-                     --PBIntraFast [1]            Fast assertion if the intra mode is probable
-                     --FastMrg [2]                Fast methods for inter merge
-                     --AMaxBT [1]                 Adaptive maximal BT-size
-                     --ContentBasedFastQtbt [1]   Signal based QTBT speed-up
-                     --FEN [1]                    fast encoder setting
-                     --MTSImplicit [1]            Enable implicit MTS when explicit MTS is off
-                     --MIP [1]                    Enable MIP (matrix-based intra prediction)
-                     --FastMIP [4]                Fast encoder search for MIP (matrix-based intra prediction)
-                     --MaxNumMergeCand [6]        Maximum number of merge candidates
-                     --Geo [3]                    Enable geometric partitioning mode (0:off, 1:on)
-                     --SMVD [3]                   Enable Symmetric MVD (0:off 1:vtm 2:fast 3:faster
-                     --AMVR [5]                   Enable Adaptive MV precision Mode (IMV)
-                     --IMV [5]                    Enable Adaptive MV precision Mode (IMV)
-                     --LMChroma [1]               Enable LMChroma prediction
-                     --MRL [1]                    MultiRefernceLines
-                     --BDOF [1]                   Enable bi-directional optical flow
-                     --BIO [1]                    Enable bi-directional optical flow
-                     --DMVR [1]                   Decoder-side Motion Vector Refinement
-                     --EncDbOpt [2]               Encoder optimization with deblocking filter 0:off 1:vtm 2:fast
-                     --EDO [2]                    Encoder optimization with deblocking filter 0:off 1:vtm 2:fast
-                     --LMCSEnable [1]             Enable LMCS (luma mapping with chroma scaling
-                     --LMCS [1]                   Enable LMCS (luma mapping with chroma scaling
-                     --LMCSOffset [6]             LMCS chroma residual scaling offset
-                     --ALF [1]                    Adpative Loop Filter
-                     --CCALF [1]                  Cross-component Adaptive Loop Filter
-                     --UseNonLinearAlfLuma [0]    Non-linear adaptive loop filters for Luma Channel
-                     --UseNonLinearAlfChroma [0]  Non-linear adaptive loop filters for Chroma Channels
-                     --ALFTempPred [1]            Enable usage of ALF temporal prediction for filter data
-                     --PROF [1]                   Enable prediction refinement with optical flow for affine mode
-                     --Affine [2]                 Enable affine prediction
-                     --MMVD [3]                   Enable Merge mode with Motion Vector Difference
-                     --AllowDisFracMMVD [1]       Disable fractional MVD in MMVD mode adaptively
-                     --MCTF [2]                   Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection
-                                                  to disable for screen coded content)
-                     --MCTFFrame [[]]             Frame to filter Strength for frame in GOP based temporal filter
-                     --MCTFStrength [[]]          Strength for  frame in GOP based temporal filter.
-                     --FastLocalDualTreeMode [1]  Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use
-                                                  threshold, 2:one intra mode only)
-                     --QtbttExtraFast [2]         Non-VTM compatible QTBTT speed-ups
-                     --SbTMVP [1]                 Enable Subblock Temporal Motion Vector Prediction (0: off, 1: on)
-                     --LFNST [1]                  Enable LFNST (0: off, 1: on)
-                     --ISP [3]                    Intra Sub-Partitions Mode (0: off, 1: vtm, 2: fast, 3: faster)
-                     --TransformSkip [2]          Intra transform skipping, 0: off, 1: TS, 2: TS with SCC detection 
-                     --BDPCM [2]                  BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)
-                     --RPR [1]                    Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready
-                      ======== Motion search options ================
-                     --FastSearch [4]             Serach mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond)
-                     -sr,  --SearchRange [384]          Motion search range
-                     --MinSearchWindow [96]       Minimum motion search window size for the adaptive window ME
-                     
+                     --RPR [1] can be now set to "2", in which case the encoder will impose constraints on the RASL frames
+                                     allowing for minimal drift open-GOP adaptive switching (with or withour resolution change).
                      
 /////////////////////////////////////////
 tag 0.2.1.0
