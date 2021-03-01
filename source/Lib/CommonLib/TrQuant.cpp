@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -237,6 +237,7 @@ void TrQuant::init( const Quant* otherQuant,
                     const int  rdoq,
                     const bool bUseRDOQTS,
                     const bool useSelectiveRDOQ,
+                    const bool scalingListsEnabled,
                     const bool bEnc,
                     const bool useTransformSkipFast,
                     const int  dqThrVal
@@ -248,7 +249,7 @@ void TrQuant::init( const Quant* otherQuant,
   m_quant = nullptr;
 
   {
-    m_quant = new DepQuant( otherQuant, bEnc );
+    m_quant = new DepQuant( otherQuant, bEnc, scalingListsEnabled );
   }
 
   if( m_quant )
@@ -862,7 +863,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width), Log2(area.height));
+        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode( cu.intraDir[toChannelType(compID)]))
@@ -967,9 +968,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(
-          SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width),
-          Log2(area.height));   
+        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));   
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode(cu.intraDir[toChannelType(compID)]))

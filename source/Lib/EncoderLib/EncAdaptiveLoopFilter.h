@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CABACWriter.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 
@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 class NoMallocThreadPool;
 
 struct AlfCovariance
@@ -68,52 +68,105 @@ struct AlfCovariance
   static constexpr int MaxAlfNumClippingValues = AdaptiveLoopFilter::MaxAlfNumClippingValues;
   using TE = double[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
   using Ty = double[MAX_NUM_ALF_LUMA_COEFF];
-  using TKE = TE[AdaptiveLoopFilter::MaxAlfNumClippingValues][AdaptiveLoopFilter::MaxAlfNumClippingValues];
-  using TKy = Ty[AdaptiveLoopFilter::MaxAlfNumClippingValues];
+  using TKE = TE**;
+  using TKy = Ty*;
 
   int numCoeff;
   int numBins;
+private:
+  int _numBinsAlloc;
+public:
+
   TKy y;
   TKE E;
   double pixAcc;
 
-  AlfCovariance() {}
-  ~AlfCovariance() {}
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ) {}
+  ~AlfCovariance() { }
 
   void create( int size, int num_bins )
   {
+    if( y ) destroy();
+
     numCoeff = size;
-    numBins = num_bins;
-    std::memset( y, 0, sizeof( y ) );
-    std::memset( E, 0, sizeof( E ) );
+    numBins  = _numBinsAlloc = num_bins;
+
+    y = new Ty[_numBinsAlloc];
+    E = new TE*[_numBinsAlloc];
+
+    for( int i = 0; i < _numBinsAlloc; i++ )
+    {
+      E[i] = new TE[_numBinsAlloc];
+    }
+
+    // will be done be reset either way
+    //std::memset( y, 0, sizeof( y ) );
+    //std::memset( E, 0, sizeof( E ) );
   }
 
   void destroy()
   {
+    delete[] y;
+    y = nullptr;
+
+    if( E )
+    {
+      for( int i = 0; i < _numBinsAlloc; i++ )
+      {
+        delete[] E[i];
+        E[i] = nullptr;
+      }
+
+      delete[] E;
+      E = nullptr;
+    }
   }
 
-  void reset( int num_bins = -1 )
+  void reset()
   {
-    if ( num_bins > 0 )
-      numBins = num_bins;
     pixAcc = 0;
-    std::memset( y, 0, sizeof( y ) );
-    std::memset( E, 0, sizeof( E ) );
+
+    for( int i = 0; i < _numBinsAlloc; i++ )
+    {
+      for( int j = 0; j < _numBinsAlloc; j++ )
+      {
+        std::memset( E[i][j], 0, sizeof( TE ) );
+      }
+
+      std::memset( y[i], 0, sizeof( Ty ) );
+    }
   }
 
   const AlfCovariance& operator=( const AlfCovariance& src )
   {
+    if( _numBinsAlloc < src.numBins )
+    {
+      destroy();
+      create( src.numCoeff, src.numBins );
+    }
+
     numCoeff = src.numCoeff;
-    numBins = src.numBins;
-    std::memcpy( E, src.E, sizeof( E ) );
-    std::memcpy( y, src.y, sizeof( y ) );
+    numBins  = src.numBins;
+
+    for( int i = 0; i < numBins; i++ )
+    {
+      for( int j = 0; j < numBins; j++ )
+      {
+        std::memcpy( E[i][j], src.E[i][j], sizeof( TE ) );
+      }
+
+      std::memcpy( y[i], src.y[i], sizeof( Ty ) );
+    }
+
     pixAcc = src.pixAcc;
 
     return *this;
   }
+
 #if ENABLE_TRACING
   void trace()
   {
+    DTRACE( g_trace_ctx, D_ALF, "E\n");
     for( int b0 = 0; b0 < numBins; b0++ )
     {
       for( int b1 = 0; b1 < numBins; b1++ )
@@ -130,7 +183,7 @@ struct AlfCovariance
       }
       DTRACE( g_trace_ctx, D_ALF, "\n" );
     }
-    DTRACE( g_trace_ctx, D_ALF, "\n" );
+    DTRACE( g_trace_ctx, D_ALF, "y\n");
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -141,12 +194,19 @@ struct AlfCovariance
     }
     DTRACE( g_trace_ctx, D_ALF, "PixAcc=%f\n", pixAcc );
   }
-#endif
 
+#endif
   void add( const AlfCovariance& lhs, const AlfCovariance& rhs )
   {
+    if( _numBinsAlloc < lhs.numBins )
+    {
+      destroy();
+      create( lhs.numCoeff, lhs.numBins );
+    }
+
     numCoeff = lhs.numCoeff;
-    numBins = lhs.numBins;
+    numBins  = lhs.numBins;
+
     for( int b0 = 0; b0 < numBins; b0++ )
     {
       for( int b1 = 0; b1 < numBins; b1++ )
@@ -160,6 +220,7 @@ struct AlfCovariance
         }
       }
     }
+
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -167,6 +228,7 @@ struct AlfCovariance
         y[b][j] = lhs.y[b][j] + rhs.y[b][j];
       }
     }
+
     pixAcc = lhs.pixAcc + rhs.pixAcc;
   }
 
@@ -185,6 +247,7 @@ struct AlfCovariance
         }
       }
     }
+
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -192,6 +255,7 @@ struct AlfCovariance
         y[b][j] += src.y[b][j];
       }
     }
+
     pixAcc += src.pixAcc;
 
     return *this;
@@ -212,6 +276,7 @@ struct AlfCovariance
         }
       }
     }
+
     for( int b = 0; b < numBins; b++ )
     {
       for( int j = 0; j < numCoeff; j++ )
@@ -219,6 +284,7 @@ struct AlfCovariance
         y[b][j] -= src.y[b][j];
       }
     }
+
     pixAcc -= src.pixAcc;
 
     return *this;
@@ -226,10 +292,10 @@ struct AlfCovariance
 
   void setEyFromClip(const int* clip, TE _E, Ty _y, int size) const
   {
-    for (int k=0; k<size; k++)
+    for( int k = 0; k < size; k++ )
     {
       _y[k] = y[clip[k]][k];
-      for (int l=0; l<size; l++)
+      for( int l = 0; l < size; l++ )
       {
         _E[k][l] = E[clip[k]][clip[l]][k][l];
       }
@@ -280,7 +346,7 @@ public:
 
 private:
   int m_alfWSSD;
-  const EncCfg*          m_encCfg;
+  const VVEncCfg*        m_encCfg;
   AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
   AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];
@@ -328,13 +394,10 @@ private:
   int                    m_reuseApsId[2];
   bool                   m_limitCcAlf;
   NoMallocThreadPool*    m_threadpool;
-#if ALF_CTU_PAR_TRACING
-  std::stringstream*     m_traceStreams;
-#endif
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
-  void init                         ( const EncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
+  void init                         ( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
   void initDistortion               ();
   std::vector<int> getAvaiApsIdsLuma( CodingStructure& cs, int& newApsId );
@@ -348,6 +411,8 @@ public:
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
   void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
+  void alfReconstructor             ( CodingStructure& cs );
+  void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
   void resetFrameStats              ();
 
 private:

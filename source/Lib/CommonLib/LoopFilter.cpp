@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -363,6 +363,9 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
 
 LoopFilter::LoopFilter()
 {
+  m_origin[0] = Position{ 0, 0 };
+  m_origin[1] = Position{ 0, 0 };
+
   xPelFilterLuma  = xPelFilterLumaCore;
   xFilteringPandQ = xFilteringPandQCore;
 
@@ -560,14 +563,11 @@ void LoopFilter::calcFilterStrengthsCTU( CodingStructure& cs, const UnitArea& ct
   for( int ch = 0; ch < maxNumChannelType; ch++ )
   {
     const ChannelType chType = ChannelType( ch );
-    cCUSecureTraverser trv = cs.secureTraverseCUs( CS::getArea( cs, ctuArea, chType, TREE_D ), chType );
-    const auto *cuLf = trv.begin;
 
-    if( cuLf ) do
+    for( const auto& cuLf : cs.traverseCUs( CS::getArea( cs, ctuArea, chType, TREE_D ), chType ) )
     {
-      LoopFilter::calcFilterStrengths( *cuLf );
+      LoopFilter::calcFilterStrengths( cuLf );
     }
-    while( cuLf != trv.last && (0 != ( cuLf = cuLf->next )) );
   }
 }
 
@@ -609,7 +609,7 @@ void LoopFilter::loopFilterCTU( CodingStructure &cs, const ChannelType chType, c
  \param edgeDir          the direction of the edge in block boundary (horizontal/vertical), which is added newly
 */
 template<DeblockEdgeDir edgeDir>
-void LoopFilter::xDeblockArea( CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picRecoBuf ) const
+void LoopFilter::xDeblockArea( const CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picRecoBuf ) const
 {
   if( cs.slice->deblockingFilterDisable )
   {
@@ -633,7 +633,7 @@ void LoopFilter::xDeblockArea( CodingStructure& cs, const UnitArea& area, const 
 
   const int lfpPtrLOffset = scale.scaleHor( incx );
 
-  LoopFilterParam* lfpPtr = cs.picture->cs->getLFPMapPtr( edgeDir );
+  const LoopFilterParam* lfpPtr = cs.picture->cs->getLFPMapPtr( edgeDir );
   ptrdiff_t lfpStride     = cs.picture->cs->getLFPMapStride();
   OFFSET( lfpPtr, lfpStride, scale.scaleHor( lumaArea.x ), scale.scaleVer( lumaArea.y ) );
 
@@ -1555,10 +1555,10 @@ inline bool xUseStrongFiltering( Pel* piSrc, const ptrdiff_t iOffset, const int 
 }
 
 template<DeblockEdgeDir edgeDir>
-void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
+void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
 {
         PelBuf&    picYuvRec   = picReco.bufs[ COMP_Y ];
-        Pel*      piSrc        = picYuvRec.bufAt( pos );
+        Pel*      piSrc        = picYuvRec.bufAt( pos.offset( -m_origin[0].x, -m_origin[0].y ) );
   const ptrdiff_t iStride      = picYuvRec.stride;
   const SPS &     sps          = *cs.sps;
   const Slice &   slice        = *cs.slice;
@@ -1581,7 +1581,7 @@ void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, cons
     srcStep  = 1;
   }
 
-#if ENABLE_SIMD_OPT 
+#if ENABLE_SIMD_DBLF && defined( TARGET_SIMD_X86 )
   if( offset == 1 )
   {
     _mm_prefetch( (char *) &piSrc[0 * srcStep - 4], _MM_HINT_T0 );
@@ -1604,7 +1604,7 @@ void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, cons
 
   const unsigned uiBs = BsGet( lfp.bs, COMP_Y );
 
-  CHECK( uiBs > 2, "baem" );
+  CHECK( uiBs > 2, "baem0" );
   
   if( !uiBs )
   {
@@ -1705,7 +1705,7 @@ void LoopFilter::xEdgeFilterLuma( CodingStructure& cs, const Position& pos, cons
 }
 
 template<DeblockEdgeDir edgeDir>
-void LoopFilter::xEdgeFilterChroma( CodingStructure &cs, const Position &pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
+void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const
 {
   const PreCalcValues &pcv               = *cs.pcv;
 
@@ -1716,8 +1716,8 @@ void LoopFilter::xEdgeFilterChroma( CodingStructure &cs, const Position &pos, co
 
   PelBuf             picYuvRecCb         = picReco.bufs[ COMP_Cb ];
   PelBuf             picYuvRecCr         = picReco.bufs[ COMP_Cr ];
-  Pel *              piSrcCb             = picYuvRecCb.bufAt( pos );
-  Pel *              piSrcCr             = picYuvRecCr.bufAt( pos );
+  Pel *              piSrcCb             = picYuvRecCb.bufAt( pos.offset( -m_origin[1].x, -m_origin[1].y ) );
+  Pel *              piSrcCr             = picYuvRecCr.bufAt( pos.offset( -m_origin[1].x, -m_origin[1].y ) );
   const ptrdiff_t    iStride             = picYuvRecCb.stride;
   const SPS &        sps                 = *cs.sps;
   const Slice &      slice               = *cs.slice;
@@ -1747,6 +1747,9 @@ void LoopFilter::xEdgeFilterChroma( CodingStructure &cs, const Position &pos, co
   unsigned tmpBs = lfp.bs;
   bS[0] = BsGet( tmpBs, COMP_Cb );
   bS[1] = BsGet( tmpBs, COMP_Cr );
+
+  CHECK( bS[0] > 2, "baem1" );
+  CHECK( bS[1] > 2, "baem2" );
 
   if( bS[0] <= 0 && bS[1] <= 0 )
   {

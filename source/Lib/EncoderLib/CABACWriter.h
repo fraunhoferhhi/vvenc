@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -183,6 +183,8 @@ private:
   OutputBitstream*   m_Bitstream;
   Ctx                m_TestCtx;
   const ScanElement* m_scanOrder;
+
+  Partitioner        m_partitioner[2];
  };
 
 

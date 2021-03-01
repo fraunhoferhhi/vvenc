@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 
 // ====================================================================================================================
 // Class definition
@@ -100,7 +100,7 @@ public:
   virtual ~EncSampleAdaptiveOffset();
 
   //interface
-  void init                  ( const EncCfg& encCfg );
+  void init                  ( const VVEncCfg& encCfg );
   void initSlice             ( const Slice* slice );
   void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
 
@@ -124,7 +124,7 @@ private:
 
 private:
 
-  const EncCfg* m_EncCfg;
+  const VVEncCfg* m_EncCfg;
 
   //for RDO
   CABACWriter*  m_CABACEstimator;

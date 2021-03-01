@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstring>
 #include <assert.h>
 #include <cassert>
+
+#include "vvenc/vvencCfg.h"
+
 
 //! \ingroup CommonLib
 //! \{
@@ -196,12 +199,6 @@ typedef       uint64_t          Distortion;        ///< distortion measurement
 // ====================================================================================================================
 // Enumeration
 // ====================================================================================================================
-enum BDPCMControl
-{
-  BDPCM_INACTIVE = 0,
-  BDPCM_LUMAONLY = 1,
-  BDPCM_LUMACHROMA = 2,
-};
 
 enum ApsType
 {
@@ -224,8 +221,7 @@ enum TransType
   DCT2 = 0,
   DCT8 = 1,
   DST7 = 2,
-  NUM_TRANS_TYPE = 3,
-  DCT2_EMT = 4
+  NUM_TRANS_TYPE = 3
 };
 
 enum MTSIdx
@@ -276,14 +272,6 @@ enum SbtMode
   SBT_HOR_Q0 = 6,
   SBT_HOR_Q1 = 7,
   NUMBER_SBT_MODE
-};
-
-enum RDPCMMode
-{
-  RDPCM_OFF             = 0,
-  RDPCM_HOR             = 1,
-  RDPCM_VER             = 2,
-  NUMBER_OF_RDPCM_MODES = 3
 };
 
 enum TreeType
@@ -399,24 +387,6 @@ enum TransformDirection
   TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
-/// supported ME search methods
-enum MESearchMethod
-{
-  MESEARCH_FULL              = 0,
-  MESEARCH_DIAMOND           = 1,
-  MESEARCH_SELECTIVE         = 2,
-  MESEARCH_DIAMOND_ENHANCED  = 3,
-  MESEARCH_DIAMOND_FAST      = 4,
-  MESEARCH_NUMBER_OF_METHODS = 5
-};
-
-/// coefficient scanning type used in ACS
-enum CoeffScanType
-{
-  SCAN_DIAG = 0,        ///< up-right diagonal scan
-  SCAN_NUMBER_OF_TYPES
-};
-
 enum CoeffScanGroupType
 {
   SCAN_UNGROUPED   = 0,
@@ -508,23 +478,9 @@ enum MergeType
   NUM_MRG_TYPE                   // 5
 };
 
-enum SharedMrgState
-{
-  NO_SHARE            = 0,
-  GEN_ON_SHARED_BOUND = 1,
-  SHARING             = 2
-};
 //////////////////////////////////////////////////////////////////////////
 // Encoder modes to try out
 //////////////////////////////////////////////////////////////////////////
-
-enum EncModeFeature
-{
-  ENC_FT_RD_COST = 0,
-  ENC_FT_ENC_MODE_TYPE,
-  ENC_FT_ENC_MODE_OPTS,
-  NUM_ENC_FEATURES
-};
 
 enum ImvMode
 {
@@ -570,13 +526,6 @@ struct BitDepths
 {
   const int& operator[]( const ChannelType ch) const { return recon[ch]; }
   int recon[MAX_NUM_CH]; ///< the bit depth as indicated in the SPS
-};
-
-enum PLTRunMode
-{
-  PLT_RUN_INDEX = 0,
-  PLT_RUN_COPY  = 1,
-  NUM_PLT_RUN   = 2
 };
 
 /// parameters for deblocking filter
@@ -825,10 +774,15 @@ public:
 // dynamic cache
 // ---------------------------------------------------------------------------
 
+
+static constexpr size_t DYN_CACHE_CHUNK_SIZE = 512;
+
 template<typename T>
 class dynamic_cache
 {
   std::vector<T*> m_cache;
+  std::vector<T*> m_cacheChunks;
+
 public:
 
   ~dynamic_cache()
@@ -838,13 +792,13 @@ public:
 
   void deleteEntries()
   {
-    for( auto &p : m_cache )
+    for( auto& chunk : m_cacheChunks )
     {
-      delete p;
-      p = nullptr;
+      delete[] chunk;
     }
 
     m_cache.clear();
+    m_cacheChunks.clear();
   }
 
   T* get()
@@ -858,10 +812,36 @@ public:
     }
     else
     {
-      ret = new T;
+      T* chunk = new T[DYN_CACHE_CHUNK_SIZE];
+
+      m_cacheChunks.push_back( chunk );
+      m_cache.reserve( m_cache.size() + DYN_CACHE_CHUNK_SIZE );
+
+      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      {
+        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+        m_cache.push_back( &chunk[p] );
+      }
+
+      ret = m_cache.back();
+      m_cache.pop_back();
     }
 
     return ret;
+  }
+
+  void defragment()
+  {
+    m_cache.clear();
+  
+    for( T* chunk : m_cacheChunks )
+    {
+      for( ptrdiff_t p = 0; p < DYN_CACHE_CHUNK_SIZE; p++ )
+      {
+        //m_cache.push_back( &chunk[DYN_CACHE_CHUNK_SIZE - p - 1] );
+        m_cache.push_back( &chunk[p] );
+      }
+    }
   }
 
   void cache( T* el )

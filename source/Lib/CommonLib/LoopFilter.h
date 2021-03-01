@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -70,9 +70,9 @@ class LoopFilter
 {
 private:
   template<DeblockEdgeDir edgeDir>
-  void xEdgeFilterLuma            ( CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const;
+  void xEdgeFilterLuma            ( const CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const;
   template<DeblockEdgeDir edgeDir>
-  void xEdgeFilterChroma          ( CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const;
+  void xEdgeFilterChroma          ( const CodingStructure& cs, const Position& pos, const LoopFilterParam& lfp, PelUnitBuf& picReco ) const;
 
   static const uint16_t sm_tcTable  [MAX_QP + 3];
   static const uint8_t  sm_betaTable[MAX_QP + 1];
@@ -103,9 +103,15 @@ public:
 
   /// ctu-level deblocking filter
   template<DeblockEdgeDir edgeDir>
-  void xDeblockArea                   ( CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picReco ) const;
+  void xDeblockArea                   ( const CodingStructure& cs, const UnitArea& area, const ChannelType chType, PelUnitBuf& picReco ) const;
 
   void loopFilterCu                   ( const CodingUnit& cu, ChannelType chType, DeblockEdgeDir edgeDir, PelUnitBuf& dbBuffer );
+
+  void setOrigin( const ChannelType chType, const Position& pos ) { m_origin[chType] = pos; }
+
+private:
+
+  Position m_origin[2];
 };
 
 } // namespace vvenc

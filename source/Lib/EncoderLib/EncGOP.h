@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58,13 +58,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncReshape.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
+#include "CommonLib/Nal.h"
 #include "RateCtrl.h"
 
 #include <vector>
 #include <list>
 #include <stdlib.h>
 #include <atomic>
-#include "vvenc/Nal.h"
+
 
 #include "Utilities/NoMallocThreadPool.h"
 #include <mutex>
@@ -104,6 +105,17 @@ struct FFwdDecoder
 
 // ====================================================================================================================
 
+class EncGOP;
+struct FinishTaskParam {
+  EncGOP*     gopEncoder;
+  EncPicture* picEncoder;
+  Picture*    pic;
+  FinishTaskParam()                                          : gopEncoder( nullptr ), picEncoder( nullptr ), pic( nullptr ) {}
+  FinishTaskParam( EncGOP* _g, EncPicture* _e, Picture* _p ) : gopEncoder( _g ),      picEncoder( _e ),      pic( _p )      {}
+};
+
+// ====================================================================================================================
+
 class EncGOP
 {
 private:
@@ -115,13 +127,14 @@ private:
   bool                      m_bFirstInit;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
+  int                       m_codingOrderIdx;
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
   int                       m_associatedIRAPPOC;
   NalUnitType               m_associatedIRAPType;
 
-  const EncCfg*             m_pcEncCfg;
+  const VVEncCfg*           m_pcEncCfg;
   HLSWriter                 m_HLSWriter;
   SEIWriter                 m_seiWriter;
   SEIEncoder                m_seiEncoder;
@@ -132,34 +145,29 @@ private:
   EncHRD*                   m_pcEncHRD;
   ParameterSetMap<APS>      m_gopApsMap;
 
-  std::vector<EncPicture*>  m_picEncoderList;
-  std::list<Picture*>       m_encodePics;
-  std::atomic_int           m_numPicEncoder;
-  NoMallocThreadPool*       m_gopThreadPool;
-  std::mutex                m_gopEncMutex;
-  std::condition_variable   m_gopEncCond;
+  std::list<EncPicture*>    m_freePicEncoderList;
+  std::list<Picture*>       m_gopEncListInput;
+
   std::vector<int>          m_globalCtuQpVector;
 
-  double                    m_lambda;
-  int                       m_actualHeadBits;
-  int                       m_actualTotalBits;
-  int                       m_estimatedBits;
+  NoMallocThreadPool*       m_threadPool;
+  std::mutex                m_gopEncMutex;
+  std::condition_variable   m_gopEncCond;
+
+public:
+  std::list<Picture*>       m_gopEncListOutput;
 
 public:
   EncGOP();
   virtual ~EncGOP();
 
-  void init               ( const EncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
-  void encodePicture      ( std::vector<Picture*> encList, PicList& picList, AccessUnit& au, bool isEncodeLtRef );
-  void finishEncPicture   ( EncPicture* picEncoder, Picture& pic );
+  void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
+  void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
-  void picInitRateControl ( int gopId, Picture& pic, Slice* slice );
-
-  EncPicture* getPicEncoder( int idx )
-  {
-    CHECK( idx > m_picEncoderList.size() || m_picEncoderList[ idx] == nullptr, "error: array index out of bounds" );
-    return m_picEncoderList[ idx ];
-  }
+  void picInitRateControl ( int gopId, Picture& pic, Slice* slice, EncPicture *picEncoder );
+  ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
+  const ParameterSetMap<APS>& getSharedApsMap() const { return m_gopApsMap; }
+  bool                        anyFramesInOutputQueue() { return !m_gopEncListOutput.empty(); }
 
 private:
   void xUpdateRasInit                 ( Slice* slice );
@@ -168,34 +176,37 @@ private:
   int  xGetSliceDepth                 ( int poc ) const;
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, PicList& picList, int gopId ) const;
 
-  void xInitPicsICO                   ( std::vector<Picture*> encList, PicList& picList, bool isEncodeLtRef );
+  void xInitPicsInCodingOrder         ( const std::vector<Picture*>& encList, PicList& picList, bool isEncodeLtRef );
+  void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
   void xInitFirstSlice                ( Picture& pic, PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
+  void xUpdateRPRtmvp                 ( PicHeader* picHeader, Slice* slice );
+  void xUpdateRPRToolCtrl             ( PicHeader* picHeader, Slice* slice );
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
   void xInitLMCS                      ( Picture& pic );
   void xSelectReferencePictureList    ( Slice* slice, int curPoc, int gopId, int ltPoc );
   void xSyncAlfAps                    ( Picture& pic, ParameterSetMap<APS>& dst, const ParameterSetMap<APS>& src );
 
-  void xWritePicture                  ( Picture& pic, AccessUnit& au, bool isEncodeLtRef );
-  int  xWriteParameterSets            ( Picture& pic, AccessUnit& accessUnit, HLSWriter& hlsWriter );
-  int  xWritePictureSlices            ( Picture& pic, AccessUnit& accessUnit, HLSWriter& hlsWriter );
-  void xWriteLeadingSEIs              ( const Picture& pic, AccessUnit& accessUnit );
-  void xWriteTrailingSEIs             ( const Picture& pic, AccessUnit& accessUnit, std::string& digestStr );
-  int  xWriteVPS                      ( AccessUnit &accessUnit, const VPS *vps, HLSWriter& hlsWriter );
-  int  xWriteDCI                      ( AccessUnit &accessUnit, const DCI *dci, HLSWriter& hlsWriter );
-  int  xWriteSPS                      ( AccessUnit &accessUnit, const SPS *sps, HLSWriter& hlsWriter );
-  int  xWritePPS                      ( AccessUnit &accessUnit, const PPS *pps, const SPS *sps, HLSWriter& hlsWriter );
-  int  xWriteAPS                      ( AccessUnit &accessUnit, const APS *aps, HLSWriter& hlsWriter, NalUnitType eNalUnitType );
-  void xWriteAccessUnitDelimiter      ( AccessUnit &accessUnit, Slice* slice, bool IrapOrGdr, HLSWriter& hlsWriter );
-  void xWriteSEI                      ( NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, int temporalId, const SPS *sps );
-  void xWriteSEISeparately            ( NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, int temporalId, const SPS *sps );
+  void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
+  int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+  int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+  void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
+  void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
+  int  xWriteVPS                      ( AccessUnitList &accessUnit, const VPS *vps, HLSWriter& hlsWriter );
+  int  xWriteDCI                      ( AccessUnitList &accessUnit, const DCI *dci, HLSWriter& hlsWriter );
+  int  xWriteSPS                      ( AccessUnitList &accessUnit, const SPS *sps, HLSWriter& hlsWriter );
+  int  xWritePPS                      ( AccessUnitList &accessUnit, const PPS *pps, const SPS *sps, HLSWriter& hlsWriter );
+  int  xWriteAPS                      ( AccessUnitList &accessUnit, const APS *aps, HLSWriter& hlsWriter, NalUnitType eNalUnitType );
+  void xWriteAccessUnitDelimiter      ( AccessUnitList &accessUnit, Slice* slice, bool IrapOrGdr, HLSWriter& hlsWriter );
+  void xWriteSEI                      ( NalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps );
+  void xWriteSEISeparately            ( NalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps );
   void xAttachSliceDataToNalUnit      ( OutputNALUnit& rNalu, const OutputBitstream* pcBitstreamRedirect );
   void xCabacZeroWordPadding          ( const Picture& pic, const Slice* slice, uint32_t binCountsInNalUnits, uint32_t numBytesInVclNalUnits, std::ostringstream &nalUnitData );
 
   void xUpdateAfterPicRC              ( const Picture* pic );
-  void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnit&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
+  void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
-  void xPrintPictureInfo              ( const Picture& pic, AccessUnit& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
+  void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );
 };// END CLASS DEFINITION EncGOP
 
 } // namespace vvenc

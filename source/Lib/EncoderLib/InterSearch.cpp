@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -216,7 +216,7 @@ InterSearch::~InterSearch()
   destroy();
 }
 
-void InterSearch::init( const EncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
+void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
   InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
 
@@ -3576,6 +3576,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
   const uint32_t numTBlocks    = getNumberValidTBlocks   ( *cs.pcv );
   CodingUnit& cu               = *cs.getCU(partitioner.chType, partitioner.treeType);
   const unsigned currDepth = partitioner.currTrDepth;
+  const bool useTS = cs.picture->useScTS;
 
   bool bCheckFull  = !partitioner.canSplit( TU_MAX_TR_SPLIT, cs );
   if( cu.sbtInfo && partitioner.canSplit( CU::getSbtTuSplit( cu.sbtInfo ), cs ) )
@@ -3648,13 +3649,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       {
         continue;
       }
-
-      bool tsAllowed = TU::isTSAllowed(tu, compID) && (isLuma(compID) || (isChroma(compID) && m_pcEncCfg->m_useChromaTS));
+      bool tsAllowed = useTS && TU::isTSAllowed(tu, compID) && (isLuma(compID) || (isChroma(compID) && m_pcEncCfg->m_useChromaTS));
       if (isChroma(compID) && tsAllowed && (tu.mtsIdx[COMP_Y] != MTS_SKIP))
       {
         tsAllowed = false;
       }
-      tsAllowed &= cs.picture->useSC;
       uint8_t nNumTransformCands = 1 + (tsAllowed ? 1 : 0); // DCT + TS = 2 tests
       std::vector<TrMode> trModes;
 
@@ -3889,13 +3888,11 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       {
         ComponentID codeCompId = (cbfMask >> 1 ? COMP_Cb : COMP_Cr);
         ComponentID otherCompId = (codeCompId == COMP_Cr ? COMP_Cb : COMP_Cr);
-
-        bool        tsAllowed = TU::isTSAllowed(tu, codeCompId) && (m_pcEncCfg->m_useChromaTS);
+        bool tsAllowed = useTS && TU::isTSAllowed(tu, codeCompId) && (m_pcEncCfg->m_useChromaTS);
         if (tsAllowed && (tu.mtsIdx[COMP_Y] != MTS_SKIP))
         {
           tsAllowed = false;
         }
-        tsAllowed &= cs.picture->useSC;
         if (!tsAllowed)
         {
           checkTSOnly = false;
@@ -5781,7 +5778,7 @@ uint32_t InterSearch::xCalcAffineMVBits(CodingUnit& cu, Mv acMvTemp[3], Mv acMvP
 
 
 //! set adaptive search range based on poc difference
-void InterSearch::setSearchRange( const Slice* slice, const EncCfg& encCfg )
+void InterSearch::setSearchRange( const Slice* slice, const VVEncCfg& encCfg )
 {
   if( !encCfg.m_bUseASR || slice->isIRAP() )
   {

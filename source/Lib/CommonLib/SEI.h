@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -660,7 +660,7 @@ public:
   int                                         sliMaxSublayers;
   bool                                        sliSublayerInfoPresent;
   std::vector<std::vector<int>>               nonSubpicLayersFraction;
-  std::vector<std::vector<Level::Name>>       refLevelIdc;
+  std::vector<std::vector<Level>>             refLevelIdc;
   std::vector<std::vector<std::vector<int>>>  refLevelFraction;
 };
 

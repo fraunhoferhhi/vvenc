@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -617,7 +617,12 @@ void InterPredInterpolation::init()
   {
     const int MVBUFFER_SIZE = MAX_CU_SIZE / MIN_PU_SIZE;
     m_storedMv = new Mv[MVBUFFER_SIZE*MVBUFFER_SIZE];
-    VALGRIND_MEMCLEAR( m_storedMv, sizeof( Mv ) * MVBUFFER_SIZE * MVBUFFER_SIZE );
+#if ENABLE_VALGRIND_CODE
+    for( int i = 0; i < MVBUFFER_SIZE * MVBUFFER_SIZE; i++ )
+    {
+      m_storedMv[i].setZero();
+    }
+#endif
   }
 }
 
@@ -1491,6 +1496,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const bool subblkMVSpreadOverLimit = isSubblockVectorSpreadOverLimit(iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY, cu.interDir);
 
   bool enablePROF = sps.PROF && (!m_skipPROF) && (compID == COMP_Y);
+  enablePROF &= (!cu.cs->picHeader->disProfFlag);
   enablePROF &= !((cu.affineType == AFFINEMODEL_6PARAM && _mv[0] == _mv[1] && _mv[0] == _mv[2]) || (cu.affineType == AFFINEMODEL_4PARAM && _mv[0] == _mv[1]));
   enablePROF &= !subblkMVSpreadOverLimit;
   const int profThres = 1 << (iBit + (m_isBi ? 1 : 0));

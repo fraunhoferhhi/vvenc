@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -43,59 +43,55 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/**
-  \ingroup VVEncExternalInterfaces
-  \file    ParcatSegmentFilter.h
-  \brief   This file contains the internal interface of the hhivvcenc SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/10/2019
+/** \file     YuvFileIO.h
+    \brief    yuv file I/O class (header)
 */
 
 #pragma once
 
-#include <vector>
-#include <stdint.h>
+#include "apputils/apputilsDecl.h"
+#include <fstream>
+#include <string>
 
-#include "vvenc/vvencDecl.h"
+#include "vvenc/vvencCfgExpert.h"
 
+//! \ingroup Interface
+//! \{
 
 namespace vvenc {
+struct YUVBuffer;
+}
 
-/**
-  \ingroup VVEncExternalInterfaces
-  The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
-  the given VVCDecoderParameters. After initialization the decoding of the video is performed by using the decoder() method to hand over compressed packets (bitstream chunks) in decoding order
-  and retrieve uncompressed pictures. The decoding can be end by calling flush() that causes the decoder to finish decoding of all pending packets.
-  Finally calling uninit() releases all allocated resources held by the decoder internally.
-*/
-class VVENC_DECL ParcatSegmentFilter
+namespace apputils {
+
+// ====================================================================================================================
+
+class APPUTILS_DECL YuvFileIO
 {
+private:
+  std::fstream        m_cHandle;              ///< file handle
+  int                 m_fileBitdepth;         ///< bitdepth of input/output video file
+  int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
+  int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
+  vvenc::ChromaFormat m_fileChrFmt;           ///< chroma format of the file
+  vvenc::ChromaFormat m_bufferChrFmt;         ///< chroma format of the buffer
+  bool                m_clipToRec709;         ///< clip data according to Recom.709
+  bool                m_packedYUVMode;        ///< used packed buffer file format
+  std::string         m_lastError;            ///< temporal storage for last occured error 
+
 public:
-
-  ParcatSegmentFilter();
-  virtual ~ParcatSegmentFilter();
-
-  std::vector<uint8_t> filter_segment(const std::vector<uint8_t> & v, int idx, int * poc_base, int * last_idr_poc);
-
-private:
-
-  /**
-   Find the beginning and end of a NAL (Network Abstraction Layer) unit in a byte buffer containing H264 bitstream data.
-   @param[in]   buf        the buffer
-   @param[in]   size       the size of the buffer
-   @param[out]  nal_start  the beginning offset of the nal
-   @param[out]  nal_end    the end offset of the nal
-   @return                 the length of the nal, or 0 if did not find start of nal, or -1 if did not find end of nal
-   */
-  // DEPRECATED - this will be replaced by a similar function with a slightly different API
-  int find_nal_unit(const uint8_t* buf, int size, int* nal_start, int* nal_end);
-
-private:
-
-  bool verbose = false;
+  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
+              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
+  void  close();
+  bool  isEof();
+  bool  isFail();
+  void  skipYuvFrames( int numFrames, int width, int height );
+  bool  readYuvBuf   ( vvenc::YUVBuffer& yuvInBuf );
+  bool  writeYuvBuf  ( const vvenc::YUVBuffer& yuvOutBuf );
+  std::string getLastError() const { return m_lastError; }   
 };
 
+} // namespace apputils
 
-
-} // namespace
+//! \}
 

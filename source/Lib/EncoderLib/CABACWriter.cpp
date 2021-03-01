@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,7 @@ void CABACWriter::end_of_slice()
 void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, int (&qps)[2], unsigned ctuRsAddr, bool skipSao /* = false */, bool skipAlf /* = false */ )
 {
   CUCtx cuCtx( qps[CH_L] );
-  Partitioner *partitioner = PartitionerFactory::get( *cs.slice );
+  Partitioner *partitioner = &m_partitioner[0];
 
   partitioner->initCtu( area, CH_L, *cs.slice );
 
@@ -209,13 +209,11 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
   if ( CS::isDualITree(cs) && cs.pcv->chrFormat != CHROMA_400 && cs.pcv->maxCUSize > 64 )
   {
     CUCtx chromaCuCtx(qps[CH_C]);
-    Partitioner *chromaPartitioner = PartitionerFactory::get(*cs.slice);
+    Partitioner *chromaPartitioner = &m_partitioner[1];
     chromaPartitioner->initCtu(area, CH_C, *cs.slice);
     coding_tree(cs, *partitioner, cuCtx, chromaPartitioner, &chromaCuCtx);
     qps[CH_L] = cuCtx.qp;
     qps[CH_C] = chromaCuCtx.qp;
-
-    delete chromaPartitioner;
   }
   else
   {
@@ -229,8 +227,6 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
       qps[CH_C] = cuCtxChroma.qp;
     }
   }
-
-  delete partitioner;
 }
 
 
@@ -2435,21 +2431,18 @@ void CABACWriter::residual_lfnst_mode( const CodingUnit& cu, CUCtx& cuCtx )
 
     bool isTrSkip = false;
 
-    cTUSecureTraverser trv( cu.firstTU, cu.lastTU );
-    const auto* currTU = trv.begin;
-    do
+    for( const auto& currTU : cTUTraverser( cu.firstTU, cu.lastTU->next ) )
     {
       const uint32_t numValidComp = getNumberValidComponents(cu.chromaFormat);
       for (uint32_t compID = COMP_Y; compID < numValidComp; compID++)
       {
-        if (currTU->blocks[compID].valid() && TU::getCbf(*currTU, (ComponentID)compID) && currTU->mtsIdx[compID] == MTS_SKIP)
+        if (currTU.blocks[compID].valid() && TU::getCbf(currTU, (ComponentID)compID) && currTU.mtsIdx[compID] == MTS_SKIP)
         {
           isTrSkip = true;
           break;
         }
       }
     }
-    while( currTU != trv.last && (0!=(currTU = currTU->next)));
 
     if( (!cuCtx.lfnstLastScanPos && !cu.ispMode) || nonZeroCoeffNonTsCorner8x8 || isTrSkip )
     {

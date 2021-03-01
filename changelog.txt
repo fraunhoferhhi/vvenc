@@ -1,4 +1,125 @@
 /////////////////////////////////////////
+tag 0.3.0.0
+
+* new:
+ - support for HDR metadata (--hdr off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020)
+   - if using HDR, encoder decisions depend on the used mode and the enabled metadata. by default VUI and SEI metadata are enabled 
+   - PQ: set vui parameter (transfer characteristics 16(smpte2084))
+   - HLG: set vui parameter (transfer characteristics 1|14(bt709|bt2020-10)) + SEI AlternativeTransferCharacteristics 18
+ - support for MasteringDisplayColourVolume and MaxContentLightLevel (SMPTE ST 2086 - HDR10/PQ)
+   - MasteringDisplayColourVolume can be set by vector of 10 values:
+     x,y,x,y,x,y,x,y,max,min  where: "G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)
+     x,y coordinates for GBR and WP in increment of 1/50000
+     max,min luminance in units of 1/10000 cd/m2 
+     0 <= x,y <= 50000, 0 <= max,min <= 10000, 
+     
+     Example for a P3D65 1000-nits monitor, where 
+     G(x=0.265, y=0.690), B(x=0.150, y=0.060), R(x=0.680, y=0.320), 
+     WP(x=0.3127, y=0.3290), L(max=1000, min=0.0001):
+     13250,34500,7500,3000,34000,16000,15635,16450,10000000,1
+   - MaxContentLightLevel can be set by vector of 2 values:
+     cll,fall  where cll=max. content light level,fall=max. frame average light level,
+     range: 1 <= cll,fall <= 65535
+    
+* changes:
+ - align usage of vvenc interface for vvencapp and vvencFFapp (both apps are now using the lib in the same manner)
+ - vvencapp is now using the command line parser of vvencFFapp, 
+   but the command line params haven´t changed to prev. version for legacy support
+ - help dialog re-designed, params are now sorted into categories
+ 
+ - perceptually motivated QP adaptation (qpa) changed to on/off (mode 0-5 before) and uses XPSNR depending on HDR mode
+   vvencapp: use --qpa  or --qpa 0|1 to enable/disable (enabled by default
+   vvencFFapp:  use -qpa|--PerceptQPA   or -qpa|--PerceptQPA 0|1 to enable/disable (enabled by default
+ - Level is set to auto per default. In this mode it will be automatically detected by given resolution
+
+
+* bugfixes:
+ - #18: setting of max number CABAC-coded coefficients for the floating point scalar RDOQ
+ 
+
+* libvvenc:
+ - changed preset configuration to reflect current Pareto-Optimal trade-offs. The new presets are much better harmonized between different
+   resolutions and content types.
+ - auto config initialization. The configuration to init the vvenc library now only needs required 
+   parameter (width, height, framerate), everything else is set to default config
+   some parameter are set to -1 per default. Params set to -1 will be set to default, auto config params:
+   profile, level, threads, aud, vui, hrd, PerceptQPATempFiltIPic, RateControl, KeepHierarchicalBit, WppBitEqual, FEN
+ - medium preset is now used as default (this has quite a big impact on default params in the vvencFFapp)
+ - decreased memory usage
+ - improved multi-threading (now can utilize up to 10 threads for HD and up to 24 for UHD, efficiency depends on preset and other parameters)
+ - added the possibility to generate bitstreams for minimal drift in open-GOP adaptive switching.
+ - various optimizations and speed-ups.
+
+* vvencapp:
+ - new parameter     -aud, --accessunitdelimiter [auto] Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); 
+                             default: auto - only if needed by dependent options)
+                     -vui, --vuiparameterspresent [auto] Emit VUI information (auto(-1),off(0),on(1); 
+                             default: auto - only if needed by dependent options)
+                     -hrd, --hrdParameterspresent [auto] Emit VUI HRD information (auto(-1),off(0),on(1); 
+                             default: auto - only if needed by dependent options)
+                     --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
+                             use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
+
+ - changed parameter --qpa [on] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
+                             as legacy support the previous modes 1-5 are now mapped to on/1
+
+* vvencFFapp:
+ - new parameter     --MaxParallelFrames [-1] Maximum number of frames to be processed in parallel
+                                     (-1: auto depends on number of threads, 0:off, >=2: enable parallel frames)
+                     --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
+                             use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
+                     --MasteringDisplayColourVolume [[]] 
+                                     SMPTE ST 2086 mastering display colour volume info SEI (HDR), vec(uint) size 10,
+                                     x,y,x,y,x,y,x,y,max,min where: "G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)"range: 0 <=
+                                     GBR,WP <= 50000, 0 <= L <= uint; GBR xy coordinates in increment of 1/50000,
+                                     min/max luminance in units of 1/10000 cd/m2
+                     --MaxContentLightLevel [[]]  Specify content light level info SEI as "cll,fall" (HDR) max. content light level,
+                                     max. frame average light level, range: 1 <= cll,fall <= 65535'
+                     --PreferredTransferCharacteristics [auto] 
+                                     Specify preferred transfer characteristics SEI and overwrite transfer entry in VUI
+                                     (0-18): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, smpte240m,
+                                     linear, log100, log316, iec61966-2-4, bt1361e, iec61966-2-1, bt2020-10, bt2020-12,
+                                     smpte2084, smpte428, arib-std-b67
+                     --segment [off] when encoding multiple separate segments, specify segment position to enable segment concatenation 
+                                     (first, mid, last) [off]
+                                     first: first segment           
+                                     mid  : all segments between first and last segment
+                                     last : last segment
+                     --FastIntraTools [0]         SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)
+
+ - changed parameter --qpa [off] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
+                     -aud, --AccessUnitDelimiter [auto] Enable Access Unit Delimiter NALUs, 
+                                     (default: auto - enable only if needed by dependent options)
+                     -vui, --VuiParametersPresent [auto] Enable generation of vui_parameters(),
+                                     (default: auto - enable only if needed by dependent options)
+                     -hrd, --HrdParametersPresent [auto] Enable generation of hrd_parameters(), 
+                                     (default: auto - enable only if needed by dependent options)
+                     --Profile [auto] name to use for encoding. Use [multilayer_]main_10[_444][_still_picture],
+                                     auto, or none
+                     --Level [auto] limit to be used, eg 5.1, or none
+                     --WppBitEqual [-1] Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line
+                                     above, 2:line wise reset)
+                     --RateControl [-1]  enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)
+                     --KeepHierarchicalBit [-1]   Rate control: (0:equal bit allocation, 1:fixed ratio bit allocation, 
+                                     2:adaptive ratio bit allocation
+                     --PerceptQPATempFiltIPic [-1] Temporal high-pass filter in QPA activity calculation for key pictures 
+                                     (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)
+                     --SliceChromaQPOffsetPeriodicity [-1] Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. 
+                                     Use 0 (default) to disable periodic nature.
+                     --ColourPrimaries [unknown]  Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg,
+                                     smpte170m, smpte240m, film, bt2020, smpte428, smpte431, smpte432
+                     --TransferCharacteristics [unknown] 
+                                     Specify opto-electroni transfer characteristics (0-18): reserved, bt709, unknown,
+                                     empty, bt470m, bt470bg, smpte170m, smpte240m, linear, log100, log316, iec61966-2-4,
+                                     bt1361e, iec61966-2-1, bt2020-10, bt2020-12, smpte2084, smpte428, arib-std-b67
+                     --MatrixCoefficients [unknown] 
+                                     Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr,
+                                     bt709, unknown, empty, fcc, bt470bg, smpte170m, smpte240m, ycgco, bt2020nc,
+                                     bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp
+                     --RPR [1] can be now set to "2", in which case the encoder will impose constraints on the RASL frames
+                                     allowing for minimal drift open-GOP adaptive switching (with or withour resolution change).
+                     
+/////////////////////////////////////////
 tag 0.2.1.0
 
 * bugfixes:

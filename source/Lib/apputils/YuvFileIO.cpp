@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -45,36 +45,29 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     FileIO.cpp
-    \brief    file I/O class (header)
+/** \file     YuvFileIO.cpp
+    \brief    yuv file I/O class (header)
 */
 
-#include "vvenc/FileIO.h"
+#include "apputils/YuvFileIO.h"
+#include "vvenc/vvenc.h"
 
-#include "CommonLib/CommonDef.h"
-#include "CommonLib/Unit.h"
-#include "CommonLib/Slice.h"
-#include "EncoderLib/NALwrite.h"
-
+#include <algorithm>
 #include <iostream>
-#include "vvenc/EncoderIf.h"
 
 //! \ingroup Interface
 //! \{
+using namespace vvenc;
 
-namespace vvenc {
-
-// ====================================================================================================================
-
-static_assert( sizeof(Pel)  == sizeof(*(YUVPlane::planeBuf)),   "internal bits per pel differ from interface definition" );
+namespace apputils {
 
 // ====================================================================================================================
+typedef int16_t LPel;
 
 bool readYuvPlane( std::istream&       fd,
-                   YUVPlane&           yuvPlane,
+                   YUVBuffer::Plane&   yuvPlane,
                    bool                is16bit,
                    int                 fileBitDepth,
-                   const int           pad[ 2 ],
                    const ComponentID&  compID,
                    const ChromaFormat& inputChFmt,
                    const ChromaFormat& internChFmt
@@ -85,15 +78,13 @@ bool readYuvPlane( std::istream&       fd,
   const int csx_dest = getComponentScaleX( compID, internChFmt );
   const int csy_dest = getComponentScaleY( compID, internChFmt );
 
-  const int stride      = yuvPlane.stride;
-  const int fullWidth   = yuvPlane.width;
-  const int fullHeight  = yuvPlane.height;
-  const int inputWidth  = ( ( fullWidth  << csx_dest ) - pad[ 0 ] ) >> csx_dest;
-  const int inputHeight = ( ( fullHeight << csy_dest ) - pad[ 1 ] ) >> csy_dest;
-  Pel* dst              = yuvPlane.planeBuf;
+  const int stride  = yuvPlane.stride;
+  const int width   = yuvPlane.width;
+  const int height  = yuvPlane.height;
+  LPel* dst         = yuvPlane.ptr;
 
-  const int fileStride = ( ( inputWidth  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
-  const int fileHeight = ( ( inputHeight << csy_dest )                       ) >> csy_file;
+  const int fileStride = ( ( width  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
+  const int fileHeight = ( ( height << csy_dest )                       ) >> csy_file;
 
   std::vector<uint8_t> bufVec( fileStride );
   uint8_t *buf = &( bufVec[0] );
@@ -103,10 +94,10 @@ bool readYuvPlane( std::istream&       fd,
     if ( internChFmt != CHROMA_400 )
     {
       // set chrominance data to mid-range: (1<<(fileBitDepth-1))
-      const Pel val = 1 << ( fileBitDepth - 1 );
-      for (int y = 0; y < fullHeight; y++, dst+= stride)
+      const LPel val = 1 << ( fileBitDepth - 1 );
+      for (int y = 0; y < height; y++, dst+= stride)
       {
-        for (int x = 0; x < fullWidth; x++)
+        for (int x = 0; x < width; x++)
         {
           dst[x] = val;
         }
@@ -126,7 +117,7 @@ bool readYuvPlane( std::istream&       fd,
   {
     const unsigned mask_y_file = ( 1 << csy_file ) - 1;
     const unsigned mask_y_dest = ( 1 << csy_dest ) - 1;
-    for( int y444 = 0; y444 < ( inputHeight << csy_dest ); y444++ )
+    for( int y444 = 0; y444 < ( height << csy_dest ); y444++ )
     {
       if ( ( y444 & mask_y_file ) == 0 )
       {
@@ -147,16 +138,16 @@ bool readYuvPlane( std::istream&       fd,
           const int sx = csx_dest - csx_file;
           if ( ! is16bit )
           {
-            for ( int x = 0; x < inputWidth; x++ )
+            for ( int x = 0; x < width; x++ )
             {
               dst[ x ] = buf[ x << sx ];
             }
           }
           else
           {
-            for ( int x = 0; x < inputWidth; x++ )
+            for ( int x = 0; x < width; x++ )
             {
-              dst[ x ] = Pel( buf[ ( x << sx ) * 2 + 0 ] ) | ( Pel ( buf[ ( x << sx ) * 2 + 1 ] ) << 8 );
+              dst[ x ] = LPel( buf[ ( x << sx ) * 2 + 0 ] ) | ( LPel ( buf[ ( x << sx ) * 2 + 1 ] ) << 8 );
             }
           }
         }
@@ -166,57 +157,42 @@ bool readYuvPlane( std::istream&       fd,
           const int sx = csx_file - csx_dest;
           if ( ! is16bit )
           {
-            for ( int x = 0; x < inputWidth; x++ )
+            for ( int x = 0; x < width; x++ )
             {
               dst[ x ] = buf[ x >> sx ];
             }
           }
           else
           {
-            for ( int x = 0; x < inputWidth; x++ )
+            for ( int x = 0; x < width; x++ )
             {
-              dst[ x ] = Pel( buf[ ( x >> sx ) * 2 + 0 ] ) | ( Pel( buf[ ( x >> sx ) * 2 + 1 ] ) << 8 );
+              dst[ x ] = LPel( buf[ ( x >> sx ) * 2 + 0 ] ) | ( LPel( buf[ ( x >> sx ) * 2 + 1 ] ) << 8 );
             }
           }
-        }
-
-        // process right hand side padding
-        const Pel val = dst[ inputWidth - 1 ];
-        for ( int x = inputWidth; x < fullWidth; x++ )
-        {
-          dst[ x ] = val;
         }
 
         dst += stride;
       }
     }
 
-    // process bottom padding
-    for ( int y = inputHeight; y < fullHeight; y++, dst += stride )
-    {
-      for ( int x = 0; x < fullWidth; x++ )
-      {
-        dst[ x ] = (dst - stride)[ x ];
-      }
-    }
   }
   return true;
 }
 
-bool writeYuvPlane( std::ostream&       fd,
-                    const YUVPlane&     yuvPlane,
-                    bool                is16bit,
-                    int                 fileBitDepth,
-                    int                 packedYUVOutputMode,
-                    const ComponentID&  compID,
-                    const ChromaFormat& internChFmt,
-                    const ChromaFormat& outputChFmt
+bool writeYuvPlane( std::ostream&           fd,
+                    const YUVBuffer::Plane& yuvPlane,
+                    bool                    is16bit,
+                    int                     fileBitDepth,
+                    int                     packedYUVOutputMode,
+                    const ComponentID&      compID,
+                    const ChromaFormat&     internChFmt,
+                    const ChromaFormat&     outputChFmt
                   )
 {
   const int stride = yuvPlane.stride;
   const int width  = yuvPlane.width;
   const int height = yuvPlane.height;
-  const Pel* src   = yuvPlane.planeBuf;
+  const LPel* src  = yuvPlane.ptr;
 
   const uint32_t csx_file = getComponentScaleX( compID, outputChFmt );
   const uint32_t csy_file = getComponentScaleY( compID, outputChFmt );
@@ -233,8 +209,6 @@ bool writeYuvPlane( std::ostream&       fd,
 
   if ( writePYUV )
   {
-    CHECK( internChFmt == CHROMA_400, "write packed yuv for chroma 400 not supported" );
-
     const unsigned mask_y_file = (1 << csy_file) - 1;
     const unsigned mask_y_src  = (1 << csy_src ) - 1;
     const int      widthS_file = fileWidth >> (fileBitDepth == 12 ? 1 : 2);
@@ -330,7 +304,7 @@ bool writeYuvPlane( std::ostream&       fd,
   {
     if ( outputChFmt != CHROMA_400 )
     {
-      const Pel value = 1 << ( fileBitDepth - 1 );
+      const LPel value = 1 << ( fileBitDepth - 1 );
 
       for ( int y = 0; y < fileHeight; y++ )
       {
@@ -427,14 +401,14 @@ bool writeYuvPlane( std::ostream&       fd,
   return true;
 }
 
-bool verifyYuvPlane( YUVPlane& yuvPlane, const int bitDepth )
+bool verifyYuvPlane( YUVBuffer::Plane& yuvPlane, const int bitDepth )
 {
   const int stride = yuvPlane.stride;
   const int width  = yuvPlane.width;
   const int height = yuvPlane.height;
-  Pel* dst         = yuvPlane.planeBuf;
+  LPel* dst        = yuvPlane.ptr;
 
-  const Pel mask = ~( ( 1 << bitDepth ) - 1 );
+  const LPel mask = ~( ( 1 << bitDepth ) - 1 );
 
   for ( int y = 0; y < height; y++, dst += stride )
   {
@@ -450,12 +424,14 @@ bool verifyYuvPlane( YUVPlane& yuvPlane, const int bitDepth )
   return true;
 }
 
-void scaleYuvPlane( YUVPlane& yuvPlane, const int shiftBits, const Pel minVal, const Pel maxVal )
+void scaleYuvPlane( YUVBuffer::Plane& yuvPlaneOut, const YUVBuffer::Plane& yuvPlaneIn, const int shiftBits, const LPel minVal, const LPel maxVal )
 {
-  const int stride = yuvPlane.stride;
-  const int width  = yuvPlane.width;
-  const int height = yuvPlane.height;
-  Pel* dst         = yuvPlane.planeBuf;
+  const int stride = yuvPlaneOut.stride;
+  const int width  = yuvPlaneOut.width;
+  const int height = yuvPlaneOut.height;
+  LPel* dst        = yuvPlaneOut.ptr;
+  const LPel* src    = yuvPlaneIn.ptr;
+  const int instride = yuvPlaneIn.stride;
 
   if( 0 == shiftBits )
   {
@@ -464,25 +440,25 @@ void scaleYuvPlane( YUVPlane& yuvPlane, const int shiftBits, const Pel minVal, c
 
   if( shiftBits > 0 )
   {
-    for( int y = 0; y < height; y++, dst += stride )
+    for( int y = 0; y < height; y++, dst += stride, src += instride )
     {
       for( int x = 0; x < width; x++)
       {
-        dst[x] <<= shiftBits;
+        dst[x] = src[x] << shiftBits;
       }
     }
   }
   else if ( shiftBits < 0 )
   {
     const int shiftbitsr =- shiftBits;
-    const Pel rounding = 1 << ( shiftbitsr-1 );
+    const LPel rounding = 1 << ( shiftbitsr-1 );
 
-    for( int y = 0; y < height; y++, dst += stride )
+    for( int y = 0; y < height; y++, dst += stride, src += instride )
     {
       for( int x = 0; x < width; x++)
       {
-        Pel val  = ( dst[ x ] + rounding ) >> shiftbitsr;
-        dst[ x ] = std::min<Pel>( minVal, std::max<Pel>( maxVal, val ) );
+        LPel val = ( src[ x ] + rounding ) >> shiftbitsr;
+        dst[ x ] = std::min<LPel>( minVal, std::max<LPel>( maxVal, val ) );
       }
     }
   }
@@ -490,35 +466,45 @@ void scaleYuvPlane( YUVPlane& yuvPlane, const int shiftBits, const Pel minVal, c
 
 // ====================================================================================================================
 
-void YuvIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth[ MAX_NUM_CH ], const int MSBExtendedBitDepth[ MAX_NUM_CH ], const int internalBitDepth[ MAX_NUM_CH ] )
+int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth, const int MSBExtendedBitDepth,
+                     const int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt,
+                     bool clipToRec709, bool packedYUVMode )
 {
   //NOTE: files cannot have bit depth greater than 16
-  for( int ch = 0; ch < MAX_NUM_CH; ch++ )
-  {
-    m_fileBitdepth       [ ch ] = std::min<unsigned>( fileBitDepth[ ch ], 16 );
-    m_MSBExtendedBitDepth[ ch ] = MSBExtendedBitDepth[ ch ];
-    m_bitdepthShift      [ ch ] = internalBitDepth[ ch ] - m_MSBExtendedBitDepth[ ch ];
+  m_fileBitdepth        = std::min<unsigned>( fileBitDepth, 16 );
+  m_MSBExtendedBitDepth = MSBExtendedBitDepth;
+  m_bitdepthShift       = internalBitDepth - m_MSBExtendedBitDepth;
+  m_fileChrFmt          = fileChrFmt; 
+  m_bufferChrFmt        = bufferChrFmt; 
+  m_clipToRec709        = clipToRec709;
+  m_packedYUVMode       = packedYUVMode;
 
-    if ( m_fileBitdepth[ ch ] > 16 )
-    {
-      if ( bWriteMode )
-      {
-        msg( WARNING, "\nWARNING: Cannot write a yuv file of bit depth greater than 16 - output will be right-shifted down to 16-bit precision\n" );
-      }
-      else
-      {
-        EXIT( "ERROR: Cannot read a yuv file of bit depth greater than 16" );
-      }
-    }
+  if( m_packedYUVMode && (m_bufferChrFmt == CHROMA_400) )
+  {  
+    m_lastError = "\nERROR: write packed yuv for chroma 400 not supported";
+    return -1;
   }
 
-  if ( bWriteMode )
+  if( m_packedYUVMode &&  !bWriteMode )
+  {
+    m_lastError = "\nERROR: yuv file input - no packed mode support";
+    return -1;
+  }
+
+  if ( m_fileBitdepth > 16 )
+  {
+    m_lastError =  "\nERROR: Cannot handle a yuv file of bit depth greater than 16";
+    return -1;
+  }
+
+  if( bWriteMode )
   {
     m_cHandle.open( fileName.c_str(), std::ios::binary | std::ios::out );
 
     if( m_cHandle.fail() )
     {
-      EXIT( "Failed to open output YUV file: " << fileName.c_str() );
+      m_lastError =  "\nFailed to open output YUV file:  " + fileName;
+      return -1;
     }
   }
   else
@@ -527,27 +513,29 @@ void YuvIO::open( const std::string &fileName, bool bWriteMode, const int fileBi
 
     if( m_cHandle.fail() )
     {
-      EXIT( "Failed to open input YUV file: " << fileName.c_str() );
+      m_lastError =  "\nFailed to open input YUV file:  " + fileName;
+      return -1;
     }
   }
+  return 0;
 }
 
-void YuvIO::close()
+void YuvFileIO::close()
 {
   m_cHandle.close();
 }
 
-bool YuvIO::isEof()
+bool YuvFileIO::isEof()
 {
   return m_cHandle.eof();
 }
 
-bool YuvIO::isFail()
+bool YuvFileIO::isFail()
 {
   return m_cHandle.fail();
 }
 
-void YuvIO::skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int width, int height  )
+void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
 {
   if ( numFrames <= 0 )
   {
@@ -556,15 +544,11 @@ void YuvIO::skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int wi
 
   //set the frame size according to the chroma format
   std::streamoff frameSize      = 0;
-  unsigned wordsize             = 1;
-  for ( int i = 0; i < getNumberValidComponents( inputChFmt ); i++ )
+  unsigned wordsize             = ( m_fileBitdepth > 8 ) ? 2 : 1;
+  for ( int i = 0; i < (int)getNumberValidComponents( m_fileChrFmt ); i++ )
   {
     const ComponentID compID = ComponentID( i );
-    frameSize += ( width >> getComponentScaleX( compID, inputChFmt ) ) * ( height >> getComponentScaleY( compID, inputChFmt ));
-    if ( m_fileBitdepth[ toChannelType( compID ) ] > 8 )
-    {
-      wordsize = 2;
-    }
+    frameSize += ( width >> getComponentScaleX( compID, m_fileChrFmt ) ) * ( height >> getComponentScaleY( compID, m_fileChrFmt ));
   }
   frameSize *= wordsize;
 
@@ -588,7 +572,7 @@ void YuvIO::skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int wi
   m_cHandle.read( buf, offset_mod_bufsize );
 }
 
-bool YuvIO::readYuvBuf( YUVBuffer& yuvInBuf, const ChromaFormat& inputChFmt, const ChromaFormat& internChFmt, const int pad[ 2 ], bool bClipToRec709 )
+bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
 {
   // check end-of-file
   if ( isEof() )
@@ -596,153 +580,67 @@ bool YuvIO::readYuvBuf( YUVBuffer& yuvInBuf, const ChromaFormat& inputChFmt, con
     return false;
   }
 
-  bool is16bit = false;
-  for( int ch = 0; ch < MAX_NUM_CH; ch++ )
-  {
-    if ( m_fileBitdepth[ ch ] > 8 )
-    {
-      is16bit = true;
-      break;
-    }
-  }
+  const bool is16bit         = m_fileBitdepth > 8;
+  const int desired_bitdepth = m_MSBExtendedBitDepth + m_bitdepthShift;
+  const bool b709Compliance  = ( m_clipToRec709 ) && ( m_bitdepthShift < 0 && desired_bitdepth >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
+  const LPel minVal           = b709Compliance ? ( (    1 << ( desired_bitdepth - 8 ) )    ) : 0;
+  const LPel maxVal           = b709Compliance ? ( ( 0xff << ( desired_bitdepth - 8 ) ) -1 ) : ( 1 << desired_bitdepth ) - 1;
 
-  const int numComp = std::max( getNumberValidComponents( inputChFmt ), getNumberValidComponents( internChFmt ) );
-
+  const int numComp          = std::max( getNumberValidComponents( m_fileChrFmt ), getNumberValidComponents( m_fileChrFmt ) );
   for( int comp = 0; comp < numComp; comp++ )
   {
-    const ComponentID compID   = ComponentID( comp );
-    const ChannelType chType   = toChannelType( compID );
-    const int desired_bitdepth = m_MSBExtendedBitDepth[ chType ] + m_bitdepthShift[ chType ];
-    const bool b709Compliance  = ( bClipToRec709 ) && ( m_bitdepthShift[ chType ] < 0 && desired_bitdepth >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
-    const Pel minVal           = b709Compliance ? ( (    1 << ( desired_bitdepth - 8 ) )    ) : 0;
-    const Pel maxVal           = b709Compliance ? ( ( 0xff << ( desired_bitdepth - 8 ) ) -1 ) : ( 1 << desired_bitdepth ) - 1;
-    YUVPlane& yuvPlane         = yuvInBuf.yuvPlanes[ comp ];
+    YUVBuffer::Plane& yuvPlane = yuvInBuf.planes[ comp ];
 
-    if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth[ chType ], pad, compID, inputChFmt, internChFmt ) )
+    if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, ComponentID( comp ), m_fileChrFmt, m_bufferChrFmt ) )
       return false;
 
-    if ( internChFmt == CHROMA_400 )
+    if ( m_bufferChrFmt == CHROMA_400 )
       continue;
 
-    CHECK( yuvPlane.planeBuf == nullptr, "allocated yuv buffer does not fit to intern chroma format" );
-
-    if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth[ chType ] ) )
+    if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
     {
-      EXIT("Source image contains values outside the specified bit range!");
+      m_lastError = "Source image contains values outside the specified bit range!";
+      return false;
     }
 
-    scaleYuvPlane( yuvPlane, m_bitdepthShift[ chType ], minVal, maxVal );
+    scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
   }
 
   return true;
 }
 
-bool YuvIO::writeYuvBuf( const YUVBuffer& yuvOutBuf, const ChromaFormat& internChFmt, const ChromaFormat& outputChFmt, bool bPackedYUVOutputMode, bool bClipToRec709 )
+bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
 {
   // compute actual YUV frame size excluding padding size
-  bool is16bit              = false;
-  bool nonZeroBitDepthShift = false;
+  bool is16bit              = m_fileBitdepth > 8;
+  bool nonZeroBitDepthShift = m_bitdepthShift != 0;
 
-  for( int ch = 0; ch < MAX_NUM_CH; ch++ )
-  {
-    if ( m_fileBitdepth[ ch ] > 8 )
-    {
-      is16bit = true;
-    }
-    if ( m_bitdepthShift[ ch ] != 0 )
-    {
-      nonZeroBitDepthShift = true;
-    }
-  }
+  YUVBufferStorage yuvScaled( m_bufferChrFmt, yuvOutBuf.planes[ COMP_Y ].width, yuvOutBuf.planes[ COMP_Y ].height );
 
-  PelStorage picScaled;
-  YUVBuffer yuvScaled;
   if ( nonZeroBitDepthShift )
   {
-    picScaled.create( internChFmt, Area( Position( 0, 0 ), Size( yuvOutBuf.yuvPlanes[ COMP_Y ].width, yuvOutBuf.yuvPlanes[ COMP_Y ].height ) ) );
-    Window zeroWindow;
-    setupYuvBuffer( picScaled, yuvScaled, &zeroWindow );
-    PelUnitBuf pic;
-    setupPelUnitBuf( yuvOutBuf, pic, internChFmt );
-    picScaled.copyFrom( pic );
-    for( int comp = 0; comp < getNumberValidComponents( internChFmt ); comp++ )
+    const bool b709Compliance = m_clipToRec709 && ( -m_bitdepthShift < 0 && m_MSBExtendedBitDepth >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
+    const LPel minVal          = b709Compliance? ( (    1 << ( m_MSBExtendedBitDepth - 8 ) )    ) : 0;
+    const LPel maxVal          = b709Compliance? ( ( 0xff << ( m_MSBExtendedBitDepth - 8 ) ) -1 ) : ( 1 << m_MSBExtendedBitDepth ) - 1;
+    for( int comp = 0; comp < (int)getNumberValidComponents( m_bufferChrFmt ); comp++ )
     {
-      const ComponentID compID  = ComponentID( comp );
-      const ChannelType chType  = toChannelType( compID );
-      const bool b709Compliance = bClipToRec709 && ( -m_bitdepthShift[ chType ] < 0 && m_MSBExtendedBitDepth[ chType ] >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
-      const Pel minVal          = b709Compliance? ( (    1 << ( m_MSBExtendedBitDepth[ chType ] - 8 ) )    ) : 0;
-      const Pel maxVal          = b709Compliance? ( ( 0xff << ( m_MSBExtendedBitDepth[ chType ] - 8 ) ) -1 ) : ( 1 << m_MSBExtendedBitDepth[ chType ] ) - 1;
-      YUVPlane& yuvPlane        = yuvScaled.yuvPlanes[ comp ];
-      scaleYuvPlane( yuvPlane, -m_bitdepthShift[ chType ], minVal, maxVal );
+      scaleYuvPlane( yuvScaled.planes[ comp ], yuvOutBuf.planes[ comp ],-m_bitdepthShift, minVal, maxVal );
     }
   }
 
   const YUVBuffer& yuvWriteBuf = nonZeroBitDepthShift ? yuvScaled : yuvOutBuf;
 
-  for( int comp = 0; comp < getNumberValidComponents( outputChFmt ); comp++ )
+  for( int comp = 0; comp < (int)getNumberValidComponents( m_fileChrFmt ); comp++ )
   {
-    const ComponentID compID = ComponentID( comp );
-    const ChannelType chType = toChannelType( compID );
-    const YUVPlane& yuvPlane = yuvWriteBuf.yuvPlanes[ comp ];
-    if ( ! writeYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth[ chType ], bPackedYUVOutputMode, compID, internChFmt, outputChFmt ) )
+    if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, ComponentID( comp ), m_bufferChrFmt, m_fileChrFmt ) )
       return false;
   }
 
   return true;
 }
 
-// ====================================================================================================================
 
-/**
- * write all NALunits in au to bytestream out in a manner satisfying
- * AnnexB of AVC.  NALunits are written in the order they are found in au.
- * the zero_byte word is appended to:
- *  - the initial startcode in the access unit,
- *  - any SPS/PPS nal units
- */
-std::vector<uint32_t> writeAnnexB( std::ostream& out, const AccessUnit& au )
-{
-  std::vector<uint32_t> annexBsizes;
-
-  for (AccessUnit::const_iterator it = au.begin(); it != au.end(); it++)
-  {
-    const NALUnitEBSP& nalu = **it;
-    uint32_t size = 0; /* size of annexB unit in bytes */
-
-    static const uint8_t start_code_prefix[] = {0,0,0,1};
-    if (it == au.begin() || nalu.m_nalUnitType == NAL_UNIT_DCI || nalu.m_nalUnitType == NAL_UNIT_SPS || nalu.m_nalUnitType == NAL_UNIT_VPS || nalu.m_nalUnitType == NAL_UNIT_PPS || nalu.m_nalUnitType == NAL_UNIT_PREFIX_APS || nalu.m_nalUnitType == NAL_UNIT_SUFFIX_APS )
-    {
-      /* From AVC, When any of the following conditions are fulfilled, the
-       * zero_byte syntax element shall be present:
-       *  - the nal_unit_type within the nal_unit() is equal to 7 (sequence
-       *    parameter set) or 8 (picture parameter set),
-       *  - the byte stream NAL unit syntax structure contains the first NAL
-       *    unit of an access unit in decoding order, as specified by subclause
-       *    7.4.1.2.3.
-       */
-      out.write(reinterpret_cast<const char*>(start_code_prefix), 4);
-      size += 4;
-    }
-    else
-    {
-      out.write(reinterpret_cast<const char*>(start_code_prefix+1), 3);
-      size += 3;
-    }
-    out << nalu.m_nalUnitData.str();
-    size += uint32_t(nalu.m_nalUnitData.str().size());
-
-    annexBsizes.push_back(size);
-  }
-
-  if (au.size() > 0)
-  {
-    out.flush();
-  }
-
-  return annexBsizes;
-}
-
-} // namespace vvenc
+} // namespace apputils
 
 //! \}
 

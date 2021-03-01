@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -45,11 +45,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 /**
-  \ingroup vvencExternalInterfaces
   \file    vvenc.cpp
-  \brief   This file contains the external interface of the hhivvcdec SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/08/2020
+  \brief   This file contains the external interface of the vvenc SDK.
 */
 
 #include "vvenc/vvenc.h"
@@ -67,7 +64,7 @@ VVEnc::~VVEnc()
 {
   if( NULL != m_pcVVEncImpl )
   {
-    if( m_pcVVEncImpl->m_bInitialized )
+    if( m_pcVVEncImpl->isInitialized() )
     {
       uninit();
     }
@@ -76,97 +73,68 @@ VVEnc::~VVEnc()
   }
 }
 
-int VVEnc::checkConfig( const VVEncParameter& rcVVEncParameter )
+int VVEnc::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
-  if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
-
-  return m_pcVVEncImpl->checkConfig( rcVVEncParameter );
+  return m_pcVVEncImpl->checkConfig( rcVVEncCfg );
 }
 
-int VVEnc::init( const VVEncParameter& rcVVEncParameter  )
+int VVEnc::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf  )
 {
-  if( m_pcVVEncImpl->m_bInitialized )       { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-  if( rcVVEncParameter.m_iThreadCount > 64 ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_NOT_SUPPORTED ); }
+  if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
-  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string simdOpt;
-  vvenc::setSIMDExtension( simdOpt );
-
-  return m_pcVVEncImpl->init( rcVVEncParameter );
+  return m_pcVVEncImpl->init( rcVVEncCfg, pcYUVWriterIf );
 }
 
 int VVEnc::initPass( int pass )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
   return m_pcVVEncImpl->initPass( pass );
 }
 
 int VVEnc::uninit()
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
 
   return m_pcVVEncImpl->uninit( );
 }
 
 bool VVEnc::isInitialized()
 {
-  return m_pcVVEncImpl->m_bInitialized;
+  return m_pcVVEncImpl->isInitialized();
 }
 
-int VVEnc::encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit )
+int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone)
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
+  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->encode( pcInputPicture, rcVvcAccessUnit );
+  return m_pcVVEncImpl->encode( pcYUVBuffer, rcAccessUnit, rbEncodeDone );
 }
 
-int VVEnc::flush( VvcAccessUnit& rcVvcAccessUnit )
+int VVEnc::getConfig( VVEncCfg& rcVVEncCfg )
 {
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->flush( rcVvcAccessUnit ) );
-}
-
-int VVEnc::getPreferredBuffer( PicBuffer &rcPicBuffer )
-{
-  if( !m_pcVVEncImpl->m_bInitialized ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getPreferredBuffer( rcPicBuffer ) );
-}
-
-void VVEnc::clockStartTime()
-{
-  m_pcVVEncImpl->clockStartTime();
-}
-
-void VVEnc::clockEndTime()
-{
-  m_pcVVEncImpl->clockEndTime();
-}
-
-double VVEnc::clockGetTimeDiffMs()
-{
-  return m_pcVVEncImpl->clockGetTimeDiffMs();
-}
-
-int VVEnc::getConfig( VVEncParameter& rcVVEncParameter )
-{
-  if( !m_pcVVEncImpl->m_bInitialized )
+  if( !m_pcVVEncImpl->isInitialized() )
   {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncParameter ) );
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncCfg ) );
 }
 
+int VVEnc::reconfig( const VVEncCfg& rcVVEncCfg )
+{
+  if( !m_pcVVEncImpl->isInitialized() )
+  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
 
-const char* VVEnc::getEncoderInfo() const
+  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncCfg ) );
+}
+
+std::string VVEnc::getEncoderInfo() const
 {
   return m_pcVVEncImpl->getEncoderInfo();
 }
 
-const char* VVEnc::getLastError() const
+std::string VVEnc::getLastError() const
 {
-  return m_pcVVEncImpl->m_cErrorString.c_str();
+  return m_pcVVEncImpl->getLastError();
 }
 
 int VVEnc::getNumLeadFrames() const
@@ -179,24 +147,61 @@ int VVEnc::getNumTrailFrames() const
   return m_pcVVEncImpl->getNumTrailFrames();
 }
 
-const char* VVEnc::getVersionNumber()
+int VVEnc::printSummary() const
+{
+  return m_pcVVEncImpl->printSummary();
+}
+
+std::string VVEnc::getVersionNumber()
 {
   return VVEncImpl::getVersionNumber();
 }
 
-const char* VVEnc::getErrorMsg( int nRet )
+std::string VVEnc::getErrorMsg( int nRet )
 {
   return VVEncImpl::getErrorMsg(nRet);
 }
 
-const char* VVEnc::getPresetParamsAsStr( int iQuality )
-{
-  return VVEncImpl::getPresetParamsAsStr(iQuality);
-}
-
 void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
 {
-  vvenc::registerMsgCbf( msgFnc );
+  VVEncImpl::registerMsgCbf( msgFnc );
+}
+
+std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+{
+  return VVEncImpl::setSIMDExtension( simdId );
+}
+
+YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+  : YUVBuffer()
+{
+  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    YUVBuffer::Plane& yuvPlane = planes[ i ];
+    yuvPlane.width  = getWidthOfComponent ( chFmt, frameWidth,  i );
+    yuvPlane.height = getHeightOfComponent( chFmt, frameHeight, i );
+    yuvPlane.stride = yuvPlane.width;
+    const int size  = yuvPlane.stride * yuvPlane.height;
+    yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+  }
+}
+
+YUVBufferStorage::~YUVBufferStorage()
+{
+  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  {
+    delete [] planes[ i ].ptr;
+  }
+}
+
+///< checks if library has tracing supported enabled (see ENABLE_TRACING).
+VVENC_DECL bool isTracingEnabled()
+{
+#if ENABLE_TRACING
+  return true;
+#else
+  return false;
+#endif
 }
 
 } // namespace

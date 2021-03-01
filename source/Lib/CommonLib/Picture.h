@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <deque>
 #include <chrono>
+#include <atomic>
 
 //! \ingroup CommonLib
 //! \{
@@ -67,6 +68,7 @@ namespace vvenc {
 
 class SEI;
 class SEIDecodedPictureHash;
+class EncRCPic;
 
 typedef std::list<SEI*> SEIMessages;
 
@@ -137,7 +139,6 @@ protected:
   uint32_t m_uiPrevISlicePOC;
   bool     m_bResetAMaxBT;
 };
-
 
 struct Picture : public UnitArea
 {
@@ -214,10 +215,11 @@ public:
 
   bool                          isMctfProcessed;
   bool                          isInitDone;
-  bool                          isReconstructed;
+  std::atomic_bool              isReconstructed;
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
+  bool                          isFinished;
   bool                          isLongTerm;
   bool                          encPic;
   bool                          writePic;
@@ -226,6 +228,7 @@ public:
   int                           refCounter;
   int                           poc;
   int                           gopId;
+  int                           rcIdxInGop;
   unsigned                      TLayer;
   int                           layerId;
   bool                          isSubPicBorderSaved;
@@ -241,7 +244,12 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   StopClock                     encTime;
-  bool                          useSC;
+  bool                          useScMCTF;
+  bool                          useScTS;
+  bool                          useScBDPCM;
+  int                           actualHeadBits;
+  int                           actualTotalBits;
+  EncRCPic*                     encRCPic;
 
 private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];
@@ -290,7 +298,6 @@ public:
 };
 
 int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
-
 
 typedef std::list<Picture*> PicList;
 

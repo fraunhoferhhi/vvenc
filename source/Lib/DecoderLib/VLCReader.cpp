@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -3298,14 +3298,14 @@ void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTi
   if(profileTierPresent)
   {
     READ_CODE(7 , symbol,   "general_profile_idc"              );
-    ptl->profileIdc  = Profile::Name(symbol);
+    ptl->profileIdc  = Profile(symbol);
 
     READ_FLAG(    flag,   "general_tier_flag"                );
-    ptl->tierFlag =  flag ? Level::HIGH : Level::MAIN;
+    ptl->tierFlag =  flag ? Tier::TIER_HIGH : Tier::TIER_MAIN;
   }
 
   READ_CODE(8 , symbol,   "general_level_idc"                );
-  ptl->levelIdc   = Level::Name(symbol);
+  ptl->levelIdc   = Level(symbol);
   READ_FLAG( ptl->frameOnlyConstraintFlag,   "ptl_frame_only_constraint_flag"   );
   READ_FLAG( ptl->multiLayerEnabledFlag,     "ptl_multilayer_enabled_flag" );
 
@@ -3329,7 +3329,7 @@ void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTi
     if (ptl->subLayerLevelPresent[i])
     {
       READ_CODE(8 , symbol,   "sub_layer_level_idc"                );
-      ptl->subLayerLevelIdc[i] = Level::Name(symbol);
+      ptl->subLayerLevelIdc[i] = Level(symbol);
     }
   }
 

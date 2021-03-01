@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -66,7 +66,7 @@ namespace vvenc {
 // ====================================================================================================================
 class EncPicture;
 class EncCu;
-class EncCfg;
+class VVEncCfg;
 
 /// encoder search class
 class IntraSearch : public IntraPrediction
@@ -93,48 +93,9 @@ private:
     bool operator==(const ModeInfo cmp) const { return (0 == ::memcmp(this,&cmp,sizeof(ModeInfo))); }
   };
 
-  struct ISPTestedModesInfo
-  {
-    int                                         numTotalParts[2];
-    int                                         bestModeSoFar;
-    ISPType                                     bestSplitSoFar;
-    double                                      bestCost[2];
-    bool                                        splitIsFinished[2];
-    int                                         subTuCounter;
-    PartSplit                                   IspType;
-
-    // set everything to default values
-    void clear()
-    {
-      for (int splitIdx = 0; splitIdx < NUM_INTRA_SUBPARTITIONS_MODES - 1; splitIdx++)
-      {
-        numTotalParts[splitIdx]   = 0;
-        splitIsFinished[splitIdx] = false;
-        bestCost[splitIdx] = MAX_DOUBLE;
-      }
-      bestModeSoFar      = -1;
-      bestSplitSoFar     = NOT_INTRA_SUBPARTITIONS;
-      subTuCounter = -1;
-      IspType      = TU_NO_ISP;
-    }
-    void init(const int numTotalPartsHor, const int numTotalPartsVer)
-    {
-      clear();
-      const int horSplit = HOR_INTRA_SUBPARTITIONS - 1, verSplit = VER_INTRA_SUBPARTITIONS - 1;
-      numTotalParts[horSplit]   = numTotalPartsHor;
-      numTotalParts[verSplit]   = numTotalPartsVer;
-      splitIsFinished[horSplit] = (numTotalParts[horSplit] == 0);
-      splitIsFinished[verSplit] = (numTotalParts[verSplit] == 0);
-      subTuCounter = -1;
-      IspType      = TU_NO_ISP;
-    }
-  };
-
-  ISPTestedModesInfo                                       m_ispTestedModes[NUM_LFNST_NUM_PER_SET];
-
 protected:
   // interface to option
-  const EncCfg*   m_pcEncCfg;
+  const VVEncCfg* m_pcEncCfg;
 
   // interface to classes
   TrQuant*        m_pcTrQuant;
@@ -147,7 +108,62 @@ protected:
 public:
   IntraSearch();
   ~IntraSearch();
-  void init                       ( const EncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
+
+  struct ISPTestedModesInfo
+  {
+    int                                         numTotalParts[2];
+    int                                         bestModeSoFar;
+    ISPType                                     bestSplitSoFar;
+    double                                      bestCost[2];
+    bool                                        splitIsFinished[2];
+    int                                         subTuCounter;
+    PartSplit                                   IspType;
+    bool                                        relatedCuIsValid;
+    bool                                        intraWasTested;
+    int                                         bestIntraMode;
+    bool                                        isIntra;
+    int                                         bestBefore[3];
+    // set everything to default values
+    void clear()
+    {
+      for (int splitIdx = 0; splitIdx < NUM_INTRA_SUBPARTITIONS_MODES - 1; splitIdx++)
+      {
+        numTotalParts[splitIdx] = 0;
+        splitIsFinished[splitIdx] = false;
+        bestCost[splitIdx] = MAX_DOUBLE;
+      }
+      bestModeSoFar = -1;
+      bestSplitSoFar = NOT_INTRA_SUBPARTITIONS;
+      subTuCounter = -1;
+      IspType = TU_NO_ISP;
+    }
+    void init(const int numTotalPartsHor, const int numTotalPartsVer, bool n)
+    {
+      if (n)
+      {
+        intraWasTested = false;
+        relatedCuIsValid = false;
+        bestIntraMode = 0;
+        isIntra   = false;
+        std::memset(bestBefore,0, sizeof(bestBefore));
+        clear();
+      }
+      else
+      {
+        const int horSplit = HOR_INTRA_SUBPARTITIONS - 1, verSplit = VER_INTRA_SUBPARTITIONS - 1;
+        numTotalParts[horSplit] = numTotalPartsHor;
+        numTotalParts[verSplit] = numTotalPartsVer;
+        splitIsFinished[horSplit] = (numTotalParts[horSplit] == 0);
+        splitIsFinished[verSplit] = (numTotalParts[verSplit] == 0);
+        subTuCounter = -1;
+        IspType = TU_NO_ISP;
+      }
+    }
+  };
+
+  ISPTestedModesInfo m_ispTestedModes[ NUM_LFNST_NUM_PER_SET ];
+
+  void init                       ( const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
   void setCtuEncRsrc              ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
   void destroy                    ();
 
@@ -186,9 +202,10 @@ private:
 
   void      xIntraCodingTUBlock       ( TransformUnit &tu, const ComponentID compID, const bool checkCrossCPrediction, Distortion &ruiDist, uint32_t *numSig = nullptr, PelUnitBuf *pPred = nullptr, const bool loadTr = false);
   ChromaCbfs xIntraChromaCodingQT     ( CodingStructure& cs, Partitioner& pm );
-  void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode );
+  void     xIntraCodingLumaQT         ( CodingStructure& cs, Partitioner& pm, PelUnitBuf* pPred, const double bestCostSoFar, int numMode, bool disableMTS);
   double   xTestISP                   ( CodingStructure& cs, Partitioner& pm, double bestCostSoFar, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx);
   int      xSpeedUpISP                ( int speed, bool& testISP, int mode, int& noISP, int& endISP, CodingUnit& cu, static_vector<ModeInfo, FAST_UDI_MAX_RDMODE_NUM>& RdModeList,const ModeInfo& bestPUMode, int bestISP, int bestLfnstIdx);
+  void     xSpeedUpIntra              ( double bestcost, int& EndMode, int& speedIntra, CodingUnit& cu);
 
   template<typename T, size_t N, int M>
   void      xReduceHadCandList        ( static_vector<T, N>& candModeList, static_vector<double, N>& candCostList, SortedPelUnitBufs<M>& sortedPelBuffer, int& numModesForFullRD, const double thresholdHadCost, const double* mipHadCost, const CodingUnit& cu, const bool fastMip);
