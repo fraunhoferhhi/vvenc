@@ -3,7 +3,7 @@ tag 0.3.0.0
 
 * new:
  - support for HDR metadata (--hdr off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020)
-   - if using an HDR mode the encoder decision is depening on used mode + metadate is enabled by default (VUI,SEI)
+   - if using HDR, encoder decisions depend on the used mode and the enabled metadata. by default VUI and SEI metadata are enabled 
    - PQ: set vui parameter (transfer characteristics 16(smpte2084))
    - HLG: set vui parameter (transfer characteristics 1|14(bt709|bt2020-10)) + SEI AlternativeTransferCharacteristics 18
  - support for MasteringDisplayColourVolume and MaxContentLightLevel (SMPTE ST 2086 - HDR10/PQ)
@@ -23,7 +23,7 @@ tag 0.3.0.0
     
 * changes:
  - align usage of vvenc interface for vvencapp and vvencFFapp (both apps are now using the lib in the same manner)
- - vvencapp is now using the command line parser of the vvencFFapp, 
+ - vvencapp is now using the command line parser of vvencFFapp, 
    but the command line params haven´t changed to prev. version for legacy support
  - help dialog re-designed, params are now sorted into categories
  
@@ -60,13 +60,12 @@ tag 0.3.0.0
                      --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
                              use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
 
-
  - changed parameter --qpa [on] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
                              as legacy support the previous modes 1-5 are now mapped to on/1
 
 * vvencFFapp:
- - new parameter     --MaxParallelFrames [0] Maximum number of frames to be processed in parallel
-                                     (0:off, >=2: enable parallel frames)
+ - new parameter     --MaxParallelFrames [-1] Maximum number of frames to be processed in parallel
+                                     (-1: auto depends on number of threads, 0:off, >=2: enable parallel frames)
                      --hdr [off] set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. 
                              use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020
                      --MasteringDisplayColourVolume [[]] 
@@ -88,9 +87,7 @@ tag 0.3.0.0
                                      last : last segment
                      --FastIntraTools [0]         SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)
 
- - changed parameter --qpa [on] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
-                             as legacy support the previous modes 1-5 are now mapped to on/1
-                             
+ - changed parameter --qpa [off] Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)
                      -aud, --AccessUnitDelimiter [auto] Enable Access Unit Delimiter NALUs, 
                                      (default: auto - enable only if needed by dependent options)
                      -vui, --VuiParametersPresent [auto] Enable generation of vui_parameters(),
