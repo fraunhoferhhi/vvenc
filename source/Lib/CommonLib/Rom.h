@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -95,7 +95,7 @@ class ScanOrderRom
 
     ~ScanOrderRom() { destroyScanOrderRom(); }
 
-    const ScanElement* getScanOrder( int g, int t, int w2, int h2 ) const { return m_scanOrder[ g ][ t ][ w2 ][ h2 ]; }
+    const ScanElement* getScanOrder( int g, int w2, int h2 ) const { return m_scanOrder[ g ][ w2 ][ h2 ]; }
 
   private:
     void initScanOrderRom();
@@ -103,7 +103,7 @@ class ScanOrderRom
     void initGeoTemplate();
 
   private:
-    ScanElement *m_scanOrder[ SCAN_NUMBER_OF_GROUP_TYPES ][ SCAN_NUMBER_OF_TYPES ][ MAX_CU_SIZE / 2 + 1 ][ MAX_CU_SIZE / 2 + 1 ];
+    ScanElement *m_scanOrder[ SCAN_NUMBER_OF_GROUP_TYPES ][ MAX_CU_SIZE / 2 + 1 ][ MAX_CU_SIZE / 2 + 1 ];
 };
 
 extern ScanOrderRom g_scanOrderRom;

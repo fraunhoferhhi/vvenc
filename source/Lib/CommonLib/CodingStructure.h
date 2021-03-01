@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -150,14 +150,11 @@ public:
   CUTraverser     traverseCUs(const UnitArea& _unit, const ChannelType _chType);
   TUTraverser     traverseTUs(const UnitArea& _unit, const ChannelType _chType);
 
-  cCUSecureTraverser secureTraverseCUs(const UnitArea& _unit, const ChannelType _chType) const;
   cCUTraverser    traverseCUs(const UnitArea& _unit, const ChannelType _chType) const;
   cTUTraverser    traverseTUs(const UnitArea& _unit, const ChannelType _chType) const;
   // ---------------------------------------------------------------------------
   // encoding search utilities
   // ---------------------------------------------------------------------------
-
-  static_vector<double, NUM_ENC_FEATURES> features;
 
   double      cost;
   double      costDbOffset;
@@ -253,7 +250,7 @@ public:
   LoopFilterParam      * getLFPMapPtr   ( const DeblockEdgeDir edgeDir )       { return m_lfParam[edgeDir]; }
   ptrdiff_t              getLFPMapStride() const { return ( ptrdiff_t ) m_mapSize[CH_L].width; }
 
-  UnitScale getScaling(const UnitScale::ScaliningType type, const ChannelType chType = CH_L)
+  UnitScale getScaling(const UnitScale::ScaliningType type, const ChannelType chType = CH_L) const
   {
     return type == UnitScale::MI_MAP ? g_miScaling : unitScale[chType];
   }

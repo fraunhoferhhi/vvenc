@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
 endif()
 
 # project name
-project( vvenc VERSION 0.2.1.0 )
+project( vvenc VERSION 0.3.0.0 )
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # enable sse4.1 build for all source files for gcc and clang
@@ -35,10 +35,23 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
 endif()
 
 # enable install target
-set( VVENC_ENABLE_INSTALL ON CACHE BOOL "Enable or disable install target" )
+set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable install target" )
+                                                             
+# enable postfix                                             
+set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
+                                                             
+set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
 
-# enable postfix
-set( VVENC_ENABLE_BUILD_TYPE_POSTFIX OFF CACHE BOOL "Enable or disable build type postfix for apps and libs" )
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
+    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
+    
+  # enable address sanitizer
+  set( VVENC_USE_ADDRESS_SANITIZER          OFF CACHE BOOL   "Enable or disable address sanitizer" )
+  
+  # add -march=native
+  set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
+endif()
+
 
 if( VVENC_ENABLE_BUILD_TYPE_POSTFIX )
   if( BUILD_SHARED_LIBS )
@@ -82,15 +95,16 @@ set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/relw
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL     "${CMAKE_SOURCE_DIR}/bin/minsizerel-${VVENC_OUTPUT_DIR_POSTFIX}" )
 
 
+# enable or disable Intel Vtune ITT Tracing
+if( CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo" )
+    set( VVCEncoderLib_ENABLE_ITT ON CACHE BOOL "Enable Intel Runtime Support for Profiling" )
+else()
+    set( VVCEncoderLib_ENABLE_ITT OFF CACHE BOOL "Enable Intel Runtime Support for Profiling" )
+endif()
+
 # set default CMAKE_BUILD_TYPE to Release if not set
 if( NOT CMAKE_BUILD_TYPE )
   set( CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE )
-endif()
-
-# address sanitizer
-if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
-    CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-  set( VVENC_USE_ADDRESS_SANITIZER OFF CACHE BOOL "Compiles with -sanitize=address and links to libasan" )
 endif()
 
 #set( ENABLE_LINK_TIME_OPT ON       CACHE BOOL   "Enable link time optimization for release and profile builds" )
@@ -135,6 +149,47 @@ endif()
 
 if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
+endif()
+
+if( ( UNIX OR MINGW ) AND NOT VVENC_OPT_TARGET_ARCH STREQUAL "" )
+  set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+endif()
+
+if( VVENC_ENABLE_LINK_TIME_OPT )
+  set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON )
+  set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON )
+  set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON )
+endif()
+
+if( VVCEncoderLib_ENABLE_ITT )
+  if( MSVC )
+    set( ITT_PATH "c:/Program Files (x86)/IntelSWTools/VTune Amplifier/" CACHE STRING "Path to the installation directory of Intel VTunes" )
+  elseif( APPLE )
+    message( WARNING "Not yet supported on Mac OS X" )
+  elseif( UNIX OR MINGW )
+    set( ITT_PATH "/opt/intel/vtune_amplifier" CACHE STRING "Path to the installation directory of Intel VTunes" )
+  endif()
+
+  if( EXISTS ${ITT_PATH} )
+    set( LIB_NAME INTEL_ITT )
+    add_library( ${LIB_NAME} STATIC IMPORTED GLOBAL )
+    if( MSVC )
+      set_target_properties( ${LIB_NAME} PROPERTIES IMPORTED_LOCATION        ${ITT_PATH}/lib64/libittnotify.lib )
+    elseif( APPLE )
+      # not supported
+    elseif( UNIX OR MINGW )
+      set_target_properties( ${LIB_NAME} PROPERTIES IMPORTED_LOCATION        ${ITT_PATH}/lib64/libittnotify.a )
+      set_target_properties( ${LIB_NAME} PROPERTIES INTERFACE_LINK_LIBRARIES dl )
+    endif()
+
+    # set include directory. relative paths do not work.
+    set_target_properties( ${LIB_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ITT_PATH}/include )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTRACE_ENABLE_ITT" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTRACE_ENABLE_ITT" )
+  else()
+    message( WARNING "ITT_PATH ${ITT_PATH} not found, ignoring option VVCEncoderLib_ENABLE_ITT" )
+  endif()
 endif()
 
 # set address sanitizer compiler arguments
@@ -184,6 +239,7 @@ endif()
 
 
 add_subdirectory( "source/Lib/vvenc" )
+add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
@@ -239,9 +295,9 @@ add_test( NAME Test_vvencFFapp-slow COMMAND vvencFFapp -c ../../cfg/randomaccess
 set_tests_properties( Test_vvencFFapp-slow PROPERTIES TIMEOUT 90 )
 add_test( NAME Test_compare_output-slow COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 
-add_test( NAME Test_vvencapp-medium_noqpa_0thr COMMAND vvencapp --preset medium --qpa 0 -threads 0 -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 -o out.vvc )
+add_test( NAME Test_vvencapp-medium_noqpa_0thr COMMAND vvencapp --preset medium --qpa 0 --threads 0 -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 -o out.vvc )
 set_tests_properties( Test_vvencapp-medium_noqpa_0thr PROPERTIES TIMEOUT 30 )
-add_test( NAME Test_vvencFFapp-medium_noqpa_0thr COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../test/data/RTn23.cfg -qpa 0 --WppBitEqual=0 --NumWppThreads=0 -f 5 -b outf.vvc )
+add_test( NAME Test_vvencFFapp-medium_noqpa_0thr COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../test/data/RTn23.cfg -qpa 0 --WppBitEqual=0 --Threads=0 -f 5 -b outf.vvc )
 set_tests_properties( Test_vvencFFapp-medium_noqpa_0thr PROPERTIES TIMEOUT 30 )
 add_test( NAME Test_compare_output-medium_noqpa_0thr COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 

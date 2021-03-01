@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -92,6 +92,7 @@ Slice::Slice()
   , pendingRasInit                      ( false )
   , checkLDC                            ( false )
   , biDirPred                           ( false )
+  , lmChromaCheckDisable                { false }
   , symRefIdx                           { -1, -1 }
   , depth                               ( 0 )
   , vps                                 ( nullptr )
@@ -576,13 +577,13 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
   {
     if(bEfficientFieldIRAPEnabled && (associatedIRAPType == NAL_UNIT_CODED_SLICE_IDR_N_LP || associatedIRAPType == NAL_UNIT_CODED_SLICE_IDR_W_RADL))
     {
-      if (bRefreshPending==true && pocCurr > pocCRA) // IDR reference marking pending
+      if (bRefreshPending==true && pocCurr > lastIDR) // IDR reference marking pending
       {
         PicList::iterator        iterPic       = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
-          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != pocCRA)
+          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != lastIDR)
           {
             rpcPic->isReferenced = false;
           }
@@ -747,7 +748,7 @@ bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) c
   while ( iterPic != rcListPic.end())
   {
     const Picture* pic = *(iterPic++);
-    if( pic->isReferenced && pic->isReconstructed && pic->poc != poc)
+    if( pic->isInitDone && pic->isReferenced && pic->poc != poc)
     {
       if( pic->TLayer >= TLayer)
       {
@@ -1192,9 +1193,9 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   int originalL0LtrpNum = numOfLTRPL0;
   int originalL0IlrpNum = numOfILRPL0;
 
-  for (int ii = 0; numOfNeedToFill > 0 && ii < (pLocalRPL1->numberOfLongtermPictures + pLocalRPL1->numberOfShorttermPictures + pLocalRPL1->numberOfInterLayerPictures); ii++)
+  for (int ii = 0; numOfNeedToFill > 0 && ii < (numOfLTRPL1 + numOfSTRPL1 + numOfILRPL1); ii++)
   {
-    if (ii <= (numOfLTRPL1 + numOfSTRPL1 - 1))
+    if (ii <= (numOfLTRPL1 + numOfSTRPL1 + numOfILRPL1 - 1))
     {
       //Make sure this copy is not already in L0
       bool canIncludeThis = true;
@@ -1978,10 +1979,10 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
           }
         }
 
-        m_spsMap.clear();
+        m_spsMap.clearActive();
         m_spsMap.setActive(spsId);
         m_activeSPSId = spsId;
-        m_ppsMap.clear();
+        m_ppsMap.clearActive();
         m_ppsMap.setActive(ppsId);
         return true;
       }

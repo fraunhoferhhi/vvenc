@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -963,7 +963,7 @@ void DecLib::xActivateParameterSets( const int layerId)
       THROW("Parameter set activation failed!");
     }
 
-    m_parameterSetManager.getApsMap()->clear();
+    m_parameterSetManager.getApsMap()->clearActive();
     //luma APSs
     for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
     {

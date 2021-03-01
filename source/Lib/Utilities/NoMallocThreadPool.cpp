@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -242,15 +242,14 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
 bool NoMallocThreadPool::processTask( int threadId, NoMallocThreadPool::Slot& task )
 {
   const bool success = task.func( threadId, task.param );
+#if ENABLE_VALGRIND_CODE
+  MutexLock lock( m_extraMutex );
+#endif
   if( !success )
   {
     task.state = WAITING;
     return false;
   }
-
-#if ENABLE_VALGRIND_CODE
-  MutexLock lock( m_extraMutex );
-#endif
 
   if( task.done != nullptr )
   {

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/CommonDef.h"
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 #include <vector>
 #include <algorithm>
@@ -117,7 +117,7 @@ namespace vvenc {
     void initGOPID2Level( int GOPID2Level[] );
     void initPicPara( TRCParameter* picPara = NULL );    // NULL to initial with default value
     void initLCUPara( TRCParameter** LCUPara = NULL );    // NULL to initial with default value
-    void updateAfterPic( int bits );
+    void updateAfterPic( int bits, int tgtBits );
     void setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB );
     void setQpInGOP( int gopId, int gopQp, int &qp );
     bool isQpResetRequired( int gopId );
@@ -127,6 +127,7 @@ namespace vvenc {
   public:
     int             rcMode;
     bool            twoPass;
+    int             fppParFrames;
     int             totalFrames;
     int             targetRate;
     int             frameRate;
@@ -196,7 +197,7 @@ namespace vvenc {
     EncRCPic();
     ~EncRCPic();
 
-    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, std::list<EncRCPic*>& listPreviousPictures );
+    void create( EncRCSeq* encRCSeq, EncRCGOP* encRCGOP, int frameLevel, int framePoc, int frameRcIdxInGop, std::list<EncRCPic*>& listPreviousPictures );
     void destroy();
 
     void   calCostSliceI( Picture* pic );
@@ -233,12 +234,17 @@ namespace vvenc {
   public:
     TRCLCU* lcu;
     int     targetBits;
+    int     tmpTargetBits;
     int     bitsLeft;
     int     numberOfLCU;
     int     lcuLeft;
     int     picQPOffsetQPA;
+    int     poc;
+    int     rcIdxInGop;
     double  picLambdaOffsetQPA;
     double  picEstLambda;
+    double  finalLambda;
+    int     estimatedBits;
   
   private:
     EncRCSeq* encRCSeq;
@@ -264,15 +270,15 @@ namespace vvenc {
     RateCtrl();
     ~RateCtrl();
 
-    void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ] );
+    void init( int RCMode, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry GOPList[ MAX_GOP ], int maxParallelFrames );
     void destroy();
-    void initRCPic( int frameLevel );
+    void initRCPic( int frameLevel, int framePoc, int frameRcIdxInGop );
     void initRCGOP( int numberOfPictures );
     void destroyRCGOP();
 
     void setRCPass( int pass, int maxPass );
     void addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
-    void processFirstPassData();
+    void processFirstPassData( const unsigned sizeInCtus );
     void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
     void processGops();
     void scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling );
@@ -281,20 +287,23 @@ namespace vvenc {
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
+    std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
 
   public:
+    std::list<EncRCPic*>    m_listRCPictures;
     EncRCSeq*   encRCSeq;
     EncRCGOP*   encRCGOP;
     EncRCPic*   encRCPic;
     std::mutex  rcMutex;
     int         rcQP;
+    int         rcPQPAOffset;
     int         rcPass;
     int         rcMaxPass;
     bool        rcIsFinalPass;
 
   private:
-    std::list<EncRCPic*>    m_listRCPictures;
     std::list<TRCPassStats> m_listRCFirstPassStats;
+    std::vector<uint8_t>    m_listRCIntraPQPAStats;
   };
 }
 #endif

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -288,7 +288,7 @@ void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, c
 
   m_partStack.back().init();
   m_partStack.back().split = CTU_LEVEL;
-  m_partStack.back().parts = Partitioning{ ctuArea };
+  m_partStack.back().parts.push_back( ctuArea );
 
   treeType = TREE_D;
   modeType = MODE_TYPE_ALL;
@@ -729,15 +729,6 @@ bool Partitioner::hasNextPart()
 }
 
 //////////////////////////////////////////////////////////////////////////
-// PartitionerFactory
-//////////////////////////////////////////////////////////////////////////
-
-Partitioner* PartitionerFactory::get( const Slice& slice )
-{
-  return new Partitioner;
-}
-
-//////////////////////////////////////////////////////////////////////////
 // Partitioner methods describing the actual partitioning logic
 //////////////////////////////////////////////////////////////////////////
 
@@ -1006,8 +997,6 @@ void PartitionerImpl::getMaxTuTiling( Partitioning& sub, const UnitArea& cuArea,
   const int numTilesH = std::max<int>( 1, area.width  / maxTrSize );
   const int numTilesV = std::max<int>( 1, area.height / maxTrSize );
   const int numTiles  = numTilesH * numTilesV;
-
-  CHECK( numTiles > MAX_CU_TILING_PARTITIONS, "CU partitioning requires more partitions than available" );
 
   Partitioning &ret = sub;
   ret.resize( numTiles, cuArea );

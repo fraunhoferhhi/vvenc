@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -53,13 +53,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncSampleAdaptiveOffset.h"
 #include "EncAdaptiveLoopFilter.h"
 #include "CommonLib/LoopFilter.h"
+#include "Utilities/NoMallocThreadPool.h"
 
 //! \ingroup EncoderLib
 //! \{
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 class EncGOP;
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -67,32 +68,40 @@ class EncGOP;
 class EncPicture
 {
   private:
-    const EncCfg*           m_pcEncCfg;
-    EncSlice                m_SliceEncoder;
-    LoopFilter              m_LoopFilter;
-    EncAdaptiveLoopFilter   m_ALF;
+    const VVEncCfg*          m_pcEncCfg;
+    EncSlice                 m_SliceEncoder;
+    LoopFilter               m_LoopFilter;
+    EncAdaptiveLoopFilter    m_ALF;
 
-    BitEstimator            m_BitEstimator;
-    CABACWriter             m_CABACEstimator;
-    CtxCache                m_CtxCache;
+    BitEstimator             m_BitEstimator;
+    CABACWriter              m_CABACEstimator;
+    CtxCache                 m_CtxCache;
+    RateCtrl*                m_pcRateCtrl;
+
+  public:
+    WaitCounter              m_ctuTasksDoneCounter;
 
   public:
     EncPicture()
-      : m_pcEncCfg( nullptr )
-      , m_CABACEstimator   ( m_BitEstimator )
+      : m_pcEncCfg      ( nullptr )
+      , m_CABACEstimator( m_BitEstimator )
     {}
     virtual ~EncPicture() {}
 
-    void      init          ( const EncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                              const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool );
-    EncSlice* getEncSlice   () { return &m_SliceEncoder; }
+    void init                   ( const VVEncCfg& encCfg,
+                                  std::vector<int>* const globalCtuQpVector,
+                                  const SPS& sps,
+                                  const PPS& pps,
+                                  RateCtrl& rateCtrl,
+                                  NoMallocThreadPool* threadPool );
+    void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
+    void skipCompressPicture    ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
+    void finalizePicture        ( Picture& pic );
 
-    void      encodePicture ( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder );
+    EncSlice* getEncSlice       () { return &m_SliceEncoder; }
 
   protected:
     void xInitPicEncoder        ( Picture& pic );
-    void xCompressPicture       ( Picture& pic );
-    void xSkipCompressPicture   ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
     void xWriteSliceData        ( Picture& pic );
 
     void xInitSliceColFromL0Flag( Slice* slice ) const;

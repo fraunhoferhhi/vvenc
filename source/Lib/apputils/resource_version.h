@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -43,53 +43,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncAppCfg.h
-    \brief    Handle encoder configuration parameters (header)
-*/
 
-#pragma once
+#if !defined( resource_version_h )
+#  define resource_version_h
 
-#include "vvenc/EncCfg.h"
+// pick up top level version information.
+#  include "vvenc/version.h"
 
-using namespace vvenc;
+#  define VS_FILE_VERSION VVENC_VS_VERSION
+#  define VS_FILE_VERSION_STR VVENC_VS_VERSION_STR
 
-//! \ingroup EncoderApp
-//! \{
-
-// ====================================================================================================================
-// Class definition
-// ====================================================================================================================
-
-/// encoder configuration class
-class EncAppCfg : public EncCfg
-{
-public:
-  std::string  m_inputFileName;                                ///< source file name
-  std::string  m_bitstreamFileName;                            ///< output bitstream file
-  std::string  m_reconFileName;                                ///< output reconstruction file
-  ChromaFormat m_inputFileChromaFormat;
-  bool         m_bClipInputVideoToRec709Range;
-  bool         m_bClipOutputVideoToRec709Range;
-  bool         m_packedYUVMode;                                ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
-  bool         m_decode;
-
-public:
-
-  EncAppCfg()
-    :   m_inputFileChromaFormat           ( CHROMA_420 )
-      , m_bClipInputVideoToRec709Range    ( false )
-      , m_bClipOutputVideoToRec709Range   ( false )
-      , m_packedYUVMode                   ( false )
-      , m_decode                          ( false )
-  {
-  }
-
-  virtual ~EncAppCfg();
-
-public:
-  bool parseCfg( int argc, char* argv[] );                    ///< parse configuration file to fill member variables
-  virtual void printCfg() const;
-};
-
-//! \}
-
+#endif

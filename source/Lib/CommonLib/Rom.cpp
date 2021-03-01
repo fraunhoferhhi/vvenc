@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -539,11 +539,10 @@ private:
   uint32_t m_line, m_column;
   const uint32_t m_blockWidth, m_blockHeight;
   const uint32_t m_stride;
-  const CoeffScanType m_scanType;
 
 public:
-  ScanGenerator(uint32_t blockWidth, uint32_t blockHeight, uint32_t stride, CoeffScanType scanType)
-    : m_line(0), m_column(0), m_blockWidth(blockWidth), m_blockHeight(blockHeight), m_stride(stride), m_scanType(scanType)
+  ScanGenerator(uint32_t blockWidth, uint32_t blockHeight, uint32_t stride)
+    : m_line(0), m_column(0), m_blockWidth(blockWidth), m_blockHeight(blockHeight), m_stride(stride)
   { }
 
   uint32_t GetCurrentX() const { return m_column; }
@@ -553,37 +552,21 @@ public:
   {
     const uint32_t rtn = ((m_line + blockOffsetY) * m_stride) + m_column + blockOffsetX;
 
-    //advance line and column to the next position
-    switch (m_scanType)
+    if ((m_column == m_blockWidth - 1) || (m_line == 0)) //if we reach the end of a rank, go diagonally down to the next one
     {
-      //------------------------------------------------
+      m_line += m_column + 1;
+      m_column = 0;
 
-      case SCAN_DIAG:
-
-        if ((m_column == m_blockWidth - 1) || (m_line == 0)) //if we reach the end of a rank, go diagonally down to the next one
-        {
-          m_line += m_column + 1;
-          m_column = 0;
-
-          if (m_line >= m_blockHeight) //if that takes us outside the block, adjust so that we are back on the bottom row
-          {
-            m_column += m_line - (m_blockHeight - 1);
-            m_line = m_blockHeight - 1;
-          }
-        }
-        else
-        {
-          m_column++;
-          m_line--;
-        }
-        break;
-
-      //------------------------------------------------
-
-      default:
-
-        THROW("ERROR: Unknown scan type \"" << m_scanType << "\"in ScanGenerator::GetNextIndex");
-        break;
+      if (m_line >= m_blockHeight) //if that takes us outside the block, adjust so that we are back on the bottom row
+      {
+        m_column += m_line - (m_blockHeight - 1);
+        m_line = m_blockHeight - 1;
+      }
+    }
+    else
+    {
+      m_column++;
+      m_line--;
     }
 
     return rtn;
@@ -620,14 +603,12 @@ void ScanOrderRom::initScanOrderRom()
 
       //non-grouped scan orders
 
-      for (uint32_t scanTypeIndex = 0; scanTypeIndex < SCAN_NUMBER_OF_TYPES; scanTypeIndex++)
       {
-        const CoeffScanType scanType = CoeffScanType(scanTypeIndex);
         ScanElement *           scan = new ScanElement[totalValues];
 
-        m_scanOrder[SCAN_UNGROUPED][scanType][blockWidthIdx][blockHeightIdx] = scan;
+        m_scanOrder[SCAN_UNGROUPED][blockWidthIdx][blockHeightIdx] = scan;
 
-        ScanGenerator fullBlockScan(blockWidth, blockHeight, blockWidth, scanType);
+        ScanGenerator fullBlockScan(blockWidth, blockHeight, blockWidth);
 
         for (uint32_t scanPosition = 0; scanPosition < totalValues; scanPosition++)
         {
@@ -656,13 +637,11 @@ void ScanOrderRom::initScanOrderRom()
       const uint32_t  groupSize      = groupWidth    * groupHeight;
       const uint32_t  totalGroups    = widthInGroups * heightInGroups;
 
-      for (uint32_t scanTypeIndex = 0; scanTypeIndex < SCAN_NUMBER_OF_TYPES; scanTypeIndex++)
+      //for (uint32_t scanTypeIndex = 0; scanTypeIndex < SCAN_NUMBER_OF_TYPES; scanTypeIndex++)
       {
-        const CoeffScanType scanType = CoeffScanType(scanTypeIndex);
-
         ScanElement *scan = new ScanElement[totalValues];
 
-        m_scanOrder[SCAN_GROUPED_4x4][scanType][blockWidthIdx][blockHeightIdx] = scan;
+        m_scanOrder[SCAN_GROUPED_4x4][blockWidthIdx][blockHeightIdx] = scan;
 
         if ( blockWidth > JVET_C0024_ZERO_OUT_TH || blockHeight > JVET_C0024_ZERO_OUT_TH )
         {
@@ -674,7 +653,7 @@ void ScanOrderRom::initScanOrderRom()
           }
         }
 
-        ScanGenerator fullBlockScan(widthInGroups, heightInGroups, groupWidth, scanType);
+        ScanGenerator fullBlockScan(widthInGroups, heightInGroups, groupWidth);
 
         for (uint32_t groupIndex = 0; groupIndex < totalGroups; groupIndex++)
         {
@@ -684,7 +663,7 @@ void ScanOrderRom::initScanOrderRom()
           const uint32_t groupOffsetY    = groupPositionY * groupHeight;
           const uint32_t groupOffsetScan = groupIndex     * groupSize;
 
-          ScanGenerator groupScan(groupWidth, groupHeight, blockWidth, scanType);
+          ScanGenerator groupScan(groupWidth, groupHeight, blockWidth);
 
           for (uint32_t scanPosition = 0; scanPosition < groupSize; scanPosition++)
           {
@@ -721,15 +700,12 @@ void ScanOrderRom::destroyScanOrderRom()
 
   for (uint32_t groupTypeIndex = 0; groupTypeIndex < SCAN_NUMBER_OF_GROUP_TYPES; groupTypeIndex++)
   {
-    for (uint32_t scanOrderIndex = 0; scanOrderIndex < SCAN_NUMBER_OF_TYPES; scanOrderIndex++)
+    for (uint32_t blockWidthIdx = 0; blockWidthIdx <= numWidths; blockWidthIdx++)
     {
-      for (uint32_t blockWidthIdx = 0; blockWidthIdx <= numWidths; blockWidthIdx++)
+      for (uint32_t blockHeightIdx = 0; blockHeightIdx <= numHeights; blockHeightIdx++)
       {
-        for (uint32_t blockHeightIdx = 0; blockHeightIdx <= numHeights; blockHeightIdx++)
-        {
-          delete[] m_scanOrder[groupTypeIndex][scanOrderIndex][blockWidthIdx][blockHeightIdx];
-          m_scanOrder[groupTypeIndex][scanOrderIndex][blockWidthIdx][blockHeightIdx] = nullptr;
-        }
+        delete[] m_scanOrder[groupTypeIndex][blockWidthIdx][blockHeightIdx];
+        m_scanOrder[groupTypeIndex][blockWidthIdx][blockHeightIdx] = nullptr;
       }
     }
   }

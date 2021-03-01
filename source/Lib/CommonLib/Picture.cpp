@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -162,6 +162,7 @@ Picture::Picture()
     , isBorderExtended  ( false )
     , isReferenced      ( false )
     , isNeededForOutput ( false )
+    , isFinished        ( false )
     , isLongTerm        ( false )
     , encPic            ( true )
     , writePic          ( true )
@@ -169,6 +170,7 @@ Picture::Picture()
     , refCounter        ( 0 )
     , poc               ( 0 )
     , gopId             ( 0 )
+    , rcIdxInGop        ( 0 )
     , TLayer            ( std::numeric_limits<uint32_t>::max() )
     , layerId           ( 0 )
     , isSubPicBorderSaved (false)
@@ -176,8 +178,13 @@ Picture::Picture()
     , cts               ( 0 )
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
-    , picInitialQP    ( 0 )
-    , useSC           ( 0 )
+    , picInitialQP      ( 0 )
+    , useScMCTF         ( false )
+    , useScTS           ( false )
+    , useScBDPCM        ( false )
+    , actualHeadBits    ( 0 )
+    , actualTotalBits   ( 0 )
+    , encRCPic          ( nullptr )
 {
 }
 

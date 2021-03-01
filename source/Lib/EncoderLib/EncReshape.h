@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/Reshape.h"
 
 //! \ingroup EncoderLib
@@ -110,7 +110,7 @@ public:
   EncReshape();
   ~EncReshape();
 
-  void init( const EncCfg& encCfg );
+  void init( const VVEncCfg& encCfg );
   void destroy();
 
   void calcSeqStats     ( Picture& pic, SeqInfo &stats);

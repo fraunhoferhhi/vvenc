@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <type_traits>
 #include <typeinfo>
+
+#include "vvenc/vvenc.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -1064,7 +1066,8 @@ private:
 struct YUVBuffer;
 struct Window;
 
-void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
+//void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
 void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow );
 
 } // namespace vvenc

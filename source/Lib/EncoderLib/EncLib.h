@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -52,8 +52,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncGOP.h"
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
-#include "vvenc/EncCfg.h"
-#include "vvenc/Nal.h"
+#include "CommonLib/Nal.h"
+#include "vvenc/vvencCfg.h"
+
 #include <mutex>
 
 //! \ingroup EncoderLib
@@ -79,9 +80,10 @@ private:
   int                       m_pocRecOut;
   int                       m_GOPSizeLog2;
   int                       m_TicksPerFrameMul4;
+  int                       m_numPassInitialized;
 
-  const EncCfg              m_cEncCfg;
-  EncCfg                    m_cBckCfg;
+  const VVEncCfg            m_cEncCfg;
+  VVEncCfg                  m_cBckCfg;
   EncGOP*                   m_cGOPEncoder;
   EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
@@ -105,9 +107,9 @@ public:
   EncLib();
   virtual ~EncLib();
 
-  void     initEncoderLib      ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf );
+  void     initEncoderLib      ( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf );
   void     initPass            ( int pass );
-  void     encodePicture       ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
+  void     encodePicture       ( bool flush, const YUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
 
@@ -133,7 +135,7 @@ private:
   void     xInitRPL            ( SPS &sps ) const;
   void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
-  void     xDetectScreenC      ( Picture& pic , PelUnitBuf yuvOrgBuf, int useTS);
+  void     xDetectScreenC      ( Picture& pic, PelUnitBuf yuvOrgBuf );
 };
 
 } // namespace vvenc

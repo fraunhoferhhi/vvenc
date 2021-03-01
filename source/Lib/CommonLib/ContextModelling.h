@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -100,7 +100,6 @@ public:
   bool            signHiding      ()                        const { return m_signHiding; }
   bool            hideSign        ( int       posFirst,
                                     int       posLast   )   const { return ( m_signHiding && ( posLast - posFirst >= SBH_THRESHOLD ) ); }
-  CoeffScanType   scanType        ()                        const { return m_scanType; }
   unsigned        blockPos        ( int scanPos )           const { return m_scan[scanPos].idx; }
   unsigned        posX            ( int scanPos )           const { return m_scan[scanPos].x; }
   unsigned        posY            ( int scanPos )           const { return m_scan[scanPos].y; }
@@ -382,7 +381,6 @@ private:
   const bool                m_signHiding;
   const bool                m_extendedPrecision;
   const int                 m_maxLog2TrDynamicRange;
-  CoeffScanType             m_scanType;
   const ScanElement *       m_scan;
   const ScanElement *       m_scanCG;
   const CtxSet              m_CtxSetLastX;

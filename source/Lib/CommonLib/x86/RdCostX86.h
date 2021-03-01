@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -666,50 +666,48 @@ static uint32_t xCalcHAD8x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
   m1[0][7] = _mm_cvtepi16_epi32(                 m1[0][7]      );
 #endif
 
-  __m128i n1[2][8];
-  __m128i n2[2][8];
-
   for( int i = 0; i < 8; i++ )
   {
     int ii = i % 4;
     int ij = i >> 2;
 
-    n2[0][i] = m1[ij][ii    ];
-    n2[1][i] = m1[ij][ii + 4];
+    m2[0][i] = m1[ij][ii    ];
+    m2[1][i] = m1[ij][ii + 4];
   }
 
   for( int i = 0; i < 2; i++ )
   {
-    n1[i][0] = _mm_add_epi32( n2[i][0], n2[i][4] );
-    n1[i][1] = _mm_add_epi32( n2[i][1], n2[i][5] );
-    n1[i][2] = _mm_add_epi32( n2[i][2], n2[i][6] );
-    n1[i][3] = _mm_add_epi32( n2[i][3], n2[i][7] );
-    n1[i][4] = _mm_sub_epi32( n2[i][0], n2[i][4] );
-    n1[i][5] = _mm_sub_epi32( n2[i][1], n2[i][5] );
-    n1[i][6] = _mm_sub_epi32( n2[i][2], n2[i][6] );
-    n1[i][7] = _mm_sub_epi32( n2[i][3], n2[i][7] );
+    m1[i][0] = _mm_add_epi32( m2[i][0], m2[i][4] );
+    m1[i][1] = _mm_add_epi32( m2[i][1], m2[i][5] );
+    m1[i][2] = _mm_add_epi32( m2[i][2], m2[i][6] );
+    m1[i][3] = _mm_add_epi32( m2[i][3], m2[i][7] );
+    m1[i][4] = _mm_sub_epi32( m2[i][0], m2[i][4] );
+    m1[i][5] = _mm_sub_epi32( m2[i][1], m2[i][5] );
+    m1[i][6] = _mm_sub_epi32( m2[i][2], m2[i][6] );
+    m1[i][7] = _mm_sub_epi32( m2[i][3], m2[i][7] );
 
-    n2[i][0] = _mm_add_epi32( n1[i][0], n1[i][2] );
-    n2[i][1] = _mm_add_epi32( n1[i][1], n1[i][3] );
-    n2[i][2] = _mm_sub_epi32( n1[i][0], n1[i][2] );
-    n2[i][3] = _mm_sub_epi32( n1[i][1], n1[i][3] );
-    n2[i][4] = _mm_add_epi32( n1[i][4], n1[i][6] );
-    n2[i][5] = _mm_add_epi32( n1[i][5], n1[i][7] );
-    n2[i][6] = _mm_sub_epi32( n1[i][4], n1[i][6] );
-    n2[i][7] = _mm_sub_epi32( n1[i][5], n1[i][7] );
+    m2[i][0] = _mm_add_epi32( m1[i][0], m1[i][2] );
+    m2[i][1] = _mm_add_epi32( m1[i][1], m1[i][3] );
+    m2[i][2] = _mm_sub_epi32( m1[i][0], m1[i][2] );
+    m2[i][3] = _mm_sub_epi32( m1[i][1], m1[i][3] );
+    m2[i][4] = _mm_add_epi32( m1[i][4], m1[i][6] );
+    m2[i][5] = _mm_add_epi32( m1[i][5], m1[i][7] );
+    m2[i][6] = _mm_sub_epi32( m1[i][4], m1[i][6] );
+    m2[i][7] = _mm_sub_epi32( m1[i][5], m1[i][7] );
 
-    n1[i][0] = _mm_abs_epi32( _mm_add_epi32( n2[i][0], n2[i][1] ) );
-    n1[i][1] = _mm_abs_epi32( _mm_sub_epi32( n2[i][0], n2[i][1] ) );
-    n1[i][2] = _mm_abs_epi32( _mm_add_epi32( n2[i][2], n2[i][3] ) );
-    n1[i][3] = _mm_abs_epi32( _mm_sub_epi32( n2[i][2], n2[i][3] ) );
-    n1[i][4] = _mm_abs_epi32( _mm_add_epi32( n2[i][4], n2[i][5] ) );
-    n1[i][5] = _mm_abs_epi32( _mm_sub_epi32( n2[i][4], n2[i][5] ) );
-    n1[i][6] = _mm_abs_epi32( _mm_add_epi32( n2[i][6], n2[i][7] ) );
-    n1[i][7] = _mm_abs_epi32( _mm_sub_epi32( n2[i][6], n2[i][7] ) );
+    m1[i][0] = _mm_abs_epi32( _mm_add_epi32( m2[i][0], m2[i][1] ) );
+    m1[i][1] = _mm_abs_epi32( _mm_sub_epi32( m2[i][0], m2[i][1] ) );
+    m1[i][2] = _mm_abs_epi32( _mm_add_epi32( m2[i][2], m2[i][3] ) );
+    m1[i][3] = _mm_abs_epi32( _mm_sub_epi32( m2[i][2], m2[i][3] ) );
+    m1[i][4] = _mm_abs_epi32( _mm_add_epi32( m2[i][4], m2[i][5] ) );
+    m1[i][5] = _mm_abs_epi32( _mm_sub_epi32( m2[i][4], m2[i][5] ) );
+    m1[i][6] = _mm_abs_epi32( _mm_add_epi32( m2[i][6], m2[i][7] ) );
+    m1[i][7] = _mm_abs_epi32( _mm_sub_epi32( m2[i][6], m2[i][7] ) );
   }
+  m2[0][0] = m1[0][0];
   for( int i = 0; i < 8; i++ )
   {
-    m1[0][i] = _mm_add_epi32( n1[0][i], n1[1][i] );
+    m1[0][i] = _mm_add_epi32( m1[0][i], m1[1][i] );
   }
 
   m1[0][0] = _mm_add_epi32( m1[0][0], m1[0][1] );
@@ -725,7 +723,7 @@ static uint32_t xCalcHAD8x8_SSE( const Torg *piOrg, const Tcur *piCur, const int
   iSum = _mm_hadd_epi32( iSum, iSum );
 
   uint32_t sad = _mm_cvtsi128_si32( iSum );
-  uint32_t absDc = _mm_cvtsi128_si32( n1[0][0] );
+  uint32_t absDc = _mm_cvtsi128_si32( m2[0][0] );
   sad -= absDc;
   sad += absDc >> 2;
   sad = ( ( sad + 2 ) >> 2 );
@@ -2058,8 +2056,8 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
     m1[15] = _mm256_sub_epi32( m2[14], m2[15] );
 
     // transpose
-    constexpr int perm_unpacklo_epi128 = ( 0 << 0 ) + ( 2 << 4 );
-    constexpr int perm_unpackhi_epi128 = ( 1 << 0 ) + ( 3 << 4 );
+    #define perm_unpacklo_epi128 ( ( 0 << 0 ) + ( 2 << 4 ) )
+    #define perm_unpackhi_epi128 ( ( 1 << 0 ) + ( 3 << 4 ) )
 
     // 1. 8x8
     m2[0] = _mm256_unpacklo_epi32( m1[0], m1[1] );
@@ -2116,6 +2114,9 @@ static uint32_t xCalcHAD8x16_AVX2( const Pel* piOrg, const Pel* piCur, const int
     m2[5+8] = _mm256_permute2x128_si256( m1[4+8], m1[6+8], perm_unpackhi_epi128 );
     m2[6+8] = _mm256_permute2x128_si256( m1[5+8], m1[7+8], perm_unpacklo_epi128 );
     m2[7+8] = _mm256_permute2x128_si256( m1[5+8], m1[7+8], perm_unpackhi_epi128 );
+    
+    #undef perm_unpacklo_epi128    
+    #undef perm_unpackhi_epi128
 
     // horizontal
     m1[0] = _mm256_add_epi32( m2[0], m2[4] );
