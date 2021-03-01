@@ -6,7 +6,7 @@ tag 0.3.0.0
    - if using an HDR mode the encoder decision is depening on used mode + metadate is enabled by default (VUI,SEI)
    - PQ: set vui parameter (transfer characteristics 16(smpte2084))
    - HLG: set vui parameter (transfer characteristics 1|14(bt709|bt2020-10)) + SEI AlternativeTransferCharacteristics 18
- - support for support MasteringDisplayColourVolume (SMPTE ST 2086) and MaxContentLightLevel (HDR10/PQ)
+ - support for MasteringDisplayColourVolume and MaxContentLightLevel (SMPTE ST 2086 - HDR10/PQ)
    - MasteringDisplayColourVolume can be set by vector of 10 values:
      x,y,x,y,x,y,x,y,max,min  where: "G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)
      x,y coordinates for GBR and WP in increment of 1/50000

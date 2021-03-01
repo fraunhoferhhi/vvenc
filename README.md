@@ -46,7 +46,7 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
 | --output,-o <str>      | not set                          | Bit-stream output file                                                                               |
 | --preset <str>         | medium                           | Preset for specific encoding setting (faster, fast, medium, slow, slower)                            |
-| --qp,-q <int>          | 32                               | Quantization parameter (0..51)                                                                       |
+| --qp,-q <int>          | 32                               | Quantization parameter (0..63)                                                                       |
 | --bitrate <int>        | 0                                | Bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits per second). <br> Rate control requires correct `--framerate` (see option above). |
 | --passes,-p <int>      | 2                                | Number of rate control passes (1: single-pass rate control, 2: two-pass rate control)                |
 | --qpa <int>            | 1                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
