@@ -159,12 +159,7 @@ set( CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" )
 message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH}" )
 
 # Enable multithreading
-find_package( Threads REQUIRED )
-
-# enable sse4.1 build for all source files for gcc and clang
-if( UNIX OR MINGW )
-  add_compile_options( "-msse4.1" )
-endif()
+find_package( Threads REQUIRED
 
 # set _WIN32_WINNT
 if( WIN32 )
