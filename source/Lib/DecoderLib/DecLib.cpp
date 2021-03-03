@@ -420,10 +420,10 @@ DecLib::DecLib()
   , m_maxDecSliceAddrInSubPic(-1)
   , m_apsMapEnc( nullptr )
 {
-#if ENABLE_SIMD_OPT_BUFFER
+#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_X86 )
   g_pelBufOP.initPelBufOpsX86();
 #endif
-#if ENABLE_SIMD_TRAFO
+#if ENABLE_SIMD_TRAFO  && defined( TARGET_SIMD_X86 )
   g_tCoeffOps.initTCoeffOpsX86();
 #endif
 }

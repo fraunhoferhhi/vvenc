@@ -354,10 +354,9 @@ PelBufferOps::PelBufferOps()
 
   copyBuffer        = copyBufferCore;
   padding           = paddingCore;
-#if ENABLE_SIMD_OPT_BCW
+
   removeHighFreq8   = removeHighFreq;
   removeHighFreq4   = removeHighFreq;
-#endif
 
   transpose4x4      = transposeNxNCore<Pel,4>;
   transpose8x8      = transposeNxNCore<Pel,8>;
@@ -481,7 +480,7 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + 1;
   const int      offset     = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
   if( destStride == width )
   {
     g_pelBufOP.addAvg(src0, src2, dest, width * height, shiftNum, offset, clpRng);
@@ -650,7 +649,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
   }
 }
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 
 template<>
 void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other )

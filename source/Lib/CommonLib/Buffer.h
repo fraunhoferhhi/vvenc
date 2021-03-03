@@ -607,7 +607,7 @@ void AreaBuf<T>::padBorderPel( unsigned marginX, unsigned marginY, int dir )
 }
 
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 template<> void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other );
 #endif
 
