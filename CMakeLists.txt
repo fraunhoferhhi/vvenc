@@ -35,19 +35,19 @@ if( APPLE )
 endif()
 
 # enable sse4.1 build for all source files for gcc and clang
-#if( VVENC_ENABLE_X86_SIMD )
-#  if( UNIX OR MINGW )
-#    add_compile_options( "-msse4.1" )
-#  endif()
-#
-#  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_X86" )
-#  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_X86" )
-#endif()
-#
-#if( VVENC_ENABLE_ARM_SIMD )
-#  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_ARM" )
-#  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_ARM" )
-#endif()
+if( VVENC_ENABLE_X86_SIMD )
+  if( UNIX OR MINGW )
+    add_compile_options( "-msse4.1" )
+  endif()
+
+  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_X86" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_X86" )
+endif()
+
+if( VVENC_ENABLE_ARM_SIMD )
+  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_ARM" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_ARM" )
+endif()
 
 if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # set exception handling
