@@ -12,12 +12,44 @@ endif()
 # project name
 project( vvenc VERSION 0.3.0.0 )
 
-if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
-  # enable sse4.1 build for all source files for gcc and clang
+set( VVENC_ENABLE_X86_SIMD TRUE )
+set( VVENC_ENABLE_ARM_SIMD FALSE )
+
+if( APPLE )
+  if( DEFINED CMAKE_OSX_ARCHITECTURES )
+    if( CMAKE_OSX_ARCHITECTURES STREQUAL "" )
+      if( CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64" )
+        set( VVENC_ENABLE_X86_SIMD FALSE )
+        set( VVENC_ENABLE_ARM_SIMD TRUE )
+      endif()
+    elseif( CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" )
+      set( VVENC_ENABLE_X86_SIMD FALSE )
+      set( VVENC_ENABLE_ARM_SIMD TRUE )
+    endif()
+  else()
+    if( CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64" )
+      set( VVENC_ENABLE_X86_SIMD FALSE )
+      set( VVENC_ENABLE_ARM_SIMD TRUE )
+    endif()
+  endif()
+endif()
+
+# enable sse4.1 build for all source files for gcc and clang
+if( VVENC_ENABLE_X86_SIMD )
   if( UNIX OR MINGW )
     add_compile_options( "-msse4.1" )
   endif()
-  
+
+  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_X86" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_X86" )
+endif()
+
+if( VVENC_ENABLE_ARM_SIMD )
+  set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DTARGET_SIMD_ARM" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTARGET_SIMD_ARM" )
+endif()
+
+if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # set exception handling
   if( MSVC )
     add_compile_options( "/EHsc" )
@@ -129,11 +161,6 @@ message( STATUS "CMAKE_MODULE_PATH: updating module path to: ${CMAKE_MODULE_PATH
 # Enable multithreading
 find_package( Threads REQUIRED )
 
-# enable sse4.1 build for all source files for gcc and clang
-if( UNIX OR MINGW )
-  add_compile_options( "-msse4.1" )
-endif()
-
 # set _WIN32_WINNT
 if( WIN32 )
   # set _WIN32_WINT version global
@@ -151,9 +178,11 @@ if( VVENC_ENABLE_TRACING )
   add_definitions( -DENABLE_TRACING=1 )
 endif()
 
-if( ( UNIX OR MINGW ) AND NOT VVENC_OPT_TARGET_ARCH STREQUAL "" )
-  set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
-  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+if( VVENC_ENABLE_X86_SIMD )
+  if( ( UNIX OR MINGW ) AND NOT VVENC_OPT_TARGET_ARCH STREQUAL "" )
+    set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+    set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${VVENC_OPT_TARGET_ARCH} -mtune=${VVENC_OPT_TARGET_ARCH}" )
+  endif()
 endif()
 
 if( VVENC_ENABLE_LINK_TIME_OPT )

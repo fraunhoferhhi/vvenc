@@ -519,15 +519,15 @@ void VVEncImpl::registerMsgCbf( std::function<void( int, const char*, va_list )>
 std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
 {
   std::string ret = "NA";
-#if ENABLE_SIMD_OPT
-#ifdef TARGET_SIMD_X86
+#if defined( TARGET_SIMD_X86 )
   const char* simdSet = read_x86_extension( simdId );
   ret = simdSet;
-#endif
+#if ENABLE_SIMD_OPT_BUFFER
   g_pelBufOP.initPelBufOpsX86();
 #endif
 #if ENABLE_SIMD_TRAFO
   g_tCoeffOps.initTCoeffOpsX86();
+#endif
 #endif
   return ret;
 }
