@@ -549,11 +549,19 @@ void decodeBitstream( const std::string& FileName)
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
 
+#if ENABLE_TRACING
+  g_trace_ctx = tracing_init( "", "" );
+#endif
+
   if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, cPicture.poc, false ))
   {
     msg( ERROR, "decoding failed");
     THROW("error decoding");
   }
+
+#if ENABLE_TRACING
+  tracing_uninit( g_trace_ctx );
+#endif
 }
 
 int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
