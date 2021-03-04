@@ -636,9 +636,7 @@ void EncLib::xInitPicture( Picture& pic, int picNum, const PPS& pps, const SPS& 
 
   if ( pic.cs->sps->alfEnabled )
   {
-    pic.resizeAlfCtuEnabled( numberOfCtusInFrame );
-    pic.resizeAlfCtuAlternative( numberOfCtusInFrame );
-    pic.resizeAlfCtbFilterIndex( numberOfCtusInFrame );
+    pic.resizeAlfCtuBuffers( numberOfCtusInFrame );
   }
 }
 
