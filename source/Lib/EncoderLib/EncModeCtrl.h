@@ -351,7 +351,7 @@ protected:
 public:
   ComprCUCtx*           comprCUCtx;
 
-  virtual ~EncModeCtrl    () { destroy(); }
+  ~EncModeCtrl    () { destroy(); }
 
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
