@@ -1193,6 +1193,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     return false;
   }
 
+  if( m_decode )
+  {
+    return true;
+  }
+
   //
   // set intern derived parameters (for convenience purposes only)
   //

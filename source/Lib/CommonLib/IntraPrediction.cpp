@@ -283,7 +283,7 @@ void IntraPrediction::init(ChromaFormat chromaFormatIDC, const unsigned bitDepth
   {
     m_pMdlmTemp = new Pel[(2 * MAX_TB_SIZEY + 1)*(2 * MAX_TB_SIZEY + 1)];//MDLM will use top-above and left-below samples.
   }
-#if   ENABLE_SIMD_OPT_INTRAPRED
+#if ENABLE_SIMD_OPT_INTRAPRED && defined( TARGET_SIMD_X86 )
   initIntraPredictionX86();
 #endif
 

@@ -332,6 +332,7 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
 
   template void AffineGradientSearch::_initAffineGradientSearchX86<SIMDX86>();
 
-#endif //#ifdef TARGET_SIMD_X86
 }
+
+#endif //#ifdef TARGET_SIMD_X86
 //! \}

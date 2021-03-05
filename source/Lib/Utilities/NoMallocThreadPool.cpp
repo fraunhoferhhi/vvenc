@@ -56,8 +56,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <pthread.h>
 #endif
 
-#include <emmintrin.h>
-
 //! \ingroup Utilities
 //! \{
 

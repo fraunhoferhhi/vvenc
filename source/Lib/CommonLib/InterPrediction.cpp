@@ -609,7 +609,7 @@ void InterPredInterpolation::init()
   xFpProfGradFilter = gradFilterCore<false>;
   xFpApplyPROF      = applyPROFCore;
 
-#if ENABLE_SIMD_OPT_BDOF
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
   initInterPredictionX86();
 #endif
 
