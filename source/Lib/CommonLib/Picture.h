@@ -251,7 +251,6 @@ public:
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
 
-private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
   std::vector<short>            m_alfCtbFilterIndex;
@@ -265,36 +264,7 @@ public:
   void            resizeSAO (unsigned numEntries, int dstid) { m_sao[dstid].resize(numEntries); }
   void            copySAO   (const Picture& src, int dstid)  { std::copy(src.m_sao[0].begin(), src.m_sao[0].end(), m_sao[dstid].begin()); }
 
-  uint8_t* getAlfCtuEnabled( int compIdx ) { return m_alfCtuEnabled[compIdx].data(); }
-  std::vector<uint8_t>* getAlfCtuEnabled() { return m_alfCtuEnabled; }
-  void resizeAlfCtuEnabled( int numEntries )
-  {
-    for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
-    {
-      m_alfCtuEnabled[compIdx].resize( numEntries );
-      std::fill( m_alfCtuEnabled[compIdx].begin(), m_alfCtuEnabled[compIdx].end(), 0 );
-    }
-  }
-  short* getAlfCtbFilterIndex() { return m_alfCtbFilterIndex.data(); }
-  std::vector<short>& getAlfCtbFilterIndexVec() { return m_alfCtbFilterIndex; }
-  void resizeAlfCtbFilterIndex(int numEntries)
-  {
-    m_alfCtbFilterIndex.resize(numEntries);
-    for (int i = 0; i < numEntries; i++)
-    {
-      m_alfCtbFilterIndex[i] = 0;
-    }
-  }
-  std::vector<uint8_t>& getAlfCtuAlternative( int compIdx ) { return m_alfCtuAlternative[compIdx]; }
-  uint8_t* getAlfCtuAlternativeData( int compIdx ) { return m_alfCtuAlternative[compIdx].data(); }
-  void resizeAlfCtuAlternative( int numEntries )
-  {
-    for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
-    {
-      m_alfCtuAlternative[compIdx].resize( numEntries );
-      std::fill( m_alfCtuAlternative[compIdx].begin(), m_alfCtuAlternative[compIdx].end(), 0 );
-    }
-  }
+  void            resizeAlfCtuBuffers( int numEntries );
 };
 
 int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
