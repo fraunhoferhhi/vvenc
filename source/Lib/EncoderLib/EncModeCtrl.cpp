@@ -70,6 +70,36 @@ void CacheBlkInfoCtrl::create()
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
   const int maxSizeIdx  = MAX_CU_SIZE_IDX - MIN_CU_LOG2;
 
+  static constexpr size_t numCu = 7921;
+
+  //for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
+  //{
+  //  for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
+  //  {
+  //    for( unsigned y = 0; y < numPos; y++ )
+  //    {
+  //      for( unsigned x = 0; x < numPos; x++ )
+  //      {
+  //        // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
+  //        // W = 1 << ( wIdx + 2 )
+  //        // 1/2 W = 1 << ( wIdx + 1 )
+  //        // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
+  //
+  //        if( (x + (1 << (wIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
+  //            && (y + (1 << (hIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
+  //            && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
+  //            && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
+  //        {
+  //          numCu++;
+  //        }
+  //      }
+  //    }
+  //  }
+  //}
+
+  m_codedCUInfoBuf = new CodedCUInfo[numCu];
+  CodedCUInfo* cuInfo = m_codedCUInfoBuf;
+
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
     for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
@@ -84,11 +114,11 @@ void CacheBlkInfoCtrl::create()
           // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
 
           if(( x + (1<<(wIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-          && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-          && ( ( ( x << MIN_CU_LOG2 ) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
-          && ( ( ( y << MIN_CU_LOG2 ) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
+            && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+            && ( ( ( x << MIN_CU_LOG2 ) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
+            && ( ( ( y << MIN_CU_LOG2 ) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
           {
-            m_codedCUInfo[wIdx][hIdx][x][y] = new CodedCUInfo;
+            m_codedCUInfo[wIdx][hIdx][x][y] = cuInfo++;
             m_codedCUInfo[wIdx][hIdx][x][y]->poc       = -1;
             m_codedCUInfo[wIdx][hIdx][x][y]->ctuRsAddr = -1;
           }
@@ -107,22 +137,8 @@ void CacheBlkInfoCtrl::destroy()
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
   const int maxSizeIdx  = MAX_CU_SIZE_IDX- MIN_CU_LOG2;
 
-  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  {
-    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-    {
-      for( unsigned x = 0; x < numPos; x++ )
-      {
-        for( unsigned y = 0; y < numPos; y++ )
-        {
-          if( m_codedCUInfo[wIdx][hIdx][x][y] )
-          {
-            delete m_codedCUInfo[wIdx][hIdx][x][y];
-          }
-        }
-      }
-    }
-  }
+  delete[] m_codedCUInfoBuf;
+  m_codedCUInfoBuf = nullptr;
 }
 
 void CacheBlkInfoCtrl::init( const Slice &slice )
@@ -250,15 +266,73 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
   const int maxSizeIdx  = MAX_CU_SIZE_IDX - MIN_CU_LOG2;
 
+  static constexpr size_t yuvNom[4] = { 1, 3, 2, 3 };
+  static constexpr size_t yuvDen[4] = { 0, 1, 0, 0 };
+
+  static constexpr size_t numCu = 7921;
+  static constexpr size_t numDmvrMv = 5439;
+  const size_t numCoeff = ( numCu * yuvNom[chFmt] ) >> yuvDen[chFmt];
+
+  //for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
+  //{
+  //  for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
+  //  {
+  //    int dmvrSize = 0;
+  //    if( hIdx >= 1 && wIdx >= 1 && (wIdx + hIdx) >= 3 )
+  //    {
+  //      dmvrSize = (1 << std::max( 0, (wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) )) * (1 << std::max( 0, (hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) ));
+  //    }
+  //
+  //    const UnitArea area( chFmt, Area( 0, 0, 1 << (wIdx + 2), 1 << (hIdx + 2) ) );
+  //
+  //    for( unsigned x = 0; x < numPos; x++ )
+  //    {
+  //      for( unsigned y = 0; y < numPos; y++ )
+  //      {
+  //        // a block of width W might be offset of N * W + 1/2 W (bcs of TT), same for H
+  //        // W = 1 << ( wIdx + 2 )
+  //        // 1/2 W = 1 << ( wIdx + 1 )
+  //        // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
+  //
+  //        if( (x + (1 << (wIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
+  //          && (y + (1 << (hIdx)) <= (MAX_CU_SIZE >> MIN_CU_LOG2))
+  //          && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
+  //          && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
+  //        {
+  //          for( const CompArea& blk : area.blocks )
+  //          {
+  //            numCoeff += blk.area();
+  //          }
+  //
+  //          //numCu++;
+  //          numDmvrMv += dmvrSize;
+  //        }
+  //      }
+  //    }
+  //  }
+  //}
+
+  m_encInfoBuf = new BestEncodingInfo[numCu];
+  BestEncodingInfo* encInfo = m_encInfoBuf;
+
+  m_dmvrMvBuf = new Mv[numDmvrMv];
+  Mv* dmvrMv = m_dmvrMvBuf;
+
+  m_pCoeff = new TCoeff[numCoeff];
+  TCoeff* coeffPtr = m_pCoeff;
+
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
     for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
     {
       int dmvrSize = 0;
-      if( hIdx >= 1 && wIdx >= 1 && (wIdx+hIdx) >= 3 )
+      if( hIdx >= 1 && wIdx >= 1 && (wIdx + hIdx) >= 3 )
       {
-        dmvrSize = (1 << std::max(0,(wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2))) * (1 << std::max(0,(hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2)));
+        dmvrSize = (1 << std::max( 0, (wIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) )) * (1 << std::max( 0, (hIdx + MIN_CU_LOG2 - DMVR_SUBCU_SIZE_LOG2) ));
       }
+
+      const UnitArea area( chFmt, Area( 0, 0, 1 << (wIdx + 2), 1 << (hIdx + 2) ) );
+
       for( unsigned x = 0; x < numPos; x++ )
       {
         for( unsigned y = 0; y < numPos; y++ )
@@ -269,20 +343,32 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
           // remainder of (N+1/2)*W -> x & ( ( 1 << ( wIdx + 1 ) ) - 1 )
 
           if(( x + (1<<(wIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-          && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
-          && ( ( ( x << MIN_CU_LOG2 )  & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
-          && ( ( ( y << MIN_CU_LOG2 )  & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
+            && ( y + (1<<(hIdx)) <= ( MAX_CU_SIZE >> MIN_CU_LOG2 ) )
+            && ( ( ( x << MIN_CU_LOG2 )  & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 )
+            && ( ( ( y << MIN_CU_LOG2 )  & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1) ) == 0 ) )
           {
-            m_bestEncInfo[wIdx][hIdx][x][y] = new BestEncodingInfo(dmvrSize);
+            m_bestEncInfo[wIdx][hIdx][x][y] = encInfo++;
 
-            const UnitArea area( chFmt, Area( 0, 0, 1<<(wIdx+2), 1<<(hIdx+2) ) );
+            m_bestEncInfo[wIdx][hIdx][x][y]->cu.UnitArea::operator=( area );
+            m_bestEncInfo[wIdx][hIdx][x][y]->tu.UnitArea::operator=( area );
 
-            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->cu ) CodingUnit   ( area );
-            new ( &m_bestEncInfo[wIdx][hIdx][x][y]->tu ) TransformUnit( area );
             if( dmvrSize )
             {
-              m_bestEncInfo[wIdx][hIdx][x][y]->cu.mvdL0SubPu = &m_bestEncInfo[wIdx][hIdx][x][y]->dmvrMvdBuffer[0]; 
+              m_bestEncInfo[wIdx][hIdx][x][y]->cu.mvdL0SubPu = dmvrMv; 
+              dmvrMv += dmvrSize;
             }
+
+            TCoeff* coeff[MAX_NUM_TBLOCKS] = { 0, };
+
+            const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
+
+            for( int i = 0; i < area.blocks.size(); i++ )
+            {
+              coeff[i] = coeffPtr; coeffPtr += area.blocks[i].area();
+            }
+
+            m_bestEncInfo[wIdx][hIdx][x][y]->tu.cs = &m_dummyCS;
+            m_bestEncInfo[wIdx][hIdx][x][y]->tu.init( coeff );
 
             m_bestEncInfo[wIdx][hIdx][x][y]->poc      = -1;
             m_bestEncInfo[wIdx][hIdx][x][y]->testMode = EncTestMode();
@@ -302,26 +388,14 @@ void BestEncInfoCache::destroy()
   const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
   const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
 
-  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  {
-    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-    {
-      for( unsigned x = 0; x < numPos; x++ )
-      {
-        for( unsigned y = 0; y < numPos; y++ )
-        {
-          if( m_bestEncInfo[wIdx][hIdx][x][y] )
-          {
-            delete m_bestEncInfo[wIdx][hIdx][x][y];
-            m_bestEncInfo[wIdx][hIdx][x][y] = nullptr;
-          }
-        }
-      }
-    }
-  }
+  delete[] m_encInfoBuf;
+  m_encInfoBuf = nullptr;
 
   delete[] m_pCoeff;
   m_pCoeff = nullptr;
+
+  delete[] m_dmvrMvBuf;
+  m_dmvrMvBuf = nullptr;
 
   m_pcv = nullptr;
 }
@@ -334,62 +408,7 @@ void BestEncInfoCache::init( const Slice &slice )
 
   if( isInitialized ) return;
 
-  const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
-
-  size_t numCoeff = 0;
-  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  {
-    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-    {
-      for( unsigned x = 0; x < numPos; x++ )
-      {
-        for( unsigned y = 0; y < numPos; y++ )
-        {
-          if( m_bestEncInfo[wIdx][hIdx][x][y] )
-          {
-            for( const CompArea& blk : m_bestEncInfo[wIdx][hIdx][x][y]->cu.blocks )
-            {
-              numCoeff += blk.area();
-            }
-          }
-        }
-      }
-    }
-  }
-
-  m_pCoeff  = new TCoeff[numCoeff];
-
-  TCoeff *coeffPtr = m_pCoeff;
-
   m_dummyCS.pcv = m_pcv;
-
-  for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
-  {
-    for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
-    {
-      for( unsigned x = 0; x < numPos; x++ )
-      {
-        for( unsigned y = 0; y < numPos; y++ )
-        {
-          if( m_bestEncInfo[wIdx][hIdx][x][y] )
-          {
-            TCoeff *coeff[MAX_NUM_TBLOCKS] = { 0, };
-
-            const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
-
-            for( int i = 0; i < area.blocks.size(); i++ )
-            {
-              coeff[i] = coeffPtr; coeffPtr += area.blocks[i].area();
-            }
-
-            m_bestEncInfo[wIdx][hIdx][x][y]->tu.cs = &m_dummyCS;
-            m_bestEncInfo[wIdx][hIdx][x][y]->tu.init(coeff);
-          }
-        }
-      }
-    }
-  }
 }
 
 bool BestEncInfoCache::setFromCs( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner )

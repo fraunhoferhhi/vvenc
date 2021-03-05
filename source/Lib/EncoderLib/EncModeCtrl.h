@@ -279,6 +279,7 @@ class CacheBlkInfoCtrl
 protected:
   // x in CTU, y in CTU, width, height
   CodedCUInfo*         m_codedCUInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
+  CodedCUInfo*         m_codedCUInfoBuf;
   const PreCalcValues* m_pcv;
 
 protected:
@@ -288,7 +289,8 @@ protected:
   void init     ( const Slice &slice );
 
 public:
-  virtual ~CacheBlkInfoCtrl () {}
+  CacheBlkInfoCtrl() : m_codedCUInfoBuf( nullptr ) {}
+  ~CacheBlkInfoCtrl () {}
 
   CodedCUInfo& getBlkInfo   ( const UnitArea& area );
   void         initBlk      ( const UnitArea& area, int poc );
@@ -299,14 +301,12 @@ public:
 
 struct BestEncodingInfo
 { 
-  BestEncodingInfo( int dmvrSize ) { dmvrMvdBuffer.resize(dmvrSize); }
   CodingUnit      cu;
   TransformUnit   tu;
   EncTestMode     testMode;
   int             poc;
   Distortion      dist;
   double          costEDO;
-  std::vector<Mv> dmvrMvdBuffer;
 };
 
 class BestEncInfoCache
@@ -315,6 +315,8 @@ private:
   const PreCalcValues* m_pcv;
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
   TCoeff*              m_pCoeff;
+  BestEncodingInfo*    m_encInfoBuf;
+  Mv*                  m_dmvrMvBuf;
   CodingStructure      m_dummyCS;
   XUCache              m_dummyCache;
 
@@ -323,8 +325,8 @@ protected:
   void create   ( const ChromaFormat chFmt );
   void destroy  ();
 public:
-  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
-  virtual ~BestEncInfoCache() {}
+  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_encInfoBuf( nullptr ), m_dmvrMvBuf( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
+  ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );
   bool setCsFrom        (       CodingStructure& cs,       EncTestMode& testMode, const Partitioner& partitioner ) const;

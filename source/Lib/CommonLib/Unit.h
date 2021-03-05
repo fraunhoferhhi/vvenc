@@ -372,7 +372,7 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
 
   // needed for fast imv mode decisions
 
-  CodingUnit() : chType( CH_L ) {}
+  CodingUnit() = default;
   CodingUnit(const UnitArea& unit);
   CodingUnit(const ChromaFormat _chromaFormat, const Area& area);
 
@@ -420,7 +420,7 @@ struct TransformUnit : public UnitArea
   TransformUnit*   next;
   TransformUnit*   prev;
 
-  TransformUnit                           () : chType( CH_L ) { }
+  TransformUnit                           () = default;
   TransformUnit                           ( const UnitArea& unit);
   TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area);
   void          initData                  ();
