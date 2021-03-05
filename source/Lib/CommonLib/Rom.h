@@ -88,15 +88,15 @@ struct ScanElement
 };
 
 
-class ScanOrderRom
+class InitGeoRom
 {
   public:
-    ScanOrderRom() { initGeoTemplate(); }
+    InitGeoRom() { initGeoTemplate(); }
 
-    ~ScanOrderRom() { }
+    ~InitGeoRom() { }
 
   private:
-    void initGeoTemplate();
+    void initGeoTemplate() const;
 
   private:
 };
@@ -106,10 +106,10 @@ extern const ScanElement* m_scanOrder[SCAN_NUMBER_OF_GROUP_TYPES][MAX_TU_SIZE_ID
 
 static const ScanElement* getScanOrder( int g, int w2, int h2 ) { return m_scanOrder[g][w2][h2]; }
 
-extern ScanOrderRom g_scanOrderRom;
+extern const InitGeoRom g_scanOrderRom;
 
 extern const uint32_t g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2];
-extern ScanElement g_coefTopLeftDiagScan8x8[MAX_CU_SIZE / 2 + 1][64];
+extern const ScanElement g_coefTopLeftDiagScan8x8[MAX_TU_SIZE_IDX][64];
 
 extern const int g_quantScales   [2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // Q(QP%6)
 extern const int g_invQuantScales[2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // IQ(QP%6)
