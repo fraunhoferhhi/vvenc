@@ -72,6 +72,8 @@ void CacheBlkInfoCtrl::create()
 
   static constexpr size_t numCu = 7921;
 
+  //size_t numCu = 0;
+  //
   //for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   //{
   //  for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
@@ -268,8 +270,12 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
 
   static constexpr size_t numCu = 7921;
   static constexpr size_t numDmvrMv = 5439;
-  const size_t numCoeff = ( numCu * yuvNom[chFmt] ) >> yuvDen[chFmt];
+  const size_t numCoeff = ( 1345600 * yuvNom[chFmt] ) >> yuvDen[chFmt];
 
+  //size_t numCu = 0;
+  //size_t numDmvrMv = 0;
+  //size_t numCoeff = 0;
+  //
   //for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   //{
   //  for( int hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
@@ -296,10 +302,10 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   //          && (((x << MIN_CU_LOG2) & ((1 << (wIdx + MIN_CU_LOG2 - 1)) - 1)) == 0)
   //          && (((y << MIN_CU_LOG2) & ((1 << (hIdx + MIN_CU_LOG2 - 1)) - 1)) == 0) )
   //        {
-  //          for( const CompArea& blk : area.blocks )
-  //          {
-  //            numCoeff += blk.area();
-  //          }
+  //          numCu++;
+  //
+  //          numCoeff += area.Y().area();
+  //
   //
   //          //numCu++;
   //          numDmvrMv += dmvrSize;
@@ -308,6 +314,11 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   //    }
   //  }
   //}
+  //
+  //std::cout << numCu << " " << numDmvrMv << " " << numCoeff << std::endl;
+  //
+  //numCoeff *= 3;
+  //numCoeff >>= 1;
 
   m_encInfoBuf = new BestEncodingInfo[numCu];
   BestEncodingInfo* encInfo = m_encInfoBuf;
