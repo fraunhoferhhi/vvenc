@@ -134,9 +134,6 @@ void CacheBlkInfoCtrl::create()
 
 void CacheBlkInfoCtrl::destroy()
 {
-  const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX- MIN_CU_LOG2;
-
   delete[] m_codedCUInfoBuf;
   m_codedCUInfoBuf = nullptr;
 }
@@ -385,9 +382,6 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
 
 void BestEncInfoCache::destroy()
 {
-  const unsigned numPos = MAX_CU_SIZE >> MIN_CU_LOG2;
-  const int maxSizeIdx  = MAX_CU_SIZE_IDX-2;
-
   delete[] m_encInfoBuf;
   m_encInfoBuf = nullptr;
 
