@@ -104,7 +104,7 @@ class InitGeoRom
 extern const ScanElement  m_scanOrderBuf[32258];
 extern const ScanElement* m_scanOrder[SCAN_NUMBER_OF_GROUP_TYPES][MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX];
 
-static const ScanElement* getScanOrder( int g, int w2, int h2 ) { return m_scanOrder[g][w2][h2]; }
+const ScanElement* const getScanOrder( int g, int w2, int h2 );
 
 extern const InitGeoRom g_scanOrderRom;
 
