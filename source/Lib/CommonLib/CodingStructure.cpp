@@ -588,7 +588,8 @@ void CodingStructure::create(const UnitArea& _unit, const bool isTopLayer, const
 
 void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLayer )
 {
-  area = _unit;
+  area     = _unit;
+  _maxArea = _unit;
 
   memcpy( unitScale, UnitScaleArray[area.chromaFormat], sizeof( unitScale ) );
 
@@ -728,10 +729,10 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   for( uint32_t i = 0; i < subStruct.area.blocks.size(); i++ )
   {
-    CHECKD( subStruct.area.blocks[i].size() != subArea.blocks[i].size(), "Trying to init sub-structure of incompatible size" );
-
-    subStruct.area.blocks[i].pos() = subArea.blocks[i].pos();
+    CHECK( subStruct._maxArea.blocks[i].area() < subArea.blocks[i].area(), "Trying to init sub-structure of incompatible size" );
   }
+
+  subStruct.area      = subArea;
 
   if( parent )
   {
@@ -945,7 +946,7 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
 
   if (!skipMotBuf && (!parent || ((!slice->isIntra() || slice->sps->IBC) && !m_isTuEnc)))
   {
-    getMotionBuf()      .memset( 0 );
+    getMotionBuf().memset( 0 );
   }
 
   m_dmvrMvCacheOffset = 0;

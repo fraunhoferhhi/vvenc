@@ -88,6 +88,7 @@ class CodingStructure
 public:
 
   UnitArea         area;
+  UnitArea         _maxArea;
 
   Picture*         picture;
   CodingStructure* parent;
