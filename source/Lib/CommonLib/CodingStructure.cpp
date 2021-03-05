@@ -722,8 +722,18 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 {
   CHECK( this == &subStruct, "Trying to init self as sub-structure" );
 
-  subStruct.m_org = ( pOrgBuffer ) ? pOrgBuffer : m_org;
+  if( pOrgBuffer ) pOrgBuffer->compactResize( subArea );
+  UnitArea subAreaLuma = subArea.singleChan( CH_L );
+  subAreaLuma.blocks.resize( 1 );
+  if( pRspBuffer ) pRspBuffer->compactResize( subAreaLuma );
+
+  subStruct.m_org    = ( pOrgBuffer ) ? pOrgBuffer : m_org;
   subStruct.m_rsporg = ( pRspBuffer ) ? pRspBuffer : m_rsporg;
+
+  subStruct.m_pred   .compactResize( subArea );
+  subStruct.m_reco   .compactResize( subArea );
+  subStruct.m_resi   .compactResize( subArea );
+  subStruct.m_rspreco.compactResize( subAreaLuma );
 
   subStruct.costDbOffset = 0;
 

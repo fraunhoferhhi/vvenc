@@ -364,8 +364,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   // init current context pointer
   m_CurrCtx = m_CtxBuffer.data();
 
-  PelStorage* orgBuffer =   &m_pOrgBuffer[0];
-  PelStorage* rspBuffer =   &m_pRspBuffer[0];
+  PelStorage* orgBuffer = &m_pOrgBuffer[0];
+  PelStorage* rspBuffer = &m_pRspBuffer[0];
   CodingStructure *tempCS =  m_pTempCS   [0];
   CodingStructure *bestCS =  m_pBestCS   [0];
   cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
