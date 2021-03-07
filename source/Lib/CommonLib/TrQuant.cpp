@@ -863,7 +863,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));
+        : getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode( cu.intraDir[toChannelType(compID)]))
@@ -968,7 +968,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));   
+        : getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));   
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode(cu.intraDir[toChannelType(compID)]))
