@@ -67,10 +67,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 #define PLTCtx(c) SubCtx( Ctx::Palette, c )
+
 IntraSearch::IntraSearch()
-  : m_pTempCS       (nullptr)
-  , m_pBestCS       (nullptr)
-  , m_pSaveCS       (nullptr)
+  : m_pSaveCS       (nullptr)
   , m_pcEncCfg      (nullptr)
   , m_pcTrQuant     (nullptr)
   , m_pcRdCost      (nullptr)
@@ -91,34 +90,13 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
   const ChromaFormat chrFormat = encCfg.m_internChromaFormat;
   const int maxCUSize          = encCfg.m_CTUSize;
 
-  const int numWidths  = MAX_CU_SIZE_IDX;
-  const int numHeights = MAX_CU_SIZE_IDX;
+  Area area = Area( 0, 0, maxCUSize, maxCUSize );
 
-  m_pBestCS = new CodingStructure**[numWidths];
-  m_pTempCS = new CodingStructure**[numWidths];
+  m_pTempCS = new CodingStructure( unitCache, nullptr );
+  m_pBestCS = new CodingStructure( unitCache, nullptr );
 
-  for( int wIdx = 0; wIdx < numWidths; wIdx++ )
-  {
-    m_pBestCS[wIdx] = new CodingStructure*[numHeights];
-    m_pTempCS[wIdx] = new CodingStructure*[numHeights];
-
-    for( int hIdx = 0; hIdx < numHeights; hIdx++ )
-    {
-      if( wIdx < 2 || hIdx < 2 )
-      {
-        m_pBestCS[wIdx][hIdx] = nullptr;
-        m_pTempCS[wIdx][hIdx] = nullptr;
-        continue;
-      }
-
-      m_pBestCS[wIdx][hIdx] = new CodingStructure( unitCache, nullptr );
-      m_pTempCS[wIdx][hIdx] = new CodingStructure( unitCache, nullptr );
-
-      Area area = Area( 0, 0, 1<<wIdx, 1<<hIdx );
-      m_pBestCS[wIdx][hIdx]->create( chrFormat, area, false );
-      m_pTempCS[wIdx][hIdx]->create( chrFormat, area, false );
-    }
-  }
+  m_pTempCS->create( chrFormat, area, false );
+  m_pBestCS->create( chrFormat, area, false );
 
   const int uiNumSaveLayersToAllocate = 3;
   m_pSaveCS = new CodingStructure*[uiNumSaveLayersToAllocate];
@@ -128,9 +106,7 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
     m_pSaveCS[ layer ]->create( chrFormat, Area( 0, 0, maxCUSize, maxCUSize ), false );
     m_pSaveCS[ layer ]->initStructData();
   }
-
 }
-
 
 void IntraSearch::destroy()
 {
@@ -145,21 +121,17 @@ void IntraSearch::destroy()
     m_pSaveCS = nullptr;
   }
 
-  const int numWidths  = MAX_CU_SIZE_IDX;
-  const int numHeights = MAX_CU_SIZE_IDX;
-  for( int wIdx = 0; wIdx < numWidths; wIdx++ )
+  if( m_pTempCS )
   {
-    for( int hIdx = 0; hIdx < numHeights; hIdx++ )
-    {
-      if ( m_pBestCS && m_pBestCS[ wIdx ] && m_pBestCS[ wIdx ][ hIdx ] ) { m_pBestCS[ wIdx ][ hIdx ]->destroy(); delete m_pBestCS[ wIdx ][ hIdx ]; }
-      if ( m_pTempCS && m_pTempCS[ wIdx ] && m_pTempCS[ wIdx ][ hIdx ] ) { m_pTempCS[ wIdx ][ hIdx ]->destroy(); delete m_pTempCS[ wIdx ][ hIdx ]; }
-    }
-    if ( m_pBestCS  && m_pBestCS[ wIdx ]  ) { delete[] m_pBestCS[ wIdx ];  }
-    if ( m_pTempCS  && m_pTempCS[ wIdx ]  ) { delete[] m_pTempCS[ wIdx ];  }
+    m_pTempCS->destroy();
+    delete m_pTempCS; m_pTempCS = nullptr;
   }
-  if ( m_pBestCS  ) { delete[] m_pBestCS;  m_pBestCS  = nullptr; }
-  if ( m_pTempCS  ) { delete[] m_pTempCS;  m_pTempCS  = nullptr; }
 
+  if( m_pBestCS )
+  {
+    m_pBestCS->destroy();
+    delete m_pBestCS; m_pBestCS = nullptr;
+  }
 }
 
 IntraSearch::~IntraSearch()
@@ -544,11 +516,13 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   //===== check modes (using r-d costs) =====
   ModeInfo bestPUMode;
 
-  CodingStructure *csTemp = m_pTempCS[Log2(cu.lwidth())][Log2(cu.lheight())];
-  CodingStructure *csBest = m_pBestCS[Log2(cu.lwidth())][Log2(cu.lheight())];
+  CodingStructure *csTemp = m_pTempCS;
+  CodingStructure *csBest = m_pBestCS;
 
   csTemp->slice   = csBest->slice   = cs.slice;
   csTemp->picture = csBest->picture = cs.picture;
+  csTemp->compactResize( cu );
+  csBest->compactResize( cu );
   csTemp->initStructData();
   csBest->initStructData();
 
