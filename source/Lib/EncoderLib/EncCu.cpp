@@ -949,7 +949,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
   int64_t approxBits = numChild << SCALE_BITS;
 
-  //approxBits = ( 3 * approxBits ) >> 1;
+  approxBits = ( 3 * approxBits ) >> 1;
 
   const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 ) /* - ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.025 : 0.0 ) */ + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
