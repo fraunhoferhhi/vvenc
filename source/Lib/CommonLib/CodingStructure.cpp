@@ -730,19 +730,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   subStruct.m_org    = ( pOrgBuffer ) ? pOrgBuffer : m_org;
   subStruct.m_rsporg = ( pRspBuffer ) ? pRspBuffer : m_rsporg;
 
-  subStruct.m_pred   .compactResize( subArea );
-  subStruct.m_reco   .compactResize( subArea );
-  subStruct.m_resi   .compactResize( subArea );
-  subStruct.m_rspreco.compactResize( subAreaLuma );
-
   subStruct.costDbOffset = 0;
-
-  for( uint32_t i = 0; i < subStruct.area.blocks.size(); i++ )
-  {
-    CHECK( subStruct._maxArea.blocks[i].area() < subArea.blocks[i].area(), "Trying to init sub-structure of incompatible size" );
-  }
-
-  subStruct.area      = subArea;
 
   if( parent )
   {
@@ -781,7 +769,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
     subStruct.motionLut = motionLut;
   }
 
-  subStruct.initStructData( currQP[_chType] );
+  subStruct.initStructData( currQP[_chType], false, &subArea );
 
   if( isTuEnc )
   {
@@ -944,10 +932,28 @@ void CodingStructure::copyStructure( const CodingStructure& other, const Channel
   }
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
 {
   clearTUs();
   clearCUs();
+
+  if( _area )
+  {
+    UnitArea areaLuma = _area->singleChan( CH_L );
+    areaLuma.blocks.resize( 1 );
+    
+    m_pred   .compactResize( *_area );
+    m_reco   .compactResize( *_area );
+    m_resi   .compactResize( *_area );
+    m_rspreco.compactResize( areaLuma );
+
+    for( uint32_t i = 0; i < _area->blocks.size(); i++ )
+    {
+      CHECK( _maxArea.blocks[i].area() < _area->blocks[i].area(), "Trying to init sub-structure of incompatible size" );
+    }
+
+    area = *_area;
+  }
 
   if( QP < MAX_INT )
   {

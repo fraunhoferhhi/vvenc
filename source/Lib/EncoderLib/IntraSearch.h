@@ -72,8 +72,10 @@ class VVEncCfg;
 class IntraSearch : public IntraPrediction
 {
 private:
-  CodingStructure***  m_pTempCS;
-  CodingStructure***  m_pBestCS;
+  static const int maxCuDepth = (MAX_CU_SIZE_IDX - MIN_CU_LOG2) << 1;
+
+  CodingStructure*    m_pTempCS[maxCuDepth];
+  CodingStructure*    m_pBestCS[maxCuDepth];
   CodingStructure**   m_pSaveCS;
   bool                m_saveCuCostInSCIPU;
   uint8_t             m_numCuInSCIPU;
