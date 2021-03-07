@@ -949,11 +949,11 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
   int64_t approxBits = numChild << SCALE_BITS;
 
-  approxBits = ( 1 * approxBits ) >> 1;
+  approxBits = ( 2 * approxBits ) >> 0;
 
   const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 ) + ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.025 : 0.0 ) + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
-  const double cost   = m_cRdCost.calcRdCost( uint64_t( m_CABACEstimator->getEstFracBits() + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
+  const double cost   = m_cRdCost.calcRdCost( uint64_t( /* m_CABACEstimator->getEstFracBits() */ + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
 
   m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), ctxSplitFlags);
 
