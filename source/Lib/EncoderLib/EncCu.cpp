@@ -999,14 +999,16 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
       PelStorage* rspBuffer =  &m_pRspBuffer[partitioner.currDepth];
       CodingStructure *tempSubCS = m_pTempCS[partitioner.currDepth];
       CodingStructure *bestSubCS = m_pBestCS[partitioner.currDepth];
-      // copy org buffer
+
+      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
+      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
+
+      // copy org buffer, need to be done after initSubStructure because of reshaping!
       orgBuffer->copyFrom( tempCS->getOrgBuf( subCUArea ) );
       if( tempCS->slice->lmcsEnabled && reshapeData.getCTUFlag() )
       {
         rspBuffer->Y().copyFrom( tempCS->getRspOrgBuf( subCUArea.Y() ) );
       }
-      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
-      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
       m_CABACEstimator->determineNeighborCus( *tempSubCS, partitioner.currArea(), partitioner.chType, partitioner.treeType );
 
       tempSubCS->bestParent = bestSubCS->bestParent = bestCS;

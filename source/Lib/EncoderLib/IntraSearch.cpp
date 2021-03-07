@@ -535,6 +535,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
   csTemp->slice   = csBest->slice   = cs.slice;
   csTemp->picture = csBest->picture = cs.picture;
+  csTemp->compactResize( cu );
+  csBest->compactResize( cu );
   csTemp->initStructData();
   csBest->initStructData();
 
