@@ -945,13 +945,13 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   if( split == CU_VERT_SPLIT || split == CU_HORZ_SPLIT ) numChild--;
   else if( split == CU_QUAD_SPLIT ) numChild++;
 
-  //if( modeTypeChild != modeTypeParent ) numChild++;
+  if( modeTypeChild != modeTypeParent ) numChild++;
 
   int64_t approxBits = numChild << SCALE_BITS;
 
   approxBits = ( 3 * approxBits ) >> 1;
 
-  const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 ) /* - ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.025 : 0.0 ) */ + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
+  const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.125 : 1.1 ) /* - ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.025 : 0.0 ) */ + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
   const double cost   = m_cRdCost.calcRdCost( uint64_t( m_CABACEstimator->getEstFracBits() + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
 
