@@ -933,21 +933,25 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
   m_CABACEstimator->getCtx() = m_CurrCtx->start;
 
-  const uint16_t split_ctx_size = Ctx::SplitFlag.size() + Ctx::SplitQtFlag.size() + Ctx::SplitHvFlag.size() + Ctx::Split12Flag.size() + Ctx::ModeConsFlag.size();
-  const TempCtx  ctxSplitFlags( m_CtxCache, SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), m_CABACEstimator->getCtx()));
+  //const uint16_t split_ctx_size = Ctx::SplitFlag.size() + Ctx::SplitQtFlag.size() + Ctx::SplitHvFlag.size() + Ctx::Split12Flag.size() + Ctx::ModeConsFlag.size();
+  //const TempCtx  ctxSplitFlags( m_CtxCache, SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), m_CABACEstimator->getCtx()));
 
   m_CABACEstimator->resetBits();
 
-  m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
-#if 0
-  m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
+  //m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
+  //m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
 
-#endif
+  int numChild = 3;
+  if( split == CU_VERT_SPLIT || split == CU_HORZ_SPLIT ) numChild--;
+  else if( split == CU_QUAD_SPLIT ) numChild++;
+
+  int64_t approxBits = numChild << SCALE_BITS;
+
   const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 ) - ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.025 : 0.0 ) + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
-  const double cost   = m_cRdCost.calcRdCost( uint64_t( m_CABACEstimator->getEstFracBits() + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
+  const double cost   = m_cRdCost.calcRdCost( uint64_t( /* m_CABACEstimator->getEstFracBits() */ approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
 
-  m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), ctxSplitFlags);
+  //m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), ctxSplitFlags);
 
   if (cost > bestCS->cost + bestCS->costDbOffset )
   {
