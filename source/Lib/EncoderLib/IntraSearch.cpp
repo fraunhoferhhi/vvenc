@@ -90,22 +90,13 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
   const ChromaFormat chrFormat = encCfg.m_internChromaFormat;
   const int maxCUSize          = encCfg.m_CTUSize;
 
-  for( int i = 0; i < maxCuDepth; i++ )
-  {
-    Area area = Area( 0, 0, maxCUSize >> ( i >> 1 ), maxCUSize >> ( ( i + 1 ) >> 1 ) );
+  Area area = Area( 0, 0, maxCUSize, maxCUSize );
 
-    if( area.width < (1 << MIN_CU_LOG2) || area.height < (1 << MIN_CU_LOG2) )
-    {
-      m_pTempCS[i] = m_pBestCS[i] = nullptr;
-      continue;
-    }
+  m_pTempCS = new CodingStructure( unitCache, nullptr );
+  m_pBestCS = new CodingStructure( unitCache, nullptr );
 
-    m_pTempCS[i] = new CodingStructure( unitCache, nullptr );
-    m_pBestCS[i] = new CodingStructure( unitCache, nullptr );
-
-    m_pTempCS[i]->create( chrFormat, area, false );
-    m_pBestCS[i]->create( chrFormat, area, false );
-  }
+  m_pTempCS->create( chrFormat, area, false );
+  m_pBestCS->create( chrFormat, area, false );
 
   const int uiNumSaveLayersToAllocate = 3;
   m_pSaveCS = new CodingStructure*[uiNumSaveLayersToAllocate];
@@ -115,9 +106,7 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
     m_pSaveCS[ layer ]->create( chrFormat, Area( 0, 0, maxCUSize, maxCUSize ), false );
     m_pSaveCS[ layer ]->initStructData();
   }
-
 }
-
 
 void IntraSearch::destroy()
 {
@@ -132,19 +121,16 @@ void IntraSearch::destroy()
     m_pSaveCS = nullptr;
   }
 
-  for( int i = 0; i < maxCuDepth; i++ )
+  if( m_pTempCS )
   {
-    if( m_pTempCS[i] )
-    {
-      m_pTempCS[i]->destroy();
-      delete m_pTempCS[i]; m_pTempCS[i] = nullptr;
-    }
+    m_pTempCS->destroy();
+    delete m_pTempCS; m_pTempCS = nullptr;
+  }
 
-    if( m_pBestCS[i] )
-    {
-      m_pBestCS[i]->destroy();
-      delete m_pBestCS[i]; m_pBestCS[i] = nullptr;
-    }
+  if( m_pBestCS )
+  {
+    m_pBestCS->destroy();
+    delete m_pBestCS; m_pBestCS = nullptr;
   }
 }
 
@@ -530,8 +516,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   //===== check modes (using r-d costs) =====
   ModeInfo bestPUMode;
 
-  CodingStructure *csTemp = m_pTempCS[cu.depth];
-  CodingStructure *csBest = m_pBestCS[cu.depth];
+  CodingStructure *csTemp = m_pTempCS;
+  CodingStructure *csBest = m_pBestCS;
 
   csTemp->slice   = csBest->slice   = cs.slice;
   csTemp->picture = csBest->picture = cs.picture;
