@@ -995,9 +995,6 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
     if( tempCS->picture->Y().contains( subCUArea.lumaPos() ) )
     {
-      const unsigned wIdx    = Log2(subCUArea.lwidth ());
-      const unsigned hIdx    = Log2(subCUArea.lheight());
-
       PelStorage* orgBuffer =  &m_pOrgBuffer[partitioner.currDepth];
       PelStorage* rspBuffer =  &m_pRspBuffer[partitioner.currDepth];
       CodingStructure *tempSubCS = m_pTempCS[partitioner.currDepth];
@@ -1154,8 +1151,6 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
     m_CurrCtx++;
 
-    const unsigned wIdx = Log2(partitioner.currArea().lwidth() );
-    const unsigned hIdx = Log2(partitioner.currArea().lheight());
     CodingStructure *tempCSChroma = m_pTempCS2;
     CodingStructure *bestCSChroma = m_pBestCS2;
 
@@ -2651,9 +2646,6 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
     double costCurStart = m_pcEncCfg->m_AMVRspeed == 1 ? m_modeCtrl.comprCUCtx->bestCostNoImv : bestCS->cost;
     double costCur      = MAX_DOUBLE;
     double bestCostIMV  = MAX_DOUBLE;
-
-    const unsigned wIdx = Log2(partitioner.currArea().lwidth());
-    const unsigned hIdx = Log2(partitioner.currArea().lheight());
 
     if (Do_OnceRes)
     {
