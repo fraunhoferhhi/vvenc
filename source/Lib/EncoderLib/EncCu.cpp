@@ -196,10 +196,18 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   unsigned      uiMaxSize    = encCfg.m_CTUSize;
   ChromaFormat  chromaFormat = encCfg.m_internChromaFormat;
 
-  Area area = Area( 0, 0, uiMaxSize, uiMaxSize );
+  Area ctuArea = Area( 0, 0, uiMaxSize, uiMaxSize );
 
   for( int i = 0; i < maxCuDepth; i++ )
   {
+    Area area = Area( 0, 0, uiMaxSize >> ( i >> 1 ), uiMaxSize >> ( ( i + 1 ) >> 1 ) );
+
+    if( area.width < (1 << MIN_CU_LOG2) || area.height < (1 << MIN_CU_LOG2) )
+    {
+      m_pTempCS[i] = m_pBestCS[i] = nullptr;
+      continue;
+    }
+
     m_pTempCS[i] = new CodingStructure( m_unitCache, nullptr );
     m_pBestCS[i] = new CodingStructure( m_unitCache, nullptr );
 
@@ -213,8 +221,8 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_pTempCS2 = new CodingStructure( m_unitCache, nullptr );
   m_pBestCS2 = new CodingStructure( m_unitCache, nullptr );
 
-  m_pTempCS2->create( chromaFormat, area, false );
-  m_pBestCS2->create( chromaFormat, area, false );
+  m_pTempCS2->create( chromaFormat, ctuArea, false );
+  m_pBestCS2->create( chromaFormat, ctuArea, false );
 
   m_cuChromaQpOffsetIdxPlus1 = 0;
   m_tempQpDiff = 0;
@@ -240,11 +248,17 @@ void EncCu::destroy()
 {
   for( int i = 0; i < maxCuDepth; i++ )
   {
-    m_pTempCS[i]->destroy();
-    m_pBestCS[i]->destroy();
+    if( m_pTempCS[i] )
+    {
+      m_pTempCS[i]->destroy();
+      delete m_pTempCS[i]; m_pTempCS[i] = nullptr;
+    }
 
-    delete m_pTempCS[i]; m_pTempCS[i] = nullptr;
-    delete m_pBestCS[i]; m_pBestCS[i] = nullptr;
+    if( m_pBestCS[i] )
+    {
+      m_pBestCS[i]->destroy();
+      delete m_pBestCS[i]; m_pBestCS[i] = nullptr;
+    }
 
     m_pOrgBuffer[i].destroy();
     m_pRspBuffer[i].destroy();
@@ -366,8 +380,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   PelStorage* orgBuffer = &m_pOrgBuffer[0];
   PelStorage* rspBuffer = &m_pRspBuffer[0];
-  CodingStructure *tempCS =  m_pTempCS   [0];
-  CodingStructure *bestCS =  m_pBestCS   [0];
+  CodingStructure *tempCS =  m_pTempCS [0];
+  CodingStructure *bestCS =  m_pBestCS [0];
   cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
   cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
   m_CABACEstimator->determineNeighborCus( *tempCS, partitioner->currArea(), partitioner->chType, partitioner->treeType );
