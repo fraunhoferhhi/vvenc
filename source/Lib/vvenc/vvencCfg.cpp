@@ -56,6 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/ProfileLevelTier.h"
 
 #include <math.h>
+#include <thread>
 
 //! \ingroup Interface
 //! \{
@@ -104,7 +105,7 @@ bool VVEncCfg::initCfgParameter()
   case 59: temporalRate = 60000; temporalScale = 1001; break;
   default: break;
   }
-  
+
   confirmParameter( (m_TicksPerSecond < 90000) && (m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
@@ -231,7 +232,12 @@ bool VVEncCfg::initCfgParameter()
   if( m_RCUseLCUSeparateModel < 0 )                      m_RCUseLCUSeparateModel = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 1 : 0;
 
   // threading
-  if( m_numThreads < 0 )              m_numThreads            = m_SourceWidth > 832 && m_SourceHeight > 480 ? 8 : 4;
+  if( m_numThreads < 0 )
+  {
+    const int numCores = std::thread::hardware_concurrency();
+    m_numThreads = m_SourceWidth > 832 && m_SourceHeight > 480 ? 8 : 4;
+    m_numThreads = std::min( m_numThreads, numCores );
+  }
   if( m_ensureWppBitEqual < 0 )       m_ensureWppBitEqual     = m_numThreads ? 1   : 0   ;
   if( m_useAMaxBT < 0 )               m_useAMaxBT             = m_numThreads ? 0   : 1   ;
   if( m_cabacInitPresent < 0 )        m_cabacInitPresent      = m_numThreads ? 0   : 1   ;
