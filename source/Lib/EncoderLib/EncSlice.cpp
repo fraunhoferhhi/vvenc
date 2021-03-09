@@ -105,9 +105,16 @@ struct CtuEncParam
   int       ctuRsAddr;
   int       ctuPosX;
   int       ctuPosY;
+  UnitArea  ctuArea;
 
-  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ) {}
-  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y ) : pic( _p ), encSlice( _s ), ctuRsAddr( _r ), ctuPosX( _x ), ctuPosY( _y ) {}
+  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ), ctuArea() {}
+  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y )
+    : pic( _p )
+    , encSlice( _s )
+    , ctuRsAddr( _r )
+    , ctuPosX( _x )
+    , ctuPosY( _y )
+    , ctuArea( pic->chromaFormat, pic->slices[0]->pps->pcv->getCtuArea( _x, _y ) ) {}
 };
 
 // ====================================================================================================================
@@ -749,6 +756,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     ctuEncParams[ idx ].ctuRsAddr = ctuPos.ctuRsAddr;
     ctuEncParams[ idx ].ctuPosX   = ctuPos.ctuPosX;
     ctuEncParams[ idx ].ctuPosY   = ctuPos.ctuPosY;
+    ctuEncParams[ idx ].ctuArea   = UnitArea( pic->chromaFormat, slice.pps->pcv->getCtuArea( ctuPos.ctuPosX, ctuPos.ctuPosY ) );
     idx++;
   }
   CHECK( idx != pcv.sizeInCtus, "array index out of bounds" );
@@ -802,7 +810,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   const int height               = std::min( pcv.maxCUSize, pcv.lumaHeight - y );
   const int ctuStride            = pcv.widthInCtus;
   ProcessCtuState* processStates = encSlice->m_processStates.data();
-  const UnitArea ctuArea( pcv.chrFormat, Area( x, y, width, height ) );
+  const UnitArea& ctuArea        = ctuEncParam->ctuArea;
   const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "poc", cs.slice->poc ) );
