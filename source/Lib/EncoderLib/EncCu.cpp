@@ -196,57 +196,33 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   unsigned      uiMaxSize    = encCfg.m_CTUSize;
   ChromaFormat  chromaFormat = encCfg.m_internChromaFormat;
 
-  const unsigned maxSizeIdx  = MAX_CU_SIZE_IDX;
-  m_pTempCS = new CodingStructure**  [maxSizeIdx];
-  m_pBestCS = new CodingStructure**  [maxSizeIdx];
-  m_pTempCS2 = new CodingStructure** [maxSizeIdx];
-  m_pBestCS2 = new CodingStructure** [maxSizeIdx];
-  m_pOrgBuffer = new PelStorage**    [maxSizeIdx];
-  m_pRspBuffer = new PelStorage**    [maxSizeIdx];
+  Area ctuArea = Area( 0, 0, uiMaxSize, uiMaxSize );
 
-  for( unsigned wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
+  for( int i = 0; i < maxCuDepth; i++ )
   {
-    m_pTempCS[wIdx] = new CodingStructure*  [maxSizeIdx];
-    m_pBestCS[wIdx] = new CodingStructure*  [maxSizeIdx];
-    m_pTempCS2[wIdx] = new CodingStructure* [maxSizeIdx];
-    m_pBestCS2[wIdx] = new CodingStructure* [maxSizeIdx];
-    m_pOrgBuffer[wIdx] = new PelStorage*    [maxSizeIdx];
-    m_pRspBuffer[wIdx] = new PelStorage*    [maxSizeIdx];
+    Area area = Area( 0, 0, uiMaxSize >> ( i >> 1 ), uiMaxSize >> ( ( i + 1 ) >> 1 ) );
 
-    for( unsigned hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
+    if( area.width < (1 << MIN_CU_LOG2) || area.height < (1 << MIN_CU_LOG2) )
     {
-      if( wIdx < 2 || hIdx < 2)
-      {
-        m_pTempCS[wIdx][hIdx] = nullptr;
-        m_pBestCS[wIdx][hIdx] = nullptr;
-        m_pTempCS2[wIdx][hIdx] = nullptr;
-        m_pBestCS2[wIdx][hIdx] = nullptr;
-        m_pOrgBuffer[wIdx][hIdx] = nullptr;
-        m_pRspBuffer[wIdx][hIdx] = nullptr;
-        continue;
-      }
-
-      Area area = Area( 0, 0, 1<<wIdx, 1<<hIdx );
-
-      m_pTempCS[wIdx][hIdx] = new CodingStructure( m_unitCache, nullptr );
-      m_pBestCS[wIdx][hIdx] = new CodingStructure( m_unitCache, nullptr );
-
-      m_pTempCS[wIdx][hIdx]->create( chromaFormat, area, false );
-      m_pBestCS[wIdx][hIdx]->create( chromaFormat, area, false );
-
-      m_pTempCS2[wIdx][hIdx] = new CodingStructure( m_unitCache, nullptr );
-      m_pBestCS2[wIdx][hIdx] = new CodingStructure( m_unitCache, nullptr );
-
-      m_pTempCS2[wIdx][hIdx]->create( chromaFormat, area, false );
-      m_pBestCS2[wIdx][hIdx]->create( chromaFormat, area, false );
-
-      m_pOrgBuffer[wIdx][hIdx] = new PelStorage();
-      m_pOrgBuffer[wIdx][hIdx]->create( chromaFormat, area );
-
-      m_pRspBuffer[wIdx][hIdx] = new PelStorage();
-      m_pRspBuffer[wIdx][hIdx]->create( CHROMA_400, area );
+      m_pTempCS[i] = m_pBestCS[i] = nullptr;
+      continue;
     }
+
+    m_pTempCS[i] = new CodingStructure( m_unitCache, nullptr );
+    m_pBestCS[i] = new CodingStructure( m_unitCache, nullptr );
+
+    m_pTempCS[i]->create( chromaFormat, area, false );
+    m_pBestCS[i]->create( chromaFormat, area, false );
+
+    m_pOrgBuffer[i].create( chromaFormat, area );
+    m_pRspBuffer[i].create( CHROMA_400, area );
   }
+
+  m_pTempCS2 = new CodingStructure( m_unitCache, nullptr );
+  m_pBestCS2 = new CodingStructure( m_unitCache, nullptr );
+
+  m_pTempCS2->create( chromaFormat, ctuArea, false );
+  m_pBestCS2->create( chromaFormat, ctuArea, false );
 
   m_cuChromaQpOffsetIdxPlus1 = 0;
   m_tempQpDiff = 0;
@@ -259,7 +235,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
     m_aTmpStorageLCU[i].create(chromaFormat, Area(0, 0, uiMaxSize, uiMaxSize));
   }
 
-  const unsigned maxDepth = 2*maxSizeIdx;
+  const unsigned maxDepth = 2 * MAX_CU_SIZE_IDX;
   m_CtxBuffer.resize( maxDepth );
   m_CurrCtx = 0;
 
@@ -270,46 +246,29 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
 
 void EncCu::destroy()
 {
-  unsigned      maxSizeIdx  = MAX_CU_SIZE_IDX;
-  for( unsigned wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
+  for( int i = 0; i < maxCuDepth; i++ )
   {
-    for( unsigned hIdx = 0; hIdx < maxSizeIdx; hIdx++ )
+    if( m_pTempCS[i] )
     {
-      if( m_pBestCS[wIdx][hIdx] ) m_pBestCS[wIdx][hIdx]->destroy();
-      if( m_pTempCS[wIdx][hIdx] ) m_pTempCS[wIdx][hIdx]->destroy();
-
-      delete m_pBestCS[wIdx][hIdx];
-      delete m_pTempCS[wIdx][hIdx];
-
-      if( m_pBestCS2[wIdx][hIdx] ) m_pBestCS2[wIdx][hIdx]->destroy();
-      if( m_pTempCS2[wIdx][hIdx] ) m_pTempCS2[wIdx][hIdx]->destroy();
-
-      delete m_pBestCS2[wIdx][hIdx];
-      delete m_pTempCS2[wIdx][hIdx];
-
-      if( m_pOrgBuffer[wIdx][hIdx] )m_pOrgBuffer[wIdx][hIdx]->destroy();
-      delete m_pOrgBuffer[wIdx][hIdx];
-
-      if( m_pRspBuffer[wIdx][hIdx] )m_pRspBuffer[wIdx][hIdx]->destroy();
-      delete m_pRspBuffer[wIdx][hIdx];
+      m_pTempCS[i]->destroy();
+      delete m_pTempCS[i]; m_pTempCS[i] = nullptr;
     }
 
-    delete[] m_pTempCS[wIdx];
-    delete[] m_pBestCS[wIdx];
-    delete[] m_pTempCS2[wIdx];
-    delete[] m_pBestCS2[wIdx];
+    if( m_pBestCS[i] )
+    {
+      m_pBestCS[i]->destroy();
+      delete m_pBestCS[i]; m_pBestCS[i] = nullptr;
+    }
 
-    delete[] m_pOrgBuffer[wIdx];
-    delete[] m_pRspBuffer[wIdx];
+    m_pOrgBuffer[i].destroy();
+    m_pRspBuffer[i].destroy();
   }
 
-  delete[] m_pBestCS; m_pBestCS = nullptr;
-  delete[] m_pTempCS; m_pTempCS = nullptr;
-  delete[] m_pBestCS2; m_pBestCS2 = nullptr;
-  delete[] m_pTempCS2; m_pTempCS2 = nullptr;
+  m_pTempCS2->destroy();
+  m_pBestCS2->destroy();
 
-  delete[] m_pOrgBuffer; m_pOrgBuffer = nullptr;
-  delete[] m_pRspBuffer; m_pRspBuffer= nullptr;
+  delete m_pTempCS2; m_pTempCS2 = nullptr;
+  delete m_pBestCS2; m_pBestCS2 = nullptr;
 
   m_SortedPelUnitBufs.destroy();
 
@@ -317,6 +276,7 @@ void EncCu::destroy()
   {
     m_aTmpStorageLCU[i].destroy();
   }
+
   m_dbBuffer.destroy();
 }
 
@@ -418,10 +378,10 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   // init current context pointer
   m_CurrCtx = m_CtxBuffer.data();
 
-  PelStorage* orgBuffer =   m_pOrgBuffer[Log2(area.lumaSize().width )][Log2(area.lumaSize().height )];
-  PelStorage* rspBuffer =   m_pRspBuffer[Log2(area.lumaSize().width )][Log2(area.lumaSize().height )];
-  CodingStructure *tempCS = m_pTempCS   [Log2(area.lumaSize().width )][Log2(area.lumaSize().height )];
-  CodingStructure *bestCS = m_pBestCS   [Log2(area.lumaSize().width )][Log2(area.lumaSize().height )];
+  PelStorage* orgBuffer = &m_pOrgBuffer[0];
+  PelStorage* rspBuffer = &m_pRspBuffer[0];
+  CodingStructure *tempCS =  m_pTempCS [0];
+  CodingStructure *bestCS =  m_pBestCS [0];
   cs.initSubStructure( *tempCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
   cs.initSubStructure( *bestCS, partitioner->chType, partitioner->currArea(), false, orgBuffer, rspBuffer );
   m_CABACEstimator->determineNeighborCus( *tempCS, partitioner->currArea(), partitioner->chType, partitioner->treeType );
@@ -1035,21 +995,20 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
     if( tempCS->picture->Y().contains( subCUArea.lumaPos() ) )
     {
-      const unsigned wIdx    = Log2(subCUArea.lwidth ());
-      const unsigned hIdx    = Log2(subCUArea.lheight());
+      PelStorage* orgBuffer =  &m_pOrgBuffer[partitioner.currDepth];
+      PelStorage* rspBuffer =  &m_pRspBuffer[partitioner.currDepth];
+      CodingStructure *tempSubCS = m_pTempCS[partitioner.currDepth];
+      CodingStructure *bestSubCS = m_pBestCS[partitioner.currDepth];
 
-      PelStorage* orgBuffer =   m_pOrgBuffer[wIdx][hIdx];
-      PelStorage* rspBuffer =   m_pRspBuffer[wIdx][hIdx];
-      CodingStructure *tempSubCS = m_pTempCS[wIdx][hIdx];
-      CodingStructure *bestSubCS = m_pBestCS[wIdx][hIdx];
-      // copy org buffer
+      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
+      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
+
+      // copy org buffer, need to be done after initSubStructure because of reshaping!
       orgBuffer->copyFrom( tempCS->getOrgBuf( subCUArea ) );
       if( tempCS->slice->lmcsEnabled && reshapeData.getCTUFlag() )
       {
         rspBuffer->Y().copyFrom( tempCS->getRspOrgBuf( subCUArea.Y() ) );
       }
-      tempCS->initSubStructure( *tempSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
-      tempCS->initSubStructure( *bestSubCS, partitioner.chType, subCUArea, false, orgBuffer, rspBuffer );
       m_CABACEstimator->determineNeighborCus( *tempSubCS, partitioner.currArea(), partitioner.chType, partitioner.treeType );
 
       tempSubCS->bestParent = bestSubCS->bestParent = bestCS;
@@ -1194,10 +1153,8 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
 
     m_CurrCtx++;
 
-    const unsigned wIdx = Log2(partitioner.currArea().lwidth() );
-    const unsigned hIdx = Log2(partitioner.currArea().lheight());
-    CodingStructure *tempCSChroma = m_pTempCS2[wIdx][hIdx];
-    CodingStructure *bestCSChroma = m_pBestCS2[wIdx][hIdx];
+    CodingStructure *tempCSChroma = m_pTempCS2;
+    CodingStructure *bestCSChroma = m_pBestCS2;
 
     tempCS->initSubStructure( *tempCSChroma, partitioner.chType, partitioner.currArea(), false );
     tempCS->initSubStructure( *bestCSChroma, partitioner.chType, partitioner.currArea(), false );
@@ -2692,17 +2649,14 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
     double costCur      = MAX_DOUBLE;
     double bestCostIMV  = MAX_DOUBLE;
 
-    const unsigned wIdx = Log2(partitioner.currArea().lwidth());
-    const unsigned hIdx = Log2(partitioner.currArea().lheight());
-
     if (Do_OnceRes)
     {
       costCurStart = xCalcDistortion(bestCS, partitioner.chType, bestCS->sps->bitDepths[CH_L], 0);
       Fpel_cost = costCurStart;
-      tempCS->initSubStructure(*m_pTempCS2[wIdx][hIdx], partitioner.chType, partitioner.currArea(), false);
+      tempCS->initSubStructure(*m_pTempCS2, partitioner.chType, partitioner.currArea(), false);
     }
 
-    CodingStructure *tempCSbest = m_pTempCS2[wIdx][hIdx];
+    CodingStructure *tempCSbest = m_pTempCS2;
 
 
     for (int i = 1; i <= IMV_HPEL; i++)
