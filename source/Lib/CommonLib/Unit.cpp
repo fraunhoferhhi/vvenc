@@ -521,7 +521,7 @@ void TransformUnit::initData()
 
 void TransformUnit::init(TCoeff** coeffs)
 {
-  uint32_t numBlocks = getNumberValidTBlocks(*cs->pcv);
+  uint32_t numBlocks = getNumberValidComponents( chromaFormat );
 
   for (uint32_t i = 0; i < numBlocks; i++)
   {

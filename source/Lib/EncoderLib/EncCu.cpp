@@ -3380,9 +3380,9 @@ void EncCu::xEncodeInterResidual( CodingStructure *&tempCS, CodingStructure *&be
 
     if( histBestSbt == MAX_UCHAR && doPreAnalyzeResi && numRDOTried > 1 )
     {
-      auto slsSbt = dynamic_cast<CacheBlkInfoCtrl*>( &m_modeCtrl );
+      auto slsSbt = static_cast<CacheBlkInfoCtrl&>( m_modeCtrl );
       int slShift = 4 + std::min( Log2( cu->lwidth() ) + Log2( cu->lheight() ), 9 );
-      slsSbt->saveBestSbt( cu->cs->area, (uint32_t)( curPuSse >> slShift ), currBestSbt );
+      slsSbt.saveBestSbt( cu->cs->area, (uint32_t)( curPuSse >> slShift ), currBestSbt );
     }
   }
 
