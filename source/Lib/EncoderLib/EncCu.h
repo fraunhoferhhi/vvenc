@@ -163,18 +163,21 @@ private:
   CtxCache*             m_CtxCache;
 
   //  Data : encoder control
+
+  static const int maxCuDepth = ( MAX_CU_SIZE_IDX - MIN_CU_LOG2 ) << 1;
+
   int                   m_cuChromaQpOffsetIdxPlus1;
   int                   m_tempQpDiff;
   std::vector<int>*     m_globalCtuQpVector;
   XUCache               m_unitCache;
   std::mutex*           m_wppMutex;
   std::mutex*           m_rcMutex;
-  CodingStructure***    m_pTempCS;
-  CodingStructure***    m_pBestCS;
-  CodingStructure***    m_pTempCS2;
-  CodingStructure***    m_pBestCS2;
-  PelStorage***         m_pOrgBuffer;
-  PelStorage***         m_pRspBuffer;
+  CodingStructure*      m_pTempCS[maxCuDepth];
+  CodingStructure*      m_pBestCS[maxCuDepth];
+  CodingStructure*      m_pTempCS2;
+  CodingStructure*      m_pBestCS2;
+  PelStorage            m_pOrgBuffer[maxCuDepth];
+  PelStorage            m_pRspBuffer[maxCuDepth];
 
   //  Access channel
   const VVEncCfg*       m_pcEncCfg;
