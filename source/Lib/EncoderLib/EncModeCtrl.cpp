@@ -360,6 +360,9 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
             m_bestEncInfo[wIdx][hIdx][x][y]->cu.UnitArea::operator=( area );
             m_bestEncInfo[wIdx][hIdx][x][y]->tu.UnitArea::operator=( area );
 
+            m_bestEncInfo[wIdx][hIdx][x][y]->cu.chType = CH_L;
+            m_bestEncInfo[wIdx][hIdx][x][y]->tu.chType = CH_L;
+
             if( dmvrSize )
             {
               m_bestEncInfo[wIdx][hIdx][x][y]->cu.mvdL0SubPu = dmvrMv; 
