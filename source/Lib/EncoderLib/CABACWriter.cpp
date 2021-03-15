@@ -1941,7 +1941,6 @@ void CABACWriter::transform_tree( const CodingStructure& cs, Partitioner& partit
   {
     // split_transform_flag
     CHECK( partitioner.canSplit( TU_MAX_TR_SPLIT, cs ) || (cu.sbtInfo && partitioner.canSplit( CU::getSbtTuSplit( cu.sbtInfo ), cs)),  "transform split implied" );
-
     DTRACE( g_trace_ctx, D_SYNTAX, "transform_unit() pos=(%d,%d) size=%dx%d depth=%d trDepth=%d\n", tu.blocks[tu.chType].x, tu.blocks[tu.chType].y, tu.blocks[tu.chType].width, tu.blocks[tu.chType].height, cu.depth, partitioner.currTrDepth );
 
     transform_unit( tu, cuCtx, partitioner, subTuCounter);

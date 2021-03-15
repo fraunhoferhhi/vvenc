@@ -852,7 +852,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FastMIP",                                         m_useFastMIP,                                     "Fast encoder search for MIP (matrix-based intra prediction)")
   ("MaxNumMergeCand",                                 m_maxNumMergeCand,                                "Maximum number of merge candidates")
   ("MaxNumAffineMergeCand",                           m_maxNumAffineMergeCand,                          "Maximum number of affine merge candidates")
-//  ("MaxNumIBCMergeCand",                              m_maxNumIBCMergeCand,                             "Maximum number of IBC merge candidates")
   ("Geo",                                             m_Geo,                                            "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                  "Maximum number of geometric partitioning mode candidates")
   ("FastIntraTools",                                  m_FastIntraTools,                                 "SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)")
@@ -1028,6 +1027,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
   ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
+#if 1 // IBC_VTM
+  ( "IBC",                                            m_IBCMode,                                        "IBCMode (0:off, 1:IBC, 2: IBC with SCC detection)")
+  ( "IBCFastMethod",                                  m_IBCFastMethod,                                  "Fast methods for IBC . 1:default, [2..5]speedups")
+#endif
   ;
 
   opts.setSubSection("Input options");

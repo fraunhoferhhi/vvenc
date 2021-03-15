@@ -177,6 +177,12 @@ public:
 
   void createTempBuffers( const bool isTopLayer );
   void destroyTempBuffers();
+#if IBC_VTM
+  bool isDecomp(const Position& pos, const ChannelType _chType) const;
+  bool isDecomp(const Position& pos, const ChannelType _chType);
+  void setDecomp(const CompArea& area, const bool _isCoded = true);
+  void setDecomp(const UnitArea& area, const bool _isCoded = true);
+#endif
 private:
   void createInternals(const UnitArea& _unit, const bool isTopLayer);
 
@@ -197,6 +203,9 @@ private:
 
   CodingUnit**      m_cuPtr   [MAX_NUM_CH];
   TransformUnit**   m_tuPtr   [MAX_NUM_CH];
+#if IBC_VTM
+  bool*             m_isDecomp[MAX_NUM_CH];
+#endif
 
   unsigned m_numCUs;
   unsigned m_numTUs;
@@ -229,6 +238,9 @@ private:
 
 public:
   CodingStructure*  bestParent;
+#if IBC_VTM
+  bool              resetIBCBuffer;
+#endif
 
   MotionBuf getMotionBuf( const     Area& _area );
   MotionBuf getMotionBuf( const UnitArea& _area ) { return getMotionBuf( _area.Y() ); }
