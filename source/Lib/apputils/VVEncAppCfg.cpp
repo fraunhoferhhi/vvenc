@@ -222,15 +222,6 @@ const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
   { "3",                     DRT_RECOVERY_POINT_SEI },
 };
 
-const std::vector<SVPair<RateControlMode>> RateControlModeToEnumMap =
-{
-  { "-1",                    RCM_AUTO },
-  { "0",                     RCM_OFF },
-  { "1",                     RCM_CTU_LEVEL },
-  { "2",                     RCM_PICTURE_LEVEL },
-  { "3",                     RCM_GOP_LEVEL },
-};
-
 const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 {
   { "yuv420",                    YUV420_8 },
@@ -598,7 +589,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
 
   IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
-  IStreamToEnum<RateControlMode>     toRateControlMode      ( &m_RCRateControlMode, &RateControlModeToEnumMap );
 
   IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
   IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
@@ -663,7 +653,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
-  ("RateControl",                                     toRateControlMode,                                "enable rate control (0:off 1:CTU-level RC; 2:picture-level RC; 3:GOP-level RC)" )
   ("NumPasses",                                       m_RCNumPasses,                                    "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
 
@@ -742,9 +731,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
-  ("KeepHierarchicalBit",                             m_RCKeepHierarchicalBit,                          "Rate control: (0:equal bit allocation, 1:fixed ratio bit allocation, 2:adaptive ratio bit allocation" )
-  ("RCLCUSeparateModel",                              m_RCUseLCUSeparateModel,                          "Rate control: use CTU level separate R-lambda model" )
-  ("InitialQP",                                       m_RCInitialQP,                                    "Rate control: initial QP" )
+  ("RCInitialQP",                                     m_RCInitialQP,                                    "Rate control: initial QP" )
   ("RCForceIntraQP",                                  m_RCForceIntraQP,                                 "Rate control: force intra QP to be equal to initial QP" )
 
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")

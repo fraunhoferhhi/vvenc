@@ -440,9 +440,6 @@ public:
   unsigned            m_maxNumGeoCand                           = 5;
   int                 m_FastIntraTools                          = 0;
 
-  RateControlMode     m_RCRateControlMode                       = RCM_AUTO;       ///< RateControlMode
-  int                 m_RCKeepHierarchicalBit                   = -1;
-  int                 m_RCUseLCUSeparateModel                   = -1;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;
 
