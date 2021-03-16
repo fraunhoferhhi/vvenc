@@ -246,11 +246,9 @@ int testLibParameterRanges()
   testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { 0,1000000,20000000 } );
   testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,800000001 }, true );
 
-  vvencParams.m_RCRateControlMode = RateControlMode::RCM_PICTURE_LEVEL;
   vvencParams.m_RCTargetBitrate = 1;
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,3 }, true );
-  vvencParams.m_RCRateControlMode = RateControlMode::RCM_AUTO;
   vvencParams.m_RCTargetBitrate = 0;
 
   testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1 } );
