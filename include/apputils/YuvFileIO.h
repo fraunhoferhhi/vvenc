@@ -73,15 +73,15 @@ private:
   int                 m_fileBitdepth;         ///< bitdepth of input/output video file
   int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
   int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
-  vvenc::ChromaFormat m_fileChrFmt;           ///< chroma format of the file
-  vvenc::ChromaFormat m_bufferChrFmt;         ///< chroma format of the buffer
+  vvencChromaFormat   m_fileChrFmt;           ///< chroma format of the file
+  vvencChromaFormat   m_bufferChrFmt;         ///< chroma format of the buffer
   bool                m_clipToRec709;         ///< clip data according to Recom.709
   bool                m_packedYUVMode;        ///< used packed buffer file format
   std::string         m_lastError;            ///< temporal storage for last occured error 
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
-              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
+              vvencChromaFormat fileChrFmt, vvencChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
   void  close();
   bool  isEof();
   bool  isFail();

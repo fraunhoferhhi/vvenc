@@ -55,8 +55,14 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
+
 class EncLib;
 class AccessUnitList;
+
+
+static std::string VVencCompileInfo;
+
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the

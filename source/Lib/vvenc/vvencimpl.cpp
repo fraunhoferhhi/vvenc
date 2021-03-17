@@ -130,7 +130,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   }
 
   std::stringstream cssCap;
-  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  cssCap << vvencGetCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
 
   // initialize the encoder
@@ -424,12 +424,12 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
       uint32_t size = 0; /* size of annexB unit in bytes */
 
       if (it == rcAuList.begin() ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_DCI ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_SPS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_VPS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_PPS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_PREFIX_APS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_SUFFIX_APS )
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_DCI ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_SPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_VPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_PPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_PREFIX_APS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_SUFFIX_APS )
       {
         size += 4;
       }
@@ -449,12 +449,12 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
       const vvenc::NALUnitEBSP& nalu = **it;
       static const uint8_t start_code_prefix[] = {0,0,0,1};
       if (it == rcAuList.begin() ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_DCI ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_SPS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_VPS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_PPS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_PREFIX_APS ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_SUFFIX_APS )
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_DCI ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_SPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_VPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_PPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_PREFIX_APS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_SUFFIX_APS )
       {
         /* From AVC, When any of the following conditions are fulfilled, the
          * zero_byte syntax element shall be present:
@@ -476,10 +476,10 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
       ::memcpy( rcAccessUnit.payload.data() + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
       iUsedSize += nalDataSize;
 
-      if( nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_IDR_N_LP ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_CRA ||
-          nalu.m_nalUnitType == vvenc::NAL_UNIT_CODED_SLICE_GDR )
+      if( nalu.m_nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_GDR )
       {
         rcAccessUnit.rap = true;
       }
@@ -497,7 +497,7 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
     rcAccessUnit.dtsValid        = rcAuList.dtsValid;
     rcAccessUnit.cts             = rcAuList.cts;
     rcAccessUnit.dts             = rcAuList.dts;
-    rcAccessUnit.sliceType       = (SliceType)rcAuList.sliceType;
+    rcAccessUnit.sliceType       = (vvencSliceType)rcAuList.sliceType;
     rcAccessUnit.refPic          = rcAuList.refPic;
     rcAccessUnit.temporalLayer   = rcAuList.temporalLayer;
     rcAccessUnit.poc             = rcAuList.poc;
@@ -533,14 +533,14 @@ std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-std::string getCompileInfoString()
+const char* vvencGetCompileInfoString()
 {
   char convBuf[ 256 ];
-  std::string compileInfo;
-  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      compileInfo += convBuf;
-  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); compileInfo += convBuf;
-  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      compileInfo += convBuf;
-  return compileInfo;
+  VVencCompileInfo.clear();
+  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      VVencCompileInfo += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); VVencCompileInfo += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      VVencCompileInfo += convBuf;
+  return VVencCompileInfo.c_str();
 }
 
 ///< decode bitstream with limited build in decoder
@@ -555,7 +555,7 @@ void decodeBitstream( const std::string& FileName)
 
   if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, cPicture.poc, false ))
   {
-    msg( ERROR, "decoding failed");
+    msg( VVENC_ERROR, "decoding failed");
     THROW("error decoding");
   }
 
@@ -564,36 +564,5 @@ void decodeBitstream( const std::string& FileName)
 #endif
 }
 
-int getWidthOfComponent( const ChromaFormat& chFmt, const int frameWidth, const int compId )
-{
-  int w = frameWidth;
-  if ( compId > 0 )
-  {
-    switch ( chFmt )
-    {
-      case CHROMA_400: w = 0;      break;
-      case CHROMA_420:
-      case CHROMA_422: w = w >> 1; break;
-      default: break;
-    }
-  }
-  return w;
-}
-
-int getHeightOfComponent( const ChromaFormat& chFmt, const int frameHeight, const int compId )
-{
-  int h = frameHeight;
-  if ( compId > 0 )
-  {
-    switch ( chFmt )
-    {
-      case CHROMA_400: h = 0;      break;
-      case CHROMA_420: h = h >> 1; break;
-      case CHROMA_422:
-      default: break;
-    }
-  }
-  return h;
-}
 
 } // namespace

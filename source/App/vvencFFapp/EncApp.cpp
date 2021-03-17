@@ -70,7 +70,7 @@ using namespace vvenc;
 
 // ====================================================================================================================
 
-vvenc::MsgLevel g_verbosity = VERBOSE;
+vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {

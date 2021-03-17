@@ -66,9 +66,9 @@ namespace vvenc {
 void CABACWriter::initCtxModels( const Slice& slice )
 {
   int       qp                = slice.sliceQp;
-  SliceType sliceType         = slice.sliceType;
-  SliceType encCABACTableIdx  = slice.encCABACTableIdx;
-  if( !slice.isIntra() && (encCABACTableIdx==B_SLICE || encCABACTableIdx==P_SLICE) && slice.pps->cabacInitPresent )
+  vvencSliceType sliceType         = slice.sliceType;
+  vvencSliceType encCABACTableIdx  = slice.encCABACTableIdx;
+  if( !slice.isIntra() && (encCABACTableIdx==VVENC_B_SLICE || encCABACTableIdx==VVENC_P_SLICE) && slice.pps->cabacInitPresent )
   {
     sliceType = encCABACTableIdx;
   }
@@ -77,20 +77,20 @@ void CABACWriter::initCtxModels( const Slice& slice )
 
 
 
-SliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ctxTest )
+vvencSliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ctxTest )
 {
   const CtxStore& ctxStoreTest = static_cast<const CtxStore&>( ctxTest );
   const CtxStore& ctxStoreRef  = static_cast<const CtxStore&>( binEncoder.getCtx() );
   int qp = slice.sliceQp;
   if( !slice.isIntra() )
   {
-    SliceType aSliceTypeChoices[] = { B_SLICE, P_SLICE };
-    uint64_t  bestCost            = std::numeric_limits<uint64_t>::max();
-    SliceType bestSliceType       = aSliceTypeChoices[0];
+    vvencSliceType aSliceTypeChoices[] = { VVENC_B_SLICE, VVENC_P_SLICE };
+    uint64_t  bestCost                 = std::numeric_limits<uint64_t>::max();
+    vvencSliceType bestSliceType       = aSliceTypeChoices[0];
     for (uint32_t idx=0; idx<2; idx++)
     {
       uint64_t  curCost           = 0;
-      SliceType curSliceType      = aSliceTypeChoices[idx];
+      vvencSliceType curSliceType = aSliceTypeChoices[idx];
       ctxTest.init( qp, (int)curSliceType );
       for( int k = 0; k < Ctx::NumberOfContexts; k++ )
       {
@@ -109,12 +109,12 @@ SliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ct
   }
   else
   {
-    return I_SLICE;
+    return VVENC_I_SLICE;
   }
 }
 
 
-SliceType CABACWriter::getCtxInitId( const Slice& slice )
+vvencSliceType CABACWriter::getCtxInitId( const Slice& slice )
 {
   return  xGetCtxInitId( slice, m_BinEncoder, m_TestCtx );
 }

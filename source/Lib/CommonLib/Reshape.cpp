@@ -99,7 +99,7 @@ int ReshapeData::calculateChromaAdjVpduNei( const TransformUnit& tu, const CompA
     setVPDULoc( xPos, yPos );
   }
   Position topLeft(xPos, yPos);
-  CodingStructure* pcs =  (CS::isDualITree(cs) && cs.slice->sliceType == I_SLICE) ? tu.cs->picture->cs : tu.cs;
+  CodingStructure* pcs =  (CS::isDualITree(cs) && cs.slice->sliceType == VVENC_I_SLICE) ? tu.cs->picture->cs : tu.cs;
   CodingUnit *topLeftLuma   = pcs->getCU(topLeft, CH_L, _treeType);
   const CodingUnit *cuAbove = pcs->getCURestricted( topLeftLuma->lumaPos().offset(0, -1), topLeftLuma->lumaPos(), topLeftLuma->slice->independentSliceIdx, topLeftLuma->tileIdx, CH_L, _treeType );
   const CodingUnit *cuLeft  = pcs->getCURestricted( topLeftLuma->lumaPos().offset(-1, 0), topLeftLuma->lumaPos(), topLeftLuma->slice->independentSliceIdx, topLeftLuma->tileIdx, CH_L, _treeType ); 

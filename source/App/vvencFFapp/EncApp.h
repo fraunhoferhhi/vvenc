@@ -53,15 +53,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdarg>
 
 #include "vvenc/vvenc.h"
+#include "vvenc/vvencCfg.h"
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
+
 
 //! \ingroup EncoderApp
 //! \{
 
 // ====================================================================================================================
 
-extern vvenc::MsgLevel g_verbosity;
+extern vvenc::vvencMsgLevel g_verbosity;
 void msgFnc( int level, const char* fmt, va_list args );
 void msgApp( int level, const char* fmt, ... );
 

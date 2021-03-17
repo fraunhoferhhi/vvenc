@@ -200,6 +200,32 @@ typedef       uint64_t          Distortion;        ///< distortion measurement
 // Enumeration
 // ====================================================================================================================
 
+enum ChannelType
+{
+  CH_L = 0,
+  CH_C = 1,
+  MAX_NUM_CH = 2
+};
+
+enum ComponentID
+{
+  COMP_Y          = 0,
+  COMP_Cb         = 1,
+  COMP_Cr         = 2,
+  MAX_NUM_COMP    = 3,
+  COMP_JOINT_CbCr = MAX_NUM_COMP,
+  MAX_NUM_TBLOCKS = MAX_NUM_COMP
+};
+
+enum ChromaFormat
+{
+  CHROMA_400        = 0,
+  CHROMA_420        = 1,
+  CHROMA_422        = 2,
+  CHROMA_444        = 3,
+  NUM_CHROMA_FORMAT = 4
+};
+
 enum ApsType
 {
   ALF_APS = 0,

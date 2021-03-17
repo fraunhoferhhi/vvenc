@@ -95,131 +95,131 @@ enum BitDepthAndColorSpace
 // ====================================================================================================================
 // string <-> enum fixed mappings
 // ====================================================================================================================
-const std::vector<SVPair<MsgLevel>> MsgLevelToEnumMap =
+const std::vector<SVPair<vvencMsgLevel>> MsgLevelToEnumMap =
 {
-  { "silent",  MsgLevel::SILENT  },
-  { "error",   MsgLevel::ERROR   },
-  { "warning", MsgLevel::WARNING },
-  { "info",    MsgLevel::INFO    },
-  { "notice",  MsgLevel::NOTICE  },
-  { "verbose", MsgLevel::VERBOSE },
-  { "details", MsgLevel::DETAILS },
-  { "0",       MsgLevel::SILENT  },
-  { "1",       MsgLevel::ERROR   },
-  { "2",       MsgLevel::WARNING },
-  { "3",       MsgLevel::INFO    },
-  { "4",       MsgLevel::NOTICE  },
-  { "5",       MsgLevel::VERBOSE },
-  { "6",       MsgLevel::DETAILS },
+  { "silent",  vvencMsgLevel::VVENC_SILENT  },
+  { "error",   vvencMsgLevel::VVENC_ERROR   },
+  { "warning", vvencMsgLevel::VVENC_WARNING },
+  { "info",    vvencMsgLevel::VVENC_INFO    },
+  { "notice",  vvencMsgLevel::VVENC_NOTICE  },
+  { "verbose", vvencMsgLevel::VVENC_VERBOSE },
+  { "details", vvencMsgLevel::VVENC_DETAILS },
+  { "0",       vvencMsgLevel::VVENC_SILENT  },
+  { "1",       vvencMsgLevel::VVENC_ERROR   },
+  { "2",       vvencMsgLevel::VVENC_WARNING },
+  { "3",       vvencMsgLevel::VVENC_INFO    },
+  { "4",       vvencMsgLevel::VVENC_NOTICE  },
+  { "5",       vvencMsgLevel::VVENC_VERBOSE },
+  { "6",       vvencMsgLevel::VVENC_DETAILS },
 };
 
 
-const std::vector<SVPair<PresetMode>> PresetToEnumMap =
+const std::vector<SVPair<vvencPresetMode>> PresetToEnumMap =
 {
-  { "none",      PresetMode::NONE },
-  { "faster",    PresetMode::FASTER },
-  { "fast",      PresetMode::FAST },
-  { "medium",    PresetMode::MEDIUM },
-  { "slow",      PresetMode::SLOW },
-  { "slower",    PresetMode::SLOWER },
-  { "firstpass", PresetMode::FIRSTPASS },
-  { "tooltest",  PresetMode::TOOLTEST },
+  { "none",      vvencPresetMode::VVENC_NONE },
+  { "faster",    vvencPresetMode::VVENC_FASTER },
+  { "fast",      vvencPresetMode::VVENC_FAST },
+  { "medium",    vvencPresetMode::VVENC_MEDIUM },
+  { "slow",      vvencPresetMode::VVENC_SLOW },
+  { "slower",    vvencPresetMode::VVENC_SLOWER },
+  { "firstpass", vvencPresetMode::VVENC_FIRSTPASS },
+  { "tooltest",  vvencPresetMode::VVENC_TOOLTEST },
 };
 
-const std::vector<SVPair<SegmentMode>> SegmentToEnumMap =
+const std::vector<SVPair<vvencSegmentMode>> SegmentToEnumMap =
 {
-  { "off",      SegmentMode::SEG_OFF },
-  { "first",    SegmentMode::SEG_FIRST },
-  { "mid",      SegmentMode::SEG_MID },
-  { "last",     SegmentMode::SEG_LAST },
+  { "off",      vvencSegmentMode::VVENC_SEG_OFF },
+  { "first",    vvencSegmentMode::VVENC_SEG_FIRST },
+  { "mid",      vvencSegmentMode::VVENC_SEG_MID },
+  { "last",     vvencSegmentMode::VVENC_SEG_LAST },
 };
 
 
-const std::vector<SVPair<Profile>> ProfileToEnumMap =
+const std::vector<SVPair<vvencProfile>> ProfileToEnumMap =
 {
-  { "main_10",                               Profile::MAIN_10 },
-  { "main_10_444",                           Profile::MAIN_10_444 },
-  { "main_10_still_picture",                 Profile::MAIN_10_STILL_PICTURE },
-  { "main_10_444_still_picture",             Profile::MAIN_10_444_STILL_PICTURE },
-  { "multilayer_main_10",                    Profile::MULTILAYER_MAIN_10 },
-  { "multilayer_main_10_444",                Profile::MULTILAYER_MAIN_10_444 },
-  { "multilayer_main_10_still_picture",      Profile::MULTILAYER_MAIN_10_STILL_PICTURE },
-  { "multilayer_main_10_444_still_picture",  Profile::MULTILAYER_MAIN_10_444_STILL_PICTURE },
-  { "auto",                                  Profile::PROFILE_AUTO }
+  { "main_10",                               vvencProfile::VVENC_MAIN_10 },
+  { "main_10_444",                           vvencProfile::VVENC_MAIN_10_444 },
+  { "main_10_still_picture",                 vvencProfile::VVENC_MAIN_10_STILL_PICTURE },
+  { "main_10_444_still_picture",             vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE },
+  { "multilayer_main_10",                    vvencProfile::VVENC_MULTILAYER_MAIN_10 },
+  { "multilayer_main_10_444",                vvencProfile::VVENC_MULTILAYER_MAIN_10_444 },
+  { "multilayer_main_10_still_picture",      vvencProfile::VVENC_MULTILAYER_MAIN_10_STILL_PICTURE },
+  { "multilayer_main_10_444_still_picture",  vvencProfile::VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE },
+  { "auto",                                  vvencProfile::VVENC_PROFILE_AUTO }
 };
 
-const std::vector<SVPair<Level>> LevelToEnumMap =
+const std::vector<SVPair<vvencLevel>> LevelToEnumMap =
 {
-  { "auto",                    Level::LEVEL_AUTO},
-  { "1",                       Level::LEVEL1    },
-  { "1.0",                     Level::LEVEL1    },
-  { "2",                       Level::LEVEL2    },
-  { "2.0",                     Level::LEVEL2    },
-  { "2.1",                     Level::LEVEL2_1  },
-  { "3",                       Level::LEVEL3    },
-  { "3.0",                     Level::LEVEL3    },
-  { "3.1",                     Level::LEVEL3_1  },
-  { "4",                       Level::LEVEL4    },
-  { "4.0",                     Level::LEVEL4    },
-  { "4.1",                     Level::LEVEL4_1  },
-  { "5",                       Level::LEVEL5    },
-  { "5.0",                     Level::LEVEL5    },
-  { "5.1",                     Level::LEVEL5_1  },
-  { "5.2",                     Level::LEVEL5_2  },
-  { "6",                       Level::LEVEL6    },
-  { "6.0",                     Level::LEVEL6    },
-  { "6.1",                     Level::LEVEL6_1  },
-  { "6.2",                     Level::LEVEL6_2  },
-  { "6.3",                     Level::LEVEL6_3  },
-  { "15.5",                    Level::LEVEL15_5 },
+  { "auto",                    VVENC_LEVEL_AUTO},
+  { "1",                       VVENC_LEVEL1    },
+  { "1.0",                     VVENC_LEVEL1    },
+  { "2",                       VVENC_LEVEL2    },
+  { "2.0",                     VVENC_LEVEL2    },
+  { "2.1",                     VVENC_LEVEL2_1  },
+  { "3",                       VVENC_LEVEL3    },
+  { "3.0",                     VVENC_LEVEL3    },
+  { "3.1",                     VVENC_LEVEL3_1  },
+  { "4",                       VVENC_LEVEL4    },
+  { "4.0",                     VVENC_LEVEL4    },
+  { "4.1",                     VVENC_LEVEL4_1  },
+  { "5",                       VVENC_LEVEL5    },
+  { "5.0",                     VVENC_LEVEL5    },
+  { "5.1",                     VVENC_LEVEL5_1  },
+  { "5.2",                     VVENC_LEVEL5_2  },
+  { "6",                       VVENC_LEVEL6    },
+  { "6.0",                     VVENC_LEVEL6    },
+  { "6.1",                     VVENC_LEVEL6_1  },
+  { "6.2",                     VVENC_LEVEL6_2  },
+  { "6.3",                     VVENC_LEVEL6_3  },
+  { "15.5",                    VVENC_LEVEL15_5 },
 };
 
-const std::vector<SVPair<Tier>> TierToEnumMap =
+const std::vector<SVPair<vvencTier>> TierToEnumMap =
 {
-  { "main",                    Tier::TIER_MAIN },
-  { "high",                    Tier::TIER_HIGH },
+  { "main",                    vvencTier::VVENC_TIER_MAIN },
+  { "high",                    vvencTier::VVENC_TIER_HIGH },
 };
 
-const std::vector<SVPair<CostMode>> CostModeToEnumMap =
+const std::vector<SVPair<vvencCostMode>> CostModeToEnumMap =
 {
-  { "lossy",                   COST_STANDARD_LOSSY              },
-  { "sequence_level_lossless", COST_SEQUENCE_LEVEL_LOSSLESS     },
-  { "lossless",                COST_LOSSLESS_CODING             },
-  { "mixed_lossless_lossy",    COST_MIXED_LOSSLESS_LOSSY_CODING }
+  { "lossy",                   VVENC_COST_STANDARD_LOSSY              },
+  { "sequence_level_lossless", VVENC_COST_SEQUENCE_LEVEL_LOSSLESS     },
+  { "lossless",                VVENC_COST_LOSSLESS_CODING             },
+  { "mixed_lossless_lossy",    VVENC_COST_MIXED_LOSSLESS_LOSSY_CODING }
 };
 
-const std::vector<SVPair<ChromaFormat>> ChromaFormatToEnumMap =
+const std::vector<SVPair<vvencChromaFormat>> ChromaFormatToEnumMap =
 {
-  { "400",                     CHROMA_400 },
-  { "420",                     CHROMA_420 },
-  { "422",                     CHROMA_422 },
-  { "444",                     CHROMA_444 },
-  { "0",                       NUM_CHROMA_FORMAT }
+  { "400",                     VVENC_CHROMA_400 },
+  { "420",                     VVENC_CHROMA_420 },
+  { "422",                     VVENC_CHROMA_422 },
+  { "444",                     VVENC_CHROMA_444 },
+  { "0",                       VVENC_NUM_CHROMA_FORMAT }
 };
 
-const std::vector<SVPair<HashType>> HashTypeToEnumMap =
+const std::vector<SVPair<vvencHashType>> HashTypeToEnumMap =
 {
-  { "md5",                     HASHTYPE_MD5      },
-  { "crc",                     HASHTYPE_CRC      },
-  { "checksum",                HASHTYPE_CHECKSUM },
-  { "off",                     HASHTYPE_NONE     },
+  { "md5",                     VVENC_HASHTYPE_MD5      },
+  { "crc",                     VVENC_HASHTYPE_CRC      },
+  { "checksum",                VVENC_HASHTYPE_CHECKSUM },
+  { "off",                     VVENC_HASHTYPE_NONE     },
   // for backward compatibility support values as well
-  { "1",                       HASHTYPE_MD5      },
-  { "2",                       HASHTYPE_CRC      },
-  { "3",                       HASHTYPE_CHECKSUM },
-  { "0",                       HASHTYPE_NONE     }
+  { "1",                       VVENC_HASHTYPE_MD5      },
+  { "2",                       VVENC_HASHTYPE_CRC      },
+  { "3",                       VVENC_HASHTYPE_CHECKSUM },
+  { "0",                       VVENC_HASHTYPE_NONE     }
 };
 
-const std::vector<SVPair<DecodingRefreshType>> DecodingRefreshTypeToEnumMap =
+const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap =
 {
-  { "none",                  DRT_NONE },
-  { "cra",                   DRT_CRA },
-  { "idr",                   DRT_IDR },
-  { "rpsei",                 DRT_RECOVERY_POINT_SEI },
-  { "0",                     DRT_NONE },
-  { "1",                     DRT_CRA },
-  { "2",                     DRT_IDR },
-  { "3",                     DRT_RECOVERY_POINT_SEI },
+  { "none",                  VVENC_DRT_NONE },
+  { "cra",                   VVENC_DRT_CRA },
+  { "idr",                   VVENC_DRT_IDR },
+  { "rpsei",                 VVENC_DRT_RECOVERY_POINT_SEI },
+  { "0",                     VVENC_DRT_NONE },
+  { "1",                     VVENC_DRT_CRA },
+  { "2",                     VVENC_DRT_IDR },
+  { "3",                     VVENC_DRT_RECOVERY_POINT_SEI },
 };
 
 const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
@@ -229,15 +229,15 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 };
 
 
-const std::vector<SVPair<HDRMode>> HdrModeToIntMap =
+const std::vector<SVPair<vvencHDRMode>> HdrModeToIntMap =
 {
-  { "off",                 HDR_OFF },
-  { "pq",                  HDR_PQ},
-  { "hdr10",               HDR_PQ},
-  { "pq_2020",             HDR_PQ_BT2020},
-  { "hdr10_2020",          HDR_PQ_BT2020},
-  { "hlg",                 HDR_HLG},
-  { "hlg_2020",            HDR_HLG_BT2020},
+  { "off",                 VVENC_HDR_OFF },
+  { "pq",                  VVENC_HDR_PQ},
+  { "hdr10",               VVENC_HDR_PQ},
+  { "pq_2020",             VVENC_HDR_PQ_BT2020},
+  { "hdr10_2020",          VVENC_HDR_PQ_BT2020},
+  { "hlg",                 VVENC_HDR_HLG},
+  { "hlg_2020",            VVENC_HDR_HLG_BT2020},
 };
 
 
@@ -573,8 +573,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToVec<int>            toQpInCbCr                   ( &m_qpInValsCbCr          );
   IStreamToVec<int>            toQpOutCbCr                  ( &m_qpOutValsCbCr         );
   IStreamToVec<double>         toIntraLambdaModifier        ( &m_adIntraLambdaModifier );
-  IStreamToVec<int>            toRectSliceBoundary          ( &m_rectSliceBoundary     );
-  IStreamToVec<int>            toSignalledSliceId           ( &m_signalledSliceId      );
 
   IStreamToVec<int>            toMCTFFrames                 ( &m_MCTFFrames   );
   IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
@@ -678,7 +676,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ;
 
-    if ( vvenc::isTracingEnabled() )
+    if ( vvencIsTracingEnabled() )
   {
     opts.setSubSection("Tracing");
     opts.addOptions()
@@ -1051,6 +1049,15 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
     ;
 
+
+  bool signalledSliceIdFlag;
+  int  signalledSliceIdLengthMinus1;
+  std::vector<int>    rectSliceBoundary;                                       // unused, only for conmpatiblity
+  std::vector<int>    signalledSliceId;                                        // unused, only for conmpatiblity
+
+  IStreamToVec<int>            toRectSliceBoundary          ( &rectSliceBoundary     );
+  IStreamToVec<int>            toSignalledSliceId           ( &signalledSliceId      );
+
   opts.setSubSection("Unused options (only for compatiblity to VTM)");
   opts.addOptions()
   ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
@@ -1061,8 +1068,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("CropOffsetBottom",                                m_cropOffsetBottom,                               "Crop Offset Bottom position")
   ("CalculateHdrMetrics",                             m_calculateHdrMetrics,                            "Enable HDR metric calculation")
 
-  ("SignalledIdFlag",                                 m_signalledSliceIdFlag,                           "Signalled Slice ID Flag")
-  ("SignalledSliceIdLengthMinus1",                    m_signalledSliceIdLengthMinus1,                   "Signalled Tile Group Length minus 1")
+  ("SignalledIdFlag",                                 signalledSliceIdFlag,                             "Signalled Slice ID Flag")
+  ("SignalledSliceIdLengthMinus1",                    signalledSliceIdLengthMinus1,                     "Signalled Tile Group Length minus 1")
   ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
   ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
 
@@ -1078,7 +1085,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
-    opts.addOptions()(cOSS.str(), m_GOPList[i], GOPEntry());
+    opts.addOptions()(cOSS.str(), m_GOPList[i], vvencGOPEntry());
   }
   opts.addOptions()("decode",                          m_decode,                                         "decode only");
 
@@ -1203,7 +1210,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
       error = true;
     }
     if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
-          || ( ( getWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
+          || ( ( vvencGetWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
     {
       cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
       error = true;
@@ -1223,10 +1230,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   return true;
 }
 
-std::string VVEncAppCfg::getConfigAsString( vvenc::MsgLevel eMsgLevel ) const
+std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
-  if( eMsgLevel >= DETAILS )
+  if( eMsgLevel >= VVENC_DETAILS )
   {
     css << "Input          File                    : " << m_inputFileName << "\n";
     css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";

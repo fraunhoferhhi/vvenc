@@ -484,7 +484,7 @@ void InterPrediction::xSubPuMC(CodingUnit& cu, PelUnitBuf& predBuf, const RefPic
   int  secStep = (!verMC ? puWidth : puHeight);
 
   cu.refIdx[0] = 0;
-  cu.refIdx[1] = cu.cs->slice->sliceType == B_SLICE ? 0 : -1;
+  cu.refIdx[1] = cu.cs->slice->sliceType == VVENC_B_SLICE ? 0 : -1;
   bool scaled = false;//!CU::isRefPicSameSize(cu);
 
   m_subPuMC = true;

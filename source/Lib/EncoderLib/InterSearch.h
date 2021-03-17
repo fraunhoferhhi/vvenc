@@ -64,6 +64,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
+class VVEncCfg;
+
 namespace vvenc {
 
 // ====================================================================================================================
@@ -190,7 +192,6 @@ struct BlkUniMvInfoBuffer
 };
 
 class EncPicture;
-class VVEncCfg;
 class EncModeCtrl;
 class EncReshape;
 class EncCu;
@@ -349,7 +350,7 @@ protected:
   // ME parameters
   int               m_iSearchRange;
   int               m_bipredSearchRange; // Search range for bi-prediction
-  MESearchMethod    m_motionEstimationSearchMethod;
+  vvencMESearchMethod m_motionEstimationSearchMethod;
   int               m_aaiAdaptSR[MAX_NUM_REF_LIST_ADAPT_SR][MAX_IDX_ADAPT_SR];
 
   // RD computation

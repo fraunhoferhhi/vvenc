@@ -56,9 +56,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-namespace vvenc {
+struct VVEncCfg;
 
-class VVEncCfg;
+namespace vvenc {
 
 // ====================================================================================================================
 // Class definition
@@ -104,8 +104,8 @@ public:
   void initSlice             ( const Slice* slice );
   void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
 
-  static void disabledRate   ( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
-  static void decidePicParams( const CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ MAX_TLAYER ], bool saoEnabled[ MAX_NUM_COMP ], const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
+  static void disabledRate   ( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
+  static void decidePicParams( const CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], bool saoEnabled[ MAX_NUM_COMP ], const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat );
 
   void storeCtuReco          ( CodingStructure& cs, const UnitArea& ctuArea );
   void getCtuStatistics      ( CodingStructure& cs, std::vector<SAOStatData**>& saoStatistics, const UnitArea& ctuArea, const int ctuRsAddr );

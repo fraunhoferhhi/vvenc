@@ -58,6 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 //! \ingroup EncoderLib
 //! \{
+struct VVEncCfg;
 
 namespace vvenc {
 
@@ -66,7 +67,6 @@ namespace vvenc {
 // ====================================================================================================================
 class EncPicture;
 class EncCu;
-class VVEncCfg;
 
 /// encoder search class
 class IntraSearch : public IntraPrediction

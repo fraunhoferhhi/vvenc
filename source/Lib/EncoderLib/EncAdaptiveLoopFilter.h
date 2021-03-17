@@ -58,9 +58,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #define ALF_CTU_PAR_TRACING ( 0 && ENABLE_TRACING )
 
+struct VVEncCfg;
+
 namespace vvenc {
 
-class VVEncCfg;
 class NoMallocThreadPool;
 
 struct AlfCovariance

@@ -48,6 +48,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "SEIEncoder.h"
 
 #include "vvenc/vvencCfg.h"
+#include "vvenc/vvencCfgExpert.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/SEI.h"
 #include "CommonLib/PicYuvMD5.h"
@@ -76,7 +77,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   uint32_t uiInitialCpbRemovalDelay = (90000/2);                      // 0.5 sec
   bpSei.bpNalCpbParamsPresent = true;
   bpSei.bpVclCpbParamsPresent = true;
-  bpSei.bpMaxSubLayers = m_pcEncCfg->m_maxTempLayer;
+  bpSei.bpMaxSubLayers = m_pcEncCfg->e.m_maxTempLayer;
   bpSei.bpCpbCnt = 1;
   for(int i=0; i < bpSei.bpMaxSubLayers; i++)
   {
@@ -94,7 +95,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   bpSei.concatenationFlag = false;
   bpSei.maxInitialRemovalDelayForConcatenation = uiInitialCpbRemovalDelay;
   bpSei.bpDecodingUnitHrdParamsPresent = false;//m_pcEncCfg->m_noPicPartitionFlag == false;
-  bpSei.decodingUnitCpbParamsInPicTimingSeiFlag = !m_pcEncCfg->m_decodingUnitInfoSEIEnabled;
+  bpSei.decodingUnitCpbParamsInPicTimingSeiFlag = !m_pcEncCfg->e.m_decodingUnitInfoSEIEnabled;
   bpSei.initialCpbRemovalDelayLength = 16;                  // assuming 0.5 sec, log2( 90,000 * 0.5 ) = 16-bit
   // Note: The following parameters require some knowledge about the GOP structure.
   //       Using getIntraPeriod() should be avoided though, because it assumes certain GOP
@@ -208,19 +209,19 @@ void SEIEncoder::initDecodedPictureHashSEI( SEIDecodedPictureHash& dphSei, const
 
   switch (m_pcEncCfg->m_decodedPictureHashSEIType)
   {
-    case HASHTYPE_MD5:
+    case VVENC_HASHTYPE_MD5:
       {
         uint32_t numChar=calcMD5(pic, dphSei.pictureHash, bitDepths);
         rHashString = hashToString(dphSei.pictureHash, numChar);
       }
       break;
-    case HASHTYPE_CRC:
+    case VVENC_HASHTYPE_CRC:
       {
         uint32_t numChar=calcCRC(pic, dphSei.pictureHash, bitDepths);
         rHashString = hashToString(dphSei.pictureHash, numChar);
       }
       break;
-    case HASHTYPE_CHECKSUM:
+    case VVENC_HASHTYPE_CHECKSUM:
     default:
       {
         uint32_t numChar=calcChecksum(pic, dphSei.pictureHash, bitDepths);
@@ -442,7 +443,7 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
       {
         m_lastBPSEI[i] = m_totalCoded[i];
       }
-      if( (slice->nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL)||(slice->nalUnitType == NAL_UNIT_CODED_SLICE_CRA) )
+      if( (slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL)||(slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA) )
       {
         m_rapWithLeading = true;
       }
@@ -485,7 +486,7 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
   }
 
   // not sure if this is the final place
-  for( int i = slice->TLayer; i < slice->sps->maxTLayers; i ++ )
+  for( uint32_t i = slice->TLayer; i < slice->sps->maxTLayers; i ++ )
   {
     m_totalCoded[i]++;
   }
@@ -504,8 +505,6 @@ void SEIEncoder::initSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourVo
   CHECK(!(m_isInitialized), "Unspecified error");
   CHECK(!(seiMDCV != NULL), "Unspecified error");
 
-  CHECK((m_pcEncCfg->m_masteringDisplay.size() != 10), "masteringDisplay must contain 10 values");
-
   //  Set SEI message parameters read from command line options
   seiMDCV->values.primaries[0][0] = m_pcEncCfg->m_masteringDisplay[0];
   seiMDCV->values.primaries[0][1] = m_pcEncCfg->m_masteringDisplay[1];
@@ -516,19 +515,17 @@ void SEIEncoder::initSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourVo
   seiMDCV->values.primaries[2][0] = m_pcEncCfg->m_masteringDisplay[4];
   seiMDCV->values.primaries[2][1] = m_pcEncCfg->m_masteringDisplay[5];
 
-  seiMDCV->values.whitePoint[0] = m_pcEncCfg->m_masteringDisplay[6];
-  seiMDCV->values.whitePoint[1] = m_pcEncCfg->m_masteringDisplay[7];
+  seiMDCV->values.whitePoint[0]   = m_pcEncCfg->m_masteringDisplay[6];
+  seiMDCV->values.whitePoint[1]   = m_pcEncCfg->m_masteringDisplay[7];
 
-  seiMDCV->values.maxLuminance = m_pcEncCfg->m_masteringDisplay[8];
-  seiMDCV->values.minLuminance = m_pcEncCfg->m_masteringDisplay[9];
+  seiMDCV->values.maxLuminance    = m_pcEncCfg->m_masteringDisplay[8];
+  seiMDCV->values.minLuminance    = m_pcEncCfg->m_masteringDisplay[9];
 }
 
 void SEIEncoder::initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL)
 {
   CHECK(!(m_isInitialized), "Unspecified error");
   CHECK(!(seiCLL != NULL), "Unspecified error");
-
-  CHECK((m_pcEncCfg->m_contentLightLevel.size() != 2), "contentLightLevel must contain 2 values");
 
   //  Set SEI message parameters read from command line options
   seiCLL->maxContentLightLevel    = m_pcEncCfg->m_contentLightLevel[0];

@@ -172,14 +172,14 @@ std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to 
   return VVEncImpl::setSIMDExtension( simdId );
 }
 
-YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+YUVBufferStorage::YUVBufferStorage( const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
   : YUVBuffer()
 {
-  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
   {
     YUVBuffer::Plane& yuvPlane = planes[ i ];
-    yuvPlane.width  = getWidthOfComponent ( chFmt, frameWidth,  i );
-    yuvPlane.height = getHeightOfComponent( chFmt, frameHeight, i );
+    yuvPlane.width  = vvencGetWidthOfComponent ( chFmt, frameWidth,  i );
+    yuvPlane.height = vvencGetHeightOfComponent( chFmt, frameHeight, i );
     yuvPlane.stride = yuvPlane.width;
     const int size  = yuvPlane.stride * yuvPlane.height;
     yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
@@ -188,20 +188,53 @@ YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWi
 
 YUVBufferStorage::~YUVBufferStorage()
 {
-  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
   {
     delete [] planes[ i ].ptr;
   }
 }
 
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL bool isTracingEnabled()
+VVENC_DECL bool vvencIsTracingEnabled()
 {
 #if ENABLE_TRACING
   return true;
 #else
   return false;
 #endif
+}
+
+
+int vvencGetWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId )
+{
+  int w = frameWidth;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case VVENC_CHROMA_400: w = 0;      break;
+      case VVENC_CHROMA_420:
+      case VVENC_CHROMA_422: w = w >> 1; break;
+      default: break;
+    }
+  }
+  return w;
+}
+
+int vvencGetHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case VVENC_CHROMA_400: h = 0;      break;
+      case VVENC_CHROMA_420: h = h >> 1; break;
+      case VVENC_CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
 }
 
 } // namespace

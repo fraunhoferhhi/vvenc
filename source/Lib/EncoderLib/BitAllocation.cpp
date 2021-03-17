@@ -321,8 +321,8 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr) return -1;
 
-  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
-  const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
+  const bool isHighResolution = (encCfg->e.m_PadSourceWidth > 2048 || encCfg->e.m_PadSourceHeight > 1280);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
 
   optChromaQPOffset[0] = optChromaQPOffset[1] = 0;
@@ -343,9 +343,9 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       if (savedLumaQP < 0)
       {
-        int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
+        int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->e.m_PadSourceWidth, encCfg->m_PadSourceHeight,
                                                                                                                   encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
-                                                                                                                  (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth)));
+                                                                                                                  (encCfg->e.m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth)));
         if (isChromaEnabled (pic->chromaFormat) && (averageAdaptedLumaQP < MAX_QP))
         {
           averageAdaptedLumaQP += getGlaringColorQPOffset (pic, -1 /*ctuAddr*/, slice->sps->bitDepths[CH_C], meanLuma);
@@ -385,7 +385,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr) return -1;
 
-  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
@@ -564,7 +564,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr) return -1;
 
-  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const int         bitDepth  = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);

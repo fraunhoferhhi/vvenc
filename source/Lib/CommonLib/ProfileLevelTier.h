@@ -56,25 +56,25 @@ struct SPS; // Forward declaration.
 
 struct LevelTierFeatures
 {
-  Level        level;
+  vvencLevel    level;
   uint32_t      maxLumaPs;
-  uint32_t      maxCpb[NUMBER_OF_TIERS];    // in units of CpbVclFactor or CpbNalFactor bits
+  uint32_t      maxCpb[VVENC_NUMBER_OF_TIERS];    // in units of CpbVclFactor or CpbNalFactor bits
   uint32_t      maxSlicesPerAu;
   uint32_t      maxTilesPerAu;
   uint32_t      maxTileCols;
   uint64_t      maxLumaSr;
-  uint32_t      maxBr[NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
-  uint32_t      minCrBase[NUMBER_OF_TIERS];
+  uint32_t      maxBr[VVENC_NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
+  uint32_t      minCrBase[VVENC_NUMBER_OF_TIERS];
   uint32_t      getMaxPicWidthInLumaSamples()  const;
   uint32_t      getMaxPicHeightInLumaSamples() const;
 
-  static Level getLevelForInput( uint32_t width, uint32_t height );
+  static vvencLevel getLevelForInput( uint32_t width, uint32_t height );
 };
 
 
 struct ProfileFeatures
 {
-  Profile                  profile;
+  vvencProfile             profile;
   const char              *pNameString;
   uint32_t                 maxBitDepth;
   ChromaFormat             maxChromaFormat;
@@ -87,7 +87,7 @@ struct ProfileFeatures
   const LevelTierFeatures *pLevelTiersListInfo;
   bool                     onePictureOnlyFlagMustBe1;
 
-  static const ProfileFeatures *getProfileFeatures(const Profile p);
+  static const ProfileFeatures *getProfileFeatures(const vvencProfile p);
 };
 
 
@@ -96,15 +96,15 @@ class ProfileLevelTierFeatures
   private:
     const ProfileFeatures   *m_pProfile;
     const LevelTierFeatures *m_pLevelTier;
-    Tier                     m_tier;
+    vvencTier                m_tier;
   public:
-    ProfileLevelTierFeatures() : m_pProfile(nullptr), m_pLevelTier(nullptr), m_tier(Tier::TIER_MAIN) {}
+    ProfileLevelTierFeatures() : m_pProfile(nullptr), m_pLevelTier(nullptr), m_tier(VVENC_TIER_MAIN) {}
 
     void extractPTLInformation(const SPS &sps);
 
     const ProfileFeatures     *getProfileFeatures()   const { return m_pProfile; }
     const LevelTierFeatures   *getLevelTierFeatures() const { return m_pLevelTier; }
-    Tier                       getTier()              const { return m_tier; }
+    vvencTier                  getTier()              const { return m_tier; }
     uint64_t getCpbSizeInBits()                       const;
     double getMinCr()                                 const;
     uint32_t getMaxDpbSize( uint32_t picSizeMaxInSamplesY ) const;

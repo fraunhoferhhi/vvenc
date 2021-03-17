@@ -437,9 +437,9 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   double qp_temp = dQP + bitdepth_luma_qp_scale - SHIFT_QP;
   // Case #1: I or P-slices (key-frame)
   double dQPFactor = gopList[ GOPid ].m_QPFactor;
-  if( slice->sliceType == I_SLICE )
+  if( slice->sliceType == VVENC_I_SLICE )
   {
-    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopList[ GOPid ].m_sliceType != I_SLICE)
+    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopList[ GOPid ].m_sliceType != VVENC_I_SLICE)
     {
       dQPFactor = m_pcEncCfg->m_dIntraQpFactor;
     }
@@ -467,13 +467,13 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   }
 
   // if hadamard is used in ME process
-  if ( !m_pcEncCfg->m_bUseHADME && slice->sliceType != I_SLICE )
+  if ( !m_pcEncCfg->m_bUseHADME && slice->sliceType != VVENC_I_SLICE )
   {
     dLambda *= 0.95;
   }
 
   double lambdaModifier;
-  if( slice->sliceType != I_SLICE || intraLambdaModifiers.empty())
+  if( slice->sliceType != VVENC_I_SLICE || intraLambdaModifiers.empty())
   {
     lambdaModifier = m_pcEncCfg->m_adLambdaModifier[ temporalId ];
   }
@@ -1125,7 +1125,7 @@ void EncSlice::encodeSliceData( Picture* pic )
   const bool wavefrontsEnabled     = slice->sps->entropyCodingSyncEnabled;
 
   // this ensures that independently encoded bitstream chunks can be combined to bit-equal
-  const SliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
+  const vvencSliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
   slice->encCABACTableIdx = cabacTableIdx;
 
   // initialise entropy coder for the slice

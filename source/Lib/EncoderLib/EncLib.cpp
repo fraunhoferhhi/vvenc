@@ -358,21 +358,21 @@ void EncLib::xSetRCEncCfg( int pass )
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
     // preserve MCTF settings
-    const int mctf = m_cBckCfg.m_MCTF;
+    const int mctf = m_cBckCfg.e.m_MCTF;
 
-    m_cBckCfg.initPreset( PresetMode::FIRSTPASS );
+    vvenc_initPreset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
     // use fixQP encoding in first pass
     m_cBckCfg.m_RCTargetBitrate = 0;
     m_cBckCfg.m_QP              = 32;
 
     // restore MCTF
-    m_cBckCfg.m_MCTF              = mctf;
+    m_cBckCfg.e.m_MCTF              = mctf;
 
     // clear MaxCuDQPSubdiv
-    if( m_cBckCfg.m_CTUSize < 128 )
+    if( m_cBckCfg.e.m_CTUSize < 128 )
     {
-      m_cBckCfg.m_cuQpDeltaSubdiv = 0;
+      m_cBckCfg.e.m_cuQpDeltaSubdiv = 0;
     }
 
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
@@ -543,7 +543,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
   Picture* pic = nullptr;
 
   // use an entry in the buffered list if the maximum number that need buffering has been reached:
-  if ( (int)m_cListPic.size() >= ( m_cEncCfg.m_InputQueueSize + m_cEncCfg.m_maxDecPicBuffering[ MAX_TLAYER - 1 ] + 2 ) )
+  if ( (int)m_cListPic.size() >= ( m_cEncCfg.m_InputQueueSize + m_cEncCfg.m_maxDecPicBuffering[ VVENC_MAX_TLAYER - 1 ] + 2 ) )
   {
     auto picItr = std::begin( m_cListPic );
     while ( picItr != std::end( m_cListPic ) )
@@ -931,7 +931,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.CIIP                          = m_cEncCfg.m_CIIP != 0;
   sps.SBT                           = m_cEncCfg.m_SBT != 0;
 
-  for (int i = 0; i < std::min(sps.maxTLayers, (uint32_t) MAX_TLAYER); i++ )
+  for (int i = 0; i < std::min(sps.maxTLayers, (uint32_t) VVENC_MAX_TLAYER); i++ )
   {
     sps.maxDecPicBuffering[i]       = m_cEncCfg.m_maxDecPicBuffering[i];
     sps.numReorderPics[i]           = m_cEncCfg.m_maxNumReorderPics[i];
@@ -979,7 +979,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   bUseDQP |= m_cEncCfg.m_lumaLevelToDeltaQPEnabled;
   bUseDQP |= m_cEncCfg.m_usePerceptQPA && (m_cEncCfg.m_QP <= MAX_QP_PERCEPT_QPA);
 
-  if (m_cEncCfg.m_costMode==COST_SEQUENCE_LEVEL_LOSSLESS || m_cEncCfg.m_costMode==COST_LOSSLESS_CODING)
+  if (m_cEncCfg.m_costMode==COST_SEQUENCE_LEVEL_LOSSLESS || m_cEncCfg.m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
     bUseDQP = false;
   }
@@ -1142,10 +1142,10 @@ void EncLib::xInitRPL(SPS &sps) const
 
   for (int i = 0; i < 2; i++)
   {
-    const RPLEntry* rplCfg = ( i == 0 ) ? m_cEncCfg.m_RPLList0 : m_cEncCfg.m_RPLList1;
+    const vvencRPLEntry* rplCfg = ( i == 0 ) ? m_cEncCfg.m_RPLList0 : m_cEncCfg.m_RPLList1;
     for (int j = 0; j < numRPLCandidates; j++)
     {
-      const RPLEntry &ge = rplCfg[ j ];
+      const vvencRPLEntry &ge = rplCfg[ j ];
       ReferencePictureList&rpl = sps.rplList[i][j];
       rpl.numberOfShorttermPictures = ge.m_numRefPics;
       rpl.numberOfLongtermPictures = 0;   //Hardcoded as 0 for now. need to update this when implementing LTRP
@@ -1254,7 +1254,7 @@ void EncLib::xInitHrdParameters(SPS &sps)
 
   sps.generalHrdParams = m_cEncHRD.generalHrdParams;
 
-  for(int i = 0; i < MAX_TLAYER; i++)
+  for(int i = 0; i < VVENC_MAX_TLAYER; i++)
   {
     sps.olsHrdParams[i] = m_cEncHRD.olsHrdParams[i];
   }

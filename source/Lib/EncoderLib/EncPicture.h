@@ -58,9 +58,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
+struct VVEncCfg;
+
 namespace vvenc {
 
-class VVEncCfg;
 class EncGOP;
 
 // ---------------------------------------------------------------------------------------------------------------------

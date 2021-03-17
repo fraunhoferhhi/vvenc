@@ -59,9 +59,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
+struct VVEncCfg;
+
 namespace vvenc {
 
-class VVEncCfg;
 struct SAOStatData;
 class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
@@ -112,10 +113,10 @@ private:
 
   Ctx                          m_entropyCodingSyncContextState;      ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for writing
   std::vector<Ctx>             m_syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
-  SliceType                    m_encCABACTableIdx;
+  vvencSliceType               m_encCABACTableIdx;
   int                          m_appliedSwitchDQQ;
 
-  double                       m_saoDisabledRate[ MAX_NUM_COMP ][ MAX_TLAYER ];
+  double                       m_saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ];
   bool                         m_saoEnabled[ MAX_NUM_COMP ];
   bool                         m_saoAllDisabled;
   std::vector<SAOBlkParam>     m_saoReconParams;

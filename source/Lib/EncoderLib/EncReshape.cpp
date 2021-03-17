@@ -90,7 +90,7 @@ EncReshape::~EncReshape()
 
 void  EncReshape::init( const VVEncCfg& encCfg )
 {
-  if ( encCfg.m_lumaReshapeEnable )
+  if ( encCfg.e.m_lumaReshapeEnable )
   {
     m_lumaBD = encCfg.m_internalBitDepth[ CH_L ];
     m_reshapeLUTSize = 1 << m_lumaBD;
@@ -129,12 +129,12 @@ void  EncReshape::init( const VVEncCfg& encCfg )
     m_srcSeqStats = SeqInfo();
     m_rspSeqStats = SeqInfo();
 
-    m_signalType = encCfg.m_reshapeSignalType;
+    m_signalType = encCfg.e.m_reshapeSignalType;
     m_chromaWeight = 1.0;
 
     initLumaLevelToWeightTableReshape();
   }
-  else if (encCfg.m_lumaLevelToDeltaQPEnabled )
+  else if (encCfg.e.m_lumaLevelToDeltaQPEnabled )
   {
     m_lumaBD = encCfg.m_internalBitDepth[ CH_L ];
     m_reshapeLUTSize = 1 << m_lumaBD;
@@ -156,12 +156,12 @@ void  EncReshape::destroy()
 \param   pcPic describe pointer of current coding picture
 \param   sliceType describe the slice type
 */
-void EncReshape::preAnalyzerHDR(Picture& pic, const SliceType sliceType, const ReshapeCW& reshapeCW, bool isDualT)
+void EncReshape::preAnalyzerHDR(Picture& pic, const vvencSliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT)
 {
   if (m_lumaBD >= 10)
   {
     m_sliceReshapeInfo.sliceReshaperEnabled = true;
-      if (sliceType == I_SLICE )                                              { m_sliceReshapeInfo.sliceReshaperModelPresent = true;  }
+      if (sliceType == VVENC_I_SLICE )                                              { m_sliceReshapeInfo.sliceReshaperModelPresent = true;  }
       else                                                                    { m_sliceReshapeInfo.sliceReshaperModelPresent = false; }
     { m_sliceReshapeInfo.enableChromaAdj = 1;                   }
   }
@@ -424,12 +424,12 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
   }
 }
 
-void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const SliceType sliceType, const ReshapeCW& reshapeCW)
+void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const vvencSliceType sliceType, const vvencReshapeCW& reshapeCW)
 {
   m_sliceReshapeInfo.sliceReshaperModelPresent = true;
   m_sliceReshapeInfo.sliceReshaperEnabled = true;
   int modIP = pic.getPOC() - pic.getPOC() / reshapeCW.rspFpsToIp * reshapeCW.rspFpsToIp;
-  if (sliceType == I_SLICE || (reshapeCW.updateCtrl == 2 && modIP == 0))
+  if (sliceType == VVENC_I_SLICE || (reshapeCW.updateCtrl == 2 && modIP == 0))
   {
     if (m_sliceReshapeInfo.sliceReshaperModelPresent == true)
     {
@@ -897,7 +897,7 @@ void EncReshape::deriveReshapeParametersSDR(bool *intraAdp, bool *interAdp)
   }
 }
 
-void EncReshape::deriveReshapeParameters(double *array, int start, int end, ReshapeCW respCW, double &alpha, double &beta)
+void EncReshape::deriveReshapeParameters(double *array, int start, int end, vvencReshapeCW respCW, double &alpha, double &beta)
 {
   double minVar = 10.0, maxVar = 0.0;
   for (int b = start; b <= end; b++)

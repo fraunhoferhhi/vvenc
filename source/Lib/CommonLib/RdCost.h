@@ -111,7 +111,7 @@ private:
   // for distortion
 
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
-  CostMode                m_costMode;
+  vvencCostMode           m_costMode;
   double                  m_distortionWeight[MAX_NUM_COMP]; // only chroma values are used.
   double                  m_dLambda;
   double                  m_dLambda_unadjusted; // TODO: check is necessary
@@ -146,7 +146,7 @@ public:
   void          setReshapeParams    ( const uint32_t* pPLUT, double chrWght)    { m_reshapeLumaLevelToWeightPLUT = pPLUT; m_chromaWeight = chrWght; }
   void          setDistortionWeight ( const ComponentID compID, const double distortionWeight ) { m_distortionWeight[compID] = distortionWeight; }
   void          setLambda           ( double dLambda, const BitDepths &bitDepths );
-  void          setCostMode         ( CostMode m )                      { m_costMode = m; }
+  void          setCostMode         ( vvencCostMode m )                      { m_costMode = m; }
 
   double        getLambda           ( bool unadj = false )              { return unadj ? m_dLambda_unadjusted : m_dLambda; }
   double        getChromaWeight     ()                                  { return ((m_distortionWeight[COMP_Cb] + m_distortionWeight[COMP_Cr]) / 2.0); }

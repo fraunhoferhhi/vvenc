@@ -67,7 +67,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
-vvenc::MsgLevel g_verbosity = vvenc::VERBOSE;
+vvenc::vvencMsgLevel g_verbosity = vvenc::VVENC_VERBOSE;
 
 void msgFnc( int level, const char* fmt, va_list args )
 {

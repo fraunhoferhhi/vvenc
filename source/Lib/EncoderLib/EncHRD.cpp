@@ -105,9 +105,9 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
     break;
   }
 
-  if (encCfg.m_temporalSubsampleRatio > 1)
+  if (encCfg.e.m_temporalSubsampleRatio > 1)
   {
-    uint32_t temporalSubsampleRatio = encCfg.m_temporalSubsampleRatio;
+    uint32_t temporalSubsampleRatio = encCfg.e.m_temporalSubsampleRatio;
     if (double(generalHrdParams.numUnitsInTick) * temporalSubsampleRatio > std::numeric_limits<uint32_t>::max())
     {
       generalHrdParams.timeScale = generalHrdParams.timeScale / temporalSubsampleRatio;
@@ -159,7 +159,7 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
   uint32_t duCpbSizeValue;
   uint32_t duBitRateValue = 0;
 
-  for (i = 0; i < MAX_TLAYER; i++)
+  for (i = 0; i < VVENC_MAX_TLAYER; i++)
   {
     olsHrdParams[i].fixedPicRateGeneralFlag = true;
     olsHrdParams[i].fixedPicRateWithinCvsFlag = true;

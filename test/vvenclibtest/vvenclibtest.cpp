@@ -149,9 +149,9 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
   rcEncCfg.m_SourceHeight               = 144;                 // luminance height of input picture
   rcEncCfg.m_GOPSize                    = 16;                  // gop size (1: intra only, 16, 32: hierarchical b frames)
-  rcEncCfg.m_DecodingRefreshType        = DRT_CRA;             // intra period refresh type
+  rcEncCfg.m_DecodingRefreshType        = VVENC_DRT_CRA;             // intra period refresh type
   rcEncCfg.m_IntraPeriod                = 32;                  // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  rcEncCfg.m_verbosity                  = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
+  rcEncCfg.m_verbosity                  = VVENC_SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
 //rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
@@ -159,9 +159,9 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
   rcEncCfg.m_internalBitDepth[0]        = 10;                  // 10bit internal
 
-  rcEncCfg.m_internChromaFormat         =  CHROMA_420;
+  rcEncCfg.m_internChromaFormat         =  VVENC_CHROMA_420;
 
-  rcEncCfg.initPreset( PresetMode::FASTER  );
+  rcEncCfg.initPreset( vvencPresetMode::VVENC_FASTER  );
   if( callInitCfgParameter )
   {
     rcEncCfg.initCfgParameter();
@@ -170,7 +170,7 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
 
 void fillInputPic( YUVBuffer& cYuvBuffer, const short val = 512 )
 {
-  for( int n = 0; n < MAX_NUM_COMP; n++)
+  for( int n = 0; n < VVENC_MAX_NUM_COMP; n++)
   {
     const int size = cYuvBuffer.planes[n].stride * cYuvBuffer.planes[n].height;
     std::fill_n( static_cast<short*> (cYuvBuffer.planes[n].ptr), size, val );

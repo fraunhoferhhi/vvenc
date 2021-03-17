@@ -158,7 +158,7 @@ protected:
   short                        m_clippApsLuma[ALF_CTB_MAX_NUM_APS][MAX_NUM_ALF_LUMA_COEFF * MAX_NUM_ALF_CLASSES];
   short                        m_clipDefault[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   bool                         m_created = false;
-  short                        m_chromaCoeffFinal[MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
+  short                        m_chromaCoeffFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   AlfParam*                    m_alfParamChroma;
   Pel                          m_alfClippingValues[MAX_NUM_CH][MaxAlfNumClippingValues];
   std::vector<AlfFilterShape>  m_filterShapesCcAlf[2];
@@ -166,7 +166,7 @@ protected:
   AlfClassifier*               m_classifier;
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
-  short                        m_chromaClippFinal[MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
+  short                        m_chromaClippFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
   int**                        m_laplacian[NUM_DIRECTIONS];
   uint8_t*                     m_ctuEnableFlag[MAX_NUM_COMP];
   uint8_t*                     m_ctuAlternative[MAX_NUM_COMP];

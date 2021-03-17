@@ -53,6 +53,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <functional>
 #include <stdint.h>
 #include <string>
+#include <vector>
+
 #include "vvenc/vvencDecl.h"
 
 
@@ -106,7 +108,7 @@ struct VVENC_DECL YUVBuffer
 */
 struct VVENC_DECL YUVBufferStorage : public YUVBuffer
 {
-  YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight );
+  YUVBufferStorage( const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight );
   ~YUVBufferStorage();
 };
 
@@ -126,7 +128,6 @@ public:
   virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ ) = 0;
 };
 
-
 /**
   \ingroup VVEncExternalInterfaces
   The struct AccessUnit contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
@@ -143,7 +144,7 @@ typedef struct VVENC_DECL AccessUnit
   bool            ctsValid      = false;    ///< composition time stamp valid flag (true: valid, false: CTS not set)
   bool            dtsValid      = false;    ///< decoding time stamp valid flag (true: valid, false: DTS not set)
   bool            rap           = false;    ///< random access point flag (true: AU is random access point, false: sequential access)
-  SliceType       sliceType     = NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
+  vvencSliceType  sliceType     = VVENC_NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
   bool            refPic        = false;    ///< reference picture
   int             temporalLayer = 0;        ///< temporal layer
   uint64_t        poc           = 0;        ///< picture order count
@@ -151,7 +152,7 @@ typedef struct VVENC_DECL AccessUnit
   int             status        = 0;        ///< additional info (see Status)
   std::string     infoString;               ///< debug info from inside the encoder
 
-  std::vector<NalUnitType> nalUnitTypeVec;
+  std::vector<vvencNalUnitType> nalUnitTypeVec;
   std::vector<uint32_t>    annexBsizeVec;
 
 } AccessUnit_t;
@@ -296,6 +297,10 @@ public:
 private:
    VVEncImpl*  m_pcVVEncImpl;
 };
+
+
+VVENC_DECL int  vvencGetWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
+VVENC_DECL int  vvencGetHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
 
 } // namespace
 
