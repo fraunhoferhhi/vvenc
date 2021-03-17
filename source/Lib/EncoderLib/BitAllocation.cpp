@@ -343,10 +343,9 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       if (savedLumaQP < 0)
       {
-        int averageAdaptedLumaQP = ((encCfg->m_RCRateControlMode == RCM_CTU_LEVEL) ? Clip3 (0, MAX_QP, sliceQP) :
-                                   Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
+        int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight,
                                                                                                                   encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
-                                                                                                                  (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth))));
+                                                                                                                  (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth)));
         if (isChromaEnabled (pic->chromaFormat) && (averageAdaptedLumaQP < MAX_QP))
         {
           averageAdaptedLumaQP += getGlaringColorQPOffset (pic, -1 /*ctuAddr*/, slice->sps->bitDepths[CH_C], meanLuma);
@@ -419,15 +418,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
     hpEnerAvg /= double (ctuBoundingAddr - ctuStartAddr);
   }
 
-  if ((encCfg->m_RCRateControlMode == RCM_CTU_LEVEL) && (!useFrameWiseQPA || (savedQP < 0)))
-  {
-    hpEnerPic = 1.0 / hpEnerAvg;
-  }
-  else
-  {
-    hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
-                                                 (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
-  }
+  hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
+                                               (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
 
   if (useFrameWiseQPA || (sliceQP >= MAX_QP))
   {

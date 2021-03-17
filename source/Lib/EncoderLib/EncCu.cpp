@@ -343,12 +343,7 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
     prevQP[CH_L] = prevQP[CH_C] = slice->sliceQp; // hlm: call CU::predictQP() here!
   }
 
-  const double oldLambda = m_cRdCost.getLambda();
-  xSetCtuQPRC( cs, slice, pic, ctuRsAddr );
-
-  {
-    xCompressCtu( cs, ctuArea, ctuRsAddr, prevQP );
-  }
+  xCompressCtu( cs, ctuArea, ctuRsAddr, prevQP );
 
   m_CABACEstimator->resetBits();
   m_CABACEstimator->coding_tree_unit( cs, ctuArea, prevQP, ctuRsAddr, true, true );
@@ -360,7 +355,7 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   }
 
   const int numberOfWrittenBits = int( m_CABACEstimator->getEstFracBits() >> SCALE_BITS );
-  xUpdateAfterCtuRC( cs, slice, ctuArea, oldLambda, numberOfWrittenBits, ctuRsAddr );
+  xUpdateAfterCtuRC( slice, numberOfWrittenBits, ctuRsAddr );
 }
 
 // ====================================================================================================================
@@ -431,7 +426,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     if ( m_wppMutex ) m_wppMutex->unlock();
   }
 
-  if ( m_pcEncCfg->m_RCRateControlMode )
+  if ( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
     cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
   }
@@ -493,12 +488,12 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   const UnitArea currCsArea = clipArea (CS::getArea (*bestCS, bestCS->area, partitioner.chType, partitioner.treeType), *bestCS->picture);
 
-  if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable() && m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL)
+  if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
   {
     const PreCalcValues &pcv = *pps.pcv;
     Picture* const pic = bestCS->picture;
     const uint32_t ctuRsAddr = getCtuAddr (partitioner.currQgPos, pcv);
-    const bool rateCtrlFrame = ((int) m_pcEncCfg->m_RCRateControlMode > 1 && !(m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL && pic->gopId > 0));
+    const bool rateCtrlFrame = m_pcEncCfg->m_RCTargetBitrate > 0;
 
     if (partitioner.currSubdiv == 0) // CTU-level QP adaptation
     {
@@ -594,7 +589,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
     const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
     const bool lossless           = false;
-    int qp                        = (m_pcEncCfg->m_RCRateControlMode == RCM_CTU_LEVEL) ? m_ctuRcQP : cs.baseQP;
+    int qp                        = cs.baseQP;
 
     if( ! isBoundary )
     {
@@ -1404,111 +1399,18 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
 }
 
-void EncCu::xSetCtuQPRC( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr )
+void EncCu::xUpdateAfterCtuRC( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr )
 {
-  if ( m_pcEncCfg->m_RCRateControlMode == RCM_OFF || m_pcEncCfg->m_RCRateControlMode == RCM_PICTURE_LEVEL )
+  if ( m_pcEncCfg->m_RCTargetBitrate == 0 )
   {
     return;
   }
 
-  int estQP = slice->sliceQp;
-  double estLambda = -1.0;
-  double bpp = -1.0;
-
-  EncRCPic* encRCPic = pic->encRCPic;
-
-  if ( ( pic->slices[ 0 ]->isIRAP() && m_pcEncCfg->m_RCForceIntraQP ) || m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL )
-  {
-    estQP = slice->sliceQp;
-    estLambda = m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ? m_cRdCost.getLambda() : encRCPic->picEstLambda;
-  }
-  else
-  {
-    bpp = encRCPic->getLCUTargetBpp( slice->isIRAP(), ctuRsAddr );
-    if ( pic->slices[ 0 ]->isIRAP() )
-    {
-      estLambda = encRCPic->getLCUEstLambdaAndQP( bpp, slice->sliceQp, &estQP, ctuRsAddr );
-    }
-    else
-    {
-      estLambda = encRCPic->getLCUEstLambda( bpp, ctuRsAddr );
-      estQP = encRCPic->getLCUEstQP( estLambda, slice->sliceQp, ctuRsAddr );
-    }
-
-    estQP = Clip3( -slice->sps->qpBDOffset[ CH_L ], MAX_QP, estQP );
-  }
-  m_cRdCost.saveUnadjustedLambda();
-  m_cRdCost.setLambda( estLambda, slice->sps->bitDepths );
-
-  for ( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
-  {
-    const ComponentID compID = ComponentID( compIdx );
-    int chromaQPOffset = slice->pps->chromaQpOffset[ compID ] + slice->sliceChromaQpDelta[ compID ];
-    int qpc = slice->sps->chromaQpMappingTable.getMappedChromaQpValue( compID, estQP ) + chromaQPOffset;
-    double tmpWeight = pow( 2.0, ( estQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
-    if ( m_pcEncCfg->m_DepQuantEnabled )
-    {
-      tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1 / 3.0 ) : pow( 2.0, 0.2 / 3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
-    }
-    m_cRdCost.setDistortionWeight( compID, tmpWeight );
-  }
-
-  const double lambdaArray[ MAX_NUM_COMP ] =  { estLambda / m_cRdCost.getDistortionWeight( COMP_Y ),
-                                                estLambda / m_cRdCost.getDistortionWeight( COMP_Cb ),
-                                                estLambda / m_cRdCost.getDistortionWeight( COMP_Cr ) };
-  m_cTrQuant.setLambdas( lambdaArray );
-
-  m_ctuRcQP = estQP;
-
-  return;
-}
-
-void EncCu::xUpdateAfterCtuRC( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr )
-{
-  if ( !m_pcEncCfg->m_RCRateControlMode )
-  {
-    return;
-  }
-
-  int actualQP = RC_INVALID_QP_VALUE;
   double actualLambda = m_cRdCost.getLambda();
-
-  bool anyCoded = false;
-  int numberOfSkipPixel = 0;
-  for( const auto& cu : cs.traverseCUs( ctuArea, CH_L ) )
-  {
-    numberOfSkipPixel +=  cu.skip *  cu.lumaSize().area();
-    anyCoded          |= !cu.skip || cu.rootCbf;
-  }
-  double skipRatio = (double)numberOfSkipPixel / ctuArea.lumaSize().area();
-  CodingUnit* cu = cs.getCU( ctuArea.lumaPos(), CH_L, TREE_D );
-
-  actualQP = ( m_pcEncCfg->m_RCRateControlMode != RCM_GOP_LEVEL || anyCoded ) ? cu->qp : RC_INVALID_QP_VALUE;
-
-  if ( m_pcEncCfg->m_RCRateControlMode != RCM_PICTURE_LEVEL )
-  {
-    int estQP = slice->sliceQp;
-
-    m_cRdCost.setLambda( oldLambda, slice->sps->bitDepths );
-
-    for ( uint32_t compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
-    {
-      const ComponentID compID = ComponentID( compIdx );
-      int chromaQPOffset = slice->pps->chromaQpOffset[ compID ] + slice->sliceChromaQpDelta[ compID ];
-      int qpc = slice->sps->chromaQpMappingTable.getMappedChromaQpValue( compID, estQP ) + chromaQPOffset;
-      double tmpWeight = pow( 2.0, ( estQP - qpc ) / 3.0 );  // takes into account of the chroma qp mapping and chroma qp Offset
-      if ( m_pcEncCfg->m_DepQuantEnabled )
-      {
-        tmpWeight *= ( m_pcEncCfg->m_GOPSize >= 8 ? pow( 2.0, 0.1 / 3.0 ) : pow( 2.0, 0.2 / 3.0 ) );  // increase chroma weight for dependent quantization (in order to reduce bit rate shift from chroma to luma)
-      }
-      m_cRdCost.setDistortionWeight( compID, tmpWeight );
-    }
-  }
 
   if ( m_rcMutex ) m_rcMutex->lock();
 
-  slice->pic->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualQP, actualLambda, skipRatio,
-    slice->isIRAP() ? 0 : m_pcEncCfg->m_RCRateControlMode == RCM_CTU_LEVEL );
+  slice->pic->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualLambda );
 
   if ( m_rcMutex ) m_rcMutex->unlock();
 

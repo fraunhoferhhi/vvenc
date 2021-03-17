@@ -226,10 +226,7 @@ bool VVEncCfg::initCfgParameter()
   }
 
   // rate control
-  if( m_RCRateControlMode == RateControlMode::RCM_AUTO ) m_RCRateControlMode     = m_RCTargetBitrate > 0 ? RateControlMode::RCM_PICTURE_LEVEL : RateControlMode::RCM_OFF;
-  if( m_RCNumPasses < 0 )                                m_RCNumPasses           = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 2 : 1;
-  if( m_RCKeepHierarchicalBit < 0 )                      m_RCKeepHierarchicalBit = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 2 : 0;
-  if( m_RCUseLCUSeparateModel < 0 )                      m_RCUseLCUSeparateModel = m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL ? 1 : 0;
+  if( m_RCNumPasses < 0 )                                m_RCNumPasses           = m_RCTargetBitrate > 0 ? 2 : 1;
 
   // threading
   if( m_numThreads < 0 )
@@ -247,7 +244,7 @@ bool VVEncCfg::initCfgParameter()
   if( m_maxParallelFrames < 0 )
   {
     m_maxParallelFrames = std::min( m_numThreads, 4 );
-    if( m_RCRateControlMode != RCM_OFF
+    if( m_RCTargetBitrate > 0
         && m_RCNumPasses == 1
         && m_maxParallelFrames > 2 )
     {
@@ -613,7 +610,7 @@ bool VVEncCfg::initCfgParameter()
     m_usePerceptQPATempFiltISlice = 0;
     if ( m_usePerceptQPA ) // auto mode for temp.filt.
     {
-      m_usePerceptQPATempFiltISlice = ( m_RCRateControlMode > 0 && m_RCNumPasses == 2 ? 2 : 1 );
+      m_usePerceptQPATempFiltISlice = ( m_RCTargetBitrate > 0 && m_RCNumPasses == 2 ? 2 : 1 );
     }
   }
   if ( m_usePerceptQPATempFiltISlice == 2
@@ -1478,7 +1475,6 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
   confirmParameter( m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
   confirmParameter( m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
-  confirmParameter( m_RCKeepHierarchicalBit < 0, "RCKeepHierarchicalBit must be >= 0" );
 
   if( m_DepQuantEnabled )
   {
@@ -1600,12 +1596,8 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
   confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
 
-  confirmParameter( m_RCRateControlMode != 0 && m_RCRateControlMode != 2,       "Invalid rate control mode. Only the frame-level rate control is currently supported" );
-  confirmParameter( m_RCRateControlMode == 1 && m_usePerceptQPA,                "CTU-level rate control cannot be combined with QPA" );
-  confirmParameter( m_RCRateControlMode == 0 && m_RCNumPasses != 1,             "Only single pass encoding supported, when rate control is disabled" );
-  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,                     "Only one pass or two pass encoding supported" );
-  confirmParameter( m_RCUseLCUSeparateModel < 0 || m_RCUseLCUSeparateModel > 1, "RCLCUSeparateModel out of range" );
-  confirmParameter( m_RCRateControlMode == RateControlMode::RCM_PICTURE_LEVEL && m_RCUseLCUSeparateModel <= 0,  "If rate control enabled RCLCUSeparateModel has to be enabled too" );
+  confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
 
   confirmParameter(!((m_level==Level::LEVEL1)
     || (m_level==Level::LEVEL2) || (m_level==Level::LEVEL2_1)
@@ -1709,7 +1701,7 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  confirmParameter( (m_hrdParametersPresent>0) && (0 == m_RCRateControlMode),  "HrdParametersPresent requires RateControl enabled");
+  confirmParameter( (m_hrdParametersPresent>0) && (0 == m_RCTargetBitrate),  "HrdParametersPresent requires RateControl enabled");
   confirmParameter( m_bufferingPeriodSEIEnabled && (m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
   confirmParameter( m_pictureTimingSEIEnabled && (m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
@@ -2628,14 +2620,12 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   css << "QtbttExtraFast:" << m_qtbttSpeedUp << " ";
 
   css << "\nRATE CONTROL CFG: ";
-  css << "RateControl:" << m_RCRateControlMode << " ";
-  if ( m_RCRateControlMode )
+  css << "RateControl:" << ( m_RCTargetBitrate > 0 ) << " ";
+  if ( m_RCTargetBitrate > 0 )
   {
     css << "Passes:" << m_RCNumPasses << " ";
     css << "TargetBitrate:" << m_RCTargetBitrate << " ";
-    css << "KeepHierarchicalBit:" << m_RCKeepHierarchicalBit << " ";
-    css << "RCLCUSeparateModel:" << m_RCUseLCUSeparateModel << " ";
-    css << "InitialQP:" << m_RCInitialQP << " ";
+    css << "RCInitialQP:" << m_RCInitialQP << " ";
     css << "RCForceIntraQP:" << m_RCForceIntraQP << " ";
   }
 
