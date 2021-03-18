@@ -105,9 +105,9 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
     break;
   }
 
-  if (encCfg.e.m_temporalSubsampleRatio > 1)
+  if (encCfg.m_temporalSubsampleRatio > 1)
   {
-    uint32_t temporalSubsampleRatio = encCfg.e.m_temporalSubsampleRatio;
+    uint32_t temporalSubsampleRatio = encCfg.m_temporalSubsampleRatio;
     if (double(generalHrdParams.numUnitsInTick) * temporalSubsampleRatio > std::numeric_limits<uint32_t>::max())
     {
       generalHrdParams.timeScale = generalHrdParams.timeScale / temporalSubsampleRatio;

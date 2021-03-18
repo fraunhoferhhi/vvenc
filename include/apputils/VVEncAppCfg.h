@@ -63,9 +63,11 @@ namespace apputils {
 /// encoder configuration class
 ///
 
-typedef struct VVEncAppCfg
+class APPUTILS_DECL VVEncAppCfg
 {
-  VVEncCfg     c;
+public:
+  VVEncCfg     conf;
+
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
   std::string  m_reconFileName;                                ///< output reconstruction file
@@ -75,10 +77,19 @@ typedef struct VVEncAppCfg
   bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_decode                        = false;
 
-  bool (*parseCfg)( int argc, char* argv[] )();                     ///< parse configuration fill member variables (simple app)
-  bool (*parseCfgFF)( int argc, char* argv[] )();                   ///< parse configuration fill member variables for FullFeature set (expert app)
+public:
 
-  std::string (*getConfigAsString)( vvenc::vvencMsgLevel eMsgLevel )();
+  VVEncAppCfg()
+  {
+  }
+
+  virtual ~VVEncAppCfg();
+
+public:
+  bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
+  bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+
+  virtual std::string getConfigAsString( vvencMsgLevel eMsgLevel ) const;
 };
 
 } // namespace

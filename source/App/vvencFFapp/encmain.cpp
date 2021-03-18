@@ -88,15 +88,15 @@ int main(int argc, char* argv[])
   simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
 
   // print information
-  msgApp( vvenc::VVENC_INFO, "\n");
-  msgApp( vvenc::VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc::VVEnc::getVersionNumber().c_str() );
-  msgApp( vvenc::VVENC_INFO, "%s", vvencGetCompileInfoString() );
-  msgApp( vvenc::VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
+  msgApp( VVENC_INFO, "\n");
+  msgApp( VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc::VVEnc::getVersionNumber().c_str() );
+  msgApp( VVENC_INFO, "%s", vvencGetCompileInfoString() );
+  msgApp( VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
   if ( vvencIsTracingEnabled() )
   {
-    msgApp( vvenc::VVENC_INFO, "[ENABLE_TRACING]" );
+    msgApp( VVENC_INFO, "[ENABLE_TRACING]" );
   }
-  msgApp( vvenc::VVENC_INFO, "\n" );
+  msgApp( VVENC_INFO, "\n" );
 
   EncApp* pcEncApp = new EncApp;
 
@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  msgApp( vvenc::VVENC_INFO, " started @ %s", std::ctime(&startTime2) );
+  msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime2) );
   clock_t startClock = clock();
 
   // call encoding function
@@ -122,12 +122,12 @@ int main(int argc, char* argv[])
   }
   catch( std::exception &e )
   {
-    msgApp( vvenc::VVENC_ERROR, "%s\n", e.what() );
+    msgApp( VVENC_ERROR, "%s\n", e.what() );
     return 1;
   }
   catch( ... )
   {
-    msgApp( vvenc::VVENC_ERROR, "Unspecified error occurred\n" );
+    msgApp( VVENC_ERROR, "Unspecified error occurred\n" );
     return 1;
   }
 #endif
@@ -139,8 +139,8 @@ int main(int argc, char* argv[])
 
   delete pcEncApp;
 
-  msgApp( vvenc::VVENC_INFO, "\n finished @ %s", std::ctime(&endTime2) );
-  msgApp( vvenc::VVENC_INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
+  msgApp( VVENC_INFO, "\n finished @ %s", std::ctime(&endTime2) );
+  msgApp( VVENC_INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
 
   return 0;
 }

@@ -90,7 +90,7 @@ EncReshape::~EncReshape()
 
 void  EncReshape::init( const VVEncCfg& encCfg )
 {
-  if ( encCfg.e.m_lumaReshapeEnable )
+  if ( encCfg.m_lumaReshapeEnable )
   {
     m_lumaBD = encCfg.m_internalBitDepth[ CH_L ];
     m_reshapeLUTSize = 1 << m_lumaBD;
@@ -129,12 +129,12 @@ void  EncReshape::init( const VVEncCfg& encCfg )
     m_srcSeqStats = SeqInfo();
     m_rspSeqStats = SeqInfo();
 
-    m_signalType = encCfg.e.m_reshapeSignalType;
+    m_signalType = encCfg.m_reshapeSignalType;
     m_chromaWeight = 1.0;
 
     initLumaLevelToWeightTableReshape();
   }
-  else if (encCfg.e.m_lumaLevelToDeltaQPEnabled )
+  else if (encCfg.m_lumaLevelToDeltaQPEnabled )
   {
     m_lumaBD = encCfg.m_internalBitDepth[ CH_L ];
     m_reshapeLUTSize = 1 << m_lumaBD;

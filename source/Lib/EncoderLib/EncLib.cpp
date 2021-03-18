@@ -67,7 +67,8 @@ namespace vvenc {
 // ====================================================================================================================
 
 EncLib::EncLib()
-  : m_cGOPEncoder   ( nullptr )
+  : m_cEncCfg       ()
+  , m_cGOPEncoder   ( nullptr )
   , m_yuvWriterIf   ( nullptr )
   , m_threadPool    ( nullptr )
   , m_spsMap        ( MAX_NUM_SPS )

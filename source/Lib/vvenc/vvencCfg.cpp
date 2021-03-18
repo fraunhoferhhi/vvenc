@@ -65,46 +65,406 @@ extern "C" {
 
 VVENC_NAMESPACE_BEGIN
 
-static bool checkCfgParameter( );
+static bool checkCfgParameter( VVEncCfg *cfg );
 
-VVENC_DECL void vvenc_cfg_default(VVEncCfg *cfg )
+
+VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 {
- cfg->m_confirmFailed        = false;         ///< state variable
+  GOPEntry->m_POC                       = -1;
+  GOPEntry->m_QPOffset                  = 0;
+  GOPEntry->m_QPOffsetModelOffset       = 0.0;
+  GOPEntry->m_QPOffsetModelScale        = 0.0;
+  GOPEntry->m_CbQPoffset                = 0;
+  GOPEntry->m_CrQPoffset                = 0;
+  GOPEntry->m_QPFactor                  = 0.0;
+  GOPEntry->m_tcOffsetDiv2              = 0;
+  GOPEntry->m_betaOffsetDiv2            = 0;
+  GOPEntry->m_CbTcOffsetDiv2            = 0;
+  GOPEntry->m_CbBetaOffsetDiv2          = 0;
+  GOPEntry->m_CrTcOffsetDiv2            = 0;
+  GOPEntry->m_CrBetaOffsetDiv2          = 0;
+  GOPEntry->m_temporalId                = 0;
+  GOPEntry->m_refPic                    = false;
+  GOPEntry->m_sliceType                 = 'P';
+  memset( GOPEntry->m_numRefPicsActive, 0, sizeof( GOPEntry->m_numRefPicsActive ) );
+  memset( GOPEntry->m_numRefPics, 0, sizeof( GOPEntry->m_numRefPics ) );
+  memset( GOPEntry->m_deltaRefPics, 0, sizeof( GOPEntry->m_deltaRefPics ) );
+  GOPEntry->m_isEncoded                 = false;
+  GOPEntry->m_ltrp_in_slice_header_flag = false;
+}
 
- cfg->m_verbosity            = VVENC_VERBOSE;       ///< encoder verbosity
- cfg->m_framesToBeEncoded    = 0;             ///< number of encoded frames
+VVENC_DECL void vvenc_WCGChromaQPControl_default(vvencWCGChromaQPControl *WCGChromaQPControl )
+{
+  WCGChromaQPControl->enabled         = false;  ///< Enabled flag (0:default)
+  WCGChromaQPControl->chromaCbQpScale = 1.0;    ///< Chroma Cb QP Scale (1.0:default)
+  WCGChromaQPControl->chromaCrQpScale = 1.0;    ///< Chroma Cr QP Scale (1.0:default)
+  WCGChromaQPControl->chromaQpScale   = 0.0;    ///< Chroma QP Scale (0.0:default)
+  WCGChromaQPControl->chromaQpOffset  = 0-0;    ///< Chroma QP Offset (0.0:default)
+}
 
- cfg->m_FrameRate            = 0;             ///< source frame-rates (Hz)
- cfg->m_FrameSkip            = 0;             ///< number of skipped frames from the beginning
- cfg->m_SourceWidth          = 0;             ///< source width in pixel
- cfg->m_SourceHeight         = 0;             ///< source height in pixel (when interlaced = field height)
- cfg->m_TicksPerSecond       = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
+VVENC_DECL void vvenc_ChromaQpMappingTableParams_default(vvencChromaQpMappingTableParams *p )
+{
+  p->m_numQpTables                                          = 0;
+  p->m_qpBdOffset                                           = 12;
+  p->m_sameCQPTableForAllChromaFlag                         = true;
 
- cfg->m_profile              = vvencProfile::VVENC_PROFILE_AUTO;
- cfg->m_levelTier            = vvencTier::VVENC_TIER_MAIN ;
- cfg->m_level                = vvencLevel::VVENC_LEVEL_AUTO;
+  memset( p->m_qpTableStartMinus26, 0, sizeof( p->m_qpTableStartMinus26 ) );
+  memset( p->m_numPtsInCQPTableMinus1, 0, sizeof( p->m_numPtsInCQPTableMinus1 ) );
+  memset( p->m_deltaQpInValMinus1, 16, sizeof( p->m_deltaQpInValMinus1 ) );
+  memset( p->m_deltaQpOutVal, 16, sizeof( p->m_deltaQpOutVal ) );
+}
 
- cfg->m_IntraPeriod          = 0;             ///< period of I-slice (random access period)
- cfg->m_IntraPeriodSec       = 1;             ///< period of I-slice in seconds (random access period)
- cfg->m_DecodingRefreshType  = VVENC_DRT_CRA;       ///< random access type
- cfg->m_GOPSize              = 32;            ///< GOP size of hierarchical structure
+VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry )
+{
+  RPLEntry->m_POC                              = -1;
+  RPLEntry->m_temporalId                       = 0;
+  RPLEntry->m_refPic                           = false;
+  RPLEntry->m_ltrp_in_slice_header_flag        = false;
+  RPLEntry->m_numRefPicsActive                 = 0;
+  RPLEntry->m_sliceType                        ='P';
+  RPLEntry->m_numRefPics                       = 0;
 
- cfg->m_QP                   = 32;            ///< QP value of key-picture (integer)
- cfg->m_usePerceptQPA        = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
+  memset(&RPLEntry->m_deltaRefPics,0, sizeof(RPLEntry->m_deltaRefPics));
+}
 
- cfg->m_RCTargetBitrate      = 0;
- cfg->m_RCNumPasses          = -1;
+VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *reshapeCW )
+{
+  memset( reshapeCW->binCW, 0, sizeof( reshapeCW->binCW ) );
+  reshapeCW->updateCtrl = 0;
+  reshapeCW->adpOption  = 0;
+  reshapeCW->initialCW  = 0;
+  reshapeCW->rspPicSize = 0;
+  reshapeCW->rspFps     = 0;
+  reshapeCW->rspBaseQP  = 0;
+  reshapeCW->rspTid     = 0;
+  reshapeCW->rspFpsToIp = 0;
+}
 
- cfg->m_SegmentMode          = VVENC_SEG_OFF;
+VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
+{
+  int i = 0;
 
- cfg->m_numThreads           = 0;             ///< number of worker threads
+  //basic params
+  c->m_confirmFailed                           = false;         ///< state variable
 
- cfg->m_inputBitDepth[0]=8;     cfg->m_inputBitDepth[1]=0; ///< bit-depth of input file
- cfg->m_internalBitDepth[0]=10; cfg->m_internalBitDepth[1]=0; ///< bit-depth codec operates at (input/output files will be converted)
+  c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
+  c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
 
- cfg->m_HdrMode              = VVENC_HDR_OFF;
+  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz)
+  c->m_FrameSkip                               = 0;             ///< number of skipped frames from the beginning
+  c->m_SourceWidth                             = 0;             ///< source width in pixel
+  c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
+  c->m_TicksPerSecond                          = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
 
-  vvenc_initPreset( cfg, vvencPresetMode::VVENC_MEDIUM );
+  c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
+  c->m_levelTier                               = vvencTier::VVENC_TIER_MAIN ;
+  c->m_level                                   = vvencLevel::VVENC_LEVEL_AUTO;
+
+  c->m_IntraPeriod                             = 0;             ///< period of I-slice (random access period)
+  c->m_IntraPeriodSec                          = 1;             ///< period of I-slice in seconds (random access period)
+  c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
+  c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
+
+  c->m_QP                                      = 32;            ///< QP value of key-picture (integer)
+  c->m_usePerceptQPA                           = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
+
+  c->m_RCTargetBitrate                         = 0;
+  c->m_RCNumPasses                             = -1;
+
+  c->m_SegmentMode                             = VVENC_SEG_OFF;
+
+  c->m_numThreads                              = 0;             ///< number of worker threads
+
+  c->m_inputBitDepth[0]                        =8;             ///< bit-depth of input file
+  c->m_inputBitDepth[1]                        =0;
+  c->m_internalBitDepth[0]                     =10;                                 ///< bit-depth codec operates at (input/output files will be converted)
+  c->m_internalBitDepth[1]                     =0;
+
+  c->m_HdrMode                                 = VVENC_HDR_OFF;
+
+  // expert options
+  c->m_listTracingChannels                     = false;
+  c->m_traceRule                               = NULL;
+  c->m_traceFile                               = NULL;
+
+  c->m_conformanceWindowMode                   = 1;
+  c->m_confWinLeft                             = 0;
+  c->m_confWinRight                            = 0;
+  c->m_confWinTop                              = 0;
+  c->m_confWinBottom                           = 0;
+
+  c->m_temporalSubsampleRatio                  = 1;                                     ///< temporal subsample ratio, 2 means code every two frames
+
+  c->m_PadSourceWidth                          = 0;                                     ///< source width in pixel
+  c->m_PadSourceHeight                         = 0;                                     ///< source height in pixel (when interlaced = field height)
+
+  memset(&c->m_aiPad,0, sizeof(c->m_aiPad));                                    ///< number of padded pixels for width and height
+  c->m_enablePictureHeaderInSliceHeader        = true;
+  c->m_AccessUnitDelimiter                     = -1;                                    ///< add Access Unit Delimiter NAL units, default: auto (only enable if needed by dependent options)
+
+  c->m_printMSEBasedSequencePSNR               = false;
+  c->m_printHexPsnr                            = false;
+  c->m_printFrameMSE                           = false;
+  c->m_printSequenceMSE                        = false;
+  c->m_cabacZeroWordPaddingEnabled             = true;
+
+  c->m_subProfile                              = 0;
+  c->m_bitDepthConstraintValue                 = 10;
+  c->m_intraOnlyConstraintFlag                 = false;
+
+  c->m_InputQueueSize                          = 0;                                     ///< Size of frame input queue
+  c->m_rewriteParamSets                        = false;                                 ///< Flag to enable rewriting of parameter sets at random access points
+  c->m_idrRefParamList                         = false;                                 ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
+  for( i = 0; i < VVENC_MAX_GOP; i++ )
+  {
+    vvenc_RPLEntry_default( &c->m_RPLList0[i]);                                         ///< the RPL entries from the config file
+    vvenc_RPLEntry_default( &c->m_RPLList1[i]);                                         ///< the RPL entries from the config file
+    vvenc_GOPEntry_default( &c->m_GOPList[i]);                                          ///< the coding structure entries from the config file
+  }
+  memset(&c->m_maxDecPicBuffering,0, sizeof(c->m_maxDecPicBuffering));                ///< total number of pictures in the decoded picture buffer
+  memset(&c->m_maxNumReorderPics,0, sizeof(c->m_maxNumReorderPics));                  ///< total number of reorder pictures
+  c->m_maxTempLayer                            = 0;                                     ///< Max temporal layer
+  c->m_numRPLList0                             = 0;
+  c->m_numRPLList1                             = 0;
+
+  c->m_useSameChromaQPTables                   = true;
+
+  vvenc_ChromaQpMappingTableParams_default( &c->m_chromaQpMappingTableParams );
+  c->m_intraQPOffset                           = 0;                                     ///< QP offset for intra slice (integer)
+  c->m_lambdaFromQPEnable                      = false;                                 ///< enable flag for QP:lambda fix
+
+  memset(&c->m_adLambdaModifier,1.0, sizeof(c->m_adLambdaModifier));                ///< Lambda modifier array for each temporal layer
+  memset(&c->m_adIntraLambdaModifier,0.0, sizeof(c->m_adIntraLambdaModifier));       ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
+
+  c->m_dIntraQpFactor                          = -1.0;                                  ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
+
+  memset(&c->m_qpInValsCb    ,0, sizeof(c->m_qpInValsCb));                      ///< qp input values used to derive the chroma QP mapping table
+  memset(&c->m_qpInValsCr    ,0, sizeof(c->m_qpInValsCr));                      ///< qp input values used to derive the chroma QP mapping table
+  memset(&c->m_qpInValsCbCr  ,0, sizeof(c->m_qpInValsCbCr));                      ///< qp input values used to derive the chroma QP mapping table
+  memset(&c->m_qpOutValsCb   ,0, sizeof(c->m_qpOutValsCb));                      ///< qp output values used to derive the chroma QP mapping table
+  memset(&c->m_qpOutValsCr   ,0, sizeof(c->m_qpOutValsCr));                      ///< qp output values used to derive the chroma QP mapping table
+  memset(&c->m_qpOutValsCbCr ,0, sizeof(c->m_qpOutValsCbCr));                      ///< qp output values used to derive the chroma QP mapping table
+
+  c->m_qpInValsCb[0] = 17;  c->m_qpInValsCb[1] = 22;  c->m_qpInValsCb[2] = 34;  c->m_qpInValsCb[3] = 42;
+  c->m_qpOutValsCb[0] = 17; c->m_qpOutValsCb[1] = 23; c->m_qpOutValsCb[2] = 35; c->m_qpOutValsCb[3] = 39;
+
+  c->m_cuQpDeltaSubdiv                         = -1;                                    ///< Maximum subdiv for CU luma Qp adjustment (0:default)
+  c->m_cuChromaQpOffsetSubdiv                  = -1;                                    ///< If negative, then do not apply chroma qp offsets.
+  c->m_chromaCbQpOffset                        = 0;                                     ///< Chroma Cb QP Offset (0:default)
+  c->m_chromaCrQpOffset                        = 0;                                     ///< Chroma Cr QP Offset (0:default)
+  c->m_chromaCbQpOffsetDualTree                = 0;                                     ///< Chroma Cb QP Offset for dual tree (overwrite m_chromaCbQpOffset for dual tree)
+  c->m_chromaCrQpOffsetDualTree                = 0;                                     ///< Chroma Cr QP Offset for dual tree (overwrite m_chromaCrQpOffset for dual tree)
+  c->m_chromaCbCrQpOffset                      = -1;                                    ///< QP Offset for joint Cb-Cr mode
+  c->m_chromaCbCrQpOffsetDualTree              = 0;                                     ///< QP Offset for joint Cb-Cr mode (overwrite m_chromaCbCrQpOffset for dual tree)
+  c->m_sliceChromaQpOffsetPeriodicity          = -1;                                    ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
+
+  memset(&c->m_sliceChromaQpOffsetIntraOrPeriodic,0, sizeof(c->m_sliceChromaQpOffsetIntraOrPeriodic));            ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
+
+  c->m_usePerceptQPATempFiltISlice             = -1;                                    ///< Flag indicating if temporal high-pass filtering in visual activity calculation in QPA should (true) or shouldn't (false) be applied for I-slices
+
+  c->m_lumaLevelToDeltaQPEnabled               = false;
+  vvenc_WCGChromaQPControl_default(&c->m_wcgChromaQpControl );
+
+  c->m_internChromaFormat                      = VVENC_NUM_CHROMA_FORMAT;
+  c->m_useIdentityTableForNon420Chroma         = true;
+  c->m_outputBitDepth[0]      = c->m_outputBitDepth[1]      = 0;                              ///< bit-depth of output file
+  c->m_MSBExtendedBitDepth[0] = c->m_MSBExtendedBitDepth[1] = 0;                    ///< bit-depth of input samples after MSB extension
+  c->m_costMode                                = VVENC_COST_STANDARD_LOSSY;                   ///< Cost mode to use
+
+  c->m_decodedPictureHashSEIType               = VVENC_HASHTYPE_NONE;                         ///< Checksum mode for decoded picture hash SEI message
+  c->m_bufferingPeriodSEIEnabled               = false;
+  c->m_pictureTimingSEIEnabled                 = false;
+  c->m_decodingUnitInfoSEIEnabled              = false;
+
+  c->m_entropyCodingSyncEnabled                = false;
+  c->m_entryPointsPresent                      = true;
+
+  c->m_CTUSize                                 = 128;
+  c->m_MinQT[0] = c->m_MinQT[1] = 8;                                            ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
+  c->m_MinQT[2] = 4;
+  c->m_maxMTTDepth                             = 3;
+  c->m_maxMTTDepthI                            = 3;
+  c->m_maxMTTDepthIChroma                      = 3;
+
+  c->m_maxBT[0]=32;  c->m_maxBT[1]=128;  c->m_maxBT[2]=64;
+  c->m_maxTT[0]=32;  c->m_maxTT[1]=64;  c->m_maxTT[2]=32;
+  c->m_dualITree                               = true;
+  c->m_MaxCodingDepth                          = 0;                                     ///< max. total CU depth - includes depth of transform-block structure
+  c->m_log2DiffMaxMinCodingBlockSize           = 0;                                     ///< difference between largest and smallest CU depth
+  c->m_log2MaxTbSize                           = 6;
+
+  c->m_bUseASR                                 = false;                                 ///< flag for using adaptive motion search range
+  c->m_bUseHADME                               = true;                                  ///< flag for using HAD in sub-pel ME
+  c->m_RDOQ                                    = 1;                                     ///< flag for using RD optimized quantization
+  c->m_useRDOQTS                               = true;                                  ///< flag for using RD optimized quantization for transform skip
+  c->m_useSelectiveRDOQ                        = false;                                 ///< flag for using selective RDOQ
+
+  c->m_JointCbCrMode                           = false;
+  c->m_cabacInitPresent                        = -1;
+  c->m_useFastLCTU                             = false;
+  c->m_usePbIntraFast                          = false;
+  c->m_useFastMrg                              = 0;
+  c->m_useAMaxBT                               = -1;
+  c->m_fastQtBtEnc                             = true;
+  c->m_contentBasedFastQtbt                    = false;
+  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;              ///< Parameter that controls fast encoder settings
+  c->m_bUseEarlyCU                             = false;                                 ///< flag for using Early CU setting
+  c->m_useFastDecisionForMerge                 = true;                                  ///< flag for using Fast Decision Merge RD-Cost
+  c->m_useEarlySkipDetection                   = false;                                 ///< flag for using Early SKIP Detection
+
+  c->m_bDisableIntraCUsInInterSlices           = false;                                 ///< Flag for disabling intra predicted CUs in inter slices.
+  c->m_bUseConstrainedIntraPred                = false;                                 ///< flag for using constrained intra prediction
+  c->m_bFastUDIUseMPMEnabled                   = true;
+  c->m_bFastMEForGenBLowDelayEnabled           = true;
+
+  c->m_MTSImplicit                             = false;
+  c->m_TMVPModeId                              = 1;
+  c->m_DepQuantEnabled                         = true;
+  c->m_SignDataHidingEnabled                   = false;
+
+  c->m_MIP                                     = false;
+  c->m_useFastMIP                              = 0;
+
+  c->m_maxNumMergeCand                         = 5;                                     ///< Max number of merge candidates
+  c->m_maxNumAffineMergeCand                   = 5;                                     ///< Max number of affine merge candidates
+//  c->m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
+  c->m_Geo                                     = 0;
+  c->m_maxNumGeoCand                           = 5;
+  c->m_FastIntraTools                          = 0;
+
+  c->m_RCInitialQP                             = 0;
+  c->m_RCForceIntraQP                          = false;
+
+  c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
+  c->m_bRestrictMESampling                     = false;                                 ///< Restrict sampling for the Selective ME
+  c->m_SearchRange                             = 96;                                    ///< ME search range
+  c->m_bipredSearchRange                       = 4;                                     ///< ME search range for bipred refinement
+  c->m_minSearchWindow                         = 8;                                     ///< ME minimum search window size for the Adaptive Window ME
+  c->m_bClipForBiPredMeEnabled                 = false;                                 ///< Enables clipping for Bi-Pred ME.
+  c->m_bFastMEAssumingSmootherMVEnabled        = true;                                  ///< Enables fast ME assuming a smoother MV.
+  c->m_fastSubPel                              = 0;
+  c->m_SMVD                                    = 0;
+  c->m_AMVRspeed                               = 0;
+  c->m_LMChroma                                = false;
+  c->m_horCollocatedChromaFlag                 = true;
+  c->m_verCollocatedChromaFlag                 = false;
+  c->m_MRL                                     = true;
+  c->m_BDOF                                    = false;
+  c->m_DMVR                                    = false;
+  c->m_EDO                                     = 0;
+  c->m_lumaReshapeEnable                       = false;
+  c->m_reshapeSignalType                       = 0;
+  c->m_updateCtrl                              = 0;
+  c->m_adpOption                               = 0;
+  c->m_initialCW                               = 0;
+  c->m_LMCSOffset                              = 0;
+  vvenc_ReshapeCW_default( &c->m_reshapeCW );
+  c->m_Affine                                  = 0;
+  c->m_PROF                                    = false;
+  c->m_AffineType                              = true;
+  c->m_MMVD                                    = 0;
+  c->m_MmvdDisNum                              = 6;
+  c->m_allowDisFracMMVD                        = false;
+  c->m_CIIP                                    = 0;
+  c->m_SbTMVP                                  = false;
+  c->m_SBT                                     = 0;                                     ///< Sub-Block Transform for inter blocks
+  c->m_LFNST                                   = 0;
+  c->m_MTS                                     = 0;
+  c->m_MTSIntraMaxCand                         = 3;
+  c->m_ISP                                     = 0;
+  c->m_TS                                      = 0;
+  c->m_TSsize                                  = 3;
+  c->m_useChromaTS                             = 0;
+  c->m_useBDPCM                                = 0;
+
+  c->m_rprEnabledFlag                          = 1;
+  c->m_resChangeInClvsEnabled                  = false;
+  c->m_craAPSreset                             = false;
+  c->m_rprRASLtoolSwitch                       = false;
+
+  c->m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter
+  c->m_loopFilterOffsetInPPS                   = true;                                  ///< offset for deblocking filter in 0 = slice header, 1 = PPS
+
+  memset(&c->m_loopFilterBetaOffsetDiv2,0, sizeof(c->m_loopFilterBetaOffsetDiv2)); ///< beta offset for deblocking filter
+  memset(&c->m_loopFilterTcOffsetDiv2,0, sizeof(c->m_loopFilterTcOffsetDiv2));     ///< tc offset for deblocking filter
+
+  c->m_deblockingFilterMetric                  = 0;
+
+  c->m_bLFCrossTileBoundaryFlag                = true;
+  c->m_bLFCrossSliceBoundaryFlag               = true;                                  ///< 1: filter across slice boundaries 0: do not filter across slice boundaries
+  c->m_loopFilterAcrossSlicesEnabled           = false;
+
+  c->m_bUseSAO                                 = true;
+  c->m_saoEncodingRate                         = -1.0;                                  ///< When >0 SAO early picture termination is enabled for luma and chroma
+  c->m_saoEncodingRateChroma                   = -1.0;                                  ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
+  c->m_log2SaoOffsetScale[0]=c->m_log2SaoOffsetScale[1] = 0;                              ///< n umber of bits for the upward bit shift operation on the decoded SAO offsets
+  c->m_saoOffsetBitShift[0]=c->m_saoOffsetBitShift[1] = 0;
+
+  c->m_decodingParameterSetEnabled             = false;                                 ///< enable decoding parameter set
+  c->m_vuiParametersPresent                    = -1;                                    ///< enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
+  c->m_hrdParametersPresent                    = -1;                                    ///< enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
+  c->m_aspectRatioInfoPresent                  = false;                                 ///< Signals whether aspect_ratio_idc is present
+  c->m_aspectRatioIdc                          = 0;                                     ///< aspect_ratio_idc
+  c->m_sarWidth                                = 0;                                     ///< horizontal size of the sample aspect ratio
+  c->m_sarHeight                               = 0;                                     ///< vertical size of the sample aspect ratio
+  c->m_colourDescriptionPresent                = false;                                 ///< Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present
+  c->m_colourPrimaries                         = 2;                                     ///< Indicates chromaticity coordinates of the source primaries
+  c->m_transferCharacteristics                 = 2;                                     ///< Indicates the opto-electronic transfer characteristics of the source
+  c->m_matrixCoefficients                      = 2;                                     ///< Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
+  c->m_chromaLocInfoPresent                    = false;                                 ///< Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
+  c->m_chromaSampleLocTypeTopField             = 0;                                     ///< Specifies the location of chroma samples for top field
+  c->m_chromaSampleLocTypeBottomField          = 0;                                     ///< Specifies the location of chroma samples for bottom field
+  c->m_chromaSampleLocType                     = 0;                                     ///< Specifies the location of chroma samples for progressive content
+  c->m_overscanInfoPresent                     = false;                                 ///< Signals whether overscan_appropriate_flag is present
+  c->m_overscanAppropriateFlag                 = false;                                 ///< Indicates whether conformant decoded pictures are suitable for display using overscan
+  c->m_videoSignalTypePresent                  = false;                                 ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
+  c->m_videoFullRangeFlag                      = false;                                 ///< Indicates the black level and range of luma and chroma signals
+
+  memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));              ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
+                                                                                                ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
+                                                                                                ///< min/max luminance value in units of 1/10000 candela per square metre
+  memset(&c->m_contentLightLevel,0, sizeof(c->m_contentLightLevel));            ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+  c->m_preferredTransferCharacteristics        = -1;                                    ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
+
+  c->m_summaryOutFilename                      = NULL;                                    ///< filename to use for producing summary output file.
+  c->m_summaryPicFilenameBase                  = NULL;                                    ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
+  c->m_summaryVerboseness                      = 0;                                     ///< Specifies the level of the verboseness of the text output.
+
+  c->m_decodeBitstreams[0]=c->m_decodeBitstreams[1] = NULL;                            ///< filename for decode bitstreams.
+  c->m_switchPOC                               = -1;                                    ///< dbg poc.
+  c->m_switchDQP                               = 0;                                     ///< switch DQP.
+  c->m_fastForwardToPOC                        = -1;                                    ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
+  c->m_stopAfterFFtoPOC                        = false;
+  c->m_bs2ModPOCAndType                        = false;
+  c->m_forceDecodeBitstream1                   = false;
+
+  c->m_alf                                     = false;                                 ///> Adaptive Loop Filter
+  c->m_useNonLinearAlfLuma                     = true;
+  c->m_useNonLinearAlfChroma                   = true;
+  c->m_maxNumAlfAlternativesChroma             = VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
+  c->m_ccalf                                   = false;
+  c->m_ccalfQpThreshold                        = 37;
+  c->m_alfTempPred                             = -1;                                    ///> Indicates using of temporal filter data prediction through APS
+
+  c->m_MCTF                                    = 0;
+  c->m_MCTFFutureReference                     = true;
+  c->m_MCTFNumLeadFrames                       = 0;
+  c->m_MCTFNumTrailFrames                      = 0;
+  memset(&c->m_MCTFFrames,0, sizeof(c->m_MCTFFrames));
+  memset(&c->m_MCTFStrengths,0, sizeof(c->m_MCTFStrengths));
+
+  c->m_dqThresholdVal                          = 8;
+  c->m_qtbttSpeedUp                            = 0;
+
+  c->m_fastLocalDualTreeMode                   = 0;
+
+  c->m_maxParallelFrames                       = -1;
+  c->m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+
+  c->m_picPartitionFlag                        = false;
+
+  // init default preset
+  vvenc_initPreset( c, vvencPresetMode::VVENC_MEDIUM );
 }
 
 static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* message )
@@ -187,7 +547,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   {
     const int maxBitDepth= std::max(c->m_internalBitDepth[0], c->m_internalBitDepth[c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_400 ? 0 : 1]);
 
-    if (c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_400 || m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_420)
+    if (c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_400 || c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_420)
     {
       if (maxBitDepth<=10)
       {
@@ -205,7 +565,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
 
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
-    c->m_level = LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight );
+    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight );
   }
 
   if ( c->m_InputQueueSize <= 0 )
@@ -214,7 +574,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
 
     if ( c->m_MCTF )
     {
-      c->m_InputQueueSize += MCTF_ADD_QUEUE_DELAY;
+      c->m_InputQueueSize += vvenc::MCTF_ADD_QUEUE_DELAY;
     }
   }
 
@@ -227,13 +587,13 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     }
   }
 
-  m_maxBT[0] = std::min( m_CTUSize, m_maxBT[0] );
-  m_maxBT[1] = std::min( m_CTUSize, m_maxBT[1] );
-  m_maxBT[2] = std::min( m_CTUSize, m_maxBT[2] );
+  c->m_maxBT[0] = std::min( c->m_CTUSize, c->m_maxBT[0] );
+  c->m_maxBT[1] = std::min( c->m_CTUSize, c->m_maxBT[1] );
+  c->m_maxBT[2] = std::min( c->m_CTUSize, c->m_maxBT[2] );
 
-  m_maxTT[0] = std::min( m_CTUSize, m_maxTT[0] );
-  m_maxTT[1] = std::min( m_CTUSize, m_maxTT[1] );
-  m_maxTT[2] = std::min( m_CTUSize, m_maxTT[2] );
+  c->m_maxTT[0] = std::min( c->m_CTUSize, c->m_maxTT[0] );
+  c->m_maxTT[1] = std::min( c->m_CTUSize, c->m_maxTT[1] );
+  c->m_maxTT[2] = std::min( c->m_CTUSize, c->m_maxTT[2] );
 
   // set MCTF Lead/Trail frames
   if( c->m_SegmentMode != VVENC_SEG_OFF )
@@ -261,7 +621,10 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   }
 
   // rate control
-  if( c->m_RCNumPasses < 0 )                                m_RCNumPasses           = m_RCTargetBitrate > 0 ? 2 : 1;
+  if( c->m_RCNumPasses < 0 )
+  {
+    c->m_RCNumPasses = c->m_RCTargetBitrate > 0 ? 2 : 1;
+  }
 
   // threading
   if( c->m_numThreads < 0 )
@@ -270,46 +633,46 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     c->m_numThreads = c->m_SourceWidth > 832 && c->m_SourceHeight > 480 ? 8 : 4;
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
-  if( m_ensureWppBitEqual < 0 )       m_ensureWppBitEqual     = m_numThreads ? 1   : 0   ;
-  if( m_useAMaxBT < 0 )               m_useAMaxBT             = m_numThreads ? 0   : 1   ;
-  if( m_cabacInitPresent < 0 )        m_cabacInitPresent      = m_numThreads ? 0   : 1   ;
-  if( m_alfTempPred < 0 )             m_alfTempPred           = m_numThreads ? 0   : 1   ;
-  if( m_saoEncodingRate < 0.0 )       m_saoEncodingRate       = m_numThreads ? 0.0 : 0.75;
-  if( m_saoEncodingRateChroma < 0.0 ) m_saoEncodingRateChroma = m_numThreads ? 0.0 : 0.5 ;
-  if( m_maxParallelFrames < 0 )
+  if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ? 1   : 0   ;
+  if( c->m_useAMaxBT < 0 )               c->m_useAMaxBT             = c->m_numThreads ? 0   : 1   ;
+  if( c->m_cabacInitPresent < 0 )        c->m_cabacInitPresent      = c->m_numThreads ? 0   : 1   ;
+  if( c->m_alfTempPred < 0 )             c->m_alfTempPred           = c->m_numThreads ? 0   : 1   ;
+  if( c->m_saoEncodingRate < 0.0 )       c->m_saoEncodingRate       = c->m_numThreads ? 0.0 : 0.75;
+  if( c->m_saoEncodingRateChroma < 0.0 ) c->m_saoEncodingRateChroma = c->m_numThreads ? 0.0 : 0.5 ;
+  if( c->m_maxParallelFrames < 0 )
   {
-    m_maxParallelFrames = std::min( m_numThreads, 4 );
-    if( m_RCTargetBitrate > 0
-        && m_RCNumPasses == 1
-        && m_maxParallelFrames > 2 )
+    c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
+    if( c->m_RCTargetBitrate > 0
+        && c->m_RCNumPasses == 1
+        && c->m_maxParallelFrames > 2 )
     {
-      m_maxParallelFrames = 2;
+      c->m_maxParallelFrames = 2;
     }
   }
 
   // MCTF
-  m_MCTFNumLeadFrames  = std::min( m_MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
-  m_MCTFNumTrailFrames = std::min( m_MCTFNumTrailFrames, VVENC_MCTF_RANGE );
+  c->m_MCTFNumLeadFrames  = std::min( c->m_MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
+  c->m_MCTFNumTrailFrames = std::min( c->m_MCTFNumTrailFrames, VVENC_MCTF_RANGE );
 
   /* rules for input, output and internal bitdepths as per help text */
-  if (m_MSBExtendedBitDepth[CH_L  ] == 0)
-    m_MSBExtendedBitDepth[CH_L  ] = c->m_inputBitDepth      [CH_L  ];
-  if (m_MSBExtendedBitDepth[CH_C] == 0)
-    m_MSBExtendedBitDepth[CH_C] = m_MSBExtendedBitDepth[CH_L  ];
-  if (m_internalBitDepth   [CH_L  ] == 0)
-    m_internalBitDepth   [CH_L  ] = m_MSBExtendedBitDepth[CH_L  ];
-  if (m_internalBitDepth   [CH_C] == 0)
-    m_internalBitDepth   [CH_C] = m_internalBitDepth   [CH_L  ];
-  if (m_inputBitDepth      [CH_C] == 0)
-    m_inputBitDepth      [CH_C] = m_inputBitDepth      [CH_L  ];
-  if (m_outputBitDepth     [CH_L  ] == 0)
-    m_outputBitDepth     [CH_L  ] = m_internalBitDepth   [CH_L  ];
-  if (m_outputBitDepth     [CH_C] == 0)
-    m_outputBitDepth     [CH_C] = m_outputBitDepth     [CH_L  ];
+  if (c->m_MSBExtendedBitDepth[0  ] == 0)
+    c->m_MSBExtendedBitDepth[0  ] = c->m_inputBitDepth      [0  ];
+  if (c->m_MSBExtendedBitDepth[1] == 0)
+    c->m_MSBExtendedBitDepth[1] = c->m_MSBExtendedBitDepth[0  ];
+  if (c->m_internalBitDepth   [0  ] == 0)
+    c->m_internalBitDepth   [0  ] = c->m_MSBExtendedBitDepth[0  ];
+  if (c->m_internalBitDepth   [1] == 0)
+    c->m_internalBitDepth   [1] = c->m_internalBitDepth   [0  ];
+  if (c->m_inputBitDepth      [1] == 0)
+    c->m_inputBitDepth      [1] = c->m_inputBitDepth      [0  ];
+  if (c->m_outputBitDepth     [0  ] == 0)
+    c->m_outputBitDepth     [0  ] = c->m_internalBitDepth   [0  ];
+  if (c->m_outputBitDepth     [1] == 0)
+    c->m_outputBitDepth     [1] = c->m_outputBitDepth     [0  ];
 
-  if( m_fastInterSearchMode  == VVENC_FASTINTERSEARCH_AUTO )
+  if( c->m_fastInterSearchMode  == VVENC_FASTINTERSEARCH_AUTO )
   {
-    m_fastInterSearchMode = VVENC_FASTINTERSEARCH_MODE1;
+    c->m_fastInterSearchMode = VVENC_FASTINTERSEARCH_MODE1;
   }
 
   if( c->m_HdrMode == VVENC_HDR_OFF &&
@@ -322,288 +685,288 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
 
   if( c->m_HdrMode == VVENC_HDR_PQ || c->m_HdrMode == VVENC_HDR_PQ_BT2020 )
   {
-    m_reshapeSignalType = RESHAPE_SIGNAL_PQ;
-    m_LMCSOffset              = 1;
-    m_useSameChromaQPTables   = false;
-    m_verCollocatedChromaFlag = true;
+    c->m_reshapeSignalType       = vvenc::RESHAPE_SIGNAL_PQ;
+    c->m_LMCSOffset              = 1;
+    c->m_useSameChromaQPTables   = false;
+    c->m_verCollocatedChromaFlag = true;
 
     VVEncCfg cBaseCfg;
     vvenc_cfg_default(&cBaseCfg);
-    if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    if( c->m_qpInValsCb == cBaseCfg.m_qpInValsCb )
     {
-      memset(&m_qpInValsCb,0, sizeof(m_qpInValsCb));
+      memset(&c->m_qpInValsCb,0, sizeof(c->m_qpInValsCb));
       std::vector<int>  qpInVals = { 13,20,36,38,43,54 };
-      std::copy(qpInVals.begin(), qpInVals.end(), m_qpInValsCb);
+      std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpInValsCb);
     }
-    if( m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    if( c->m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
     {
-      memset(&m_qpOutValsCb,0, sizeof(m_qpOutValsCb));
+      memset(&c->m_qpOutValsCb,0, sizeof(c->m_qpOutValsCb));
       std::vector<int>  qpInVals = { 13,21,29,29,32,37 };
-      std::copy(qpInVals.begin(), qpInVals.end(), m_qpOutValsCb);
+      std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpOutValsCb);
     }
-    if( m_qpInValsCr == cBaseCfg.m_qpInValsCr )
+    if( c->m_qpInValsCr == cBaseCfg.m_qpInValsCr )
     {
-      memset(&m_qpInValsCr,0, sizeof(m_qpInValsCr));
+      memset(&c->m_qpInValsCr,0, sizeof(c->m_qpInValsCr));
       std::vector<int>  qpInVals = { 13,20,37,41,44,54 };
-      std::copy(qpInVals.begin(), qpInVals.end(), m_qpInValsCr);
+      std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpInValsCr);
     }
-    if( m_qpOutValsCr == cBaseCfg.m_qpOutValsCr )
+    if( c->m_qpOutValsCr == cBaseCfg.m_qpOutValsCr )
     {
-      memset(&m_qpOutValsCr,0, sizeof(m_qpOutValsCr));
+      memset(&c->m_qpOutValsCr,0, sizeof(c->m_qpOutValsCr));
       std::vector<int>  qpInVals = { 13,21,27,29,32,37 };
-      std::copy(qpInVals.begin(), qpInVals.end(), m_qpOutValsCr);
+      std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpOutValsCr);
     }
-    if( m_qpInValsCbCr == cBaseCfg.m_qpInValsCbCr )
+    if( c->m_qpInValsCbCr == cBaseCfg.m_qpInValsCbCr )
     {
-      memset(&m_qpInValsCbCr,0, sizeof(m_qpInValsCbCr));
+      memset(&c->m_qpInValsCbCr,0, sizeof(c->m_qpInValsCbCr));
       std::vector<int>  qpInVals = { 12,21,41,43,54 };
-      std::copy(qpInVals.begin(), qpInVals.end(), m_qpInValsCbCr);
+      std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpInValsCbCr);
     }
-    if( m_qpOutValsCbCr == cBaseCfg.m_qpOutValsCbCr )
+    if( c->m_qpOutValsCbCr == cBaseCfg.m_qpOutValsCbCr )
     {
-      memset(&m_qpOutValsCbCr,0, sizeof(m_qpOutValsCbCr));
+      memset(&c->m_qpOutValsCbCr,0, sizeof(c->m_qpOutValsCbCr));
       std::vector<int>  qpInVals = { 12,22,30,32,37 };
-      std::copy(qpInVals.begin(), qpInVals.end(), m_qpOutValsCbCr);
+      std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpOutValsCbCr);
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent     = m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
-    m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
+    c->m_vuiParametersPresent     = c->m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
+    c->m_colourDescriptionPresent = true;                                // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
 
-    m_transferCharacteristics = 16; // smpte2084 - HDR10
-    if( m_colourPrimaries == 2 )
+    c->m_transferCharacteristics = 16; // smpte2084 - HDR10
+    if( c->m_colourPrimaries == 2 )
     {
-      m_colourPrimaries = m_HdrMode == VVENC_HDR_PQ_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
+      c->m_colourPrimaries = c->m_HdrMode == VVENC_HDR_PQ_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
     }
-    if( m_matrixCoefficients == 2 )
+    if( c->m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = m_HdrMode == VVENC_HDR_PQ_BT2020 ? 9 : 1; // bt2020nc : bt709
+      c->m_matrixCoefficients = c->m_HdrMode == VVENC_HDR_PQ_BT2020 ? 9 : 1; // bt2020nc : bt709
     }
   }
-  else if( m_HdrMode == VVENC_HDR_HLG || m_HdrMode == VVENC_HDR_HLG_BT2020 )
+  else if( c->m_HdrMode == VVENC_HDR_HLG || c->m_HdrMode == VVENC_HDR_HLG_BT2020 )
   {
-    m_reshapeSignalType       = RESHAPE_SIGNAL_HLG;
-    m_LMCSOffset              = 0;
-    m_useSameChromaQPTables   = true;
-    m_verCollocatedChromaFlag = true;
+    c->m_reshapeSignalType       = vvenc::RESHAPE_SIGNAL_HLG;
+    c->m_LMCSOffset              = 0;
+    c->m_useSameChromaQPTables   = true;
+    c->m_verCollocatedChromaFlag = true;
 
     VVEncCfg cBaseCfg;
     vvenc_cfg_default(&cBaseCfg);
-    if( m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    if( c->m_qpInValsCb == cBaseCfg.m_qpInValsCb )
     {
       std::vector<int>  qpVals = { 9, 23, 33, 42 };
-      std::copy(qpVals.begin(), qpVals.end(), m_qpInValsCb);
+      std::copy(qpVals.begin(), qpVals.end(), c->m_qpInValsCb);
     }
-    if( m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    if( c->m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
     {
       std::vector<int>  qpVals = { 9, 24, 33, 37 };
-      std::copy(qpVals.begin(), qpVals.end(), m_qpOutValsCb);
+      std::copy(qpVals.begin(), qpVals.end(), c->m_qpOutValsCb);
     }
 
     // VUI and SEI options
-    m_vuiParametersPresent = m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
-    m_colourDescriptionPresent = true;                            // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
+    c->m_vuiParametersPresent = c->m_vuiParametersPresent != 0 ? 1:0; // enable vui only if not explicitly disabled
+    c->m_colourDescriptionPresent = true;                            // enable colour_primaries, transfer_characteristics and matrix_coefficients in vui
 
-    if( m_colourPrimaries == 2 )
+    if( c->m_colourPrimaries == 2 )
     {
-      m_colourPrimaries = m_HdrMode == VVENC_HDR_HLG_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
+      c->m_colourPrimaries = c->m_HdrMode == VVENC_HDR_HLG_BT2020 ? 9 : 1; //  bt2020(9) : bt709 (1)
     }
 
-    if( m_matrixCoefficients == 2 )
+    if( c->m_matrixCoefficients == 2 )
     {
-      m_matrixCoefficients = m_HdrMode == VVENC_HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
+      c->m_matrixCoefficients = c->m_HdrMode == VVENC_HDR_HLG_BT2020 ? 9 : 1; // bt2020nc : bt709
     }
 
-    if( m_transferCharacteristics == 2 )
+    if( c->m_transferCharacteristics == 2 )
     {
-      m_transferCharacteristics = m_HdrMode == VVENC_HDR_HLG_BT2020 ? 14 : 1; // bt2020-10 : bt709
+      c->m_transferCharacteristics = c->m_HdrMode == VVENC_HDR_HLG_BT2020 ? 14 : 1; // bt2020-10 : bt709
     }
 
-    if( m_preferredTransferCharacteristics < 0 )
+    if( c->m_preferredTransferCharacteristics < 0 )
     {
-      m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
+      c->m_preferredTransferCharacteristics = 18; // ARIB STD-B67 (HLG)
     }
   }
 
-  if( m_preferredTransferCharacteristics < 0 )
+  if( c->m_preferredTransferCharacteristics < 0 )
   {
-    m_preferredTransferCharacteristics = 0;
+    c->m_preferredTransferCharacteristics = 0;
   }
 
-  if( m_AccessUnitDelimiter < 0 )
+  if( c->m_AccessUnitDelimiter < 0 )
   {
-    m_AccessUnitDelimiter = 0;
+    c->m_AccessUnitDelimiter = 0;
   }
 
-  if ( m_vuiParametersPresent < 0 )
+  if ( c->m_vuiParametersPresent < 0 )
   {
-    m_vuiParametersPresent = 0;
+    c->m_vuiParametersPresent = 0;
   }
 
-  if ( m_hrdParametersPresent < 0 )
+  if ( c->m_hrdParametersPresent < 0 )
   {
-    m_hrdParametersPresent = 0;
+    c->m_hrdParametersPresent = 0;
   }
 
-  switch ( m_conformanceWindowMode)
+  switch ( c->m_conformanceWindowMode)
   {
   case 0:
     {
       // no conformance or padding
-      m_confWinLeft = m_confWinRight = m_confWinTop = m_confWinBottom = 0;
-      m_aiPad[1] = m_aiPad[0] = 0;
+      c->m_confWinLeft = c->m_confWinRight = c->m_confWinTop = c->m_confWinBottom = 0;
+      c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
     }
   case 1:
     {
       // automatic padding to minimum CU size
-      const int minCuSize = 1 << ( MIN_CU_LOG2 + 1 );
-      if (m_SourceWidth % minCuSize)
+      const int minCuSize = 1 << ( vvenc::MIN_CU_LOG2 + 1 );
+      if (c->m_SourceWidth % minCuSize)
       {
-        m_aiPad[0] = m_confWinRight  = ((m_SourceWidth / minCuSize) + 1) * minCuSize - m_SourceWidth;
+        c->m_aiPad[0] = c->m_confWinRight  = ((c->m_SourceWidth / minCuSize) + 1) * minCuSize - c->m_SourceWidth;
       }
-      if (m_SourceHeight % minCuSize)
+      if (c->m_SourceHeight % minCuSize)
       {
-        m_aiPad[1] = m_confWinBottom = ((m_SourceHeight / minCuSize) + 1) * minCuSize - m_SourceHeight;
+        c->m_aiPad[1] =c->m_confWinBottom = ((c->m_SourceHeight / minCuSize) + 1) * minCuSize - c->m_SourceHeight;
       }
       break;
     }
   case 2:
     {
       //padding
-      m_confWinRight  = m_aiPad[0];
-      m_confWinBottom = m_aiPad[1];
+      c->m_confWinRight  = c->m_aiPad[0];
+      c->m_confWinBottom = c->m_aiPad[1];
       break;
     }
   case 3:
     {
       // conformance
-      if ((m_confWinLeft == 0) && (m_confWinRight == 0) && (m_confWinTop == 0) && (m_confWinBottom == 0))
+      if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
       }
-      if ((m_aiPad[1] != 0) || (m_aiPad[0]!=0))
+      if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
       }
-      m_aiPad[1] = m_aiPad[0] = 0;
+      c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
     }
   }
-    m_PadSourceWidth  = m_SourceWidth  + m_aiPad[0];
-    m_PadSourceHeight = m_SourceHeight + m_aiPad[1];
+    c->m_PadSourceWidth  = c->m_SourceWidth  + c->m_aiPad[0];
+    c->m_PadSourceHeight = c->m_SourceHeight + c->m_aiPad[1];
 
-  for(uint32_t ch=0; ch < MAX_NUM_CH; ch++ )
+  for(uint32_t ch=0; ch < 2; ch++ )
   {
-    if (m_saoOffsetBitShift[ch]<0)
+    if (c->m_saoOffsetBitShift[ch]<0)
     {
-      if (m_internalBitDepth[ch]>10)
+      if (c->m_internalBitDepth[ch]>10)
       {
-        m_log2SaoOffsetScale[ch]=uint32_t(Clip3<int>(0, m_internalBitDepth[ch]-10, int(m_internalBitDepth[ch]-10 + 0.165*m_QP - 3.22 + 0.5) ) );
+        c->m_log2SaoOffsetScale[ch]=uint32_t(vvenc::Clip3<int>(0, c->m_internalBitDepth[ch]-10, int(c->m_internalBitDepth[ch]-10 + 0.165*c->m_QP - 3.22 + 0.5) ) );
       }
       else
       {
-        m_log2SaoOffsetScale[ch]=0;
+        c->m_log2SaoOffsetScale[ch]=0;
       }
     }
     else
     {
-      m_log2SaoOffsetScale[ch]=uint32_t(m_saoOffsetBitShift[ch]);
+      c->m_log2SaoOffsetScale[ch]=uint32_t(c->m_saoOffsetBitShift[ch]);
     }
   }
 
-  m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = m_useSameChromaQPTables;
+  c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = c->m_useSameChromaQPTables;
 
-  if (m_useIdentityTableForNon420Chroma && m_internChromaFormat != VVENC_CHROMA_420)
+  if (c->m_useIdentityTableForNon420Chroma && c->m_internChromaFormat != VVENC_CHROMA_420)
   {
-    m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = true;
-    memset(&m_qpInValsCb   ,0, sizeof(m_qpInValsCb));
-    memset(&m_qpInValsCr   ,0, sizeof(m_qpInValsCr));
-    memset(&m_qpInValsCbCr ,0, sizeof(m_qpInValsCbCr));
-    memset(&m_qpOutValsCb  ,0, sizeof(m_qpOutValsCb));
-    memset(&m_qpOutValsCr  ,0, sizeof(m_qpOutValsCr));
-    memset(&m_qpOutValsCbCr,0, sizeof(m_qpOutValsCbCr));
+    c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag = true;
+    memset(&c->m_qpInValsCb   ,0, sizeof(c->m_qpInValsCb));
+    memset(&c->m_qpInValsCr   ,0, sizeof(c->m_qpInValsCr));
+    memset(&c->m_qpInValsCbCr ,0, sizeof(c->m_qpInValsCbCr));
+    memset(&c->m_qpOutValsCb  ,0, sizeof(c->m_qpOutValsCb));
+    memset(&c->m_qpOutValsCr  ,0, sizeof(c->m_qpOutValsCr));
+    memset(&c->m_qpOutValsCbCr,0, sizeof(c->m_qpOutValsCbCr));
   }
 
-  m_chromaQpMappingTableParams.m_numQpTables = m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag? 1 : (m_JointCbCrMode ? 3 : 2);
-  m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0].resize(m_qpInValsCb.size());
-  m_chromaQpMappingTableParams.m_deltaQpOutVal[0].resize(m_qpOutValsCb.size());
-  m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (m_qpOutValsCb.size() > 1) ? (int)m_qpOutValsCb.size() - 2 : 0;
-  m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = (m_qpOutValsCb.size() > 1) ? -26 + m_qpInValsCb[0] : 0;
-  for (int i = 0; i < m_qpInValsCb.size() - 1; i++)
+  c->m_chromaQpMappingTableParams.m_numQpTables = c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag? 1 : (c->m_JointCbCrMode ? 3 : 2);
+  c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0].resize(c->m_qpInValsCb.size());
+  c->m_chromaQpMappingTableParams.m_deltaQpOutVal[0].resize(c->m_qpOutValsCb.size());
+  c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (c->m_qpOutValsCb.size() > 1) ? (int)c->m_qpOutValsCb.size() - 2 : 0;
+  c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = (c->m_qpOutValsCb.size() > 1) ? -26 + c->m_qpInValsCb[0] : 0;
+  for (int i = 0; i < c->m_qpInValsCb.size() - 1; i++)
   {
-    m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0][i] = m_qpInValsCb[i + 1] - m_qpInValsCb[i] - 1;
-    m_chromaQpMappingTableParams.m_deltaQpOutVal[0][i] = m_qpOutValsCb[i + 1] - m_qpOutValsCb[i];
+    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0][i] = c->m_qpInValsCb[i + 1] - c->m_qpInValsCb[i] - 1;
+    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[0][i] = c->m_qpOutValsCb[i + 1] - c->m_qpOutValsCb[i];
   }
-  if (!m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
+  if (!c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
   {
-    m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1].resize(m_qpInValsCr.size());
-    m_chromaQpMappingTableParams.m_deltaQpOutVal[1].resize(m_qpOutValsCr.size());
-    m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (m_qpOutValsCr.size() > 1) ? (int)m_qpOutValsCr.size() - 2 : 0;
-    m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = (m_qpOutValsCr.size() > 1) ? -26 + m_qpInValsCr[0] : 0;
-    for (int i = 0; i < m_qpInValsCr.size() - 1; i++)
+    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1].resize(c->m_qpInValsCr.size());
+    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[1].resize(c->m_qpOutValsCr.size());
+    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (c->m_qpOutValsCr.size() > 1) ? (int)c->m_qpOutValsCr.size() - 2 : 0;
+    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = (c->m_qpOutValsCr.size() > 1) ? -26 + c->m_qpInValsCr[0] : 0;
+    for (int i = 0; i < c->m_qpInValsCr.size() - 1; i++)
     {
-      m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1][i] = m_qpInValsCr[i + 1] - m_qpInValsCr[i] - 1;
-      m_chromaQpMappingTableParams.m_deltaQpOutVal[1][i] = m_qpOutValsCr[i + 1] - m_qpOutValsCr[i];
+      c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1][i] = c->m_qpInValsCr[i + 1] - c->m_qpInValsCr[i] - 1;
+      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[1][i] = c->m_qpOutValsCr[i + 1] - c->m_qpOutValsCr[i];
     }
-    m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2].resize(m_qpInValsCbCr.size());
-    m_chromaQpMappingTableParams.m_deltaQpOutVal[2].resize(m_qpOutValsCbCr.size());
-    m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (m_qpOutValsCbCr.size() > 1) ? (int)m_qpOutValsCbCr.size() - 2 : 0;
-    m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = (m_qpOutValsCbCr.size() > 1) ? -26 + m_qpInValsCbCr[0] : 0;
-    for (int i = 0; i < m_qpInValsCbCr.size() - 1; i++)
+    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2].resize(c->m_qpInValsCbCr.size());
+    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2].resize(c->m_qpOutValsCbCr.size());
+    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (c->m_qpOutValsCbCr.size() > 1) ? (int)c->m_qpOutValsCbCr.size() - 2 : 0;
+    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = (c->m_qpOutValsCbCr.size() > 1) ? -26 + c->m_qpInValsCbCr[0] : 0;
+    for (int i = 0; i < c->m_qpInValsCbCr.size() - 1; i++)
     {
-      m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = m_qpInValsCbCr[i + 1] - m_qpInValsCbCr[i] - 1;
-      m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = m_qpInValsCbCr[i + 1] - m_qpInValsCbCr[i];
+      c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = c->m_qpInValsCbCr[i + 1] - c->m_qpInValsCbCr[i] - 1;
+      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = c->m_qpInValsCbCr[i + 1] - c->m_qpInValsCbCr[i];
     }
   }
 
-  const int minCuSize = 1 << MIN_CU_LOG2;
-  m_MaxCodingDepth = 0;
-  while( ( m_CTUSize >> m_MaxCodingDepth ) > minCuSize )
+  const int minCuSize = 1 << vvenc::MIN_CU_LOG2;
+  c->m_MaxCodingDepth = 0;
+  while( ( c->m_CTUSize >> c->m_MaxCodingDepth ) > minCuSize )
   {
-    m_MaxCodingDepth++;
+    c->m_MaxCodingDepth++;
   }
-  m_log2DiffMaxMinCodingBlockSize = m_MaxCodingDepth;
+  c->m_log2DiffMaxMinCodingBlockSize = c->m_MaxCodingDepth;
 
-  m_reshapeCW.rspFps     = m_FrameRate;
-  m_reshapeCW.rspPicSize = m_PadSourceWidth*m_PadSourceHeight;
-  m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)m_FrameRate /16.0)));
-  m_reshapeCW.rspBaseQP  = m_QP;
-  m_reshapeCW.updateCtrl = m_updateCtrl;
-  m_reshapeCW.adpOption  = m_adpOption;
-  m_reshapeCW.initialCW  = m_initialCW;
+  c->m_reshapeCW.rspFps     = c->m_FrameRate;
+  c->m_reshapeCW.rspPicSize = c->m_PadSourceWidth*c->m_PadSourceHeight;
+  c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_FrameRate /16.0)));
+  c->m_reshapeCW.rspBaseQP  = c->m_QP;
+  c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
+  c->m_reshapeCW.adpOption  = c->m_adpOption;
+  c->m_reshapeCW.initialCW  = c->m_initialCW;
 
-  vvenc_confirmParameter( c, m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag < 0 || c->m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
 
-  if( m_rprEnabledFlag == 2 )
+  if( c->m_rprEnabledFlag == 2 )
   {
-    m_resChangeInClvsEnabled = true;
-    m_craAPSreset            = true;
-    m_rprRASLtoolSwitch      = true;
+    c->m_resChangeInClvsEnabled = true;
+    c->m_craAPSreset            = true;
+    c->m_rprRASLtoolSwitch      = true;
   }  
     
-  if( m_IntraPeriod == 0 &&  m_IntraPeriodSec > 0 )
+  if( c->m_IntraPeriod == 0 &&  c->m_IntraPeriodSec > 0 )
   {
-    if ( m_FrameRate % m_GOPSize == 0 )
+    if ( c->m_FrameRate % c->m_GOPSize == 0 )
     {
-      m_IntraPeriod = m_FrameRate * m_IntraPeriodSec;
+      c->m_IntraPeriod = c->m_FrameRate * c->m_IntraPeriodSec;
     }
     else
     {
-      int iIDRPeriod  = (m_FrameRate * m_IntraPeriodSec);
-      if( iIDRPeriod < m_GOPSize )
+      int iIDRPeriod  = (c->m_FrameRate * c->m_IntraPeriodSec);
+      if( iIDRPeriod < c->m_GOPSize )
       {
-        iIDRPeriod = m_GOPSize;
+        iIDRPeriod = c->m_GOPSize;
       }
 
-      int iDiff = iIDRPeriod % m_GOPSize;
-      if( iDiff < m_GOPSize >> 1 )
+      int iDiff = iIDRPeriod % c->m_GOPSize;
+      if( iDiff < c->m_GOPSize >> 1 )
       {
-        m_IntraPeriod = iIDRPeriod - iDiff;
+        c->m_IntraPeriod = iIDRPeriod - iDiff;
       }
       else
       {
-        m_IntraPeriod = iIDRPeriod + m_GOPSize - iDiff;
+        c->m_IntraPeriod = iIDRPeriod + c->m_GOPSize - iDiff;
       }
     }
   }
@@ -612,439 +975,439 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   // do some check and set of parameters next
   //
 
-  if (m_lumaReshapeEnable)
+  if ( c->m_lumaReshapeEnable)
   {
-    if (m_updateCtrl > 0 && m_adpOption > 2) { m_adpOption -= 2; }
+    if ( c->m_updateCtrl > 0 && c->m_adpOption > 2) { c->m_adpOption -= 2; }
   }
 
-  if ( m_JointCbCrMode && (m_internChromaFormat == VVENC_CHROMA_400) )
+  if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400) )
   {
-    m_JointCbCrMode = false;
+    c->m_JointCbCrMode = false;
   }
 
-  if ( m_MCTF && m_QP < 17 )
+  if ( c->m_MCTF && c->m_QP < 17 )
   {
-    msg( VVENC_WARNING, "disable MCTF for QP < 17\n");
-    m_MCTF = 0;
+    vvenc::msg( VVENC_WARNING, "disable MCTF for QP < 17\n");
+    c->m_MCTF = 0;
   }
-  if( m_MCTF )
+  if( c->m_MCTF )
   {
-    if( m_MCTFFrames[0] == 0 && m_MCTFFrames[1] == 0 )
+    if( c->m_MCTFFrames[0] == 0 && c->m_MCTFFrames[1] == 0 )
     {
-      if( m_GOPSize == 32 )
+      if( c->m_GOPSize == 32 )
       {
-        m_MCTFFrames[0] = 8;
-        m_MCTFFrames[1] = 16;
-        m_MCTFFrames[2] = 32;
+        c->m_MCTFFrames[0] = 8;
+        c->m_MCTFFrames[1] = 16;
+        c->m_MCTFFrames[2] = 32;
 
-        m_MCTFStrengths[0] = 0.28125;     //  9/32
-        m_MCTFStrengths[1] = 0.5625;      // 18/32
-        m_MCTFStrengths[2] = 0.84375;     // 27/32
+        c->m_MCTFStrengths[0] = 0.28125;     //  9/32
+        c->m_MCTFStrengths[1] = 0.5625;      // 18/32
+        c->m_MCTFStrengths[2] = 0.84375;     // 27/32
       }
-      else if( m_GOPSize == 16 )
+      else if( c->m_GOPSize == 16 )
       {
-        m_MCTFFrames[0] = 8;
-        m_MCTFFrames[1] = 16;
+        c->m_MCTFFrames[0] = 8;
+        c->m_MCTFFrames[1] = 16;
 
-        m_MCTFStrengths[0] = 0.4;     // ~12.75/32
-        m_MCTFStrengths[1] = 0.8;     // ~25.50/32
+        c->m_MCTFStrengths[0] = 0.4;     // ~12.75/32
+        c->m_MCTFStrengths[1] = 0.8;     // ~25.50/32
       }
-      else if( m_GOPSize == 8 )
+      else if( c->m_GOPSize == 8 )
       {
-        m_MCTFFrames[0] = 8;
-        m_MCTFStrengths[0] = 0.65625;     // 21/32
+        c->m_MCTFFrames[0] = 8;
+        c->m_MCTFStrengths[0] = 0.65625;     // 21/32
       }
     }
   }
 
-  if ( m_usePerceptQPATempFiltISlice < 0 )
+  if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
-    m_usePerceptQPATempFiltISlice = 0;
-    if ( m_usePerceptQPA ) // auto mode for temp.filt.
+    c->m_usePerceptQPATempFiltISlice = 0;
+    if ( c->m_usePerceptQPA ) // auto mode for temp.filt.
     {
-      m_usePerceptQPATempFiltISlice = ( m_RCTargetBitrate > 0 && m_RCNumPasses == 2 ? 2 : 1 );
+      c->m_usePerceptQPATempFiltISlice = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 2 ? 2 : 1 );
     }
   }
-  if ( m_usePerceptQPATempFiltISlice == 2
-      && (m_QP <= 27 || m_QP > MAX_QP_PERCEPT_QPA || m_GOPSize <= 8 || m_IntraPeriod < 2 * m_GOPSize) )
+  if ( c->m_usePerceptQPATempFiltISlice == 2
+      && ( c->m_QP <= 27 || c->m_QP > vvenc::MAX_QP_PERCEPT_QPA || c->m_GOPSize <= 8 || c->m_IntraPeriod < 2 * c->m_GOPSize) )
   {
-    m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
+    c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
-  if ( m_usePerceptQPATempFiltISlice > 0
-      && (m_MCTF == 0 || !m_usePerceptQPA) )
+  if ( c->m_usePerceptQPATempFiltISlice > 0
+      && ( c->m_MCTF == 0 || ! c->m_usePerceptQPA) )
   {
-    m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
+    c->m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
   }
 
-  if (m_cuQpDeltaSubdiv < 0)
+  if ( c->m_cuQpDeltaSubdiv < 0)
   {
-    m_cuQpDeltaSubdiv = 0;
-    if ( m_usePerceptQPA
-        && m_QP <= MAX_QP_PERCEPT_QPA
-        && m_CTUSize == 128
-        && m_PadSourceWidth <= 2048
-        && m_PadSourceHeight <= 1280 )
+    c->m_cuQpDeltaSubdiv = 0;
+    if ( c->m_usePerceptQPA
+        && c->m_QP <= vvenc::MAX_QP_PERCEPT_QPA
+        && c->m_CTUSize == 128
+        && c->m_PadSourceWidth <= 2048
+        && c->m_PadSourceHeight <= 1280 )
     {
-      m_cuQpDeltaSubdiv = 2;
+      c->m_cuQpDeltaSubdiv = 2;
     }
   }
-  if (m_sliceChromaQpOffsetPeriodicity < 0)
+  if ( c->m_sliceChromaQpOffsetPeriodicity < 0)
   {
-    m_sliceChromaQpOffsetPeriodicity = 0;
-    if ( m_usePerceptQPA && m_internChromaFormat != CHROMA_400 )
+    c->m_sliceChromaQpOffsetPeriodicity = 0;
+    if ( c->m_usePerceptQPA && c->m_internChromaFormat != VVENC_CHROMA_400 )
     {
-      m_sliceChromaQpOffsetPeriodicity = 1;
+      c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
 
   /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
    * This permits the ability to omit a GOP structure specification */
-  if ( m_IntraPeriod == 1 && m_GOPList[0].m_POC == -1 )
+  if ( c->m_IntraPeriod == 1 && c->m_GOPList[0].m_POC == -1 )
   {
-    m_GOPList[0] = vvencGOPEntry();
-    m_GOPList[0].m_QPFactor = 1;
-    m_GOPList[0].m_betaOffsetDiv2 = 0;
-    m_GOPList[0].m_tcOffsetDiv2 = 0;
-    m_GOPList[0].m_POC = 1;
-    m_RPLList0[0] = vvencRPLEntry();
-    m_RPLList1[0] = vvencRPLEntry();
-    m_RPLList0[0].m_POC = m_RPLList1[0].m_POC = 1;
-    m_RPLList0[0].m_numRefPicsActive = 4;
-    m_GOPList[0].m_numRefPicsActive[0] = 4;
+    c->m_GOPList[0] = vvencGOPEntry();
+    c->m_GOPList[0].m_QPFactor = 1;
+    c->m_GOPList[0].m_betaOffsetDiv2 = 0;
+    c->m_GOPList[0].m_tcOffsetDiv2 = 0;
+    c->m_GOPList[0].m_POC = 1;
+    c->m_RPLList0[0] = vvencRPLEntry();
+    c->m_RPLList1[0] = vvencRPLEntry();
+    c->m_RPLList0[0].m_POC = c->m_RPLList1[0].m_POC = 1;
+    c->m_RPLList0[0].m_numRefPicsActive = 4;
+    c->m_GOPList[0].m_numRefPicsActive[0] = 4;
   }
   else
   {
     // set default RA config
-    if( m_GOPSize == 16 && m_GOPList[0].m_POC == -1 && m_GOPList[1].m_POC == -1 )
+    if( c->m_GOPSize == 16 && c->m_GOPList[0].m_POC == -1 && c->m_GOPList[1].m_POC == -1 )
     {
       for( int i = 0; i < 16; i++ )
       {
-        m_GOPList[i] = vvencGOPEntry();
-        m_GOPList[i].m_sliceType = 'B';
-        m_GOPList[i].m_QPFactor = 1;
+        c->m_GOPList[i] = vvencGOPEntry();
+        c->m_GOPList[i].m_sliceType = 'B';
+        c->m_GOPList[i].m_QPFactor = 1;
 
-        m_GOPList[i].m_numRefPicsActive[0] = 2;
-        m_GOPList[i].m_numRefPicsActive[1] = 2;
-        m_GOPList[i].m_numRefPics[0] = 2;
-        m_GOPList[i].m_numRefPics[1] = 2;
+        c->m_GOPList[i].m_numRefPicsActive[0] = 2;
+        c->m_GOPList[i].m_numRefPicsActive[1] = 2;
+        c->m_GOPList[i].m_numRefPics[0] = 2;
+        c->m_GOPList[i].m_numRefPics[1] = 2;
       }
-      m_GOPList[0].m_POC  = 16;  m_GOPList[0].m_temporalId  = 0;
-      m_GOPList[1].m_POC  =  8;  m_GOPList[1].m_temporalId  = 1;
-      m_GOPList[2].m_POC  =  4;  m_GOPList[2].m_temporalId  = 2;
-      m_GOPList[3].m_POC  =  2;  m_GOPList[3].m_temporalId  = 3;
-      m_GOPList[4].m_POC  =  1;  m_GOPList[4].m_temporalId  = 4;
-      m_GOPList[5].m_POC  =  3;  m_GOPList[5].m_temporalId  = 4;
-      m_GOPList[6].m_POC  =  6;  m_GOPList[6].m_temporalId  = 3;
-      m_GOPList[7].m_POC  =  5;  m_GOPList[7].m_temporalId  = 4;
-      m_GOPList[8].m_POC  =  7;  m_GOPList[8].m_temporalId  = 4;
-      m_GOPList[9].m_POC  = 12;  m_GOPList[9].m_temporalId  = 2;
-      m_GOPList[10].m_POC = 10;  m_GOPList[10].m_temporalId = 3;
-      m_GOPList[11].m_POC =  9;  m_GOPList[11].m_temporalId = 4;
-      m_GOPList[12].m_POC = 11;  m_GOPList[12].m_temporalId = 4;
-      m_GOPList[13].m_POC = 14;  m_GOPList[13].m_temporalId = 3;
-      m_GOPList[14].m_POC = 13;  m_GOPList[14].m_temporalId = 4;
-      m_GOPList[15].m_POC = 15;  m_GOPList[15].m_temporalId = 4;
+      c->m_GOPList[0].m_POC  = 16;  c->m_GOPList[0].m_temporalId  = 0;
+      c->m_GOPList[1].m_POC  =  8;  c->m_GOPList[1].m_temporalId  = 1;
+      c->m_GOPList[2].m_POC  =  4;  c->m_GOPList[2].m_temporalId  = 2;
+      c->m_GOPList[3].m_POC  =  2;  c->m_GOPList[3].m_temporalId  = 3;
+      c->m_GOPList[4].m_POC  =  1;  c->m_GOPList[4].m_temporalId  = 4;
+      c->m_GOPList[5].m_POC  =  3;  c->m_GOPList[5].m_temporalId  = 4;
+      c->m_GOPList[6].m_POC  =  6;  c->m_GOPList[6].m_temporalId  = 3;
+      c->m_GOPList[7].m_POC  =  5;  c->m_GOPList[7].m_temporalId  = 4;
+      c->m_GOPList[8].m_POC  =  7;  c->m_GOPList[8].m_temporalId  = 4;
+      c->m_GOPList[9].m_POC  = 12;  c->m_GOPList[9].m_temporalId  = 2;
+      c->m_GOPList[10].m_POC = 10;  c->m_GOPList[10].m_temporalId = 3;
+      c->m_GOPList[11].m_POC =  9;  c->m_GOPList[11].m_temporalId = 4;
+      c->m_GOPList[12].m_POC = 11;  c->m_GOPList[12].m_temporalId = 4;
+      c->m_GOPList[13].m_POC = 14;  c->m_GOPList[13].m_temporalId = 3;
+      c->m_GOPList[14].m_POC = 13;  c->m_GOPList[14].m_temporalId = 4;
+      c->m_GOPList[15].m_POC = 15;  c->m_GOPList[15].m_temporalId = 4;
 
-      m_GOPList[0].m_numRefPics[0]  = 3;
-      m_GOPList[8].m_numRefPics[0]  = 3;
-      m_GOPList[12].m_numRefPics[0] = 3;
-      m_GOPList[13].m_numRefPics[0] = 3;
-      m_GOPList[14].m_numRefPics[0] = 3;
-      m_GOPList[15].m_numRefPics[0] = 4;
+      c->m_GOPList[0].m_numRefPics[0]  = 3;
+      c->m_GOPList[8].m_numRefPics[0]  = 3;
+      c->m_GOPList[12].m_numRefPics[0] = 3;
+      c->m_GOPList[13].m_numRefPics[0] = 3;
+      c->m_GOPList[14].m_numRefPics[0] = 3;
+      c->m_GOPList[15].m_numRefPics[0] = 4;
 
-      m_GOPList[0].m_deltaRefPics[0][0]  = 16; m_GOPList[0].m_deltaRefPics[0][1]  = 32; m_GOPList[0].m_deltaRefPics[0][2]  = 24;
-      m_GOPList[1].m_deltaRefPics[0][0]  =  8; m_GOPList[1].m_deltaRefPics[0][1]  = 16;
-      m_GOPList[2].m_deltaRefPics[0][0]  =  4; m_GOPList[2].m_deltaRefPics[0][1]  = 12;
-      m_GOPList[3].m_deltaRefPics[0][0]  =  2; m_GOPList[3].m_deltaRefPics[0][1]  = 10;
-      m_GOPList[4].m_deltaRefPics[0][0]  =  1; m_GOPList[4].m_deltaRefPics[0][1]  = -1;
-      m_GOPList[5].m_deltaRefPics[0][0]  =  1; m_GOPList[5].m_deltaRefPics[0][1]  = 3;
-      m_GOPList[6].m_deltaRefPics[0][0]  =  2; m_GOPList[6].m_deltaRefPics[0][1]  = 6;
-      m_GOPList[7].m_deltaRefPics[0][0]  =  1; m_GOPList[7].m_deltaRefPics[0][1]  = 5;
-      m_GOPList[8].m_deltaRefPics[0][0]  =  1; m_GOPList[8].m_deltaRefPics[0][1]  = 3; m_GOPList[8].m_deltaRefPics[0][2]  = 7;
-      m_GOPList[9].m_deltaRefPics[0][0]  =  4; m_GOPList[9].m_deltaRefPics[0][1]  = 12;
-      m_GOPList[10].m_deltaRefPics[0][0] =  2; m_GOPList[10].m_deltaRefPics[0][1] = 10;
-      m_GOPList[11].m_deltaRefPics[0][0] =  1; m_GOPList[11].m_deltaRefPics[0][1] = 9;
-      m_GOPList[12].m_deltaRefPics[0][0] =  1; m_GOPList[12].m_deltaRefPics[0][1] = 3; m_GOPList[12].m_deltaRefPics[0][2]  = 11;
-      m_GOPList[13].m_deltaRefPics[0][0] =  2; m_GOPList[13].m_deltaRefPics[0][1] = 6; m_GOPList[13].m_deltaRefPics[0][2]  = 14;
-      m_GOPList[14].m_deltaRefPics[0][0] =  1; m_GOPList[14].m_deltaRefPics[0][1] = 5; m_GOPList[14].m_deltaRefPics[0][2]  = 13;
-      m_GOPList[15].m_deltaRefPics[0][0] =  1; m_GOPList[15].m_deltaRefPics[0][1] = 3; m_GOPList[15].m_deltaRefPics[0][2]  = 7; m_GOPList[15].m_deltaRefPics[0][3]  = 15;
+      c->m_GOPList[0].m_deltaRefPics[0][0]  = 16; c->m_GOPList[0].m_deltaRefPics[0][1]  = 32; c->m_GOPList[0].m_deltaRefPics[0][2]  = 24;
+      c->m_GOPList[1].m_deltaRefPics[0][0]  =  8; c->m_GOPList[1].m_deltaRefPics[0][1]  = 16;
+      c->m_GOPList[2].m_deltaRefPics[0][0]  =  4; c->m_GOPList[2].m_deltaRefPics[0][1]  = 12;
+      c->m_GOPList[3].m_deltaRefPics[0][0]  =  2; c->m_GOPList[3].m_deltaRefPics[0][1]  = 10;
+      c->m_GOPList[4].m_deltaRefPics[0][0]  =  1; c->m_GOPList[4].m_deltaRefPics[0][1]  = -1;
+      c->m_GOPList[5].m_deltaRefPics[0][0]  =  1; c->m_GOPList[5].m_deltaRefPics[0][1]  = 3;
+      c->m_GOPList[6].m_deltaRefPics[0][0]  =  2; c->m_GOPList[6].m_deltaRefPics[0][1]  = 6;
+      c->m_GOPList[7].m_deltaRefPics[0][0]  =  1; c->m_GOPList[7].m_deltaRefPics[0][1]  = 5;
+      c->m_GOPList[8].m_deltaRefPics[0][0]  =  1; c->m_GOPList[8].m_deltaRefPics[0][1]  = 3; c->m_GOPList[8].m_deltaRefPics[0][2]  = 7;
+      c->m_GOPList[9].m_deltaRefPics[0][0]  =  4; c->m_GOPList[9].m_deltaRefPics[0][1]  = 12;
+      c->m_GOPList[10].m_deltaRefPics[0][0] =  2; c->m_GOPList[10].m_deltaRefPics[0][1] = 10;
+      c->m_GOPList[11].m_deltaRefPics[0][0] =  1; c->m_GOPList[11].m_deltaRefPics[0][1] = 9;
+      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] = 3; c->m_GOPList[12].m_deltaRefPics[0][2]  = 11;
+      c->m_GOPList[13].m_deltaRefPics[0][0] =  2; c->m_GOPList[13].m_deltaRefPics[0][1] = 6; c->m_GOPList[13].m_deltaRefPics[0][2]  = 14;
+      c->m_GOPList[14].m_deltaRefPics[0][0] =  1; c->m_GOPList[14].m_deltaRefPics[0][1] = 5; c->m_GOPList[14].m_deltaRefPics[0][2]  = 13;
+      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] = 3; c->m_GOPList[15].m_deltaRefPics[0][2]  = 7; c->m_GOPList[15].m_deltaRefPics[0][3]  = 15;
 
-      m_GOPList[3].m_numRefPics[1]  = 3;
-      m_GOPList[4].m_numRefPics[1]  = 4;
-      m_GOPList[5].m_numRefPics[1]  = 3;
-      m_GOPList[7].m_numRefPics[1]  = 3;
-      m_GOPList[11].m_numRefPics[1] = 3;
+      c->m_GOPList[3].m_numRefPics[1]  = 3;
+      c->m_GOPList[4].m_numRefPics[1]  = 4;
+      c->m_GOPList[5].m_numRefPics[1]  = 3;
+      c->m_GOPList[7].m_numRefPics[1]  = 3;
+      c->m_GOPList[11].m_numRefPics[1] = 3;
 
-      m_GOPList[0].m_deltaRefPics[1][0]  = 16; m_GOPList[0].m_deltaRefPics[1][1]  =  32;
-      m_GOPList[1].m_deltaRefPics[1][0]  = -8; m_GOPList[1].m_deltaRefPics[1][1]  =   8;
-      m_GOPList[2].m_deltaRefPics[1][0]  = -4; m_GOPList[2].m_deltaRefPics[1][1]  = -12;
-      m_GOPList[3].m_deltaRefPics[1][0]  = -2; m_GOPList[3].m_deltaRefPics[1][1]  =  -6; m_GOPList[3].m_deltaRefPics[1][2]  = -14;
-      m_GOPList[4].m_deltaRefPics[1][0]  = -1; m_GOPList[4].m_deltaRefPics[1][1]  =  -3; m_GOPList[4].m_deltaRefPics[1][2]  =  -7;  m_GOPList[4].m_deltaRefPics[1][3]  = -15;
-      m_GOPList[5].m_deltaRefPics[1][0]  = -1; m_GOPList[5].m_deltaRefPics[1][1]  =  -5; m_GOPList[5].m_deltaRefPics[1][2]  = -13;
-      m_GOPList[6].m_deltaRefPics[1][0]  = -2; m_GOPList[6].m_deltaRefPics[1][1]  =  -10;
-      m_GOPList[7].m_deltaRefPics[1][0]  = -1; m_GOPList[7].m_deltaRefPics[1][1]  =  -3; m_GOPList[7].m_deltaRefPics[1][2]  = -11;
-      m_GOPList[8].m_deltaRefPics[1][0]  = -1; m_GOPList[8].m_deltaRefPics[1][1]  =  -9;
-      m_GOPList[9].m_deltaRefPics[1][0]  = -4; m_GOPList[9].m_deltaRefPics[1][1]  =   4;
-      m_GOPList[10].m_deltaRefPics[1][0] = -2; m_GOPList[10].m_deltaRefPics[1][1] =  -6;
-      m_GOPList[11].m_deltaRefPics[1][0] = -1; m_GOPList[11].m_deltaRefPics[1][1] =  -3; m_GOPList[11].m_deltaRefPics[1][2]  = -7;
-      m_GOPList[12].m_deltaRefPics[1][0] = -1; m_GOPList[12].m_deltaRefPics[1][1] =  -5;
-      m_GOPList[13].m_deltaRefPics[1][0] = -2; m_GOPList[13].m_deltaRefPics[1][1] =   2;
-      m_GOPList[14].m_deltaRefPics[1][0] = -1; m_GOPList[14].m_deltaRefPics[1][1] =  -3;
-      m_GOPList[15].m_deltaRefPics[1][0] = -1; m_GOPList[15].m_deltaRefPics[1][1] =   1;
+      c->m_GOPList[0].m_deltaRefPics[1][0]  = 16; c->m_GOPList[0].m_deltaRefPics[1][1]  =  32;
+      c->m_GOPList[1].m_deltaRefPics[1][0]  = -8; c->m_GOPList[1].m_deltaRefPics[1][1]  =   8;
+      c->m_GOPList[2].m_deltaRefPics[1][0]  = -4; c->m_GOPList[2].m_deltaRefPics[1][1]  = -12;
+      c->m_GOPList[3].m_deltaRefPics[1][0]  = -2; c->m_GOPList[3].m_deltaRefPics[1][1]  =  -6; c->m_GOPList[3].m_deltaRefPics[1][2]  = -14;
+      c->m_GOPList[4].m_deltaRefPics[1][0]  = -1; c->m_GOPList[4].m_deltaRefPics[1][1]  =  -3; c->m_GOPList[4].m_deltaRefPics[1][2]  =  -7;  c->m_GOPList[4].m_deltaRefPics[1][3]  = -15;
+      c->m_GOPList[5].m_deltaRefPics[1][0]  = -1; c->m_GOPList[5].m_deltaRefPics[1][1]  =  -5; c->m_GOPList[5].m_deltaRefPics[1][2]  = -13;
+      c->m_GOPList[6].m_deltaRefPics[1][0]  = -2; c->m_GOPList[6].m_deltaRefPics[1][1]  =  -10;
+      c->m_GOPList[7].m_deltaRefPics[1][0]  = -1; c->m_GOPList[7].m_deltaRefPics[1][1]  =  -3; c->m_GOPList[7].m_deltaRefPics[1][2]  = -11;
+      c->m_GOPList[8].m_deltaRefPics[1][0]  = -1; c->m_GOPList[8].m_deltaRefPics[1][1]  =  -9;
+      c->m_GOPList[9].m_deltaRefPics[1][0]  = -4; c->m_GOPList[9].m_deltaRefPics[1][1]  =   4;
+      c->m_GOPList[10].m_deltaRefPics[1][0] = -2; c->m_GOPList[10].m_deltaRefPics[1][1] =  -6;
+      c->m_GOPList[11].m_deltaRefPics[1][0] = -1; c->m_GOPList[11].m_deltaRefPics[1][1] =  -3; c->m_GOPList[11].m_deltaRefPics[1][2]  = -7;
+      c->m_GOPList[12].m_deltaRefPics[1][0] = -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -5;
+      c->m_GOPList[13].m_deltaRefPics[1][0] = -2; c->m_GOPList[13].m_deltaRefPics[1][1] =   2;
+      c->m_GOPList[14].m_deltaRefPics[1][0] = -1; c->m_GOPList[14].m_deltaRefPics[1][1] =  -3;
+      c->m_GOPList[15].m_deltaRefPics[1][0] = -1; c->m_GOPList[15].m_deltaRefPics[1][1] =   1;
 
       for( int i = 0; i < 16; i++ )
       {
-        switch( m_GOPList[i].m_temporalId )
+        switch( c->m_GOPList[i].m_temporalId )
         {
-        case 0: m_GOPList[i].m_QPOffset   = 1;
-                m_GOPList[i].m_QPOffsetModelOffset = 0.0;
-                m_GOPList[i].m_QPOffsetModelScale  = 0.0;
+        case 0: c->m_GOPList[i].m_QPOffset   = 1;
+                c->m_GOPList[i].m_QPOffsetModelOffset = 0.0;
+                c->m_GOPList[i].m_QPOffsetModelScale  = 0.0;
         break;
-        case 1: m_GOPList[i].m_QPOffset   = 1;
-                m_GOPList[i].m_QPOffsetModelOffset = -4.8848;
-                m_GOPList[i].m_QPOffsetModelScale  = 0.2061;
+        case 1: c->m_GOPList[i].m_QPOffset   = 1;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -4.8848;
+                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2061;
         break;
-        case 2: m_GOPList[i].m_QPOffset   = 4;
-                m_GOPList[i].m_QPOffsetModelOffset = -5.7476;
-                m_GOPList[i].m_QPOffsetModelScale  = 0.2286;
+        case 2: c->m_GOPList[i].m_QPOffset   = 4;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -5.7476;
+                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2286;
         break;
-        case 3: m_GOPList[i].m_QPOffset   = 5;
-                m_GOPList[i].m_QPOffsetModelOffset = -5.90;
-                m_GOPList[i].m_QPOffsetModelScale  = 0.2333;
+        case 3: c->m_GOPList[i].m_QPOffset   = 5;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -5.90;
+                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2333;
         break;
-        case 4: m_GOPList[i].m_QPOffset   = 6;
-                m_GOPList[i].m_QPOffsetModelOffset = -7.1444;
-                m_GOPList[i].m_QPOffsetModelScale  = 0.3;
+        case 4: c->m_GOPList[i].m_QPOffset   = 6;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -7.1444;
+                c->m_GOPList[i].m_QPOffsetModelScale  = 0.3;
         break;
         default: break;
         }
       }
     }
-    else if( m_GOPSize == 32 &&
-            ( (m_GOPList[0].m_POC == -1 && m_GOPList[1].m_POC == -1) ||
-              (m_GOPList[16].m_POC == -1 && m_GOPList[17].m_POC == -1)
+    else if( c->m_GOPSize == 32 &&
+            ( (c->m_GOPList[0].m_POC == -1 && c->m_GOPList[1].m_POC == -1) ||
+              (c->m_GOPList[16].m_POC == -1 && c->m_GOPList[17].m_POC == -1)
               ) )
     {
       for( int i = 0; i < 32; i++ )
       {
-        vvenc_GOPEntry_default(&m_GOPList[i]);
-        m_GOPList[i].m_sliceType = 'B';
-        m_GOPList[i].m_QPFactor = 1;
+        vvenc_GOPEntry_default(&c->m_GOPList[i]);
+        c->m_GOPList[i].m_sliceType = 'B';
+        c->m_GOPList[i].m_QPFactor = 1;
 
-        m_GOPList[i].m_numRefPicsActive[0] = 2;
-        m_GOPList[i].m_numRefPicsActive[1] = 2;
-        m_GOPList[i].m_numRefPics[0] = 2;
-        m_GOPList[i].m_numRefPics[1] = 2;
+        c->m_GOPList[i].m_numRefPicsActive[0] = 2;
+        c->m_GOPList[i].m_numRefPicsActive[1] = 2;
+        c->m_GOPList[i].m_numRefPics[0] = 2;
+        c->m_GOPList[i].m_numRefPics[1] = 2;
       }
-      m_GOPList[ 0].m_POC = 32;   m_GOPList[0].m_temporalId  = 0;
-      m_GOPList[ 1].m_POC = 16;   m_GOPList[1].m_temporalId  = 1;
-      m_GOPList[ 2].m_POC =  8;   m_GOPList[2].m_temporalId  = 2;
-      m_GOPList[ 3].m_POC =  4;   m_GOPList[3].m_temporalId  = 3;
-      m_GOPList[ 4].m_POC =  2;   m_GOPList[4].m_temporalId  = 4;
-      m_GOPList[ 5].m_POC =  1;   m_GOPList[5].m_temporalId  = 5;
-      m_GOPList[ 6].m_POC =  3;   m_GOPList[6].m_temporalId  = 5;
-      m_GOPList[ 7].m_POC =  6;   m_GOPList[7].m_temporalId  = 4;
-      m_GOPList[ 8].m_POC =  5;   m_GOPList[8].m_temporalId  = 5;
-      m_GOPList[ 9].m_POC =  7;   m_GOPList[9].m_temporalId  = 5;
-      m_GOPList[10].m_POC = 12;   m_GOPList[10].m_temporalId = 3;
-      m_GOPList[11].m_POC = 10;   m_GOPList[11].m_temporalId = 4;
-      m_GOPList[12].m_POC =  9;   m_GOPList[12].m_temporalId = 5;
-      m_GOPList[13].m_POC = 11;   m_GOPList[13].m_temporalId = 5;
-      m_GOPList[14].m_POC = 14;   m_GOPList[14].m_temporalId = 4;
-      m_GOPList[15].m_POC = 13;   m_GOPList[15].m_temporalId = 5;
+      c->m_GOPList[ 0].m_POC = 32;   c->m_GOPList[0].m_temporalId  = 0;
+      c->m_GOPList[ 1].m_POC = 16;   c->m_GOPList[1].m_temporalId  = 1;
+      c->m_GOPList[ 2].m_POC =  8;   c->m_GOPList[2].m_temporalId  = 2;
+      c->m_GOPList[ 3].m_POC =  4;   c->m_GOPList[3].m_temporalId  = 3;
+      c->m_GOPList[ 4].m_POC =  2;   c->m_GOPList[4].m_temporalId  = 4;
+      c->m_GOPList[ 5].m_POC =  1;   c->m_GOPList[5].m_temporalId  = 5;
+      c->m_GOPList[ 6].m_POC =  3;   c->m_GOPList[6].m_temporalId  = 5;
+      c->m_GOPList[ 7].m_POC =  6;   c->m_GOPList[7].m_temporalId  = 4;
+      c->m_GOPList[ 8].m_POC =  5;   c->m_GOPList[8].m_temporalId  = 5;
+      c->m_GOPList[ 9].m_POC =  7;   c->m_GOPList[9].m_temporalId  = 5;
+      c->m_GOPList[10].m_POC = 12;   c->m_GOPList[10].m_temporalId = 3;
+      c->m_GOPList[11].m_POC = 10;   c->m_GOPList[11].m_temporalId = 4;
+      c->m_GOPList[12].m_POC =  9;   c->m_GOPList[12].m_temporalId = 5;
+      c->m_GOPList[13].m_POC = 11;   c->m_GOPList[13].m_temporalId = 5;
+      c->m_GOPList[14].m_POC = 14;   c->m_GOPList[14].m_temporalId = 4;
+      c->m_GOPList[15].m_POC = 13;   c->m_GOPList[15].m_temporalId = 5;
 
-      m_GOPList[16].m_POC = 15;   m_GOPList[16].m_temporalId = 5;
-      m_GOPList[17].m_POC = 24;   m_GOPList[17].m_temporalId = 2;
-      m_GOPList[18].m_POC = 20;   m_GOPList[18].m_temporalId = 3;
-      m_GOPList[19].m_POC = 18;   m_GOPList[19].m_temporalId = 4;
-      m_GOPList[20].m_POC = 17;   m_GOPList[20].m_temporalId = 5;
-      m_GOPList[21].m_POC = 19;   m_GOPList[21].m_temporalId = 5;
-      m_GOPList[22].m_POC = 22;   m_GOPList[22].m_temporalId = 4;
-      m_GOPList[23].m_POC = 21;   m_GOPList[23].m_temporalId = 5;
-      m_GOPList[24].m_POC = 23;   m_GOPList[24].m_temporalId = 5;
-      m_GOPList[25].m_POC = 28;   m_GOPList[25].m_temporalId = 3;
-      m_GOPList[26].m_POC = 26;   m_GOPList[26].m_temporalId = 4;
-      m_GOPList[27].m_POC = 25;   m_GOPList[27].m_temporalId = 5;
-      m_GOPList[28].m_POC = 27;   m_GOPList[28].m_temporalId = 5;
-      m_GOPList[29].m_POC = 30;   m_GOPList[29].m_temporalId = 4;
-      m_GOPList[30].m_POC = 29;   m_GOPList[30].m_temporalId = 5;
-      m_GOPList[31].m_POC = 31;   m_GOPList[31].m_temporalId = 5;
+      c->m_GOPList[16].m_POC = 15;   c->m_GOPList[16].m_temporalId = 5;
+      c->m_GOPList[17].m_POC = 24;   c->m_GOPList[17].m_temporalId = 2;
+      c->m_GOPList[18].m_POC = 20;   c->m_GOPList[18].m_temporalId = 3;
+      c->m_GOPList[19].m_POC = 18;   c->m_GOPList[19].m_temporalId = 4;
+      c->m_GOPList[20].m_POC = 17;   c->m_GOPList[20].m_temporalId = 5;
+      c->m_GOPList[21].m_POC = 19;   c->m_GOPList[21].m_temporalId = 5;
+      c->m_GOPList[22].m_POC = 22;   c->m_GOPList[22].m_temporalId = 4;
+      c->m_GOPList[23].m_POC = 21;   c->m_GOPList[23].m_temporalId = 5;
+      c->m_GOPList[24].m_POC = 23;   c->m_GOPList[24].m_temporalId = 5;
+      c->m_GOPList[25].m_POC = 28;   c->m_GOPList[25].m_temporalId = 3;
+      c->m_GOPList[26].m_POC = 26;   c->m_GOPList[26].m_temporalId = 4;
+      c->m_GOPList[27].m_POC = 25;   c->m_GOPList[27].m_temporalId = 5;
+      c->m_GOPList[28].m_POC = 27;   c->m_GOPList[28].m_temporalId = 5;
+      c->m_GOPList[29].m_POC = 30;   c->m_GOPList[29].m_temporalId = 4;
+      c->m_GOPList[30].m_POC = 29;   c->m_GOPList[30].m_temporalId = 5;
+      c->m_GOPList[31].m_POC = 31;   c->m_GOPList[31].m_temporalId = 5;
 
-      m_GOPList[ 0].m_numRefPics[0] = 3;
-      m_GOPList[ 1].m_numRefPics[0] = 2;
-      m_GOPList[ 2].m_numRefPics[0] = 2;
-      m_GOPList[ 3].m_numRefPics[0] = 2;
-      m_GOPList[ 4].m_numRefPics[0] = 2;
-      m_GOPList[ 5].m_numRefPics[0] = 2;
-      m_GOPList[ 6].m_numRefPics[0] = 2;
-      m_GOPList[ 7].m_numRefPics[0] = 2;
-      m_GOPList[ 8].m_numRefPics[0] = 2;
-      m_GOPList[ 9].m_numRefPics[0] = 3;
-      m_GOPList[10].m_numRefPics[0] = 2;
-      m_GOPList[11].m_numRefPics[0] = 2;
-      m_GOPList[12].m_numRefPics[0] = 2;
-      m_GOPList[13].m_numRefPics[0] = 3;
-      m_GOPList[14].m_numRefPics[0] = 3;
-      m_GOPList[15].m_numRefPics[0] = 3;
+      c->m_GOPList[ 0].m_numRefPics[0] = 3;
+      c->m_GOPList[ 1].m_numRefPics[0] = 2;
+      c->m_GOPList[ 2].m_numRefPics[0] = 2;
+      c->m_GOPList[ 3].m_numRefPics[0] = 2;
+      c->m_GOPList[ 4].m_numRefPics[0] = 2;
+      c->m_GOPList[ 5].m_numRefPics[0] = 2;
+      c->m_GOPList[ 6].m_numRefPics[0] = 2;
+      c->m_GOPList[ 7].m_numRefPics[0] = 2;
+      c->m_GOPList[ 8].m_numRefPics[0] = 2;
+      c->m_GOPList[ 9].m_numRefPics[0] = 3;
+      c->m_GOPList[10].m_numRefPics[0] = 2;
+      c->m_GOPList[11].m_numRefPics[0] = 2;
+      c->m_GOPList[12].m_numRefPics[0] = 2;
+      c->m_GOPList[13].m_numRefPics[0] = 3;
+      c->m_GOPList[14].m_numRefPics[0] = 3;
+      c->m_GOPList[15].m_numRefPics[0] = 3;
 
-      m_GOPList[16].m_numRefPics[0] = 4;
-      m_GOPList[17].m_numRefPics[0] = 2;
-      m_GOPList[18].m_numRefPics[0] = 2;
-      m_GOPList[19].m_numRefPics[0] = 2;
-      m_GOPList[20].m_numRefPics[0] = 2;
-      m_GOPList[21].m_numRefPics[0] = 3;
-      m_GOPList[22].m_numRefPics[0] = 3;
-      m_GOPList[23].m_numRefPics[0] = 3;
-      m_GOPList[24].m_numRefPics[0] = 4;
-      m_GOPList[25].m_numRefPics[0] = 3;
-      m_GOPList[26].m_numRefPics[0] = 3;
-      m_GOPList[27].m_numRefPics[0] = 3;
-      m_GOPList[28].m_numRefPics[0] = 4;
-      m_GOPList[29].m_numRefPics[0] = 3;
-      m_GOPList[30].m_numRefPics[0] = 3;
-      m_GOPList[31].m_numRefPics[0] = 4;
+      c->m_GOPList[16].m_numRefPics[0] = 4;
+      c->m_GOPList[17].m_numRefPics[0] = 2;
+      c->m_GOPList[18].m_numRefPics[0] = 2;
+      c->m_GOPList[19].m_numRefPics[0] = 2;
+      c->m_GOPList[20].m_numRefPics[0] = 2;
+      c->m_GOPList[21].m_numRefPics[0] = 3;
+      c->m_GOPList[22].m_numRefPics[0] = 3;
+      c->m_GOPList[23].m_numRefPics[0] = 3;
+      c->m_GOPList[24].m_numRefPics[0] = 4;
+      c->m_GOPList[25].m_numRefPics[0] = 3;
+      c->m_GOPList[26].m_numRefPics[0] = 3;
+      c->m_GOPList[27].m_numRefPics[0] = 3;
+      c->m_GOPList[28].m_numRefPics[0] = 4;
+      c->m_GOPList[29].m_numRefPics[0] = 3;
+      c->m_GOPList[30].m_numRefPics[0] = 3;
+      c->m_GOPList[31].m_numRefPics[0] = 4;
 
-      m_GOPList[ 0].m_deltaRefPics[0][0] = 32; m_GOPList[ 0].m_deltaRefPics[0][1] = 64; m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
-      m_GOPList[ 1].m_deltaRefPics[0][0] = 16; m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
-      m_GOPList[ 2].m_deltaRefPics[0][0] =  8; m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
-      m_GOPList[ 3].m_deltaRefPics[0][0] =  4; m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
+      c->m_GOPList[ 0].m_deltaRefPics[0][0] = 32; c->m_GOPList[ 0].m_deltaRefPics[0][1] = 64; c->m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
+      c->m_GOPList[ 1].m_deltaRefPics[0][0] = 16; c->m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
+      c->m_GOPList[ 2].m_deltaRefPics[0][0] =  8; c->m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
+      c->m_GOPList[ 3].m_deltaRefPics[0][0] =  4; c->m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
 
-      m_GOPList[ 4].m_deltaRefPics[0][0] =  2; m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
-      m_GOPList[ 5].m_deltaRefPics[0][0] =  1; m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
-      m_GOPList[ 6].m_deltaRefPics[0][0] =  1; m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
-      m_GOPList[ 7].m_deltaRefPics[0][0] =  2; m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
+      c->m_GOPList[ 4].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
+      c->m_GOPList[ 5].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
+      c->m_GOPList[ 6].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
+      c->m_GOPList[ 7].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
 
-      m_GOPList[ 8].m_deltaRefPics[0][0] =  1; m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
-      m_GOPList[ 9].m_deltaRefPics[0][0] =  1; m_GOPList[ 9].m_deltaRefPics[0][1] =  3; m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
-      m_GOPList[10].m_deltaRefPics[0][0] =  4; m_GOPList[10].m_deltaRefPics[0][1] = 12;
-      m_GOPList[11].m_deltaRefPics[0][0] =  2; m_GOPList[11].m_deltaRefPics[0][1] = 10;
+      c->m_GOPList[ 8].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
+      c->m_GOPList[ 9].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 9].m_deltaRefPics[0][1] =  3; c->m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
+      c->m_GOPList[10].m_deltaRefPics[0][0] =  4; c->m_GOPList[10].m_deltaRefPics[0][1] = 12;
+      c->m_GOPList[11].m_deltaRefPics[0][0] =  2; c->m_GOPList[11].m_deltaRefPics[0][1] = 10;
 
-      m_GOPList[12].m_deltaRefPics[0][0] =  1; m_GOPList[12].m_deltaRefPics[0][1] =  9;
-      m_GOPList[13].m_deltaRefPics[0][0] =  1; m_GOPList[13].m_deltaRefPics[0][1] =  3; m_GOPList[13].m_deltaRefPics[0][2] = 11;
-      m_GOPList[14].m_deltaRefPics[0][0] =  2; m_GOPList[14].m_deltaRefPics[0][1] =  6; m_GOPList[14].m_deltaRefPics[0][2] = 14;
-      m_GOPList[15].m_deltaRefPics[0][0] =  1; m_GOPList[15].m_deltaRefPics[0][1] =  5; m_GOPList[15].m_deltaRefPics[0][2] = 13;
+      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] =  9;
+      c->m_GOPList[13].m_deltaRefPics[0][0] =  1; c->m_GOPList[13].m_deltaRefPics[0][1] =  3; c->m_GOPList[13].m_deltaRefPics[0][2] = 11;
+      c->m_GOPList[14].m_deltaRefPics[0][0] =  2; c->m_GOPList[14].m_deltaRefPics[0][1] =  6; c->m_GOPList[14].m_deltaRefPics[0][2] = 14;
+      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] =  5; c->m_GOPList[15].m_deltaRefPics[0][2] = 13;
 
-      m_GOPList[16].m_deltaRefPics[0][0] =  1; m_GOPList[16].m_deltaRefPics[0][1] =  3; m_GOPList[16].m_deltaRefPics[0][2] =  7; m_GOPList[16].m_deltaRefPics[0][3] = 15;
-      m_GOPList[17].m_deltaRefPics[0][0] =  8; m_GOPList[17].m_deltaRefPics[0][1] = 24;
-      m_GOPList[18].m_deltaRefPics[0][0] =  4; m_GOPList[18].m_deltaRefPics[0][1] = 20;
-      m_GOPList[19].m_deltaRefPics[0][0] =  2; m_GOPList[19].m_deltaRefPics[0][1] = 18;
+      c->m_GOPList[16].m_deltaRefPics[0][0] =  1; c->m_GOPList[16].m_deltaRefPics[0][1] =  3; c->m_GOPList[16].m_deltaRefPics[0][2] =  7; c->m_GOPList[16].m_deltaRefPics[0][3] = 15;
+      c->m_GOPList[17].m_deltaRefPics[0][0] =  8; c->m_GOPList[17].m_deltaRefPics[0][1] = 24;
+      c->m_GOPList[18].m_deltaRefPics[0][0] =  4; c->m_GOPList[18].m_deltaRefPics[0][1] = 20;
+      c->m_GOPList[19].m_deltaRefPics[0][0] =  2; c->m_GOPList[19].m_deltaRefPics[0][1] = 18;
 
-      m_GOPList[20].m_deltaRefPics[0][0] =  1; m_GOPList[20].m_deltaRefPics[0][1] = 17;
-      m_GOPList[21].m_deltaRefPics[0][0] =  1; m_GOPList[21].m_deltaRefPics[0][1] =  3; m_GOPList[21].m_deltaRefPics[0][2] = 19;
-      m_GOPList[22].m_deltaRefPics[0][0] =  2; m_GOPList[22].m_deltaRefPics[0][1] =  6; m_GOPList[22].m_deltaRefPics[0][2] = 22;
-      m_GOPList[23].m_deltaRefPics[0][0] =  1; m_GOPList[23].m_deltaRefPics[0][1] =  5; m_GOPList[23].m_deltaRefPics[0][2] = 21;
+      c->m_GOPList[20].m_deltaRefPics[0][0] =  1; c->m_GOPList[20].m_deltaRefPics[0][1] = 17;
+      c->m_GOPList[21].m_deltaRefPics[0][0] =  1; c->m_GOPList[21].m_deltaRefPics[0][1] =  3; c->m_GOPList[21].m_deltaRefPics[0][2] = 19;
+      c->m_GOPList[22].m_deltaRefPics[0][0] =  2; c->m_GOPList[22].m_deltaRefPics[0][1] =  6; c->m_GOPList[22].m_deltaRefPics[0][2] = 22;
+      c->m_GOPList[23].m_deltaRefPics[0][0] =  1; c->m_GOPList[23].m_deltaRefPics[0][1] =  5; c->m_GOPList[23].m_deltaRefPics[0][2] = 21;
 
-      m_GOPList[24].m_deltaRefPics[0][0] =  1; m_GOPList[24].m_deltaRefPics[0][1] =  3; m_GOPList[24].m_deltaRefPics[0][2] =  7; m_GOPList[24].m_deltaRefPics[0][3] = 23;
-      m_GOPList[25].m_deltaRefPics[0][0] =  4; m_GOPList[25].m_deltaRefPics[0][1] = 12; m_GOPList[25].m_deltaRefPics[0][2] = 28;
-      m_GOPList[26].m_deltaRefPics[0][0] =  2; m_GOPList[26].m_deltaRefPics[0][1] = 10; m_GOPList[26].m_deltaRefPics[0][2] = 26;
-      m_GOPList[27].m_deltaRefPics[0][0] =  1; m_GOPList[27].m_deltaRefPics[0][1] =  9; m_GOPList[27].m_deltaRefPics[0][2] = 25;
+      c->m_GOPList[24].m_deltaRefPics[0][0] =  1; c->m_GOPList[24].m_deltaRefPics[0][1] =  3; c->m_GOPList[24].m_deltaRefPics[0][2] =  7; c->m_GOPList[24].m_deltaRefPics[0][3] = 23;
+      c->m_GOPList[25].m_deltaRefPics[0][0] =  4; c->m_GOPList[25].m_deltaRefPics[0][1] = 12; c->m_GOPList[25].m_deltaRefPics[0][2] = 28;
+      c->m_GOPList[26].m_deltaRefPics[0][0] =  2; c->m_GOPList[26].m_deltaRefPics[0][1] = 10; c->m_GOPList[26].m_deltaRefPics[0][2] = 26;
+      c->m_GOPList[27].m_deltaRefPics[0][0] =  1; c->m_GOPList[27].m_deltaRefPics[0][1] =  9; c->m_GOPList[27].m_deltaRefPics[0][2] = 25;
 
-      m_GOPList[28].m_deltaRefPics[0][0] =  1; m_GOPList[28].m_deltaRefPics[0][1] =  3; m_GOPList[28].m_deltaRefPics[0][2] = 11; m_GOPList[28].m_deltaRefPics[0][3] = 27;
-      m_GOPList[29].m_deltaRefPics[0][0] =  2; m_GOPList[29].m_deltaRefPics[0][1] = 14; m_GOPList[29].m_deltaRefPics[0][2] = 30;
-      m_GOPList[30].m_deltaRefPics[0][0] =  1; m_GOPList[30].m_deltaRefPics[0][1] = 13; m_GOPList[30].m_deltaRefPics[0][2] = 29;
-      m_GOPList[31].m_deltaRefPics[0][0] =  1; m_GOPList[31].m_deltaRefPics[0][1] =  3; m_GOPList[31].m_deltaRefPics[0][2] = 15; m_GOPList[31].m_deltaRefPics[0][3] = 31;
+      c->m_GOPList[28].m_deltaRefPics[0][0] =  1; c->m_GOPList[28].m_deltaRefPics[0][1] =  3; c->m_GOPList[28].m_deltaRefPics[0][2] = 11; c->m_GOPList[28].m_deltaRefPics[0][3] = 27;
+      c->m_GOPList[29].m_deltaRefPics[0][0] =  2; c->m_GOPList[29].m_deltaRefPics[0][1] = 14; c->m_GOPList[29].m_deltaRefPics[0][2] = 30;
+      c->m_GOPList[30].m_deltaRefPics[0][0] =  1; c->m_GOPList[30].m_deltaRefPics[0][1] = 13; c->m_GOPList[30].m_deltaRefPics[0][2] = 29;
+      c->m_GOPList[31].m_deltaRefPics[0][0] =  1; c->m_GOPList[31].m_deltaRefPics[0][1] =  3; c->m_GOPList[31].m_deltaRefPics[0][2] = 15; c->m_GOPList[31].m_deltaRefPics[0][3] = 31;
 
-      m_GOPList[ 0].m_numRefPics[1] = 2;
-      m_GOPList[ 1].m_numRefPics[1] = 2;
-      m_GOPList[ 2].m_numRefPics[1] = 2;
-      m_GOPList[ 3].m_numRefPics[1] = 3;
-      m_GOPList[ 4].m_numRefPics[1] = 4;
-      m_GOPList[ 5].m_numRefPics[1] = 5;
-      m_GOPList[ 6].m_numRefPics[1] = 4;
-      m_GOPList[ 7].m_numRefPics[1] = 3;
-      m_GOPList[ 8].m_numRefPics[1] = 4;
-      m_GOPList[ 9].m_numRefPics[1] = 3;
-      m_GOPList[10].m_numRefPics[1] = 2;
-      m_GOPList[11].m_numRefPics[1] = 3;
-      m_GOPList[12].m_numRefPics[1] = 4;
-      m_GOPList[13].m_numRefPics[1] = 3;
-      m_GOPList[14].m_numRefPics[1] = 2;
-      m_GOPList[15].m_numRefPics[1] = 3;
+      c->m_GOPList[ 0].m_numRefPics[1] = 2;
+      c->m_GOPList[ 1].m_numRefPics[1] = 2;
+      c->m_GOPList[ 2].m_numRefPics[1] = 2;
+      c->m_GOPList[ 3].m_numRefPics[1] = 3;
+      c->m_GOPList[ 4].m_numRefPics[1] = 4;
+      c->m_GOPList[ 5].m_numRefPics[1] = 5;
+      c->m_GOPList[ 6].m_numRefPics[1] = 4;
+      c->m_GOPList[ 7].m_numRefPics[1] = 3;
+      c->m_GOPList[ 8].m_numRefPics[1] = 4;
+      c->m_GOPList[ 9].m_numRefPics[1] = 3;
+      c->m_GOPList[10].m_numRefPics[1] = 2;
+      c->m_GOPList[11].m_numRefPics[1] = 3;
+      c->m_GOPList[12].m_numRefPics[1] = 4;
+      c->m_GOPList[13].m_numRefPics[1] = 3;
+      c->m_GOPList[14].m_numRefPics[1] = 2;
+      c->m_GOPList[15].m_numRefPics[1] = 3;
 
-      m_GOPList[16].m_numRefPics[1] = 2;
-      m_GOPList[17].m_numRefPics[1] = 2;
-      m_GOPList[18].m_numRefPics[1] = 2;
-      m_GOPList[19].m_numRefPics[1] = 3;
-      m_GOPList[20].m_numRefPics[1] = 4;
-      m_GOPList[21].m_numRefPics[1] = 3;
-      m_GOPList[22].m_numRefPics[1] = 2;
-      m_GOPList[23].m_numRefPics[1] = 3;
-      m_GOPList[24].m_numRefPics[1] = 2;
-      m_GOPList[25].m_numRefPics[1] = 2;
-      m_GOPList[26].m_numRefPics[1] = 2;
-      m_GOPList[27].m_numRefPics[1] = 3;
-      m_GOPList[28].m_numRefPics[1] = 2;
-      m_GOPList[29].m_numRefPics[1] = 2;
-      m_GOPList[30].m_numRefPics[1] = 2;
-      m_GOPList[31].m_numRefPics[1] = 2;
+      c->m_GOPList[16].m_numRefPics[1] = 2;
+      c->m_GOPList[17].m_numRefPics[1] = 2;
+      c->m_GOPList[18].m_numRefPics[1] = 2;
+      c->m_GOPList[19].m_numRefPics[1] = 3;
+      c->m_GOPList[20].m_numRefPics[1] = 4;
+      c->m_GOPList[21].m_numRefPics[1] = 3;
+      c->m_GOPList[22].m_numRefPics[1] = 2;
+      c->m_GOPList[23].m_numRefPics[1] = 3;
+      c->m_GOPList[24].m_numRefPics[1] = 2;
+      c->m_GOPList[25].m_numRefPics[1] = 2;
+      c->m_GOPList[26].m_numRefPics[1] = 2;
+      c->m_GOPList[27].m_numRefPics[1] = 3;
+      c->m_GOPList[28].m_numRefPics[1] = 2;
+      c->m_GOPList[29].m_numRefPics[1] = 2;
+      c->m_GOPList[30].m_numRefPics[1] = 2;
+      c->m_GOPList[31].m_numRefPics[1] = 2;
 
-      m_GOPList[ 0].m_deltaRefPics[1][0] =  32; m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
-      m_GOPList[ 1].m_deltaRefPics[1][0] = -16; m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
-      m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
-      m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; m_GOPList[ 3].m_deltaRefPics[1][1] = -12; m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
+      c->m_GOPList[ 0].m_deltaRefPics[1][0] =  32; c->m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
+      c->m_GOPList[ 1].m_deltaRefPics[1][0] = -16; c->m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
+      c->m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; c->m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
+      c->m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; c->m_GOPList[ 3].m_deltaRefPics[1][1] = -12; c->m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
 
-      m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; m_GOPList[ 4].m_deltaRefPics[1][2] = -14; m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
-      m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; m_GOPList[ 5].m_deltaRefPics[1][3] = -15; m_GOPList[5].m_deltaRefPics[1][4] = -31;
-      m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; m_GOPList[ 6].m_deltaRefPics[1][2] = -13; m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
-      m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; m_GOPList[ 7].m_deltaRefPics[1][1] = -10; m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
+      c->m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; c->m_GOPList[ 4].m_deltaRefPics[1][2] = -14; c->m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
+      c->m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; c->m_GOPList[ 5].m_deltaRefPics[1][3] = -15; c->m_GOPList[5].m_deltaRefPics[1][4] = -31;
+      c->m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; c->m_GOPList[ 6].m_deltaRefPics[1][2] = -13; c->m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
+      c->m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 7].m_deltaRefPics[1][1] = -10; c->m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
 
-      m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; m_GOPList[ 8].m_deltaRefPics[1][2] = -11; m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
-      m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
-      m_GOPList[10].m_deltaRefPics[1][0] =  -4; m_GOPList[10].m_deltaRefPics[1][1] = -20;
-      m_GOPList[11].m_deltaRefPics[1][0] =  -2; m_GOPList[11].m_deltaRefPics[1][1] =  -6; m_GOPList[11].m_deltaRefPics[1][2] = -22;
+      c->m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 8].m_deltaRefPics[1][2] = -11; c->m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
+      c->m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; c->m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
+      c->m_GOPList[10].m_deltaRefPics[1][0] =  -4; c->m_GOPList[10].m_deltaRefPics[1][1] = -20;
+      c->m_GOPList[11].m_deltaRefPics[1][0] =  -2; c->m_GOPList[11].m_deltaRefPics[1][1] =  -6; c->m_GOPList[11].m_deltaRefPics[1][2] = -22;
 
-      m_GOPList[12].m_deltaRefPics[1][0] =  -1; m_GOPList[12].m_deltaRefPics[1][1] =  -3; m_GOPList[12].m_deltaRefPics[1][2] =  -7; m_GOPList[12].m_deltaRefPics[1][3] = -23;
-      m_GOPList[13].m_deltaRefPics[1][0] =  -1; m_GOPList[13].m_deltaRefPics[1][1] =  -5; m_GOPList[13].m_deltaRefPics[1][2] = -21;
-      m_GOPList[14].m_deltaRefPics[1][0] =  -2; m_GOPList[14].m_deltaRefPics[1][1] = -18;
-      m_GOPList[15].m_deltaRefPics[1][0] =  -1; m_GOPList[15].m_deltaRefPics[1][1] =  -3; m_GOPList[15].m_deltaRefPics[1][2] = -19;
+      c->m_GOPList[12].m_deltaRefPics[1][0] =  -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -3; c->m_GOPList[12].m_deltaRefPics[1][2] =  -7; c->m_GOPList[12].m_deltaRefPics[1][3] = -23;
+      c->m_GOPList[13].m_deltaRefPics[1][0] =  -1; c->m_GOPList[13].m_deltaRefPics[1][1] =  -5; c->m_GOPList[13].m_deltaRefPics[1][2] = -21;
+      c->m_GOPList[14].m_deltaRefPics[1][0] =  -2; c->m_GOPList[14].m_deltaRefPics[1][1] = -18;
+      c->m_GOPList[15].m_deltaRefPics[1][0] =  -1; c->m_GOPList[15].m_deltaRefPics[1][1] =  -3; c->m_GOPList[15].m_deltaRefPics[1][2] = -19;
 
-      m_GOPList[16].m_deltaRefPics[1][0] =  -1; m_GOPList[16].m_deltaRefPics[1][1] = -17;
-      m_GOPList[17].m_deltaRefPics[1][0] =  -8; m_GOPList[17].m_deltaRefPics[1][1] =   8;
-      m_GOPList[18].m_deltaRefPics[1][0] =  -4; m_GOPList[18].m_deltaRefPics[1][1] = -12;
-      m_GOPList[19].m_deltaRefPics[1][0] =  -2; m_GOPList[19].m_deltaRefPics[1][1] =  -6; m_GOPList[19].m_deltaRefPics[1][2] = -14;
+      c->m_GOPList[16].m_deltaRefPics[1][0] =  -1; c->m_GOPList[16].m_deltaRefPics[1][1] = -17;
+      c->m_GOPList[17].m_deltaRefPics[1][0] =  -8; c->m_GOPList[17].m_deltaRefPics[1][1] =   8;
+      c->m_GOPList[18].m_deltaRefPics[1][0] =  -4; c->m_GOPList[18].m_deltaRefPics[1][1] = -12;
+      c->m_GOPList[19].m_deltaRefPics[1][0] =  -2; c->m_GOPList[19].m_deltaRefPics[1][1] =  -6; c->m_GOPList[19].m_deltaRefPics[1][2] = -14;
 
-      m_GOPList[20].m_deltaRefPics[1][0] =  -1; m_GOPList[20].m_deltaRefPics[1][1] =  -3; m_GOPList[20].m_deltaRefPics[1][2] =  -7; m_GOPList[20].m_deltaRefPics[1][3] = -15;
-      m_GOPList[21].m_deltaRefPics[1][0] =  -1; m_GOPList[21].m_deltaRefPics[1][1] =  -5; m_GOPList[21].m_deltaRefPics[1][2] = -13;
-      m_GOPList[22].m_deltaRefPics[1][0] =  -2; m_GOPList[22].m_deltaRefPics[1][1] = -10;
-      m_GOPList[23].m_deltaRefPics[1][0] =  -1; m_GOPList[23].m_deltaRefPics[1][1] =  -3; m_GOPList[23].m_deltaRefPics[1][2] = -11;
+      c->m_GOPList[20].m_deltaRefPics[1][0] =  -1; c->m_GOPList[20].m_deltaRefPics[1][1] =  -3; c->m_GOPList[20].m_deltaRefPics[1][2] =  -7; c->m_GOPList[20].m_deltaRefPics[1][3] = -15;
+      c->m_GOPList[21].m_deltaRefPics[1][0] =  -1; c->m_GOPList[21].m_deltaRefPics[1][1] =  -5; c->m_GOPList[21].m_deltaRefPics[1][2] = -13;
+      c->m_GOPList[22].m_deltaRefPics[1][0] =  -2; c->m_GOPList[22].m_deltaRefPics[1][1] = -10;
+      c->m_GOPList[23].m_deltaRefPics[1][0] =  -1; c->m_GOPList[23].m_deltaRefPics[1][1] =  -3; c->m_GOPList[23].m_deltaRefPics[1][2] = -11;
 
-      m_GOPList[24].m_deltaRefPics[1][0] =  -1; m_GOPList[24].m_deltaRefPics[1][1] =  -9;
-      m_GOPList[25].m_deltaRefPics[1][0] =  -4; m_GOPList[25].m_deltaRefPics[1][1] =   4;
-      m_GOPList[26].m_deltaRefPics[1][0] =  -2; m_GOPList[26].m_deltaRefPics[1][1] =  -6;
-      m_GOPList[27].m_deltaRefPics[1][0] =  -1; m_GOPList[27].m_deltaRefPics[1][1] =  -3; m_GOPList[27].m_deltaRefPics[1][2] = -7;
+      c->m_GOPList[24].m_deltaRefPics[1][0] =  -1; c->m_GOPList[24].m_deltaRefPics[1][1] =  -9;
+      c->m_GOPList[25].m_deltaRefPics[1][0] =  -4; c->m_GOPList[25].m_deltaRefPics[1][1] =   4;
+      c->m_GOPList[26].m_deltaRefPics[1][0] =  -2; c->m_GOPList[26].m_deltaRefPics[1][1] =  -6;
+      c->m_GOPList[27].m_deltaRefPics[1][0] =  -1; c->m_GOPList[27].m_deltaRefPics[1][1] =  -3; c->m_GOPList[27].m_deltaRefPics[1][2] = -7;
 
-      m_GOPList[28].m_deltaRefPics[1][0] =  -1; m_GOPList[28].m_deltaRefPics[1][1] =  -5;
-      m_GOPList[29].m_deltaRefPics[1][0] =  -2; m_GOPList[29].m_deltaRefPics[1][1] =   2;
-      m_GOPList[30].m_deltaRefPics[1][0] =  -1; m_GOPList[30].m_deltaRefPics[1][1] =  -3;
-      m_GOPList[31].m_deltaRefPics[1][0] =  -1; m_GOPList[31].m_deltaRefPics[1][1] =   1;
+      c->m_GOPList[28].m_deltaRefPics[1][0] =  -1; c->m_GOPList[28].m_deltaRefPics[1][1] =  -5;
+      c->m_GOPList[29].m_deltaRefPics[1][0] =  -2; c->m_GOPList[29].m_deltaRefPics[1][1] =   2;
+      c->m_GOPList[30].m_deltaRefPics[1][0] =  -1; c->m_GOPList[30].m_deltaRefPics[1][1] =  -3;
+      c->m_GOPList[31].m_deltaRefPics[1][0] =  -1; c->m_GOPList[31].m_deltaRefPics[1][1] =   1;
 
       for( int i = 0; i < 32; i++ )
       {
-        switch( m_GOPList[i].m_temporalId )
+        switch( c->m_GOPList[i].m_temporalId )
         {
-        case 0: m_GOPList[i].m_QPOffset   = -1;
-                m_GOPList[i].m_QPOffsetModelOffset = 0.0;
-                m_GOPList[i].m_QPOffsetModelScale  = 0.0;
+        case 0: c->m_GOPList[i].m_QPOffset   = -1;
+                c->m_GOPList[i].m_QPOffsetModelOffset = 0.0;
+                c->m_GOPList[i].m_QPOffsetModelScale  = 0.0;
                 break;
-        case 1: m_GOPList[i].m_QPOffset   = 0;
-                m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
-                m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
+        case 1: c->m_GOPList[i].m_QPOffset   = 0;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
                 break;
-        case 2: m_GOPList[i].m_QPOffset   = 0;
-                m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
-                m_GOPList[i].m_QPOffsetModelScale  =  0.2353;
+        case 2: c->m_GOPList[i].m_QPOffset   = 0;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2353;
                 break;
-        case 3: m_GOPList[i].m_QPOffset   = 3;
-                m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
-                m_GOPList[i].m_QPOffsetModelScale  =  0.2571;
+        case 3: c->m_GOPList[i].m_QPOffset   = 3;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2571;
                 break;
-        case 4: m_GOPList[i].m_QPOffset   = 5;
-                m_GOPList[i].m_QPOffsetModelOffset = -4.4895;
-                m_GOPList[i].m_QPOffsetModelScale  =  0.1947;
+        case 4: c->m_GOPList[i].m_QPOffset   = 5;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -4.4895;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  0.1947;
                 break;
-        case 5: m_GOPList[i].m_QPOffset   = 6;
-                m_GOPList[i].m_QPOffsetModelOffset = -5.4429;
-                m_GOPList[i].m_QPOffsetModelScale  =  0.2429;
+        case 5: c->m_GOPList[i].m_QPOffset   = 6;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -5.4429;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2429;
                 break;
         default: break;
         }
@@ -1052,24 +1415,24 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     }
   }
 
-  for (int i = 0; m_GOPList[i].m_POC != -1 && i < VVENC_MAX_GOP + 1; i++)
+  for (int i = 0; c->m_GOPList[i].m_POC != -1 && i < VVENC_MAX_GOP + 1; i++)
   {
-    m_RPLList0[i].m_POC = m_RPLList1[i].m_POC = m_GOPList[i].m_POC;
-    m_RPLList0[i].m_temporalId = m_RPLList1[i].m_temporalId = m_GOPList[i].m_temporalId;
-    m_RPLList0[i].m_refPic = m_RPLList1[i].m_refPic = m_GOPList[i].m_refPic;
-    m_RPLList0[i].m_sliceType = m_RPLList1[i].m_sliceType = m_GOPList[i].m_sliceType;
+    c->m_RPLList0[i].m_POC = c->m_RPLList1[i].m_POC = c->m_GOPList[i].m_POC;
+    c->m_RPLList0[i].m_temporalId = c->m_RPLList1[i].m_temporalId = c->m_GOPList[i].m_temporalId;
+    c->m_RPLList0[i].m_refPic = c->m_RPLList1[i].m_refPic = c->m_GOPList[i].m_refPic;
+    c->m_RPLList0[i].m_sliceType = c->m_RPLList1[i].m_sliceType = c->m_GOPList[i].m_sliceType;
 
-    m_RPLList0[i].m_numRefPicsActive = m_GOPList[i].m_numRefPicsActive[0];
-    m_RPLList1[i].m_numRefPicsActive = m_GOPList[i].m_numRefPicsActive[1];
-    m_RPLList0[i].m_numRefPics = m_GOPList[i].m_numRefPics[0];
-    m_RPLList1[i].m_numRefPics = m_GOPList[i].m_numRefPics[1];
-    m_RPLList0[i].m_ltrp_in_slice_header_flag = m_GOPList[i].m_ltrp_in_slice_header_flag;
-    m_RPLList1[i].m_ltrp_in_slice_header_flag = m_GOPList[i].m_ltrp_in_slice_header_flag;
+    c->m_RPLList0[i].m_numRefPicsActive = c->m_GOPList[i].m_numRefPicsActive[0];
+    c->m_RPLList1[i].m_numRefPicsActive = c->m_GOPList[i].m_numRefPicsActive[1];
+    c->m_RPLList0[i].m_numRefPics = c->m_GOPList[i].m_numRefPics[0];
+    c->m_RPLList1[i].m_numRefPics = c->m_GOPList[i].m_numRefPics[1];
+    c->m_RPLList0[i].m_ltrp_in_slice_header_flag = c->m_GOPList[i].m_ltrp_in_slice_header_flag;
+    c->m_RPLList1[i].m_ltrp_in_slice_header_flag = c->m_GOPList[i].m_ltrp_in_slice_header_flag;
 
-    for (int j = 0; j < m_GOPList[i].m_numRefPics[0]; j++)
-      m_RPLList0[i].m_deltaRefPics[j] = m_GOPList[i].m_deltaRefPics[0][j];
-    for (int j = 0; j < m_GOPList[i].m_numRefPics[1]; j++)
-      m_RPLList1[i].m_deltaRefPics[j] = m_GOPList[i].m_deltaRefPics[1][j];
+    for (int j = 0; j < c->m_GOPList[i].m_numRefPics[0]; j++)
+      c->m_RPLList0[i].m_deltaRefPics[j] = c->m_GOPList[i].m_deltaRefPics[0][j];
+    for (int j = 0; j < c->m_GOPList[i].m_numRefPics[1]; j++)
+      c->m_RPLList1[i].m_deltaRefPics[j] = c->m_GOPList[i].m_deltaRefPics[1][j];
   }
 
   int multipleFactor = /*m_compositeRefEnabled ? 2 :*/ 1;
@@ -1089,20 +1452,20 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   //start looping through frames in coding order until we can verify that the GOP structure is correct.
   while (!verifiedGOP && !errorGOP)
   {
-    int curGOP = (checkGOP - 1) % m_GOPSize;
-    int curPOC = ((checkGOP - 1) / m_GOPSize)*m_GOPSize * multipleFactor + m_RPLList0[curGOP].m_POC;
-    if (m_RPLList0[curGOP].m_POC < 0 || m_RPLList1[curGOP].m_POC < 0)
+    int curGOP = (checkGOP - 1) % c->m_GOPSize;
+    int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
+    if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
       errorGOP = true;
     }
     else
     {
       //check that all reference pictures are available, or have a POC < 0 meaning they might be available in the next GOP.
       bool beforeI = false;
-      for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
       {
-        int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
         if (absPOC < 0)
         {
           beforeI = true;
@@ -1115,13 +1478,13 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
             if (refList[j] == absPOC)
             {
               found = true;
-              for (int k = 0; k<m_GOPSize; k++)
+              for (int k = 0; k < c->m_GOPSize; k++)
               {
-                if (absPOC % (m_GOPSize * multipleFactor) == m_RPLList0[k].m_POC % (m_GOPSize * multipleFactor))
+                if (absPOC % (c->m_GOPSize * multipleFactor) == c->m_RPLList0[k].m_POC % (c->m_GOPSize * multipleFactor))
                 {
-                  if (m_RPLList0[k].m_temporalId == m_RPLList0[curGOP].m_temporalId)
+                  if (c->m_RPLList0[k].m_temporalId == c->m_RPLList0[curGOP].m_temporalId)
                   {
-                    m_RPLList0[k].m_refPic = true;
+                    c->m_RPLList0[k].m_refPic = true;
                   }
                 }
               }
@@ -1129,7 +1492,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
           }
           if (!found)
           {
-            msg(WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -1141,7 +1504,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
         {
           numOK++;
           isOK[curGOP] = true;
-          if (numOK == m_GOPSize)
+          if (numOK == c->m_GOPSize)
           {
             verifiedGOP = true;
           }
@@ -1150,38 +1513,38 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
       else
       {
         //create a new RPLEntry for this frame containing all the reference pictures that were available (POC > 0)
-        m_RPLList0[m_GOPSize + extraRPLs] = m_RPLList0[curGOP];
-        m_RPLList1[m_GOPSize + extraRPLs] = m_RPLList1[curGOP];
+        c->m_RPLList0[c->m_GOPSize + extraRPLs] = c->m_RPLList0[curGOP];
+        c->m_RPLList1[c->m_GOPSize + extraRPLs] = c->m_RPLList1[curGOP];
         int newRefs0 = 0;
-        for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+        for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
         {
-          int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+          int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
           if (absPOC >= 0)
           {
-            m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[newRefs0] = m_RPLList0[curGOP].m_deltaRefPics[i];
+            c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[newRefs0] = c->m_RPLList0[curGOP].m_deltaRefPics[i];
             newRefs0++;
           }
         }
-        int numPrefRefs0 = m_RPLList0[curGOP].m_numRefPicsActive;
+        int numPrefRefs0 = c->m_RPLList0[curGOP].m_numRefPicsActive;
 
         int newRefs1 = 0;
-        for (int i = 0; i< m_RPLList1[curGOP].m_numRefPics; i++)
+        for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
         {
-          int absPOC = curPOC - m_RPLList1[curGOP].m_deltaRefPics[i];
+          int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
           if (absPOC >= 0)
           {
-            m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[newRefs1] = m_RPLList1[curGOP].m_deltaRefPics[i];
+            c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[newRefs1] = c->m_RPLList1[curGOP].m_deltaRefPics[i];
             newRefs1++;
           }
         }
-        int numPrefRefs1 = m_RPLList1[curGOP].m_numRefPicsActive;
+        int numPrefRefs1 = c->m_RPLList1[curGOP].m_numRefPicsActive;
 
         for (int offset = -1; offset>-checkGOP; offset--)
         {
           //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / m_GOPSize)*(m_GOPSize * multipleFactor) + m_RPLList0[offGOP].m_POC;
-          if (offPOC >= 0 && m_RPLList0[offGOP].m_temporalId <= m_RPLList0[curGOP].m_temporalId)
+          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
+          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList0[offGOP].m_POC;
+          if (offPOC >= 0 && c->m_RPLList0[offGOP].m_temporalId <= c->m_RPLList0[curGOP].m_temporalId)
           {
             bool newRef = false;
             for (int i = 0; i<(newRefs0 + newRefs1); i++)
@@ -1193,7 +1556,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
             }
             for (int i = 0; i<newRefs0; i++)
             {
-              if (m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
+              if (c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
               {
                 newRef = false;
               }
@@ -1202,13 +1565,13 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
             {
               int insertPoint = newRefs0;
               //this picture can be added, find appropriate place in list and insert it.
-              if (m_RPLList0[offGOP].m_temporalId == m_RPLList0[curGOP].m_temporalId)
+              if (c->m_RPLList0[offGOP].m_temporalId == c->m_RPLList0[curGOP].m_temporalId)
               {
-                m_RPLList0[offGOP].m_refPic = true;
+                c->m_RPLList0[offGOP].m_refPic = true;
               }
               for (int j = 0; j<newRefs0; j++)
               {
-                if (m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[j] > curPOC - offPOC && curPOC - offPOC > 0)
+                if (c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] > curPOC - offPOC && curPOC - offPOC > 0)
                 {
                   insertPoint = j;
                   break;
@@ -1217,8 +1580,8 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
               int prev = curPOC - offPOC;
               for (int j = insertPoint; j<newRefs0 + 1; j++)
               {
-                int newPrev = m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[j];
-                m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[j] = prev;
+                int newPrev = c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[j];
+                c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] = prev;
                 prev = newPrev;
               }
               newRefs0++;
@@ -1233,9 +1596,9 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
         for (int offset = -1; offset>-checkGOP; offset--)
         {
           //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / m_GOPSize)*(m_GOPSize * multipleFactor) + m_RPLList1[offGOP].m_POC;
-          if (offPOC >= 0 && m_RPLList1[offGOP].m_temporalId <= m_RPLList1[curGOP].m_temporalId)
+          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
+          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList1[offGOP].m_POC;
+          if (offPOC >= 0 && c->m_RPLList1[offGOP].m_temporalId <= c->m_RPLList1[curGOP].m_temporalId)
           {
             bool newRef = false;
             for (int i = 0; i<(newRefs0 + newRefs1); i++)
@@ -1247,7 +1610,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
             }
             for (int i = 0; i<newRefs1; i++)
             {
-              if (m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
+              if (c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
               {
                 newRef = false;
               }
@@ -1256,13 +1619,13 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
             {
               int insertPoint = newRefs1;
               //this picture can be added, find appropriate place in list and insert it.
-              if (m_RPLList1[offGOP].m_temporalId == m_RPLList1[curGOP].m_temporalId)
+              if (c->m_RPLList1[offGOP].m_temporalId == c->m_RPLList1[curGOP].m_temporalId)
               {
-                m_RPLList1[offGOP].m_refPic = true;
+                c->m_RPLList1[offGOP].m_refPic = true;
               }
               for (int j = 0; j<newRefs1; j++)
               {
-                if (m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[j] > curPOC - offPOC && curPOC - offPOC > 0)
+                if (c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] > curPOC - offPOC && curPOC - offPOC > 0)
                 {
                   insertPoint = j;
                   break;
@@ -1271,8 +1634,8 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
               int prev = curPOC - offPOC;
               for (int j = insertPoint; j<newRefs1 + 1; j++)
               {
-                int newPrev = m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[j];
-                m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[j] = prev;
+                int newPrev = c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[j];
+                c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[j] = prev;
                 prev = newPrev;
               }
               newRefs1++;
@@ -1284,26 +1647,26 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
           }
         }
 
-        m_RPLList0[m_GOPSize + extraRPLs].m_numRefPics = newRefs0;
-        m_RPLList0[m_GOPSize + extraRPLs].m_numRefPicsActive = std::min(m_RPLList0[m_GOPSize + extraRPLs].m_numRefPics, m_RPLList0[m_GOPSize + extraRPLs].m_numRefPicsActive);
-        m_RPLList1[m_GOPSize + extraRPLs].m_numRefPics = newRefs1;
-        m_RPLList1[m_GOPSize + extraRPLs].m_numRefPicsActive = std::min(m_RPLList1[m_GOPSize + extraRPLs].m_numRefPics, m_RPLList1[m_GOPSize + extraRPLs].m_numRefPicsActive);
-        curGOP = m_GOPSize + extraRPLs;
+        c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPics = newRefs0;
+        c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPicsActive = std::min(c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPics, c->m_RPLList0[c->m_GOPSize + extraRPLs].m_numRefPicsActive);
+        c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPics = newRefs1;
+        c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPicsActive = std::min(c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPics, c->m_RPLList1[c->m_GOPSize + extraRPLs].m_numRefPicsActive);
+        curGOP = c->m_GOPSize + extraRPLs;
         extraRPLs++;
       }
       numRefs = 0;
-      for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
       {
-        int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
         if (absPOC >= 0)
         {
           refList[numRefs] = absPOC;
           numRefs++;
         }
       }
-      for (int i = 0; i< m_RPLList1[curGOP].m_numRefPics; i++)
+      for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
       {
-        int absPOC = curPOC - m_RPLList1[curGOP].m_deltaRefPics[i];
+        int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
         if (absPOC >= 0)
         {
           bool alreadyExist = false;
@@ -1329,38 +1692,38 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
 
   c->m_maxTempLayer = 1;
 
-  for(int i=0; i<m_GOPSize; i++)
+  for(int i=0; i < c->m_GOPSize; i++)
   {
-    if(m_GOPList[i].m_temporalId >= m_maxTempLayer)
+    if(c->m_GOPList[i].m_temporalId >= c->m_maxTempLayer)
     {
-      m_maxTempLayer = m_GOPList[i].m_temporalId+1;
+      c->m_maxTempLayer = c->m_GOPList[i].m_temporalId+1;
     }
   }
   for(int i=0; i< VVENC_MAX_TLAYER; i++)
   {
-    m_maxNumReorderPics[i] = 0;
-    m_maxDecPicBuffering[i] = 1;
+    c->m_maxNumReorderPics[i] = 0;
+    c->m_maxDecPicBuffering[i] = 1;
   }
-  for(int i=0; i<m_GOPSize; i++)
+  for(int i=0; i < c->m_GOPSize; i++)
   {
-    int numRefPic = m_RPLList0[i].m_numRefPics;
-    for (int tmp = 0; tmp < m_RPLList1[i].m_numRefPics; tmp++)
+    int numRefPic = c->m_RPLList0[i].m_numRefPics;
+    for (int tmp = 0; tmp < c->m_RPLList1[i].m_numRefPics; tmp++)
     {
       bool notSame = true;
-      for (int jj = 0; notSame && jj < m_RPLList0[i].m_numRefPics; jj++)
+      for (int jj = 0; notSame && jj < c->m_RPLList0[i].m_numRefPics; jj++)
       {
-        if (m_RPLList1[i].m_deltaRefPics[tmp] == m_RPLList0[i].m_deltaRefPics[jj]) notSame = false;
+        if (c->m_RPLList1[i].m_deltaRefPics[tmp] == c->m_RPLList0[i].m_deltaRefPics[jj]) notSame = false;
       }
       if (notSame) numRefPic++;
     }
-    if (numRefPic + 1 > m_maxDecPicBuffering[m_GOPList[i].m_temporalId])
+    if (numRefPic + 1 > c->m_maxDecPicBuffering[c->m_GOPList[i].m_temporalId])
     {
-      m_maxDecPicBuffering[m_GOPList[i].m_temporalId] = numRefPic + 1;
+      c->m_maxDecPicBuffering[c->m_GOPList[i].m_temporalId] = numRefPic + 1;
     }
     int highestDecodingNumberWithLowerPOC = 0;
-    for(int j=0; j<m_GOPSize; j++)
+    for(int j=0; j < c->m_GOPSize; j++)
     {
-      if(m_GOPList[j].m_POC <= m_GOPList[i].m_POC)
+      if(c->m_GOPList[j].m_POC <= c->m_GOPList[i].m_POC)
       {
         highestDecodingNumberWithLowerPOC = j;
       }
@@ -1368,47 +1731,47 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     int numReorder = 0;
     for(int j=0; j<highestDecodingNumberWithLowerPOC; j++)
     {
-      if(m_GOPList[j].m_temporalId <= m_GOPList[i].m_temporalId &&
-          m_GOPList[j].m_POC > m_GOPList[i].m_POC)
+      if(c->m_GOPList[j].m_temporalId <= c->m_GOPList[i].m_temporalId &&
+          c->m_GOPList[j].m_POC > c->m_GOPList[i].m_POC)
       {
         numReorder++;
       }
     }
-    if(numReorder > m_maxNumReorderPics[m_GOPList[i].m_temporalId])
+    if(numReorder > c->m_maxNumReorderPics[c->m_GOPList[i].m_temporalId])
     {
-      m_maxNumReorderPics[m_GOPList[i].m_temporalId] = numReorder;
+      c->m_maxNumReorderPics[c->m_GOPList[i].m_temporalId] = numReorder;
     }
   }
 
   for(int i=0; i < VVENC_MAX_TLAYER-1; i++)
   {
     // a lower layer can not have higher value of m_numReorderPics than a higher layer
-    if(m_maxNumReorderPics[i+1] < m_maxNumReorderPics[i])
+    if( c->m_maxNumReorderPics[i+1] < c->m_maxNumReorderPics[i])
     {
-      m_maxNumReorderPics[i+1] = m_maxNumReorderPics[i];
+      c->m_maxNumReorderPics[i+1] = c->m_maxNumReorderPics[i];
     }
     // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] - 1, inclusive
-    if(m_maxNumReorderPics[i] > m_maxDecPicBuffering[i] - 1)
+    if( c->m_maxNumReorderPics[i] > c->m_maxDecPicBuffering[i] - 1)
     {
-      m_maxDecPicBuffering[i] = m_maxNumReorderPics[i] + 1;
+      c->m_maxDecPicBuffering[i] = c->m_maxNumReorderPics[i] + 1;
     }
-    // a lower layer can not have higher value of m_uiMaxDecPicBuffering than a higher layer
-    if(m_maxDecPicBuffering[i+1] < m_maxDecPicBuffering[i])
+    // a lower layer can not have higher value of c->m_uiMaxDecPicBuffering than a higher layer
+    if( c->m_maxDecPicBuffering[i+1] < c->m_maxDecPicBuffering[i])
     {
-      m_maxDecPicBuffering[i+1] = m_maxDecPicBuffering[i];
+      c->m_maxDecPicBuffering[i+1] = c->m_maxDecPicBuffering[i];
     }
   }
 
   // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] -  1, inclusive
-  if(m_maxNumReorderPics[VVENC_MAX_TLAYER-1] > m_maxDecPicBuffering[VVENC_MAX_TLAYER-1] - 1)
+  if( c->m_maxNumReorderPics[VVENC_MAX_TLAYER-1] > c->m_maxDecPicBuffering[VVENC_MAX_TLAYER-1] - 1)
   {
-    m_maxDecPicBuffering[VVENC_MAX_TLAYER-1] = m_maxNumReorderPics[VVENC_MAX_TLAYER-1] + 1;
+    c->m_maxDecPicBuffering[VVENC_MAX_TLAYER-1] = c->m_maxNumReorderPics[VVENC_MAX_TLAYER-1] + 1;
   }
 
-  if ( ! m_MMVD && m_allowDisFracMMVD )
+  if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
-    msg( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
-    m_allowDisFracMMVD = false;
+    vvenc::msg( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
+    c->m_allowDisFracMMVD = false;
   }
 
   //
@@ -1417,104 +1780,104 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
 
 
   // coding structure
-  m_numRPLList0 = 0;
+  c->m_numRPLList0 = 0;
   for ( int i = 0; i < VVENC_MAX_GOP; i++ )
   {
-    if ( m_RPLList0[ i ].m_POC != -1 )
-      m_numRPLList0++;
+    if ( c->m_RPLList0[ i ].m_POC != -1 )
+      c->m_numRPLList0++;
   }
-  m_numRPLList1 = 0;
+  c->m_numRPLList1 = 0;
   for ( int i = 0; i < VVENC_MAX_GOP; i++ )
   {
-    if ( m_RPLList1[ i ].m_POC != -1 )
-      m_numRPLList1++;
+    if ( c->m_RPLList1[ i ].m_POC != -1 )
+      c->m_numRPLList1++;
   }
 
-  m_PROF &= bool(m_Affine);
-  if (m_Affine > 1)
+  c->m_PROF &= bool(c->m_Affine);
+  if (c->m_Affine > 1)
   {
-    m_PROF = bool(m_Affine);
-    m_AffineType = (m_Affine == 2) ? true : false;
+    c->m_PROF = bool(c->m_Affine);
+    c->m_AffineType = (c->m_Affine == 2) ? true : false;
   }
 
-  m_confirmFailed = checkCfgParameter();
-  return( m_confirmFailed );
+  c->m_confirmFailed = checkCfgParameter(c);
+  return( c->m_confirmFailed );
 }
 
-static bool checkCfgParameter( )
+static bool checkCfgParameter( VVEncCfg *c )
 {
   // run base check first
-  vvenc_confirmParameter( c, m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
-  vvenc_confirmParameter( c, (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+  vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "can not determin auto profile");
+  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10 && c->m_profile != VVENC_MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
 
-  vvenc_confirmParameter( c, m_level   == Level::LEVEL_AUTO, "can not determin level");
+  vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
-  vvenc_confirmParameter( c, m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
-  vvenc_confirmParameter( c, m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  vvenc_confirmParameter( c, m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
+  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
+  vvenc_confirmParameter( c, c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
 
-  switch ( m_conformanceWindowMode)
+  switch ( c->m_conformanceWindowMode)
   {
   case 0:
       break;
   case 1:
       // automatic padding to minimum CU size
-      vvenc_confirmParameter( c, m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
-      vvenc_confirmParameter( c, m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
+      vvenc_confirmParameter( c, c->m_aiPad[0] % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
+      vvenc_confirmParameter( c, c->m_aiPad[1] % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
       break;
   case 2:
       break;
   case 3:
       // conformance
-      if ((m_confWinLeft == 0) && (m_confWinRight == 0) && (m_confWinTop == 0) && (m_confWinBottom == 0))
+      if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
       }
-      if ((m_aiPad[1] != 0) || (m_aiPad[0]!=0))
+      if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
       }
       break;
   }
 
-  vvenc_confirmParameter( c, m_colourPrimaries < 0 || m_colourPrimaries > 12,                 "colourPrimaries must be in range 0 <= x <= 12" );
-  vvenc_confirmParameter( c, m_transferCharacteristics < 0 || m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
-  vvenc_confirmParameter( c, m_matrixCoefficients < 0 || m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
+  vvenc_confirmParameter( c, c->m_colourPrimaries < 0 || c->m_colourPrimaries > 12,                 "colourPrimaries must be in range 0 <= x <= 12" );
+  vvenc_confirmParameter( c, c->m_transferCharacteristics < 0 || c->m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
+  vvenc_confirmParameter( c, c->m_matrixCoefficients < 0 || c->m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
 
 
-  vvenc_confirmParameter( c, m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
-  vvenc_confirmParameter( c, m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
-  vvenc_confirmParameter( c, m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
+  vvenc_confirmParameter( c, c->m_qpInValsCb.size()   != c->m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
+  vvenc_confirmParameter( c, c->m_qpInValsCr.size()   != c->m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
+  vvenc_confirmParameter( c, c->m_qpInValsCbCr.size() != c->m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
 
-  if ( m_confirmFailed )
+  if ( c->m_confirmFailed )
   {
-    return m_confirmFailed;
+    return c->m_confirmFailed;
   }
 
-  int qpBdOffsetC = 6 * (m_internalBitDepth[CH_C] - 8);
+  int qpBdOffsetC = 6 * (c->m_internalBitDepth[1] - 8);
 
-  vvenc_confirmParameter( c,(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-  vvenc_confirmParameter( c,(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
-  for (size_t i = 0; i < m_qpInValsCb.size() - 1; i++)
+  vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+  vvenc_confirmParameter( c,c->m_qpInValsCb[0] != c->m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
+  for (size_t i = 0; i < c->m_qpInValsCb.size() - 1; i++)
   {
-    vvenc_confirmParameter( c,(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
-    vvenc_confirmParameter( c,(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    vvenc_confirmParameter( c,c->m_qpInValsCb[i]  < -qpBdOffsetC || c->m_qpInValsCb[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    vvenc_confirmParameter( c,c->m_qpOutValsCb[i] < -qpBdOffsetC || c->m_qpOutValsCb[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
   }
-  if (!m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
+  if (!c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
   {
-    vvenc_confirmParameter( c,(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-    vvenc_confirmParameter( c,(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
-    for (size_t i = 0; i < m_qpInValsCr.size() - 1; i++)
+    vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    vvenc_confirmParameter( c,c->m_qpInValsCr[0] != c->m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
+    for (size_t i = 0; i < c->m_qpInValsCr.size() - 1; i++)
     {
-      vvenc_confirmParameter( c,(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      vvenc_confirmParameter( c,(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,c->m_qpInValsCr[i] < -qpBdOffsetC || c->m_qpInValsCr[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,c->m_qpOutValsCr[i] < -qpBdOffsetC || c->m_qpOutValsCr[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
-    vvenc_confirmParameter( c,(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-    vvenc_confirmParameter( c,(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
-    for (size_t i = 0; i < m_qpInValsCbCr.size() - 1; i++)
+    vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    vvenc_confirmParameter( c,c->m_qpInValsCbCr[0] != c->m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
+    for (size_t i = 0; i < c->m_qpInValsCbCr.size() - 1; i++)
     {
-      vvenc_confirmParameter( c,(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      vvenc_confirmParameter( c,(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,c->m_qpInValsCbCr[i]  < -qpBdOffsetC || c->m_qpInValsCbCr[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,c->m_qpOutValsCbCr[i] < -qpBdOffsetC || c->m_qpOutValsCbCr[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
   }
 
@@ -1522,47 +1885,47 @@ static bool checkCfgParameter( )
   // do some check and set of parameters next
   //
 
-  vvenc_confirmParameter( c, m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
-  vvenc_confirmParameter( c, m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
-  vvenc_confirmParameter( c, m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
+  vvenc_confirmParameter( c, c->m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
+  vvenc_confirmParameter( c, c->m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
+  vvenc_confirmParameter( c, c->m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
 
-  if( m_DepQuantEnabled )
+  if( c->m_DepQuantEnabled )
   {
-    vvenc_confirmParameter( c, !m_RDOQ || !m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
-    vvenc_confirmParameter( c, m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
+    vvenc_confirmParameter( c, !c->m_RDOQ || !c->m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
+    vvenc_confirmParameter( c, c->m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
   }
 
-  vvenc_confirmParameter( c, (m_MSBExtendedBitDepth[CH_L] < m_inputBitDepth[CH_L]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
-  vvenc_confirmParameter( c, (m_MSBExtendedBitDepth[CH_C] < m_inputBitDepth[CH_C]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
+  vvenc_confirmParameter( c, (c->m_MSBExtendedBitDepth[0] < c->m_inputBitDepth[0]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
+  vvenc_confirmParameter( c, (c->m_MSBExtendedBitDepth[1] < c->m_inputBitDepth[1]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
 
-  const uint32_t maxBitDepth=(m_internChromaFormat==CHROMA_400) ? m_internalBitDepth[CH_L] : std::max(m_internalBitDepth[CH_L], m_internalBitDepth[CH_C]);
-  confirmParameter(m_bitDepthConstraintValue<maxBitDepth, "The internalBitDepth must not be greater than the bitDepthConstraint value");
+  const uint32_t maxBitDepth=(c->m_internChromaFormat==VVENC_CHROMA_400) ? c->m_internalBitDepth[0] : std::max(c->m_internalBitDepth[0], c->m_internalBitDepth[1]);
+  vvenc_confirmParameter( c,c->m_bitDepthConstraintValue<maxBitDepth, "The internalBitDepth must not be greater than the bitDepthConstraint value");
 
-  confirmParameter(m_bitDepthConstraintValue!=10, "BitDepthConstraint must be 8 for MAIN profile and 10 for MAIN10 profile.");
-  confirmParameter(m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
+  vvenc_confirmParameter( c,c->m_bitDepthConstraintValue!=10, "BitDepthConstraint must be 8 for MAIN profile and 10 for MAIN10 profile.");
+  vvenc_confirmParameter( c,c->m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
 
   // check range of parameters
-  vvenc_confirmParameter( c, m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
-  vvenc_confirmParameter( c, m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
+  vvenc_confirmParameter( c, c->m_inputBitDepth[0  ] < 8,                                 "InputBitDepth must be at least 8" );
+  vvenc_confirmParameter( c, c->m_inputBitDepth[1] < 8,                                   "InputBitDepthC must be at least 8" );
 
 #if !RExt__HIGH_BIT_DEPTH_SUPPORT
-  for (uint32_t channelType = 0; channelType < MAX_NUM_CH; channelType++)
+  for (uint32_t channelType = 0; channelType < 2; channelType++)
   {
-    vvenc_confirmParameter( c,(m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
+    vvenc_confirmParameter( c,(c->m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
   }
 #endif
 
 
-  vvenc_confirmParameter( c, (m_HdrMode != VVENC_HDR_OFF && m_internalBitDepth[CH_L] < 10 )     ,       "internalBitDepth must be at least 10 bit for HDR");
-  vvenc_confirmParameter( c, (m_HdrMode != VVENC_HDR_OFF && m_internChromaFormat != VVENC_CHROMA_420 ) ,"internChromaFormat must YCbCr 4:2:0 for HDR");
-  vvenc_confirmParameter( c, (m_contentLightLevel[0] < 0 || m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
-  vvenc_confirmParameter( c, (m_contentLightLevel[1] < 0 || m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
+  vvenc_confirmParameter( c, (c->m_HdrMode != VVENC_HDR_OFF && c->m_internalBitDepth[0] < 10 )     ,       "internalBitDepth must be at least 10 bit for HDR");
+  vvenc_confirmParameter( c, (c->m_HdrMode != VVENC_HDR_OFF && c->m_internChromaFormat != VVENC_CHROMA_420 ) ,"internChromaFormat must YCbCr 4:2:0 for HDR");
+  vvenc_confirmParameter( c, (c->m_contentLightLevel[0] < 0 || c->m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
+  vvenc_confirmParameter( c, (c->m_contentLightLevel[1] < 0 || c->m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
 
   {
     bool outOfRGBRange = false;
-    for( size_t i = 0; i < sizeof(m_masteringDisplay); i++ )
+    for( size_t i = 0; i < sizeof(c->m_masteringDisplay); i++ )
     {
-      if( i < 8 && m_masteringDisplay[i] > 50000 )
+      if( i < 8 && c->m_masteringDisplay[i] > 50000 )
       {
         outOfRGBRange = true; break;
       }
@@ -1570,204 +1933,204 @@ static bool checkCfgParameter( )
     vvenc_confirmParameter( c, outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
   }
 
-  vvenc_confirmParameter( c, m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
-  vvenc_confirmParameter( c, m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
+  vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
+  vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  vvenc_confirmParameter( c, m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
-  vvenc_confirmParameter( c, m_framesToBeEncoded < m_switchPOC,                                          "debug POC out of range" );
+  vvenc_confirmParameter( c, c->m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
+  vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
-  vvenc_confirmParameter( c, (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
-  vvenc_confirmParameter( c, m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
-  vvenc_confirmParameter( c, m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
+  vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
+  vvenc_confirmParameter( c, c->m_InputQueueSize < c->m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
+  vvenc_confirmParameter( c, c->m_MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
-  vvenc_confirmParameter( c, m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-  vvenc_confirmParameter( c, m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  vvenc_confirmParameter( c, m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
-  vvenc_confirmParameter( c, m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
+  vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
   {
-    vvenc_confirmParameter( c, m_loopFilterBetaOffsetDiv2[comp] < -12 || m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
-    vvenc_confirmParameter( c, m_loopFilterTcOffsetDiv2[comp] < -12 || m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter( c, c->m_loopFilterBetaOffsetDiv2[comp] < -12 || c->m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter( c, c->m_loopFilterTcOffsetDiv2[comp] < -12 || c->m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
   }
-  vvenc_confirmParameter( c, m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
-  vvenc_confirmParameter( c, m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
-  vvenc_confirmParameter( c, m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, c->m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
+  vvenc_confirmParameter( c, c->m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
+  vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
-  vvenc_confirmParameter( c, m_MCTFFrames.size() != m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, m_MCTFNumLeadFrames  > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  vvenc_confirmParameter( c, m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  vvenc_confirmParameter( c, m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
-  vvenc_confirmParameter( c, m_SegmentMode != VVENC_SEG_OFF && m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
+  vvenc_confirmParameter( c, c->m_MCTFFrames.size() != c->m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
+  vvenc_confirmParameter( c, c->m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, c->m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, c->m_MCTFNumLeadFrames  > 0 && ! c->m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
+  vvenc_confirmParameter( c, c->m_MCTFNumTrailFrames > 0 && ! c->m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
+  vvenc_confirmParameter( c, c->m_MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
+  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
 
-  if (m_lumaReshapeEnable)
+  if (c->m_lumaReshapeEnable)
   {
-    vvenc_confirmParameter( c, m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
-    confirmParameter(m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
-    confirmParameter(m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
-    confirmParameter(m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
-    confirmParameter(m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
-    confirmParameter(m_initialCW < 0,     "Min. Initial Total Codeword is 0");
-    confirmParameter(m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
-    confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
-    confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
+    vvenc_confirmParameter( c, c->m_reshapeSignalType < vvenc::RESHAPE_SIGNAL_SDR || c->m_reshapeSignalType > vvenc::RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
+    vvenc_confirmParameter( c, c->m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
+    vvenc_confirmParameter( c, c->m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
+    vvenc_confirmParameter( c, c->m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
+    vvenc_confirmParameter( c, c->m_adpOption > 4,     "Max. LMCS Adaptation Option is 4");
+    vvenc_confirmParameter( c, c->m_initialCW < 0,     "Min. Initial Total Codeword is 0");
+    vvenc_confirmParameter( c, c->m_initialCW > 1023,  "Max. Initial Total Codeword is 1023");
+    vvenc_confirmParameter( c, c->m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
+    vvenc_confirmParameter( c, c->m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
   }
-  vvenc_confirmParameter( c, m_EDO && m_bLoopFilterDisable,             "no EDO support with LoopFilter disabled" );
-  vvenc_confirmParameter( c, m_EDO < 0 || m_EDO > 2,                    "EDO out of range [0..2]" );
-  vvenc_confirmParameter( c, m_TMVPModeId < 0 || m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
-  vvenc_confirmParameter( c, m_AMVRspeed < 0 || m_AMVRspeed > 7,        "AMVR/IMV out of range [0..7]" );
-  vvenc_confirmParameter( c, m_Affine < 0 || m_Affine > 2,              "Affine out of range [0..2]" );
-  confirmParameter( m_MMVD < 0 || m_MMVD > 4,                  "MMVD out of range [0..4]" );
-  confirmParameter( m_SMVD < 0 || m_SMVD > 3,                  "SMVD out of range [0..3]" );
-  confirmParameter( m_Geo  < 0 || m_Geo  > 3,                  "Geo out of range [0..3]" );
-  confirmParameter( m_CIIP < 0 || m_CIIP > 3,                  "CIIP out of range [0..3]" );
-  confirmParameter( m_SBT  < 0 || m_SBT  > 3,                  "SBT out of range [0..3]" );
-  confirmParameter( m_LFNST< 0 || m_LFNST> 3,                  "LFNST out of range [0..3]" );
-  confirmParameter( m_MCTF < 0 || m_MCTF > 2,                  "MCTF out of range [0..2]" );
-  confirmParameter( m_ISP < 0 || m_ISP > 3,                    "ISP out of range [0..3]" );
-  confirmParameter(m_TS < 0 || m_TS > 2,                       "TS out of range [0..2]" );
-  confirmParameter(m_TSsize < 2 || m_TSsize > 5,               "TSsize out of range [2..5]" );
-  confirmParameter(m_useBDPCM < 0 || m_useBDPCM > 2,           "BDPCM out of range [0..2]");
-  confirmParameter(m_useBDPCM  && m_TS==0,                     "BDPCM cannot be used when transform skip is disabled" );
-  confirmParameter(m_useBDPCM==1  && m_TS==2,                  "BDPCM cannot be permanently used when transform skip is auto" );
-  confirmParameter(m_FastIntraTools <0 || m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
+  vvenc_confirmParameter( c, c->m_EDO && c->m_bLoopFilterDisable,             "no EDO support with LoopFilter disabled" );
+  vvenc_confirmParameter( c, c->m_EDO < 0 || c->m_EDO > 2,                    "EDO out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_TMVPModeId < 0 || c->m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_AMVRspeed < 0 || c->m_AMVRspeed > 7,        "AMVR/IMV out of range [0..7]" );
+  vvenc_confirmParameter( c, c->m_Affine < 0 || c->m_Affine > 2,              "Affine out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_MMVD < 0 || c->m_MMVD > 4,                  "MMVD out of range [0..4]" );
+  vvenc_confirmParameter( c, c->m_SMVD < 0 || c->m_SMVD > 3,                  "SMVD out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_Geo  < 0 || c->m_Geo  > 3,                  "Geo out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_CIIP < 0 || c->m_CIIP > 3,                  "CIIP out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_SBT  < 0 || c->m_SBT  > 3,                  "SBT out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_LFNST< 0 || c->m_LFNST> 3,                  "LFNST out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_MCTF < 0 || c->m_MCTF > 2,                  "MCTF out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_ISP  < 0 || c->m_ISP > 3,                    "ISP out of range [0..3]" );
+  vvenc_confirmParameter( c, c->m_TS   < 0 || c->m_TS > 2,                       "TS out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_TSsize < 2 || c->m_TSsize > 5,               "TSsize out of range [2..5]" );
+  vvenc_confirmParameter( c, c->m_useBDPCM < 0 || c->m_useBDPCM > 2,           "BDPCM out of range [0..2]");
+  vvenc_confirmParameter( c, c->m_useBDPCM  && c->m_TS==0,                     "BDPCM cannot be used when transform skip is disabled" );
+  vvenc_confirmParameter( c, c->m_useBDPCM==1  && c->m_TS==2,                  "BDPCM cannot be permanently used when transform skip is auto" );
+  vvenc_confirmParameter( c, c->m_FastIntraTools <0 || c->m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
 
-  if( m_alf )
+  if( c->m_alf )
   {
-    confirmParameter( m_maxNumAlfAlternativesChroma < 1 || m_maxNumAlfAlternativesChroma > VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
-  }
-
-  confirmParameter( m_useFastMrg < 0 || m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
-  confirmParameter( m_useFastMIP < 0 || m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
-  confirmParameter( m_fastSubPel < 0 || m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
-
-  confirmParameter( m_RCTargetBitrate == 0 && m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
-  confirmParameter( m_RCNumPasses < 1 || m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
-
-  confirmParameter(!((m_level==VVENC_LEVEL1)
-    || (m_level==VVENC_LEVEL2) || (m_level==VVENC_LEVEL2_1)
-    || (m_level==VVENC_LEVEL3) || (m_level==VVENC_LEVEL3_1)
-    || (m_level==VVENC_LEVEL4) || (m_level==VVENC_LEVEL4_1)
-    || (m_level==VVENC_LEVEL5) || (m_level==VVENC_LEVEL5_1) || (m_level==VVENC_LEVEL5_2)
-    || (m_level==VVENC_LEVEL6) || (m_level==VVENC_LEVEL6_1) || (m_level==VVENC_LEVEL6_2) || (m_level==VVENC_LEVEL6_3)
-    || (m_level==VVENC_LEVEL15_5)), "invalid level selected");
-  confirmParameter(!((m_levelTier==VVENC_TIER_MAIN) || (m_levelTier==VVENC_TIER_HIGH)), "invalid tier selected");
-
-
-  confirmParameter( m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
-  confirmParameter( m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );
-  confirmParameter( m_chromaCrQpOffset < -12,           "Min. Chroma Cr QP Offset is -12" );
-  confirmParameter( m_chromaCrQpOffset >  12,           "Max. Chroma Cr QP Offset is  12" );
-  confirmParameter( m_chromaCbQpOffsetDualTree < -12,   "Min. Chroma Cb QP Offset for dual tree is -12" );
-  confirmParameter( m_chromaCbQpOffsetDualTree >  12,   "Max. Chroma Cb QP Offset for dual tree is  12" );
-  confirmParameter( m_chromaCrQpOffsetDualTree < -12,   "Min. Chroma Cr QP Offset for dual tree is -12" );
-  confirmParameter( m_chromaCrQpOffsetDualTree >  12,   "Max. Chroma Cr QP Offset for dual tree is  12" );
-
-  if ( m_JointCbCrMode )
-  {
-    confirmParameter( m_chromaCbCrQpOffset < -12, "Min. Joint Cb-Cr QP Offset is -12");
-    confirmParameter( m_chromaCbCrQpOffset >  12, "Max. Joint Cb-Cr QP Offset is  12");
-    confirmParameter( m_chromaCbCrQpOffsetDualTree < -12, "Min. Joint Cb-Cr QP Offset for dual tree is -12");
-    confirmParameter( m_chromaCbCrQpOffsetDualTree >  12, "Max. Joint Cb-Cr QP Offset for dual tree is  12");
+    vvenc_confirmParameter( c, c->m_maxNumAlfAlternativesChroma < 1 || c->m_maxNumAlfAlternativesChroma > VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
   }
 
-  if (m_usePerceptQPA && m_dualITree && (m_internChromaFormat != CHROMA_400) && (m_chromaCbQpOffsetDualTree != 0 || m_chromaCrQpOffsetDualTree != 0 || m_chromaCbCrQpOffsetDualTree != 0))
+  vvenc_confirmParameter( c, c->m_useFastMrg < 0 || c->m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
+  vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
+
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
+  vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
+
+  vvenc_confirmParameter(!((m_level==VVENC_LEVEL1)
+    || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
+    || (c->m_level==VVENC_LEVEL3) || (c->m_level==VVENC_LEVEL3_1)
+    || (c->m_level==VVENC_LEVEL4) || (c->m_level==VVENC_LEVEL4_1)
+    || (c->m_level==VVENC_LEVEL5) || (c->m_level==VVENC_LEVEL5_1) || (c->m_level==VVENC_LEVEL5_2)
+    || (c->m_level==VVENC_LEVEL6) || (c->m_level==VVENC_LEVEL6_1) || (c->m_level==VVENC_LEVEL6_2) || (c->m_level==VVENC_LEVEL6_3)
+    || (c->m_level==VVENC_LEVEL15_5)), "invalid level selected");
+  vvenc_confirmParameter(!((c->m_levelTier==VVENC_TIER_MAIN) || (c->m_levelTier==VVENC_TIER_HIGH)), "invalid tier selected");
+
+
+  vvenc_confirmParameter( c, c->m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );
+  vvenc_confirmParameter( c, c->m_chromaCbQpOffset >  12,           "Max. Chroma Cb QP Offset is  12" );
+  vvenc_confirmParameter( c, c->m_chromaCrQpOffset < -12,           "Min. Chroma Cr QP Offset is -12" );
+  vvenc_confirmParameter( c, c->m_chromaCrQpOffset >  12,           "Max. Chroma Cr QP Offset is  12" );
+  vvenc_confirmParameter( c, c->m_chromaCbQpOffsetDualTree < -12,   "Min. Chroma Cb QP Offset for dual tree is -12" );
+  vvenc_confirmParameter( c, c->m_chromaCbQpOffsetDualTree >  12,   "Max. Chroma Cb QP Offset for dual tree is  12" );
+  vvenc_confirmParameter( c, c->m_chromaCrQpOffsetDualTree < -12,   "Min. Chroma Cr QP Offset for dual tree is -12" );
+  vvenc_confirmParameter( c, c->m_chromaCrQpOffsetDualTree >  12,   "Max. Chroma Cr QP Offset for dual tree is  12" );
+
+  if ( c->m_JointCbCrMode )
   {
-    msg(VVENC_WARNING, "***************************************************************************\n");
-    msg(VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
-    msg(VVENC_WARNING, "***************************************************************************\n");
+    vvenc_confirmParameter( c, c->m_chromaCbCrQpOffset < -12, "Min. Joint Cb-Cr QP Offset is -12");
+    vvenc_confirmParameter( c, c->m_chromaCbCrQpOffset >  12, "Max. Joint Cb-Cr QP Offset is  12");
+    vvenc_confirmParameter( c, c->m_chromaCbCrQpOffsetDualTree < -12, "Min. Joint Cb-Cr QP Offset for dual tree is -12");
+    vvenc_confirmParameter( c, c->m_chromaCbCrQpOffsetDualTree >  12, "Max. Joint Cb-Cr QP Offset for dual tree is  12");
   }
 
-  confirmParameter( m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
-  confirmParameter( m_usePerceptQPATempFiltISlice > 0 && m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
-
-  confirmParameter( m_usePerceptQPA && (m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
-  if ( m_DecodingRefreshType == 2 )
+  if (c->m_usePerceptQPA && c->m_dualITree && (c->m_internChromaFormat != VVENC_CHROMA_400) && (c->m_chromaCbQpOffsetDualTree != 0 || c->m_chromaCrQpOffsetDualTree != 0 || c->m_chromaCbCrQpOffsetDualTree != 0))
   {
-    confirmParameter( m_IntraPeriod > 0 && m_IntraPeriod <= m_GOPSize ,                                   "Intra period must be larger than GOP size for periodic IDR pictures");
+    vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
+    vvenc::msg(VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
+    vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
   }
-  confirmParameter( m_MaxCodingDepth > MAX_CU_DEPTH,                                                      "MaxPartitionDepth exceeds predefined MAX_CU_DEPTH limit");
-  confirmParameter( m_MinQT[0] < 1<<MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
-  confirmParameter( m_MinQT[1] < 1<<MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
-  confirmParameter( m_CTUSize < 32,                                                                       "CTUSize must be greater than or equal to 32");
-  confirmParameter( m_CTUSize > 128,                                                                      "CTUSize must be less than or equal to 128");
-  confirmParameter( m_CTUSize != 32 && m_CTUSize != 64 && m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
-  confirmParameter( m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
-  confirmParameter( (m_CTUSize  >> ( m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
-  confirmParameter( (m_PadSourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
-  confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
-  confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
-  confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
+  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
 
-  confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
-
-  confirmParameter( m_confWinLeft   % SPS::getWinUnitX(m_internChromaFormat) != 0, "Left conformance window offset must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_confWinRight  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Right conformance window offset must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_confWinTop    % SPS::getWinUnitY(m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
-  confirmParameter( m_confWinBottom % SPS::getWinUnitY(m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
-
-  confirmParameter( m_numThreads < 0,                                               "NumThreads out of range" );
-  confirmParameter( m_ensureWppBitEqual < 0       || m_ensureWppBitEqual > 1,       "WppBitEqual out of range (0,1)");
-  confirmParameter( m_useAMaxBT < 0               || m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
-  confirmParameter( m_cabacInitPresent < 0        || m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
-  confirmParameter( m_alfTempPred < 0             || m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
-  confirmParameter( m_saoEncodingRate < 0.0       || m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
-  confirmParameter( m_saoEncodingRateChroma < 0.0 || m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
-  confirmParameter( m_maxParallelFrames < 0,                                        "MaxParallelFrames out of range" );
-
-  confirmParameter( m_numThreads > 0 && m_ensureWppBitEqual == 0, "NumThreads > 0 requires WppBitEqual > 0");
-
-  if( m_maxParallelFrames )
+  vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
+  if ( c->m_DecodingRefreshType == 2 )
   {
-    confirmParameter( m_numThreads == 0,       "For frame parallel processing NumThreads > 0 is required" );
-    confirmParameter( m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
-    confirmParameter( m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
-    confirmParameter( m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
-    confirmParameter( m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
+    vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && c->m_IntraPeriod <= c->m_GOPSize ,                                   "Intra period must be larger than GOP size for periodic IDR pictures");
+  }
+  vvenc_confirmParameter(c, c->m_MaxCodingDepth > vvenc::MAX_CU_DEPTH,                                                      "MaxPartitionDepth exceeds predefined MAX_CU_DEPTH limit");
+  vvenc_confirmParameter(c, c->m_MinQT[0] < 1<<vvenc::MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
+  vvenc_confirmParameter(c, c->m_MinQT[1] < 1<<vvenc::MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
+  vvenc_confirmParameter(c, c->m_CTUSize < 32,                                                                       "CTUSize must be greater than or equal to 32");
+  vvenc_confirmParameter(c, c->m_CTUSize > 128,                                                                      "CTUSize must be less than or equal to 128");
+  vvenc_confirmParameter(c, c->m_CTUSize != 32 && c->m_CTUSize != 64 && c->m_CTUSize != 128,                               "CTUSize must be a power of 2 (32, 64, or 128)");
+  vvenc_confirmParameter(c, c->m_MaxCodingDepth < 1,                                                                 "MaxPartitionDepth must be greater than zero");
+  vvenc_confirmParameter(c, (c->m_CTUSize  >> ( c->m_MaxCodingDepth - 1 ) ) < 8,                                        "Minimum partition width size should be larger than or equal to 8");
+  vvenc_confirmParameter(c, (c->m_PadSourceWidth  % std::max( 8, int(c->m_CTUSize  >> ( c->m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
+  vvenc_confirmParameter(c, c->m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
+  vvenc_confirmParameter(c, c->m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
+
+  vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
+  vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
+
+  vvenc_confirmParameter(c, c->m_aiPad[0] % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
+  vvenc_confirmParameter(c, c->m_aiPad[1] % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
+
+  vvenc_confirmParameter(c, c->m_confWinLeft   % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Left conformance window offset must be an integer multiple of the specified chroma subsampling");
+  vvenc_confirmParameter(c, c->m_confWinRight  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Right conformance window offset must be an integer multiple of the specified chroma subsampling");
+  vvenc_confirmParameter(c, c->m_confWinTop    % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
+  vvenc_confirmParameter(c, c->m_confWinBottom % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
+
+  vvenc_confirmParameter(c, c->m_numThreads < 0,                                               "NumThreads out of range" );
+  vvenc_confirmParameter(c, c->m_ensureWppBitEqual < 0       || c->m_ensureWppBitEqual > 1,       "WppBitEqual out of range (0,1)");
+  vvenc_confirmParameter(c, c->m_useAMaxBT < 0               || c->m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
+  vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
+  vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
+  vvenc_confirmParameter(c, c->m_saoEncodingRate < 0.0       || c->m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
+  vvenc_confirmParameter(c, c->m_saoEncodingRateChroma < 0.0 || c->m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
+  vvenc_confirmParameter(c, c->m_maxParallelFrames < 0,                                        "MaxParallelFrames out of range" );
+
+  vvenc_confirmParameter(c, c->m_numThreads > 0 && c->m_ensureWppBitEqual == 0, "NumThreads > 0 requires WppBitEqual > 0");
+
+  if( c->m_maxParallelFrames )
+  {
+    vvenc_confirmParameter(c, c->m_numThreads == 0,       "For frame parallel processing NumThreads > 0 is required" );
+    vvenc_confirmParameter(c, c->m_useAMaxBT,             "Frame parallel processing: AMaxBT is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_cabacInitPresent,      "Frame parallel processing: CabacInitPresent is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
+    vvenc_confirmParameter(c, c->m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
 #if ENABLE_TRACING
-    confirmParameter( !m_traceFile.empty() && m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
+    vvenc_confirmParameter(c, !c->m_traceFile.empty() && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
-    confirmParameter( m_maxParallelFrames > m_InputQueueSize, "Max parallel frames should be less than size of input queue" );
+    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_InputQueueSize, "Max parallel frames should be less than size of input queue" );
   }
 
-  confirmParameter(((m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
-  confirmParameter(((m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
+  vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
+  vvenc_confirmParameter(c,((c->m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
 
 
-  confirmParameter( m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
-  confirmParameter( m_maxNumMergeCand > MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
-  confirmParameter( m_maxNumGeoCand > GEO_MAX_NUM_UNI_CANDS,            "MaxNumGeoCand must be no more than GEO_MAX_NUM_UNI_CANDS." );
-  confirmParameter( m_maxNumGeoCand > m_maxNumMergeCand,                "MaxNumGeoCand must be no more than MaxNumMergeCand." );
-  confirmParameter( 0 < m_maxNumGeoCand && m_maxNumGeoCand < 2,         "MaxNumGeoCand must be no less than 2 unless MaxNumGeoCand is 0." );
-  confirmParameter( m_maxNumAffineMergeCand < (m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
-  confirmParameter( m_maxNumAffineMergeCand > AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
+  vvenc_confirmParameter(c, c->m_maxNumMergeCand < 1,                              "MaxNumMergeCand must be 1 or greater.");
+  vvenc_confirmParameter(c, c->m_maxNumMergeCand > vvenc::MRG_MAX_NUM_CANDS,              "MaxNumMergeCand must be no more than MRG_MAX_NUM_CANDS." );
+  vvenc_confirmParameter(c, c->m_maxNumGeoCand > vvenc::GEO_MAX_NUM_UNI_CANDS,            "MaxNumGeoCand must be no more than GEO_MAX_NUM_UNI_CANDS." );
+  vvenc_confirmParameter(c, c->m_maxNumGeoCand > c->m_maxNumMergeCand,                "MaxNumGeoCand must be no more than MaxNumMergeCand." );
+  vvenc_confirmParameter(c, 0 < c->m_maxNumGeoCand && c->m_maxNumGeoCand < 2,         "MaxNumGeoCand must be no less than 2 unless MaxNumGeoCand is 0." );
+  vvenc_confirmParameter(c, c->m_maxNumAffineMergeCand < (c->m_SbTMVP ? 1 : 0),       "MaxNumAffineMergeCand must be greater than 0 when SbTMVP is enabled");
+  vvenc_confirmParameter(c, c->m_maxNumAffineMergeCand > vvenc::AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  confirmParameter( (m_hrdParametersPresent>0) && (0 == m_RCTargetBitrate),  "HrdParametersPresent requires RateControl enabled");
-  confirmParameter( m_bufferingPeriodSEIEnabled && (m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  confirmParameter( m_pictureTimingSEIEnabled && (m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, (c->m_hrdParametersPresent>0) && (0 == c->m_RCTargetBitrate),  "HrdParametersPresent requires RateControl enabled");
+  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (c->m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (c->m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
-  uint32_t ui = m_CTUSize;
+  uint32_t ui = c->m_CTUSize;
   while(ui)
   {
     ui >>= 1;
     if( (ui & 1) == 1)
     {
-      confirmParameter( ui != 1 , "CTU Size should be 2^n");
+      vvenc_confirmParameter(c, ui != 1 , "CTU Size should be 2^n");
     }
   }
 
-  if ( m_IntraPeriod == 1 && m_GOPList[0].m_POC == -1 )
+  if ( c->m_IntraPeriod == 1 && c->m_GOPList[0].m_POC == -1 )
   {
   }
   else
   {
-    confirmParameter( m_intraOnlyConstraintFlag, "IntraOnlyConstraintFlag cannot be 1 for inter sequences");
+    vvenc_confirmParameter(c,  c->m_intraOnlyConstraintFlag, "IntraOnlyConstraintFlag cannot be 1 for inter sequences");
   }
 
   int multipleFactor = /*m_compositeRefEnabled ? 2 :*/ 1;
@@ -1781,62 +2144,62 @@ static bool checkCfgParameter( )
     isOK[i]=false;
   }
   int numOK=0;
-  confirmParameter( m_IntraPeriod >=0&&(m_IntraPeriod%m_GOPSize!=0), "Intra period must be a multiple of GOPSize, or -1" );
-  confirmParameter( m_temporalSubsampleRatio < 1, "TemporalSubsampleRatio must be greater than 0");
+  vvenc_confirmParameter(c,  c->m_IntraPeriod >=0&&(c->m_IntraPeriod%c->m_GOPSize!=0), "Intra period must be a multiple of GOPSize, or -1" );
+  vvenc_confirmParameter(c,  c->m_temporalSubsampleRatio < 1, "TemporalSubsampleRatio must be greater than 0");
 
-  for(int i=0; i<m_GOPSize; i++)
+  for(int i=0; i<c->m_GOPSize; i++)
   {
-    if (m_GOPList[i].m_POC == m_GOPSize * multipleFactor)
+    if (c->m_GOPList[i].m_POC == c->m_GOPSize * multipleFactor)
     {
-      confirmParameter( m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
+      vvenc_confirmParameter(c,  c->m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
     }
   }
 
-  if ( (m_IntraPeriod != 1) && !m_loopFilterOffsetInPPS && (!m_bLoopFilterDisable) )
+  if ( (c->m_IntraPeriod != 1) && !c->m_loopFilterOffsetInPPS && (!c->m_bLoopFilterDisable) )
   {
-    for(int i=0; i<m_GOPSize; i++)
+    for(int i=0; i<c->m_GOPSize; i++)
     {
       for( int comp = 0; comp < 3; comp++ )
       {
-        confirmParameter( (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2[comp]) < -12 || (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2[comp]) > 12, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
-        confirmParameter( (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2[comp]) < -12 || (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2[comp]) > 12, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+        vvenc_confirmParameter(c,  (c->m_GOPList[i].m_betaOffsetDiv2 + c->m_loopFilterBetaOffsetDiv2[comp]) < -12 || (c->m_GOPList[i].m_betaOffsetDiv2 + c->m_loopFilterBetaOffsetDiv2[comp]) > 12, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
+        vvenc_confirmParameter(c,  (c->m_GOPList[i].m_tcOffsetDiv2 + c->m_loopFilterTcOffsetDiv2[comp]) < -12 || (c->m_GOPList[i].m_tcOffsetDiv2 + c->m_loopFilterTcOffsetDiv2[comp]) > 12, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-12 to 12)" );
       }
     }
   }
 
-  for(int i=0; i<m_GOPSize; i++)
+  for(int i=0; i<c->m_GOPSize; i++)
   {
-    confirmParameter( abs(m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
-    confirmParameter( abs(m_GOPList[i].m_CbQPoffset + m_chromaCbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
-    confirmParameter( abs(m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
-    confirmParameter( abs(m_GOPList[i].m_CrQPoffset + m_chromaCrQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CbQPoffset + c->m_chromaCbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter(c, abs(c->m_GOPList[i].m_CrQPoffset + c->m_chromaCrQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
   }
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]                 ) > 12, "Intra/periodic Cb QP Offset exceeds supported range (-12 to 12)" );
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]  + m_chromaCbQpOffset ) > 12, "Intra/periodic Cb QP Offset, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]                 ) > 12, "Intra/periodic Cr QP Offset exceeds supported range (-12 to 12)" );
-  confirmParameter( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]  + m_chromaCrQpOffset ) > 12, "Intra/periodic Cr QP Offset, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+  vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[0]                 ) > 12, "Intra/periodic Cb QP Offset exceeds supported range (-12 to 12)" );
+  vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[0]  + c->m_chromaCbQpOffset ) > 12, "Intra/periodic Cb QP Offset, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+  vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[1]                 ) > 12, "Intra/periodic Cr QP Offset exceeds supported range (-12 to 12)" );
+  vvenc_confirmParameter(c, abs(c->m_sliceChromaQpOffsetIntraOrPeriodic[1]  + c->m_chromaCrQpOffset ) > 12, "Intra/periodic Cr QP Offset, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
 
-  confirmParameter( m_fastLocalDualTreeMode < 0 || m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
+  vvenc_confirmParameter(c, c->m_fastLocalDualTreeMode < 0 || c->m_fastLocalDualTreeMode > 2, "FastLocalDualTreeMode must be in range [0..2]" );
 
   int extraRPLs = 0;
   int numRefs   = 1;
   //start looping through frames in coding order until we can verify that the GOP structure is correct.
   while (!verifiedGOP && !errorGOP)
   {
-    int curGOP = (checkGOP - 1) % m_GOPSize;
-    int curPOC = ((checkGOP - 1) / m_GOPSize)*m_GOPSize * multipleFactor + m_RPLList0[curGOP].m_POC;
-    if (m_RPLList0[curGOP].m_POC < 0 || m_RPLList1[curGOP].m_POC < 0)
+    int curGOP = (checkGOP - 1) % c->m_GOPSize;
+    int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
+    if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
       errorGOP = true;
     }
     else
     {
       //check that all reference pictures are available, or have a POC < 0 meaning they might be available in the next GOP.
       bool beforeI = false;
-      for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
       {
-        int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
         if (absPOC < 0)
         {
           beforeI = true;
@@ -1853,7 +2216,7 @@ static bool checkCfgParameter( )
           }
           if (!found)
           {
-            msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -1865,7 +2228,7 @@ static bool checkCfgParameter( )
         {
           numOK++;
           isOK[curGOP] = true;
-          if (numOK == m_GOPSize)
+          if (numOK == c->m_GOPSize)
           {
             verifiedGOP = true;
           }
@@ -1875,33 +2238,33 @@ static bool checkCfgParameter( )
       {
         //create a new RPLEntry for this frame containing all the reference pictures that were available (POC > 0)
         int newRefs0 = 0;
-        for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+        for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
         {
-          int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+          int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
           if (absPOC >= 0)
           {
             newRefs0++;
           }
         }
-        int numPrefRefs0 = m_RPLList0[curGOP].m_numRefPicsActive;
+        int numPrefRefs0 = c->m_RPLList0[curGOP].m_numRefPicsActive;
 
         int newRefs1 = 0;
-        for (int i = 0; i< m_RPLList1[curGOP].m_numRefPics; i++)
+        for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
         {
-          int absPOC = curPOC - m_RPLList1[curGOP].m_deltaRefPics[i];
+          int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
           if (absPOC >= 0)
           {
             newRefs1++;
           }
         }
-        int numPrefRefs1 = m_RPLList1[curGOP].m_numRefPicsActive;
+        int numPrefRefs1 = c->m_RPLList1[curGOP].m_numRefPicsActive;
 
         for (int offset = -1; offset>-checkGOP; offset--)
         {
           //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / m_GOPSize)*(m_GOPSize * multipleFactor) + m_RPLList0[offGOP].m_POC;
-          if (offPOC >= 0 && m_RPLList0[offGOP].m_temporalId <= m_RPLList0[curGOP].m_temporalId)
+          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
+          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList0[offGOP].m_POC;
+          if (offPOC >= 0 && c->m_RPLList0[offGOP].m_temporalId <= c->m_RPLList0[curGOP].m_temporalId)
           {
             bool newRef = false;
             for (int i = 0; i<(newRefs0 + newRefs1); i++)
@@ -1913,7 +2276,7 @@ static bool checkCfgParameter( )
             }
             for (int i = 0; i<newRefs0; i++)
             {
-              if (m_RPLList0[m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
+              if (c->m_RPLList0[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
               {
                 newRef = false;
               }
@@ -1932,9 +2295,9 @@ static bool checkCfgParameter( )
         for (int offset = -1; offset>-checkGOP; offset--)
         {
           //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
-          int offGOP = (checkGOP - 1 + offset) % m_GOPSize;
-          int offPOC = ((checkGOP - 1 + offset) / m_GOPSize)*(m_GOPSize * multipleFactor) + m_RPLList1[offGOP].m_POC;
-          if (offPOC >= 0 && m_RPLList1[offGOP].m_temporalId <= m_RPLList1[curGOP].m_temporalId)
+          int offGOP = (checkGOP - 1 + offset) % c->m_GOPSize;
+          int offPOC = ((checkGOP - 1 + offset) / c->m_GOPSize)*(c->m_GOPSize * multipleFactor) + c->m_RPLList1[offGOP].m_POC;
+          if (offPOC >= 0 && c->m_RPLList1[offGOP].m_temporalId <= c->m_RPLList1[curGOP].m_temporalId)
           {
             bool newRef = false;
             for (int i = 0; i<(newRefs0 + newRefs1); i++)
@@ -1946,7 +2309,7 @@ static bool checkCfgParameter( )
             }
             for (int i = 0; i<newRefs1; i++)
             {
-              if (m_RPLList1[m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
+              if (c->m_RPLList1[c->m_GOPSize + extraRPLs].m_deltaRefPics[i] == curPOC - offPOC)
               {
                 newRef = false;
               }
@@ -1962,22 +2325,22 @@ static bool checkCfgParameter( )
           }
         }
 
-        curGOP = m_GOPSize + extraRPLs;
+        curGOP = c->m_GOPSize + extraRPLs;
         extraRPLs++;
       }
       numRefs = 0;
-      for (int i = 0; i< m_RPLList0[curGOP].m_numRefPics; i++)
+      for (int i = 0; i< c->m_RPLList0[curGOP].m_numRefPics; i++)
       {
-        int absPOC = curPOC - m_RPLList0[curGOP].m_deltaRefPics[i];
+        int absPOC = curPOC - c->m_RPLList0[curGOP].m_deltaRefPics[i];
         if (absPOC >= 0)
         {
           refList[numRefs] = absPOC;
           numRefs++;
         }
       }
-      for (int i = 0; i< m_RPLList1[curGOP].m_numRefPics; i++)
+      for (int i = 0; i< c->m_RPLList1[curGOP].m_numRefPics; i++)
       {
-        int absPOC = curPOC - m_RPLList1[curGOP].m_deltaRefPics[i];
+        int absPOC = curPOC - c->m_RPLList1[curGOP].m_deltaRefPics[i];
         if (absPOC >= 0)
         {
           bool alreadyExist = false;
@@ -2000,38 +2363,39 @@ static bool checkCfgParameter( )
     }
     checkGOP++;
   }
-  confirmParameter(errorGOP, "Invalid GOP structure given");
+  vvenc_confirmParameter(c, errorGOP, "Invalid GOP structure given");
 
-  for(int i=0; i<m_GOPSize; i++)
+  for(int i=0; i<c->m_GOPSize; i++)
   {
-    confirmParameter(m_GOPList[i].m_sliceType!='B' && m_GOPList[i].m_sliceType!='P' && m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
+    vvenc_confirmParameter(c, c->m_GOPList[i].m_sliceType!='B' && c->m_GOPList[i].m_sliceType!='P' && c->m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
   }
 
-  confirmParameter( m_MCTF > 2 || m_MCTF < 0, "MCTF out of range" );
+  vvenc_confirmParameter(c,  c->m_MCTF > 2 || c->m_MCTF < 0, "MCTF out of range" );
 
-  if( m_MCTF )
+  if( c->m_MCTF )
   {
-    if( m_MCTFFrames[0] == 0 )
+    if( c->m_MCTFFrames[0] == 0 )
     {
-      msg( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
+      vvenc::msg( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
     }
 
-    confirmParameter( m_MCTFFrames.size() != m_MCTFStrengths.size(), "MCTFFrames and MCTFStrengths do not match");
+    vvenc_confirmParameter(c, c->m_MCTFFrames.size() != c->m_MCTFStrengths.size(), "MCTFFrames and MCTFStrengths do not match");
   }
 
-  if( m_fastForwardToPOC != -1 )
+  if( c->m_fastForwardToPOC != -1 )
   {
-    if( m_cabacInitPresent )  { msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); }
-    if( m_alf )               { msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
+    if( c->m_cabacInitPresent )  { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); }
+    if( c->m_alf )               { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
   }
 
 
-  return( m_confirmFailed );
+  return( c->m_confirmFailed );
 }
 
-VVENC_DECL int vvenc_initDefault( VVEncCfg *c, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM )
+VVENC_DECL int vvenc_initDefault( VVEncCfg *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
 {
   int iRet = 0;
+  vvenc_cfg_default(c);
   c->m_SourceWidth         = width;                    // luminance width of input picture
   c->m_SourceHeight        = height;                   // luminance height of input picture
 
@@ -2464,6 +2828,8 @@ static inline std::string getMasteringDisplayStr(  std::vector<uint32_t> md )
   if(  md.size() != 10 )
   {
     return "unspecified";
+
+
   }
 
   css << "G(" << md[0] << "," << md[1] << ")";
@@ -2495,192 +2861,192 @@ static inline std::string getContentLightLevel(  std::vector<uint32_t> cll )
   return css.str();
 }
 
-std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
+VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgLevel )
 {
   std::stringstream css;
 
   if( eMsgLevel >= VVENC_DETAILS )
   {
-  css << "Real     Format                        : " << m_PadSourceWidth - m_confWinLeft - m_confWinRight << "x" << m_PadSourceHeight - m_confWinTop - m_confWinBottom << " " <<
-                                                        (double)m_FrameRate / m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(m_HdrMode) << "\n";
-  css << "Internal Format                        : " << m_PadSourceWidth << "x" << m_PadSourceHeight << " " <<  (double)m_FrameRate / m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(m_HdrMode) << "\n";
-  css << "Sequence PSNR output                   : " << (m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
-  css << "Hexadecimal PSNR output                : " << (m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
-  css << "Sequence MSE output                    : " << (m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
-  css << "Frame MSE output                       : " << (m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
-  css << "Cabac-zero-word-padding                : " << (m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
+  css << "Real     Format                        : " << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " " <<
+                                                        (double)c->m_FrameRate / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
+  css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+  css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
+  css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
+  css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";
+  css << "Frame MSE output                       : " << (c->m_printFrameMSE ? "Enabled" : "Disabled") << "\n";
+  css << "Cabac-zero-word-padding                : " << (c->m_cabacZeroWordPaddingEnabled ? "Enabled" : "Disabled") << "\n";
   css << "Frame/Field                            : Frame based coding\n";
-  if ( m_framesToBeEncoded > 0 )
-    css << "Frame index                            : " << m_framesToBeEncoded << " frames\n";
+  if ( c->m_framesToBeEncoded > 0 )
+    css << "Frame index                            : " << c->m_framesToBeEncoded << " frames\n";
   else
     css << "Frame index                            : all frames\n";
 
-  css << "Profile                                : " << getProfileStr( m_profile ) << "\n";
-  css << "Level                                  : " << getLevelStr( m_level ) << "\n";
-  css << "CU size / total-depth                  : " << m_CTUSize << " / " << m_MaxCodingDepth << "\n";
-  css << "Max TB size                            : " << (1 << m_log2MaxTbSize) << "\n";
-  css << "Motion search range                    : " << m_SearchRange << "\n";
-  css << "Intra period                           : " << m_IntraPeriod << "\n";
-  css << "Decoding refresh type                  : " << m_DecodingRefreshType << "\n";
-  css << "QP                                     : " << m_QP << "\n";
-  css << "Percept QPA                            : " << m_usePerceptQPA << "\n";
-  css << "Max dQP signaling subdiv               : " << m_cuQpDeltaSubdiv << "\n";
-  css << "Cb QP Offset (dual tree)               : " << m_chromaCbQpOffset << " (" << m_chromaCbQpOffsetDualTree << ")\n";
-  css << "Cr QP Offset (dual tree)               : " << m_chromaCrQpOffset << " (" << m_chromaCrQpOffsetDualTree << ")\n";
-  css << "GOP size                               : " << m_GOPSize << "\n";
-  css << "Input queue size                       : " << m_InputQueueSize << "\n";
-  css << "Input bit depth                        : (Y:" << m_inputBitDepth[ CH_L ] << ", C:" << m_inputBitDepth[ CH_C ] << ")\n";
-  css << "MSB-extended bit depth                 : (Y:" << m_MSBExtendedBitDepth[ CH_L ] << ", C:" << m_MSBExtendedBitDepth[ CH_C ] << ")\n";
-  css << "Internal bit depth                     : (Y:" << m_internalBitDepth[ CH_L ] << ", C:" << m_internalBitDepth[ CH_C ] << ")\n";
-  css << "cu_chroma_qp_offset_subdiv             : " << m_cuChromaQpOffsetSubdiv << "\n";
-  if (m_bUseSAO)
+  css << "Profile                                : " << getProfileStr( c->m_profile ) << "\n";
+  css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
+  css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
+  css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
+  css << "Motion search range                    : " << c->m_SearchRange << "\n";
+  css << "Intra period                           : " << c->m_IntraPeriod << "\n";
+  css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";
+  css << "QP                                     : " << c->m_QP << "\n";
+  css << "Percept QPA                            : " << c->m_usePerceptQPA << "\n";
+  css << "Max dQP signaling subdiv               : " << c->m_cuQpDeltaSubdiv << "\n";
+  css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
+  css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
+  css << "GOP size                               : " << c->m_GOPSize << "\n";
+  css << "Input queue size                       : " << c->m_InputQueueSize << "\n";
+  css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
+  css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
+  css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
+  css << "cu_chroma_qp_offset_subdiv             : " << c->m_cuChromaQpOffsetSubdiv << "\n";
+  if (c->m_bUseSAO)
   {
-    css << "log2_sao_offset_scale_luma             : " << m_log2SaoOffsetScale[ CH_L ] << "\n";
-    css << "log2_sao_offset_scale_chroma           : " << m_log2SaoOffsetScale[ CH_C ] << "\n";
+    css << "log2_sao_offset_scale_luma             : " << c->m_log2SaoOffsetScale[ 0 ] << "\n";
+    css << "log2_sao_offset_scale_chroma           : " << c->m_log2SaoOffsetScale[ 1 ] << "\n";
   }
-  css << "Cost function:                         : " << getCostFunctionStr( m_costMode ) << "\n";
+  css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
 
-  if( !m_masteringDisplay.empty() )
+  if( !c->m_masteringDisplay.empty() )
   {
-    css << "Mastering display color volume         : " << getMasteringDisplayStr( m_masteringDisplay ) << "\n";
+    css << "Mastering display color volume         : " << getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
   }
-  if( !m_contentLightLevel.empty() )
+  if( !c->m_contentLightLevel.empty() )
   {
-    css << "Content light level                    : " << getContentLightLevel( m_contentLightLevel ) << "\n";
+    css << "Content light level                    : " << getContentLightLevel( c->m_contentLightLevel ) << "\n";
   }
   css << "\n";
   }
 
-  if( eMsgLevel >= VERBOSE )
+  if( eMsgLevel >= VVENC_VERBOSE )
   {
   // verbose output
   css << "CODING TOOL CFG: ";
-  css << "CTU" << m_CTUSize << " QT" << Log2( m_CTUSize / m_MinQT[0] ) << Log2( m_CTUSize / m_MinQT[1] ) << "BTT" << m_maxMTTDepthI << m_maxMTTDepth << " ";
-  css << "IBD:" << ((m_internalBitDepth[ CH_L ] > m_MSBExtendedBitDepth[ CH_L ]) || (m_internalBitDepth[ CH_C ] > m_MSBExtendedBitDepth[ CH_C ])) << " ";
-  css << "CIP:" << m_bUseConstrainedIntraPred << " ";
-  css << "SAO:" << (m_bUseSAO ? 1 : 0) << " ";
-  css << "ALF:" << (m_alf ? 1 : 0) << " ";
-  if( m_alf )
+  css << "CTU" << c->m_CTUSize << " QT" << Log2( c->m_CTUSize / c->m_MinQT[0] ) << Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
+  css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
+  css << "CIP:" << c->m_bUseConstrainedIntraPred << " ";
+  css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
+  css << "ALF:" << (c->m_alf ? 1 : 0) << " ";
+  if( c->m_alf )
   {
-    css << "(NonLinLuma:" << m_useNonLinearAlfLuma << " ";
-    css << "NonLinChr:" << m_useNonLinearAlfChroma << ") ";
+    css << "(NonLinLuma:" << c->m_useNonLinearAlfLuma << " ";
+    css << "NonLinChr:" << c->m_useNonLinearAlfChroma << ") ";
   }
-  css << "CCALF:" << (m_ccalf ? 1 : 0) << " ";
+  css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
 
-  const int iWaveFrontSubstreams = m_entropyCodingSyncEnabled ? ( m_PadSourceHeight + m_CTUSize - 1 ) / m_CTUSize : 1;
-  css << "WPP:" << (m_entropyCodingSyncEnabled ? 1 : 0) << " ";
+  const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
+  css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
   css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
-  css << "TMVP:" << m_TMVPModeId << " ";
+  css << "TMVP:" << c->m_TMVPModeId << " ";
 
-  css << "DQ:" << m_DepQuantEnabled << " ";
-  if( m_DepQuantEnabled )
+  css << "DQ:" << c->m_DepQuantEnabled << " ";
+  if( c->m_DepQuantEnabled )
   {
-    if( m_dqThresholdVal & 1 )
-      css << "(Thr: " << (m_dqThresholdVal >> 1) << ".5) ";
+    if( c->m_dqThresholdVal & 1 )
+      css << "(Thr: " << (c->m_dqThresholdVal >> 1) << ".5) ";
     else
-      css << "(Thr: " << (m_dqThresholdVal >> 1) << ") ";
+      css << "(Thr: " << (c->m_dqThresholdVal >> 1) << ") ";
   }
-  css << "SDH:" << m_SignDataHidingEnabled << " ";
-  css << "CST:" << m_dualITree << " ";
-  css << "BDOF:" << m_BDOF << " ";
-  css << "DMVR:" << m_DMVR << " ";
-  css << "MTSImplicit:" << m_MTSImplicit << " ";
-  css << "SBT:" << m_SBT << " ";
-  css << "JCbCr:" << m_JointCbCrMode << " ";
-  css << "CabacInitPresent:" << m_cabacInitPresent << " ";
-  css << "AMVR:" << m_AMVRspeed << " ";
-  css << "SMVD:" << m_SMVD << " ";
+  css << "SDH:" << c->m_SignDataHidingEnabled << " ";
+  css << "CST:" << c->m_dualITree << " ";
+  css << "BDOF:" << c->m_BDOF << " ";
+  css << "DMVR:" << c->m_DMVR << " ";
+  css << "MTSImplicit:" << c->m_MTSImplicit << " ";
+  css << "SBT:" << c->m_SBT << " ";
+  css << "JCbCr:" << c->m_JointCbCrMode << " ";
+  css << "CabacInitPresent:" << c->m_cabacInitPresent << " ";
+  css << "AMVR:" << c->m_AMVRspeed << " ";
+  css << "SMVD:" << c->m_SMVD << " ";
 
-  css << "LMCS:" << m_lumaReshapeEnable << " ";
-  if( m_lumaReshapeEnable )
+  css << "LMCS:" << c->m_lumaReshapeEnable << " ";
+  if( c->m_lumaReshapeEnable )
   {
-    css << "(Signal:" << (m_reshapeSignalType == 0 ? "SDR" : (m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
-    css << "Opt:" << m_adpOption << "";
-    if( m_adpOption > 0 )
+    css << "(Signal:" << (c->m_reshapeSignalType == 0 ? "SDR" : (c->m_reshapeSignalType == 2 ? "HDR-HLG" : "HDR-PQ")) << " ";
+    css << "Opt:" << c->m_adpOption << "";
+    if( c->m_adpOption > 0 )
     {
-      css << " CW:" << m_initialCW << "";
+      css << " CW:" << c->m_initialCW << "";
     }
     css << ") ";
   }
-  css << "CIIP:" << m_CIIP << " ";
-  css << "MIP:" << m_MIP << " ";
-  css << "AFFINE:" << m_Affine << " ";
-  if( m_Affine )
+  css << "CIIP:" << c->m_CIIP << " ";
+  css << "MIP:" << c->m_MIP << " ";
+  css << "AFFINE:" << c->m_Affine << " ";
+  if( c->m_Affine )
   {
-    css << "(PROF:" << m_PROF << ", ";
-    css << "Type:" << m_AffineType << ")";
+    css << "(PROF:" << c->m_PROF << ", ";
+    css << "Type:" << c->m_AffineType << ")";
   }
-  css << "MMVD:" << m_MMVD << " ";
-  if( m_MMVD )
-    css << "DisFracMMVD:" << m_allowDisFracMMVD << " ";
-  css << "SbTMVP:" << m_SbTMVP << " ";
-  css << "GPM:" << m_Geo << " ";
-  css << "LFNST:" << m_LFNST << " ";
-  css << "MTS:" << m_MTS << " ";
-  if( m_MTS )
+  css << "MMVD:" << c->m_MMVD << " ";
+  if( c->m_MMVD )
+    css << "DisFracMMVD:" << c->m_allowDisFracMMVD << " ";
+  css << "SbTMVP:" << c->m_SbTMVP << " ";
+  css << "GPM:" << c->m_Geo << " ";
+  css << "LFNST:" << c->m_LFNST << " ";
+  css << "MTS:" << c->m_MTS << " ";
+  if( c->m_MTS )
   {
-    css << "(IntraCand:" << m_MTSIntraMaxCand << ")";
+    css << "(IntraCand:" << c->m_MTSIntraMaxCand << ")";
   }
-  css << "ISP:" << m_ISP << " ";
-  css << "TS:" << m_TS << " ";
-  if( m_TS )
+  css << "ISP:" << c->m_ISP << " ";
+  css << "TS:" << c->m_TS << " ";
+  if( c->m_TS )
   {
-    css << "TSLog2MaxSize:" << m_TSsize << " ";
-    css << "useChromaTS:" << m_useChromaTS << " ";
+    css << "TSLog2MaxSize:" << c->m_TSsize << " ";
+    css << "useChromaTS:" << c->m_useChromaTS << " ";
   }
-  css << "BDPCM:" << m_useBDPCM << " ";
+  css << "BDPCM:" << c->m_useBDPCM << " ";
 
   css << "\nENC. ALG. CFG: ";
-  css << "QPA:" << m_usePerceptQPA << " ";
-  css << "HAD:" << m_bUseHADME << " ";
-  css << "RDQ:" << m_RDOQ << " ";
-  css << "RDQTS:" << m_useRDOQTS << " ";
-  css << "ASR:" << m_bUseASR << " ";
-  css << "MinSearchWindow:" << m_minSearchWindow << " ";
-  css << "RestrictMESampling:" << m_bRestrictMESampling << " ";
-  css << "EDO:" << m_EDO << " ";
-  css << "MCTF:" << m_MCTF << " ";
-  if( m_MCTF )
+  css << "QPA:" << c->m_usePerceptQPA << " ";
+  css << "HAD:" << c->m_bUseHADME << " ";
+  css << "RDQ:" << c->m_RDOQ << " ";
+  css << "RDQTS:" << c->m_useRDOQTS << " ";
+  css << "ASR:" << c->m_bUseASR << " ";
+  css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
+  css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
+  css << "EDO:" << c->m_EDO << " ";
+  css << "MCTF:" << c->m_MCTF << " ";
+  if( c->m_MCTF )
   {
-    css << "[L:" << m_MCTFNumLeadFrames << ", T:" << m_MCTFNumTrailFrames << "] ";
+    css << "[L:" << c->m_MCTFNumLeadFrames << ", T:" << c->m_MCTFNumTrailFrames << "] ";
   }
 
   css << "\nFAST TOOL CFG: ";
-  css << "ECU:" << m_bUseEarlyCU << " ";
-  css << "FEN:" << m_fastInterSearchMode << " ";
-  css << "FDM:" << m_useFastDecisionForMerge << " ";
-  css << "ESD:" << m_useEarlySkipDetection << " ";
-  css << "FastSearch:" << m_motionEstimationSearchMethod << " ";
-  css << "LCTUFast:" << m_useFastLCTU << " ";
-  css << "FastMrg:" << m_useFastMrg << " ";
-  css << "PBIntraFast:" << m_usePbIntraFast << " ";
-  css << "AMaxBT:" << m_useAMaxBT << " ";
-  css << "FastQtBtEnc:" << m_fastQtBtEnc << " ";
-  css << "ContentBasedFastQtbt:" << m_contentBasedFastQtbt << " ";
-  if( m_MIP )
+  css << "ECU:" << c->m_bUseEarlyCU << " ";
+  css << "FEN:" << c->m_fastInterSearchMode << " ";
+  css << "FDM:" << c->m_useFastDecisionForMerge << " ";
+  css << "ESD:" << c->m_useEarlySkipDetection << " ";
+  css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
+  css << "LCTUFast:" << c->m_useFastLCTU << " ";
+  css << "FastMrg:" << c->m_useFastMrg << " ";
+  css << "PBIntraFast:" << c->m_usePbIntraFast << " ";
+  css << "AMaxBT:" << c->m_useAMaxBT << " ";
+  css << "FastQtBtEnc:" << c->m_fastQtBtEnc << " ";
+  css << "ContentBasedFastQtbt:" << c->m_contentBasedFastQtbt << " ";
+  if( c->m_MIP )
   {
-    css << "FastMIP:" << m_useFastMIP << " ";
+    css << "FastMIP:" << c->m_useFastMIP << " ";
   }
-  css << "FastIntraTools:" << m_FastIntraTools << " ";
-  css << "FastLocalDualTree:" << m_fastLocalDualTreeMode << " ";
-  css << "FastSubPel:" << m_fastSubPel << " ";
-  css << "QtbttExtraFast:" << m_qtbttSpeedUp << " ";
+  css << "FastIntraTools:" << c->m_FastIntraTools << " ";
+  css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
+  css << "FastSubPel:" << c->m_fastSubPel << " ";
+  css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
 
   css << "\nRATE CONTROL CFG: ";
-  css << "RateControl:" << ( m_RCTargetBitrate > 0 ) << " ";
-  if ( m_RCTargetBitrate > 0 )
+  css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
+  if ( c->m_RCTargetBitrate > 0 )
   {
-    css << "Passes:" << m_RCNumPasses << " ";
-    css << "TargetBitrate:" << m_RCTargetBitrate << " ";
-    css << "RCInitialQP:" << m_RCInitialQP << " ";
-    css << "RCForceIntraQP:" << m_RCForceIntraQP << " ";
+    css << "Passes:" << c->m_RCNumPasses << " ";
+    css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
+    css << "RCInitialQP:" << c->m_RCInitialQP << " ";
+    css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
   }
 
   css << "\nPARALLEL PROCESSING CFG: ";
-  css << "NumThreads:" << m_numThreads << " ";
-  css << "MaxParallelFrames:" << m_maxParallelFrames << " ";
-  css << "WppBitEqual:" << m_ensureWppBitEqual << " ";
-  css << "WF:" << m_entropyCodingSyncEnabled << "";
+  css << "NumThreads:" << c->m_numThreads << " ";
+  css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+  css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
+  css << "WF:" << c->m_entropyCodingSyncEnabled << "";
   css << "\n";
   }
 

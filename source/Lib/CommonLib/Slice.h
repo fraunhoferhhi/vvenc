@@ -56,7 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "MotionInfo.h"
 #include "HRD.h"
 
-#include "vvenc/vvencCfgExpert.h"
+#include "vvenc/vvencCfg.h"
 
 
 #include <cstring>

@@ -48,7 +48,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "SEIEncoder.h"
 
 #include "vvenc/vvencCfg.h"
-#include "vvenc/vvencCfgExpert.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/SEI.h"
 #include "CommonLib/PicYuvMD5.h"
@@ -77,7 +76,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   uint32_t uiInitialCpbRemovalDelay = (90000/2);                      // 0.5 sec
   bpSei.bpNalCpbParamsPresent = true;
   bpSei.bpVclCpbParamsPresent = true;
-  bpSei.bpMaxSubLayers = m_pcEncCfg->e.m_maxTempLayer;
+  bpSei.bpMaxSubLayers = m_pcEncCfg->m_maxTempLayer;
   bpSei.bpCpbCnt = 1;
   for(int i=0; i < bpSei.bpMaxSubLayers; i++)
   {
@@ -95,7 +94,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   bpSei.concatenationFlag = false;
   bpSei.maxInitialRemovalDelayForConcatenation = uiInitialCpbRemovalDelay;
   bpSei.bpDecodingUnitHrdParamsPresent = false;//m_pcEncCfg->m_noPicPartitionFlag == false;
-  bpSei.decodingUnitCpbParamsInPicTimingSeiFlag = !m_pcEncCfg->e.m_decodingUnitInfoSEIEnabled;
+  bpSei.decodingUnitCpbParamsInPicTimingSeiFlag = !m_pcEncCfg->m_decodingUnitInfoSEIEnabled;
   bpSei.initialCpbRemovalDelayLength = 16;                  // assuming 0.5 sec, log2( 90,000 * 0.5 ) = 16-bit
   // Note: The following parameters require some knowledge about the GOP structure.
   //       Using getIntraPeriod() should be avoided though, because it assumes certain GOP

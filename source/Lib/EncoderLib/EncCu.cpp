@@ -166,12 +166,12 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
 
 void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
 {
-  DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
+  DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, (ChromaFormat)encCfg.m_internChromaFormat );
   m_cRdCost.create     ();
   m_cRdCost.setCostMode( encCfg.m_costMode );
   if ( encCfg.m_lumaReshapeEnable || encCfg.m_lumaLevelToDeltaQPEnabled )
   {
-    m_cRdCost.setReshapeInfo( encCfg.m_lumaReshapeEnable ? encCfg.m_reshapeSignalType : RESHAPE_SIGNAL_PQ, encCfg.m_internalBitDepth[ CH_L ], encCfg.m_internChromaFormat );
+    m_cRdCost.setReshapeInfo( encCfg.m_lumaReshapeEnable ? encCfg.m_reshapeSignalType : RESHAPE_SIGNAL_PQ, encCfg.m_internalBitDepth[ CH_L ], (ChromaFormat)encCfg.m_internChromaFormat );
   }
 
   m_modeCtrl.init     ( encCfg, &m_cRdCost );
@@ -194,7 +194,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_AFFBestSATDCost = MAX_DOUBLE;
 
   unsigned      uiMaxSize    = encCfg.m_CTUSize;
-  ChromaFormat  chromaFormat = encCfg.m_internChromaFormat;
+  ChromaFormat  chromaFormat = (ChromaFormat)encCfg.m_internChromaFormat;
 
   Area ctuArea = Area( 0, 0, uiMaxSize, uiMaxSize );
 

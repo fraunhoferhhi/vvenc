@@ -254,7 +254,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
-  const vvencGOPEntry* gopList = m_pcEncCfg->e.m_GOPList;
+  const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
 
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
@@ -402,7 +402,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     {
       if ( ! ( qp == -lumaQpBDOffset ) )
       {
-        const GOPEntry &gopEntry = m_pcEncCfg->m_GOPList[ gopId ];
+        const vvencGOPEntry &gopEntry = m_pcEncCfg->m_GOPList[ gopId ];
         // adjust QP according to the QP offset for the GOP entry.
         qp += gopEntry.m_QPOffset;
 

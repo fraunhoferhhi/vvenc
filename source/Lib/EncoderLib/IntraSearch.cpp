@@ -80,14 +80,14 @@ IntraSearch::IntraSearch()
 
 void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache )
 {
-  IntraPrediction::init( encCfg.m_internChromaFormat, encCfg.m_internalBitDepth[ CH_L ] );
+  IntraPrediction::init( (ChromaFormat)encCfg.m_internChromaFormat, encCfg.m_internalBitDepth[ CH_L ] );
 
   m_pcEncCfg          = &encCfg;
   m_pcTrQuant         = pTrQuant;
   m_pcRdCost          = pRdCost;
   m_SortedPelUnitBufs = pSortedPelUnitBufs;
 
-  const ChromaFormat chrFormat = encCfg.m_internChromaFormat;
+  const ChromaFormat chrFormat = (ChromaFormat)encCfg.m_internChromaFormat;
   const int maxCUSize          = encCfg.m_CTUSize;
 
   Area area = Area( 0, 0, maxCUSize, maxCUSize );
