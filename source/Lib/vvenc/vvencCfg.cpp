@@ -1652,6 +1652,8 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( (m_PadSourceWidth  % std::max( 8, int(m_CTUSize  >> ( m_MaxCodingDepth - 1 )))) != 0, "Resulting coded frame width must be a multiple of Max(8, the minimum CU size)");
   confirmParameter( m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
+  confirmParameter( m_log2MinCodingBlockSize < 2,                                                         "Log2MinCodingBlockSize must be 2 or greater." );
+  confirmParameter( m_CTUSize < ( 1 << m_log2MinCodingBlockSize ),                                        "Log2MinCodingBlockSize must be smaller than max CTU size." );
 
   confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
@@ -2474,6 +2476,7 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   css << "Level                                  : " << getLevelStr( m_level ) << "\n";
   css << "CU size / total-depth                  : " << m_CTUSize << " / " << m_MaxCodingDepth << "\n";
   css << "Max TB size                            : " << (1 << m_log2MaxTbSize) << "\n";
+  css << "Min CB size                            : " << (1 << m_log2MinCodingBlockSize) << "\n";
   css << "Motion search range                    : " << m_SearchRange << "\n";
   css << "Intra period                           : " << m_IntraPeriod << "\n";
   css << "Decoding refresh type                  : " << m_DecodingRefreshType << "\n";
