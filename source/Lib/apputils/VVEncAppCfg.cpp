@@ -347,21 +347,21 @@ const std::vector<SVPair<bool>> QPAToIntMap =
 
 void setPresets( VVEncAppCfg* cfg, int preset )
 {
-  cfg->initPreset( (PresetMode)preset );
+  vvenc_initPreset(cfg, (vvencPresetMode)preset );
 }
 
 void setInputBitDepthAndColorSpace( VVEncAppCfg* cfg, int dbcs )
 {
   switch( dbcs )
   {
-  case YUV420_8 :  cfg->m_inputFileChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV420_10 : cfg->m_inputFileChromaFormat = CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV422_8 :  cfg->m_inputFileChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV422_10 : cfg->m_inputFileChromaFormat = CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV444_8 :  cfg->m_inputFileChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV444_10 : cfg->m_inputFileChromaFormat = CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV400_8 :  cfg->m_inputFileChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV400_10 : cfg->m_inputFileChromaFormat = CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV420_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV422_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
 }
@@ -387,22 +387,22 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
-  IStreamToEnum<MsgLevel>      toMsgLevel                   ( &m_verbosity,   &MsgLevelToEnumMap );
-  IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
-  IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
+  IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &m_verbosity,   &MsgLevelToEnumMap );
+  IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
+  IStreamToRefVec<int>              toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
 
-  IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
-  IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
-  IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
-  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
-  IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
+  IStreamToEnum<vvencProfile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
+  IStreamToEnum<vvencTier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
+  IStreamToEnum<vvencLevel>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
+  IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
+  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
 
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
-  IStreamToEnum<DecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,              &DecodingRefreshTypeToEnumMap );
+  IStreamToEnum<vvencDecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
-  IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToEnum<int>           toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toAud                        ( &e.m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToEnum<int>           toHrd                        ( &e.m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toVui                        ( &e.m_vuiParametersPresent,            &FlagToIntMap );
   IStreamToEnum<bool>          toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
 
 
@@ -528,12 +528,12 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   //
 
   // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
-  m_rewriteParamSets        = true;
+  e.m_rewriteParamSets        = true;
 
 //  // this has to be set outside
-  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  if ( e.m_internChromaFormat < 0 || e.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
-    m_internChromaFormat = m_inputFileChromaFormat;
+    e.m_internChromaFormat = e.m_inputFileChromaFormat;
   }
 
   return true;
@@ -544,7 +544,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     \param  argv        array of arguments
     \retval             true when success
  */
-bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
+static bool parseCfgFF( VVEncAppCfg *c, int argc, char* argv[] )
 {
   bool do_help                = false;
   bool do_expert_help         = false;
@@ -554,43 +554,43 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // link custom formated configuration parameters with istream reader
   //
-  IStreamToEnum<MsgLevel>      toMsgLevel                   ( &m_verbosity,                   &MsgLevelToEnumMap      );
-  IStreamToFunc<PresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,PresetMode::MEDIUM);
-  IStreamToRefVec<int>         toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
-  IStreamToRefVec<double>      toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
+  IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &c->c.m_verbosity,                   &MsgLevelToEnumMap      );
+  IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, c, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
+  IStreamToRefVec<int>              toSourceSize                 ( { &c->c.m_SourceWidth, &c->c.m_SourceHeight }, true, 'x' );
+  IStreamToRefVec<double>           toLambdaModifier             ( { &c->c.e.m_adLambdaModifier[0], &c->c.e.m_adLambdaModifier[1], &c->c.e.m_adLambdaModifier[2], &c->c.e.m_adLambdaModifier[3], &c->c.e.m_adLambdaModifier[4], &c->c.e.m_adLambdaModifier[5], &c->c.e.m_adLambdaModifier[6] }, false );
 
-  IStreamToEnum<Profile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
-  IStreamToEnum<Tier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
-  IStreamToEnum<Level>         toLevel                      ( &m_level,                       &LevelToEnumMap        );
-  IStreamToEnum<CostMode>      toCostMode                   ( &m_costMode,                    &CostModeToEnumMap     );
-  IStreamToEnum<ChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
-  IStreamToEnum<ChromaFormat>  toInternCoFormat             ( &m_internChromaFormat,          &ChromaFormatToEnumMap  );
-  IStreamToEnum<HashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
-  IStreamToVec<int>            toQpInCb                     ( &m_qpInValsCb            );
-  IStreamToVec<int>            toQpOutCb                    ( &m_qpOutValsCb           );
-  IStreamToVec<int>            toQpInCr                     ( &m_qpInValsCr            );
-  IStreamToVec<int>            toQpOutCr                    ( &m_qpOutValsCr           );
-  IStreamToVec<int>            toQpInCbCr                   ( &m_qpInValsCbCr          );
-  IStreamToVec<int>            toQpOutCbCr                  ( &m_qpOutValsCbCr         );
-  IStreamToVec<double>         toIntraLambdaModifier        ( &m_adIntraLambdaModifier );
+  IStreamToEnum<vvencProfile>       toProfile                    ( &c->c.m_profile,                     &ProfileToEnumMap      );
+  IStreamToEnum<vvencTier>          toLevelTier                  ( &c->c.m_levelTier,                   &TierToEnumMap         );
+  IStreamToEnum<vvencLevel>         toLevel                      ( &c->c.m_level,                       &LevelToEnumMap        );
+  IStreamToEnum<vvencCostMode>      toCostMode                   ( &c->c.e.m_costMode,                    &CostModeToEnumMap     );
+  IStreamToEnum<vvencChromaFormat>  toInputFileCoFormat          ( &c->m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
+  IStreamToEnum<vvencChromaFormat>  toInternCoFormat             ( &c->c.e.m_internChromaFormat,          &ChromaFormatToEnumMap  );
+  IStreamToEnum<vvencHashType>      toHashType                   ( &c->c.e.m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
+  IStreamToVec<int>            toQpInCb                     ( &c->c.e.m_qpInValsCb            );
+  IStreamToVec<int>            toQpOutCb                    ( &c->c.e.m_qpOutValsCb           );
+  IStreamToVec<int>            toQpInCr                     ( &c->c.e.m_qpInValsCr            );
+  IStreamToVec<int>            toQpOutCr                    ( &c->c.e.m_qpOutValsCr           );
+  IStreamToVec<int>            toQpInCbCr                   ( &c->c.e.m_qpInValsCbCr          );
+  IStreamToVec<int>            toQpOutCbCr                  ( &c->c.e.m_qpOutValsCbCr         );
+  IStreamToVec<double>         toIntraLambdaModifier        ( &c->c.e.m_adIntraLambdaModifier );
 
-  IStreamToVec<int>            toMCTFFrames                 ( &m_MCTFFrames   );
-  IStreamToVec<double>         toMCTFStrengths              ( &m_MCTFStrengths );
-  IStreamToEnum<SegmentMode>   toSegment                    ( &m_SegmentMode,            &SegmentToEnumMap );
-  IStreamToEnum<HDRMode>       toHDRMode                    ( &m_HdrMode,                &HdrModeToIntMap       );
-  IStreamToEnum<int>           toColorPrimaries             ( &m_colourPrimaries,        &ColorPrimariesToIntMap );
-  IStreamToEnum<int>           toTransferCharacteristics    ( &m_transferCharacteristics,&TransferCharacteristicsToIntMap );
-  IStreamToEnum<int>           toColorMatrix                ( &m_matrixCoefficients,     &ColorMatrixToIntMap );
-  IStreamToEnum<int>           toPrefTransferCharacteristics( &m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
+  IStreamToVec<int>            toMCTFFrames                 ( &c->c.e.m_MCTFFrames   );
+  IStreamToVec<double>         toMCTFStrengths              ( &c->c.e.m_MCTFStrengths );
+  IStreamToEnum<vvencSegmentMode>   toSegment               ( &c->c.m_SegmentMode,            &SegmentToEnumMap );
+  IStreamToEnum<vvencHDRMode>       toHDRMode               ( &c->c.m_HdrMode,                &HdrModeToIntMap       );
+  IStreamToEnum<int>           toColorPrimaries             ( &c->c.e.m_colourPrimaries,        &ColorPrimariesToIntMap );
+  IStreamToEnum<int>           toTransferCharacteristics    ( &c->c.e.m_transferCharacteristics,&TransferCharacteristicsToIntMap );
+  IStreamToEnum<int>           toColorMatrix                ( &c->c.e.m_matrixCoefficients,     &ColorMatrixToIntMap );
+  IStreamToEnum<int>           toPrefTransferCharacteristics( &c->c.e.m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
-  IStreamToVec<unsigned int>   toMasteringDisplay           ( &m_masteringDisplay  );
-  IStreamToVec<unsigned int>   toContentLightLevel          ( &m_contentLightLevel );
+  IStreamToVec<unsigned int>   toMasteringDisplay           ( &c->c.e.m_masteringDisplay  );
+  IStreamToVec<unsigned int>   toContentLightLevel          ( &c->c.e.m_contentLightLevel );
 
-  IStreamToEnum<DecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
+  IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType  ( &c->c.m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
-  IStreamToEnum<int>           toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>           toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToEnum<int>           toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toAud                        ( &c->c.e.m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToEnum<int>           toHrd                        ( &c->c.e.m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>           toVui                        ( &c->c.e.m_vuiParametersPresent,            &FlagToIntMap );
 
   //
   // setup configuration parameters
@@ -609,7 +609,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("InputFile,i",                                     m_inputFileName,                                  "Original YUV input file name")
   ("Size,s",                                          toSourceSize,                                     "Input resolution (WidthxHeight)")
-  ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                          "Bit-depth of input file")
+  ("InputBitDepth",                                   m_inputBitDepth[ 0 ],                          "Bit-depth of input file")
   ("FramesToBeEncoded,f",                             m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
   ("FrameRate,-fr",                                   m_FrameRate,                                      "Frame rate")
   ("FrameSkip,-fs",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
@@ -625,7 +625,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("BitstreamFile,b",                                 m_bitstreamFileName,                              "Bitstream output file name")
   ("ReconFile,o",                                     m_reconFileName,                                  "Reconstructed YUV output file name")
-  ("OutputBitDepth",                                  m_outputBitDepth[ CH_L ],                         "Bit-depth of output file")
+  ("OutputBitDepth",                                  m_outputBitDepth[ 0 ],                         "Bit-depth of output file")
   ;
 
   opts.setSubSection("Profile, Level, Tier");
@@ -985,30 +985,30 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("LMCSAdpOption",                                   m_adpOption,                                      "LMCS adaptation options: 0:automatic,"
                                                                                                         "1: rsp both (CW66 for QP<=22), 2: rsp TID0 (for all QP),"
                                                                                                         "3: rsp inter(CW66 for QP<=22), 4: rsp inter(for all QP).")
-  ("LMCSInitialCW",                                   m_initialCW,                                      "LMCS initial total codeword (0~1023) when LMCSAdpOption > 0")
-  ("LMCSOffset",                                      m_LMCSOffset,                                     "LMCS chroma residual scaling offset")
-  ("ALF",                                             m_alf,                                            "Adpative Loop Filter\n" )
-  ("CCALF",                                           m_ccalf,                                          "Cross-component Adaptive Loop Filter" )
-  ("CCALFQpTh",                                       m_ccalfQpThreshold,                               "QP threshold above which encoder reduces CCALF usage")
-  ("UseNonLinearAlfLuma",                             m_useNonLinearAlfLuma,                            "Non-linear adaptive loop filters for Luma Channel")
-  ("UseNonLinearAlfChroma",                           m_useNonLinearAlfChroma,                          "Non-linear adaptive loop filters for Chroma Channels")
-  ("MaxNumAlfAlternativesChroma",                     m_maxNumAlfAlternativesChroma,                    std::string("Maximum number of alternative Chroma filters (1-") + std::to_string(MAX_NUM_ALF_ALTERNATIVES_CHROMA) + std::string (", inclusive)") )
-  ("ALFTempPred",                                     m_alfTempPred,                                    "Enable usage of ALF temporal prediction for filter data\n" )
-  ("PROF",                                            m_PROF,                                           "Enable prediction refinement with optical flow for affine mode")
-  ("Affine",                                          m_Affine,                                         "Enable affine prediction")
-  ("AffineType",                                      m_AffineType,                                     "Enable affine type prediction")
-  ("MMVD",                                            m_MMVD,                                           "Enable Merge mode with Motion Vector Difference")
-  ("MmvdDisNum",                                      m_MmvdDisNum,                                     "Number of MMVD Distance Entries")
-  ("AllowDisFracMMVD",                                m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
-  ("MCTF",                                            m_MCTF,                                           "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
-  ("MCTFFutureReference",                             m_MCTFFutureReference,                            "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
-  ("MCTFNumLeadFrames",                               m_MCTFNumLeadFrames,                              "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
-  ("MCTFNumTrailFrames",                              m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
+  ("LMCSInitialCW",                                   c->c.e.m_initialCW,                                      "LMCS initial total codeword (0~1023) when LMCSAdpOption > 0")
+  ("LMCSOffset",                                      c->c.e.m_LMCSOffset,                                     "LMCS chroma residual scaling offset")
+  ("ALF",                                             c->c.e.m_alf,                                            "Adpative Loop Filter\n" )
+  ("CCALF",                                           c->c.e.m_ccalf,                                          "Cross-component Adaptive Loop Filter" )
+  ("CCALFQpTh",                                       c->c.e.m_ccalfQpThreshold,                               "QP threshold above which encoder reduces CCALF usage")
+  ("UseNonLinearAlfLuma",                             c->c.e.m_useNonLinearAlfLuma,                            "Non-linear adaptive loop filters for Luma Channel")
+  ("UseNonLinearAlfChroma",                           c->c.e.m_useNonLinearAlfChroma,                          "Non-linear adaptive loop filters for Chroma Channels")
+  ("MaxNumAlfAlternativesChroma",                     c->c.e.m_maxNumAlfAlternativesChroma,                    std::string("Maximum number of alternative Chroma filters (1-") + std::to_string(VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA) + std::string (", inclusive)") )
+  ("ALFTempPred",                                     c->c.e.m_alfTempPred,                                    "Enable usage of ALF temporal prediction for filter data\n" )
+  ("PROF",                                            c->c.e.m_PROF,                                           "Enable prediction refinement with optical flow for affine mode")
+  ("Affine",                                          c->c.e.m_Affine,                                         "Enable affine prediction")
+  ("AffineType",                                      c->c.e.m_AffineType,                                     "Enable affine type prediction")
+  ("MMVD",                                            c->c.e.m_MMVD,                                           "Enable Merge mode with Motion Vector Difference")
+  ("MmvdDisNum",                                      c->c.e.m_MmvdDisNum,                                     "Number of MMVD Distance Entries")
+  ("AllowDisFracMMVD",                                c->c.e.m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
+  ("MCTF",                                            c->c.e.m_MCTF,                                           "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
+  ("MCTFFutureReference",                             c->c.e.m_MCTFFutureReference,                            "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
+  ("MCTFNumLeadFrames",                               c->c.e.m_MCTFNumLeadFrames,                              "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
+  ("MCTFNumTrailFrames",                              c->c.e.m_MCTFNumTrailFrames,                             "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFFrame",                                       toMCTFFrames,                                     "Frame to filter Strength for frame in GOP based temporal filter")
   ("MCTFStrength",                                    toMCTFStrengths,                                  "Strength for  frame in GOP based temporal filter.")
 
-  ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
-  ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
+  ("FastLocalDualTreeMode",                           c->c.e.m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
+  ("QtbttExtraFast",                                  c->c.e.m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
   ;
 
   opts.setSubSection("Threading, performance");
@@ -1058,6 +1058,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToVec<int>            toRectSliceBoundary          ( &rectSliceBoundary     );
   IStreamToVec<int>            toSignalledSliceId           ( &signalledSliceId      );
 
+  bool sdr; // unused
   opts.setSubSection("Unused options (only for compatiblity to VTM)");
   opts.addOptions()
   ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
@@ -1073,7 +1074,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
   ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
 
-  ("isSDR",                                           m_sdr,                                            "compatibility")
+  ("isSDR",                                           sdr,                                              "compatibility")
   ;
   
   
@@ -1081,7 +1082,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
 
-  for ( int i = 0; i < MAX_GOP; i++ )
+  for ( int i = 0; i < VVENC_MAX_GOP; i++ )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
@@ -1139,7 +1140,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
       //ignoreParamsLst.push_back( "WarnUnknowParameter,w" );
 
       ignoreParamsLst.push_back( "decode" );
-      for ( int i = 0; i < MAX_GOP; i++ )
+      for ( int i = 0; i < VVENC_MAX_GOP; i++ )
       {
         std::ostringstream cOSS;
         cOSS << "Frame" << i+1;
@@ -1176,7 +1177,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  if( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= NUM_CHROMA_FORMAT )
+  if( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
     cout <<  "error: Input chroma format must be either 400, 420, 422 or 444" << std::endl;
     error = true;
@@ -1196,21 +1197,21 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   // set intern derived parameters (for convenience purposes only)
   //
 
-  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = m_inputFileChromaFormat;
   }
 
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
   {
-    if( ( m_outputBitDepth[ CH_L ] != 10 && m_outputBitDepth[ CH_L ] != 12 )
-        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ CH_L ] & 3 ) ) ) != 0 ) )
+    if( ( m_outputBitDepth[ 0 ] != 10 && m_outputBitDepth[ 0 ] != 12 )
+        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
     {
       cout <<  "error: Invalid output bit-depth or image width for packed YUV output, aborting" << std::endl;
       error = true;
     }
-    if( ( m_internChromaFormat != CHROMA_400 ) && ( ( m_outputBitDepth[ CH_C ] != 10 && m_outputBitDepth[ CH_C ] != 12 )
-          || ( ( vvencGetWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ CH_C ] & 3 ) ) ) != 0 ) ) )
+    if( ( m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( m_outputBitDepth[ 1 ] != 10 && m_outputBitDepth[ 1 ] != 12 )
+          || ( ( vvencGetWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
     {
       cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
       error = true;
@@ -1222,25 +1223,25 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  if ( VVEncCfg::initCfgParameter() )
-  {
-    return false;
-  }
+//  if ( vvenc_initCfgParameter() )
+//  {
+//    return false;
+//  }
 
   return true;
 }
 
-std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
+static std::string getConfigAsString( VVEncAppCfg *c, vvencMsgLevel eMsgLevel )
 {
   std::stringstream css;
   if( eMsgLevel >= VVENC_DETAILS )
   {
-    css << "Input          File                    : " << m_inputFileName << "\n";
-    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
-    css << "Reconstruction File                    : " << m_reconFileName << "\n";
+    css << "Input          File                    : " << c->m_inputFileName << "\n";
+    css << "Bitstream      File                    : " << c->m_bitstreamFileName << "\n";
+    css << "Reconstruction File                    : " << c->m_reconFileName << "\n";
   }
 
-  css << VVEncCfg::getConfigAsString( eMsgLevel );
+  css << vvenc_getConfigAsString( &c->c, eMsgLevel);
   css << "\n";
 
   return css.str();

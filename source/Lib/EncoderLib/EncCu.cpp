@@ -1486,7 +1486,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   const Slice &slice = *tempCS->slice;
   const SPS& sps = *tempCS->sps;
 
-  CHECK( slice.sliceType == I_SLICE, "Merge modes not available for I-slices" );
+  CHECK( slice.sliceType == VVENC_I_SLICE, "Merge modes not available for I-slices" );
 
   tempCS->initStructData( encTestMode.qp );
 
@@ -2085,7 +2085,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         {
           m_modeCtrl.comprCUCtx->earlySkip = true;
         }
-        else if( m_pcEncCfg->m_motionEstimationSearchMethod != MESEARCH_SELECTIVE )
+        else if( m_pcEncCfg->m_motionEstimationSearchMethod != VVENC_MESEARCH_SELECTIVE )
         {
           int absolute_MV = 0;
 

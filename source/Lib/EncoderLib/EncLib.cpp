@@ -979,7 +979,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   bUseDQP |= m_cEncCfg.m_lumaLevelToDeltaQPEnabled;
   bUseDQP |= m_cEncCfg.m_usePerceptQPA && (m_cEncCfg.m_QP <= MAX_QP_PERCEPT_QPA);
 
-  if (m_cEncCfg.m_costMode==COST_SEQUENCE_LEVEL_LOSSLESS || m_cEncCfg.m_costMode==VVENC_COST_LOSSLESS_CODING)
+  if (m_cEncCfg.m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_cEncCfg.m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
     bUseDQP = false;
   }

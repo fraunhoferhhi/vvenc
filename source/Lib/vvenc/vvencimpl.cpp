@@ -106,7 +106,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
   VVEncCfg cVVEncCfgCopy = rcVVEncCfg;
 
-  if ( cVVEncCfgCopy.initCfgParameter() )
+  if ( vvenc_initCfgParameter(&cVVEncCfgCopy) )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -124,7 +124,8 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
 
   m_cVVEncCfgExt = rcVVEncCfg;
   m_cVVEncCfg    = rcVVEncCfg;
-  if ( m_cVVEncCfg.initCfgParameter() ) // init auto/dependent options
+
+  if ( vvenc_initCfgParameter(&m_cVVEncCfg) ) // init auto/dependent options
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -235,7 +236,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfg.e.m_internChromaFormat != CHROMA_400 )
     {
       if( pcYUVBuffer->planes[1].ptr == nullptr ||
           pcYUVBuffer->planes[2].ptr == nullptr )
@@ -263,9 +264,9 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfg.e.m_internChromaFormat != CHROMA_400 )
     {
-      if( m_cVVEncCfg.m_internChromaFormat == CHROMA_444 )
+      if( m_cVVEncCfg.e.m_internChromaFormat == CHROMA_444 )
       {
         if( pcYUVBuffer->planes[1].stride && pcYUVBuffer->planes[0].width > pcYUVBuffer->planes[1].stride )
         {
@@ -391,12 +392,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.m_MCTFNumLeadFrames;
+  return m_cVVEncCfg.e.m_MCTFNumLeadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.m_MCTFNumTrailFrames;
+  return m_cVVEncCfg.e.m_MCTFNumTrailFrames;
 }
 
 int VVEncImpl::printSummary() const

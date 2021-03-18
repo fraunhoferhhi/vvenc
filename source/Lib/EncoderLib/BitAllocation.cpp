@@ -343,7 +343,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       if (savedLumaQP < 0)
       {
-        int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->e.m_PadSourceWidth, encCfg->m_PadSourceHeight,
+        int averageAdaptedLumaQP = Clip3 (0, MAX_QP, sliceQP + apprI3Log2 (hpEner[0] / getAveragePictureActivity (encCfg->e.m_PadSourceWidth, encCfg->e.m_PadSourceHeight,
                                                                                                                   encCfg->m_RCNumPasses == 2 ? 0 : ctuPumpRedQP.back(),
                                                                                                                   (encCfg->e.m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth)));
         if (isChromaEnabled (pic->chromaFormat) && (averageAdaptedLumaQP < MAX_QP))

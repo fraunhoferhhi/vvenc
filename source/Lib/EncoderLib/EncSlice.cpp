@@ -129,7 +129,7 @@ EncSlice::EncSlice()
   , m_pALF               ( nullptr )
   , m_pcRateCtrl         ( nullptr )
   , m_CABACWriter        ( m_BinEncoder )
-  , m_encCABACTableIdx   ( I_SLICE )
+  , m_encCABACTableIdx   ( VVENC_I_SLICE )
   , m_appliedSwitchDQQ   ( 0 )
 {
 }
@@ -237,7 +237,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
   slice->sliceMap.addCtusToSlice( 0, pic->cs->pcv->widthInCtus, 0, pic->cs->pcv->heightInCtus, pic->cs->pcv->widthInCtus);
 
   // this ensures that independently encoded bitstream chunks can be combined to bit-equal
-  const SliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
+  const vvencSliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
   slice->encCABACTableIdx = cabacTableIdx;
 
   // set QP and lambda values
@@ -254,7 +254,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
-  const GOPEntry* gopList = m_pcEncCfg->m_GOPList;
+  const vvencGOPEntry* gopList = m_pcEncCfg->e.m_GOPList;
 
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
@@ -378,13 +378,13 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
   const int lumaQpBDOffset = slice->sps->qpBDOffset[ CH_L ];
   int qp;
 
-  if ( m_pcEncCfg->m_costMode == COST_LOSSLESS_CODING )
+  if ( m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
   {
     qp = LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP;
   }
   else
   {
-    const SliceType sliceType = slice->sliceType;
+    const vvencSliceType sliceType = slice->sliceType;
 
     qp = m_pcEncCfg->m_QP;
     // switch at specific qp and keep this qp offset
@@ -394,7 +394,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     }
     qp += m_appliedSwitchDQQ;
 
-    if( sliceType == I_SLICE )
+    if( sliceType == VVENC_I_SLICE )
     {
       qp += m_pcEncCfg->m_intraQPOffset;
     }
@@ -425,7 +425,7 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
                                   const double     dQP,   // initial double-precision QP
                                           int&     iQP )  // returned integer QP.
 {
-  const  GOPEntry* gopList       = m_pcEncCfg->m_GOPList;
+  const  vvencGOPEntry* gopList  = m_pcEncCfg->m_GOPList;
   const  int       NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
   const  int       SHIFT_QP      = 12;
   const int temporalId           = gopList[ GOPid ].m_temporalId;

@@ -1531,7 +1531,7 @@ void EncGOP::xWriteTrailingSEIs( const Picture& pic, AccessUnitList& accessUnit,
   const Slice* slice = pic.slices[ 0 ];
   SEIMessages trailingSeiMessages;
 
-  if ( m_pcEncCfg->m_decodedPictureHashSEIType != HASHTYPE_NONE )
+  if ( m_pcEncCfg->m_decodedPictureHashSEIType != VVENC_HASHTYPE_NONE )
   {
     SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
     const CPelUnitBuf recoBuf = pic.cs->getRecoBuf();
@@ -1908,7 +1908,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     c += 32;
   }
 
-  if( m_pcEncCfg->e.m_verbosity >= VVENC_NOTICE )
+  if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
   {
     if( ! m_pcRateCtrl->rcIsFinalPass )
     {

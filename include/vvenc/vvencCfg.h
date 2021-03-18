@@ -278,15 +278,6 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *cfg, vvencPresetMode preset );
 
 VVENC_DECL int vvenc_initDefault( VVEncCfg *cfg, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM );
 
-/**
-  This method checks if the current configuration is valid.
-  The method checks all configuration parameter (base and derived/dependent)
-  \param[in]  none
-  \retval     bool true: error, false: ok
-  \pre        The initCfgParameter must be called first.
-*/
-VVENC_DECL bool vvenc_checkCfgParameter( VVEncCfg *cfg );
-
 
 /**
   This method initializes the configuration depending on set default parameter
@@ -296,9 +287,6 @@ VVENC_DECL bool vvenc_checkCfgParameter( VVEncCfg *cfg );
 VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *cfg );
 
 VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *cfg, vvencMsgLevel eMsgLevel );
-
-VVENC_DECL bool vvenc_checkExperimental( VVEncCfg *cfg, bool bflag, const char* message );
-VVENC_DECL bool vvenc_confirmParameter ( VVEncCfg *cfg, bool bflag, const char* message );
 
 #ifdef __cplusplus
 }

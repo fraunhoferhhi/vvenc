@@ -55,13 +55,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Slice.h"
 #include "CommonLib/ProfileLevelTier.h"
 
-#include <math.h>
-#include <thread>
+//#include <math.h>
+//#include <thread>
 
-//! \ingroup Interface
-//! \{
 
-namespace vvenc {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+VVENC_NAMESPACE_BEGIN
+
+static bool checkCfgParameter( );
 
 VVENC_DECL void vvenc_cfg_default(VVEncCfg *cfg )
 {
@@ -103,11 +107,11 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *cfg )
   vvenc_initPreset( cfg, vvencPresetMode::VVENC_MEDIUM );
 }
 
-VVENC_DECL bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* message );
+static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
-  msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+  vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
   c->m_confirmFailed = true;
   return true;
 }
@@ -117,14 +121,14 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   c->m_confirmFailed = false;
 
   // check for valid base parameter
-  confirmParameter(  (c->m_SourceWidth <= 0 || c->m_SourceHeight <= 0), "Error: input resolution not set");
+  vvenc_confirmParameter( c,  (c->m_SourceWidth <= 0 || c->m_SourceHeight <= 0), "Error: input resolution not set");
 
-  confirmParameter( c->m_inputBitDepth[CH_L] < 8 || c->m_inputBitDepth[CH_L] > 16,                    "InputBitDepth must be at least 8" );
-  confirmParameter( c->m_inputBitDepth[CH_L] != 8 && c->m_inputBitDepth[CH_L] != 10,                  "Input bitdepth must be 8 or 10 bit" );
-  confirmParameter( c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
+  vvenc_confirmParameter( c, c->m_inputBitDepth[0] < 8 || c->m_inputBitDepth[0] > 16,                    "InputBitDepth must be at least 8" );
+  vvenc_confirmParameter( c, c->m_inputBitDepth[0] != 8 && c->m_inputBitDepth[0] != 10,                  "Input bitdepth must be 8 or 10 bit" );
+  vvenc_confirmParameter( c, c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
 
-  confirmParameter( c->m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
-  confirmParameter( c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
+  vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
+  vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
 
   int temporalRate   = c->m_FrameRate;
   int temporalScale  = 1;
@@ -137,33 +141,33 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   default: break;
   }
 
-  confirmParameter( (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
-  confirmParameter( c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
+  vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
-  confirmParameter( c->m_IntraPeriod < 0,                 "IDR period (in frames) must be >= 0");
-  confirmParameter( c->m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
+  vvenc_confirmParameter( c, c->m_IntraPeriod < 0,                 "IDR period (in frames) must be >= 0");
+  vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
 
-  confirmParameter( c->m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
-  confirmParameter( c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( c->m_GOPSize > 64,                                                             "GOP size must be <= 64" );
-  confirmParameter( c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
+  vvenc_confirmParameter( c, c->m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
+  vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
+  vvenc_confirmParameter( c, c->m_GOPSize > 64,                                                             "GOP size must be <= 64" );
+  vvenc_confirmParameter( c, c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
 
-  confirmParameter( c->m_QP < 0 || c->m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
 
-  confirmParameter( c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
 
   if( 0 == c->m_RCTargetBitrate )
    {
-     confirmParameter( c->m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
-     confirmParameter( c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
-     confirmParameter( c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
+     vvenc_confirmParameter( c, c->m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
+     vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
+     vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
 
-  confirmParameter( c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
+  vvenc_confirmParameter( c, c->m_HdrMode < VVENC_HDR_OFF || c->m_HdrMode > VVENC_HDR_USER_DEFINED,  "HdrMode must be in the range 0 - 5" );
 
-  confirmParameter( c->m_verbosity < VVENC_SILENT || c->m_verbosity > VVENC_DETAILS, "verbosity is out of range[0..6]" );
+  vvenc_confirmParameter( c, c->m_verbosity < VVENC_SILENT || c->m_verbosity > VVENC_DETAILS, "verbosity is out of range[0..6]" );
 
   if ( c->m_confirmFailed )
   {
@@ -181,7 +185,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
 
   if( c->m_profile == vvencProfile::VVENC_PROFILE_AUTO )
   {
-    const int maxBitDepth= std::max(c->m_internalBitDepth[CH_L], c->m_internalBitDepth[c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_400 ? CH_L : CH_C]);
+    const int maxBitDepth= std::max(c->m_internalBitDepth[0], c->m_internalBitDepth[c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_400 ? 0 : 1]);
 
     if (c->m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_400 || m_internChromaFormat==vvencChromaFormat::VVENC_CHROMA_420)
     {
@@ -569,7 +573,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   m_reshapeCW.adpOption  = m_adpOption;
   m_reshapeCW.initialCW  = m_initialCW;
 
-  confirmParameter( m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
+  vvenc_confirmParameter( c, m_rprEnabledFlag < 0 || m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
 
   if( m_rprEnabledFlag == 2 )
   {
@@ -1323,7 +1327,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     checkGOP++;
   }
 
-  m_maxTempLayer = 1;
+  c->m_maxTempLayer = 1;
 
   for(int i=0; i<m_GOPSize; i++)
   {
@@ -1437,17 +1441,17 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   return( m_confirmFailed );
 }
 
-bool VVEncCfg::checkCfgParameter( )
+static bool checkCfgParameter( )
 {
   // run base check first
-  confirmParameter( m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
-  confirmParameter( (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+  vvenc_confirmParameter( c, m_profile == Profile::PROFILE_AUTO, "can not determin auto profile");
+  vvenc_confirmParameter( c, (m_profile != Profile::MAIN_10 && m_profile !=MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
 
-  confirmParameter( m_level   == Level::LEVEL_AUTO, "can not determin level");
+  vvenc_confirmParameter( c, m_level   == Level::LEVEL_AUTO, "can not determin level");
 
-  confirmParameter( m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
-  confirmParameter( m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  confirmParameter( m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
+  vvenc_confirmParameter( c, m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
+  vvenc_confirmParameter( c, m_motionEstimationSearchMethod < 0 || m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
+  vvenc_confirmParameter( c, m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
 
   switch ( m_conformanceWindowMode)
   {
@@ -1455,8 +1459,8 @@ bool VVEncCfg::checkCfgParameter( )
       break;
   case 1:
       // automatic padding to minimum CU size
-      confirmParameter( m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
-      confirmParameter( m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
+      vvenc_confirmParameter( c, m_aiPad[0] % SPS::getWinUnitX(m_internChromaFormat) != 0, "Error: picture width is not an integer multiple of the specified chroma subsampling" );
+      vvenc_confirmParameter( c, m_aiPad[1] % SPS::getWinUnitY(m_internChromaFormat) != 0, "Error: picture height is not an integer multiple of the specified chroma subsampling" );
       break;
   case 2:
       break;
@@ -1473,14 +1477,14 @@ bool VVEncCfg::checkCfgParameter( )
       break;
   }
 
-  confirmParameter(  m_colourPrimaries < 0 || m_colourPrimaries > 12,                 "colourPrimaries must be in range 0 <= x <= 12" );
-  confirmParameter(  m_transferCharacteristics < 0 || m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
-  confirmParameter(  m_matrixCoefficients < 0 || m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
+  vvenc_confirmParameter( c, m_colourPrimaries < 0 || m_colourPrimaries > 12,                 "colourPrimaries must be in range 0 <= x <= 12" );
+  vvenc_confirmParameter( c, m_transferCharacteristics < 0 || m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
+  vvenc_confirmParameter( c, m_matrixCoefficients < 0 || m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
 
 
-  confirmParameter(m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
-  confirmParameter(m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
-  confirmParameter(m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
+  vvenc_confirmParameter( c, m_qpInValsCb.size() != m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
+  vvenc_confirmParameter( c, m_qpInValsCr.size() != m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
+  vvenc_confirmParameter( c, m_qpInValsCbCr.size() != m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
 
   if ( m_confirmFailed )
   {
@@ -1489,28 +1493,28 @@ bool VVEncCfg::checkCfgParameter( )
 
   int qpBdOffsetC = 6 * (m_internalBitDepth[CH_C] - 8);
 
-  confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-  confirmParameter(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
+  vvenc_confirmParameter( c,(m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+  vvenc_confirmParameter( c,(m_qpInValsCb[0] != m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
   for (size_t i = 0; i < m_qpInValsCb.size() - 1; i++)
   {
-    confirmParameter(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
-    confirmParameter(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    vvenc_confirmParameter( c,(m_qpInValsCb[i] < -qpBdOffsetC || m_qpInValsCb[i] > MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
+    vvenc_confirmParameter( c,(m_qpOutValsCb[i] < -qpBdOffsetC || m_qpOutValsCb[i] > MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
   }
   if (!m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
   {
-    confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-    confirmParameter(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
+    vvenc_confirmParameter( c,(m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    vvenc_confirmParameter( c,(m_qpInValsCr[0] != m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
     for (size_t i = 0; i < m_qpInValsCr.size() - 1; i++)
     {
-      confirmParameter(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      confirmParameter(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,(m_qpInValsCr[i] < -qpBdOffsetC || m_qpInValsCr[i] > MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,(m_qpOutValsCr[i] < -qpBdOffsetC || m_qpOutValsCr[i] > MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
-    confirmParameter(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-    confirmParameter(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
+    vvenc_confirmParameter( c,(m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
+    vvenc_confirmParameter( c,(m_qpInValsCbCr[0] != m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
     for (size_t i = 0; i < m_qpInValsCbCr.size() - 1; i++)
     {
-      confirmParameter(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
-      confirmParameter(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,(m_qpInValsCbCr[i] < -qpBdOffsetC || m_qpInValsCbCr[i] > MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
+      vvenc_confirmParameter( c,(m_qpOutValsCbCr[i] < -qpBdOffsetC || m_qpOutValsCbCr[i] > MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
   }
 
@@ -1518,18 +1522,18 @@ bool VVEncCfg::checkCfgParameter( )
   // do some check and set of parameters next
   //
 
-  confirmParameter( m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
-  confirmParameter( m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
-  confirmParameter( m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
+  vvenc_confirmParameter( c, m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
+  vvenc_confirmParameter( c, m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
+  vvenc_confirmParameter( c, m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
 
   if( m_DepQuantEnabled )
   {
-    confirmParameter( !m_RDOQ || !m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
-    confirmParameter( m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
+    vvenc_confirmParameter( c, !m_RDOQ || !m_useRDOQTS, "RDOQ and RDOQTS must be greater 0 if dependent quantization is enabled" );
+    vvenc_confirmParameter( c, m_SignDataHidingEnabled, "SignHideFlag must be equal to 0 if dependent quantization is enabled" );
   }
 
-  confirmParameter( (m_MSBExtendedBitDepth[CH_L] < m_inputBitDepth[CH_L]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
-  confirmParameter( (m_MSBExtendedBitDepth[CH_C] < m_inputBitDepth[CH_C]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
+  vvenc_confirmParameter( c, (m_MSBExtendedBitDepth[CH_L] < m_inputBitDepth[CH_L]), "MSB-extended bit depth for luma channel (--MSBExtendedBitDepth) must be greater than or equal to input bit depth for luma channel (--InputBitDepth)" );
+  vvenc_confirmParameter( c, (m_MSBExtendedBitDepth[CH_C] < m_inputBitDepth[CH_C]), "MSB-extended bit depth for chroma channel (--MSBExtendedBitDepthC) must be greater than or equal to input bit depth for chroma channel (--InputBitDepthC)" );
 
   const uint32_t maxBitDepth=(m_internChromaFormat==CHROMA_400) ? m_internalBitDepth[CH_L] : std::max(m_internalBitDepth[CH_L], m_internalBitDepth[CH_C]);
   confirmParameter(m_bitDepthConstraintValue<maxBitDepth, "The internalBitDepth must not be greater than the bitDepthConstraint value");
@@ -1538,21 +1542,21 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter(m_intraOnlyConstraintFlag==true, "IntraOnlyConstraintFlag must be false for non main_RExt profiles.");
 
   // check range of parameters
-  confirmParameter( m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
-  confirmParameter( m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
+  vvenc_confirmParameter( c, m_inputBitDepth[CH_L  ] < 8,                                 "InputBitDepth must be at least 8" );
+  vvenc_confirmParameter( c, m_inputBitDepth[CH_C] < 8,                                   "InputBitDepthC must be at least 8" );
 
 #if !RExt__HIGH_BIT_DEPTH_SUPPORT
   for (uint32_t channelType = 0; channelType < MAX_NUM_CH; channelType++)
   {
-    confirmParameter((m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
+    vvenc_confirmParameter( c,(m_internalBitDepth[channelType] > 12) , "Model is not configured to support high enough internal accuracies - enable RExt__HIGH_BIT_DEPTH_SUPPORT to use increased precision internal data types etc...");
   }
 #endif
 
 
-  confirmParameter( (m_HdrMode != VVENC_HDR_OFF && m_internalBitDepth[CH_L] < 10 )     ,       "internalBitDepth must be at least 10 bit for HDR");
-  confirmParameter( (m_HdrMode != VVENC_HDR_OFF && m_internChromaFormat != VVENC_CHROMA_420 ) ,"internChromaFormat must YCbCr 4:2:0 for HDR");
-  confirmParameter( (m_contentLightLevel[0] < 0 || m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
-  confirmParameter( (m_contentLightLevel[1] < 0 || m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
+  vvenc_confirmParameter( c, (m_HdrMode != VVENC_HDR_OFF && m_internalBitDepth[CH_L] < 10 )     ,       "internalBitDepth must be at least 10 bit for HDR");
+  vvenc_confirmParameter( c, (m_HdrMode != VVENC_HDR_OFF && m_internChromaFormat != VVENC_CHROMA_420 ) ,"internChromaFormat must YCbCr 4:2:0 for HDR");
+  vvenc_confirmParameter( c, (m_contentLightLevel[0] < 0 || m_contentLightLevel[0] > 10000),  "max content light level must 0 <= cll <= 10000 ");
+  vvenc_confirmParameter( c, (m_contentLightLevel[1] < 0 || m_contentLightLevel[1] > 10000),  "max average content light level must 0 <= cll <= 10000 ");
 
   {
     bool outOfRGBRange = false;
@@ -1563,43 +1567,43 @@ bool VVEncCfg::checkCfgParameter( )
         outOfRGBRange = true; break;
       }
     }
-    confirmParameter( outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
+    vvenc_confirmParameter( c, outOfRGBRange,  "mastering display colour volume RGB values must be in range 0 <= RGB <= 50000");
   }
 
-  confirmParameter( m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
-  confirmParameter( m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
+  vvenc_confirmParameter( c, m_log2SaoOffsetScale[CH_L]   > (m_internalBitDepth[CH_L  ]<10?0:(m_internalBitDepth[CH_L  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
+  vvenc_confirmParameter( c, m_log2SaoOffsetScale[CH_C] > (m_internalBitDepth[CH_C]<10?0:(m_internalBitDepth[CH_C]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  confirmParameter( m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
-  confirmParameter( m_framesToBeEncoded < m_switchPOC,                                          "debug POC out of range" );
+  vvenc_confirmParameter( c, m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
+  vvenc_confirmParameter( c, m_framesToBeEncoded < m_switchPOC,                                          "debug POC out of range" );
 
-  confirmParameter( (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
-  confirmParameter( m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
-  confirmParameter( m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
+  vvenc_confirmParameter( c, (m_IntraPeriod > 0 && m_IntraPeriod < m_GOPSize) || m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
+  vvenc_confirmParameter( c, m_InputQueueSize < m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
+  vvenc_confirmParameter( c, m_MCTF && m_InputQueueSize < m_GOPSize + MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
-  confirmParameter( m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-  confirmParameter( m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  confirmParameter( m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
-  confirmParameter( m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
+  vvenc_confirmParameter( c, m_DecodingRefreshType < 0 || m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
+  vvenc_confirmParameter( c, m_IntraPeriod > 0 && !(m_DecodingRefreshType==1 || m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  vvenc_confirmParameter( c, m_IntraPeriod < 0 && m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
+  vvenc_confirmParameter( c, m_QP < -6 * (m_internalBitDepth[CH_L] - 8) || m_QP > MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
   {
-    confirmParameter( m_loopFilterBetaOffsetDiv2[comp] < -12 || m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
-    confirmParameter( m_loopFilterTcOffsetDiv2[comp] < -12 || m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter( c, m_loopFilterBetaOffsetDiv2[comp] < -12 || m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
+    vvenc_confirmParameter( c, m_loopFilterTcOffsetDiv2[comp] < -12 || m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
   }
-  confirmParameter( m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
-  confirmParameter( m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
-  confirmParameter( m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
+  vvenc_confirmParameter( c, m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
+  vvenc_confirmParameter( c, m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
-  confirmParameter( m_MCTFFrames.size() != m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
-  confirmParameter( m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  confirmParameter( m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  confirmParameter( m_MCTFNumLeadFrames  > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  confirmParameter( m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  confirmParameter( m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
-  confirmParameter( m_SegmentMode != VVENC_SEG_OFF && m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
+  vvenc_confirmParameter( c, m_MCTFFrames.size() != m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
+  vvenc_confirmParameter( c, m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, m_MCTFNumLeadFrames  > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
+  vvenc_confirmParameter( c, m_MCTFNumTrailFrames > 0 && ! m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
+  vvenc_confirmParameter( c, m_MCTFNumTrailFrames > 0 && m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
+  vvenc_confirmParameter( c, m_SegmentMode != VVENC_SEG_OFF && m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
 
   if (m_lumaReshapeEnable)
   {
-    confirmParameter( m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
+    vvenc_confirmParameter( c, m_reshapeSignalType < RESHAPE_SIGNAL_SDR || m_reshapeSignalType > RESHAPE_SIGNAL_HLG, "LMCSSignalType out of range" );
     confirmParameter(m_updateCtrl < 0,    "Min. LMCS Update Control is 0");
     confirmParameter(m_updateCtrl > 2,    "Max. LMCS Update Control is 2");
     confirmParameter(m_adpOption < 0,     "Min. LMCS Adaptation Option is 0");
@@ -1609,11 +1613,11 @@ bool VVEncCfg::checkCfgParameter( )
     confirmParameter(m_LMCSOffset < -7,   "Min. LMCS Offset value is -7");
     confirmParameter(m_LMCSOffset > 7,    "Max. LMCS Offset value is 7");
   }
-  confirmParameter( m_EDO && m_bLoopFilterDisable,             "no EDO support with LoopFilter disabled" );
-  confirmParameter( m_EDO < 0 || m_EDO > 2,                    "EDO out of range [0..2]" );
-  confirmParameter( m_TMVPModeId < 0 || m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
-  confirmParameter( m_AMVRspeed < 0 || m_AMVRspeed > 7,        "AMVR/IMV out of range [0..7]" );
-  confirmParameter( m_Affine < 0 || m_Affine > 2,              "Affine out of range [0..2]" );
+  vvenc_confirmParameter( c, m_EDO && m_bLoopFilterDisable,             "no EDO support with LoopFilter disabled" );
+  vvenc_confirmParameter( c, m_EDO < 0 || m_EDO > 2,                    "EDO out of range [0..2]" );
+  vvenc_confirmParameter( c, m_TMVPModeId < 0 || m_TMVPModeId > 2,      "TMVPMode out of range [0..2]" );
+  vvenc_confirmParameter( c, m_AMVRspeed < 0 || m_AMVRspeed > 7,        "AMVR/IMV out of range [0..7]" );
+  vvenc_confirmParameter( c, m_Affine < 0 || m_Affine > 2,              "Affine out of range [0..2]" );
   confirmParameter( m_MMVD < 0 || m_MMVD > 4,                  "MMVD out of range [0..4]" );
   confirmParameter( m_SMVD < 0 || m_SMVD > 3,                  "SMVD out of range [0..3]" );
   confirmParameter( m_Geo  < 0 || m_Geo  > 3,                  "Geo out of range [0..3]" );
@@ -2683,9 +2687,10 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   return css.str();
 }
 
+#ifdef __cplusplus
+};
+#endif
 
+VVENC_NAMESPACE_END
 
-} // namespace vvenc
-
-//! \}
 

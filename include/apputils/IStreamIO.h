@@ -415,6 +415,70 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 }
 
 
+
+inline std::ostream& operator<< ( std::ostream& os, const vvencGOPEntry& entry )
+{
+  os << entry.m_sliceType;
+  os << entry.m_POC;
+  os << entry.m_QPOffset;
+  os << entry.m_QPOffsetModelOffset;
+  os << entry.m_QPOffsetModelScale;
+  os << entry.m_CbQPoffset;
+  os << entry.m_CrQPoffset;
+  os << entry.m_QPFactor;
+  os << entry.m_tcOffsetDiv2;
+  os << entry.m_betaOffsetDiv2;
+  os << entry.m_CbTcOffsetDiv2;
+  os << entry.m_CbBetaOffsetDiv2;
+  os << entry.m_CrTcOffsetDiv2;
+  os << entry.m_CrBetaOffsetDiv2;
+  os << entry.m_temporalId;
+
+  for( int l = 0; l < 2; l++)
+  {
+    os <<  entry.m_numRefPicsActive[l];
+    os <<  entry.m_numRefPics[l];
+    for ( int i = 0; i < entry.m_numRefPics[l]; i++ )
+    {
+      os <<  entry.m_deltaRefPics[l][i];
+    }
+  }
+
+  return os;
+}
+
+inline std::istream& operator>> ( std::istream& in, vvencGOPEntry& entry )
+{
+  in >> entry.m_sliceType;
+  in >> entry.m_POC;
+  in >> entry.m_QPOffset;
+  in >> entry.m_QPOffsetModelOffset;
+  in >> entry.m_QPOffsetModelScale;
+  in >> entry.m_CbQPoffset;
+  in >> entry.m_CrQPoffset;
+  in >> entry.m_QPFactor;
+  in >> entry.m_tcOffsetDiv2;
+  in >> entry.m_betaOffsetDiv2;
+  in >> entry.m_CbTcOffsetDiv2;
+  in >> entry.m_CbBetaOffsetDiv2;
+  in >> entry.m_CrTcOffsetDiv2;
+  in >> entry.m_CrBetaOffsetDiv2;
+  in >> entry.m_temporalId;
+
+  for( int l = 0; l < 2; l++)
+  {
+    in >> entry.m_numRefPicsActive[l];
+    in >> entry.m_numRefPics[l];
+    for ( int i = 0; i < entry.m_numRefPics[l]; i++ )
+    {
+      in >> entry.m_deltaRefPics[l][i];
+    }
+  }
+
+  return in;
+}
+
+
 } // namespace
 
 //! \}
