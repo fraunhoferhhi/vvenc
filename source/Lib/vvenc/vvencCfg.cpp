@@ -2111,6 +2111,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_SignDataHidingEnabled     = 1;
 
       m_useBDPCM                  = 2;
+      m_BDOF                      = 1;
       m_DMVR                      = 1;
       m_LMChroma                  = 1;
       m_MTSImplicit               = 1;
@@ -2139,6 +2140,7 @@ int VVEncCfg::initPreset( PresetMode preset )
       m_BDOF                      = 1;
       m_DMVR                      = 1;
       m_AMVRspeed                 = 5;
+      m_LFNST                     = 1;
       m_LMChroma                  = 1;
       m_MCTF                      = 2;
       m_MTSImplicit               = 1;
