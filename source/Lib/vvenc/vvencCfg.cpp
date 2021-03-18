@@ -1654,6 +1654,9 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter( m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
   confirmParameter( m_log2MinCodingBlockSize < 2,                                                         "Log2MinCodingBlockSize must be 2 or greater." );
   confirmParameter( m_CTUSize < ( 1 << m_log2MinCodingBlockSize ),                                        "Log2MinCodingBlockSize must be smaller than max CTU size." );
+  confirmParameter( m_MinQT[ 0 ] < ( 1 << m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for I slices" );
+  confirmParameter( m_MinQT[ 1 ] < ( 1 << m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for non I slices" );
+  confirmParameter( ( m_MinQT[ 2 ] << getChannelTypeScaleX(CH_C, m_internChromaFormat) ) < ( 1 << m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
   confirmParameter( m_PadSourceWidth  % SPS::getWinUnitX(m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   confirmParameter( m_PadSourceHeight % SPS::getWinUnitY(m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
