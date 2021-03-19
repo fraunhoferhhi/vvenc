@@ -1,4 +1,24 @@
 /////////////////////////////////////////
+tag 0.3.1.0
+
+* libvvenc:
+ - only supporting picture-level rate control, removed vvencCfgExpert::m_RCRateControlMode,
+   vvencCfgExpert::m_RCKeepHierarchicalBit and vvencCfgExpert::m_RCUseLCUSeparateModel parameters.
+ - added vvencCfgExpert::m_log2MinCodingBlockSize parameter to limit minimal coding block size (default: 2)
+ - reduced and defragmented the used memory.
+ - added new speed-ups and adapted fast and faster presets.
+   
+* vvencFFapp:
+ - removed parameters --KeepHierarchicalBit, --RCLCUSeparateModel
+   and --RateControl (defaults to 2 if target rate is set, 0 otherwise).
+ - renamed parameter --InitialQP to --RCInitialQP.
+ - added parameter --Log2MinCodingBlockSize (default: 2) to limit the minimal coding block size
+
+* bugfixes
+ - corrected motion vector clipping during DMVR process (might produce enc/dec mismatches).
+ - fixed LMCS/ISP interaction (weighted SAD for blocks of width '1').
+
+/////////////////////////////////////////
 tag 0.3.0.0
 
 * new:
