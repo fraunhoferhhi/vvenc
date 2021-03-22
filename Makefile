@@ -54,6 +54,10 @@ ifneq ($(install-prefix),)
 CONFIG_OPTIONS += -DCMAKE_INSTALL_PREFIX=$(install-prefix)
 endif
 
+ifneq ($(osx-arch),)
+CONFIG_OPTIONS += -DCMAKE_OSX_ARCHITECTURES=$(osx-arch)
+endif
+
 ifeq ($(j),)
 # Query cmake for the number of cores
 NUM_JOBS := $(shell cmake -P cmake/modules/vvencNumCores.cmake)

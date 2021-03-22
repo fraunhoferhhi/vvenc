@@ -191,16 +191,15 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
                     if( pic->cs->sps->alfEnabled )
                     {
-                      std::copy(pic->getAlfCtbFilterIndexVec().begin(), pic->getAlfCtbFilterIndexVec().end(), pcEncPic->getAlfCtbFilterIndexVec().begin());
                       for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
                       {
-                        std::copy( pic->getAlfCtuEnabled()[compIdx].begin(), pic->getAlfCtuEnabled()[compIdx].end(), pcEncPic->getAlfCtuEnabled()[compIdx].begin() );
+                        std::copy( pic->m_alfCtuEnabled[ compIdx ].begin(), pic->m_alfCtuEnabled[ compIdx ].end(), pcEncPic->m_alfCtuEnabled[ compIdx ].begin() );
                       }
-                      pcEncPic->resizeAlfCtbFilterIndex(pic->cs->pcv->sizeInCtus);
-                      memcpy( pcEncPic->getAlfCtbFilterIndex(), pic->getAlfCtbFilterIndex(), sizeof(short)*pic->cs->pcv->sizeInCtus );
+                      pcEncPic->resizeAlfCtuBuffers(pic->cs->pcv->sizeInCtus);
+                      std::copy( pic->m_alfCtbFilterIndex.begin(), pic->m_alfCtbFilterIndex.end(), pcEncPic->m_alfCtbFilterIndex.begin() );
 
-                      std::copy( pic->getAlfCtuAlternative(COMP_Cb).begin(), pic->getAlfCtuAlternative(COMP_Cb).end(), pcEncPic->getAlfCtuAlternative(COMP_Cb).begin() );
-                      std::copy( pic->getAlfCtuAlternative(COMP_Cr).begin(), pic->getAlfCtuAlternative(COMP_Cr).end(), pcEncPic->getAlfCtuAlternative(COMP_Cr).begin() );
+                      std::copy( pic->m_alfCtuAlternative[COMP_Cb].begin(), pic->m_alfCtuAlternative[COMP_Cb].end(), pcEncPic->m_alfCtuAlternative[COMP_Cb].begin() );
+                      std::copy( pic->m_alfCtuAlternative[COMP_Cr].begin(), pic->m_alfCtuAlternative[COMP_Cr].end(), pcEncPic->m_alfCtuAlternative[COMP_Cr].begin() );
 
                       for( int i = 0; i < pic->slices.size(); i++ )
                       {
@@ -420,10 +419,10 @@ DecLib::DecLib()
   , m_maxDecSliceAddrInSubPic(-1)
   , m_apsMapEnc( nullptr )
 {
-#if ENABLE_SIMD_OPT_BUFFER
+#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_X86 )
   g_pelBufOP.initPelBufOpsX86();
 #endif
-#if ENABLE_SIMD_TRAFO
+#if ENABLE_SIMD_TRAFO  && defined( TARGET_SIMD_X86 )
   g_tCoeffOps.initTCoeffOpsX86();
 #endif
 }

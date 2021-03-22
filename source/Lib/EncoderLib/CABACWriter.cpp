@@ -179,7 +179,7 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
       }
       if (isChroma(ComponentID(compIdx)))
       {
-        uint8_t* ctbAlfFlag = cs.slice->tileGroupAlfEnabled[compIdx] ? cs.slice->pic->getAlfCtuEnabled( compIdx ) : nullptr;
+        const uint8_t* ctbAlfFlag = cs.slice->tileGroupAlfEnabled[compIdx] ? cs.slice->pic->m_alfCtuEnabled[ compIdx ].data() : nullptr;
         if( ctbAlfFlag && ctbAlfFlag[ctuRsAddr] )
         {
           codeAlfCtuAlternative( cs, ctuRsAddr, compIdx );
@@ -2926,7 +2926,7 @@ void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr
     int leftCTUAddr = leftAvail ? ctuRsAddr - 1 : -1;
     int aboveCTUAddr = aboveAvail ? ctuRsAddr - frame_width_in_ctus : -1;
 
-    uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+    const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
     int ctx = 0;
     ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
     ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
@@ -3024,13 +3024,13 @@ void CABACWriter::codeAlfCtuFilterIndex(CodingStructure& cs, uint32_t ctuRsAddr,
     return;
   }
 
-  uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled(COMP_Y);
+  const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ COMP_Y ].data();
   if (!ctbAlfFlag[ctuRsAddr])
   {
     return;
   }
 
-  short* alfCtbFilterIndex = cs.slice->pic->getAlfCtbFilterIndex();
+  const short* alfCtbFilterIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
   const unsigned filterSetIdx = alfCtbFilterIndex[ctuRsAddr];
   unsigned numAps = cs.slice->tileGroupNumAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
@@ -3077,7 +3077,7 @@ void CABACWriter::codeAlfCtuAlternatives( CodingStructure& cs, ComponentID compI
   if( compID == COMP_Y )
     return;
   uint32_t numCTUs = cs.pcv->sizeInCtus;
-  uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compID );
+  const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compID ].data();
 
   for( int ctuIdx = 0; ctuIdx < numCTUs; ctuIdx++ )
   {
@@ -3098,12 +3098,12 @@ void CABACWriter::codeAlfCtuAlternative( CodingStructure& cs, uint32_t ctuRsAddr
 
   if( alfParam || (cs.sps->alfEnabled && cs.slice->tileGroupAlfEnabled[compIdx]) )
   {
-    uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+    const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
 
     if( ctbAlfFlag[ctuRsAddr] )
     {
       const int numAlts = alfParamRef.numAlternativesChroma;
-      uint8_t* ctbAlfAlternative = cs.slice->pic->getAlfCtuAlternativeData( compIdx );
+      const uint8_t* ctbAlfAlternative = cs.slice->pic->m_alfCtuAlternative[compIdx].data();
       unsigned numOnes = ctbAlfAlternative[ctuRsAddr];
       assert( ctbAlfAlternative[ctuRsAddr] < numAlts );
       for( int i = 0; i < numOnes; ++i )

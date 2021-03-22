@@ -160,7 +160,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
     {
       if (cs.slice->tileGroupAlfEnabled[compIdx])
       {
-        uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+        uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
         int ctx = 0;
         ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
         ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
@@ -177,7 +177,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
           CHECK(cs.slice->alfAps[apsIdx] == nullptr, "APS not initialized");
           const AlfParam& alfParam = cs.slice->alfAps[apsIdx]->alfParam;
           const int numAlts = alfParam.numAlternativesChroma;
-          uint8_t* ctbAlfAlternative = cs.slice->pic->getAlfCtuAlternativeData( compIdx );
+          uint8_t* ctbAlfAlternative = cs.slice->pic->m_alfCtuAlternative[compIdx].data();
           ctbAlfAlternative[ctuRsAddr] = 0;
           if( ctbAlfFlag[ctuRsAddr] )
           {
@@ -237,7 +237,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
 void CABACReader::readAlfCtuFilterIndex(CodingStructure& cs, unsigned ctuRsAddr)
 {
-  short* alfCtbFilterSetIndex = cs.slice->pic->getAlfCtbFilterIndex();
+  short* alfCtbFilterSetIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
   unsigned numAps = cs.slice->tileGroupNumAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
   uint32_t filtIndex = 0;

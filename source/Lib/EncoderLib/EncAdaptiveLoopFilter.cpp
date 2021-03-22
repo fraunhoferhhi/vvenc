@@ -1270,14 +1270,14 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
   for( int ctbIdx = 0; ctbIdx < m_numCTUsInPic; ctbIdx++ )
   {
-    pic.getAlfCtbFilterIndex()[ctbIdx] = NUM_FIXED_FILTER_SETS;
+    pic.m_alfCtbFilterIndex[ctbIdx] = NUM_FIXED_FILTER_SETS;
   }
 
   // set CTU ALF enable flags, it was already reset before ALF process
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    m_ctuEnableFlag[compIdx] = cs.picture->getAlfCtuEnabled( compIdx );
-    m_ctuAlternative[compIdx] = cs.picture->getAlfCtuAlternativeData( compIdx );
+    m_ctuEnableFlag[compIdx] = cs.picture->m_alfCtuEnabled[ compIdx ].data();
+    m_ctuAlternative[compIdx] = cs.picture->m_alfCtuAlternative[ compIdx ].data();
   }
 
   // reset ALF parameters
@@ -1293,7 +1293,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
   alfParam.newFilterFlag[CH_C] = true;
   cs.slice->tileGroupNumAps = ( 1 ); // Only new filter for RD cost optimization
 
-  const bool useCtuWiseLambda     = m_encCfg->m_usePerceptQPA && cs.slice->pps->useDQP && m_encCfg->m_RCRateControlMode != 1;
+  const bool useCtuWiseLambda     = m_encCfg->m_usePerceptQPA && cs.slice->pps->useDQP;
   const double lambdaChromaWeight = useCtuWiseLambda && ( m_lambda[COMP_Y] > 0.0 ) ? ( m_lambda[COMP_Cb] + m_lambda[COMP_Cr] ) / ( 2.0 * m_lambda[COMP_Y] ) : 0.0;
 
   // derive filter (luma)
@@ -1399,7 +1399,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
     PelUnitBuf& recBuf = cs.getRecoBufRef();
     const ClpRngs& clpRngs = cs.slice->clpRngs;
 
-    const short* alfCtuFilterIndex = cs.picture->getAlfCtbFilterIndex();
+    const short* alfCtuFilterIndex = cs.picture->m_alfCtbFilterIndex.data();
 
     const PreCalcValues& pcv = *cs.pcv;
     const int xPos            = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
@@ -1635,7 +1635,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
       if( isLuma( channel ) )
       {
         // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
-        assert( cs.picture->getAlfCtbFilterIndex()[ctuIdx] == NUM_FIXED_FILTER_SETS );
+        assert( cs.picture->m_alfCtbFilterIndex[ctuIdx] == NUM_FIXED_FILTER_SETS );
         assert( cs.slice->tileGroupNumAps == 1 );
         m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
       }
@@ -1911,7 +1911,7 @@ double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double
     if( isLuma( channel ) )
     {
       // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
-      assert( cs.picture->getAlfCtbFilterIndex()[ctuIdx] == NUM_FIXED_FILTER_SETS );
+      assert( cs.picture->m_alfCtbFilterIndex[ctuIdx] == NUM_FIXED_FILTER_SETS );
       assert( cs.slice->tileGroupNumAps == 1 );
       m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
     }
@@ -3208,7 +3208,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
   TempCtx   ctxTempAltBest ( m_CtxCache );
   AlfParam  alfParamNewFiltersBest = alfParamNewFilters;
   APS**     apss = cs.slice->alfAps;
-  short*    alfCtbFilterSetIndex = cs.picture->getAlfCtbFilterIndex();
+  short*    alfCtbFilterSetIndex = cs.picture->m_alfCtbFilterIndex.data();
   bool      hasNewFilters[2] = { alfParamNewFilters.alfEnabled[COMP_Y] , alfParamNewFilters.alfEnabled[COMP_Cb] || alfParamNewFilters.alfEnabled[COMP_Cr] };
   const double invFactor = 1.0/((double)(1<<(m_NUM_BITS-1)));
   const bool doClip      = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma;

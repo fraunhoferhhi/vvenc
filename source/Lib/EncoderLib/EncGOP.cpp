@@ -305,7 +305,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
 void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList )
 {
   // in lockstep mode, process only pics of same temporal layer
-  const bool lockStepMode  = m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
+  const bool lockStepMode  = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
   if( lockStepMode )
   {
     // start new parallel chunk only, if next output picture is not reconstructed
@@ -358,7 +358,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   xGetProcessingLists( procList, rcUpdateList );
 
   // in lockstep mode, process all pictures in processing list
-  const bool lockStepMode = m_pcEncCfg->m_RCRateControlMode > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
+  const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
   // encode one picture in serial mode / multiple pictures in FPP mode
   while( true )
@@ -911,40 +911,12 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   if (m_pcEncCfg->m_usePerceptQPA)
   {
     // this is needed for chunk-wise parallel RA encoding!
-    if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ) || !slice->isIntra())
+    if (m_pcEncCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra())
     {
-      if ((slice->TLayer == 0) && (m_pcEncCfg->m_RCRateControlMode == RCM_GOP_LEVEL ))
+      for (auto& picItr : picList) // find previous frames
       {
-        const int firstPoc = std::max (0, curPoc - m_pcEncCfg->m_GOPSize + 1);
-        double gopLevelAct = 0.0;
-
-        for (auto& picItr : picList)  // sum up activities
-        {
-          const int itrPoc = picItr->poc;
-          PelStorage* pels = &picItr->m_bufs[PIC_ORIGINAL];
-
-          if (itrPoc + 1 == firstPoc) pic.m_bufsOrigPrev[0] = pels;
-          if (itrPoc + 2 == firstPoc) pic.m_bufsOrigPrev[1] = pels;
-          if (itrPoc >= firstPoc && itrPoc <= curPoc)
-          {
-            gopLevelAct += BitAllocation::getPicVisualActivity (slice, m_pcEncCfg, &pels->bufs[COMP_Y]);
-
-            if (itrPoc < curPoc) // update previous frames
-            {
-              pic.m_bufsOrigPrev[1] = pic.m_bufsOrigPrev[0];
-              pic.m_bufsOrigPrev[0] = pels;
-            }
-          }
-        }
-        m_globalCtuQpVector.back() = int (0.5 + (gopLevelAct * (1 << (24 - slice->sps->bitDepths[CH_L]))) / double (curPoc + 1 - firstPoc));
-      }
-      else
-      {
-        for (auto& picItr : picList) // find previous frames
-        {
-          if (picItr->poc + 1 == curPoc) pic.m_bufsOrigPrev[0] = &picItr->m_bufs[PIC_ORIGINAL];
-          if (picItr->poc + 2 == curPoc) pic.m_bufsOrigPrev[1] = &picItr->m_bufs[PIC_ORIGINAL];
-        }
+        if (picItr->poc + 1 == curPoc) pic.m_bufsOrigPrev[0] = &picItr->m_bufs[PIC_ORIGINAL];
+        if (picItr->poc + 2 == curPoc) pic.m_bufsOrigPrev[1] = &picItr->m_bufs[PIC_ORIGINAL];
       }
     }
   }
@@ -1725,7 +1697,7 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
 
 void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPicture* picEncoder )
 {
-  if( m_pcEncCfg->m_RCRateControlMode < 1 ) // TODO: does this work with multiple slices and slice-segments?
+  if( m_pcEncCfg->m_RCTargetBitrate == 0 ) // TODO: does this work with multiple slices and slice-segments?
   {
     return;
   }
@@ -1777,10 +1749,9 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
     }
 
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
-    encRCPic->getLCUInitTargetBits();
     lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
-    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
+    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_RCNumPasses == 2) &&
         (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && slice->isIntra() && (sliceQP > 0) )
     {
       sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
@@ -1792,7 +1763,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
     std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
     lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
     sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
-    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCRateControlMode == 2) && (m_pcEncCfg->m_RCNumPasses == 2) &&
+    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_RCNumPasses == 2) &&
         (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
     {
       sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
@@ -1802,30 +1773,20 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
 
   sliceQP = Clip3( -slice->sps->qpBDOffset[CH_L], MAX_QP, sliceQP );
 
-  if( m_pcRateCtrl->encRCSeq->isQpResetRequired( gopId ) )
-  {
-    lambda = picEncoder->getEncSlice()->resetQP( &pic, sliceQP, lambda );
-  }
+  picEncoder->getEncSlice()->resetQP( &pic, sliceQP, lambda );
   encRCPic->finalLambda = lambda;
 }
 
 void EncGOP::xUpdateAfterPicRC( const Picture* pic )
 {
   EncRCPic* encRCPic = pic->encRCPic;
-  if ( m_pcEncCfg->m_RCRateControlMode < 1 )
+  if ( m_pcEncCfg->m_RCTargetBitrate == 0 )
   {
     return;
   }
 
-  //double avgQP = encRCPic->calAverageQP();
-  double avgLambda = encRCPic->calAverageLambda();
-  if ( avgLambda < 0.0 )
-  {
-    avgLambda = encRCPic->finalLambda;
-  }
-
+  encRCPic->calPicMSE();
   encRCPic->updateAfterPicture( pic->actualHeadBits, pic->actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->slices[ 0 ]->lambdas[ COMP_Y ], pic->slices[ 0 ]->isIRAP() );
-  //encRCPic->updateAfterPicture( m_actualHeadBits, m_actualTotalBits, avgQP, avgLambda, pic->slices[ 0 ]->isIRAP() );
   encRCPic->addToPictureList( m_pcRateCtrl->getPicList() );
 
   m_pcRateCtrl->encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );

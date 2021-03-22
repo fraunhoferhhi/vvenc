@@ -187,7 +187,7 @@ namespace DQIntern
         const uint32_t      groupSize     = groupWidth * groupHeight;
         const SizeType      blkWidthIdx   = Log2( blockWidth );
         const SizeType      blkHeightIdx  = Log2( blockHeight );
-        const ScanElement * scanId2RP     = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, blkWidthIdx, blkHeightIdx );
+        const ScanElement * scanId2RP     = getScanOrder( SCAN_GROUPED_4x4, blkWidthIdx, blkHeightIdx );
         NbInfoSbb*&         sId2NbSbb     = m_scanId2NbInfoSbbArray[hd][vd];
         NbInfoOut*&         sId2NbOut     = m_scanId2NbInfoOutArray[hd][vd];
         // consider only non-zero-out region
@@ -362,8 +362,8 @@ namespace DQIntern
     SizeType        vsbb  = Log2( m_heightInSbb );
     SizeType        hsId  = Log2( m_width  );
     SizeType        vsId  = Log2( m_height );
-    m_scanSbbId2SbbPos    = g_scanOrderRom.getScanOrder( SCAN_UNGROUPED   , hsbb , vsbb );
-    m_scanId2BlkPos       = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4 , hsId , vsId );
+    m_scanSbbId2SbbPos    = getScanOrder( SCAN_UNGROUPED   , hsbb , vsbb );
+    m_scanId2BlkPos       = getScanOrder( SCAN_GROUPED_4x4 , hsId , vsId );
     int log2W             = Log2( m_width  );
     int log2H             = Log2( m_height );
     m_scanId2NbInfoSbb    = rom.getNbInfoSbb( log2W, log2H );
@@ -720,7 +720,7 @@ namespace DQIntern
     const int           numCoeff  = area.area();
     const SizeType      hsId      = Log2( area.width );
     const SizeType      vsId      = Log2( area.height );
-    const ScanElement *scan       = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
+    const ScanElement *scan       = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
     const TCoeff*       qCoeff    = tu.getCoeffs( compID ).buf;
           TCoeff*       tCoeff    = recCoeff.buf;
 

@@ -456,6 +456,28 @@ Pel* Picture::getOrigin( const PictureType& type, const ComponentID compID ) con
 
 }
 
+void Picture::resizeAlfCtuBuffers( int numEntries )
+{
+  for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    m_alfCtuEnabled[compIdx].resize( numEntries );
+    std::fill( m_alfCtuEnabled[compIdx].begin(), m_alfCtuEnabled[compIdx].end(), 0 );
+  }
+
+  m_alfCtbFilterIndex.resize(numEntries);
+  for (int i = 0; i < numEntries; i++)
+  {
+    m_alfCtbFilterIndex[i] = 0;
+  }
+
+  for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    m_alfCtuAlternative[compIdx].resize( numEntries );
+    std::fill( m_alfCtuAlternative[compIdx].begin(), m_alfCtuAlternative[compIdx].end(), 0 );
+  }
+}
+
+
 } // namespace vvenc
 
 //! \}

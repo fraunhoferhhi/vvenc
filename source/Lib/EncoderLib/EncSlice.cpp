@@ -105,9 +105,16 @@ struct CtuEncParam
   int       ctuRsAddr;
   int       ctuPosX;
   int       ctuPosY;
+  UnitArea  ctuArea;
 
-  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ) {}
-  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y ) : pic( _p ), encSlice( _s ), ctuRsAddr( _r ), ctuPosX( _x ), ctuPosY( _y ) {}
+  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ), ctuArea() {}
+  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y )
+    : pic( _p )
+    , encSlice( _s )
+    , ctuRsAddr( _r )
+    , ctuPosX( _x )
+    , ctuPosY( _y )
+    , ctuArea( pic->chromaFormat, pic->slices[0]->pps->pcv->getCtuArea( _x, _y ) ) {}
 };
 
 // ====================================================================================================================
@@ -255,7 +262,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   double dLambda = xCalculateLambda( slice, gopId, slice->depth, dQP, dQP, iQP );
   int sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] };
 
-  if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCRateControlMode != RCM_CTU_LEVEL &&
+  if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA &&
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
@@ -263,7 +270,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
-    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCRateControlMode == RCM_OFF && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
+    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCTargetBitrate == 0 && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
 
@@ -347,14 +354,9 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
 }
 
-double EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
+void EncSlice::resetQP( Picture* pic, int sliceQP, double& lambda )
 {
   Slice* slice = pic->cs->slice;
-  if ( RCM_GOP_LEVEL == m_pcEncCfg->m_RCRateControlMode )
-  {
-    int gopQp = sliceQP - (( slice->sliceType == I_SLICE ) ? m_pcEncCfg->m_intraQPOffset : 1);
-    m_pcRateCtrl->encRCGOP->gopQP = gopQp;
-  }
 
   if ( m_pcEncCfg->m_usePerceptQPA )
   {
@@ -369,7 +371,6 @@ double EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
   {
     lineRsc->m_encCu.setUpLambda( *slice, lambda, sliceQP, true, true, true );
   }
-  return lambda;
 }
 
 int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
@@ -386,11 +387,6 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     const SliceType sliceType = slice->sliceType;
 
     qp = m_pcEncCfg->m_QP;
-    if ( RCM_GOP_LEVEL == m_pcEncCfg->m_RCRateControlMode )
-    {
-      m_pcRateCtrl->encRCSeq->setQpInGOP( gopId, m_pcRateCtrl->encRCGOP->gopQP, qp );
-    }
-
     // switch at specific qp and keep this qp offset
     if( slice->poc == m_pcEncCfg->m_switchPOC )
     {
@@ -749,6 +745,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     ctuEncParams[ idx ].ctuRsAddr = ctuPos.ctuRsAddr;
     ctuEncParams[ idx ].ctuPosX   = ctuPos.ctuPosX;
     ctuEncParams[ idx ].ctuPosY   = ctuPos.ctuPosY;
+    ctuEncParams[ idx ].ctuArea   = UnitArea( pic->chromaFormat, slice.pps->pcv->getCtuArea( ctuPos.ctuPosX, ctuPos.ctuPosY ) );
     idx++;
   }
   CHECK( idx != pcv.sizeInCtus, "array index out of bounds" );
@@ -802,7 +799,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   const int height               = std::min( pcv.maxCUSize, pcv.lumaHeight - y );
   const int ctuStride            = pcv.widthInCtus;
   ProcessCtuState* processStates = encSlice->m_processStates.data();
-  const UnitArea ctuArea( pcv.chrFormat, Area( x, y, width, height ) );
+  const UnitArea& ctuArea        = ctuEncParam->ctuArea;
   const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "poc", cs.slice->poc ) );

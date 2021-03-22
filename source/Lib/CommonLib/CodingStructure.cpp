@@ -323,9 +323,11 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   uint32_t idx = ++m_numCUs;
   cu->idx  = idx;
   cu->mvdL0SubPu = nullptr;
-  if( isLuma( chType ) && unit.lheight() >= 8 && unit.lwidth()  >= 8 && unit.Y().area() >= 128 )
+
+  if( isLuma( chType ) && unit.lheight() >= 8 && unit.lwidth() >= 8 && unit.Y().area() >= 128 )
   {
-    CHECKD( m_dmvrMvCacheOffset >= m_dmvrMvCache.size(), "dmvr cache offset out of bounds" )
+    CHECKD( m_dmvrMvCacheOffset >= m_dmvrMvCache.size(), "dmvr cache offset out of bounds" );
+
     cu->mvdL0SubPu       = &m_dmvrMvCache[m_dmvrMvCacheOffset];
     m_dmvrMvCacheOffset += std::max<int>( 1, unit.lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, unit.lheight() >> DMVR_SUBCU_SIZE_LOG2 );
   }
@@ -345,8 +347,10 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
     const UnitScale& scale = unitScale[_blk.compID];
     const Area scaledSelf  = scale.scale( _selfBlk );
     const Area scaledBlk   = scale.scale(     _blk );
-    CodingUnit **cuPtr    = m_cuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
+    CodingUnit **cuPtr     = m_cuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
+
     CHECK( *cuPtr, "Overwriting a pre-existing value, should be '0'!" );
+
     g_pelBufOP.fillPtrMap( ( void** ) cuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) cu );
   }
 
@@ -389,9 +393,9 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
   }
 
   uint32_t idx = ++m_numTUs;
-  tu->idx  = idx;
+  tu->idx = idx;
 
-  TCoeff *coeffs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+  TCoeff *coeffs[3] = { nullptr, nullptr, nullptr };
 
   uint32_t numCh = getNumberValidComponents( area.chromaFormat );
 
@@ -421,7 +425,9 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const Area scaledSelf  = scale.scale( _selfBlk );
         const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
+
         CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
+
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
       }
     }
@@ -462,7 +468,7 @@ void CodingStructure::addEmptyTUs( Partitioner &partitioner, CodingUnit* cu )
 
 CUTraverser CodingStructure::traverseCUs( const UnitArea& unit, const ChannelType effChType )
 {
-//  CHECK( _treeType != treeType, "not good");
+  //  CHECK( _treeType != treeType, "not good");
   CodingUnit* firstCU = getCU( isLuma( effChType ) ? unit.lumaPos() : unit.chromaPos(), effChType, TREE_D );
   CodingUnit* lastCU = firstCU;
   if( !CS::isDualITree( *this ) ) //for a more generalized separate tree
@@ -588,7 +594,8 @@ void CodingStructure::create(const UnitArea& _unit, const bool isTopLayer, const
 
 void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLayer )
 {
-  area = _unit;
+  area     = _unit;
+  _maxArea = _unit;
 
   memcpy( unitScale, UnitScaleArray[area.chromaFormat], sizeof( unitScale ) );
 
@@ -721,22 +728,24 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 {
   CHECK( this == &subStruct, "Trying to init self as sub-structure" );
 
-  subStruct.m_org = ( pOrgBuffer ) ? pOrgBuffer : m_org;
-  subStruct.m_rsporg = ( pRspBuffer ) ? pRspBuffer : m_rsporg;
+  subStruct.parent = this;
+
+  if( pOrgBuffer ) pOrgBuffer->compactResize( subArea );
+  UnitArea subAreaLuma = subArea.singleChan( CH_L );
+  subAreaLuma.blocks.resize( 1 );
+  if( pRspBuffer ) pRspBuffer->compactResize( subAreaLuma );
+
+  subStruct.m_org    = (pOrgBuffer) ? pOrgBuffer : m_org;
+  subStruct.m_rsporg = (pRspBuffer) ? pRspBuffer : m_rsporg;
+
+  subStruct.compactResize( subArea );
 
   subStruct.costDbOffset = 0;
-
-  for( uint32_t i = 0; i < subStruct.area.blocks.size(); i++ )
-  {
-    CHECKD( subStruct.area.blocks[i].size() != subArea.blocks[i].size(), "Trying to init sub-structure of incompatible size" );
-
-    subStruct.area.blocks[i].pos() = subArea.blocks[i].pos();
-  }
 
   if( parent )
   {
     // allow this to be false at the top level (need for edge CTU's)
-    CHECKD( !area.contains( subStruct.area ), "Trying to init sub-structure not contained in the parent" );
+    CHECKD( !area.contains( subArea ), "Trying to init sub-structure not contained in the parent" );
   }
 
   subStruct.parent    = this;
@@ -762,7 +771,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   if( nullptr == parent )
   {
-    int ctuPosY = subStruct.area.ly() >> pcv->maxCUSizeLog2;
+    int ctuPosY = subArea.ly() >> pcv->maxCUSizeLog2;
     subStruct.motionLut = motionLutBuf[ctuPosY];
   }
   else
@@ -933,10 +942,30 @@ void CodingStructure::copyStructure( const CodingStructure& other, const Channel
   }
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
+void CodingStructure::compactResize( const UnitArea& _area )
+{
+  UnitArea areaLuma = _area.singleChan( CH_L );
+  areaLuma.blocks.resize( 1 );
+
+  m_pred   .compactResize( _area );
+  m_reco   .compactResize( _area );
+  m_resi   .compactResize( _area );
+  m_rspreco.compactResize( areaLuma );
+
+  for( uint32_t i = 0; i < _area.blocks.size(); i++ )
+  {
+    CHECK( _maxArea.blocks[i].area() < _area.blocks[i].area(), "Trying to init sub-structure of incompatible size" );
+  }
+
+  area = _area;
+}
+
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
 {
   clearTUs();
   clearCUs();
+
+  if( _area ) compactResize( *_area );
 
   if( QP < MAX_INT )
   {
@@ -945,7 +974,7 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
 
   if (!skipMotBuf && (!parent || ((!slice->isIntra() || slice->sps->IBC) && !m_isTuEnc)))
   {
-    getMotionBuf()      .memset( 0 );
+    getMotionBuf().memset( 0 );
   }
 
   m_dmvrMvCacheOffset = 0;

@@ -163,18 +163,21 @@ private:
   CtxCache*             m_CtxCache;
 
   //  Data : encoder control
+
+  static const int maxCuDepth = ( MAX_CU_SIZE_IDX - MIN_CU_LOG2 ) << 1;
+
   int                   m_cuChromaQpOffsetIdxPlus1;
   int                   m_tempQpDiff;
   std::vector<int>*     m_globalCtuQpVector;
   XUCache               m_unitCache;
   std::mutex*           m_wppMutex;
   std::mutex*           m_rcMutex;
-  CodingStructure***    m_pTempCS;
-  CodingStructure***    m_pBestCS;
-  CodingStructure***    m_pTempCS2;
-  CodingStructure***    m_pBestCS2;
-  PelStorage***         m_pOrgBuffer;
-  PelStorage***         m_pRspBuffer;
+  CodingStructure*      m_pTempCS[maxCuDepth];
+  CodingStructure*      m_pBestCS[maxCuDepth];
+  CodingStructure*      m_pTempCS2;
+  CodingStructure*      m_pBestCS2;
+  PelStorage            m_pOrgBuffer[maxCuDepth];
+  PelStorage            m_pRspBuffer[maxCuDepth];
 
   //  Access channel
   const VVEncCfg*       m_pcEncCfg;
@@ -203,7 +206,6 @@ private:
   // thread stuff
   Ctx*                  m_syncPicCtx;                        ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   PelStorage            m_dbBuffer;
-  int                   m_ctuRcQP;
   
   Partitioner           m_partitioner;
 
@@ -243,8 +245,7 @@ private:
   void xCheckModeSplitInternal( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass );
   void xReuseCachedResult     ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm );
 
-  void xSetCtuQPRC            ( CodingStructure& cs, const Slice* slice, const Picture* pic, const int ctuRsAddr );
-  void xUpdateAfterCtuRC      ( CodingStructure& cs, const Slice* slice, const UnitArea& ctuArea, const double oldLambda, const int numberOfWrittenBits, const int ctuRsAddr );
+  void xUpdateAfterCtuRC      ( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr );
 
   void xCheckDQP              ( CodingStructure& cs, Partitioner& partitioner, bool bKeepCtx = false);
   void xEncodeDontSplit       ( CodingStructure& cs, Partitioner& partitioner);
