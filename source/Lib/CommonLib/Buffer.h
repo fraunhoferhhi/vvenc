@@ -607,7 +607,7 @@ void AreaBuf<T>::padBorderPel( unsigned marginX, unsigned marginY, int dir )
 }
 
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 template<> void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other );
 #endif
 
@@ -938,6 +938,7 @@ struct PelStorage : public PelUnitBuf
   void create( const ChromaFormat &_chromaFormat, const Area& _area );
   void create( const ChromaFormat &_chromaFormat, const Area& _area, const unsigned _maxCUSize, const unsigned _margin = 0, const unsigned _alignment = 0, const bool _scaleChromaMargin = true );
   void destroy();
+  void compactResize( const UnitArea& area );
 
          PelBuf getBuf( const CompArea& blk );
   const CPelBuf getBuf( const CompArea& blk ) const;
@@ -963,6 +964,7 @@ struct PelStorage : public PelUnitBuf
 
 private:
 
+  UnitArea m_maxArea;
   Pel* m_origin[MAX_NUM_COMP];
 };
 

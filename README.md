@@ -66,8 +66,8 @@ The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](
 | sequence.cfg                                                                                                                    | Sequence specific configuration parameters. Must be always adapted to the input sequence.                               |
 | randomaccess_faster.cfg<br>randomaccess_fast.cfg<br>randomaccess_medium.cfg<br>randomaccess_slow.cfg<br>randomaccess_slower.cfg | Random access configuration for different presets. Each configuration file corresponds to one of the 5 preset modes.    |
 | qpa.cfg                                                                                                                         | Perceptually optimized QPA configuration file.                                                                          |
-| frc.cfg                                                                                                                         | Frame level single pass rate control configuration, overriding default fix QP setup.                                    |
-| rc2p.cfg                                                                                                                        | Frame level two pass rate control configuration, overriding default fix QP setup.                                       |
+| rc1p.cfg                                                                                                                        | Single pass rate control configuration, overriding default fix QP setup.                                                |
+| rc2p.cfg                                                                                                                        | Two pass rate control configuration, overriding default fix QP setup.                                                   |
 
 **Example usage:** In order to start your first experiments with the expert mode encoder, adapt the sequence.cfg configuration file to your input YUV source file and use the following command:
 

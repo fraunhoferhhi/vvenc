@@ -428,8 +428,8 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
   // set CTU enable flags
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
   {
-    m_ctuEnableFlag[compIdx] = cs.picture->getAlfCtuEnabled( compIdx );
-    m_ctuAlternative[compIdx] = cs.picture->getAlfCtuAlternativeData( compIdx );
+    m_ctuEnableFlag[compIdx] = cs.picture->m_alfCtuEnabled[ compIdx ].data();
+    m_ctuAlternative[compIdx] = cs.picture->m_alfCtuAlternative[ compIdx ].data();
   }
   short* alfCtuFilterIndex = nullptr;
   uint32_t lastSliceIdx = 0xFFFFFFFF;
@@ -466,7 +466,7 @@ void AdaptiveLoopFilter::ALFProcess(CodingStructure& cs)
       {
         cs.slice = cu->slice;
         reconstructCoeffAPSs(cs, true, cu->slice->tileGroupAlfEnabled[COMP_Cb] || cu->slice->tileGroupAlfEnabled[COMP_Cr], false);
-        alfCtuFilterIndex = cu->slice->pic->getAlfCtbFilterIndex();
+        alfCtuFilterIndex = cu->slice->pic->m_alfCtbFilterIndex.data();
         m_ccAlfFilterParam = cu->slice->ccAlfFilterParam;
       }
       lastSliceIdx = cu->slice->sliceSubPicId;

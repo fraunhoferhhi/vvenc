@@ -354,10 +354,9 @@ PelBufferOps::PelBufferOps()
 
   copyBuffer        = copyBufferCore;
   padding           = paddingCore;
-#if ENABLE_SIMD_OPT_BCW
+
   removeHighFreq8   = removeHighFreq;
   removeHighFreq4   = removeHighFreq;
-#endif
 
   transpose4x4      = transposeNxNCore<Pel,4>;
   transpose8x8      = transposeNxNCore<Pel,8>;
@@ -481,7 +480,7 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + 1;
   const int      offset     = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
   if( destStride == width )
   {
     g_pelBufOP.addAvg(src0, src2, dest, width * height, shiftNum, offset, clpRng);
@@ -650,7 +649,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
   }
 }
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 
 template<>
 void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other )
@@ -753,6 +752,7 @@ PelStorage::~PelStorage()
 void PelStorage::create( const UnitArea& _UnitArea )
 {
   create( _UnitArea.chromaFormat, _UnitArea.blocks[0] );
+  m_maxArea = _UnitArea;
 }
 
 void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
@@ -789,6 +789,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
     bufs.push_back( PelBuf( topLeft, totalWidth, totalWidth, totalHeight ) );
     topLeft += area;
   }
+
+  m_maxArea = UnitArea( _chromaFormat, _area );
 }
 
 void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area, const unsigned _maxCUSize, const unsigned _margin, const unsigned _alignment, const bool _scaleChromaMargin )
@@ -834,6 +836,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area, c
     Pel* topLeft = m_origin[i] + totalWidth * ymargin + xmargin;
     bufs.push_back( PelBuf( topLeft, totalWidth, _area.width >> scaleX, _area.height >> scaleY ) );
   }
+
+  m_maxArea = UnitArea( _chromaFormat, _area );
 }
 
 void PelStorage::createFromBuf( PelUnitBuf buf )
@@ -851,6 +855,19 @@ void PelStorage::createFromBuf( PelUnitBuf buf )
   }
 }
 
+void PelStorage::compactResize( const UnitArea& area )
+{
+  CHECK( bufs.size() < area.blocks.size(), "Cannot increase buffer size when compacting!" );
+
+  for( uint32_t i = 0; i < area.blocks.size(); i++ )
+  {
+    CHECK( m_maxArea.blocks[i].area() < area.blocks[i].area(), "Cannot increase buffer size when compacting!" );
+
+    bufs[i].Size::operator=( area.blocks[i].size() );
+    bufs[i].stride = bufs[i].width;
+  }
+}
+
 void PelStorage::takeOwnership( PelStorage& other )
 {
   chromaFormat = other.chromaFormat;
@@ -865,6 +882,9 @@ void PelStorage::takeOwnership( PelStorage& other )
     bufs[i] = PelBuf( cPelBuf.bufAt( 0, 0 ), cPelBuf.stride, cPelBuf.width, cPelBuf.height );
     std::swap( m_origin[i], other.m_origin[i]);
   }
+
+  m_maxArea = other.m_maxArea;
+
   other.destroy();
 }
 

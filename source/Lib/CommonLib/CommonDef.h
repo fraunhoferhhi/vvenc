@@ -97,22 +97,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 # define GCC_WARNING_RESET
 #endif
 
+#ifdef TARGET_SIMD_X86
 #if ENABLE_SIMD_OPT
-
-#if defined(__i386__) || defined(i386) || defined(__x86_64__) || defined(_M_X64) || defined (_WIN32) || defined (_MSC_VER)
-#define TARGET_SIMD_X86
-#elif defined (__ARM_NEON__)
-#define TARGET_SIMD_ARM 1
-#else
-#error no simd target
-#endif
-
 #define SIMD_PREFETCH_T0(_s)  _mm_prefetch( (char*)(_s), _MM_HINT_T0 )
 #else
 #define SIMD_PREFETCH_T0(_s)
 #endif //ENABLE_SIMD_OPT
 
-#ifdef TARGET_SIMD_X86
 #ifdef _WIN32
 # include <intrin.h>
 #else

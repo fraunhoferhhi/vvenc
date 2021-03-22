@@ -322,7 +322,7 @@ public:
   bool                m_intraOnlyConstraintFlag                 = false;
 
   int                 m_InputQueueSize                          = 0;                                     ///< Size of frame input queue
-  bool                m_rewriteParamSets                        = false;                                 ///< Flag to enable rewriting of parameter sets at random access points
+  bool                m_rewriteParamSets                        = true;                                  ///< Flag to enable rewriting of parameter sets at random access points
   bool                m_idrRefParamList                         = false;                                 ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
   RPLEntry            m_RPLList0[ MAX_GOP ];                                                             ///< the RPL entries from the config file
   RPLEntry            m_RPLList1[ MAX_GOP ];                                                             ///< the RPL entries from the config file
@@ -400,6 +400,7 @@ public:
   unsigned            m_MaxCodingDepth                          = 0;                                     ///< max. total CU depth - includes depth of transform-block structure
   unsigned            m_log2DiffMaxMinCodingBlockSize           = 0;                                     ///< difference between largest and smallest CU depth
   int                 m_log2MaxTbSize                           = 6;
+  int                 m_log2MinCodingBlockSize                  = 2;
 
   bool                m_bUseASR                                 = false;                                 ///< flag for using adaptive motion search range
   bool                m_bUseHADME                               = true;                                  ///< flag for using HAD in sub-pel ME
@@ -440,9 +441,6 @@ public:
   unsigned            m_maxNumGeoCand                           = 5;
   int                 m_FastIntraTools                          = 0;
 
-  RateControlMode     m_RCRateControlMode                       = RCM_AUTO;       ///< RateControlMode
-  int                 m_RCKeepHierarchicalBit                   = -1;
-  int                 m_RCUseLCUSeparateModel                   = -1;
   int                 m_RCInitialQP                             = 0;
   bool                m_RCForceIntraQP                          = false;
 

@@ -108,9 +108,7 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
 
   if (slice->sliceMap.ctuAddrInSlice[0] == 0)
   {
-    cs.picture->resizeAlfCtuEnabled( cs.pcv->sizeInCtus );
-    cs.picture->resizeAlfCtbFilterIndex(cs.pcv->sizeInCtus);
-    cs.picture->resizeAlfCtuAlternative( cs.pcv->sizeInCtus );
+    cs.picture->resizeAlfCtuBuffers( cs.pcv->sizeInCtus );
   }
 
   const unsigned numSubstreams = slice->getNumberOfSubstreamSizes() + 1;

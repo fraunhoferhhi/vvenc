@@ -144,7 +144,7 @@ public:
   void    saoDisabledRate     ( CodingStructure& cs, SAOBlkParam* reconParams );
   void    finishCompressSlice ( Picture* pic, Slice& slice );
 
-  double  resetQP              ( Picture* pic, int sliceQP, double lambda );
+  void    resetQP             ( Picture* pic, int sliceQP, double& lambda );
 
 private:
   void    xInitSliceLambdaQP   ( Slice* slice, int gopId );

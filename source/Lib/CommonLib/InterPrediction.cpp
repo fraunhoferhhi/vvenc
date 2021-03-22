@@ -609,7 +609,7 @@ void InterPredInterpolation::init()
   xFpProfGradFilter = gradFilterCore<false>;
   xFpApplyPROF      = applyPROFCore;
 
-#if ENABLE_SIMD_OPT_BDOF
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
   initInterPredictionX86();
 #endif
 
@@ -1130,8 +1130,8 @@ void DMVR::xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, cons
 {
   int mvShift = MV_FRACTIONAL_BITS_INTERNAL;
   Mv mv[2];
-  mv[L0] = mergeMv[L0] + refMv;
-  mv[L1] = mergeMv[L1] - refMv;
+  mv[L0] = mergeMv[L0] + refMv; mv[L0].clipToStorageBitDepth();
+  mv[L1] = mergeMv[L1] - refMv; mv[L1].clipToStorageBitDepth();
 
   for (int k = 0; k < NUM_REF_PIC_LIST_01; k++)
   {
