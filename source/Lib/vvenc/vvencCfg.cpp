@@ -213,7 +213,7 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_intraOnlyConstraintFlag                 = false;
 
   c->m_InputQueueSize                          = 0;                                     ///< Size of frame input queue
-  c->m_rewriteParamSets                        = false;                                 ///< Flag to enable rewriting of parameter sets at random access points
+  c->m_rewriteParamSets                        = true;                                 ///< Flag to enable rewriting of parameter sets at random access points
   c->m_idrRefParamList                         = false;                                 ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
   for( i = 0; i < VVENC_MAX_GOP; i++ )
   {
