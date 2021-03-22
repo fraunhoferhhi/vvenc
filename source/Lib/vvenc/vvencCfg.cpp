@@ -2062,6 +2062,12 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter(c, c->m_log2MaxTbSize > 6,                                                                  "Log2MaxTbSize must be 6 or smaller." );
   vvenc_confirmParameter(c, c->m_log2MaxTbSize < 5,                                                                  "Log2MaxTbSize must be 5 or greater." );
 
+  vvenc_confirmParameter( c, c->m_log2MinCodingBlockSize < 2,                                                         "Log2MinCodingBlockSize must be 2 or greater." );
+  vvenc_confirmParameter( c, c->m_CTUSize < ( 1 << c->m_log2MinCodingBlockSize ),                                        "Log2MinCodingBlockSize must be smaller than max CTU size." );
+  vvenc_confirmParameter( c, c->m_MinQT[ 0 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for I slices" );
+  vvenc_confirmParameter( c, c->m_MinQT[ 1 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for non I slices" );
+  vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << getChannelTypeScaleX(1, c->m_internChromaFormat) ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
+
   vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
 
@@ -2522,6 +2528,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled     = 1;
 
       c->m_useBDPCM                  = 2;
+      c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
       c->m_LMChroma                  = 1;
       c->m_MTSImplicit               = 1;
@@ -2550,6 +2557,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
       c->m_AMVRspeed                 = 5;
+      c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
       c->m_MCTF                      = 2;
       c->m_MTSImplicit               = 1;
@@ -2557,6 +2565,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_bUseSAO                   = 1;
       c->m_TMVPModeId                = 1;
       c->m_TS                        = 2;
+
       break;
 
     case vvencPresetMode::VVENC_MEDIUM:
@@ -2885,6 +2894,7 @@ VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgL
   css << "Level                                  : " << getLevelStr( c->m_level ) << "\n";
   css << "CU size / total-depth                  : " << c->m_CTUSize << " / " << c->m_MaxCodingDepth << "\n";
   css << "Max TB size                            : " << (1 << c->m_log2MaxTbSize) << "\n";
+  css << "Min CB size                            : " << (1 << c->m_log2MinCodingBlockSize) << "\n";
   css << "Motion search range                    : " << c->m_SearchRange << "\n";
   css << "Intra period                           : " << c->m_IntraPeriod << "\n";
   css << "Decoding refresh type                  : " << c->m_DecodingRefreshType << "\n";

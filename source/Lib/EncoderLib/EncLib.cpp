@@ -900,7 +900,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.partitionOverrideEnabled      = m_cEncCfg.m_useAMaxBT != 0;
   sps.resChangeInClvsEnabled        = m_cEncCfg.m_resChangeInClvsEnabled;
   sps.rprEnabled                    = m_cEncCfg.m_rprEnabledFlag != 0;
-  sps.log2MinCodingBlockSize        = 2;
+  sps.log2MinCodingBlockSize        = m_cEncCfg.m_log2MinCodingBlockSize;
   sps.log2MaxTbSize                 = m_cEncCfg.m_log2MaxTbSize;
   sps.temporalMVPEnabled            = m_cEncCfg.m_TMVPModeId == 2 || m_cEncCfg.m_TMVPModeId == 1;
   sps.LFNST                         = m_cEncCfg.m_LFNST != 0;

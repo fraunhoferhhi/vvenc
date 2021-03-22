@@ -523,15 +523,8 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     return false;
   }
 
-  //
-  // set intern derived parameters (for convenience purposes only)
-  //
-
-  // enable ReWriteParamSets ( TODO: should that flag be enabled by default?
-  conf.m_rewriteParamSets        = true;
-
-//  // this has to be set outside
-  if ( conf.m_internChromaFormat < 0 || conf.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
+  // this has to be set outside
+  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {
     conf.m_internChromaFormat = m_inputFileChromaFormat;
   }
@@ -810,14 +803,15 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MaxMTTHierarchyDepthISliceL",                     conf.m_maxMTTDepthI,                              "maxMTTDepthISliceL")
   ("MaxMTTHierarchyDepthISliceC",                     conf.m_maxMTTDepthIChroma,                        "maxMTTDepthISliceC")
   // <-- deprecated
-  ("MaxBTLumaISlice",                                 conf.m_maxBT[0],                                  "MaxBTLumaISlice")
-  ("MaxBTChromaISlice",                               conf.m_maxBT[2],                                  "MaxBTChromaISlice")
-  ("MaxBTNonISlice",                                  conf.m_maxBT[1],                                  "MaxBTNonISlice")
-  ("MaxTTLumaISlice",                                 conf.m_maxTT[0],                                  "MaxTTLumaISlice")
-  ("MaxTTChromaISlice",                               conf.m_maxTT[2],                                  "MaxTTChromaISlice")
-  ("MaxTTNonISlice",                                  conf.m_maxTT[1],                                  "MaxTTNonISlice")
-  ("DualITree",                                       conf.m_dualITree,                                 "Use separate luma and chroma QTBT trees for intra slice")
-  ("Log2MaxTbSize",                                   conf.m_log2MaxTbSize,                             "Maximum transform block size in logarithm base 2")
+  ("MaxBTLumaISlice",                                 conf.m_maxBT[0],                                       "MaxBTLumaISlice")
+  ("MaxBTChromaISlice",                               conf.m_maxBT[2],                                       "MaxBTChromaISlice")
+  ("MaxBTNonISlice",                                  conf.m_maxBT[1],                                       "MaxBTNonISlice")
+  ("MaxTTLumaISlice",                                 conf.m_maxTT[0],                                       "MaxTTLumaISlice")
+  ("MaxTTChromaISlice",                               conf.m_maxTT[2],                                       "MaxTTChromaISlice")
+  ("MaxTTNonISlice",                                  conf.m_maxTT[1],                                       "MaxTTNonISlice")
+  ("DualITree",                                       conf.m_dualITree,                                      "Use separate luma and chroma QTBT trees for intra slice")
+  ("Log2MaxTbSize",                                   conf.m_log2MaxTbSize,                                  "Maximum transform block size in logarithm base 2")
+  ("Log2MinCodingBlockSize",                          conf.m_log2MinCodingBlockSize,                         "Minimum coding block size in logarithm base 2")
   ;
 
   opts.setSubSection("Coding tools");
