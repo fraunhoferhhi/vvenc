@@ -534,7 +534,7 @@ std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-const char* vvencGetCompileInfoString()
+VVENC_DECL const char* vvenc_getCompileInfoString()
 {
   char convBuf[ 256 ];
   VVencCompileInfo.clear();

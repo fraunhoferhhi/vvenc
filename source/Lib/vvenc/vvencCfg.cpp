@@ -2008,14 +2008,14 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
 
-  vvenc_confirmParameter(!((m_level==VVENC_LEVEL1)
+  vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
     || (c->m_level==VVENC_LEVEL3) || (c->m_level==VVENC_LEVEL3_1)
     || (c->m_level==VVENC_LEVEL4) || (c->m_level==VVENC_LEVEL4_1)
     || (c->m_level==VVENC_LEVEL5) || (c->m_level==VVENC_LEVEL5_1) || (c->m_level==VVENC_LEVEL5_2)
     || (c->m_level==VVENC_LEVEL6) || (c->m_level==VVENC_LEVEL6_1) || (c->m_level==VVENC_LEVEL6_2) || (c->m_level==VVENC_LEVEL6_3)
     || (c->m_level==VVENC_LEVEL15_5)), "invalid level selected");
-  vvenc_confirmParameter(!((c->m_levelTier==VVENC_TIER_MAIN) || (c->m_levelTier==VVENC_TIER_HIGH)), "invalid tier selected");
+  vvenc_confirmParameter(c, !((c->m_levelTier==VVENC_TIER_MAIN) || (c->m_levelTier==VVENC_TIER_HIGH)), "invalid tier selected");
 
 
   vvenc_confirmParameter( c, c->m_chromaCbQpOffset < -12,           "Min. Chroma Cb QP Offset is -12" );

@@ -721,10 +721,6 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *cfg );
 
 VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *cfg, vvencMsgLevel eMsgLevel );
 
-VVENC_DECL bool  vvencIsTracingEnabled();           // checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL const char* vvencGetCompileInfoString(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-VVENC_DECL void   vvencDecodeBitstream( const char* FileName);
-
 #ifdef __cplusplus
 }
 #endif /*__cplusplus */

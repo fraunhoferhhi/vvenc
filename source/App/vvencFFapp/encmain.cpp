@@ -90,9 +90,9 @@ int main(int argc, char* argv[])
   // print information
   msgApp( VVENC_INFO, "\n");
   msgApp( VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc::VVEnc::getVersionNumber().c_str() );
-  msgApp( VVENC_INFO, "%s", vvencGetCompileInfoString() );
+  msgApp( VVENC_INFO, "%s", vvenc_getCompileInfoString() );
   msgApp( VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
-  if ( vvencIsTracingEnabled() )
+  if ( vvenc_isTracingEnabled() )
   {
     msgApp( VVENC_INFO, "[ENABLE_TRACING]" );
   }

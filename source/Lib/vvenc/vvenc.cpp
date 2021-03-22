@@ -52,7 +52,12 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvenc.h"
 #include "vvencimpl.h"
 
-namespace vvenc {
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+VVENC_NAMESPACE_BEGIN
 
 VVEnc::VVEnc()
 {
@@ -178,8 +183,8 @@ YUVBufferStorage::YUVBufferStorage( const vvencChromaFormat& chFmt, const int fr
   for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
   {
     YUVBuffer::Plane& yuvPlane = planes[ i ];
-    yuvPlane.width  = vvencGetWidthOfComponent ( chFmt, frameWidth,  i );
-    yuvPlane.height = vvencGetHeightOfComponent( chFmt, frameHeight, i );
+    yuvPlane.width  = vvenc_getWidthOfComponent ( chFmt, frameWidth,  i );
+    yuvPlane.height = vvenc_getHeightOfComponent( chFmt, frameHeight, i );
     yuvPlane.stride = yuvPlane.width;
     const int size  = yuvPlane.stride * yuvPlane.height;
     yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
@@ -194,8 +199,35 @@ YUVBufferStorage::~YUVBufferStorage()
   }
 }
 
+VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
+{
+  vvencYUVBuffer* yuvBuffer = (vvencYUVBuffer*)malloc(sizeof(vvencYUVBuffer));
+  vvdec_accessUnit_default( yuvBuffer );
+  return accessUnit;
+}
+
+VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer )
+{
+
+}
+
+VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
+{
+
+}
+
+VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+{
+
+}
+
+VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
+{
+
+}
+
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL bool vvencIsTracingEnabled()
+VVENC_DECL bool vvenc_isTracingEnabled()
 {
 #if ENABLE_TRACING
   return true;
@@ -237,5 +269,8 @@ int vvencGetHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHe
   return h;
 }
 
-} // namespace
+VVENC_NAMESPACE_END
 
+#ifdef __cplusplus
+};
+#endif
