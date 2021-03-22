@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
 endif()
 
 # project name
-project( vvenc VERSION 0.3.0.0 )
+project( vvenc VERSION 0.3.1.0 )
 
 set( VVENC_ENABLE_X86_SIMD TRUE )
 set( VVENC_ENABLE_ARM_SIMD FALSE )
