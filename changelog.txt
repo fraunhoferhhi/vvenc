@@ -15,6 +15,7 @@ tag 0.3.1.0
  - added parameter --Log2MinCodingBlockSize (default: 2) to limit the minimal coding block size
 
 * bugfixes
+ - fixes #29
  - corrected motion vector clipping during DMVR process (might produce enc/dec mismatches).
  - fixed LMCS/ISP interaction (weighted SAD for blocks of width '1').
 
