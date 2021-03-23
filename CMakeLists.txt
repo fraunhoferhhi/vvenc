@@ -54,6 +54,13 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   if( MSVC )
     add_compile_options( "/EHsc" )
   endif()
+  
+  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvencFFapp" vvEncFfAppFound )
+  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvencapp" vvEncAppFound )
+  
+  if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
+    list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
+  endif()
 
   # vvenc embedded by superproject, always include source/Lib/vvenc  as first component
   list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvenc" )
