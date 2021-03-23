@@ -55,8 +55,8 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
     add_compile_options( "/EHsc" )
   endif()
   
-  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvencFFapp" vvEncFfAppFound )
-  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/vvencapp" vvEncAppFound )
+  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencFFapp" vvEncFfAppFound )
+  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencapp" vvEncAppFound )
   
   if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
     list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
