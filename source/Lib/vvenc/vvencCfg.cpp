@@ -226,7 +226,7 @@ bool VVEncCfg::initCfgParameter()
   }
 
   // rate control
-  if( m_RCNumPasses < 0 )                                m_RCNumPasses           = m_RCTargetBitrate > 0 ? 2 : 1;
+  if( m_RCNumPasses < 0 ) m_RCNumPasses = 1;
 
   // threading
   if( m_numThreads < 0 )
