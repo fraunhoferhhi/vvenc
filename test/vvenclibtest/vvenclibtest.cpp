@@ -74,6 +74,7 @@ int g_verbose = 0;
 int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
+int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
 
 int main( int argc, char* argv[] )
 {
@@ -119,10 +120,16 @@ int main( int argc, char* argv[] )
     testInvalidInputParams(); 
     break;
   }
+  case 4:
+  {
+    testSDKDefaultBehaviour();
+    break;
+  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
     testInvalidInputParams();
+    testSDKDefaultBehaviour();
     break;
   }
 
@@ -162,6 +169,16 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_internChromaFormat         =  CHROMA_420;
 
   rcEncCfg.initPreset( PresetMode::FASTER  );
+  if( callInitCfgParameter )
+  {
+    rcEncCfg.initCfgParameter();
+  }
+}
+
+void defaultSDKInit( VVEncCfg& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
+{
+  rcEncCfg.initDefault(176,144,60, targetBitrate, 32,  PresetMode::MEDIUM );
+
   if( callInitCfgParameter )
   {
     rcEncCfg.initCfgParameter();
@@ -505,6 +522,62 @@ int callingOrderRegularInit2Pass()
 }
 
 
+int checkSDKDefaultBehaviourRC()
+{
+  VVEnc cVVEnc;
+  VVEncCfg vvencParams;
+  defaultSDKInit( vvencParams,  500000 );
+  vvencParams.m_internChromaFormat = CHROMA_420;
+
+  if( 0 != cVVEnc.init( vvencParams ) )
+  {
+    return -1;
+  }
+
+  AccessUnit cAU;
+  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( cYuvPicture );
+
+  int validAUs = 0;
+
+  bool encodeDone = false;
+  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  {
+    return -1;
+  }
+
+  if( ! cAU.payload.empty()  )
+  {
+    validAUs++;
+  }
+
+  while ( !encodeDone )
+  {
+    if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
+    {
+      return -1;
+    }
+
+    if( ! cAU.payload.empty()  )
+    {
+      validAUs++;
+    }
+  }
+
+  if( 0 != cVVEnc.uninit())
+  {
+    return -1;
+  }
+
+
+  if( validAUs != 1 )
+  {
+    return -1;
+  }
+
+  return 0;
+}
+
 
 int testLibCallingOrder()
 {
@@ -520,6 +593,13 @@ int testLibCallingOrder()
 
   return 0;
 }
+
+int testSDKDefaultBehaviour()
+{
+  testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
+  return 0;
+}
+
 
 
 int inputBufTest( YUVBuffer& cYuvPicture )
