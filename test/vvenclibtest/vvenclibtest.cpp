@@ -569,12 +569,8 @@ int checkSDKDefaultBehaviourRC()
     return -1;
   }
 
-  if( !encodeDone )
-  {
-    return -1;
-  }
 
-  if( validAUs == 0 || validAUs > 1 )
+  if( validAUs != 1 )
   {
     return -1;
   }
