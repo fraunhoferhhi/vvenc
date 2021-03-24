@@ -177,7 +177,7 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
 
 void defaultSDKInit( VVEncCfg& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  rcEncCfg.initDefault(176,144,60, targetBitrate, 32,  PresetMode::FASTER );
+  rcEncCfg.initDefault(176,144,60, targetBitrate, 32,  PresetMode::MEDIUM );
 
   if( callInitCfgParameter )
   {
@@ -527,11 +527,8 @@ int checkSDKDefaultBehaviourRC()
   VVEnc cVVEnc;
   VVEncCfg vvencParams;
   defaultSDKInit( vvencParams,  500000 );
-  vvencParams.m_numThreads = 0;
-  if ( vvencParams.m_internChromaFormat < 0 || vvencParams.m_internChromaFormat >= NUM_CHROMA_FORMAT )
-  {
-    vvencParams.m_internChromaFormat = CHROMA_420;
-  }
+  vvencParams.m_internChromaFormat = CHROMA_420;
+
   if( 0 != cVVEnc.init( vvencParams ) )
   {
     return -1;
@@ -554,14 +551,17 @@ int checkSDKDefaultBehaviourRC()
     validAUs++;
   }
 
-  if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
+  while ( !encodeDone )
   {
-    return -1;
-  }
+    if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
+    {
+      return -1;
+    }
 
-  if( ! cAU.payload.empty()  )
-  {
-    validAUs++;
+    if( ! cAU.payload.empty()  )
+    {
+      validAUs++;
+    }
   }
 
   if( 0 != cVVEnc.uninit())
@@ -574,7 +574,7 @@ int checkSDKDefaultBehaviourRC()
     return -1;
   }
 
-  if( validAUs == 0 )
+  if( validAUs == 0 || validAUs > 1 )
   {
     return -1;
   }
