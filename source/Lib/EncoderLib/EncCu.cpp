@@ -2791,7 +2791,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
   }
   if (m_pcEncCfg->m_EDO && bestCS->cost != MAX_DOUBLE)
   {
-    xCalDebCost(*tempCS, partitioner);
+    xCalDebCost(*bestCS, partitioner);
   }
 }
 
