@@ -527,7 +527,7 @@ int checkSDKDefaultBehaviourRC()
   VVEnc cVVEnc;
   VVEncCfg vvencParams;
   defaultSDKInit( vvencParams,  500000 );
-
+  vvencParams.m_numThreads = 0;
   if ( vvencParams.m_internChromaFormat < 0 || vvencParams.m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {
     vvencParams.m_internChromaFormat = CHROMA_420;
