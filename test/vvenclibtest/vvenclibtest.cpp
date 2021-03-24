@@ -177,13 +177,7 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
 
 void defaultSDKInit( VVEncCfg& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  rcEncCfg.initDefault(176,144,60, targetBitrate );
-
-  //rcEncCfg.m_usePerceptQPA              = true;
-  //rcEncCfg.m_internalBitDepth[0]        = 10;
-  //rcEncCfg.m_internChromaFormat         =  CHROMA_420;
-
-  rcEncCfg.initPreset( PresetMode::FASTER  );
+  rcEncCfg.initDefault(176,144,60, targetBitrate, 32,  PresetMode::FASTER );
 
   if( callInitCfgParameter )
   {
@@ -542,7 +536,7 @@ int checkSDKDefaultBehaviourRC()
   {
     return -1;
   }
-  cVVEnc.getConfig( vvencParams );
+
   AccessUnit cAU;
   YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( cYuvPicture );
