@@ -517,8 +517,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   // check own parameters
   //
 
-
-
   if( m_bitstreamFileName.empty() )
   {
     cout <<  "error: A bitstream file name must be specified (--output=bit.266)" << std::endl;
