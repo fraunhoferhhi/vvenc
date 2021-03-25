@@ -478,6 +478,9 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   m_bufferChrFmt        = bufferChrFmt; 
   m_clipToRec709        = clipToRec709;
   m_packedYUVMode       = packedYUVMode;
+#if 1 //PIPE_INPUT
+  m_readStdin           = false;
+#endif
 
   if( m_packedYUVMode && (m_bufferChrFmt == CHROMA_400) )
   {  
@@ -509,6 +512,13 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   }
   else
   {
+#if 1 //PIPE_INPUT
+    if( fileName.empty() )
+    {
+      m_readStdin = true;
+      return 0;
+    }
+#endif
     m_cHandle.open( fileName.c_str(), std::ios::binary | std::ios::in );
 
     if( m_cHandle.fail() )
@@ -590,10 +600,18 @@ bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
   for( int comp = 0; comp < numComp; comp++ )
   {
     YUVBuffer::Plane& yuvPlane = yuvInBuf.planes[ comp ];
-
-    if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, ComponentID( comp ), m_fileChrFmt, m_bufferChrFmt ) )
-      return false;
-
+#if 1 //PIPE_INPUT
+    if( m_readStdin )
+    {
+      if ( ! readYuvPlane( std::cin, yuvPlane, is16bit, m_fileBitdepth, ComponentID( comp ), m_fileChrFmt, m_bufferChrFmt ) )
+        return false;
+    }
+    else
+#endif
+    {
+      if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, ComponentID( comp ), m_fileChrFmt, m_bufferChrFmt ) )
+        return false;
+    }
     if ( m_bufferChrFmt == CHROMA_400 )
       continue;
 

@@ -151,6 +151,33 @@ void EncApp::encode()
     default: break;
   }
 
+#if 1 //PIPE_INPUT
+  bool readStdin = false;
+  if( m_cEncAppCfg.m_inputFileName.empty() )
+  {
+    if( m_cEncAppCfg.m_RCNumPasses > 1 )
+    {
+      msgApp( ERROR, "no input file given and 2 pass rate control is enabled; no supported yet\n" );
+      return;
+    }
+    else
+    {
+      msgApp( vvenc::INFO, "no input file given, trying to read from stdin\n\n" );
+    }
+
+    readStdin = true;
+
+    if( ( fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0 )
+    {
+      rewind( stdin );
+    }
+    else
+    {
+      msgApp( ERROR, "stdin is empty, check input!" );
+      return;
+    }
+  }
+#endif
 
   vvenc::AccessUnit au;
 
@@ -225,8 +252,13 @@ void EncApp::encode()
       }
     }
 
-    // close input YUV
-    m_yuvInputFile.close();
+#if 1 //PIPE_INPUT
+    if( !readStdin )
+#endif
+    {
+      // close input YUV
+      m_yuvInputFile.close();
+    }
   }
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );

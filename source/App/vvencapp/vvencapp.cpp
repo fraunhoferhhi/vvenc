@@ -149,10 +149,38 @@ int main( int argc, char* argv[] )
   // assign verbosity used for encoder output
   g_verbosity = vvencappCfg.m_verbosity; 
 
+#if 1 //PIPE_INPUT
+  bool readStdin = false;
+#endif
+  
   if( vvencappCfg.m_inputFileName.empty() )
   {
+#if 1 //PIPE_INPUT
+    if( vvencappCfg.m_RCNumPasses > 1 )
+    {
+      std::cout << cAppname << " [error]: no input file given and 2 pass rate control is enabled; no supported yet" << std::endl;
+      return -1;
+    }
+    else
+    {
+      std::cout << cAppname << " no input file given. trying to read from stdin" << std::endl;
+    }
+
+    readStdin = true;
+
+    if( ( fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0 )
+    {
+      rewind( stdin );
+    }
+    else
+    {
+      std::cout << cAppname << " [error]: stdin is empty, check input!" << std::endl;
+      return -1;
+    }
+#else
     std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
     return -1;
+#endif
   }
 
   if( vvencappCfg.m_bitstreamFileName.empty() )
@@ -311,8 +339,12 @@ int main( int argc, char* argv[] )
         bEof = true;
       }
     }
-
-    cYuvFileInput.close();
+#if 1 //PIPE_INPUT
+    if( !readStdin )
+#endif
+    {
+      cYuvFileInput.close();
+    }
   }
 
   std::chrono::steady_clock::time_point cTPEndRun = std::chrono::steady_clock::now();
