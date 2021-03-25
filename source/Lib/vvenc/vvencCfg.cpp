@@ -110,14 +110,12 @@ bool VVEncCfg::initCfgParameter()
 
   confirmParameter( m_numThreads < -1 || m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
-  confirmParameter( m_IntraPeriod < 0,                 "IDR period (in frames) must be >= 0");
+  confirmParameter( m_IntraPeriod < -1,                "IDR period (in frames) must be >= -1");
   confirmParameter( m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
 
-  confirmParameter( m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
-  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  confirmParameter( m_GOPSize > 64,                                                             "GOP size must be <= 64" );
-  confirmParameter( m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
+  confirmParameter( m_GOPSize < 1 || m_GOPSize > 64,                                                  "GOP Size must be between 1 and 64" );
+  confirmParameter( m_GOPSize > 1 &&  m_GOPSize % 2,                                                  "GOP Size must be a multiple of 2" );
+  confirmParameter( m_GOPList[0].m_POC == -1 && m_GOPSize != 1 && m_GOPSize != 16 && m_GOPSize != 32, "GOP list auto config only supported GOP sizes: 1, 16, 32" );
 
   confirmParameter( m_QP < 0 || m_QP > MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
 
