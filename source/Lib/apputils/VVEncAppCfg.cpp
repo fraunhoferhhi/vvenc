@@ -529,6 +529,11 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     m_internChromaFormat = m_inputFileChromaFormat;
   }
 
+  if( m_RCNumPasses < 0 )
+  {
+    m_RCNumPasses = m_RCTargetBitrate > 0 ? 2 : 1;
+  }
+
   return true;
 }
 
@@ -1189,6 +1194,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = m_inputFileChromaFormat;
+  }
+
+  if( m_RCNumPasses < 0 )
+  {
+    m_RCNumPasses = m_RCTargetBitrate > 0 ? 2 : 1;
   }
 
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
