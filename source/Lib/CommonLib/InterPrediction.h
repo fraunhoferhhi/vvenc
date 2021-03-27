@@ -153,10 +153,6 @@ class InterPrediction : public DMVR
 {
 protected:
   ChromaFormat m_currChromaFormat;
-#if IBC_VTM
-  PelStorage           m_IBCBuffer;
-  void xIntraBlockCopy (CodingUnit& cu, PelUnitBuf& predBuf, const ComponentID compID);
-#endif
 
 private:
   PelStorage   m_yuvPred[NUM_REF_PIC_LIST_01];
@@ -164,6 +160,8 @@ private:
   PelStorage   m_geoPartBuf[2]; 
 #if IBC_VTM
   int          m_IBCBufferWidth;
+  PelStorage   m_IBCBuffer;
+  void xIntraBlockCopyIBC       ( CodingUnit& cu, PelUnitBuf& predBuf, const ComponentID compID );
 #endif
 
   void xPredInterUni            ( const CodingUnit& cu, const RefPicList& refPicList, PelUnitBuf& pcYuvPred, const bool bi, const bool bdofApplied );
@@ -187,7 +185,7 @@ public:
   void xFillIBCBuffer(CodingUnit& cu);
   void resetIBCBuffer(const ChromaFormat chromaFormatIDC, const int ctuSize);
   void resetVPDUforIBC(const ChromaFormat chromaFormatIDC, const int ctuSize, const int vSize, const int xPos, const int yPos);
-  bool isLumaBvValid(const int ctuSize, const int xCb, const int yCb, const int width, const int height, const int xBv, const int yBv);
+  bool isLumaBvValidIBC(const int ctuSize, const int xCb, const int yCb, const int width, const int height, const int xBv, const int yBv);
 #endif
 };
 

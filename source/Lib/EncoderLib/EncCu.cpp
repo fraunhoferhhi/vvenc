@@ -380,7 +380,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     {
       m_cInterSearch.resetIbcSearch();
     }
-    m_cInterSearch.resetCtuRecord();
+    m_cInterSearch.resetCtuRecordIBC();
   }
 #endif
 
@@ -2678,7 +2678,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       int xPred = cu.bv.hor;
       int yPred = cu.bv.ver;
       
-      if (!m_cInterSearch.searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth)) // not valid bv derived
+      if (!m_cInterSearch.searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth)) // not valid bv derived
       {
         numValidBv--;
         continue;
@@ -2688,7 +2688,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
 
       Distortion sad = distParam.distFunc(distParam);
       unsigned int bitsCand = mergeCand + 1;
-      if (mergeCand == tempCS->sps->maxNumMergeCand - 1)
+      if (mergeCand == tempCS->sps->maxNumIBCMergeCand - 1)
       {
         bitsCand--;
       }

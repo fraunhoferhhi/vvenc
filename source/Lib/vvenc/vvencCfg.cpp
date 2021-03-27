@@ -242,13 +242,8 @@ bool VVEncCfg::initCfgParameter()
   if( m_maxParallelFrames < 0 )
   {
     m_maxParallelFrames = std::min( m_numThreads, 4 );
-#if IBC_VTM && IBC_PROBLEM
-    if ( /*m_RCTargetBitrate > 0
-        &&*/ m_RCNumPasses == 1
-#else
     if( m_RCTargetBitrate > 0
         && m_RCNumPasses == 1
-#endif
         && m_maxParallelFrames > 2 )
     {
       m_maxParallelFrames = 2;
@@ -2095,6 +2090,10 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_TS                            = 0;
   m_useNonLinearAlfChroma         = 0;
   m_useNonLinearAlfLuma           = 0;
+#if 1 // IBC_VTM
+  m_IBCMode                       = 0;
+  m_IBCFastMethod                 = 1;
+#endif
 
   // enable speedups
   m_qtbttSpeedUp                  = 2;

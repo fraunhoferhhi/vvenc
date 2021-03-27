@@ -526,11 +526,7 @@ void AreaBuf<Pel>::copyClip( const AreaBuf<const Pel>& src, const ClpRng& clpRng
   const unsigned srcStride  = src.stride;
   const unsigned destStride = stride;
 
-#if IBC_VTM
-  if (destStride == width && (destStride>0))
-#else
   if( destStride == width)
-#endif
   {
     g_pelBufOP.copyClip(srcp, dest, width * height, clpRng);
   }
@@ -564,11 +560,7 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   const unsigned src1Stride = pred.stride;
   const unsigned src2Stride = resi.stride;
   const unsigned destStride =      stride;
-#if IBC_VTM
-  if (src2Stride == width && src2Stride!=0)
-#else
   if( src2Stride == width )
-#endif
   {
     g_pelBufOP.reco( pred.buf, resi.buf, buf, width * height, clpRng );
   }

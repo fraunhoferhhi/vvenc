@@ -276,16 +276,6 @@ void DecCu::xIntraRecBlk( TransformUnit& tu, const ComponentID compID )
     piResi.scaleSignal(tu.chromaAdj, 0, tu.cu->cs->slice->clpRngs[compID]);
   }
 
-#if IBC_VTM
-  if (!tu.cu->ispMode || !isLuma(compID))
-  {
-    cs.setDecomp(area);
-  }
-  else if (tu.cu->ispMode && isLuma(compID) && CU::isISPFirst(*tu.cu, tu.blocks[compID], compID))
-  {
-    cs.setDecomp(tu.cu->blocks[compID]);
-  }
-#endif
 
   piPred.reconstruct( piPred, piResi, tu.cu->cs->slice->clpRngs[ compID ] );
   pReco.copyFrom( piPred );
@@ -441,18 +431,31 @@ void DecCu::xReconInter(CodingUnit &cu)
   // inter recon
   xDecodeInterTexture(cu);
 
+#if IBC_VTM
+  bool LumaOnly = predBuf.bufs.size() > 1 ? false : true;
+  if (predBuf.bufs[1].stride == 0 || predBuf.bufs[2].stride == 0)
+  {
+    LumaOnly = true;
+  }
+#endif
   if (cu.rootCbf)
   {
+#if IBC_VTM
+    cs.getResiBuf( cu ).reconstruct( predBuf, cs.getResiBuf( cu ), cs.slice->clpRngs, LumaOnly);
+    cs.getRecoBuf(cu).copyFrom(cs.getResiBuf(cu), LumaOnly);
+#else
     cs.getResiBuf( cu ).reconstruct( predBuf, cs.getResiBuf( cu ), cs.slice->clpRngs );
     cs.getRecoBuf( cu ).copyFrom( cs.getResiBuf( cu ) );
+#endif
   }
   else
   {
-    cs.getRecoBuf(cu).copyClip( predBuf, cs.slice->clpRngs);
-  }
 #if IBC_VTM
-  cs.setDecomp(cu);
+    cs.getRecoBuf(cu).copyClip(predBuf, cs.slice->clpRngs, LumaOnly);
+#else
+    cs.getRecoBuf(cu).copyClip( predBuf, cs.slice->clpRngs);
 #endif
+}
 }
 
 void DecCu::xDecodeInterTU( TransformUnit&  currTU, const ComponentID compID )
@@ -597,10 +600,14 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         {
 #if IBC_VTM
           if (CU::isIBC(cu))
+          {
             CU::getIBCMergeCandidates(cu, mrgCtx, cu.mergeIdx);
+          }
           else
 #endif
+          {
           CU::getInterMergeCandidates(cu, mrgCtx, 0, cu.mergeIdx);
+          }
           mrgCtx.setMergeInfo(cu, cu.mergeIdx);
         }
 
@@ -700,7 +707,7 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
     const unsigned int  lcuWidth = cu.cs->slice->sps->CTUSize;
     int xPred = cu.mv[0].hor >> MV_FRACTIONAL_BITS_INTERNAL;
     int yPred = cu.mv[0].ver >> MV_FRACTIONAL_BITS_INTERNAL;
-    CHECK(!m_pcInterPred->isLumaBvValid(lcuWidth, cuPelX, cuPelY, roiWidth, roiHeight, xPred, yPred), "invalid block vector for IBC detected.");
+    CHECK(!m_pcInterPred->isLumaBvValidIBC(lcuWidth, cuPelX, cuPelY, roiWidth, roiHeight, xPred, yPred), "invalid block vector for IBC detected.");
   }
 #endif
 }

@@ -1945,6 +1945,98 @@ Distortion RdCost::xGetSADwMask(const DistParam &rcDtParam)
   return (sum >> distortionShift);
 }
 
+#if IBC_VTM
+Distortion RdCost::getBvCostMultiplePredsIBC(int x, int y, bool useIMV)
+{
+  return Distortion(m_dCostIBC * getBitsMultiplePredsIBC(x, y, useIMV));
+}
+unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
+{
+  int rmvH[2];
+  int rmvV[2];
+  rmvH[0] = x - m_bvPredictors[0].hor;
+  rmvH[1] = x - m_bvPredictors[1].hor;
+
+  rmvV[0] = y - m_bvPredictors[0].ver;
+  rmvV[1] = y - m_bvPredictors[1].ver;
+  int absCand[2];
+  absCand[0] = abs(rmvH[0]) + abs(rmvV[0]);
+  absCand[1] = abs(rmvH[1]) + abs(rmvV[1]);
+
+  int rmvHQP[2];
+  int rmvVQP[2];
+  if (x % 4 == 0 && y % 4 == 0 && useIMV)
+  {
+    int imvShift = 2;
+    int offset = 1 << (imvShift - 1);
+
+    rmvHQP[0] = (x >> 2) - ((m_bvPredictors[0].hor + offset) >> 2);
+    rmvHQP[1] = (x >> 2) - ((m_bvPredictors[1].hor + offset) >> 2);
+    rmvVQP[0] = (y >> 2) - ((m_bvPredictors[0].ver + offset) >> 2);
+    rmvVQP[1] = (y >> 2) - ((m_bvPredictors[1].ver + offset) >> 2);
+
+    int absCandQP[2];
+    absCandQP[0] = abs(rmvHQP[0]) + abs(rmvVQP[0]);
+    absCandQP[1] = abs(rmvHQP[1]) + abs(rmvVQP[1]);
+    unsigned int candBits0QP, candBits1QP;
+    if (absCand[0] < absCand[1])
+    {
+      unsigned int candBits0 = getIComponentBitsIBC(rmvH[0]) + getIComponentBitsIBC(rmvV[0]);
+      if (absCandQP[0] < absCandQP[1])
+      {
+        candBits0QP = getIComponentBitsIBC(rmvHQP[0]) + getIComponentBitsIBC(rmvVQP[0]);
+        return candBits0QP < candBits0 ? candBits0QP : candBits0;
+      }
+      else
+      {
+        candBits1QP = getIComponentBitsIBC(rmvHQP[1]) + getIComponentBitsIBC(rmvVQP[1]);
+        return candBits1QP < candBits0 ? candBits1QP : candBits0;
+      }
+    }
+    else
+    {
+      unsigned int candBits1 = getIComponentBitsIBC(rmvH[1]) + getIComponentBitsIBC(rmvV[1]);
+      if (absCandQP[0] < absCandQP[1])
+      {
+        candBits0QP = getIComponentBitsIBC(rmvHQP[0]) + getIComponentBitsIBC(rmvVQP[0]);
+        return candBits0QP < candBits1 ? candBits0QP : candBits1;
+      }
+      else
+      {
+        candBits1QP = getIComponentBitsIBC(rmvHQP[1]) + getIComponentBitsIBC(rmvVQP[1]);
+        return candBits1QP < candBits1 ? candBits1QP : candBits1;
+      }
+    }
+  }
+  else
+
+  {
+    if (absCand[0] < absCand[1])
+    {
+      return getIComponentBitsIBC(rmvH[0]) + getIComponentBitsIBC(rmvV[0]);
+    }
+    else
+    {
+      return getIComponentBitsIBC(rmvH[1]) + getIComponentBitsIBC(rmvV[1]);
+    }
+  }
+}
+unsigned int RdCost::getIComponentBitsIBC(int val)
+{
+  if (!val) return 1;
+
+  unsigned int length = 1;
+  unsigned int temp = (val <= 0) ? (-val << 1) + 1 : (val << 1);
+
+  while (1 != temp)
+  {
+    temp >>= 1;
+    length += 2;
+  }
+
+  return length;
+}
+#endif
 } // namespace vvenc
 
 //! \}

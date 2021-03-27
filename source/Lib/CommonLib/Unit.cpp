@@ -333,6 +333,9 @@ void CodingUnit::initData()
   treeType          = TREE_D;
   modeType          = MODE_TYPE_ALL;
   modeTypeSeries    = 0;
+#if IBC_VTM
+  mcControl         = 0;
+#endif
 }
 
 

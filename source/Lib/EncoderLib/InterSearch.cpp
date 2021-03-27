@@ -4198,8 +4198,13 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
 #if IBC_VTM
-  bool luma = cu.mcControl > 3 ? false : true;
-  bool chroma = (cu.mcControl >> 1) == 1 ? false : true;
+  bool luma = true;
+  bool chroma = true;
+  if (cu.predMode == MODE_IBC)
+  {
+    luma =  cu.mcControl > 3 ? false : true;
+    chroma = (cu.mcControl >> 1) == 1 ? false : true;
+  }
 #endif
   if( cu.predMode == MODE_INTER )
     CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );
@@ -6007,7 +6012,7 @@ static unsigned int xMergeCandLists(Mv* dst, unsigned int dn, unsigned int dstTo
 
   return dn;
 }
-void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* pcMvSrchRngLT, Mv* pcMvSrchRngRB, Mv* pcMvPred)
+void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* pcMvSrchRngLT, Mv* pcMvSrchRngRB, Mv* pcMvPred)
 {
   const int   srchRngHorLeft = pcMvSrchRngLT->hor;
   const int   srchRngHorRight = pcMvSrchRngRB->hor;
@@ -6070,11 +6075,11 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
         && !((yPred < srTop) || (yPred > srBottom))
         && !((xPred < srLeft) || (xPred > srRight)))
       {
-        bool validCand = searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth);
+        bool validCand = searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, xPred, yPred, lcuWidth);
 
         if (validCand)
         {
-          sad = m_pcRdCost->getBvCostMultiplePreds(xPred, yPred, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(xPred, yPred, cu.cs->sps->AMVR);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * yPred + xPred;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6091,12 +6096,12 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
     const int boundY = (0 - roiHeight - puPelOffsetY);
     for (int y = std::max(srchRngVerTop, 0 - cuPelY); y <= boundY; ++y)
     {
-      if (!searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, 0, y, lcuWidth))
+      if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, 0, y, lcuWidth))
       {
         continue;
       }
 
-      sad = m_pcRdCost->getBvCostMultiplePreds(0, y, cu.cs->sps->AMVR);
+      sad = m_pcRdCost->getBvCostMultiplePredsIBC(0, y, cu.cs->sps->AMVR);
       m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y;
       sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6116,12 +6121,12 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
     const int boundX = std::max(srchRngHorLeft, -cuPelX);
     for (int x = 0 - roiWidth - puPelOffsetX; x >= boundX; --x)
     {
-      if (!searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, 0, lcuWidth))
+      if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, 0, lcuWidth))
       {
         continue;
       }
 
-      sad = m_pcRdCost->getBvCostMultiplePreds(x, 0, cu.cs->sps->AMVR);
+      sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, 0, cu.cs->sps->AMVR);
       m_cDistParam.cur.buf = piRefSrch + x;
       sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6142,7 +6147,7 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
     bestX = cMVCand[0].hor;
     bestY = cMVCand[0].ver;
     sadBest = sadBestCand[0];
-    if ((!bestX && !bestY) || (sadBest - m_pcRdCost->getBvCostMultiplePreds(bestX, bestY, cu.cs->sps->AMVR) <= 32))
+    if ((!bestX && !bestY) || (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR) <= 32))
     {
       //chroma refine
       bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
@@ -6170,12 +6175,12 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
           if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
             continue;
 
-          if (!searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+          if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
           {
             continue;
           }
 
-          sad = m_pcRdCost->getBvCostMultiplePreds(x, y, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6186,7 +6191,7 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
       bestX = cMVCand[0].hor;
       bestY = cMVCand[0].ver;
       sadBest = sadBestCand[0];
-      if (sadBest - m_pcRdCost->getBvCostMultiplePreds(bestX, bestY, cu.cs->sps->AMVR) <= 16)
+      if (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR) <= 16)
       {
         //chroma refine
         bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
@@ -6210,12 +6215,12 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
           if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
             continue;
 
-          if (!searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+          if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
           {
             continue;
           }
 
-          sad = m_pcRdCost->getBvCostMultiplePreds(x, y, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6239,7 +6244,7 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
       bestY = cMVCand[0].ver;
       sadBest = sadBestCand[0];
 
-      if ((sadBest >= tempSadBest) || ((sadBest - m_pcRdCost->getBvCostMultiplePreds(bestX, bestY, cu.cs->sps->AMVR)) <= 32))
+      if ((sadBest >= tempSadBest) || ((sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR)) <= 32))
       {
         //chroma refine
         bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
@@ -6267,12 +6272,12 @@ void InterSearch::xIntraPatternSearch(CodingUnit& cu, TZSearchStruct& cStruct, M
           if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
             continue;
 
-          if (!searchBv(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+          if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
           {
             continue;
           }
 
-          sad = m_pcRdCost->getBvCostMultiplePreds(x, y, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6364,8 +6369,8 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf,
   cStruct.imvShift = cu.imv << 1;
   cStruct.subShiftMode = 0; 
 
-  m_pcRdCost->getMotionCost(0);
-  m_pcRdCost->setPredictors(pcMvPred);
+  m_pcRdCost->getMotionCostIBC(0);
+  m_pcRdCost->setPredictorsIBC(pcMvPred);
   m_pcRdCost->setCostScale(0);
 
   m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode);
@@ -6380,10 +6385,10 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf,
 
       int xBv = bv.hor;
       int yBv = bv.ver;
-      if (searchBv(cu, cuPelX, cuPelY, iRoiWidth, iRoiHeight, iPicWidth, iPicHeight, xBv, yBv, lcuWidth))
+      if (searchBvIBC(cu, cuPelX, cuPelY, iRoiWidth, iRoiHeight, iPicWidth, iPicHeight, xBv, yBv, lcuWidth))
       {
         buffered = true;
-        Distortion sad = m_pcRdCost->getBvCostMultiplePreds(xBv, yBv, cu.cs->sps->AMVR);
+        Distortion sad = m_pcRdCost->getBvCostMultiplePredsIBC(xBv, yBv, cu.cs->sps->AMVR);
         m_cDistParam.cur.buf = cStruct.piRefY + cStruct.iRefStride * yBv + xBv;
         sad += m_cDistParam.distFunc(m_cDistParam);
         if (sad < ruiCost)
@@ -6415,9 +6420,9 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf,
         int xPred = cMvPredEncOnly[cand].hor;
         int yPred = cMvPredEncOnly[cand].ver;
 
-        if (searchBv(cu, cuPelX, cuPelY, iRoiWidth, iRoiHeight, iPicWidth, iPicHeight, xPred, yPred, lcuWidth))
+        if (searchBvIBC(cu, cuPelX, cuPelY, iRoiWidth, iRoiHeight, iPicWidth, iPicHeight, xPred, yPred, lcuWidth))
         {
-          Distortion sad = m_pcRdCost->getBvCostMultiplePreds(xPred, yPred, cu.cs->sps->AMVR);
+          Distortion sad = m_pcRdCost->getBvCostMultiplePredsIBC(xPred, yPred, cu.cs->sps->AMVR);
           m_cDistParam.cur.buf = cStruct.piRefY + cStruct.iRefStride * yPred + xPred;
           sad += m_cDistParam.distFunc(m_cDistParam);
           if (sad < ruiCost)
@@ -6447,14 +6452,14 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf,
     Mv        cMvSrchRngRB;
 
     // assume that intra BV is integer-pel precision
-    xSetIntraSearchRange(cu, cu.lwidth(), cu.lheight(), localSearchRangeX, localSearchRangeY, cMvSrchRngLT, cMvSrchRngRB);
+    xSetIntraSearchRangeIBC(cu, cu.lwidth(), cu.lheight(), localSearchRangeX, localSearchRangeY, cMvSrchRngLT, cMvSrchRngRB);
 
     //  Do integer search
-    xIntraPatternSearch(cu, cStruct, rcMv, ruiCost, &cMvSrchRngLT, &cMvSrchRngRB, pcMvPred);
+    xIntraPatternSearchIBC(cu, cStruct, rcMv, ruiCost, &cMvSrchRngLT, &cMvSrchRngRB, pcMvPred);
   }
 }
 // based on xSetSearchRange
-void InterSearch::xSetIntraSearchRange(CodingUnit& cu, int iRoiWidth, int iRoiHeight, const int localSearchRangeX, const int localSearchRangeY, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB)
+void InterSearch::xSetIntraSearchRangeIBC(CodingUnit& cu, int iRoiWidth, int iRoiHeight, const int localSearchRangeX, const int localSearchRangeY, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB)
 {
  // const SPS& sps = *cu.cs->sps;
 
@@ -6604,7 +6609,7 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
   return true;
 }
 
-bool InterSearch::searchBv(CodingUnit& cu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize)
+bool InterSearch::searchBvIBC(CodingUnit& cu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize)
 {
   const int ctuSizeLog2 = floorLog2(ctuSize);
 
@@ -6682,8 +6687,12 @@ bool InterSearch::searchBv(CodingUnit& cu, int xPos, int yPos, int width, int he
       int offset64x = (refPosCol.x >> (ctuSizeLog2 - 1)) << (ctuSizeLog2 - 1);
       int offset64y = (refPosCol.y >> (ctuSizeLog2 - 1)) << (ctuSizeLog2 - 1);
       const Position refPosCol64x64 = { offset64x, offset64y };
-      if (cu.cs->isDecomp(refPosCol64x64, toChannelType(COMP_Y)))
+      CodingUnit* curef = cu.cs->getCU(refPosCol64x64, CH_L, cu.treeType);
+      bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
+      if (isDecomp)
+      {
         return false;
+      }
       if (refPosCol64x64 == cu.Y().topLeft())
         return false;
     }
@@ -6694,11 +6703,18 @@ bool InterSearch::searchBv(CodingUnit& cu, int xPos, int yPos, int width, int he
   // in the same CTU, or valid area from left CTU. Check if the reference block is already coded
   const Position refPosLT = cu.Y().topLeft().offset(xBv, yBv);
   const Position refPosBR = cu.Y().bottomRight().offset(xBv, yBv);
-  const ChannelType      chType = toChannelType(COMP_Y);
-  if (!cu.cs->isDecomp(refPosBR, chType))
+  CodingUnit* curef = cu.cs->getCU(refPosBR, CH_L, cu.treeType);
+  bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
+  if (!isDecomp)
+  {
     return false;
-  if (!cu.cs->isDecomp(refPosLT, chType))
+  }
+  CodingUnit* curef2 = cu.cs->getCU(refPosLT, CH_L, cu.treeType);
+  isDecomp = curef && ((cu.cs != curef2->cs) || cu.idx < curef2->idx);
+  if (!isDecomp)
+  {
     return false;
+  }
   return true;
 }
 #endif

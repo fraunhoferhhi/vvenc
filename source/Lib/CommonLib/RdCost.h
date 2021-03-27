@@ -132,7 +132,7 @@ private:
   double                  m_motionLambda;
   int                     m_iCostScale;
 #if IBC_VTM
-  double                  m_dCost; // for ibc
+  double                  m_dCostIBC;
 #endif
 public:
   RdCost();
@@ -168,16 +168,6 @@ public:
   void          setPredictor        ( const Mv& rcMv )            { m_mvPredictor = rcMv; }
   void          setCostScale        ( int iCostScale )            { m_iCostScale = iCostScale; }
   Distortion    getCost             ( uint32_t b )          const { return Distortion( m_motionLambda * b ); }
-#if IBC_VTM
-  void    setPredictors(Mv* pcMv)
-  {
-    for (int i = 0; i < 2; i++)
-    {
-      m_bvPredictors[i] = pcMv[i];
-    }
-  }
-  void           getMotionCost(int add) { m_dCost = m_dLambdaMotionSAD + add; }
-#endif
   // for motion cost
   static uint32_t    xGetExpGolombNumberOfBits( int iVal )
   {
@@ -198,96 +188,15 @@ public:
   void           saveUnadjustedLambda ();
   void           setReshapeInfo       ( uint32_t type, int lumaBD, ChromaFormat cf )   { m_signalType = type; m_lumaBD = lumaBD; m_cf = cf; }
 #if IBC_VTM
-  inline Distortion getBvCostMultiplePreds(int x, int y, bool useIMV)
+  void          setPredictorsIBC(Mv* pcMv)
   {
-    return Distortion(m_dCost * getBitsMultiplePreds(x, y, useIMV));
-  }
-  unsigned int    getBitsMultiplePreds(int x, int y, bool useIMV)
-  {
-    int rmvH[2];
-    int rmvV[2];
-    rmvH[0] = x - m_bvPredictors[0].hor;
-    rmvH[1] = x - m_bvPredictors[1].hor;
-
-    rmvV[0] = y - m_bvPredictors[0].ver;
-    rmvV[1] = y - m_bvPredictors[1].ver;
-    int absCand[2];
-    absCand[0] = abs(rmvH[0]) + abs(rmvV[0]);
-    absCand[1] = abs(rmvH[1]) + abs(rmvV[1]);
-
-    int rmvHQP[2];
-    int rmvVQP[2];
-    if (x % 4 == 0 && y % 4 == 0 && useIMV)
+    for (int i = 0; i < 2; i++)
     {
-      int imvShift = 2;
-      int offset = 1 << (imvShift - 1);
-
-      rmvHQP[0] = (x >> 2) - ((m_bvPredictors[0].hor + offset) >> 2);
-      rmvHQP[1] = (x >> 2) - ((m_bvPredictors[1].hor + offset) >> 2);
-      rmvVQP[0] = (y >> 2) - ((m_bvPredictors[0].ver + offset) >> 2);
-      rmvVQP[1] = (y >> 2) - ((m_bvPredictors[1].ver + offset) >> 2);
-
-      int absCandQP[2];
-      absCandQP[0] = abs(rmvHQP[0]) + abs(rmvVQP[0]);
-      absCandQP[1] = abs(rmvHQP[1]) + abs(rmvVQP[1]);
-      unsigned int candBits0QP, candBits1QP;
-      if (absCand[0] < absCand[1])
-      {
-        unsigned int candBits0 = getIComponentBits(rmvH[0]) + getIComponentBits(rmvV[0]);
-        if (absCandQP[0] < absCandQP[1])
-        {
-          candBits0QP = getIComponentBits(rmvHQP[0]) + getIComponentBits(rmvVQP[0]);
-          return candBits0QP < candBits0 ? candBits0QP : candBits0;
-        }
-        else
-        {
-          candBits1QP = getIComponentBits(rmvHQP[1]) + getIComponentBits(rmvVQP[1]);
-          return candBits1QP < candBits0 ? candBits1QP : candBits0;
-        }
-      }
-      else
-      {
-        unsigned int candBits1 = getIComponentBits(rmvH[1]) + getIComponentBits(rmvV[1]);
-        if (absCandQP[0] < absCandQP[1])
-        {
-          candBits0QP = getIComponentBits(rmvHQP[0]) + getIComponentBits(rmvVQP[0]);
-          return candBits0QP < candBits1 ? candBits0QP : candBits1;
-        }
-        else
-        {
-          candBits1QP = getIComponentBits(rmvHQP[1]) + getIComponentBits(rmvVQP[1]);
-          return candBits1QP < candBits1 ? candBits1QP : candBits1;
-        }
-      }
-    }
-    else
-
-    {
-      if (absCand[0] < absCand[1])
-      {
-        return getIComponentBits(rmvH[0]) + getIComponentBits(rmvV[0]);
-      }
-      else
-      {
-        return getIComponentBits(rmvH[1]) + getIComponentBits(rmvV[1]);
-      }
+      m_bvPredictors[i] = pcMv[i];
     }
   }
-  unsigned int getIComponentBits(int val)
-  {
-    if (!val) return 1;
-
-    unsigned int length = 1;
-    unsigned int temp = (val <= 0) ? (-val << 1) + 1 : (val << 1);
-
-    while (1 != temp)
-    {
-      temp >>= 1;
-      length += 2;
-    }
-
-    return length;
-  }
+  void           getMotionCostIBC(int add) { m_dCostIBC = m_dLambdaMotionSAD + add; }
+  Distortion     getBvCostMultiplePredsIBC(int x, int y, bool useIMV);
 #endif
 private:
          Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
@@ -334,6 +243,10 @@ private:
   static Distortion xGetSADwMask_SIMD( const DistParam &pcDtParam );
 #endif
 
+#if IBC_VTM
+  unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
+  unsigned int   getIComponentBitsIBC(int val);
+#endif
 public:
 
   Distortion   getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma = NULL );

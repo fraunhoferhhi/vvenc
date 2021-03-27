@@ -425,7 +425,7 @@ public:
 
   void       getBestSbt             ( CodingStructure* tempCS, CodingUnit* cu, uint8_t& histBestSbt, Distortion& curPuSse, uint8_t sbtAllowed, bool doPreAnalyzeResi, bool mtsAllowed );
 #if IBC_VTM
-  void       resetCtuRecord(){ m_ctuRecord.clear(); }
+  void       resetCtuRecordIBC(){ m_ctuRecord.clear(); }
   bool       predIBCSearch(CodingUnit& cu, Partitioner& partitioner);
   void       resetIbcSearch()
   {
@@ -435,12 +435,7 @@ public:
     }
     m_defaultCachedBvs.currCnt = 0;
   }
-  void  xSetIntraSearchRange(CodingUnit& pu, int iRoiWidth, int iRoiHeight, const int localSearchRangeX, const int localSearchRangeY, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
-  void  xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost, const int localSearchRangeX, const int localSearchRangeY);
-  void  xIBCSearchMVCandUpdate(Distortion  uiSad, int x, int y, Distortion* uiSadBestCand, Mv* cMVCand);
-  int   xIBCSearchMVChromaRefine(CodingUnit& cu, int iRoiWidth, int iRoiHeight, int cuPelX, int cuPelY, Distortion* uiSadBestCand, Mv* cMVCand);
-  //void  xIntraPatternSearch(CodingUnit& pu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* cMvSrchRngLT, Mv* cMvSrchRngRB, Mv* pcMvPred);
-  bool searchBv(CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize);
+ bool searchBvIBC(CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize);
 
 #endif
 private:
@@ -621,7 +616,11 @@ private:
   void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist = NULL );
   uint64_t xGetSymbolFracBitsInter    ( CodingStructure &cs, Partitioner &partitioner );
 #if IBC_VTM
-  void  xIntraPatternSearch           ( CodingUnit& pu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* cMvSrchRngLT, Mv* cMvSrchRngRB, Mv* pcMvPred);
+  void  xSetIntraSearchRangeIBC       ( CodingUnit& pu, int iRoiWidth, int iRoiHeight, const int localSearchRangeX, const int localSearchRangeY, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
+  void  xIBCEstimation                ( CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost, const int localSearchRangeX, const int localSearchRangeY);
+  void  xIBCSearchMVCandUpdate        ( Distortion  uiSad, int x, int y, Distortion* uiSadBestCand, Mv* cMVCand);
+  int   xIBCSearchMVChromaRefine      ( CodingUnit& cu, int iRoiWidth, int iRoiHeight, int cuPelX, int cuPelY, Distortion* uiSadBestCand, Mv* cMVCand);
+  void  xIntraPatternSearchIBC        ( CodingUnit& pu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* cMvSrchRngLT, Mv* cMvSrchRngRB, Mv* pcMvPred);
 #endif
 };// END CLASS DEFINITION EncSearch
 

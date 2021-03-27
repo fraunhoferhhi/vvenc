@@ -428,11 +428,11 @@ void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf
       bool luma = cu.mcControl > 3 ? false : true;
       bool chroma = (cu.mcControl >> 1) == 1 ? false : true;
       CHECK(!luma, "IBC only for Chroma is not allowed.");
-      xIntraBlockCopy(cu, predBuf, COMP_Y);
+      xIntraBlockCopyIBC(cu, predBuf, COMP_Y);
       if (chroma && isChromaEnabled(cu.chromaFormat))
       {
-        xIntraBlockCopy(cu, predBuf, COMP_Cb);
-        xIntraBlockCopy(cu, predBuf, COMP_Cr);
+        xIntraBlockCopyIBC(cu, predBuf, COMP_Cb);
+        xIntraBlockCopyIBC(cu, predBuf, COMP_Cr);
       }
       return;
     }
@@ -1892,7 +1892,7 @@ void InterPrediction::xFillIBCBuffer(CodingUnit& cu)
   }
 }
 
-void InterPrediction::xIntraBlockCopy(CodingUnit& cu, PelUnitBuf& predBuf, const ComponentID compID)
+void InterPrediction::xIntraBlockCopyIBC(CodingUnit& cu, PelUnitBuf& predBuf, const ComponentID compID)
 {
   const unsigned int lcuWidth = cu.cs->slice->sps->CTUSize;
   const int shiftSampleHor = getComponentScaleX(compID, cu.chromaFormat);
@@ -1947,7 +1947,7 @@ void InterPrediction::resetVPDUforIBC(const ChromaFormat chromaFormatIDC, const 
   const UnitArea area = UnitArea(chromaFormatIDC, Area(xPos & (m_IBCBufferWidth - 1), yPos & (ctuSize - 1), vSize, vSize));
   m_IBCBuffer.getBuf(area).fill(-1);
 }
-bool InterPrediction::isLumaBvValid(const int ctuSize, const int xCb, const int yCb, const int width, const int height, const int xBv, const int yBv)
+bool InterPrediction::isLumaBvValidIBC(const int ctuSize, const int xCb, const int yCb, const int width, const int height, const int xBv, const int yBv)
 {
   if (((yCb + yBv) & (ctuSize - 1)) + height > ctuSize)
   {

@@ -1536,7 +1536,7 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
   const CodingUnit* aboveLeftCU = cu.cs->getCURestricted(posLT.offset(-1, -1), cu, CH_L);
   if (aboveLeftCU && CU::isIBC(*aboveLeftCU))
   {
-    if (isAddNeighborMv(aboveLeftCU->bv, mvPred, nbPred))
+    if (isAddNeighborMvIBC(aboveLeftCU->bv, mvPred, nbPred))
     {
       mvPred[nbPred++] = aboveLeftCU->bv;
     }
@@ -1548,7 +1548,7 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
     const CodingUnit* tmpCU = cu.cs->getCURestricted(posLT.offset((dx << log2UnitWidth), -1), cu, CH_L);
     if (tmpCU && CU::isIBC(*tmpCU))
     {
-      if (isAddNeighborMv(tmpCU->bv, mvPred, nbPred))
+      if (isAddNeighborMvIBC(tmpCU->bv, mvPred, nbPred))
       {
         mvPred[nbPred++] = tmpCU->bv;
       }
@@ -1561,7 +1561,7 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
     const CodingUnit* tmpCU = cu.cs->getCURestricted(posLT.offset(-1, (dy << log2UnitHeight)), cu, CH_L);
     if (tmpCU && CU::isIBC(*tmpCU))
     {
-      if (isAddNeighborMv(tmpCU->bv, mvPred, nbPred))
+      if (isAddNeighborMvIBC(tmpCU->bv, mvPred, nbPred))
       {
         mvPred[nbPred++] = tmpCU->bv;
       }
@@ -1573,7 +1573,7 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
   {
     auto& neibMi = cu.cs->motionLut.lutIbc;
     HPMVInfo miNeighbor = neibMi[cand];
-    if (isAddNeighborMv(miNeighbor.bv, mvPred, nbPred))
+    if (isAddNeighborMvIBC(miNeighbor.bv, mvPred, nbPred))
     {
       mvPred[nbPred++] = miNeighbor.bv;
     }
@@ -1593,9 +1593,9 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
         if (!isBvCandDerived[idx])
         {
           Mv derivedBv;
-          if (getDerivedBV(cu, mvPred[idx], derivedBv))
+          if (getDerivedBVIBC(cu, mvPred[idx], derivedBv))
           {
-            if (isAddNeighborMv(derivedBv, mvPred, nbPred))
+            if (isAddNeighborMvIBC(derivedBv, mvPred, nbPred))
             {
               mvPred[nbPred++] = derivedBv;
             }
@@ -1606,7 +1606,7 @@ void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
     } while (nbPred > curNbPred && nbPred < IBC_NUM_CANDIDATES);
   }
 }
-bool CU::isAddNeighborMv(const Mv& currMv, Mv* neighborMvs, int numNeighborMv)
+bool CU::isAddNeighborMvIBC(const Mv& currMv, Mv* neighborMvs, int numNeighborMv)
 {
   bool existed = false;
   for (uint32_t cand = 0; cand < numNeighborMv && !existed; cand++)
@@ -1626,7 +1626,7 @@ bool CU::isAddNeighborMv(const Mv& currMv, Mv* neighborMvs, int numNeighborMv)
     return false;
   }
 }
-bool CU::getDerivedBV(CodingUnit& cu, const Mv& currentMv, Mv& derivedMv)
+bool CU::getDerivedBVIBC(CodingUnit& cu, const Mv& currentMv, Mv& derivedMv)
 {
   int   cuPelX = cu.lumaPos().x;
   int   cuPelY = cu.lumaPos().y;

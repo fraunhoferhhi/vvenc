@@ -724,9 +724,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
   PROFILER_SCOPE_AND_STAGE_EXT( 0, g_timeProfiler, P_INTRA_CHROMA, cu.cs, CH_C );
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
   CodingStructure &cs   = *cu.cs;
-#if IBC_VTM
-  cs.setDecomp(cs.area.Cb(), false);
-#endif
   bool lumaUsesISP      = !CU::isSepTree(cu) && cu.ispMode;
   PartSplit ispType     = lumaUsesISP ? CU::getISPType(cu, COMP_Y) : TU_NO_ISP;
   double bestCostSoFar  = maxCostAllowed;
@@ -910,9 +907,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
           continue;
         }
       }
-#if IBC_VTM
-      cs.setDecomp(cu.Cb(), false);
-#endif
       cs.dist = baseDist;
       //----- restore context models -----
       m_CABACEstimator->getCtx() = ctxStart;
@@ -2011,9 +2005,6 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
     tmpTU.initData();
     tmpTU.UnitArea::operator=(currArea);
-#if IBC_VTM
-    cs.setDecomp(currArea.Cb(), true); // set in advance (required for Cb2/Cr2 in 4:2:2 video)
-#endif
     const unsigned      numTBlocks = getNumberValidTBlocks(*cs.pcv);
 
     CompArea& cbArea = currTU.blocks[COMP_Cb];

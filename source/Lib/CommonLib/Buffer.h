@@ -696,8 +696,13 @@ struct UnitBuf
   bool valid          () const { return bufs.size() != 0; }
 
   void fill                 ( const T& val );
+#if IBC_VTM
+  void copyFrom             ( const UnitBuf<const T>& other, const bool lumaOnly = false );
+  void reconstruct          ( const UnitBuf<const T>& pred, const UnitBuf<const T>& resi, const ClpRngs& clpRngs, const bool lumaOnly = false);
+#else
   void copyFrom             ( const UnitBuf<const T> &other );
   void reconstruct          ( const UnitBuf<const T>& pred, const UnitBuf<const T>& resi, const ClpRngs& clpRngs );
+#endif
   void copyClip             ( const UnitBuf<const T> &src, const ClpRngs& clpRngs, const bool lumaOnly = false, const bool chromaOnly = false );
   void subtract             ( const UnitBuf<const T>& minuend, const UnitBuf<const T>& subtrahend );
   void addAvg               ( const UnitBuf<const T>& other1, const UnitBuf<const T>& other2, const ClpRngs& clpRngs, const bool chromaOnly = false, const bool lumaOnly = false);
@@ -731,11 +736,20 @@ void UnitBuf<T>::fill( const T &val )
 }
 
 template<typename T>
+#if IBC_VTM
+void UnitBuf<T>::copyFrom(const UnitBuf<const T>& other, const bool lumaOnly)
+#else
 void UnitBuf<T>::copyFrom(const UnitBuf<const T> &other)
+#endif
 {
   CHECK( chromaFormat != other.chromaFormat, "Incompatible formats" );
 
+#if IBC_VTM
+  const size_t compEnd = lumaOnly ? 1 : bufs.size();
+  for (size_t i = 0; i < compEnd; i++)
+#else
   for(size_t i = 0; i < bufs.size(); i++)
+#endif
   {
     if( bufs[ i ].buf != nullptr && other.bufs[ i ].buf != nullptr )
       bufs[i].copyFrom( other.bufs[i] );
@@ -769,12 +783,21 @@ void UnitBuf<T>::copyClip(const UnitBuf<const T> &src, const ClpRngs &clpRngs, c
 }
 
 template<typename T>
+#if IBC_VTM
+void UnitBuf<T>::reconstruct(const UnitBuf<const T>& pred, const UnitBuf<const T>& resi, const ClpRngs& clpRngs, const bool lumaOnly)
+#else
 void UnitBuf<T>::reconstruct(const UnitBuf<const T>& pred, const UnitBuf<const T>& resi, const ClpRngs& clpRngs)
+#endif
 {
   CHECK( chromaFormat != pred.chromaFormat, "Incompatible formats" );
   CHECK( chromaFormat != resi.chromaFormat, "Incompatible formats" );
 
+#if IBC_VTM
+  const size_t compEnd = lumaOnly ? 1 : bufs.size();
+  for (size_t i = 0; i < compEnd; i++)
+#else
   for( size_t i = 0; i < bufs.size(); i++ )
+#endif
   {
     bufs[i].reconstruct( pred.bufs[i], resi.bufs[i], clpRngs.comp[i] );
   }

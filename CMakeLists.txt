@@ -293,11 +293,13 @@ add_test( NAME Test_vvencapp-tooltest COMMAND vvencapp --preset tooltest -s 80x4
 set_tests_properties( Test_vvencapp-tooltest PROPERTIES TIMEOUT 90 )
 add_test( NAME Test_vvencFFapp-tooltest COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b outf.vvc )
 set_tests_properties( Test_vvencFFapp-tooltest PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+#add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out.vvc outf.vvc )
 
 add_test( NAME Test_vvencFFapp-tooltest-Scalar COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b outf.vvc --SIMD=SCALAR )
 set_tests_properties( Test_vvencFFapp-tooltest-Scalar PROPERTIES TIMEOUT 70 )
-add_test( NAME Test_compare_output-tooltest-Scalar COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+#add_test( NAME Test_compare_output-tooltest-Scalar COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+add_test( NAME Test_compare_output-tooltest-Scalar COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out.vvc outf.vvc )
 
 add_test( NAME Test_vvencFFapp-tooltesttrans COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=outf.vvc --DebugPOC=3 -b out.vvc )
 set_tests_properties( Test_vvencFFapp-tooltesttrans PROPERTIES TIMEOUT 20 )

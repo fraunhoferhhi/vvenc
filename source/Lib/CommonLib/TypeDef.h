@@ -70,7 +70,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 #define IBC_VTM                                           1
-#define IBC_PROBLEM                                       1
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 

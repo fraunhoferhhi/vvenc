@@ -185,8 +185,8 @@ namespace CU
   void    getIBCMergeCandidates         (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
   void    fillIBCMvpCand                (CodingUnit& cu, AMVPInfo& amvpInfo);
   void    getIbcMVPsEncOnly             (CodingUnit& cu, Mv* mvPred, int& nbPred);
-  bool    isAddNeighborMv               (const Mv& currMv, Mv* neighborMvs, int numNeighborMv);
-  bool    getDerivedBV                  (CodingUnit& cu, const Mv& currentMv, Mv& derivedMv);
+  bool    isAddNeighborMvIBC               (const Mv& currMv, Mv* neighborMvs, int numNeighborMv);
+  bool    getDerivedBVIBC                  (CodingUnit& cu, const Mv& currentMv, Mv& derivedMv);
 #endif
 }
 
