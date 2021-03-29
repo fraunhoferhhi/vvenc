@@ -2642,7 +2642,6 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
     cu.mmvdSkip = false;
     cu.geo = false;
     DistParam distParam;
-    const bool bUseHadamard = !cu.slice->disableSATDForRd;
     cu.initPuData();
     cu.mmvdMergeFlag = false;
     cu.regularMergeFlag = false;
