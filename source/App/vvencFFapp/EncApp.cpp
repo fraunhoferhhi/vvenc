@@ -130,6 +130,19 @@ void EncApp::encode()
 
   msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
 
+  if( m_cEncAppCfg.m_inputFileName.empty() )
+  {
+    if( m_cEncAppCfg.m_RCNumPasses > 1 )
+    {
+      msgApp( ERROR, " no input file given and 2 pass rate control is enabled; not supported yet\n" );
+      return;
+    }
+    else
+    {
+      msgApp( INFO, " no input file given. trying to read from stdin\n" );
+    }
+  }
+
   if( ! openFileIO() )
   {
     return;
@@ -150,20 +163,6 @@ void EncApp::encode()
     case 59: tempRate = 60000; tempScale = 1001; break;
     default: break;
   }
-
-#if 1 //PIPE_INPUT
-  if( m_cEncAppCfg.m_inputFileName.empty() )
-  {
-    if( m_cEncAppCfg.m_RCNumPasses > 1 )
-    {
-      msgApp( ERROR, " no input file given and 2 pass rate control is enabled; not supported yet\n" );
-    }
-    else
-    {
-      msgApp( INFO, " no input file given. trying to read from stdin\n" );
-    }
-  }
-#endif
   
   vvenc::AccessUnit au;
 

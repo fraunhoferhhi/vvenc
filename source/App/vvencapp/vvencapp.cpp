@@ -151,7 +151,6 @@ int main( int argc, char* argv[] )
   
   if( vvencappCfg.m_inputFileName.empty() )
   {
-#if 1 //PIPE_INPUT
     if( vvencappCfg.m_RCNumPasses > 1 )
     {
       std::cout << cAppname << " [error]: no input file given and 2 pass rate control is enabled; not supported yet" << std::endl;
@@ -161,10 +160,6 @@ int main( int argc, char* argv[] )
     {
       std::cout << cAppname << " no input file given. trying to read from stdin" << std::endl;
     }
-#else
-    std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
-    return -1;
-#endif
   }
 
   if( vvencappCfg.m_bitstreamFileName.empty() )
