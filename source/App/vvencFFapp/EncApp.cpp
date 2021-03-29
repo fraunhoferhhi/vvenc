@@ -151,6 +151,20 @@ void EncApp::encode()
     default: break;
   }
 
+#if 1 //PIPE_INPUT
+  if( m_cEncAppCfg.m_inputFileName.empty() )
+  {
+    if( m_cEncAppCfg.m_RCNumPasses > 1 )
+    {
+      msgApp( ERROR, " no input file given and 2 pass rate control is enabled; not supported yet\n" );
+    }
+    else
+    {
+      msgApp( INFO, " no input file given. trying to read from stdin\n" );
+    }
+  }
+#endif
+  
   vvenc::AccessUnit au;
 
   int framesRcvd = 0;
@@ -158,11 +172,7 @@ void EncApp::encode()
   {
     // open input YUV
     if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth[0], m_cEncAppCfg.m_MSBExtendedBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], 
-                             m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false
-#if 1 //PIPE_INPUT
-                           , m_cEncAppCfg.m_RCNumPasses
-#endif
-                            ))
+                             m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false ))
     { 
       msgApp( ERROR, "%s", m_yuvInputFile.getLastError().c_str() );
       break;
@@ -270,11 +280,7 @@ bool EncApp::openFileIO()
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
     if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], 
-                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode
-#if 1 //PIPE_INPUT
-                           , m_cEncAppCfg.m_RCNumPasses
-#endif
-                            ))
+                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
     {
       msgApp( ERROR, "%s", m_yuvReconFile.getLastError().c_str() );
       return false;

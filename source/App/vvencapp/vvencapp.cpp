@@ -152,7 +152,15 @@ int main( int argc, char* argv[] )
   if( vvencappCfg.m_inputFileName.empty() )
   {
 #if 1 //PIPE_INPUT
-    std::cout << cAppname << " no input file given. trying to read from stdin" << std::endl;
+    if( vvencappCfg.m_RCNumPasses > 1 )
+    {
+      std::cout << cAppname << " [error]: no input file given and 2 pass rate control is enabled; not supported yet" << std::endl;
+      return -1;
+    }
+    else
+    {
+      std::cout << cAppname << " no input file given. trying to read from stdin" << std::endl;
+    }
 #else
     std::cerr << cAppname  << " [error]: no input file given. run VVEncoderApp --help to see available options" << std::endl;
     return -1;
@@ -245,11 +253,7 @@ int main( int argc, char* argv[] )
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
     if( 0 != cYuvFileInput.open( cInputFile, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0],
-                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false
-#if 1 //PIPE_INPUT
-                               , vvencappCfg.m_RCNumPasses
-#endif
-                                ) )
+                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
       return -1;
