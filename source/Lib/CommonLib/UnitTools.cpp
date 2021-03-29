@@ -1249,11 +1249,7 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
-#if IBC_VTM
-  for(; uiArrayAddr < maxNumMergeCand; uiArrayAddr++)
-#else
   while (uiArrayAddr < maxNumMergeCand)
-#endif
   {
     mrgCtx.interDirNeighbours [uiArrayAddr     ] = 1;
     mrgCtx.BcwIdx             [uiArrayAddr     ] = BCW_DEFAULT;
