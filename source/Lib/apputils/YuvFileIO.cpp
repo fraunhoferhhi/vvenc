@@ -468,7 +468,11 @@ void scaleYuvPlane( YUVBuffer::Plane& yuvPlaneOut, const YUVBuffer::Plane& yuvPl
 
 int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fileBitDepth, const int MSBExtendedBitDepth,
                      const int internalBitDepth, ChromaFormat fileChrFmt, ChromaFormat bufferChrFmt,
-                     bool clipToRec709, bool packedYUVMode )
+                     bool clipToRec709, bool packedYUVMode
+#if 1
+                   , const int rcNumPasses
+#endif
+                    )
 {
   //NOTE: files cannot have bit depth greater than 16
   m_fileBitdepth        = std::min<unsigned>( fileBitDepth, 16 );
@@ -515,6 +519,26 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
 #if 1 //PIPE_INPUT
     if( fileName.empty() )
     {
+      if( rcNumPasses > 1 )
+      {
+        m_lastError = "no input file given and 2 pass rate control is enabled; no supported yet\n";
+        return -1;
+      }
+      else
+      {
+        std::cout << " no input file given. trying to read from stdin" << std::endl;
+      }
+      
+      if( ( fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0 )
+      {
+        rewind( stdin );
+      }
+      else
+      {
+        m_lastError = "stdin is empty, check input!";
+        return -1;
+      }
+
       m_readStdin = true;
       return 0;
     }
@@ -532,7 +556,10 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
 
 void YuvFileIO::close()
 {
-  m_cHandle.close();
+#if 1 //PIPE_INPUT
+  if( !m_readStdin )
+#endif
+    m_cHandle.close();
 }
 
 bool YuvFileIO::isEof()

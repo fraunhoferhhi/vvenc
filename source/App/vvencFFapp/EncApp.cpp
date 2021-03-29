@@ -151,34 +151,6 @@ void EncApp::encode()
     default: break;
   }
 
-#if 1 //PIPE_INPUT
-  bool readStdin = false;
-  if( m_cEncAppCfg.m_inputFileName.empty() )
-  {
-    if( m_cEncAppCfg.m_RCNumPasses > 1 )
-    {
-      msgApp( ERROR, "no input file given and 2 pass rate control is enabled; no supported yet\n" );
-      return;
-    }
-    else
-    {
-      msgApp( vvenc::INFO, "no input file given, trying to read from stdin\n\n" );
-    }
-
-    readStdin = true;
-
-    if( ( fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0 )
-    {
-      rewind( stdin );
-    }
-    else
-    {
-      msgApp( ERROR, "stdin is empty, check input!" );
-      return;
-    }
-  }
-#endif
-
   vvenc::AccessUnit au;
 
   int framesRcvd = 0;
@@ -186,7 +158,11 @@ void EncApp::encode()
   {
     // open input YUV
     if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth[0], m_cEncAppCfg.m_MSBExtendedBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], 
-                             m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false ))
+                             m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false
+#if 1 //PIPE_INPUT
+                           , m_cEncAppCfg.m_RCNumPasses
+#endif
+                            ))
     { 
       msgApp( ERROR, "%s", m_yuvInputFile.getLastError().c_str() );
       break;
@@ -252,13 +228,8 @@ void EncApp::encode()
       }
     }
 
-#if 1 //PIPE_INPUT
-    if( !readStdin )
-#endif
-    {
-      // close input YUV
-      m_yuvInputFile.close();
-    }
+    // close input YUV
+    m_yuvInputFile.close();
   }
 
   printRateSummary( framesRcvd - ( m_cEncAppCfg.m_MCTFNumLeadFrames + m_cEncAppCfg.m_MCTFNumTrailFrames ) );
@@ -299,7 +270,11 @@ bool EncApp::openFileIO()
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
     if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0], 
-                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
+                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode
+#if 1 //PIPE_INPUT
+                           , m_cEncAppCfg.m_RCNumPasses
+#endif
+                            ))
     {
       msgApp( ERROR, "%s", m_yuvReconFile.getLastError().c_str() );
       return false;

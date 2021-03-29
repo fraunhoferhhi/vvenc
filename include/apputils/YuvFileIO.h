@@ -84,7 +84,11 @@ private:
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
-              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
+              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode
+#if 1 //PIPE_INPUT
+            , const int rcNumPasses
+#endif
+             );
   void  close();
   bool  isEof();
   bool  isFail();
