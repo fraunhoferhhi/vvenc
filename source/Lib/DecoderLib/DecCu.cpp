@@ -441,21 +441,31 @@ void DecCu::xReconInter(CodingUnit &cu)
   if (cu.rootCbf)
   {
 #if IBC_VTM
-    cs.getResiBuf( cu ).reconstruct( predBuf, cs.getResiBuf( cu ), cs.slice->clpRngs, LumaOnly);
-    cs.getRecoBuf(cu).copyFrom(cs.getResiBuf(cu), LumaOnly);
-#else
-    cs.getResiBuf( cu ).reconstruct( predBuf, cs.getResiBuf( cu ), cs.slice->clpRngs );
-    cs.getRecoBuf( cu ).copyFrom( cs.getResiBuf( cu ) );
+    if (LumaOnly)
+    {
+      cs.getResiBuf(cu.Y()).reconstruct(predBuf.Y(), cs.getResiBuf(cu.Y()), cs.slice->clpRngs.comp[COMP_Y]);
+      cs.getRecoBuf(cu.Y()).copyFrom(cs.getResiBuf(cu.Y()));
+    }
+    else
 #endif
+    {
+      cs.getResiBuf(cu).reconstruct(predBuf, cs.getResiBuf(cu), cs.slice->clpRngs);
+      cs.getRecoBuf(cu).copyFrom(cs.getResiBuf(cu));
+    }
   }
   else
   {
 #if IBC_VTM
-    cs.getRecoBuf(cu).copyClip(predBuf, cs.slice->clpRngs, LumaOnly);
-#else
-    cs.getRecoBuf(cu).copyClip( predBuf, cs.slice->clpRngs);
+    if (LumaOnly)
+    {
+      cs.getRecoBuf(cu.Y()).copyClip(predBuf.Y(), cs.slice->clpRngs.comp[COMP_Y]);
+    }
+    else
 #endif
-}
+    {
+      cs.getRecoBuf(cu).copyClip(predBuf, cs.slice->clpRngs);
+    }
+  }
 }
 
 void DecCu::xDecodeInterTU( TransformUnit&  currTU, const ComponentID compID )

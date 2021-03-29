@@ -491,8 +491,8 @@ public:
   bool                m_rprRASLtoolSwitch                       = false;
 
 #if 1 // IBC_VTM
-  int                m_IBCMode                                  = 0;
-  int                m_IBCFastMethod                            = 1;
+  int                 m_IBCMode                                 = 0;
+  int                 m_IBCFastMethod                           = 1;
 #endif
 
   bool                m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter

@@ -165,7 +165,7 @@ struct HPMVInfo
   uint8_t  BcwIdx   = 0;
   bool     useAltHpelIf = false;
 #if IBC_VTM
-  Mv      bv;
+  Mv       bv;
 #endif
 
 
@@ -183,7 +183,7 @@ struct HPMVInfo
     BcwIdx       = _bcwIdx;
     useAltHpelIf = _useAltHpelIf;
 #if IBC_VTM
-    bv = mi.bv;
+    bv           = mi.bv;
 #endif
   }
 

@@ -358,8 +358,13 @@ void InterPrediction::xPredInterUni(const CodingUnit& cu, const RefPicList& refP
 
   for( uint32_t comp = COMP_Y; comp < pcYuvPred.bufs.size(); comp++ )
   {
+#if IBC_VTM
+    bool luma = cu.mcControl <= 3;
+    bool chroma = (cu.mcControl >> 1) != 1 ;
+#else
     bool luma   = cu.mcControl > 3         ? false : true;
     bool chroma = (cu.mcControl >> 1) == 1 ? false : true;
+#endif
     const ComponentID compID = ComponentID( comp );
     if (compID == COMP_Y && !luma)
       continue;
@@ -425,8 +430,8 @@ void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf
   {
     if (CU::isIBC(cu))
     {
-      bool luma = cu.mcControl > 3 ? false : true;
-      bool chroma = (cu.mcControl >> 1) == 1 ? false : true;
+      bool luma = cu.mcControl <= 3;
+      bool chroma = (cu.mcControl >> 1) != 1;
       CHECK(!luma, "IBC only for Chroma is not allowed.");
       xIntraBlockCopyIBC(cu, predBuf, COMP_Y);
       if (chroma && isChromaEnabled(cu.chromaFormat))

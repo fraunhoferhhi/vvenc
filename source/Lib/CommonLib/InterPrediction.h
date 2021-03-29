@@ -182,10 +182,10 @@ public:
   void    xSubPuMC              ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& eRefPicList = REF_PIC_LIST_X );
   void    motionCompensationGeo ( CodingUnit& cu, PelUnitBuf& predBuf, const MergeCtx& geoMrgCtx );
 #if IBC_VTM
-  void xFillIBCBuffer(CodingUnit& cu);
-  void resetIBCBuffer(const ChromaFormat chromaFormatIDC, const int ctuSize);
-  void resetVPDUforIBC(const ChromaFormat chromaFormatIDC, const int ctuSize, const int vSize, const int xPos, const int yPos);
-  bool isLumaBvValidIBC(const int ctuSize, const int xCb, const int yCb, const int width, const int height, const int xBv, const int yBv);
+  void    xFillIBCBuffer        ( CodingUnit& cu);
+  void    resetIBCBuffer        ( const ChromaFormat chromaFormatIDC, const int ctuSize);
+  void    resetVPDUforIBC       ( const ChromaFormat chromaFormatIDC, const int ctuSize, const int vSize, const int xPos, const int yPos);
+  bool    isLumaBvValidIBC      ( const int ctuSize, const int xCb, const int yCb, const int width, const int height, const int xBv, const int yBv);
 #endif
 };
 

@@ -2868,7 +2868,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
   PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_INTER_MVD_SEARCH, tempCS, partitioner.chType );
   tempCS->initStructData( encTestMode.qp );
 
-  CodingUnit &cu      = tempCS->addCU( tempCS->area, partitioner.chType );  //
+  CodingUnit &cu      = tempCS->addCU( tempCS->area, partitioner.chType );
 
   partitioner.setCUData( cu );
   cu.slice            = tempCS->slice;

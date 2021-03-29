@@ -4202,8 +4202,8 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   bool chroma = true;
   if (cu.predMode == MODE_IBC)
   {
-    luma =  cu.mcControl > 3 ? false : true;
-    chroma = (cu.mcControl >> 1) == 1 ? false : true;
+    luma = cu.mcControl <= 3;
+    chroma = (cu.mcControl >> 1) != 1;
   }
 #endif
   if( cu.predMode == MODE_INTER )
