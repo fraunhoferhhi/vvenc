@@ -1245,6 +1245,10 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
 
   int r = 0;
   int refcnt = 0;
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-stringop-overflow"
+#endif
 #if IBC_VTM
   for(; uiArrayAddr < maxNumMergeCand; uiArrayAddr++)
 #else
@@ -1283,6 +1287,9 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
       ++refcnt;
     }
   }
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
+#pragma GCC diagnostic pop
+#endif
   mrgCtx.numValidMergeCand = uiArrayAddr;
 }
 
