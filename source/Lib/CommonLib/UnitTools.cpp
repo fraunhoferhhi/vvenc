@@ -1245,7 +1245,11 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
 
   int r = 0;
   int refcnt = 0;
+#if IBC_VTM
+  for(; uiArrayAddr < maxNumMergeCand; uiArrayAddr++)
+#else
   while (uiArrayAddr < maxNumMergeCand)
+#endif
   {
     mrgCtx.interDirNeighbours [uiArrayAddr     ] = 1;
     mrgCtx.BcwIdx             [uiArrayAddr     ] = BCW_DEFAULT;
