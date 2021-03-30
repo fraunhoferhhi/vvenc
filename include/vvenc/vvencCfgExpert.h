@@ -436,7 +436,6 @@ public:
 
   unsigned            m_maxNumMergeCand                         = 5;                                     ///< Max number of merge candidates
   unsigned            m_maxNumAffineMergeCand                   = 5;                                     ///< Max number of affine merge candidates
-//  unsigned            m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
   int                 m_Geo                                     = 0;
   unsigned            m_maxNumGeoCand                           = 5;
   int                 m_FastIntraTools                          = 0;
@@ -490,6 +489,11 @@ public:
   bool                m_resChangeInClvsEnabled                  = false;
   bool                m_craAPSreset                             = false;
   bool                m_rprRASLtoolSwitch                       = false;
+
+#if 1 // IBC_VTM
+  int                 m_IBCMode                                 = 0;
+  int                 m_IBCFastMethod                           = 1;
+#endif
 
   bool                m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS                   = true;                                  ///< offset for deblocking filter in 0 = slice header, 1 = PPS

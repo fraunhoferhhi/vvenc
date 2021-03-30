@@ -85,6 +85,9 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   , m_tuCache       ( unitCache.tuCache )
   , m_unitCacheMutex( mutex )
   , bestParent      ( nullptr )
+#if IBC_VTM
+  , resetIBCBuffer  ( false )
+#endif
 {
   for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
   {
@@ -120,7 +123,6 @@ void CodingStructure::destroy()
   m_rsporg = nullptr;
 
   destroyCoeffs();
-
   delete[] m_motionBuf;
   m_motionBuf = nullptr;
 
@@ -157,7 +159,6 @@ const int CodingStructure::signalModeCons( const PartSplit split, Partitioner &p
   bool is2xNChroma = (partitioner.currArea().chromaSize().width == 4 && split == CU_VERT_SPLIT) || (partitioner.currArea().chromaSize().width == 8 && split == CU_TRIV_SPLIT);
   return minChromaBlock >= 16 && !is2xNChroma ? LDT_MODE_TYPE_INHERIT : ((minLumaArea < 32) || slice->isIntra()) ? LDT_MODE_TYPE_INFER : LDT_MODE_TYPE_SIGNAL;
 }
-
 
 CodingUnit* CodingStructure::getLumaCU( const Position& pos )
 {
@@ -461,7 +462,11 @@ void CodingStructure::addEmptyTUs( Partitioner &partitioner, CodingUnit* cu )
   }
   else
   {
+#if IBC_VTM
+    TransformUnit& tu = addTU(CS::getArea(*this, area, partitioner.chType, TreeType(partitioner.treeType)), partitioner.chType, cu);
+#else
     TransformUnit &tu = addTU( CS::getArea( *this, area, partitioner.chType, TREE_D ), partitioner.chType, cu );
+#endif
     tu.depth = trDepth;
   }
 }
@@ -798,6 +803,7 @@ void CodingStructure::useSubStructure( const CodingStructure& subStruct, const C
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
 
+
   if( cpyReco )
   {
     CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
@@ -996,6 +1002,7 @@ void CodingStructure::clearTUs()
     size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
 
     memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
+
   }
 
   numCh = getNumberValidComponents( area.chromaFormat );

@@ -180,6 +180,14 @@ namespace CU
   void     fillAffineMvpCand            (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
   bool     addAffineMVPCandUnscaled     (const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);
   bool     getInterMergeSbTMVPCand      (const CodingUnit& cu, MergeCtx &mrgCtx, bool& LICFlag, const int count, int mmvdList);
+
+#if IBC_VTM
+  void     getIBCMergeCandidates        (const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx = -1);
+  void     fillIBCMvpCand               (CodingUnit& cu, AMVPInfo& amvpInfo);
+  void     getIbcMVPsEncOnly            (CodingUnit& cu, Mv* mvPred, int& nbPred);
+  bool     isAddNeighborMvIBC           (const Mv& currMv, Mv* neighborMvs, int numNeighborMv);
+  bool     getDerivedBVIBC              (CodingUnit& cu, const Mv& currentMv, Mv& derivedMv);
+#endif
 }
 
 // TU tools

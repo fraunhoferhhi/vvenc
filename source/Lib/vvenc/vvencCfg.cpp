@@ -1584,6 +1584,10 @@ bool VVEncCfg::checkCfgParameter( )
   confirmParameter(m_useBDPCM  && m_TS==0,                     "BDPCM cannot be used when transform skip is disabled" );
   confirmParameter(m_useBDPCM==1  && m_TS==2,                  "BDPCM cannot be permanently used when transform skip is auto" );
   confirmParameter(m_FastIntraTools <0 || m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
+#if IBC_VTM
+  confirmParameter(m_IBCMode < 0 || m_IBCMode > 2,           "IBC out of range [0..2]");
+  confirmParameter(m_IBCFastMethod < 0 || m_IBCFastMethod > 5,     "IBCFastMethod out of range [0..5]");
+#endif
 
   if( m_alf )
   {
@@ -2086,6 +2090,10 @@ int VVEncCfg::initPreset( PresetMode preset )
   m_TS                            = 0;
   m_useNonLinearAlfChroma         = 0;
   m_useNonLinearAlfLuma           = 0;
+#if 1 // IBC_VTM
+  m_IBCMode                       = 0;
+  m_IBCFastMethod                 = 1;
+#endif
 
   // enable speedups
   m_qtbttSpeedUp                  = 2;
@@ -2588,6 +2596,10 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
     css << "useChromaTS:" << m_useChromaTS << " ";
   }
   css << "BDPCM:" << m_useBDPCM << " ";
+#if IBC_VTM
+  css << "IBC:" << m_IBCMode << " ";
+  css << "IBCfastMethod:" << m_IBCFastMethod << " ";
+#endif
 
   css << "\nENC. ALG. CFG: ";
   css << "QPA:" << m_usePerceptQPA << " ";
