@@ -1,0 +1,27 @@
+name: Build executables for Linux
+on:
+  push:
+    branches: [ master, develop, build ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Gather build version
+      run: |
+        make install-release
+
+    - name: Upload standalone executable artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: vvenc
+        path: |
+          install/vvencapp
+          install/vvencFFapp
+          LICENSE.txt
