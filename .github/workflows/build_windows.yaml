@@ -18,12 +18,16 @@ jobs:
       run: |
         make install-release
 
+    - name: Run tests
+      shell: cmd
+      run: |
+        bin/release-static/vvenclibtest.exe
+
     - name: Upload standalone executable artifact
       uses: actions/upload-artifact@v2
       with:
-        name: vvenc
+        name: vvenc_win64
         path: |
           bin/release-static/vvencapp.exe
           bin/release-static/vvencFFapp.exe
-          bin/release-static/vvenclibtest.exe
           LICENSE.txt

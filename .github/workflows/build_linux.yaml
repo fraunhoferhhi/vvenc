@@ -17,12 +17,16 @@ jobs:
       run: |
         make install-release
 
+    - name: Run tests
+      run: |
+        chmod +x dist/FastFlix
+        bin/release-static/vvenclibtest
+
     - name: Upload standalone executable artifact
       uses: actions/upload-artifact@v2
       with:
-        name: vvenc
+        name: vvenc_linux
         path: |
           bin/release-static/vvencapp
           bin/release-static/vvencFFapp
-          bin/release-static/vvenclibtest
           LICENSE.txt
