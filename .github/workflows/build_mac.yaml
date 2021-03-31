@@ -1,4 +1,4 @@
-name: Build executables for Windows
+name: Build executables for Mac
 on:
   push:
     branches: [ master, develop, build ]
@@ -8,13 +8,12 @@ on:
 jobs:
   build:
 
-    runs-on: windows-2019
+    runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Build vvenc
-      shell: cmd
       run: |
         make install-release
 
@@ -23,7 +22,7 @@ jobs:
       with:
         name: vvenc
         path: |
-          bin/release-static/vvencapp.exe
-          bin/release-static/vvencFFapp.exe
-          bin/release-static/vvenclibtest.exe
+          bin/release-static/vvencapp
+          bin/release-static/vvencFFapp
+          bin/release-static/vvenclibtest
           LICENSE.txt

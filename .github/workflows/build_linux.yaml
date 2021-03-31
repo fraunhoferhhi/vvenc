@@ -13,7 +13,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Gather build version
+    - name: Build vvenc
       run: |
         make install-release
 
@@ -22,6 +22,7 @@ jobs:
       with:
         name: vvenc
         path: |
-          install/vvencapp
-          install/vvencFFapp
+          bin/release-static/vvencapp
+          bin/release-static/vvencFFapp
+          bin/release-static/vvenclibtest
           LICENSE.txt
