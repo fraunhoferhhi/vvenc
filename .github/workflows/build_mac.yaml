@@ -14,19 +14,23 @@ jobs:
     - uses: actions/checkout@v2
 
     - name: Build vvenc
+      run: make install-release
+
+    - name: Move executables to root directory
       run: |
-        make install-release
+        cp bin/release-static/* .
+        chmod +x ./vvencapp
+        chmod +x ./vvencFFapp
+        chmod +x ./vvenclibtest
 
     - name: Run tests
-      run: |
-        chmod +x dist/FastFlix
-        bin/release-static/vvenclibtest
+      run: ./vvenclibtest
 
     - name: Upload standalone executable artifact
       uses: actions/upload-artifact@v2
       with:
         name: vvenc_macos
         path: |
-          bin/release-static/vvencapp
-          bin/release-static/vvencFFapp
+          vvencapp
+          vvencFFapp
           LICENSE.txt

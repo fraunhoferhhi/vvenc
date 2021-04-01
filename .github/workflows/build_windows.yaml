@@ -15,19 +15,21 @@ jobs:
 
     - name: Build vvenc
       shell: cmd
-      run: |
-        make install-release
+      run: make install-release
+
+    - name: Move executables to root directory
+      shell: cmd
+      run: move bin\release-static\*.exe .
 
     - name: Run tests
       shell: cmd
-      run: |
-        bin/release-static/vvenclibtest.exe
+      run: vvenclibtest.exe
 
     - name: Upload standalone executable artifact
       uses: actions/upload-artifact@v2
       with:
         name: vvenc_win64
         path: |
-          bin/release-static/vvencapp.exe
-          bin/release-static/vvencFFapp.exe
+          vvencapp.exe
+          vvencFFapp.exe
           LICENSE.txt
