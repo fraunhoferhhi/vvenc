@@ -494,7 +494,7 @@ namespace apputils
       return -1;
     }
 
-    if (fileName.compare("stdin") == 0)
+    if (fileName.compare("stdin") == 0 || fileName.compare("-") == 0)
     {
       m_isStdin = true;
     }
