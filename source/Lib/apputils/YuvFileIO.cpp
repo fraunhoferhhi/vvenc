@@ -44,7 +44,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 
-
 /** \file     YuvFileIO.cpp
     \brief    yuv file I/O class (header)
 */
@@ -495,7 +494,7 @@ namespace apputils
       return -1;
     }
 
-    if (fileName.compare("-")==0)
+    if (fileName.compare("stdin") == 0)
     {
       m_isStdin = true;
     }
@@ -527,10 +526,10 @@ namespace apputils
 
   void YuvFileIO::close()
   {
-    if(!m_isStdin) {
-m_cHandle.close();
+    if (!m_isStdin)
+    {
+      m_cHandle.close();
     }
-    
   }
 
   bool YuvFileIO::isEof()
