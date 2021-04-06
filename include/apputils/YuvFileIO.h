@@ -70,6 +70,7 @@ class APPUTILS_DECL YuvFileIO
 {
 private:
   std::fstream        m_cHandle;              ///< file handle
+  bool                m_isStdin;              ///< using stdin instead of input file
   int                 m_fileBitdepth;         ///< bitdepth of input/output video file
   int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
   int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
