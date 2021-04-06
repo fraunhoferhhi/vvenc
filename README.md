@@ -16,14 +16,14 @@ A working CMake installation is required for building the software.
 Download CMake from http://www.cmake.org/ and install it. The following targets are supported: Windows (Visual Studio), Linux (gcc) and MacOS (clang).
 
 ## How to build for Windows?
-In order to compile the software for Windows, Visual Studio 15 2017 or higher and cmake version 3.12 or higher are required. Install gnuwin32 that provides make for Windows. To build the software open a command prompt window, change into the project directory and use:
+In order to compile the software for Windows, Visual Studio 15 2017 or higher and cmake version 3.13 or higher are required. Install gnuwin32 that provides make for Windows. To build the software open a command prompt window, change into the project directory and use:
 
     make install-release
 
 This will create the statically linked release version of the encoder applications in the install/bin/release-static/ subdirectory.
 
 ## How to build for Linux/MacOS?
-In order to compile the software for Linux, gcc version 7.0 or higher and cmake version 3.12 or higher are required. For MacOS, Xcode and cmake version 3.12 or higher are required. To simplify the build process a Makefile with predefined targets is available. To build the VVenC encoder applications open a terminal, change into the project directory and use:
+In order to compile the software for Linux, gcc version 7.0 or higher and cmake version 3.13 or higher are required. For MacOS, Xcode and cmake version 3.13 or higher are required. To simplify the build process a Makefile with predefined targets is available. To build the VVenC encoder applications open a terminal, change into the project directory and use:
 
     make install-release
 
