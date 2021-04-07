@@ -109,7 +109,7 @@ public:
 
   void     initEncoderLib      ( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf );
   void     initPass            ( int pass );
-  void     encodePicture       ( bool flush, const YUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
+  void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
 

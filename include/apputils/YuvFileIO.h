@@ -58,9 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup Interface
 //! \{
 
-namespace vvenc {
-struct YUVBuffer;
-}
+struct vvencYUVBuffer;
 
 namespace apputils {
 
@@ -86,8 +84,8 @@ public:
   bool  isEof();
   bool  isFail();
   void  skipYuvFrames( int numFrames, int width, int height );
-  bool  readYuvBuf   ( vvenc::YUVBuffer& yuvInBuf );
-  bool  writeYuvBuf  ( const vvenc::YUVBuffer& yuvOutBuf );
+  bool  readYuvBuf   ( vvencYUVBuffer& yuvInBuf );
+  bool  writeYuvBuf  ( const vvencYUVBuffer& yuvOutBuf );
   std::string getLastError() const { return m_lastError; }   
 };
 

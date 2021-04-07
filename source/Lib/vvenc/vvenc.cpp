@@ -50,8 +50,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "vvenc/vvenc.h"
+#include "vvenc/vvencCfg.h"
 #include "vvencimpl.h"
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,130 +59,68 @@ extern "C" {
 
 VVENC_NAMESPACE_BEGIN
 
-VVEnc::VVEnc()
+
+//YUVBufferStorage::YUVBufferStorage( const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+//  : YUVBuffer()
+//{
+//  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
+//  {
+//    YUVBuffer::Plane& yuvPlane = planes[ i ];
+//    yuvPlane.width  = vvenc_getWidthOfComponent ( chFmt, frameWidth,  i );
+//    yuvPlane.height = vvenc_getHeightOfComponent( chFmt, frameHeight, i );
+//    yuvPlane.stride = yuvPlane.width;
+//    const int size  = yuvPlane.stride * yuvPlane.height;
+//    yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
+//  }
+//}
+
+//YUVBufferStorage::~YUVBufferStorage()
+//{
+//  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
+//  {
+//    delete [] planes[ i ].ptr;
+//  }
+//}
+
+VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
 {
-  m_pcVVEncImpl = new VVEncImpl;
+  vvencYUVBuffer* yuvBuffer = (vvencYUVBuffer*)malloc(sizeof(vvencYUVBuffer));
+  vvenc_YUVBuffer_default( yuvBuffer );
+  return yuvBuffer;
 }
 
-/// Destructor
-VVEnc::~VVEnc()
+VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer, bool freePicBuffer )
 {
-  if( NULL != m_pcVVEncImpl )
+  if( yuvBuffer )
   {
-    if( m_pcVVEncImpl->isInitialized() )
+    if( freePicBuffer && yuvBuffer->planes[0].ptr )
     {
-      uninit();
+      vvenc_YUVBuffer_free_buffer ( yuvBuffer );
     }
-    delete m_pcVVEncImpl;
-    m_pcVVEncImpl = NULL;
+    free(yuvBuffer);
   }
 }
 
-int VVEnc::checkConfig( const VVEncCfg& rcVVEncCfg )
+VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
 {
-  return m_pcVVEncImpl->checkConfig( rcVVEncCfg );
-}
-
-int VVEnc::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf  )
-{
-  if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-
-  return m_pcVVEncImpl->init( rcVVEncCfg, pcYUVWriterIf );
-}
-
-int VVEnc::initPass( int pass )
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-
-  return m_pcVVEncImpl->initPass( pass );
-}
-
-int VVEnc::uninit()
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-
-  return m_pcVVEncImpl->uninit( );
-}
-
-bool VVEnc::isInitialized()
-{
-  return m_pcVVEncImpl->isInitialized();
-}
-
-int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone)
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->encode( pcYUVBuffer, rcAccessUnit, rbEncodeDone );
-}
-
-int VVEnc::getConfig( VVEncCfg& rcVVEncCfg )
-{
-  if( !m_pcVVEncImpl->isInitialized() )
-  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncCfg ) );
-}
-
-int VVEnc::reconfig( const VVEncCfg& rcVVEncCfg )
-{
-  if( !m_pcVVEncImpl->isInitialized() )
-  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncCfg ) );
-}
-
-std::string VVEnc::getEncoderInfo() const
-{
-  return m_pcVVEncImpl->getEncoderInfo();
-}
-
-std::string VVEnc::getLastError() const
-{
-  return m_pcVVEncImpl->getLastError();
-}
-
-int VVEnc::getNumLeadFrames() const
-{
-  return m_pcVVEncImpl->getNumLeadFrames();
-}
-
-int VVEnc::getNumTrailFrames() const
-{
-  return m_pcVVEncImpl->getNumTrailFrames();
-}
-
-int VVEnc::printSummary() const
-{
-  return m_pcVVEncImpl->printSummary();
-}
-
-std::string VVEnc::getVersionNumber()
-{
-  return VVEncImpl::getVersionNumber();
-}
-
-std::string VVEnc::getErrorMsg( int nRet )
-{
-  return VVEncImpl::getErrorMsg(nRet);
-}
-
-void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
-{
-  VVEncImpl::registerMsgCbf( msgFnc );
-}
-
-std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-{
-  return VVEncImpl::setSIMDExtension( simdId );
-}
-
-YUVBufferStorage::YUVBufferStorage( const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
-  : YUVBuffer()
-{
-  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
+  for( int i = 0; i < 3; i ++ )
   {
-    YUVBuffer::Plane& yuvPlane = planes[ i ];
+    yuvBuffer->planes[i].ptr     = NULL;          // pointer to plane buffer
+    yuvBuffer->planes[i].width   = 0;             // width of the plane
+    yuvBuffer->planes[i].height  = 0;             // height of the plane
+    yuvBuffer->planes[i].stride  = 0;             // stride (width + left margin + right margins) of plane in samples
+  }
+  yuvBuffer->sequenceNumber  = 0;                 // sequence number of the picture
+  yuvBuffer->cts             = 0;                 // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  yuvBuffer->ctsValid        = false;             // composition time stamp valid flag (true: valid, false: CTS not set)
+}
+
+
+VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
+{
+  for ( int i = 0; i < 3; i++ )
+  {
+    vvencYUVPlane&    yuvPlane = yuvBuffer->planes[ i ];
     yuvPlane.width  = vvenc_getWidthOfComponent ( chFmt, frameWidth,  i );
     yuvPlane.height = vvenc_getHeightOfComponent( chFmt, frameHeight, i );
     yuvPlane.stride = yuvPlane.width;
@@ -191,40 +129,272 @@ YUVBufferStorage::YUVBufferStorage( const vvencChromaFormat& chFmt, const int fr
   }
 }
 
-YUVBufferStorage::~YUVBufferStorage()
+VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
 {
-  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
+  for ( int i = 0; i < 3; i++ )
   {
-    delete [] planes[ i ].ptr;
+    delete [] yuvBuffer->planes[ i ].ptr;
   }
 }
 
-VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
+
+VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc()
 {
-  vvencYUVBuffer* yuvBuffer = (vvencYUVBuffer*)malloc(sizeof(vvencYUVBuffer));
-  vvdec_accessUnit_default( yuvBuffer );
+  vvencAccessUnit* accessUnit = (vvencAccessUnit*)malloc(sizeof(vvencAccessUnit));
+  vvenc_accessUnit_default( accessUnit );
   return accessUnit;
 }
 
-VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer )
+VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit )
+{
+  if( accessUnit )
+  {
+    if( accessUnit->payload )
+    {
+      vvenc_accessUnit_free_payload ( accessUnit );
+    }
+    free(accessUnit);
+  }
+}
+
+VVENC_DECL void vvenc_accessUnit_alloc_payload(vvencAccessUnit *accessUnit, int payload_size )
+{
+  accessUnit->payload = (unsigned char*)malloc(sizeof(unsigned char) * payload_size );
+  accessUnit->payloadSize = payload_size;
+  accessUnit->payloadUsedSize = 0;
+}
+
+VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit )
+{
+  if( accessUnit->payload )
+  {
+    free(accessUnit->payload);
+    accessUnit->payloadSize = 0;
+    accessUnit->payloadUsedSize = 0;
+  }
+}
+
+VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
+{
+  accessUnit->payload         = NULL;         ///< pointer to buffer that retrieves the coded data,
+  accessUnit->payloadSize     = 0;            ///< size of the allocated buffer in bytes
+  accessUnit->payloadUsedSize = 0;            ///< length of the coded data in bytes
+  accessUnit->cts             = 0;            ///< composition time stamp in TicksPerSecond (see VVCDecoderParameter)
+  accessUnit->dts             = 0;            ///< decoding time stamp in TicksPerSecond (see VVCDecoderParameter)
+  accessUnit->ctsValid        = false;        ///< composition time stamp valid flag (true: valid, false: CTS not set)
+  accessUnit->dtsValid        = false;        ///< decoding time stamp valid flag (true: valid, false: DTS not set)
+  accessUnit->rap             = false;        ///< random access point flag (true: AU is random access point, false: sequential access)
+  accessUnit->sliceType     = VVENC_NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
+  accessUnit->refPic        = false;         ///< reference picture
+  accessUnit->temporalLayer = 0;             ///< temporal layer
+  accessUnit->poc           = 0;             ///< picture order count
+
+  accessUnit->status        = 0;        ///< additional info (see Status)
+  //accessUnit->infoString;                    ///< debug info from inside the encoder
+
+}
+
+
+VVENC_DECL vvencEncoder* vvenc_encoder_open( VVEncCfg* config )
+{
+  if (nullptr == config)
+  {
+    vvenc::msg( VVENC_ERROR, "vvdec_Params_t is null\n" );
+    return nullptr;
+  }
+
+  vvenc::VVEncImpl* encCtx = new vvenc::VVEncImpl();
+  if (!encCtx)
+  {
+    vvenc::msg( VVENC_ERROR, "cannot allocate memory for VVdeC decoder\n" );
+    return nullptr;
+  }
+
+  int ret = encCtx->init(*config, NULL );
+  if (ret != 0)
+  {
+    // Error initializing the decoder
+    delete encCtx;
+
+    vvenc::msg( VVENC_ERROR, "cannot init the VVdeC decoder\n" );
+    return nullptr;
+  }
+
+  return (vvencEncoder*)encCtx;
+}
+
+VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  d->uninit();
+
+  delete d;
+
+  return VVENC_OK;
+}
+
+VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, vvencYUVWriterCallback callback )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  //d->setYUVWriterCallback( callback );
+  return VVENC_OK;
+}
+
+VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  d->initPass( pass );
+  return VVENC_OK;
+}
+
+
+VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvencAccessUnit** accessUnit, bool* encodeDone )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  d->encode( YUVBuffer, accessUnit, encodeDone );
+  return VVENC_OK;
+}
+
+VVENC_DECL int vvenc_getConfig( vvencEncoder *enc, VVEncCfg* cfg )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  d->getConfig( *cfg );
+  return VVENC_OK;
+}
+
+
+VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const VVEncCfg *cfg )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  d->reconfig( *cfg );
+  return VVENC_OK;
+}
+
+VVENC_DECL int vvenc_checkConfig( vvencEncoder *enc, const VVEncCfg *cfg )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  d->checkConfig( *cfg );
+  return VVENC_OK;
+}
+
+VVENC_DECL const char* vvenc_getLastError( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return NULL;
+  }
+
+  return d->getLastError().c_str();
+}
+
+VVENC_DECL const char* vvenc_getEncoderInfo( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return NULL;
+  }
+
+  return d->getEncoderInfo();
+}
+
+VVENC_DECL int vvenc_getNumLeadFrames( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->getNumLeadFrames();
+}
+
+VVENC_DECL int vvenc_getNumTrailFrames( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->getNumTrailFrames();
+}
+
+VVENC_DECL int vvenc_printSummary( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  d->printSummary();
+  return VVENC_OK;
+}
+
+
+VVENC_DECL const char* vvenc_getVersionNumber()
 {
 
 }
 
-VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
+VVENC_DECL const char* vvenc_getErrorMsg( int nRet )
 {
-
+  return vvenc::VVEncImpl::getErrorMsg( nRet );
 }
 
-VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
-{
 
+VVENC_DECL int vvenc_set_logging_callback(vvencEncoder *enc, vvencLoggingCallback callback )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  d->setLoggingCallback(callback );
+  return VVENC_OK;
 }
 
-VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
-{
 
-}
+VVENC_DECL std::string vvenc_set_SIMD_extension( const char* simdId );
+
 
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
 VVENC_DECL bool vvenc_isTracingEnabled()
@@ -236,8 +406,15 @@ VVENC_DECL bool vvenc_isTracingEnabled()
 #endif
 }
 
+VVENC_DECL const char* vvenc_getCompileInfoString(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+VVENC_DECL void   vvenc_decodeBitstream( const char* FileName);
 
-int vvencGetWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId )
+VVENC_DECL int  vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
+VVENC_DECL int  vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
+
+
+
+int vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId )
 {
   int w = frameWidth;
   if ( compId > 0 )
@@ -253,7 +430,7 @@ int vvencGetWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWid
   return w;
 }
 
-int vvencGetHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId )
+int vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId )
 {
   int h = frameHeight;
   if ( compId > 0 )

@@ -139,8 +139,8 @@ public:
              NoMallocThreadPool* threadPool );
   void uninit();
 
-  void addLeadFrame ( const YUVBuffer& yuvInBuf );
-  void addTrailFrame( const YUVBuffer& yuvInBuf );
+  void addLeadFrame ( const vvencYUVBuffer& yuvInBuf );
+  void addTrailFrame( const vvencYUVBuffer& yuvInBuf );
 
   int getNumLeadFrames()  const { return (int)m_leadFifo.size(); };
   int getNumTrailFrames() const { return (int)m_trailFifo.size(); };
@@ -196,7 +196,7 @@ private:
   std::deque<Picture*>  m_trailFifo;
 
   // Private functions
-  Picture* createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc );
+  Picture* createLeadTrailPic( const vvencYUVBuffer& yuvInBuf, const int poc );
   void subsampleLuma(const PelStorage &input, PelStorage &output, const int factor = 2) const;
 
   int motionErrorLuma(const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;

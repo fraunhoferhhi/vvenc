@@ -50,16 +50,26 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include <string>
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
+#include "EncoderLib/EncLib.h"
 
 namespace vvenc {
 
-
+static const char * const vvencErrorMsg[] = { "expected behavior",
+                                              "unspecified malfunction",
+                                              "encoder not initialized or tried to initialize multiple times",
+                                              "internal allocation error",
+                                              "allocated memory to small to receive encoded data",
+                                              "inconsistent or invalid parameters",
+                                              "unsupported request",
+                                              "encoder requires restart",
+                                              "unsupported CPU - SSE 4.1 needed",
+                                              "unknown error code", 0 };
 
 class EncLib;
 class AccessUnitList;
-
 
 static std::string VVencCompileInfo;
 
@@ -93,7 +103,7 @@ public:
 
   bool isInitialized() const;
 
-  int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
+  int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone );
 
   int getConfig( VVEncCfg& rcVVEncCfg ) const;
   int checkConfig( const VVEncCfg& rcVVEncCfg );
@@ -106,19 +116,19 @@ public:
 
   int printSummary() const;
 
-  std::string getEncoderInfo() const;
+  const char* getEncoderInfo() const;
 
-  std::string getLastError() const;
+  const char* getLastError() const;
 
-  static std::string getErrorMsg( int nRet );
-  static std::string getVersionNumber();
+  static const char* getErrorMsg( int nRet );
+  static const char* getVersionNumber();
   
   static void        registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
   static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 
 private:
 
-  int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
+  int xCopyAu( vvencAccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:
   VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
@@ -128,6 +138,7 @@ private:
   VVEncCfg               m_cVVEncCfg;         // internal (adapted) config
 
   std::string            m_cErrorString;
+  std::string            m_cEncoderInfo;
   std::string            m_sEncoderCapabilities;
 
   EncLib*                m_pEncLib = nullptr;

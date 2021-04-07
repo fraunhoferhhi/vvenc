@@ -359,7 +359,7 @@ void EncLib::xSetRCEncCfg( int pass )
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
     // preserve MCTF settings
-    const int mctf = m_cBckCfg.e.m_MCTF;
+    const int mctf = m_cBckCfg.m_MCTF;
 
     vvenc_initPreset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
@@ -368,12 +368,12 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_QP              = 32;
 
     // restore MCTF
-    m_cBckCfg.e.m_MCTF              = mctf;
+    m_cBckCfg.m_MCTF              = mctf;
 
     // clear MaxCuDQPSubdiv
     if( m_cBckCfg.e.m_CTUSize < 128 )
     {
-      m_cBckCfg.e.m_cuQpDeltaSubdiv = 0;
+      m_cBckCfg.m_cuQpDeltaSubdiv = 0;
     }
 
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
@@ -384,7 +384,7 @@ void EncLib::xSetRCEncCfg( int pass )
 // Public member functions
 // ====================================================================================================================
 
-void EncLib::encodePicture( bool flush, const YUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
+void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
 
@@ -857,7 +857,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_PadSourceWidth;
   sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_PadSourceHeight;
   sps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
-  sps.chromaFormatIdc               = m_cEncCfg.m_internChromaFormat;
+  sps.chromaFormatIdc               = (ChromaFormat)m_cEncCfg.m_internChromaFormat;
   sps.CTUSize                       = m_cEncCfg.m_CTUSize;
   sps.maxMTTDepth[0]                = m_cEncCfg.m_maxMTTDepthI;
   sps.maxMTTDepth[1]                = m_cEncCfg.m_maxMTTDepth;

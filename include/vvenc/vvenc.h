@@ -113,35 +113,32 @@ enum ErrorCodes
   The struct YUVBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture.
 */
 
+typedef struct vvencYUVPlane
+{
+  int16_t*  ptr     = nullptr;      ///< pointer to plane buffer
+  int       width   = 0;            ///< width of the plane
+  int       height  = 0;            ///< height of the plane
+  int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
+}vvencYUVPlane;
+
 typedef struct vvencYUVBuffer
 {
-  struct vvencPlane
-  {
-    int16_t*  ptr     = nullptr;      ///< pointer to plane buffer
-    int       width   = 0;            ///< width of the plane
-    int       height  = 0;            ///< height of the plane
-    int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
-  };
-
-  vvencPlane planes[ 3 ];
-  uint64_t   sequenceNumber  = 0;      ///< sequence number of the picture
-  uint64_t   cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
-  bool       ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
+  vvencYUVPlane planes[ 3 ];
+  uint64_t      sequenceNumber  = 0;      ///< sequence number of the picture
+  uint64_t      cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  bool          ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
 typedef void (*vvencYUVWriterCallback)(void*, vvencYUVBuffer* );
 
 VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc();
-VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer );
+VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer, bool freePicBuffer );
 VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer );
 
-
-VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight );
-VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer );
-
+VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight );
+VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer );
 
 // ----------------------------------------
-
 
 
 /**
@@ -227,12 +224,12 @@ VVENC_DECL vvencEncoder* vvenc_encoder_open( VVEncCfg* );
 VVENC_DECL int vvenc_encoder_close(vvencEncoder *);
 
 
-VVENC_DECL int vvenc_encoder_setYUVWriterCallback(vvencEncoder *, vvencYUVWriterCallback callback );
+VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *, vvencYUVWriterCallback callback );
 
 /**
   This method initializes the encoder instance in dependency to the encoder pass.
 */
-VVENC_DECL int vvenc_initPass( vvencEncoder *, int pass );
+VVENC_DECL int vvenc_init_pass( vvencEncoder *, int pass );
 
 /**
   This method encodes a picture.
@@ -256,7 +253,7 @@ VVENC_DECL int vvenc_encode( vvencEncoder *, vvencYUVBuffer* YUVBuffer, vvencAcc
  \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
  \pre        The encoder has to be initialized.
 */
-VVENC_DECL int getConfig( vvencEncoder *,VVEncCfg& rcVVEncCfg );
+VVENC_DECL int vvenc_getConfig( vvencEncoder *,VVEncCfg* VVEncCfg );
 
 /**
  This method reconfigures the encoder instance.
@@ -270,7 +267,7 @@ VVENC_DECL int getConfig( vvencEncoder *,VVEncCfg& rcVVEncCfg );
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        The encoder has to be initialized successfully.
 */
-VVENC_DECL int reconfig( vvencEncoder *,VVEncCfg* );
+VVENC_DECL int vvenc_reconfig( vvencEncoder *, const VVEncCfg* );
 
 /**
  This method checks the passed configuration.
@@ -278,46 +275,46 @@ VVENC_DECL int reconfig( vvencEncoder *,VVEncCfg* );
  \param[in]  rcVVCEncParameter reference to an VVCEncParameter struct that returns the current encoder setup.
  \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
 */
-VVENC_DECL int checkConfig( vvencEncoder *,VVEncCfg* );
+VVENC_DECL int vvenc_checkConfig( vvencEncoder *, const VVEncCfg* );
 
 /**
  This method returns the last occurred error as a string.
  \param      None
  \retval     std::string empty string for no error assigned
 */
-VVENC_DECL std::string vvenc_getLastError()
+VVENC_DECL const char* vvenc_getLastError( vvencEncoder * );
 
-VVENC_DECL std::string vvenc_getEncoderInfo()
+VVENC_DECL const char* vvenc_getEncoderInfo( vvencEncoder * );
 
-VVENC_DECL int vvenc_getNumLeadFrames()
+VVENC_DECL int vvenc_getNumLeadFrames( vvencEncoder * );
 
-VVENC_DECL int vvenc_getNumTrailFrames()
+VVENC_DECL int vvenc_getNumTrailFrames( vvencEncoder * );
 
-VVENC_DECL int vvenc_printSummary()
+VVENC_DECL int vvenc_printSummary( vvencEncoder * );
 
 /**
  This method returns the encoder version number as a string.
  \param      None
  \retval     std::string returns the version number
 */
-VVENC_DECL std::string vvenc_getVersionNumber();
+VVENC_DECL const char* vvenc_getVersionNumber();
 
 /**
  This static function returns a string according to the passed parameter nRet.
  \param[in]  nRet return value code to translate
  \retval[ ]  std::string empty string for no error
 */
-VVENC_DECL std::string vvenc_getErrorMsg( int nRet );
+VVENC_DECL const char* vvenc_getErrorMsg( int nRet );
 
 /**
  This method registers a log message callback function to the encoder library.
  If no such function has been registered, the library will omit all messages.
  \param      Log message callback function.
 */
-VVENC_DECL void vvenc_registerMsgCbf( std::function<void( int, const char*, va_list )> msgCbf );
+VVENC_DECL int vvenc_set_logging_callback(vvencEncoder*, vvencLoggingCallback callback );
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-VVENC_DECL std::string setSIMDExtension( const std::string& simdId );
+VVENC_DECL std::string vvenc_set_SIMD_extension( const char* simdId );
 
 VVENC_DECL bool  vvenc_isTracingEnabled();           // checks if library has tracing supported enabled (see ENABLE_TRACING).
 VVENC_DECL const char* vvenc_getCompileInfoString(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).

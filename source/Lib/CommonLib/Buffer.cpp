@@ -1004,14 +1004,14 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
-void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
 {
   CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
   pelUnitBuf.chromaFormat = chFmt;
   const int numComp = getNumberValidComponents( chFmt );
   for ( int i = 0; i < numComp; i++ )
   {
-    const YUVBuffer::Plane& src = yuvBuffer.planes[ i ];
+    const vvencYUVPlane& src = yuvBuffer.planes[ i ];
     CHECK( src.ptr == nullptr, "yuvBuffer not setup" );
     PelBuf& dest = pelUnitBuf.bufs[i];
     CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
@@ -1049,7 +1049,7 @@ void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const 
   }
 }
 */
-void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow )
+void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, vvencYUVBuffer& yuvBuffer, const Window* confWindow )
 {
   const ChromaFormat chFmt = pelUnitBuf.chromaFormat;
   const int numComp        = getNumberValidComponents( chFmt );
@@ -1059,7 +1059,7 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
           PelBuf area        = pelUnitBuf.get( compId );
     const int sx             = getComponentScaleX( compId, chFmt );
     const int sy             = getComponentScaleY( compId, chFmt );
-    YUVBuffer::Plane& yuvPlane = yuvBuffer.planes[ i ];
+    vvencYUVPlane& yuvPlane = yuvBuffer.planes[ i ];
     CHECK( yuvPlane.ptr != nullptr, "yuvBuffer already in use" );
     yuvPlane.ptr             = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
     yuvPlane.width           = ( ( area.width  << sx ) - ( confWindow->winLeftOffset + confWindow->winRightOffset  ) ) >> sx;

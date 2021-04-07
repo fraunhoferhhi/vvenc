@@ -54,10 +54,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <iostream>
+#include <vector>
 
 //! \ingroup Interface
 //! \{
-using namespace vvenc;
 
 namespace apputils {
 
@@ -65,7 +65,7 @@ namespace apputils {
 typedef int16_t LPel;
 
 bool readYuvPlane( std::istream&       fd,
-                   YUVBuffer::Plane&   yuvPlane,
+                   vvencYUVPlane&      yuvPlane,
                    bool                is16bit,
                    int                 fileBitDepth,
                    const int&          compID,
@@ -180,7 +180,7 @@ bool readYuvPlane( std::istream&       fd,
 }
 
 bool writeYuvPlane( std::ostream&            fd,
-                    const YUVBuffer::Plane&  yuvPlane,
+                    const vvencYUVPlane&     yuvPlane,
                     bool                     is16bit,
                     int                      fileBitDepth,
                     int                      packedYUVOutputMode,
@@ -401,7 +401,7 @@ bool writeYuvPlane( std::ostream&            fd,
   return true;
 }
 
-bool verifyYuvPlane( YUVBuffer::Plane& yuvPlane, const int bitDepth )
+bool verifyYuvPlane( vvencYUVPlane& yuvPlane, const int bitDepth )
 {
   const int stride = yuvPlane.stride;
   const int width  = yuvPlane.width;
@@ -424,7 +424,7 @@ bool verifyYuvPlane( YUVBuffer::Plane& yuvPlane, const int bitDepth )
   return true;
 }
 
-void scaleYuvPlane( YUVBuffer::Plane& yuvPlaneOut, const YUVBuffer::Plane& yuvPlaneIn, const int shiftBits, const LPel minVal, const LPel maxVal )
+void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn, const int shiftBits, const LPel minVal, const LPel maxVal )
 {
   const int stride = yuvPlaneOut.stride;
   const int width  = yuvPlaneOut.width;
@@ -574,7 +574,7 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
   m_cHandle.read( buf, offset_mod_bufsize );
 }
 
-bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
+bool YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf )
 {
   // check end-of-file
   if ( isEof() )
@@ -590,7 +590,7 @@ bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
   const int numComp                = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
   for( int comp = 0; comp < numComp; comp++ )
   {
-    YUVBuffer::Plane& yuvPlane = yuvInBuf.planes[ comp ];
+    vvencYUVPlane& yuvPlane = yuvInBuf.planes[ comp ];
 
     if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, comp, m_fileChrFmt, m_bufferChrFmt ) )
       return false;
@@ -610,13 +610,15 @@ bool YuvFileIO::readYuvBuf( YUVBuffer& yuvInBuf )
   return true;
 }
 
-bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
+bool YuvFileIO::writeYuvBuf( const vvencYUVBuffer& yuvOutBuf )
 {
   // compute actual YUV frame size excluding padding size
   bool is16bit              = m_fileBitdepth > 8;
   bool nonZeroBitDepthShift = m_bitdepthShift != 0;
 
-  YUVBufferStorage yuvScaled( m_bufferChrFmt, yuvOutBuf.planes[ 0 ].width, yuvOutBuf.planes[ 0 ].height );
+  vvencYUVBuffer yuvScaled;
+  vvenc_YUVBuffer_default( &yuvScaled );
+  vvenc_YUVBuffer_alloc_buffer( &yuvScaled, m_bufferChrFmt, yuvOutBuf.planes[ 0 ].width, yuvOutBuf.planes[ 0 ].height );
 
   if ( nonZeroBitDepthShift )
   {
@@ -631,7 +633,7 @@ bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
     }
   }
 
-  const YUVBuffer& yuvWriteBuf = nonZeroBitDepthShift ? yuvScaled : yuvOutBuf;
+  const vvencYUVBuffer& yuvWriteBuf = nonZeroBitDepthShift ? yuvScaled : yuvOutBuf;
 
   const int numComp = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
   for( int comp = 0; comp < numComp; comp++ )
@@ -639,6 +641,8 @@ bool YuvFileIO::writeYuvBuf( const YUVBuffer& yuvOutBuf )
     if ( ! writeYuvPlane( m_cHandle, yuvWriteBuf.planes[ comp ], is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_bufferChrFmt, m_fileChrFmt ) )
       return false;
   }
+
+  vvenc_YUVBuffer_free_buffer( &yuvScaled );
 
   return true;
 }

@@ -55,8 +55,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Slice.h"
 #include "CommonLib/ProfileLevelTier.h"
 
-//#include <math.h>
-//#include <thread>
+#include <math.h>
+#include <thread>
 
 
 #ifdef __cplusplus
@@ -292,6 +292,7 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_MaxCodingDepth                          = 0;                                     ///< max. total CU depth - includes depth of transform-block structure
   c->m_log2DiffMaxMinCodingBlockSize           = 0;                                     ///< difference between largest and smallest CU depth
   c->m_log2MaxTbSize                           = 6;
+  c->m_log2MinCodingBlockSize                  = 2;
 
   c->m_bUseASR                                 = false;                                 ///< flag for using adaptive motion search range
   c->m_bUseHADME                               = true;                                  ///< flag for using HAD in sub-pel ME
@@ -1998,7 +1999,7 @@ static bool checkCfgParameter( VVEncCfg *c )
 
   if( c->m_alf )
   {
-    vvenc_confirmParameter( c, c->m_maxNumAlfAlternativesChroma < 1 || c->m_maxNumAlfAlternativesChroma > VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
+    vvenc_confirmParameter( c, c->m_maxNumAlfAlternativesChroma < 1 || c->m_maxNumAlfAlternativesChroma > VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
   }
 
   vvenc_confirmParameter( c, c->m_useFastMrg < 0 || c->m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
@@ -2066,7 +2067,9 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_CTUSize < ( 1 << c->m_log2MinCodingBlockSize ),                                        "Log2MinCodingBlockSize must be smaller than max CTU size." );
   vvenc_confirmParameter( c, c->m_MinQT[ 0 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for I slices" );
   vvenc_confirmParameter( c, c->m_MinQT[ 1 ] < ( 1 << c->m_log2MinCodingBlockSize ),                                     "Log2MinCodingBlockSize must be greater than min QT size for non I slices" );
-  vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << getChannelTypeScaleX(1, c->m_internChromaFormat) ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
+
+  const int chromaScaleX = ( (c->m_internChromaFormat==VVENC_CHROMA_444) ) ? 0 : 1;
+  vvenc_confirmParameter( c, ( c->m_MinQT[ 2 ] << chromaScaleX ) < ( 1 << c->m_log2MinCodingBlockSize ), "Log2MinCodingBlockSize must be greater than min chroma QT size for I slices" );
 
   vvenc_confirmParameter(c, c->m_PadSourceWidth  % vvenc::SPS::getWinUnitX(c->m_internChromaFormat) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
   vvenc_confirmParameter(c, c->m_PadSourceHeight % vvenc::SPS::getWinUnitY(c->m_internChromaFormat) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");

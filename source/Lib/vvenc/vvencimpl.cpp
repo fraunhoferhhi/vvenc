@@ -72,7 +72,7 @@ namespace vvenc {
 
 // ====================================================================================================================
 
-static_assert( sizeof(Pel)  == sizeof(*(YUVBuffer::Plane::ptr)),   "internal bits per pel differ from interface definition" );
+static_assert( sizeof(Pel)  == sizeof(*(vvencYUVPlane::ptr)),   "internal bits per pel differ from interface definition" );
 
 // ====================================================================================================================
 
@@ -131,8 +131,12 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   }
 
   std::stringstream cssCap;
-  cssCap << vvencGetCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  cssCap << vvenc_getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
+
+  m_cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
+  m_cEncoderInfo += " ";
+  m_cEncoderInfo += m_sEncoderCapabilities;
 
   // initialize the encoder
   m_pEncLib = new EncLib;
@@ -218,7 +222,7 @@ bool VVEncImpl::isInitialized() const
 }
 
 
-int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone )
+int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone )
 {
   if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
   if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
@@ -236,7 +240,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cVVEncCfg.e.m_internChromaFormat != CHROMA_400 )
+    if( (ChromaFormat)m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
     {
       if( pcYUVBuffer->planes[1].ptr == nullptr ||
           pcYUVBuffer->planes[2].ptr == nullptr )
@@ -264,9 +268,9 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( m_cVVEncCfg.e.m_internChromaFormat != CHROMA_400 )
+    if( (ChromaFormat)m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
     {
-      if( m_cVVEncCfg.e.m_internChromaFormat == CHROMA_444 )
+      if( (ChromaFormat)m_cVVEncCfg.m_internChromaFormat == CHROMA_444 )
       {
         if( pcYUVBuffer->planes[1].stride && pcYUVBuffer->planes[0].width > pcYUVBuffer->planes[1].stride )
         {
@@ -305,14 +309,13 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
   }
 
   // reset AU data
-  rcAccessUnit = AccessUnit();
-
-  rbEncodeDone = false;
+  *ppcAccessUnit = vvenc_accessUnit_alloc();
+  *pbEncodeDone  = false;
 
   AccessUnitList cAu;
   try
   {
-    m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, rbEncodeDone );
+    m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, *pbEncodeDone );
   }
   catch( std::exception& e )
   {
@@ -320,7 +323,7 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( rbEncodeDone )
+  if( pbEncodeDone )
   {
     if( m_eState == INTERNAL_STATE_FLUSHING )
     {
@@ -328,56 +331,50 @@ int VVEncImpl::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& r
     }
     else
     {
-      rbEncodeDone = false;
+      *pbEncodeDone = false;
     }
   }
 
   /* copy output AU */
   if ( !cAu.empty() )
   {
-    iRet = xCopyAu( rcAccessUnit, cAu  );
+    iRet = xCopyAu( **ppcAccessUnit, cAu  );
   }
 
   return iRet;
 }
 
-std::string VVEncImpl::getVersionNumber()
+const char* VVEncImpl::getVersionNumber()
 {
-  std::string cVersion = VVENC_VERSION;
-  return cVersion;
+  return VVENC_VERSION;
 }
 
-std::string VVEncImpl::getEncoderInfo() const
+const char* VVEncImpl::getEncoderInfo() const
 {
-  std::string cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
-  cEncoderInfo += " ";
-  cEncoderInfo += m_sEncoderCapabilities;
-  return cEncoderInfo;
+  return m_sEncoderCapabilities.c_str();
 }
 
-std::string VVEncImpl::getLastError() const
+const char* VVEncImpl::getLastError() const
 {
-  return m_cErrorString;
+  return m_cErrorString.c_str();
 }
 
-std::string VVEncImpl::getErrorMsg( int nRet )
+const char* VVEncImpl::getErrorMsg( int nRet )
 {
-  std::string cErr;
   switch( nRet )
   {
-  case VVENC_OK :                  cErr = "expected behavior"; break;
-  case VVENC_ERR_UNSPECIFIED:      cErr = "unspecified malfunction"; break;
-  case VVENC_ERR_INITIALIZE:       cErr = "encoder not initialized or tried to initialize multiple times"; break;
-  case VVENC_ERR_ALLOCATE:         cErr = "internal allocation error"; break;
-  case VVENC_NOT_ENOUGH_MEM:       cErr = "allocated memory to small to receive encoded data"; break;
-  case VVENC_ERR_PARAMETER:        cErr = "inconsistent or invalid parameters"; break;
-  case VVENC_ERR_NOT_SUPPORTED:    cErr = "unsupported request"; break;
-  case VVENC_ERR_RESTART_REQUIRED: cErr = "encoder requires restart"; break;
-  case VVENC_ERR_CPU:              cErr = "unsupported CPU - SSE 4.1 needed!"; break;
-  default:                         cErr = "unknown ret code"; break;
+  case VVENC_OK :                  return vvencErrorMsg[0]; break;
+  case VVENC_ERR_UNSPECIFIED:      return vvencErrorMsg[1]; break;
+  case VVENC_ERR_INITIALIZE:       return vvencErrorMsg[2]; break;
+  case VVENC_ERR_ALLOCATE:         return vvencErrorMsg[3]; break;
+  case VVENC_NOT_ENOUGH_MEM:       return vvencErrorMsg[4]; break;
+  case VVENC_ERR_PARAMETER:        return vvencErrorMsg[5]; break;
+  case VVENC_ERR_NOT_SUPPORTED:    return vvencErrorMsg[6]; break;
+  case VVENC_ERR_RESTART_REQUIRED: return vvencErrorMsg[7]; break;
+  case VVENC_ERR_CPU:              return vvencErrorMsg[8]; break;
+  default:                         return vvencErrorMsg[9]; break;
   }
-
-  return cErr;
+  return vvencErrorMsg[9];
 }
 
 int VVEncImpl::setAndRetErrorMsg( int iRet )
@@ -392,12 +389,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.e.m_MCTFNumLeadFrames;
+  return m_cVVEncCfg.m_MCTFNumLeadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.e.m_MCTFNumTrailFrames;
+  return m_cVVEncCfg.m_MCTFNumTrailFrames;
 }
 
 int VVEncImpl::printSummary() const
@@ -409,7 +406,7 @@ int VVEncImpl::printSummary() const
   return 0;
 }
 
-int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& rcAuList )
+int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitList& rcAuList )
 {
   rcAccessUnit.rap = false;
 
@@ -443,7 +440,15 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
       annexBsizes.push_back( size );
     }
 
-    rcAccessUnit.payload.resize( sizeSum );
+    if( rcAccessUnit.payloadSize < (int)sizeSum )
+    {
+      if ( rcAccessUnit.payload )
+      {
+        vvenc_accessUnit_free_payload( &rcAccessUnit );
+      }
+      vvenc_accessUnit_alloc_payload( &rcAccessUnit, sizeSum );
+    }
+
     uint32_t iUsedSize = 0;
     for (vvenc::AccessUnitList::const_iterator it = rcAuList.begin(); it != rcAuList.end(); it++)
     {
@@ -465,16 +470,16 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
          *    unit of an access unit in decoding order, as specified by subclause
          *    7.4.1.2.3.
          */
-        ::memcpy( rcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
+        ::memcpy( rcAccessUnit.payload + iUsedSize, reinterpret_cast<const char*>(start_code_prefix), 4 );
         iUsedSize += 4;
       }
       else
       {
-        ::memcpy( rcAccessUnit.payload.data() + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
+        ::memcpy( rcAccessUnit.payload + iUsedSize, reinterpret_cast<const char*>(start_code_prefix+1), 3 );
         iUsedSize += 3;
       }
       uint32_t nalDataSize = uint32_t(nalu.m_nalUnitData.str().size()) ;
-      ::memcpy( rcAccessUnit.payload.data() + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
+      ::memcpy( rcAccessUnit.payload + iUsedSize, nalu.m_nalUnitData.str().c_str() , nalDataSize );
       iUsedSize += nalDataSize;
 
       if( nalu.m_nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
@@ -485,15 +490,16 @@ int VVEncImpl::xCopyAu( AccessUnit& rcAccessUnit, const vvenc::AccessUnitList& r
         rcAccessUnit.rap = true;
       }
 
-      rcAccessUnit.nalUnitTypeVec.push_back( nalu.m_nalUnitType );
+      //rcAccessUnit.nalUnitTypeVec.push_back( nalu.m_nalUnitType );
     }
 
+    rcAccessUnit.payloadUsedSize = iUsedSize;
     if( iUsedSize != sizeSum  )
     {
       return VVENC_NOT_ENOUGH_MEM;
     }
 
-    rcAccessUnit.annexBsizeVec   = annexBsizes;
+    //rcAccessUnit.annexBsizeVec   = annexBsizes;
     rcAccessUnit.ctsValid        = rcAuList.ctsValid;
     rcAccessUnit.dtsValid        = rcAuList.dtsValid;
     rcAccessUnit.cts             = rcAuList.cts;

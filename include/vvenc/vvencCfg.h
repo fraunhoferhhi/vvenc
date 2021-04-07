@@ -540,6 +540,7 @@ typedef struct VVEncCfg
   unsigned            m_MaxCodingDepth;                                                   ///< max. total CU depth - includes depth of transform-block structure
   unsigned            m_log2DiffMaxMinCodingBlockSize;                                    ///< difference between largest and smallest CU depth
   int                 m_log2MaxTbSize;
+  int                 m_log2MinCodingBlockSize;
 
   bool                m_bUseASR;                                                          ///< flag for using adaptive motion search range
   bool                m_bUseHADME;                                                        ///< flag for using HAD in sub-pel ME

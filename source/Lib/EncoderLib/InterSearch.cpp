@@ -1236,7 +1236,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
           int iNumIter = 4;
 
           // fast encoder setting: only one iteration
-          if ( m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE2 || cs.picHeader->mvdL1Zero )
+          if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 || cs.picHeader->mvdL1Zero )
           {
             iNumIter = 1;
           }
@@ -1245,7 +1245,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
           {
             int         iRefList    = iIter % 2;
 
-            if ( m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE2 )
+            if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 )
             {
               if( uiCost[0] <= uiCost[1] )
               {

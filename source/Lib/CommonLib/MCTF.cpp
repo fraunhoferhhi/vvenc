@@ -265,7 +265,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
 // Public member functions
 // ====================================================================================================================
 
-Picture* MCTF::createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc )
+Picture* MCTF::createLeadTrailPic( const vvencYUVBuffer& yuvInBuf, const int poc )
 {
   Picture* pic = new Picture;
   pic->create( m_chromaFormatIDC, m_area, m_ctuSize, m_ctuSize + 16, false, m_padding );
@@ -282,7 +282,7 @@ Picture* MCTF::createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc )
   return pic;
 }
 
-void MCTF::addLeadFrame( const YUVBuffer& yuvInBuf )
+void MCTF::addLeadFrame( const vvencYUVBuffer& yuvInBuf )
 {
   const int poc = m_leadFifo.size() ? m_leadFifo.back()->poc + 1 : 0 - m_numLeadFrames;
 
@@ -295,7 +295,7 @@ void MCTF::addLeadFrame( const YUVBuffer& yuvInBuf )
   m_picFifo.push_back( pic );
 }
 
-void MCTF::addTrailFrame( const YUVBuffer& yuvInBuf )
+void MCTF::addTrailFrame( const vvencYUVBuffer& yuvInBuf )
 {
   const int poc = m_trailFifo.size() ? m_trailFifo.back()->poc + 1 : m_framesToBeEncoded;
 

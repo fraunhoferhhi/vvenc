@@ -61,8 +61,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-using namespace vvenc;
-
 #define TEST(x)     { int res = x; g_numTests++; g_numFails += res;  if( g_verbose ) if(res) { std::cerr << "\n test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__;} }
 #define TESTT(x,w)  { int res = x; g_numTests++; g_numFails += res;  if( g_verbose ) if(res) { std::cerr << "\n" << w << "\n test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__;} }
 #define ERROR(w)    { g_numTests++; g_numFails ++;                   if( g_verbose ) std::cerr << "\n" << w << " test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__; }
@@ -168,19 +166,26 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   }
 }
 
-void fillInputPic( YUVBuffer& cYuvBuffer, const short val = 512 )
+void fillInputPic( vvencYUVBuffer* pcYuvBuffer, const short val = 512 )
 {
   for( int n = 0; n < VVENC_MAX_NUM_COMP; n++)
   {
-    const int size = cYuvBuffer.planes[n].stride * cYuvBuffer.planes[n].height;
-    std::fill_n( static_cast<short*> (cYuvBuffer.planes[n].ptr), size, val );
+    const int size = pcYuvBuffer->planes[n].stride * pcYuvBuffer->planes[n].height;
+    std::fill_n( static_cast<short*> (pcYuvBuffer->planes[n].ptr), size, val );
   }
 }
 
 template< typename T, typename V = int>
 int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
 {
-  VVEnc cVVEnc;
+  vvencEncoder *enc = nullptr;
+  enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
+  {
+    std::cout << "cannot init encoder" << std::endl;
+    return -1;
+  }
+
   const int numFails = g_numFails;
   const T savedTestParam = testParam;
 
@@ -190,7 +195,7 @@ int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, co
     try
     {
       // initialize the encoder
-      TESTT( expectedFail == ( 0 == cVVEnc.checkConfig( vvencParams ) ), "\n" << w << "==" << testVal << " expected " << ( expectedFail ? "failure" : "success" ) );
+      TESTT( expectedFail == ( 0 == vvenc_checkConfig( enc, &vvencParams ) ), "\n" << w << "==" << testVal << " expected " << ( expectedFail ? "failure" : "success" ) );
     }
     catch ( ... )
     {
@@ -303,8 +308,8 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
 
 int callingOrderInvalidUninit()
 {
-  VVEnc cVVEnc;
-  if( 0 != cVVEnc.uninit())
+  vvencEncoder *enc = nullptr;
+  if( 0 != vvenc_encoder_close( enc ))
   {
     return -1;
   }
@@ -313,68 +318,94 @@ int callingOrderInvalidUninit()
 
 int callingOrderInitNoUninit()
 {
-  VVEnc cVVEnc;
   VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams, true );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
   {
     return -1;
   }
+
+  vvenc_encoder_close( enc );
+
   return 0;
 }
 
 int callingOrderInitTwice()
 {
-  VVEnc cVVEnc;
   VVEncCfg vvencParams; //
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
+
+  vvencEncoder *enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
   {
     return -1;
   }
-  if( 0 != cVVEnc.init( vvencParams ))
+
+  enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
   {
     return -1;
   }
+
+  vvenc_encoder_close( enc );
+
   return 0;
 }
 
 int callingOrderNoInit()
 {
-  VVEnc cVVEnc;
-  AccessUnit cAU;
+  vvencAccessUnit* AU;
   VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
+
+  vvencEncoder *enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
   {
     return -1;
   }
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
+  bool encodeDone = false;
+  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone))
+  {
+    return -1;
+  }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+
   return 0;
 }
 
 int callingOrderRegular()
 {
-  VVEnc cVVEnc;
   VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+
+  vvencAccessUnit* AU;
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
+  fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
   {
     return -1;
   }
 
-  YUVBuffer* pcYUVBuffer = nullptr;
-  if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
+  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, &AU, &encodeDone ))
   {
     return -1;
   }
@@ -384,47 +415,57 @@ int callingOrderRegular()
     return -1;
   }
 
-  if( 0 != cVVEnc.uninit())
+  if( 0 != vvenc_encoder_close( enc ) )
   {
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+
   return 0;
 }
 
 int callingOrderNotRegular()
 {
-  VVEnc cVVEnc;
   VVEncCfg vvencParams;
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_open( &vvencParams );
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+
+  vvencAccessUnit* AU;
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
   {
     return -1;
   }
 
-  YUVBuffer* pcYUVBuffer = nullptr;
-  if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
+  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, &AU, &encodeDone ))
   {
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
   {
     return -1;
   }
 
-  if( 0 != cVVEnc.uninit())
+  if( 0 != vvenc_encoder_close( enc ) )
   {
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+
   return 0;
 }
 
@@ -437,7 +478,7 @@ int callingOrderRegularInitPass()
   {
     return -1;
   }
-  AccessUnit cAU;
+  vvencAccessUnit cAU;
   YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( cYuvPicture );
   if( 0 != cVVEnc.initPass( 0 ) )
@@ -469,16 +510,19 @@ int callingOrderRegularInit2Pass()
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+  vvencAccessUnit cAU;
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
+  fillInputPic( pcYuvPicture );
   if( 0 != cVVEnc.initPass( 0 ) )
   {
     return -1;
   }
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != cVVEnc.encode( pcYuvPicture, cAU, encodeDone ))
   {
     return -1;
   }
@@ -493,7 +537,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
+  if( 0 != cVVEnc.encode( pcYuvPicture, cAU, encodeDone))
   {
     return -1;
   }
@@ -501,6 +545,9 @@ int callingOrderRegularInit2Pass()
   {
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+
   return 0;
 }
 
@@ -522,7 +569,7 @@ int testLibCallingOrder()
 }
 
 
-int inputBufTest( YUVBuffer& cYuvPicture )
+int inputBufTest( vvencYUVBuffer& cYuvPicture )
 {
   VVEnc cVVEnc;
   VVEncCfg vvencParams;
@@ -531,7 +578,7 @@ int inputBufTest( YUVBuffer& cYuvPicture )
   {
     return -1;
   }
-  AccessUnit cAU;
+  vvencAccessUnit cAU;
   bool encodeDone = false;
   if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
   {
@@ -547,7 +594,7 @@ int inputBufTest( YUVBuffer& cYuvPicture )
 
 int invaildInputUninitialzedInputPic( )
 {
-  YUVBuffer  cYuvPicture;
+  vvencYUVBuffer  cYuvPicture;
   if( 0 != inputBufTest( cYuvPicture ))
   {
     return -1;
@@ -559,7 +606,7 @@ int invaildInputUninitialzedInputPic( )
 int invaildInputInvalidPicSize( )
 {
   int16_t dummy = 0;
-  YUVBuffer  cYuvPicture;
+  vvencYUVBuffer  cYuvPicture;
   cYuvPicture.planes[0].ptr = &dummy;
   cYuvPicture.planes[1].ptr = &dummy;
   cYuvPicture.planes[2].ptr = &dummy;
@@ -575,7 +622,7 @@ int invaildInputInvalidPicSize( )
 int invaildInputInvalidLumaStride( )
 {
   int16_t dummy = 0;
-  YUVBuffer  cYuvPicture;
+  vvencYUVBuffer  cYuvPicture;
   cYuvPicture.planes[0].ptr = &dummy;
   cYuvPicture.planes[1].ptr = &dummy;
   cYuvPicture.planes[2].ptr = &dummy;
@@ -595,7 +642,7 @@ int invaildInputInvalidLumaStride( )
 int invaildInputInvalidChromaStride( )
 {
   int16_t dummy = 0;
-  YUVBuffer  cYuvPicture;
+  vvencYUVBuffer  cYuvPicture;
   cYuvPicture.planes[0].ptr = &dummy;
   cYuvPicture.planes[1].ptr = &dummy;
   cYuvPicture.planes[2].ptr = &dummy;
@@ -625,7 +672,10 @@ int invaildInputBuf( )
     return -1;
   }
 
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  vvencYUVBuffer cYuvPicture;
+  vvenc_YUVBuffer_default( &cYuvPicture );
+  vvenc_YUVBuffer_alloc_buffer( &cYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
   fillInputPic( cYuvPicture );
 
   if( 0 != inputBufTest( cYuvPicture ))
