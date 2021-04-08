@@ -1510,8 +1510,7 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   }
 
   // content light level
-  if( m_pcEncCfg->m_contentLightLevel.size() == 2 &&
-      m_pcEncCfg->m_contentLightLevel[0] != 0 && m_pcEncCfg->m_contentLightLevel[1] != 0 )
+  if( m_pcEncCfg->m_contentLightLevel[0] != 0 && m_pcEncCfg->m_contentLightLevel[1] != 0 )
   {
     SEIContentLightLevelInfo *seiCLL = new SEIContentLightLevelInfo;
     m_seiEncoder.initSEIContentLightLevel(seiCLL);
@@ -1903,7 +1902,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   }
 
   char c = (slice->isIntra() ? 'I' : slice->isInterP() ? 'P' : 'B');
-  if ( ! pic->isReferenced && pic->refCounter == 0 && ! m_pcEncCfg->e.m_maxParallelFrames )
+  if ( ! pic->isReferenced && pic->refCounter == 0 && ! m_pcEncCfg->m_maxParallelFrames )
   {
     c += 32;
   }

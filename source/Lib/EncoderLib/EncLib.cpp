@@ -93,13 +93,13 @@ void EncLib::xResetLib()
   m_numPassInitialized = -1;
 }
 
-void EncLib::initEncoderLib( const VVEncCfg& encCfg, YUVWriterIf* yuvWriterIf )
+void EncLib::initEncoderLib( const VVEncCfg& encCfg, vvencYUVWriterCallback callback )
 {
   // copy config parameter
   const_cast<VVEncCfg&>(m_cEncCfg) = encCfg;
   m_cBckCfg = encCfg;
 
-  m_yuvWriterIf = yuvWriterIf;
+  m_yuvWriterIf = callback;
 
   // initialize first pass
   initPass( 0 );
@@ -257,9 +257,7 @@ void EncLib::initPass( int pass )
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
-               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_MCTFFrames, m_cEncCfg.m_MCTFStrengths,
-               m_cEncCfg.m_MCTFFutureReference, m_cEncCfg.m_MCTF,
-               m_cEncCfg.m_MCTFNumLeadFrames, m_cEncCfg.m_MCTFNumTrailFrames, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
+               (ChromaFormat)m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_vvencMCTF, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
 
   CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
   m_cGOPEncoder = new EncGOP;
@@ -359,7 +357,7 @@ void EncLib::xSetRCEncCfg( int pass )
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
     // preserve MCTF settings
-    const int mctf = m_cBckCfg.m_MCTF;
+    const int mctf = m_cBckCfg.m_vvencMCTF.MCTF;
 
     vvenc_initPreset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
@@ -368,10 +366,10 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_QP              = 32;
 
     // restore MCTF
-    m_cBckCfg.m_MCTF              = mctf;
+    m_cBckCfg.m_vvencMCTF.MCTF  = mctf;
 
     // clear MaxCuDQPSubdiv
-    if( m_cBckCfg.e.m_CTUSize < 128 )
+    if( m_cBckCfg.m_CTUSize < 128 )
     {
       m_cBckCfg.m_cuQpDeltaSubdiv = 0;
     }
@@ -398,11 +396,11 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     CHECK( m_ppsMap.getFirstPS() == nullptr || m_spsMap.getPS( m_ppsMap.getFirstPS()->spsId ) == nullptr, "picture set not initialised" );
     CHECK( yuvInBuf == nullptr, "no input picture given" );
 
-    if ( m_cEncCfg.m_MCTF && m_numPicsRcvd <= 0 && m_MCTF.getNumLeadFrames() < m_cEncCfg.m_MCTFNumLeadFrames )
+    if ( m_cEncCfg.m_vvencMCTF.MCTF && m_numPicsRcvd <= 0 && m_MCTF.getNumLeadFrames() < m_cEncCfg.m_vvencMCTF.MCTFNumLeadFrames )
     {
       m_MCTF.addLeadFrame( *yuvInBuf );
     }
-    else if ( m_cEncCfg.m_MCTF && m_cEncCfg.m_framesToBeEncoded > 0 && m_numPicsRcvd >= m_cEncCfg.m_framesToBeEncoded )
+    else if ( m_cEncCfg.m_vvencMCTF.MCTF && m_cEncCfg.m_framesToBeEncoded > 0 && m_numPicsRcvd >= m_cEncCfg.m_framesToBeEncoded )
     {
       m_MCTF.addTrailFrame( *yuvInBuf );
     }
@@ -413,7 +411,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
       pic = xGetNewPicBuffer( pps, sps );
 
-      copyPadToPelUnitBuf( pic->getOrigBuf(), *yuvInBuf, m_cEncCfg.m_internChromaFormat );
+      copyPadToPelUnitBuf( pic->getOrigBuf(), *yuvInBuf, (ChromaFormat)m_cEncCfg.m_internChromaFormat );
 
       if( yuvInBuf->ctsValid )
       {
@@ -432,7 +430,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   if ( m_cEncCfg.m_usePerceptQPA ) m_MCTF.assignQpaBufs( pic );
 
   int mctfDelay = 0;
-  if ( m_cEncCfg.m_MCTF )
+  if ( m_cEncCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF.filter( pic );
     mctfDelay = m_MCTF.getCurDelay();
@@ -573,7 +571,7 @@ Picture* EncLib::xGetNewPicBuffer( const PPS& pps, const SPS& sps )
 
   if ( pic == nullptr )
   {
-    const int padding = m_cEncCfg.m_MCTF ? MCTF_PADDING : 0;
+    const int padding = m_cEncCfg.m_vvencMCTF.MCTF ? MCTF_PADDING : 0;
     pic = new Picture;
     pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples), sps.CTUSize, sps.CTUSize+16, false, padding );
     m_cListPic.push_back( pic );
@@ -686,7 +684,7 @@ void EncLib::xCreateCodingOrder( int start, int max, int numInQueue, bool flush,
   while ( poc < max )
   {
     Picture* pic = xGetPictureBuffer( poc );
-    if ( m_cEncCfg.m_MCTF && ! pic->isMctfProcessed )
+    if ( m_cEncCfg.m_vvencMCTF.MCTF && ! pic->isMctfProcessed )
     {
       break;
     }
@@ -868,7 +866,7 @@ void EncLib::xInitSPS(SPS &sps) const
     sps.maxBTSize[i]                = m_cEncCfg.m_maxBT[i];
     sps.maxTTSize[i]                = m_cEncCfg.m_maxTT[i];
   }
-  sps.minQTSize[2]                <<= getChannelTypeScaleX(CH_C, m_cEncCfg.m_internChromaFormat);
+  sps.minQTSize[2]                <<= getChannelTypeScaleX(CH_C, (ChromaFormat)m_cEncCfg.m_internChromaFormat);
 
   sps.maxNumMergeCand               = m_cEncCfg.m_maxNumMergeCand;
   sps.maxNumAffineMergeCand         = m_cEncCfg.m_Affine ? m_cEncCfg.m_maxNumAffineMergeCand : 0;
@@ -1050,8 +1048,8 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_cEncCfg.m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_cEncCfg.m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled     |= (m_cEncCfg.m_usePerceptQPA || m_cEncCfg.m_sliceChromaQpOffsetPeriodicity > 0) && (m_cEncCfg.m_internChromaFormat != CHROMA_400);
-    if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_cEncCfg.m_internChromaFormat != CHROMA_400) )
+    bChromaDeltaQPEnabled     |= (m_cEncCfg.m_usePerceptQPA || m_cEncCfg.m_sliceChromaQpOffsetPeriodicity > 0) && (m_cEncCfg.m_internChromaFormat != VVENC_CHROMA_400);
+    if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_cEncCfg.m_internChromaFormat != VVENC_CHROMA_400) )
     {
       bChromaDeltaQPEnabled = (m_cEncCfg.m_chromaCbQpOffsetDualTree != 0 || m_cEncCfg.m_chromaCrQpOffsetDualTree != 0 || m_cEncCfg.m_chromaCbCrQpOffsetDualTree != 0);
     }
@@ -1240,8 +1238,9 @@ void EncLib::xOutputRecYuv()
     if( m_cRateCtrl.rcIsFinalPass && m_yuvWriterIf )
     {
       const PPS& pps = *(picItr->cs->pps);
-      YUVBuffer yuvBuffer;
+      vvencYUVBuffer yuvBuffer;
       setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
+
       m_yuvWriterIf->outputYuv( yuvBuffer );
     }
     m_pocRecOut = picItr->poc + 1;
@@ -1271,7 +1270,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
   bool useScMCTF = false;
   bool useScTools = false;
 
-  if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_MCTF == 2)
+  if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_vvencMCTF.MCTF == 2)
   {
     int SIZE_BL = 4;
     int K_SC = 25;
@@ -1358,7 +1357,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
   }
   pic.useScTS    = m_cEncCfg.m_TS == 1       || (m_cEncCfg.m_TS == 2 && useScTools);
   pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1 || (m_cEncCfg.m_useBDPCM == 2 && useScTools);
-  pic.useScMCTF  = m_cEncCfg.m_MCTF == 1     || (m_cEncCfg.m_MCTF == 2 && useScMCTF);
+  pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1 || (m_cEncCfg.m_vvencMCTF.MCTF == 2 && useScMCTF);
 }
 
 #if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && __GNUC__ == 5

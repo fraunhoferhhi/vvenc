@@ -66,9 +66,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #define MACRO_TO_STRING(val) MACRO_TO_STRING_HELPER(val)
 
 using namespace std;
-using namespace vvenc;
 namespace po = apputils::df::program_options_lite;
-
 
 namespace apputils {
 
@@ -524,7 +522,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   }
 
   // this has to be set outside
-  if ( m_internChromaFormat < 0 || m_internChromaFormat >= NUM_CHROMA_FORMAT )
+  if ( conf.m_internChromaFormat < 0 || conf.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
     conf.m_internChromaFormat = m_inputFileChromaFormat;
   }
@@ -669,7 +667,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SIMD",                                            ignoreParams,                                     "SIMD extension to use (SCALAR, SSE41, SSE42, AVX, AVX2, AVX512), default: the highest supported extension")
   ;
 
-    if ( vvencIsTracingEnabled() )
+    if ( vvenc_is_tracing_enabled() )
   {
     opts.setSubSection("Tracing");
     opts.addOptions()

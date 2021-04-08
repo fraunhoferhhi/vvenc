@@ -589,7 +589,7 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
-extern std::function<void( int, const char*, va_list )> g_msgFnc;
+extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
 
 inline void msg( int level, const char* fmt, ... )
 {
@@ -599,7 +599,7 @@ inline void msg( int level, const char* fmt, ... )
     std::unique_lock<std::mutex> _lock( _msgMutex );
     va_list args;
     va_start( args, fmt );
-    g_msgFnc( level, fmt, args );
+    g_msgFnc( NULL, level, fmt, args );
     va_end( args );
   }
 }

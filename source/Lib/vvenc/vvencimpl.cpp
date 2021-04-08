@@ -114,7 +114,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
+int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, vvencYUVWriterCallback callback )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -131,7 +131,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
   }
 
   std::stringstream cssCap;
-  cssCap << vvenc_getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+  cssCap << vvenc_get_compile_info_string() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
 
   m_cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
@@ -143,7 +143,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf )
 
   try
   {
-    m_pEncLib->initEncoderLib( m_cVVEncCfg, pcYUVWriterIf );
+    m_pEncLib->initEncoderLib( m_cVVEncCfg, callback );
   }
   catch( std::exception& e )
   {
@@ -309,7 +309,13 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   }
 
   // reset AU data
-  *ppcAccessUnit = vvenc_accessUnit_alloc();
+
+  if( !*ppcAccessUnit )
+  {
+    *ppcAccessUnit = vvenc_accessUnit_alloc();
+  }
+
+  vvenc_accessUnit_reset(*ppcAccessUnit);
   *pbEncodeDone  = false;
 
   AccessUnitList cAu;
@@ -389,12 +395,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.m_MCTFNumLeadFrames;
+  return m_cVVEncCfg.m_vvencMCTF.MCTFNumLeadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.m_MCTFNumTrailFrames;
+  return m_cVVEncCfg.m_vvencMCTF.MCTFNumTrailFrames;
 }
 
 int VVEncImpl::printSummary() const
@@ -438,6 +444,29 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
       size += uint32_t(nalu.m_nalUnitData.str().size());
       sizeSum += size;
       annexBsizes.push_back( size );
+
+      switch( nalu.m_nalUnitType )
+      {
+        case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
+        case VVENC_NAL_UNIT_CODED_SLICE_STSA:
+        case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+        case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
+        case VVENC_NAL_UNIT_CODED_SLICE_CRA:
+        case VVENC_NAL_UNIT_CODED_SLICE_GDR:
+        case VVENC_NAL_UNIT_CODED_SLICE_RADL:
+        case VVENC_NAL_UNIT_CODED_SLICE_RASL:
+        case VVENC_NAL_UNIT_DCI:
+        case VVENC_NAL_UNIT_VPS:
+        case VVENC_NAL_UNIT_SPS:
+        case VVENC_NAL_UNIT_PPS:
+        case VVENC_NAL_UNIT_PREFIX_APS:
+        case VVENC_NAL_UNIT_SUFFIX_APS:
+          rcAccessUnit.essentialBytes += size;
+          break;
+        default:
+          break;
+      }
+      rcAccessUnit.totalBytes += size;
     }
 
     if( rcAccessUnit.payloadSize < (int)sizeSum )
@@ -489,7 +518,6 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
       {
         rcAccessUnit.rap = true;
       }
-
       //rcAccessUnit.nalUnitTypeVec.push_back( nalu.m_nalUnitType );
     }
 
@@ -517,7 +545,7 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
 
 
 ///< set message output function for encoder lib. if not set, no messages will be printed.
-void VVEncImpl::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
+void VVEncImpl::registerMsgCbf( vvencLoggingCallback msgFnc )
 {
   g_msgFnc = msgFnc;
 }

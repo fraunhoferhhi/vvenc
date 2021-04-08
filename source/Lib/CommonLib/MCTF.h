@@ -129,12 +129,7 @@ public:
              const int ctuSize,
              const ChromaFormat inputChroma,
              const int qp,
-             const std::vector<int>&    filterFrames,
-             const std::vector<double>& filterStrengths,
-             const bool filterFutureReference,
-             const int MCTFMode,
-             const int numLeadFrames,
-             const int numTrailFrames,
+             const vvencMCTF MCTFCfg,
              const int framesToBeEncoded,
              NoMallocThreadPool* threadPool );
   void uninit();

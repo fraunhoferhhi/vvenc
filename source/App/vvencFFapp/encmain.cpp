@@ -75,7 +75,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 int main(int argc, char* argv[])
 {
-  vvenc::VVEnc::registerMsgCbf( msgFnc );
+  vvenc_set_logging_callback( msgFnc );
 
   std::string simdOpt;
   apputils::df::program_options_lite::Options opts;
@@ -85,14 +85,14 @@ int main(int argc, char* argv[])
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  simdOpt = vvenc::VVEnc::setSIMDExtension( simdOpt );
+  simdOpt = vvenc_set_SIMD_extension( simdOpt.c_str() );
 
   // print information
   msgApp( VVENC_INFO, "\n");
-  msgApp( VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc::VVEnc::getVersionNumber().c_str() );
-  msgApp( VVENC_INFO, "%s", vvenc_getCompileInfoString() );
+  msgApp( VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc_get_version() );
+  msgApp( VVENC_INFO, "%s", vvenc_get_compile_info_string() );
   msgApp( VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
-  if ( vvenc_isTracingEnabled() )
+  if ( vvenc_is_tracing_enabled() )
   {
     msgApp( VVENC_INFO, "[ENABLE_TRACING]" );
   }

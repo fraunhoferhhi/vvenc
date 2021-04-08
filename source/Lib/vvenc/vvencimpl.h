@@ -96,7 +96,7 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf );
+  int init( const VVEncCfg& rcVVEncCfg, vvencYUVWriterCallback callback );
 
   int initPass( int pass );
   int uninit();
@@ -123,7 +123,7 @@ public:
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
   
-  static void        registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
+  static void        registerMsgCbf( vvencLoggingCallback msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
   static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 
 private:

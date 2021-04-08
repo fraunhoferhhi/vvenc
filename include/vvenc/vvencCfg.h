@@ -397,6 +397,21 @@ typedef struct vvencReshapeCW
 VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *ReshapeCW );
 
 
+typedef struct vvencMCTF
+{
+  int                 MCTF;
+  bool                MCTFFutureReference;
+  int                 MCTFNumLeadFrames;
+  int                 MCTFNumTrailFrames;
+
+  int                 numFrames;
+  int                 MCTFFrames[16];
+  int                 numStrength;
+  double              MCTFStrengths[16];
+}vvencMCTF;
+
+VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF );
+
 // ====================================================================================================================
 
 typedef struct VVEncCfg
@@ -667,20 +682,20 @@ typedef struct VVEncCfg
   bool                m_videoSignalTypePresent;                                          ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
   bool                m_videoFullRangeFlag;                                              ///< Indicates the black level and range of luma and chroma signals
 
-  unsigned int        m_masteringDisplay[10];                                                              ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
-                                                                                                         ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
-                                                                                                         ///< min/max luminance value in units of 1/10000 candela per square metre
-  unsigned int        m_contentLightLevel[2];                                                             ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
-  int                 m_preferredTransferCharacteristics;                                        ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
+  unsigned int        m_masteringDisplay[10];                                            ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
+                                                                                         ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
+                                                                                         ///< min/max luminance value in units of 1/10000 candela per square metre
+  unsigned int        m_contentLightLevel[2];                                            ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+  int                 m_preferredTransferCharacteristics;                                ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
 
-  char               *m_summaryOutFilename;                                                        ///< filename to use for producing summary output file.
-  char               *m_summaryPicFilenameBase;                                                    ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
-  unsigned            m_summaryVerboseness;                                                      ///< Specifies the level of the verboseness of the text output.
+  char               *m_summaryOutFilename;                                              ///< filename to use for producing summary output file.
+  char               *m_summaryPicFilenameBase;                                          ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
+  unsigned            m_summaryVerboseness;                                              ///< Specifies the level of the verboseness of the text output.
 
-  char               *m_decodeBitstreams[ 2 ];                                       ///< filename for decode bitstreams.
-  int                 m_switchPOC;                                                               ///< dbg poc.
-  int                 m_switchDQP;                                                               ///< switch DQP.
-  int                 m_fastForwardToPOC;                                                        ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
+  char               *m_decodeBitstreams[ 2 ];                                           ///< filename for decode bitstreams.
+  int                 m_switchPOC;                                                       ///< dbg poc.
+  int                 m_switchDQP;                                                       ///< switch DQP.
+  int                 m_fastForwardToPOC;                                                ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
   bool                m_stopAfterFFtoPOC;
   bool                m_bs2ModPOCAndType;
   bool                m_forceDecodeBitstream1;
@@ -693,12 +708,7 @@ typedef struct VVEncCfg
   int                 m_ccalfQpThreshold;
   int                 m_alfTempPred;                                                             ///> Indicates using of temporal filter data prediction through APS
 
-  int                 m_MCTF;
-  bool                m_MCTFFutureReference;
-  int                 m_MCTFNumLeadFrames;
-  int                 m_MCTFNumTrailFrames;
-  int                 m_MCTFFrames[16];
-  double              m_MCTFStrengths[16];
+  vvencMCTF           m_vvencMCTF;
 
   int                 m_dqThresholdVal;
   int                 m_qtbttSpeedUp;

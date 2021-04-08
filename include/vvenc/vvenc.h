@@ -155,19 +155,21 @@ typedef struct vvencAccessUnit
   int             payloadSize;         // size of the allocated buffer in bytes
   int             payloadUsedSize;     // length of the coded data in bytes
 
-  uint64_t        cts           = 0;        ///< composition time stamp in TicksPerSecond (see VVEncCfg)
-  uint64_t        dts           = 0;        ///< decoding time stamp in TicksPerSecond (see VVEncCfg)
-  bool            ctsValid      = false;    ///< composition time stamp valid flag (true: valid, false: CTS not set)
-  bool            dtsValid      = false;    ///< decoding time stamp valid flag (true: valid, false: DTS not set)
-  bool            rap           = false;    ///< random access point flag (true: AU is random access point, false: sequential access)
-  vvencSliceType  sliceType     = VVENC_NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
-  bool            refPic        = false;    ///< reference picture
-  int             temporalLayer = 0;        ///< temporal layer
-  uint64_t        poc           = 0;        ///< picture order count
+  uint64_t        cts;                 // composition time stamp in TicksPerSecond (see VVEncCfg)
+  uint64_t        dts;                 // decoding time stamp in TicksPerSecond (see VVEncCfg)
+  bool            ctsValid;            // composition time stamp valid flag (true: valid, false: CTS not set)
+  bool            dtsValid;            // decoding time stamp valid flag (true: valid, false: DTS not set)
+  bool            rap;                 // random access point flag (true: AU is random access point, false: sequential access)
+  vvencSliceType  sliceType;           // slice type (I/P/B) */
+  bool            refPic;              // reference picture
+  int             temporalLayer;       // temporal layer
+  uint64_t        poc;                 // picture order count
 
-  int             status        = 0;        ///< additional info (see Status)
-  std::string     infoString;               ///< debug info from inside the encoder
+  int             status;              // additional info (see Status)
+  std::string     infoString;          // debug info from inside the encoder
 
+  int             essentialBytes;
+  int             totalBytes;
 //  std::vector<vvencNalUnitType> nalUnitTypeVec;
 //  std::vector<uint32_t>    annexBsizeVec;
 
@@ -180,7 +182,7 @@ VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc();
    release storage of an vvdecAccessUnit instance.
    The payload memory is also released if not done yet.
 */
-VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit );
+VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit, bool freePayload );
 
 /* vvdec_accessUnit_alloc_payload:
    Allocates the memory for an accessUnit payload.
@@ -194,11 +196,22 @@ VVENC_DECL void vvenc_accessUnit_alloc_payload(vvencAccessUnit *accessUnit, int 
 */
 VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit );
 
+/* vvenc_accessUnit_reset:
+  resets vvdecAccessUnit structure
+*/
+VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit );
+
 /* vvdec_accessUnit_default:
-  Initialize vvdecAccessUnit structure to default values
+  Initialize vvdecAccessUnit structure to default values (including au payload)
 */
 VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit );
 
+/**
+ This method returns the encoder version number as a string.
+ \param      None
+ \retval     std::string returns the version number
+*/
+VVENC_DECL const char* vvenc_get_version();
 
 /**
   This method initializes the encoder instance.
@@ -211,7 +224,20 @@ VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit );
   \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
   \pre        The encoder must not be initialized.
 */
-VVENC_DECL vvencEncoder* vvenc_encoder_open( VVEncCfg* );
+VVENC_DECL vvencEncoder* vvenc_encoder_create();
+
+/**
+  This method initializes the encoder instance.
+  This method is used to initially set up the encoder with the assigned encoder parameter struct.
+  The method fails if the encoder is already initialized or if the assigned parameter struct
+  does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
+  insufficient CPU-capabilities.
+  \param[in]  rcVVEncCfg const reference of VVEncCfg struct that holds initial encoder parameters.
+  \param[in]  ptrYUVWriterIf pointer to callback interface YUVWriteIf used to emit reconstruced samples.
+  \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
+  \pre        The encoder must not be initialized.
+*/
+VVENC_DECL int vvenc_encoder_open( vvencEncoder*, VVEncCfg*, vvencYUVWriterCallback callback );
 
 /**
  This method resets the encoder instance.
@@ -253,7 +279,7 @@ VVENC_DECL int vvenc_encode( vvencEncoder *, vvencYUVBuffer* YUVBuffer, vvencAcc
  \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
  \pre        The encoder has to be initialized.
 */
-VVENC_DECL int vvenc_getConfig( vvencEncoder *,VVEncCfg* VVEncCfg );
+VVENC_DECL int vvenc_get_config( vvencEncoder *,VVEncCfg* VVEncCfg );
 
 /**
  This method reconfigures the encoder instance.
@@ -275,50 +301,43 @@ VVENC_DECL int vvenc_reconfig( vvencEncoder *, const VVEncCfg* );
  \param[in]  rcVVCEncParameter reference to an VVCEncParameter struct that returns the current encoder setup.
  \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
 */
-VVENC_DECL int vvenc_checkConfig( vvencEncoder *, const VVEncCfg* );
+VVENC_DECL int vvenc_check_config( vvencEncoder *, const VVEncCfg* );
 
 /**
  This method returns the last occurred error as a string.
  \param      None
  \retval     std::string empty string for no error assigned
 */
-VVENC_DECL const char* vvenc_getLastError( vvencEncoder * );
+VVENC_DECL const char* vvenc_get_last_error( vvencEncoder * );
 
-VVENC_DECL const char* vvenc_getEncoderInfo( vvencEncoder * );
+VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder * );
 
-VVENC_DECL int vvenc_getNumLeadFrames( vvencEncoder * );
+VVENC_DECL int vvenc_get_num_lead_frames( vvencEncoder * );
 
-VVENC_DECL int vvenc_getNumTrailFrames( vvencEncoder * );
+VVENC_DECL int vvenc_get_num_trail_frames( vvencEncoder * );
 
-VVENC_DECL int vvenc_printSummary( vvencEncoder * );
-
-/**
- This method returns the encoder version number as a string.
- \param      None
- \retval     std::string returns the version number
-*/
-VVENC_DECL const char* vvenc_getVersionNumber();
+VVENC_DECL int vvenc_print_summary( vvencEncoder * );
 
 /**
  This static function returns a string according to the passed parameter nRet.
  \param[in]  nRet return value code to translate
  \retval[ ]  std::string empty string for no error
 */
-VVENC_DECL const char* vvenc_getErrorMsg( int nRet );
+VVENC_DECL const char* vvenc_get_error_msg( int nRet );
 
 /**
  This method registers a log message callback function to the encoder library.
  If no such function has been registered, the library will omit all messages.
  \param      Log message callback function.
 */
-VVENC_DECL int vvenc_set_logging_callback(vvencEncoder*, vvencLoggingCallback callback );
+VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback );
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 VVENC_DECL std::string vvenc_set_SIMD_extension( const char* simdId );
 
-VVENC_DECL bool  vvenc_isTracingEnabled();           // checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL const char* vvenc_getCompileInfoString(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-VVENC_DECL void   vvenc_decodeBitstream( const char* FileName);
+VVENC_DECL bool  vvenc_is_tracing_enabled();           // checks if library has tracing supported enabled (see ENABLE_TRACING).
+VVENC_DECL const char* vvenc_get_compile_info_string(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+VVENC_DECL void   vvenc_decode_bitstream( const char* FileName);
 
 VVENC_DECL int  vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
 VVENC_DECL int  vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );

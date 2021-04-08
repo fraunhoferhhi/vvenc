@@ -140,6 +140,18 @@ VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *reshapeCW )
   reshapeCW->rspFpsToIp = 0;
 }
 
+VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
+{
+  vvencMCTF->MCTF = 0;
+  vvencMCTF->MCTFFutureReference = true;
+  vvencMCTF->MCTFNumLeadFrames = 0;
+  vvencMCTF->MCTFNumTrailFrames = 0;
+  vvencMCTF->numFrames = 0;
+  vvencMCTF->numStrength = 0;
+  memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
+  memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
+}
+
 VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
 {
   int i = 0;
@@ -447,12 +459,7 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_ccalfQpThreshold                        = 37;
   c->m_alfTempPred                             = -1;                                    ///> Indicates using of temporal filter data prediction through APS
 
-  c->m_MCTF                                    = 0;
-  c->m_MCTFFutureReference                     = true;
-  c->m_MCTFNumLeadFrames                       = 0;
-  c->m_MCTFNumTrailFrames                      = 0;
-  memset(&c->m_MCTFFrames,0, sizeof(c->m_MCTFFrames));
-  memset(&c->m_MCTFStrengths,0, sizeof(c->m_MCTFStrengths));
+  vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
   c->m_dqThresholdVal                          = 8;
   c->m_qtbttSpeedUp                            = 0;
@@ -573,7 +580,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   {
     c->m_InputQueueSize = c->m_GOPSize;
 
-    if ( c->m_MCTF )
+    if ( c->m_vvencMCTF.MCTF )
     {
       c->m_InputQueueSize += vvenc::MCTF_ADD_QUEUE_DELAY;
     }
@@ -599,21 +606,21 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   // set MCTF Lead/Trail frames
   if( c->m_SegmentMode != VVENC_SEG_OFF )
   {
-    if( c->m_MCTF )
+    if( c->m_vvencMCTF.MCTF )
     {
       switch( c->m_SegmentMode )
       {
         case VVENC_SEG_FIRST:
-          c->m_MCTFNumLeadFrames  = 0;
-          c->m_MCTFNumTrailFrames = c->m_MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumLeadFrames  = 0;
+          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
           break;
         case VVENC_SEG_MID:
-          c->m_MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_MCTFNumTrailFrames = c->m_MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
+          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
           break;
         case VVENC_SEG_LAST:
-          c->m_MCTFNumLeadFrames  = c->m_MCTFNumLeadFrames == 0 ? VVENC_MCTF_RANGE : c->m_MCTFNumTrailFrames;
-          c->m_MCTFNumTrailFrames = 0;
+          c->m_vvencMCTF.MCTFNumLeadFrames  = c->m_vvencMCTF.MCTFNumLeadFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumTrailFrames = 0;
           break;
         default:
           break;
@@ -652,8 +659,8 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
   }
 
   // MCTF
-  c->m_MCTFNumLeadFrames  = std::min( c->m_MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
-  c->m_MCTFNumTrailFrames = std::min( c->m_MCTFNumTrailFrames, VVENC_MCTF_RANGE );
+  c->m_vvencMCTF.MCTFNumLeadFrames  = std::min( c->m_vvencMCTF.MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
+  c->m_vvencMCTF.MCTFNumTrailFrames = std::min( c->m_vvencMCTF.MCTFNumTrailFrames, VVENC_MCTF_RANGE );
 
   /* rules for input, output and internal bitdepths as per help text */
   if (c->m_MSBExtendedBitDepth[0  ] == 0)
@@ -986,37 +993,40 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     c->m_JointCbCrMode = false;
   }
 
-  if ( c->m_MCTF && c->m_QP < 17 )
+  if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
     vvenc::msg( VVENC_WARNING, "disable MCTF for QP < 17\n");
-    c->m_MCTF = 0;
+    c->m_vvencMCTF.MCTF = 0;
   }
-  if( c->m_MCTF )
+  if( c->m_vvencMCTF.MCTF )
   {
-    if( c->m_MCTFFrames[0] == 0 && c->m_MCTFFrames[1] == 0 )
+    if( c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
     {
       if( c->m_GOPSize == 32 )
       {
-        c->m_MCTFFrames[0] = 8;
-        c->m_MCTFFrames[1] = 16;
-        c->m_MCTFFrames[2] = 32;
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+        c->m_vvencMCTF.MCTFFrames[2] = 32;
 
-        c->m_MCTFStrengths[0] = 0.28125;     //  9/32
-        c->m_MCTFStrengths[1] = 0.5625;      // 18/32
-        c->m_MCTFStrengths[2] = 0.84375;     // 27/32
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.28125;     //  9/32
+        c->m_vvencMCTF.MCTFStrengths[1] = 0.5625;      // 18/32
+        c->m_vvencMCTF.MCTFStrengths[2] = 0.84375;     // 27/32
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
       }
       else if( c->m_GOPSize == 16 )
       {
-        c->m_MCTFFrames[0] = 8;
-        c->m_MCTFFrames[1] = 16;
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
 
-        c->m_MCTFStrengths[0] = 0.4;     // ~12.75/32
-        c->m_MCTFStrengths[1] = 0.8;     // ~25.50/32
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.4;     // ~12.75/32
+        c->m_vvencMCTF.MCTFStrengths[1] = 0.8;     // ~25.50/32
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
       }
       else if( c->m_GOPSize == 8 )
       {
-        c->m_MCTFFrames[0] = 8;
-        c->m_MCTFStrengths[0] = 0.65625;     // 21/32
+        c->m_vvencMCTF.MCTFFrames[0]    = 8;
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.65625;     // 21/32
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 1;
       }
     }
   }
@@ -1035,7 +1045,7 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     c->m_usePerceptQPATempFiltISlice = 1; // disable temporal pumping reduction aspect
   }
   if ( c->m_usePerceptQPATempFiltISlice > 0
-      && ( c->m_MCTF == 0 || ! c->m_usePerceptQPA) )
+      && ( c->m_vvencMCTF.MCTF == 0 || ! c->m_usePerceptQPA) )
   {
     c->m_usePerceptQPATempFiltISlice = 0; // fully disable temporal filtering features
   }
@@ -1942,7 +1952,7 @@ static bool checkCfgParameter( VVEncCfg *c )
 
   vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
   vvenc_confirmParameter( c, c->m_InputQueueSize < c->m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
-  vvenc_confirmParameter( c, c->m_MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY ,             "Input queue size must be greater or equal to gop size + N frames for MCTF" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 3,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
   vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1957,12 +1967,12 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
-  vvenc_confirmParameter( c, c->m_MCTFFrames.size() != c->m_MCTFStrengths.size(),        "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, c->m_MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_MCTFNumLeadFrames  > 0 && ! c->m_MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  vvenc_confirmParameter( c, c->m_MCTFNumTrailFrames > 0 && ! c->m_MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  vvenc_confirmParameter( c, c->m_MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ");
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
 
   if (c->m_lumaReshapeEnable)
@@ -1988,7 +1998,7 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_CIIP < 0 || c->m_CIIP > 3,                  "CIIP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_SBT  < 0 || c->m_SBT  > 3,                  "SBT out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_LFNST< 0 || c->m_LFNST> 3,                  "LFNST out of range [0..3]" );
-  vvenc_confirmParameter( c, c->m_MCTF < 0 || c->m_MCTF > 2,                  "MCTF out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF < 0 || c->m_vvencMCTF.MCTF > 2,  "MCTF out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_ISP  < 0 || c->m_ISP > 3,                    "ISP out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_TS   < 0 || c->m_TS > 2,                       "TS out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_TSsize < 2 || c->m_TSsize > 5,               "TSsize out of range [2..5]" );
@@ -2044,7 +2054,7 @@ static bool checkCfgParameter( VVEncCfg *c )
   }
 
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
-  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_MCTF == 0,                                     "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
+  vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_vvencMCTF.MCTF == 0,                        "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
 
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
   if ( c->m_DecodingRefreshType == 2 )
@@ -2379,16 +2389,16 @@ static bool checkCfgParameter( VVEncCfg *c )
     vvenc_confirmParameter(c, c->m_GOPList[i].m_sliceType!='B' && c->m_GOPList[i].m_sliceType!='P' && c->m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
   }
 
-  vvenc_confirmParameter(c,  c->m_MCTF > 2 || c->m_MCTF < 0, "MCTF out of range" );
+  vvenc_confirmParameter(c,  c->m_vvencMCTF.MCTF > 2 || c->m_vvencMCTF.MCTF < 0, "MCTF out of range" );
 
-  if( c->m_MCTF )
+  if( c->m_vvencMCTF.MCTF )
   {
-    if( c->m_MCTFFrames[0] == 0 )
+    if( c->m_vvencMCTF.MCTFFrames[0] == 0 )
     {
       vvenc::msg( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
     }
 
-    vvenc_confirmParameter(c, c->m_MCTFFrames.size() != c->m_MCTFStrengths.size(), "MCTFFrames and MCTFStrengths do not match");
+    vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
   }
 
   if( c->m_fastForwardToPOC != -1 )
@@ -2488,7 +2498,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
   c->m_LFNST                         = 0;
   c->m_LMChroma                      = 0;
   c->m_lumaReshapeEnable             = 0;
-  c->m_MCTF                          = 0;
+  c->m_vvencMCTF.MCTF                = 0;
   c->m_MIP                           = 0;
   c->m_MMVD                          = 0;
   c->m_MRL                           = 0;
@@ -2562,7 +2572,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_AMVRspeed                 = 5;
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
-      c->m_MCTF                      = 2;
+      c->m_vvencMCTF.MCTF            = 2;
       c->m_MTSImplicit               = 1;
       c->m_PROF                      = 1;
       c->m_bUseSAO                   = 1;
@@ -2597,7 +2607,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
       c->m_lumaReshapeEnable         = 1;
-      c->m_MCTF                      = 2;
+      c->m_vvencMCTF.MCTF            = 2;
       c->m_MIP                       = 1;
       c->m_MMVD                      = 3;
       c->m_MRL                       = 1;
@@ -2639,7 +2649,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
       c->m_lumaReshapeEnable         = 1;
-      c->m_MCTF                      = 2;
+      c->m_vvencMCTF.MCTF            = 2;
       c->m_MIP                       = 1;
       c->m_MMVD                      = 3;
       c->m_MRL                       = 1;
@@ -2685,7 +2695,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
       c->m_lumaReshapeEnable         = 1;
-      c->m_MCTF                      = 2;
+      c->m_vvencMCTF.MCTF            = 2;
       c->m_MIP                       = 1;
       c->m_MMVD                      = 1;
       c->m_MRL                       = 1;
@@ -2735,7 +2745,7 @@ VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
       c->m_lumaReshapeEnable         = 1;
-      c->m_MCTF                      = 2;
+      c->m_vvencMCTF.MCTF            = 2;
       c->m_MIP                       = 1;
       c->m_MMVD                      = 2;
       c->m_MRL                       = 1;
@@ -2833,16 +2843,9 @@ static inline std::string getDynamicRangeStr( int dynamicRange )
   return cT;
 }
 
-static inline std::string getMasteringDisplayStr(  std::vector<uint32_t> md )
+static inline std::string getMasteringDisplayStr( unsigned int md[10]  )
 {
   std::stringstream css;
-
-  if(  md.size() != 10 )
-  {
-    return "unspecified";
-
-
-  }
 
   css << "G(" << md[0] << "," << md[1] << ")";
   css << "B(" << md[2] << "," << md[3] << ")";
@@ -2860,14 +2863,9 @@ static inline std::string getMasteringDisplayStr(  std::vector<uint32_t> md )
   return css.str();
 }
 
-static inline std::string getContentLightLevel(  std::vector<uint32_t> cll )
+static inline std::string getContentLightLevel( unsigned int cll[2] )
 {
   std::stringstream css;
-
-  if(  cll.size() != 2 )
-  {
-    return "unspecified";
-  }
 
   css << cll[0] << "," << cll[1] << " (cll,fall)";
   return css.str();
@@ -2923,7 +2921,7 @@ VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgL
   {
     css << "Mastering display color volume         : " << getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
   }
-  if( !c->m_contentLightLevel.empty() )
+  if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
   {
     css << "Content light level                    : " << getContentLightLevel( c->m_contentLightLevel ) << "\n";
   }
@@ -2934,7 +2932,7 @@ VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgL
   {
   // verbose output
   css << "CODING TOOL CFG: ";
-  css << "CTU" << c->m_CTUSize << " QT" << Log2( c->m_CTUSize / c->m_MinQT[0] ) << Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
+  css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
   css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
   css << "CIP:" << c->m_bUseConstrainedIntraPred << " ";
   css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
@@ -3018,10 +3016,10 @@ VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgL
   css << "MinSearchWindow:" << c->m_minSearchWindow << " ";
   css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
   css << "EDO:" << c->m_EDO << " ";
-  css << "MCTF:" << c->m_MCTF << " ";
-  if( c->m_MCTF )
+  css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
+  if( c->m_vvencMCTF.MCTF )
   {
-    css << "[L:" << c->m_MCTFNumLeadFrames << ", T:" << c->m_MCTFNumTrailFrames << "] ";
+    css << "[L:" << c->m_vvencMCTF.MCTFNumLeadFrames << ", T:" << c->m_vvencMCTF.MCTFNumTrailFrames << "] ";
   }
 
   css << "\nFAST TOOL CFG: ";

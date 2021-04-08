@@ -51,6 +51,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvenc.h"
 #include "vvenc/vvencCfg.h"
+#include "vvenc/version.h"
+
 #include "vvencimpl.h"
 
 #ifdef __cplusplus
@@ -145,11 +147,11 @@ VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc()
   return accessUnit;
 }
 
-VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit )
+VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit, bool freePayload  )
 {
   if( accessUnit )
   {
-    if( accessUnit->payload )
+    if( freePayload && accessUnit->payload )
     {
       vvenc_accessUnit_free_payload ( accessUnit );
     }
@@ -174,35 +176,35 @@ VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit )
   }
 }
 
-VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
+VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
 {
-  accessUnit->payload         = NULL;         ///< pointer to buffer that retrieves the coded data,
-  accessUnit->payloadSize     = 0;            ///< size of the allocated buffer in bytes
   accessUnit->payloadUsedSize = 0;            ///< length of the coded data in bytes
   accessUnit->cts             = 0;            ///< composition time stamp in TicksPerSecond (see VVCDecoderParameter)
   accessUnit->dts             = 0;            ///< decoding time stamp in TicksPerSecond (see VVCDecoderParameter)
   accessUnit->ctsValid        = false;        ///< composition time stamp valid flag (true: valid, false: CTS not set)
   accessUnit->dtsValid        = false;        ///< decoding time stamp valid flag (true: valid, false: DTS not set)
   accessUnit->rap             = false;        ///< random access point flag (true: AU is random access point, false: sequential access)
-  accessUnit->sliceType     = VVENC_NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
-  accessUnit->refPic        = false;         ///< reference picture
-  accessUnit->temporalLayer = 0;             ///< temporal layer
-  accessUnit->poc           = 0;             ///< picture order count
+  accessUnit->sliceType       = VVENC_NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
+  accessUnit->refPic          = false;         ///< reference picture
+  accessUnit->temporalLayer   = 0;             ///< temporal layer
+  accessUnit->poc             = 0;             ///< picture order count
 
   accessUnit->status        = 0;        ///< additional info (see Status)
   //accessUnit->infoString;                    ///< debug info from inside the encoder
 
+  accessUnit->essentialBytes =0;
+  accessUnit->totalBytes = 0;
 }
 
-
-VVENC_DECL vvencEncoder* vvenc_encoder_open( VVEncCfg* config )
+VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
 {
-  if (nullptr == config)
-  {
-    vvenc::msg( VVENC_ERROR, "vvdec_Params_t is null\n" );
-    return nullptr;
-  }
+  accessUnit->payload         = NULL;         ///< pointer to buffer that retrieves the coded data,
+  accessUnit->payloadSize     = 0;            ///< size of the allocated buffer in bytes
+  vvenc_accessUnit_reset( accessUnit );
+}
 
+VVENC_DECL vvencEncoder* vvenc_encoder_create()
+{
   vvenc::VVEncImpl* encCtx = new vvenc::VVEncImpl();
   if (!encCtx)
   {
@@ -210,17 +212,33 @@ VVENC_DECL vvencEncoder* vvenc_encoder_open( VVEncCfg* config )
     return nullptr;
   }
 
-  int ret = encCtx->init(*config, NULL );
+  return (vvencEncoder*)encCtx;
+}
+
+
+VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, VVEncCfg* config, vvencYUVWriterCallback callback )
+{
+  if (nullptr == config)
+  {
+    vvenc::msg( VVENC_ERROR, "VVEncCfg is null\n" );
+    return VVENC_ERR_PARAMETER;
+  }
+
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  int ret = d->init(*config, callback );
   if (ret != 0)
   {
     // Error initializing the decoder
-    delete encCtx;
-
-    vvenc::msg( VVENC_ERROR, "cannot init the VVdeC decoder\n" );
-    return nullptr;
+    vvenc::msg( VVENC_ERROR, "cannot init the VVenC encoder\n" );
+    return VVENC_ERR_INITIALIZE;
   }
 
-  return (vvencEncoder*)encCtx;
+  return VVENC_OK;
 }
 
 VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
@@ -231,11 +249,10 @@ VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
     return VVENC_ERR_INITIALIZE;
   }
 
-  d->uninit();
-
+  int ret = d->uninit();
   delete d;
 
-  return VVENC_OK;
+  return ret;
 }
 
 VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, vvencYUVWriterCallback callback )
@@ -275,7 +292,7 @@ VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvenc
   return VVENC_OK;
 }
 
-VVENC_DECL int vvenc_getConfig( vvencEncoder *enc, VVEncCfg* cfg )
+VVENC_DECL int vvenc_get_config( vvencEncoder *enc, VVEncCfg* cfg )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -300,7 +317,7 @@ VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const VVEncCfg *cfg )
   return VVENC_OK;
 }
 
-VVENC_DECL int vvenc_checkConfig( vvencEncoder *enc, const VVEncCfg *cfg )
+VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const VVEncCfg *cfg )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -312,7 +329,7 @@ VVENC_DECL int vvenc_checkConfig( vvencEncoder *enc, const VVEncCfg *cfg )
   return VVENC_OK;
 }
 
-VVENC_DECL const char* vvenc_getLastError( vvencEncoder *enc )
+VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -323,7 +340,7 @@ VVENC_DECL const char* vvenc_getLastError( vvencEncoder *enc )
   return d->getLastError().c_str();
 }
 
-VVENC_DECL const char* vvenc_getEncoderInfo( vvencEncoder *enc )
+VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder *enc )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -334,7 +351,7 @@ VVENC_DECL const char* vvenc_getEncoderInfo( vvencEncoder *enc )
   return d->getEncoderInfo();
 }
 
-VVENC_DECL int vvenc_getNumLeadFrames( vvencEncoder *enc )
+VVENC_DECL int vvenc_get_num_lead_frames( vvencEncoder *enc )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -345,7 +362,7 @@ VVENC_DECL int vvenc_getNumLeadFrames( vvencEncoder *enc )
   return d->getNumLeadFrames();
 }
 
-VVENC_DECL int vvenc_getNumTrailFrames( vvencEncoder *enc )
+VVENC_DECL int vvenc_get_num_trail_frames( vvencEncoder *enc )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -356,7 +373,7 @@ VVENC_DECL int vvenc_getNumTrailFrames( vvencEncoder *enc )
   return d->getNumTrailFrames();
 }
 
-VVENC_DECL int vvenc_printSummary( vvencEncoder *enc )
+VVENC_DECL int vvenc_print_summary( vvencEncoder *enc )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -369,26 +386,20 @@ VVENC_DECL int vvenc_printSummary( vvencEncoder *enc )
 }
 
 
-VVENC_DECL const char* vvenc_getVersionNumber()
+VVENC_DECL const char* vvenc_get_version()
 {
-
+  return VVENC_VERSION;
 }
 
-VVENC_DECL const char* vvenc_getErrorMsg( int nRet )
+VVENC_DECL const char* vvenc_get_error_msg( int nRet )
 {
   return vvenc::VVEncImpl::getErrorMsg( nRet );
 }
 
 
-VVENC_DECL int vvenc_set_logging_callback(vvencEncoder *enc, vvencLoggingCallback callback )
+VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
-  {
-    return VVENC_ERR_UNSPECIFIED;
-  }
-
-  d->setLoggingCallback(callback );
+  vvenc::VVEncImpl::registerMsgCbf ( callback );
   return VVENC_OK;
 }
 
@@ -397,7 +408,7 @@ VVENC_DECL std::string vvenc_set_SIMD_extension( const char* simdId );
 
 
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL bool vvenc_isTracingEnabled()
+VVENC_DECL bool vvenc_is_tracing_enabled()
 {
 #if ENABLE_TRACING
   return true;
