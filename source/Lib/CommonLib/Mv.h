@@ -295,7 +295,7 @@ void roundAffineMv( int& mvx, int& mvy, int nShift );
 namespace std
 {
   template <>
-  struct hash<vvenc::Mv> : public std::unary_function<vvenc::Mv, uint64_t>
+  struct hash<vvenc::Mv>
   {
     uint64_t operator()(const vvenc::Mv& value) const
     {
