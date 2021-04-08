@@ -78,6 +78,7 @@ private:
   bool                m_clipToRec709;         ///< clip data according to Recom.709
   bool                m_packedYUVMode;        ///< used packed buffer file format
   std::string         m_lastError;            ///< temporal storage for last occured error 
+  bool                m_readStdin;
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
