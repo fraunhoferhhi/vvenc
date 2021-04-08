@@ -512,8 +512,6 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   {
     if( fileName.empty() )
     {
-      rewind( stdin );
-
       m_readStdin = true;
       return 0;
     }
