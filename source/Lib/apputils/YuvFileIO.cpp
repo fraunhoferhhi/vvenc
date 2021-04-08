@@ -512,15 +512,7 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   {
     if( fileName.empty() )
     {
-      if( ( fseek(stdin, 0, SEEK_END), ftell(stdin)) > 0 )
-      {
-        rewind( stdin );
-      }
-      else
-      {
-        m_lastError = "\nERROR: stdin is empty, check input!";
-        return -1;
-      }
+      rewind( stdin );
 
       m_readStdin = true;
       return 0;
