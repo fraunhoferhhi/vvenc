@@ -69,6 +69,9 @@ void msgApp( int level, const char* fmt, ... );
 
 // ====================================================================================================================
 
+typedef struct vvencEncApp vvencEncApp;
+extern vvencEncApp *g_vvencEncApp;
+
 class EncApp
 {
 private:
@@ -94,7 +97,7 @@ public:
   bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
   void  encode();                                     ///< main encoding function
   void  outputAU ( const vvencAccessUnit& au );            ///< write encoded access units to bitstream
-  void  outputYuv( void*, vvencYUVBuffer* );      ///< write reconstructed yuv output
+  static void outputYuv( void*, vvencYUVBuffer* );      ///< write reconstructed yuv output
 
   void msgFnc( int level, const char* fmt, va_list args )
   {

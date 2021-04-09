@@ -106,7 +106,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
 {
   VVEncCfg cVVEncCfgCopy = rcVVEncCfg;
 
-  if ( vvenc_initCfgParameter(&cVVEncCfgCopy) )
+  if ( vvenc_init_cfg_parameter(&cVVEncCfgCopy) )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -119,19 +119,20 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, vvencYUVWriterCallback callback
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
   // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string simdOpt;
-  std::string curSimd = setSIMDExtension( simdOpt );
+  std::string curSimd;
+  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
+  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
 
   m_cVVEncCfgExt = rcVVEncCfg;
   m_cVVEncCfg    = rcVVEncCfg;
 
-  if ( vvenc_initCfgParameter(&m_cVVEncCfg) ) // init auto/dependent options
+  if ( vvenc_init_cfg_parameter(&m_cVVEncCfg) ) // init auto/dependent options
   {
     return VVENC_ERR_INITIALIZE;
   }
 
   std::stringstream cssCap;
-  cssCap << vvenc_get_compile_info_string() << "[SIMD=" << curSimd <<"]";
+  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
 
   m_cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
@@ -551,12 +552,12 @@ void VVEncImpl::registerMsgCbf( vvencLoggingCallback msgFnc )
 }
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
+const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
-  std::string ret = "NA";
+  const char* simdSet = NULL;
 #if defined( TARGET_SIMD_X86 )
-  const char* simdSet = read_x86_extension( simdId );
-  ret = simdSet;
+  std::string cSimdId ( simdId );
+  simdSet = read_x86_extension( cSimdId );
 #if ENABLE_SIMD_OPT_BUFFER
   g_pelBufOP.initPelBufOpsX86();
 #endif
@@ -564,11 +565,11 @@ std::string VVEncImpl::setSIMDExtension( const std::string& simdId )
   g_tCoeffOps.initTCoeffOpsX86();
 #endif
 #endif
-  return ret;
+  return simdSet;
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-VVENC_DECL const char* vvenc_getCompileInfoString()
+const char* VVEncImpl::getCompileInfoString()
 {
   char convBuf[ 256 ];
   VVencCompileInfo.clear();
@@ -579,7 +580,7 @@ VVENC_DECL const char* vvenc_getCompileInfoString()
 }
 
 ///< decode bitstream with limited build in decoder
-void decodeBitstream( const std::string& FileName)
+void VVEncImpl::decodeBitstream( const char* FileName)
 {
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
@@ -588,7 +589,8 @@ void decodeBitstream( const std::string& FileName)
   g_trace_ctx = tracing_init( "", "" );
 #endif
 
-  if( tryDecodePicture( &cPicture, -1, FileName, ffwdDecoder, nullptr, false, cPicture.poc, false ))
+  std::string filename(FileName );
+  if( tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false ))
   {
     msg( VVENC_ERROR, "decoding failed");
     THROW("error decoding");

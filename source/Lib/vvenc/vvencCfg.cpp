@@ -66,7 +66,7 @@ extern "C" {
 VVENC_NAMESPACE_BEGIN
 
 static bool checkCfgParameter( VVEncCfg *cfg );
-
+static std::string vvenc_cfgString;
 
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 {
@@ -472,7 +472,7 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_picPartitionFlag                        = false;
 
   // init default preset
-  vvenc_initPreset( c, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
 
 static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* message )
@@ -484,7 +484,30 @@ static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* messag
   return true;
 }
 
-VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
+static int vvenc_getQpValsSize( int QpVals[] )
+{
+  int size=0;
+  for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
+  {
+    if( QpVals[i] > 0) size++;
+    else return size;
+  }
+
+  return size;
+}
+
+static std::vector<int> vvenc_getQpValsAsVec( int QpVals[] )
+{
+  std::vector<int> QpValsVec;
+  for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
+  {
+    if( QpVals[i] > 0) QpValsVec.push_back( QpVals[i] );
+    else break;
+  }
+  return QpValsVec;
+}
+
+VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
 {
   c->m_confirmFailed = false;
 
@@ -896,35 +919,36 @@ VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *c )
     memset(&c->m_qpOutValsCbCr,0, sizeof(c->m_qpOutValsCbCr));
   }
 
+  std::vector<int> qpInValsCb  = vvenc_getQpValsAsVec( c->m_qpInValsCb );
+  std::vector<int> qpInValsCr = vvenc_getQpValsAsVec( c->m_qpInValsCr );
+  std::vector<int> qpInValsCbCr= vvenc_getQpValsAsVec( c->m_qpInValsCbCr );
+  std::vector<int> qpOutValsCb= vvenc_getQpValsAsVec( c->m_qpOutValsCb );
+  std::vector<int> qpOutValsCr= vvenc_getQpValsAsVec( c->m_qpOutValsCr );
+  std::vector<int> qpOutValsCbCr= vvenc_getQpValsAsVec( c->m_qpOutValsCbCr );
+
   c->m_chromaQpMappingTableParams.m_numQpTables = c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag? 1 : (c->m_JointCbCrMode ? 3 : 2);
-  c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0].resize(c->m_qpInValsCb.size());
-  c->m_chromaQpMappingTableParams.m_deltaQpOutVal[0].resize(c->m_qpOutValsCb.size());
-  c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (c->m_qpOutValsCb.size() > 1) ? (int)c->m_qpOutValsCb.size() - 2 : 0;
-  c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = (c->m_qpOutValsCb.size() > 1) ? -26 + c->m_qpInValsCb[0] : 0;
-  for (int i = 0; i < c->m_qpInValsCb.size() - 1; i++)
+  c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[0] = (qpOutValsCb.size() > 1) ? (int)qpOutValsCb.size() - 2 : 0;
+  c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] = (qpOutValsCb.size() > 1) ? -26 + qpInValsCb[0] : 0;
+  for ( size_t i = 0; i < qpInValsCb.size() - 1; i++)
   {
-    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0][i] = c->m_qpInValsCb[i + 1] - c->m_qpInValsCb[i] - 1;
-    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[0][i] = c->m_qpOutValsCb[i + 1] - c->m_qpOutValsCb[i];
+    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[0][i] = qpInValsCb[i + 1] - qpInValsCb[i] - 1;
+    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[0][i] = qpOutValsCb[i + 1] - qpOutValsCb[i];
   }
   if (!c->m_chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag)
   {
-    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1].resize(c->m_qpInValsCr.size());
-    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[1].resize(c->m_qpOutValsCr.size());
-    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (c->m_qpOutValsCr.size() > 1) ? (int)c->m_qpOutValsCr.size() - 2 : 0;
-    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = (c->m_qpOutValsCr.size() > 1) ? -26 + c->m_qpInValsCr[0] : 0;
-    for (int i = 0; i < c->m_qpInValsCr.size() - 1; i++)
+    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[1] = (qpOutValsCr.size() > 1) ? (int)qpOutValsCr.size() - 2 : 0;
+    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] = (qpOutValsCr.size() > 1) ? -26 + qpInValsCr[0] : 0;
+    for (size_t i = 0; i < qpInValsCr.size() - 1; i++)
     {
-      c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1][i] = c->m_qpInValsCr[i + 1] - c->m_qpInValsCr[i] - 1;
-      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[1][i] = c->m_qpOutValsCr[i + 1] - c->m_qpOutValsCr[i];
+      c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[1][i] = qpInValsCr[i + 1] - qpInValsCr[i] - 1;
+      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[1][i] = qpOutValsCr[i + 1] - qpOutValsCr[i];
     }
-    c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2].resize(c->m_qpInValsCbCr.size());
-    c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2].resize(c->m_qpOutValsCbCr.size());
-    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (c->m_qpOutValsCbCr.size() > 1) ? (int)c->m_qpOutValsCbCr.size() - 2 : 0;
-    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = (c->m_qpOutValsCbCr.size() > 1) ? -26 + c->m_qpInValsCbCr[0] : 0;
-    for (int i = 0; i < c->m_qpInValsCbCr.size() - 1; i++)
+    c->m_chromaQpMappingTableParams.m_numPtsInCQPTableMinus1[2] = (qpOutValsCbCr.size() > 1) ? (int)qpOutValsCbCr.size() - 2 : 0;
+    c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] = (qpOutValsCbCr.size() > 1) ? -26 + qpInValsCbCr[0] : 0;
+    for (size_t i = 0; i < qpInValsCbCr.size() - 1; i++)
     {
-      c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = c->m_qpInValsCbCr[i + 1] - c->m_qpInValsCbCr[i] - 1;
-      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = c->m_qpInValsCbCr[i + 1] - c->m_qpInValsCbCr[i];
+      c->m_chromaQpMappingTableParams.m_deltaQpInValMinus1[2][i] = qpInValsCbCr[i + 1] - qpInValsCbCr[i] - 1;
+      c->m_chromaQpMappingTableParams.m_deltaQpOutVal[2][i] = qpInValsCbCr[i + 1] - qpInValsCbCr[i];
     }
   }
 
@@ -1855,10 +1879,9 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_transferCharacteristics < 0 || c->m_transferCharacteristics > 18, "transferCharacteristics must be in range 0 <= x <= 18" );
   vvenc_confirmParameter( c, c->m_matrixCoefficients < 0 || c->m_matrixCoefficients > 14,           "matrixCoefficients must be in range 0 <= x <= 14" );
 
-
-  vvenc_confirmParameter( c, c->m_qpInValsCb.size()   != c->m_qpOutValsCb.size(), "Chroma QP table for Cb is incomplete.");
-  vvenc_confirmParameter( c, c->m_qpInValsCr.size()   != c->m_qpOutValsCr.size(), "Chroma QP table for Cr is incomplete.");
-  vvenc_confirmParameter( c, c->m_qpInValsCbCr.size() != c->m_qpOutValsCbCr.size(), "Chroma QP table for CbCr is incomplete.");
+  vvenc_confirmParameter( c, vvenc_getQpValsSize(c->m_qpInValsCb )  != vvenc_getQpValsSize(c->m_qpOutValsCb), "Chroma QP table for Cb is incomplete.");
+  vvenc_confirmParameter( c, vvenc_getQpValsSize(c->m_qpInValsCr)   != vvenc_getQpValsSize(c->m_qpOutValsCr), "Chroma QP table for Cr is incomplete.");
+  vvenc_confirmParameter( c, vvenc_getQpValsSize(c->m_qpInValsCbCr) != vvenc_getQpValsSize(c->m_qpOutValsCbCr), "Chroma QP table for CbCr is incomplete.");
 
   if ( c->m_confirmFailed )
   {
@@ -1869,7 +1892,7 @@ static bool checkCfgParameter( VVEncCfg *c )
 
   vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[0] > 36, "qpTableStartMinus26[0] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
   vvenc_confirmParameter( c,c->m_qpInValsCb[0] != c->m_qpOutValsCb[0], "First qpInValCb value should be equal to first qpOutValCb value");
-  for (size_t i = 0; i < c->m_qpInValsCb.size() - 1; i++)
+  for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCb) - 1; i++)
   {
     vvenc_confirmParameter( c,c->m_qpInValsCb[i]  < -qpBdOffsetC || c->m_qpInValsCb[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
     vvenc_confirmParameter( c,c->m_qpOutValsCb[i] < -qpBdOffsetC || c->m_qpOutValsCb[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCb are out of valid range of -qpBdOffsetC to 63, inclusive.");
@@ -1878,14 +1901,14 @@ static bool checkCfgParameter( VVEncCfg *c )
   {
     vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[1] > 36, "qpTableStartMinus26[1] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
     vvenc_confirmParameter( c,c->m_qpInValsCr[0] != c->m_qpOutValsCr[0], "First qpInValCr value should be equal to first qpOutValCr value");
-    for (size_t i = 0; i < c->m_qpInValsCr.size() - 1; i++)
+    for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCr) - 1; i++)
     {
       vvenc_confirmParameter( c,c->m_qpInValsCr[i] < -qpBdOffsetC || c->m_qpInValsCr[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
       vvenc_confirmParameter( c,c->m_qpOutValsCr[i] < -qpBdOffsetC || c->m_qpOutValsCr[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
     }
     vvenc_confirmParameter( c,c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] < -26 - qpBdOffsetC || c->m_chromaQpMappingTableParams.m_qpTableStartMinus26[2] > 36, "qpTableStartMinus26[2] is out of valid range of -26 -qpBdOffsetC to 36, inclusive.");
-    vvenc_confirmParameter( c,c->m_qpInValsCbCr[0] != c->m_qpInValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
-    for (size_t i = 0; i < c->m_qpInValsCbCr.size() - 1; i++)
+    vvenc_confirmParameter( c,c->m_qpInValsCbCr[0] != c->m_qpOutValsCbCr[0], "First qpInValCbCr value should be equal to first qpOutValCbCr value");
+    for (int i = 0; i < vvenc_getQpValsSize(c->m_qpInValsCbCr) - 1; i++)
     {
       vvenc_confirmParameter( c,c->m_qpInValsCbCr[i]  < -qpBdOffsetC || c->m_qpInValsCbCr[i] > vvenc::MAX_QP, "Some entries cfg_qpInValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
       vvenc_confirmParameter( c,c->m_qpOutValsCbCr[i] < -qpBdOffsetC || c->m_qpOutValsCbCr[i] > vvenc::MAX_QP, "Some entries cfg_qpOutValCbCr are out of valid range of -qpBdOffsetC to 63, inclusive.");
@@ -2411,7 +2434,7 @@ static bool checkCfgParameter( VVEncCfg *c )
   return( c->m_confirmFailed );
 }
 
-VVENC_DECL int vvenc_initDefault( VVEncCfg *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
+VVENC_DECL int vvenc_init_default( VVEncCfg *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
 {
   int iRet = 0;
   vvenc_cfg_default(c);
@@ -2431,11 +2454,11 @@ VVENC_DECL int vvenc_initDefault( VVEncCfg *c, int width, int height, int framer
 
   c->m_numThreads          = -1;                       // number of worker threads (-1: auto, 0: off, else set worker threads)
 
-  iRet = vvenc_initPreset(c, preset );
+  iRet = vvenc_init_preset(c, preset );
   return iRet;
 }
 
-VVENC_DECL int vvenc_initPreset( VVEncCfg *c, vvencPresetMode preset )
+VVENC_DECL int vvenc_init_preset( VVEncCfg *c, vvencPresetMode preset )
 {
   memset(&c->m_qpInValsCb ,0, sizeof(c->m_qpInValsCb));
   memset(&c->m_qpOutValsCb,0, sizeof(c->m_qpOutValsCb));
@@ -2843,7 +2866,7 @@ static inline std::string getDynamicRangeStr( int dynamicRange )
   return cT;
 }
 
-static inline std::string getMasteringDisplayStr( unsigned int md[10]  )
+static inline std::string vvenc_getMasteringDisplayStr( unsigned int md[10]  )
 {
   std::stringstream css;
 
@@ -2863,7 +2886,7 @@ static inline std::string getMasteringDisplayStr( unsigned int md[10]  )
   return css.str();
 }
 
-static inline std::string getContentLightLevel( unsigned int cll[2] )
+static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
 {
   std::stringstream css;
 
@@ -2871,7 +2894,7 @@ static inline std::string getContentLightLevel( unsigned int cll[2] )
   return css.str();
 }
 
-VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgLevel )
+VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *c, vvencMsgLevel eMsgLevel )
 {
   std::stringstream css;
 
@@ -2917,13 +2940,13 @@ VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgL
   }
   css << "Cost function:                         : " << getCostFunctionStr( c->m_costMode ) << "\n";
 
-  if( !c->m_masteringDisplay.empty() )
+  if( c->m_masteringDisplay[0] != 0 || c->m_masteringDisplay[1] != 0 || c->m_masteringDisplay[8] != 0  )
   {
-    css << "Mastering display color volume         : " << getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
+    css << "Mastering display color volume         : " << vvenc_getMasteringDisplayStr( c->m_masteringDisplay ) << "\n";
   }
   if( c->m_contentLightLevel[0] != 0 || c->m_contentLightLevel[1] != 0 )
   {
-    css << "Content light level                    : " << getContentLightLevel( c->m_contentLightLevel ) << "\n";
+    css << "Content light level                    : " << vvenc_getContentLightLevelStr( c->m_contentLightLevel ) << "\n";
   }
   css << "\n";
   }
@@ -3061,8 +3084,10 @@ VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *c, vvencMsgLevel eMsgL
   css << "\n";
   }
 
-  return css.str();
+  vvenc_cfgString = css.str();
+  return vvenc_cfgString.c_str();
 }
+
 
 #ifdef __cplusplus
 };

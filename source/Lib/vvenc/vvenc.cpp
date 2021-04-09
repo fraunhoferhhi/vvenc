@@ -337,7 +337,7 @@ VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )
     return NULL;
   }
 
-  return d->getLastError().c_str();
+  return d->getLastError();
 }
 
 VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder *enc )
@@ -404,7 +404,10 @@ VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback )
 }
 
 
-VVENC_DECL std::string vvenc_set_SIMD_extension( const char* simdId );
+VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId )
+{
+  return vvenc::VVEncImpl::setSIMDExtension( simdId );
+}
 
 
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
@@ -417,8 +420,15 @@ VVENC_DECL bool vvenc_is_tracing_enabled()
 #endif
 }
 
-VVENC_DECL const char* vvenc_getCompileInfoString(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-VVENC_DECL void   vvenc_decodeBitstream( const char* FileName);
+// creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+VVENC_DECL const char* vvenc_get_compile_info_string()
+{
+  return vvenc::VVEncImpl::getCompileInfoString();
+}
+VVENC_DECL void vvenc_decode_bitstream( const char* FileName)
+{
+  vvenc::VVEncImpl::decodeBitstream( FileName );
+}
 
 VVENC_DECL int  vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
 VVENC_DECL int  vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );

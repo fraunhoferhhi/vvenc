@@ -69,7 +69,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
-void msgFnc( int level, const char* fmt, va_list args )
+void msgFnc( void*, int level, const char* fmt, va_list args )
 {
   if ( g_verbosity >= level )
   {
@@ -77,11 +77,11 @@ void msgFnc( int level, const char* fmt, va_list args )
   }
 }
 
-void msgApp( int level, const char* fmt, ... )
+void msgApp( void* ctx, int level, const char* fmt, ... )
 {
     va_list args;
     va_start( args, fmt );
-    msgFnc( level, fmt, args );
+    msgFnc( ctx, level, fmt, args );
     va_end( args );
 }
 
@@ -107,14 +107,14 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
 {
   try
   {
-    if( ! parseCfg( &rcVVEncAppCfg, argc, argv ) )
+    if( ! rcVVEncAppCfg.parseCfg( argc, argv ) )
     {
       return false;
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
-    msgApp( VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
+    msgApp( nullptr, VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
   g_verbosity = rcVVEncAppCfg.conf.m_verbosity;
@@ -139,7 +139,7 @@ int main( int argc, char* argv[] )
   std::string cOutputfile = "";
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-  vvenc_initDefault( &vvencappCfg.conf, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &vvencappCfg.conf, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
@@ -194,7 +194,7 @@ int main( int argc, char* argv[] )
 
   if( vvencappCfg.conf.m_verbosity >= VVENC_INFO )
   {
-    std::cout << vvenc_getConfigAsString( &vvencappCfg.conf, vvencappCfg.conf.m_verbosity ) << std::endl;
+    std::cout << vvenc_get_config_as_string( &vvencappCfg.conf, vvencappCfg.conf.m_verbosity ) << std::endl;
   }
 
   // open output file

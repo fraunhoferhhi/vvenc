@@ -345,7 +345,7 @@ const std::vector<SVPair<bool>> QPAToIntMap =
 
 void setPresets( VVEncAppCfg* cfg, int preset )
 {
-  vvenc_initPreset( &cfg->conf, (vvencPresetMode)preset );
+  vvenc_init_preset( &cfg->conf, (vvencPresetMode)preset );
 }
 
 void setInputBitDepthAndColorSpace( VVEncAppCfg* cfg, int dbcs )
@@ -557,16 +557,16 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<vvencChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
   IStreamToEnum<vvencChromaFormat>  toInternCoFormat             ( &this->conf.m_internChromaFormat,          &ChromaFormatToEnumMap  );
   IStreamToEnum<vvencHashType>      toHashType                   ( &this->conf.m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
-  IStreamToVec<int>            toQpInCb                     ( &this->conf.m_qpInValsCb            );
-  IStreamToVec<int>            toQpOutCb                    ( &this->conf.m_qpOutValsCb           );
-  IStreamToVec<int>            toQpInCr                     ( &this->conf.m_qpInValsCr            );
-  IStreamToVec<int>            toQpOutCr                    ( &this->conf.m_qpOutValsCr           );
-  IStreamToVec<int>            toQpInCbCr                   ( &this->conf.m_qpInValsCbCr          );
-  IStreamToVec<int>            toQpOutCbCr                  ( &this->conf.m_qpOutValsCbCr         );
-  IStreamToVec<double>         toIntraLambdaModifier        ( &this->conf.m_adIntraLambdaModifier );
+  IStreamToArr<int>            toQpInCb                     ( &this->conf.m_qpInValsCb[0], VVENC_MAX_QP_VALS_CHROMA            );
+  IStreamToArr<int>            toQpOutCb                    ( &this->conf.m_qpOutValsCb[0], VVENC_MAX_QP_VALS_CHROMA           );
+  IStreamToArr<int>            toQpInCr                     ( &this->conf.m_qpInValsCr[0], VVENC_MAX_QP_VALS_CHROMA            );
+  IStreamToArr<int>            toQpOutCr                    ( &this->conf.m_qpOutValsCr[0], VVENC_MAX_QP_VALS_CHROMA           );
+  IStreamToArr<int>            toQpInCbCr                   ( &this->conf.m_qpInValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA          );
+  IStreamToArr<int>            toQpOutCbCr                  ( &this->conf.m_qpOutValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA         );
+  IStreamToArr<double>         toIntraLambdaModifier        ( &this->conf.m_adIntraLambdaModifier[0], VVENC_MAX_TLAYER );
 
-  IStreamToVec<int>            toMCTFFrames                 ( &this->conf.m_MCTFFrames   );
-  IStreamToVec<double>         toMCTFStrengths              ( &this->conf.m_MCTFStrengths );
+  IStreamToArr<int>            toMCTFFrames                 ( &this->conf.m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
+  IStreamToArr<double>         toMCTFStrengths              ( &this->conf.m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
   IStreamToEnum<vvencSegmentMode>   toSegment               ( &this->conf.m_SegmentMode,            &SegmentToEnumMap );
   IStreamToEnum<vvencHDRMode>       toHDRMode               ( &this->conf.m_HdrMode,                &HdrModeToIntMap       );
   IStreamToEnum<int>           toColorPrimaries             ( &this->conf.m_colourPrimaries,        &ColorPrimariesToIntMap );
@@ -574,8 +574,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<int>           toColorMatrix                ( &this->conf.m_matrixCoefficients,     &ColorMatrixToIntMap );
   IStreamToEnum<int>           toPrefTransferCharacteristics( &this->conf.m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
-  IStreamToVec<unsigned int>   toMasteringDisplay           ( &this->conf.m_masteringDisplay  );
-  IStreamToVec<unsigned int>   toContentLightLevel          ( &this->conf.m_contentLightLevel );
+  IStreamToArr<unsigned int>   toMasteringDisplay           ( &this->conf.m_masteringDisplay[0], 10  );
+  IStreamToArr<unsigned int>   toContentLightLevel          ( &this->conf.m_contentLightLevel[0], 2 );
 
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType  ( &this->conf.m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
@@ -774,11 +774,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("ChromaFormatIDC,-cf",                             toInternCoFormat,                                 "intern chroma format (400, 420, 422, 444) or set to 0 (default), same as InputChromaFormat")
   ("UseIdentityTableForNon420Chroma",                 conf.m_useIdentityTableForNon420Chroma,           "True: Indicates that 422/444 chroma uses identity chroma QP mapping tables; False: explicit Qp table may be specified in config")
-  ("InputBitDepthC",                                  conf.m_inputBitDepth[ CH_C ],                     "As per InputBitDepth but for chroma component. (default:InputBitDepth)")
-  ("InternalBitDepth",                                conf.m_internalBitDepth[ CH_L ],                  "Bit-depth the codec operates at. (default: MSBExtendedBitDepth). If different to MSBExtendedBitDepth, source data will be converted")
-  ("OutputBitDepthC",                                 conf.m_outputBitDepth[ CH_C ],                    "As per OutputBitDepth but for chroma component. (default: use luma output bit-depth)")
-  ("MSBExtendedBitDepth",                             conf.m_MSBExtendedBitDepth[ CH_L ],               "bit depth of luma component after addition of MSBs of value 0 (used for synthesising High Dynamic Range source material). (default:InputBitDepth)")
-  ("MSBExtendedBitDepthC",                            conf.m_MSBExtendedBitDepth[ CH_C ],               "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
+  ("InputBitDepthC",                                  conf.m_inputBitDepth[ 1 ],                        "As per InputBitDepth but for chroma component. (default:InputBitDepth)")
+  ("InternalBitDepth",                                conf.m_internalBitDepth[ 0 ],                     "Bit-depth the codec operates at. (default: MSBExtendedBitDepth). If different to MSBExtendedBitDepth, source data will be converted")
+  ("OutputBitDepthC",                                 conf.m_outputBitDepth[ 1 ],                       "As per OutputBitDepth but for chroma component. (default: use luma output bit-depth)")
+  ("MSBExtendedBitDepth",                             conf.m_MSBExtendedBitDepth[ 0 ],                  "bit depth of luma component after addition of MSBs of value 0 (used for synthesising High Dynamic Range source material). (default:InputBitDepth)")
+  ("MSBExtendedBitDepthC",                            conf.m_MSBExtendedBitDepth[ 1 ],                  "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
 
   ("WaveFrontSynchro",                                conf.m_entropyCodingSyncEnabled,                  "Enable entropy coding sync")
   ("EntryPointsPresent",                              conf.m_entryPointsPresent,                        "Enable entry points in slice header")
@@ -887,8 +887,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("SAO",                                             conf.m_bUseSAO,                                        "Enable Sample Adaptive Offset")
   ("SaoEncodingRate",                                 conf.m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
   ("SaoEncodingRateChroma",                           conf.m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
-  ("SaoLumaOffsetBitShift",                           conf.m_saoOffsetBitShift[ CH_L ],                      "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
-  ("SaoChromaOffsetBitShift",                         conf.m_saoOffsetBitShift[ CH_C ],                      "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
+  ("SaoLumaOffsetBitShift",                           conf.m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
+  ("SaoChromaOffsetBitShift",                         conf.m_saoOffsetBitShift[ 1 ],                         "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
   ;
 
   opts.setSubSection("VUI and SEI options");
@@ -992,12 +992,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MMVD",                                            conf.m_MMVD,                                "Enable Merge mode with Motion Vector Difference")
   ("MmvdDisNum",                                      conf.m_MmvdDisNum,                          "Number of MMVD Distance Entries")
   ("AllowDisFracMMVD",                                conf.m_allowDisFracMMVD,                    "Disable fractional MVD in MMVD mode adaptively")
-  ("MCTF",                                            conf.m_MCTF,                                "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
-  ("MCTFFutureReference",                             conf.m_MCTFFutureReference,                 "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
-  ("MCTFNumLeadFrames",                               conf.m_MCTFNumLeadFrames,                   "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
-  ("MCTFNumTrailFrames",                              conf.m_MCTFNumTrailFrames,                  "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
-  ("MCTFFrame",                                       toMCTFFrames,                                     "Frame to filter Strength for frame in GOP based temporal filter")
-  ("MCTFStrength",                                    toMCTFStrengths,                                  "Strength for  frame in GOP based temporal filter.")
+  ("MCTF",                                            conf.m_vvencMCTF.MCTF,                      "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
+  ("MCTFFutureReference",                             conf.m_vvencMCTF.MCTFFutureReference,       "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
+  ("MCTFNumLeadFrames",                               conf.m_vvencMCTF.MCTFNumLeadFrames,         "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
+  ("MCTFNumTrailFrames",                              conf.m_vvencMCTF.MCTFNumTrailFrames,        "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
+  ("MCTFFrame",                                       toMCTFFrames,                               "Frame to filter Strength for frame in GOP based temporal filter")
+  ("MCTFStrength",                                    toMCTFStrengths,                            "Strength for  frame in GOP based temporal filter.")
 
   ("FastLocalDualTreeMode",                           conf.m_fastLocalDualTreeMode,               "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  conf.m_qtbttSpeedUp,                        "Non-VTM compatible QTBTT speed-ups" )
@@ -1083,7 +1083,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
-    opts.addOptions()(cOSS.str(), m_GOPList[i], vvencGOPEntry());
+    opts.addOptions()(cOSS.str(), conf.m_GOPList[i], vvencGOPEntry());
   }
   opts.addOptions()("decode",                          m_decode,                                         "decode only");
 
@@ -1162,12 +1162,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   }
   else
   {
-    if( m_decodeBitstreams[0] == m_bitstreamFileName )
+    if( conf.m_decodeBitstreams[0] == m_bitstreamFileName )
     {
       cout <<  "error: Debug bitstream and the output bitstream cannot be equal" << std::endl;
       error = true;
     }
-    if( m_decodeBitstreams[1] == m_bitstreamFileName )
+    if( conf.m_decodeBitstreams[1] == m_bitstreamFileName )
     {
       cout <<  "error: Decode2 bitstream and the output bitstream cannot be equal" << std::endl;
       error = true;
@@ -1194,21 +1194,21 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   // set intern derived parameters (for convenience purposes only)
   //
 
-  if ( m_internChromaFormat < 0 || m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
+  if ( conf.m_internChromaFormat < 0 || conf.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
-    m_internChromaFormat = m_inputFileChromaFormat;
+    conf.m_internChromaFormat = m_inputFileChromaFormat;
   }
 
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
   {
-    if( ( m_outputBitDepth[ 0 ] != 10 && m_outputBitDepth[ 0 ] != 12 )
-        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
+    if( ( conf.m_outputBitDepth[ 0 ] != 10 && conf.m_outputBitDepth[ 0 ] != 12 )
+        || ( ( ( conf.m_SourceWidth ) & ( 1 + ( conf.m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
     {
       cout <<  "error: Invalid output bit-depth or image width for packed YUV output, aborting" << std::endl;
       error = true;
     }
-    if( ( m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( m_outputBitDepth[ 1 ] != 10 && m_outputBitDepth[ 1 ] != 12 )
-          || ( ( vvencGetWidthOfComponent( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
+    if( ( conf.m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( conf.m_outputBitDepth[ 1 ] != 10 && conf.m_outputBitDepth[ 1 ] != 12 )
+          || ( ( vvenc_getWidthOfComponent( conf.m_internChromaFormat, conf.m_SourceWidth, 1 ) & ( 1 + ( conf.m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
     {
       cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
       error = true;
@@ -1228,17 +1228,18 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   return true;
 }
 
-static std::string getConfigAsString( VVEncAppCfg *c, vvencMsgLevel eMsgLevel )
+std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
 {
   std::stringstream css;
   if( eMsgLevel >= VVENC_DETAILS )
   {
-    css << "Input          File                    : " << c->m_inputFileName << "\n";
-    css << "Bitstream      File                    : " << c->m_bitstreamFileName << "\n";
-    css << "Reconstruction File                    : " << c->m_reconFileName << "\n";
+    css << "Input          File                    : " << m_inputFileName << "\n";
+    css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
+    css << "Reconstruction File                    : " << m_reconFileName << "\n";
   }
 
-  css << vvenc_getConfigAsString( &c->c, eMsgLevel);
+  std::string config ( vvenc_get_config_as_string( (VVEncCfg*)&conf, eMsgLevel) );
+  css << config;
   css << "\n";
 
   return css.str();

@@ -359,7 +359,7 @@ void EncLib::xSetRCEncCfg( int pass )
     // preserve MCTF settings
     const int mctf = m_cBckCfg.m_vvencMCTF.MCTF;
 
-    vvenc_initPreset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
+    vvenc_init_preset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
     // use fixQP encoding in first pass
     m_cBckCfg.m_RCTargetBitrate = 0;
@@ -1241,7 +1241,7 @@ void EncLib::xOutputRecYuv()
       vvencYUVBuffer yuvBuffer;
       setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
 
-      m_yuvWriterIf->outputYuv( yuvBuffer );
+      m_yuvWriterIf( this, &yuvBuffer );
     }
     m_pocRecOut = picItr->poc + 1;
     picItr->isNeededForOutput = false;

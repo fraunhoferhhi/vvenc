@@ -78,11 +78,11 @@ void msgFnc( void* , int level, const char* fmt, va_list args )
   }
 }
 
-void msgApp( void* ctx, int level, const char* fmt, ... )
+void msgApp( int level, const char* fmt, ... )
 {
     va_list args;
     va_start( args, fmt );
-    msgFnc( ctx, level, fmt, args );
+    msgFnc( nullptr, level, fmt, args );
     va_end( args );
 }
 
@@ -134,7 +134,7 @@ void EncApp::encode()
 
   vvenc_get_config( m_encCtx, &vvencCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
 
-  msgApp( VVENC_INFO, "%s",m_cEncAppCfg.getConfigAsString( vvencCfg.m_verbosity).c_str() );
+  msgApp( VVENC_INFO, "%s",m_cEncAppCfg.getConfigAsString( vvencCfg.m_verbosity ));
 
   if( ! openFileIO() )
   {
@@ -259,11 +259,13 @@ void EncApp::outputAU( const vvencAccessUnit& au )
   m_bitstream.flush();
 }
 
-void EncApp::outputYuv( void*, vvencYUVBuffer* yuvOutBuf )
+void EncApp::outputYuv( void* encapp, vvencYUVBuffer* yuvOutBuf )
 {
-  if ( ! m_cEncAppCfg.m_reconFileName.empty() && nullptr != yuvOutBuf )
+  auto d = (EncApp*)encapp;
+
+  if ( ! d->m_cEncAppCfg.m_reconFileName.empty() && nullptr != yuvOutBuf )
   {
-    m_yuvReconFile.writeYuvBuf( *yuvOutBuf );
+    d->m_yuvReconFile.writeYuvBuf( *yuvOutBuf );
   }
 }
 

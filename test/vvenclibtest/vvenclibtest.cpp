@@ -159,10 +159,10 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
 
   rcEncCfg.m_internChromaFormat         =  VVENC_CHROMA_420;
 
-  vvenc_initPreset(  &rcEncCfg, vvencPresetMode::VVENC_FASTER );
+  vvenc_init_preset(  &rcEncCfg, vvencPresetMode::VVENC_FASTER );
   if( callInitCfgParameter )
   {
-    vvenc_initCfgParameter( &rcEncCfg );
+    vvenc_init_cfg_parameter( &rcEncCfg );
   }
 }
 

@@ -89,7 +89,6 @@ private:
   MCTF                      m_MCTF;
   PicList                   m_cListPic;
 
-  //YUVWriterIf*              m_yuvWriterIf;
   std::function<void( void*, vvencYUVBuffer* )> m_yuvWriterIf;
 
   NoMallocThreadPool*       m_threadPool;

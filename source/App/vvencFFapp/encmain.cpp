@@ -85,7 +85,8 @@ int main(int argc, char* argv[])
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  simdOpt = vvenc_set_SIMD_extension( simdOpt.c_str() );
+  const char* pSimd = vvenc_set_SIMD_extension( simdOpt.c_str() );
+  pSimd == nullptr ? simdOpt = "NA" : simdOpt = pSimd;
 
   // print information
   msgApp( VVENC_INFO, "\n");
@@ -99,6 +100,7 @@ int main(int argc, char* argv[])
   msgApp( VVENC_INFO, "\n" );
 
   EncApp* pcEncApp = new EncApp;
+  g_vvencEncApp = (vvencEncApp*)pcEncApp;
 
   // parse configuration
   if ( ! pcEncApp->parseCfg( argc, argv ) )

@@ -429,7 +429,12 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   const  int       NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
   const  int       SHIFT_QP      = 12;
   const int temporalId           = gopList[ GOPid ].m_temporalId;
-  const std::vector<double> &intraLambdaModifiers = m_pcEncCfg->m_adIntraLambdaModifier;
+  std::vector<double> intraLambdaModifiers;
+  for ( int i = 0; i < VVENC_MAX_TLAYER; i++ )
+  {
+    if( m_pcEncCfg->m_adIntraLambdaModifier[i] != 0.0 ) intraLambdaModifiers.push_back( m_pcEncCfg->m_adIntraLambdaModifier[i] );
+    else break;
+  }
 
   int bitdepth_luma_qp_scale = 6
                                * (slice->sps->bitDepths[ CH_L ] - 8

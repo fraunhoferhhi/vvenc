@@ -415,6 +415,119 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 }
 
 
+// ====================================================================================================================
+// string -> array
+// ====================================================================================================================
+
+template<typename T>
+class APPUTILS_DECL IStreamToArr
+{
+  public:
+    IStreamToArr( T* v, size_t maxSize )
+    : _valVec( v )
+    , _maxSize ( maxSize )
+    {
+    }
+
+    ~IStreamToArr()
+    {
+    }
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToArr<F>& toArr );
+
+    template<typename F>
+    friend std::ostream& operator << ( std::ostream& in, const IStreamToArr<F>& toArr );
+
+  private:
+    T*     _valVec;
+    size_t _maxSize;
+};
+
+template<typename T>
+inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
+{
+  for( int i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(T));
+
+  bool fail = false;
+  int pos = 0;
+  // split into multiple lines if any
+  while ( ! in.eof() )
+  {
+    std::string line;
+    std::getline( in, line );
+
+    if( line == "[]" || line == "empty"  )
+    {
+      return in;    // forcing empty entry
+    }
+    else
+    {
+      // treat all whitespaces and commas as valid separators
+      replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
+      std::stringstream tokenStream( line );
+      std::string token;
+      // split into multiple tokens if any
+      while( std::getline( tokenStream, token, ' ' ) )
+      {
+        if ( ! token.length() )
+          continue;
+        // convert to value
+        std::stringstream convStream( token );
+        T val;
+        convStream >> val;
+        fail |= convStream.fail();
+        toArr._valVec[pos] = val;
+        pos++;
+      }
+    }
+  }
+
+  if ( fail || ( 0 == pos ) )
+  {
+    in.setstate( std::ios::failbit );
+  }
+
+  return in;
+}
+
+template<typename T>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<T>& toArr )
+{
+  int size=0;
+  for ( int i = 0; i < toArr._maxSize; i++ )
+  {
+    if( toArr._valVec[i] != 0 ) size++;
+    else break;
+  }
+
+  if( 0 == size )
+  {
+    os << "[]";
+    return os;
+  }
+
+  bool bfirst = true;
+  for ( int i = 0; i < size; i++ )
+  {
+    if( bfirst )
+    {
+      bfirst = false;
+    }
+    else
+    {
+      os << ",";
+    }
+    os << toArr._valVec[i];
+  }
+
+  return os;
+}
+
+// ====================================================================================================================
+// vvencGOPEntry
+// ====================================================================================================================
+
 
 inline std::ostream& operator<< ( std::ostream& os, const vvencGOPEntry& entry )
 {

@@ -124,7 +124,9 @@ public:
   static const char* getVersionNumber();
   
   static void        registerMsgCbf( vvencLoggingCallback msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
-  static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+  static const char* setSIMDExtension( const char* simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+  static const char* getCompileInfoString();
+  static void decodeBitstream( const char* FileName);
 
 private:
 

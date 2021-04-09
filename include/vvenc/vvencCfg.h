@@ -78,8 +78,8 @@ static const int VVENC_MAX_NUM_CQP_MAPPING_TABLES      =  3; ///< Maximum number
 static const int VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA =  8;
 static const int VVENC_MCTF_RANGE                      =  2; ///< max number of frames used for MCTF filtering in forward / backward direction
 static const int VVENC_MAX_NUM_COMP                    =  3; ///< max number of components
-
-
+static const int VVENC_MAX_QP_VALS_CHROMA              =  8;
+static const int VVENC_MAX_MCTF_FRAMES                 =  16;
 // ====================================================================================================================
 
 
@@ -405,9 +405,9 @@ typedef struct vvencMCTF
   int                 MCTFNumTrailFrames;
 
   int                 numFrames;
-  int                 MCTFFrames[16];
+  int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
   int                 numStrength;
-  double              MCTFStrengths[16];
+  double              MCTFStrengths[VVENC_MAX_MCTF_FRAMES];
 }vvencMCTF;
 
 VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF );
@@ -502,12 +502,12 @@ typedef struct VVEncCfg
   double              m_adLambdaModifier[ VVENC_MAX_TLAYER ];    ///< Lambda modifier array for each temporal layer
   double              m_adIntraLambdaModifier[ VVENC_MAX_TLAYER ];                                                           ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
   double              m_dIntraQpFactor;                                                            ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
-  int                 m_qpInValsCb[8];                                              ///< qp input values used to derive the chroma QP mapping table
-  int                 m_qpInValsCr[8];                                              ///< qp input values used to derive the chroma QP mapping table
-  int                 m_qpInValsCbCr[8];                                            ///< qp input values used to derive the chroma QP mapping table
-  int                 m_qpOutValsCb[8];                                             ///< qp output values used to derive the chroma QP mapping table
-  int                 m_qpOutValsCr[8];                                             ///< qp output values used to derive the chroma QP mapping table
-  int                 m_qpOutValsCbCr[8];                                           ///< qp output values used to derive the chroma QP mapping table
+  int                 m_qpInValsCb[VVENC_MAX_QP_VALS_CHROMA];                                              ///< qp input values used to derive the chroma QP mapping table
+  int                 m_qpInValsCr[VVENC_MAX_QP_VALS_CHROMA];                                              ///< qp input values used to derive the chroma QP mapping table
+  int                 m_qpInValsCbCr[VVENC_MAX_QP_VALS_CHROMA];                                            ///< qp input values used to derive the chroma QP mapping table
+  int                 m_qpOutValsCb[VVENC_MAX_QP_VALS_CHROMA];                                             ///< qp output values used to derive the chroma QP mapping table
+  int                 m_qpOutValsCr[VVENC_MAX_QP_VALS_CHROMA];                                             ///< qp output values used to derive the chroma QP mapping table
+  int                 m_qpOutValsCbCr[VVENC_MAX_QP_VALS_CHROMA];                                           ///< qp output values used to derive the chroma QP mapping table
   int                 m_cuQpDeltaSubdiv;                                         ///< Maximum subdiv for CU luma Qp adjustment (0:default)
   int                 m_cuChromaQpOffsetSubdiv;                                  ///< If negative, then do not apply chroma qp offsets.
   int                 m_chromaCbQpOffset;                                        ///< Chroma Cb QP Offset (0:default)
@@ -724,13 +724,13 @@ typedef struct VVEncCfg
 
 VVENC_DECL void vvenc_cfg_default( VVEncCfg *cfg );
 
-VVENC_DECL int vvenc_initPreset( VVEncCfg *cfg, vvencPresetMode preset );
+VVENC_DECL int vvenc_init_preset( VVEncCfg *cfg, vvencPresetMode preset );
 
-VVENC_DECL int vvenc_initDefault( VVEncCfg *cfg, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM );
+VVENC_DECL int vvenc_init_default( VVEncCfg *cfg, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM );
 
-VVENC_DECL bool vvenc_initCfgParameter( VVEncCfg *cfg );
+VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *cfg );
 
-VVENC_DECL std::string vvenc_getConfigAsString( VVEncCfg *cfg, vvencMsgLevel eMsgLevel );
+VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *cfg, vvencMsgLevel eMsgLevel );
 
 #ifdef __cplusplus
 }

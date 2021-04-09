@@ -1502,7 +1502,8 @@ void EncGOP::xWriteLeadingSEIs( const Picture& pic, AccessUnitList& accessUnit )
   }
 
   // mastering display colour volume
-  if (m_pcEncCfg->m_masteringDisplay.size() == 10 )
+  if( (m_pcEncCfg->m_masteringDisplay[0] != 0 && m_pcEncCfg->m_masteringDisplay[1] != 0) ||
+      m_pcEncCfg->m_masteringDisplay[8] )
   {
     SEIMasteringDisplayColourVolume *sei = new SEIMasteringDisplayColourVolume;
     m_seiEncoder.initSEIMasteringDisplayColourVolume(sei);

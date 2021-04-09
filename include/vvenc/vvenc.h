@@ -131,7 +131,7 @@ typedef struct vvencYUVBuffer
 
 typedef void (*vvencYUVWriterCallback)(void*, vvencYUVBuffer* );
 
-VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc();
+VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc( void );
 VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer, bool freePicBuffer );
 VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer );
 
@@ -176,7 +176,7 @@ typedef struct vvencAccessUnit
 } vvencAccessUnit;
 
 
-VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc();
+VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc( void );
 
 /* vvdec_accessUnit_free:
    release storage of an vvdecAccessUnit instance.
@@ -211,7 +211,7 @@ VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit );
  \param      None
  \retval     std::string returns the version number
 */
-VVENC_DECL const char* vvenc_get_version();
+VVENC_DECL const char* vvenc_get_version( void );
 
 /**
   This method initializes the encoder instance.
@@ -224,7 +224,7 @@ VVENC_DECL const char* vvenc_get_version();
   \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
   \pre        The encoder must not be initialized.
 */
-VVENC_DECL vvencEncoder* vvenc_encoder_create();
+VVENC_DECL vvencEncoder* vvenc_encoder_create( void );
 
 /**
   This method initializes the encoder instance.
@@ -333,10 +333,10 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet );
 VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback );
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-VVENC_DECL std::string vvenc_set_SIMD_extension( const char* simdId );
+VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId );
 
-VVENC_DECL bool  vvenc_is_tracing_enabled();           // checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL const char* vvenc_get_compile_info_string(); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+VVENC_DECL bool  vvenc_is_tracing_enabled( void );            // checks if library has tracing supported enabled (see ENABLE_TRACING).
+VVENC_DECL const char* vvenc_get_compile_info_string( void ); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
 VVENC_DECL void   vvenc_decode_bitstream( const char* FileName);
 
 VVENC_DECL int  vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
