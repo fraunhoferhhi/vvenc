@@ -2598,7 +2598,6 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   css << "BDPCM:" << m_useBDPCM << " ";
 #if IBC_VTM
   css << "IBC:" << m_IBCMode << " ";
-  css << "IBCfastMethod:" << m_IBCFastMethod << " ";
 #endif
 
   css << "\nENC. ALG. CFG: ";
@@ -2636,6 +2635,12 @@ std::string VVEncCfg::getConfigAsString( MsgLevel eMsgLevel ) const
   css << "FastLocalDualTree:" << m_fastLocalDualTreeMode << " ";
   css << "FastSubPel:" << m_fastSubPel << " ";
   css << "QtbttExtraFast:" << m_qtbttSpeedUp << " ";
+#if IBC_VTM
+  if( m_IBCMode )
+  {
+    css << "IBCfastMethod:" << m_IBCFastMethod << " ";
+  }
+#endif
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( m_RCTargetBitrate > 0 ) << " ";

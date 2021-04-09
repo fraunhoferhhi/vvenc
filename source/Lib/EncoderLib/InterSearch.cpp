@@ -6166,19 +6166,32 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
       {
         stepS = 8;
       }
+      const int minCuLog2 = m_pcEncCfg->m_log2MinCodingBlockSize;
+      const int minCuMask = ( 1 << minCuLog2 ) - 1;
+      bool lastDec = false;
       for (int y = std::max(srchRngVerTop, -cuPelY); y <= srchRngVerBottom; y += stepS)
       {
         if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
           continue;
-        for (int x = std::max(srchRngHorLeft, -cuPelX); x <= srchRngHorRight; x++)
+
+        bool firstX = true;
+        for (int x = std::max(srchRngHorLeft, -cuPelX); x <= srchRngHorRight; firstX = false, x++)
         {
           if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
             continue;
 
-          if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+          bool isSameAsLast = !firstX && ( ( cuPelX + x ) & minCuMask ) > 1;
+
+          if( ( isSameAsLast && !lastDec ) || ( !isSameAsLast && !searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth ) ) )
           {
+            CHECKD( isSameAsLast && lastDec, "" );
+            lastDec = false;
             continue;
           }
+
+          CHECKD( isSameAsLast && !lastDec, "" );
+
+          lastDec = true;
 
           sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
@@ -6204,7 +6217,6 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
         goto end;
       }
 
-
       for (int y = (std::max(srchRngVerTop, -cuPelY) + 1); y <= srchRngVerBottom; y += stepS)
       {
         if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
@@ -6215,7 +6227,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
           if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
             continue;
 
-          if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+          if( !searchBvIBC( cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth ) )
           {
             continue;
           }
@@ -6258,21 +6270,17 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
       tempSadBest = sadBestCand[0];
 
-
       for (int y = (std::max(srchRngVerTop, -cuPelY) + 1); y <= srchRngVerBottom; y += stepS)
       {
         if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
           continue;
 
-
-
         for (int x = (std::max(srchRngHorLeft, -cuPelX) + 1); x <= srchRngHorRight; x += stepS)
         {
-
           if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
             continue;
 
-          if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+          if( !searchBvIBC( cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth ) )
           {
             continue;
           }
@@ -6609,15 +6617,84 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
   return true;
 }
 
+
+static inline bool isYPartBefore( SplitSeries series, const int ctuSizeLog2, const Position& refPos, const Position& pos )
+{
+#ifndef NDEBUG
+  const int refCtuX = refPos.x >> ctuSizeLog2;
+  const int refCtuY = refPos.y >> ctuSizeLog2;
+  const int posCtuX = pos.x >> ctuSizeLog2;
+  const int posCtuY = pos.y >> ctuSizeLog2;
+
+  CHECK( refCtuX != posCtuX || refCtuY != posCtuY, "This method can only be applied for positions within the same CTU" );
+
+#endif
+  const int ctuMask = ( 1 << ctuSizeLog2 ) - 1;
+
+  const int refX = refPos.x & ctuMask;
+  const int refY = refPos.y & ctuMask;
+  const int posX = pos.x & ctuMask;
+  const int posY = pos.y & ctuMask;
+
+  int x = 0, y = 0, w = 1 << ctuSizeLog2, h = 1 << ctuSizeLog2;
+  
+  while( true )
+  {
+    PartSplit split = PartSplit( series & SPLIT_MASK );
+
+    switch( split )
+    {
+    case CU_QUAD_SPLIT:
+      w >>= 1;
+      if( posX >= x + w ) x += w;
+    case CU_HORZ_SPLIT:
+      h >>= 1;
+      if( posY >= y + h ) y += h;
+      break;
+
+    case CU_VERT_SPLIT:
+      w >>= 1;
+      if( posX >= x + w ) x += w;
+      goto checkXonly;
+
+    case CU_TRIH_SPLIT:
+      h >>= 2;
+      if( posY >= y + h ) { y += h; h <<= 1; }
+      if( posY >= y + h ) { y += h; h >>= 1; }
+      break;
+
+    case CU_TRIV_SPLIT:
+      w >>= 2;
+      if( posX >= x + w ) { x += w; w <<= 1; }
+      if( posX >= x + w ) { x += w; w >>= 1; }
+      goto checkXonly;
+
+    default:
+      return false;
+    }
+
+    if( refY >= y + h ) return true;
+    else if( refY < y ) return false;
+
+checkXonly:
+    if( refX >= x + w ) return true;
+    else if( refX < x ) return false;
+
+    series >>= SPLIT_DMULT; continue;
+  }
+
+  return false;
+}
+
 bool InterSearch::searchBvIBC(CodingUnit& cu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize)
 {
-  const int ctuSizeLog2 = floorLog2(ctuSize);
+  const int ctuSizeLog2 = Log2(ctuSize);
 
-  int refRightX = xPos + xBv + width - 1;
+  int refRightX  = xPos + xBv + width  - 1;
   int refBottomY = yPos + yBv + height - 1;
 
   int refLeftX = xPos + xBv;
-  int refTopY = yPos + yBv;
+  int refTopY  = yPos + yBv;
 
   if ((xPos + xBv) < 0)
   {
@@ -6687,8 +6764,9 @@ bool InterSearch::searchBvIBC(CodingUnit& cu, int xPos, int yPos, int width, int
       int offset64x = (refPosCol.x >> (ctuSizeLog2 - 1)) << (ctuSizeLog2 - 1);
       int offset64y = (refPosCol.y >> (ctuSizeLog2 - 1)) << (ctuSizeLog2 - 1);
       const Position refPosCol64x64 = { offset64x, offset64y };
-      CodingUnit* curef = cu.cs->getCU(refPosCol64x64, CH_L, cu.treeType);
-      bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
+      //CodingUnit* curef = cu.cs->getCU(refPosCol64x64, CH_L, cu.treeType);
+      //bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
+      bool isDecomp = isYPartBefore( cu.splitSeries, ctuSizeLog2, cu.Y().pos(), refPosCol64x64 );
       if (isDecomp)
       {
         return false;
@@ -6703,14 +6781,16 @@ bool InterSearch::searchBvIBC(CodingUnit& cu, int xPos, int yPos, int width, int
   // in the same CTU, or valid area from left CTU. Check if the reference block is already coded
   const Position refPosLT = cu.Y().topLeft().offset(xBv, yBv);
   const Position refPosBR = cu.Y().bottomRight().offset(xBv, yBv);
-  CodingUnit* curef = cu.cs->getCU(refPosBR, CH_L, cu.treeType);
-  bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
+  //CodingUnit* curef = cu.cs->getCU(refPosBR, CH_L, cu.treeType);
+  //bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
+  bool isDecomp = ( ( refPosBR.x >> ctuSizeLog2 ) < ( cu.lx() >> ctuSizeLog2 ) ) || isYPartBefore( cu.splitSeries, ctuSizeLog2, cu.Y().pos(), refPosBR );
   if (!isDecomp)
   {
     return false;
   }
-  CodingUnit* curef2 = cu.cs->getCU(refPosLT, CH_L, cu.treeType);
-  isDecomp = curef && ((cu.cs != curef2->cs) || cu.idx < curef2->idx);
+  //CodingUnit* curef2 = cu.cs->getCU(refPosLT, CH_L, cu.treeType);
+  //isDecomp = curef && ((cu.cs != curef2->cs) || cu.idx < curef2->idx);
+  isDecomp = ( ( refPosLT.x >> ctuSizeLog2 ) < ( cu.lx() >> ctuSizeLog2 ) ) || isYPartBefore( cu.splitSeries, ctuSizeLog2, cu.Y().pos(), refPosLT );
   if (!isDecomp)
   {
     return false;
