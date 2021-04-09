@@ -245,7 +245,6 @@ private:
 
 #if IBC_VTM
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
-  unsigned int   getIComponentBitsIBC(int val);
 #endif
 public:
 

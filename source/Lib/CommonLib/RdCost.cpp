@@ -1950,6 +1950,16 @@ Distortion RdCost::getBvCostMultiplePredsIBC(int x, int y, bool useIMV)
 {
   return Distortion(m_dCostIBC * getBitsMultiplePredsIBC(x, y, useIMV));
 }
+
+static inline unsigned getIComponentBitsIBC( int val )
+{
+  if( !val ) return 1;
+
+  const unsigned int l2 = floorLog2( (val <= 0) ? (-val << 1) + 1 : (val << 1) );
+
+  return (l2 << 1) + 1;
+}
+
 unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
 {
   int rmvH[2];
@@ -2020,21 +2030,6 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
       return getIComponentBitsIBC(rmvH[1]) + getIComponentBitsIBC(rmvV[1]);
     }
   }
-}
-unsigned int RdCost::getIComponentBitsIBC(int val)
-{
-  if (!val) return 1;
-
-  unsigned int length = 1;
-  unsigned int temp = (val <= 0) ? (-val << 1) + 1 : (val << 1);
-
-  while (1 != temp)
-  {
-    temp >>= 1;
-    length += 2;
-  }
-
-  return length;
 }
 #endif
 } // namespace vvenc
