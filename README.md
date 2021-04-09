@@ -40,7 +40,7 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | OPTION                 | DEFAULT                          | DESCRIPTION                                                                                          |
 |------------------------|----------------------------------|------------------------------------------------------------------------------------------------------|
 | --help,-h              | -                                | Show basic help                                                                                      |
-| --input,-i <str>       | -                                | Raw yuv input file                                                                                   |
+| --input,-i <str>       | -                                | Raw yuv input file or '-' for reading from stdin                                                                                   |
 | --size,-s <wxh>        | 1920x1080                        | Input file resolution (width x height)                                                               |
 | --framerate,-r <int>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. <br> Also recommended with perceptual QP adaptation (see `--qpa` option below). |
 | --format,-c <str>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
