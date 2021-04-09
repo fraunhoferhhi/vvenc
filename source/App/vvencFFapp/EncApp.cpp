@@ -130,16 +130,16 @@ void EncApp::encode()
 
   msgApp( vvenc::INFO, "%s",m_cEncAppCfg.getConfigAsString( m_cEncAppCfg.m_verbosity).c_str() );
 
-  if( m_cEncAppCfg.m_inputFileName.empty() )
+  if( !strcmp( m_cEncAppCfg.m_inputFileName.c_str(), "-" ) )
   {
     if( m_cEncAppCfg.m_RCNumPasses > 1 )
     {
-      msgApp( ERROR, " no input file given and 2 pass rate control is enabled; not supported yet\n" );
+      msgApp( ERROR, " 2 pass rate control and reading from stdin is not supported yet\n" );
       return;
     }
     else
     {
-      msgApp( INFO, " no input file given. trying to read from stdin\n" );
+      msgApp( INFO, " trying to read from stdin\n" );
     }
   }
 
