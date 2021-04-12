@@ -1170,12 +1170,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   }
   else
   {
-    if( conf.m_decodeBitstreams[0] == m_bitstreamFileName )
+    if( conf.m_decodeBitstreams[0] != nullptr && conf.m_decodeBitstreams[0] == m_bitstreamFileName )
     {
       cout <<  "error: Debug bitstream and the output bitstream cannot be equal" << std::endl;
       error = true;
     }
-    if( conf.m_decodeBitstreams[1] == m_bitstreamFileName )
+    if( conf.m_decodeBitstreams[1] != nullptr && conf.m_decodeBitstreams[1] == m_bitstreamFileName )
     {
       cout <<  "error: Decode2 bitstream and the output bitstream cannot be equal" << std::endl;
       error = true;

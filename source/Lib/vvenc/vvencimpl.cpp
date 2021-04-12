@@ -241,7 +241,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( (ChromaFormat)m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfg.m_internChromaFormat != VVENC_CHROMA_400 )
     {
       if( pcYUVBuffer->planes[1].ptr == nullptr ||
           pcYUVBuffer->planes[2].ptr == nullptr )
@@ -269,9 +269,9 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
       return VVENC_ERR_UNSPECIFIED;
     }
 
-    if( (ChromaFormat)m_cVVEncCfg.m_internChromaFormat != CHROMA_400 )
+    if( m_cVVEncCfg.m_internChromaFormat != VVENC_CHROMA_400 )
     {
-      if( (ChromaFormat)m_cVVEncCfg.m_internChromaFormat == CHROMA_444 )
+      if( m_cVVEncCfg.m_internChromaFormat == VVENC_CHROMA_444 )
       {
         if( pcYUVBuffer->planes[1].stride && pcYUVBuffer->planes[0].width > pcYUVBuffer->planes[1].stride )
         {

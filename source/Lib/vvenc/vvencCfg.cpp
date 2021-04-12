@@ -237,8 +237,8 @@ VVENC_DECL void vvenc_ChromaQpMappingTableParams_default(vvencChromaQpMappingTab
 
   memset( p->m_qpTableStartMinus26, 0, sizeof( p->m_qpTableStartMinus26 ) );
   memset( p->m_numPtsInCQPTableMinus1, 0, sizeof( p->m_numPtsInCQPTableMinus1 ) );
-  memset( p->m_deltaQpInValMinus1, 16, sizeof( p->m_deltaQpInValMinus1 ) );
-  memset( p->m_deltaQpOutVal, 16, sizeof( p->m_deltaQpOutVal ) );
+  memset( p->m_deltaQpInValMinus1, 0, sizeof( p->m_deltaQpInValMinus1 ) );
+  memset( p->m_deltaQpOutVal, 0, sizeof( p->m_deltaQpOutVal ) );
 }
 
 VVENC_DECL void vvenc_RPLEntry_default(vvencRPLEntry *RPLEntry )
@@ -372,8 +372,11 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_intraQPOffset                           = 0;                                     ///< QP offset for intra slice (integer)
   c->m_lambdaFromQPEnable                      = false;                                 ///< enable flag for QP:lambda fix
 
-  memset(&c->m_adLambdaModifier,1.0, sizeof(c->m_adLambdaModifier));                ///< Lambda modifier array for each temporal layer
-  memset(&c->m_adIntraLambdaModifier,0.0, sizeof(c->m_adIntraLambdaModifier));       ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
+  for( i = 0; i < VVENC_MAX_TLAYER; i++ )
+  {
+    c->m_adLambdaModifier[i] = 1.0;                                                     ///< Lambda modifier array for each temporal layer
+    c->m_adIntraLambdaModifier[i] = 0.0;                                                ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
+  }
 
   c->m_dIntraQpFactor                          = -1.0;                                  ///< Intra Q Factor. If negative, use a default equation: 0.57*(1.0 - Clip3( 0.0, 0.5, 0.05*(double)(isField ? (GopSize-1)/2 : GopSize-1) ))
 

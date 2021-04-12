@@ -125,7 +125,13 @@ void EncApp::encode()
     return;
   }
 
-  if( 0 != vvenc_encoder_open( m_encCtx, &vvencCfg, outputYuv ) )
+  vvencYUVWriterCallback vvencYUVWriterCallbackIf = nullptr;
+  if ( ! m_cEncAppCfg.m_reconFileName.empty() )
+  {
+    vvencYUVWriterCallbackIf = outputYuv;
+  }
+
+  if( 0 != vvenc_encoder_open( m_encCtx, &vvencCfg, vvencYUVWriterCallbackIf ) )
   {
     msgApp( VVENC_ERROR, vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
@@ -236,7 +242,10 @@ void EncApp::encode()
       }
 
       // write out encoded access units
-      outputAU( *au );
+      if( au != nullptr )
+      {
+        outputAU( *au );
+      }
 
       // temporally skip frames
       if( ! inputDone && vvencCfg.m_temporalSubsampleRatio > 1 )
