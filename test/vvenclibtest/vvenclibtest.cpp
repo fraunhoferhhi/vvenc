@@ -670,7 +670,6 @@ int checkSDKDefaultBehaviourRC()
   VVEncCfg vvencParams;
   defaultSDKInit( vvencParams,  500000 );
   vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
-  vvencParams.m_numThreads = 0;
 
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )

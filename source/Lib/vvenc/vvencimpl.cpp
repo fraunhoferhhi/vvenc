@@ -360,7 +360,7 @@ const char* VVEncImpl::getVersionNumber()
 
 const char* VVEncImpl::getEncoderInfo() const
 {
-  return m_sEncoderCapabilities.c_str();
+  return m_cEncoderInfo.c_str();
 }
 
 const char* VVEncImpl::getLastError() const

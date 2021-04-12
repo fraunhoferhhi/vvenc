@@ -201,7 +201,7 @@ int main( int argc, char* argv[] )
 
   if( vvencappCfg.conf.m_verbosity >= VVENC_INFO )
   {
-    std::cout << vvenc_get_config_as_string( &vvencappCfg.conf, vvencappCfg.conf.m_verbosity ) << std::endl;
+    std::cout << vvencappCfg.getConfigAsString( vvencappCfg.conf.m_verbosity ) << std::endl;
   }
 
   // open output file
