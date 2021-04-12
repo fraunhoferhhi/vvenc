@@ -59,6 +59,133 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <thread>
 
 
+static int vvenc_getQpValsSize( int QpVals[] )
+{
+  int size=0;
+  for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
+  {
+    if( QpVals[i] > 0) size++;
+    else return size;
+  }
+
+  return size;
+}
+
+static std::vector<int> vvenc_getQpValsAsVec( int QpVals[] )
+{
+  std::vector<int> QpValsVec;
+  for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
+  {
+    if( QpVals[i] > 0) QpValsVec.push_back( QpVals[i] );
+    else break;
+  }
+  return QpValsVec;
+}
+
+static inline std::string getProfileStr( int profile )
+{
+  std::string cT;
+  switch( profile )
+  {
+    case VVENC_MAIN_10                              : cT = "main_10"; break;
+    case VVENC_MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
+    case VVENC_MAIN_10_444                          : cT = "main_10_444"; break;
+    case VVENC_MAIN_10_444_STILL_PICTURE            : cT = "main_10_444_still_picture"; break;
+    case VVENC_MULTILAYER_MAIN_10                   : cT = "multilayer_main_10"; break;
+    case VVENC_MULTILAYER_MAIN_10_STILL_PICTURE     : cT = "multilayer_main_10_still_picture"; break;
+    case VVENC_MULTILAYER_MAIN_10_444               : cT = "multilayer_main_10_444"; break;
+    case VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE : cT = "multilayer_main_10_444_still_picture"; break;
+    case VVENC_PROFILE_AUTO                         : cT = "auto"; break;
+    default                                            : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getLevelStr( int level )
+{
+  std::string cT;
+  switch( level )
+  {
+    case VVENC_LEVEL_AUTO: cT = "auto";    break;
+    case VVENC_LEVEL1    : cT = "1";       break;
+    case VVENC_LEVEL2    : cT = "2";       break;
+    case VVENC_LEVEL2_1  : cT = "2.1";     break;
+    case VVENC_LEVEL3    : cT = "3";       break;
+    case VVENC_LEVEL3_1  : cT = "3.1";     break;
+    case VVENC_LEVEL4    : cT = "4";       break;
+    case VVENC_LEVEL4_1  : cT = "4.1";     break;
+    case VVENC_LEVEL5    : cT = "5";       break;
+    case VVENC_LEVEL5_1  : cT = "5.1";     break;
+    case VVENC_LEVEL5_2  : cT = "5.2";     break;
+    case VVENC_LEVEL6    : cT = "6";       break;
+    case VVENC_LEVEL6_1  : cT = "6.1";     break;
+    case VVENC_LEVEL6_2  : cT = "6.2";     break;
+    case VVENC_LEVEL6_3  : cT = "6.3";     break;
+    case VVENC_LEVEL15_5 : cT = "15.5";    break;
+    default               : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getCostFunctionStr( int cost )
+{
+  std::string cT;
+  switch( cost )
+  {
+    case VVENC_COST_STANDARD_LOSSY               : cT = "Lossy coding"; break;
+    case VVENC_COST_SEQUENCE_LEVEL_LOSSLESS      : cT = "Sequence level lossless coding"; break;
+    case VVENC_COST_LOSSLESS_CODING              : cT = "Lossless coding"; break;
+    case VVENC_COST_MIXED_LOSSLESS_LOSSY_CODING  : cT = "Mixed lossless lossy coding"; break;
+    default                                : cT = "Unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string getDynamicRangeStr( int dynamicRange )
+{
+  std::string cT;
+  switch( dynamicRange )
+  {
+    case VVENC_HDR_OFF            : cT = "SDR"; break;
+    case VVENC_HDR_PQ             : cT = "HDR10/PQ"; break;
+    case VVENC_HDR_HLG            : cT = "HDR HLG"; break;
+    case VVENC_HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
+    case VVENC_HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
+    case VVENC_HDR_USER_DEFINED   : cT = "HDR user defined"; break;
+    default                          : cT = "unknown"; break;
+  }
+  return cT;
+}
+
+static inline std::string vvenc_getMasteringDisplayStr( unsigned int md[10]  )
+{
+  std::stringstream css;
+
+  css << "G(" << md[0] << "," << md[1] << ")";
+  css << "B(" << md[2] << "," << md[3] << ")";
+  css << "R(" << md[4] << "," << md[5] << ")";
+  css << "WP("<< md[6] << "," << md[7] << ")";
+  css << "L(" << md[8] << "," << md[9] << ")";
+
+  css << " (= nits: ";
+  css << "G(" << md[0]/50000.0 << "," << md[1]/50000.0 << ")";
+  css << "B(" << md[2]/50000.0 << "," << md[3]/50000.0 << ")";
+  css << "R(" << md[4]/50000.0 << "," << md[5]/50000.0 << ")";
+  css << "WP("<< md[6]/50000.0 << "," << md[7]/50000.0 << ")";
+  css << "L(" << md[8]/10000.0 << "," << md[9]/10000.0 << ")";
+  css << ")";
+  return css.str();
+}
+
+static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
+{
+  std::stringstream css;
+
+  css << cll[0] << "," << cll[1] << " (cll,fall)";
+  return css.str();
+}
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -486,29 +613,6 @@ static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* messag
   vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
   c->m_confirmFailed = true;
   return true;
-}
-
-static int vvenc_getQpValsSize( int QpVals[] )
-{
-  int size=0;
-  for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
-  {
-    if( QpVals[i] > 0) size++;
-    else return size;
-  }
-
-  return size;
-}
-
-static std::vector<int> vvenc_getQpValsAsVec( int QpVals[] )
-{
-  std::vector<int> QpValsVec;
-  for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
-  {
-    if( QpVals[i] > 0) QpValsVec.push_back( QpVals[i] );
-    else break;
-  }
-  return QpValsVec;
 }
 
 VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
@@ -2797,109 +2901,6 @@ VVENC_DECL int vvenc_init_preset( VVEncCfg *c, vvencPresetMode preset )
   }
 
   return 0;
-}
-
-static inline std::string getProfileStr( int profile )
-{
-  std::string cT;
-  switch( profile )
-  {
-    case VVENC_MAIN_10                              : cT = "main_10"; break;
-    case VVENC_MAIN_10_STILL_PICTURE                : cT = "main_10_still_picture"; break;
-    case VVENC_MAIN_10_444                          : cT = "main_10_444"; break;
-    case VVENC_MAIN_10_444_STILL_PICTURE            : cT = "main_10_444_still_picture"; break;
-    case VVENC_MULTILAYER_MAIN_10                   : cT = "multilayer_main_10"; break;
-    case VVENC_MULTILAYER_MAIN_10_STILL_PICTURE     : cT = "multilayer_main_10_still_picture"; break;
-    case VVENC_MULTILAYER_MAIN_10_444               : cT = "multilayer_main_10_444"; break;
-    case VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE : cT = "multilayer_main_10_444_still_picture"; break;
-    case VVENC_PROFILE_AUTO                         : cT = "auto"; break;
-    default                                            : cT = "unknown"; break;
-  }
-  return cT;
-}
-
-static inline std::string getLevelStr( int level )
-{
-  std::string cT;
-  switch( level )
-  {
-    case VVENC_LEVEL_AUTO: cT = "auto";    break;
-    case VVENC_LEVEL1    : cT = "1";       break;
-    case VVENC_LEVEL2    : cT = "2";       break;
-    case VVENC_LEVEL2_1  : cT = "2.1";     break;
-    case VVENC_LEVEL3    : cT = "3";       break;
-    case VVENC_LEVEL3_1  : cT = "3.1";     break;
-    case VVENC_LEVEL4    : cT = "4";       break;
-    case VVENC_LEVEL4_1  : cT = "4.1";     break;
-    case VVENC_LEVEL5    : cT = "5";       break;
-    case VVENC_LEVEL5_1  : cT = "5.1";     break;
-    case VVENC_LEVEL5_2  : cT = "5.2";     break;
-    case VVENC_LEVEL6    : cT = "6";       break;
-    case VVENC_LEVEL6_1  : cT = "6.1";     break;
-    case VVENC_LEVEL6_2  : cT = "6.2";     break;
-    case VVENC_LEVEL6_3  : cT = "6.3";     break;
-    case VVENC_LEVEL15_5 : cT = "15.5";    break;
-    default               : cT = "unknown"; break;
-  }
-  return cT;
-}
-
-static inline std::string getCostFunctionStr( int cost )
-{
-  std::string cT;
-  switch( cost )
-  {
-    case VVENC_COST_STANDARD_LOSSY               : cT = "Lossy coding"; break;
-    case VVENC_COST_SEQUENCE_LEVEL_LOSSLESS      : cT = "Sequence level lossless coding"; break;
-    case VVENC_COST_LOSSLESS_CODING              : cT = "Lossless coding"; break;
-    case VVENC_COST_MIXED_LOSSLESS_LOSSY_CODING  : cT = "Mixed lossless lossy coding"; break;
-    default                                : cT = "Unknown"; break;
-  }
-  return cT;
-}
-
-static inline std::string getDynamicRangeStr( int dynamicRange )
-{
-  std::string cT;
-  switch( dynamicRange )
-  {
-    case VVENC_HDR_OFF            : cT = "SDR"; break;
-    case VVENC_HDR_PQ             : cT = "HDR10/PQ"; break;
-    case VVENC_HDR_HLG            : cT = "HDR HLG"; break;
-    case VVENC_HDR_PQ_BT2020      : cT = "HDR10/PQ BT.2020"; break;
-    case VVENC_HDR_HLG_BT2020     : cT = "HDR HLG BT.2020"; break;
-    case VVENC_HDR_USER_DEFINED   : cT = "HDR user defined"; break;
-    default                          : cT = "unknown"; break;
-  }
-  return cT;
-}
-
-static inline std::string vvenc_getMasteringDisplayStr( unsigned int md[10]  )
-{
-  std::stringstream css;
-
-  css << "G(" << md[0] << "," << md[1] << ")";
-  css << "B(" << md[2] << "," << md[3] << ")";
-  css << "R(" << md[4] << "," << md[5] << ")";
-  css << "WP("<< md[6] << "," << md[7] << ")";
-  css << "L(" << md[8] << "," << md[9] << ")";
-
-  css << " (= nits: ";
-  css << "G(" << md[0]/50000.0 << "," << md[1]/50000.0 << ")";
-  css << "B(" << md[2]/50000.0 << "," << md[3]/50000.0 << ")";
-  css << "R(" << md[4]/50000.0 << "," << md[5]/50000.0 << ")";
-  css << "WP("<< md[6]/50000.0 << "," << md[7]/50000.0 << ")";
-  css << "L(" << md[8]/10000.0 << "," << md[9]/10000.0 << ")";
-  css << ")";
-  return css.str();
-}
-
-static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
-{
-  std::stringstream css;
-
-  css << cll[0] << "," << cll[1] << " (cll,fall)";
-  return css.str();
 }
 
 VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *c, vvencMsgLevel eMsgLevel )
