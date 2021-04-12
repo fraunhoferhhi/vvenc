@@ -100,7 +100,7 @@ int main(int argc, char* argv[])
   msgApp( VVENC_INFO, "\n" );
 
   EncApp* pcEncApp = new EncApp;
-  g_vvencEncApp = (vvencEncApp*)pcEncApp;
+  //g_vvencEncApp = (vvencEncApp*)pcEncApp;
 
   // parse configuration
   if ( ! pcEncApp->parseCfg( argc, argv ) )

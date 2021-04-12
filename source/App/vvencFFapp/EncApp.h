@@ -70,7 +70,7 @@ void msgApp( int level, const char* fmt, ... );
 // ====================================================================================================================
 
 typedef struct vvencEncApp vvencEncApp;
-extern vvencEncApp *g_vvencEncApp;
+//extern vvencEncApp *g_vvencEncApp;
 
 class EncApp
 {
