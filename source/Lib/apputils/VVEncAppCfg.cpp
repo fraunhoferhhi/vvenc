@@ -57,8 +57,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <cstdarg>
 
-#include "apputils/ParseArg.h"
 #include "apputils/IStreamIO.h"
+#include "apputils/ParseArg.h"
 #include "apputils/VVEncAppCfg.h"
 #include "vvenc/vvenc.h"
 
@@ -1091,9 +1091,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
-    //vvencGOPEntry gopEntry;
-    //vvenc_GOPEntry_default( &gopEntry );
-    opts.addOptions()(cOSS.str(), conf.m_GOPList[i], vvencGOPEntry() );   // TODO: does it work so? cl
+    opts.addOptions()(cOSS.str(), conf.m_GOPList[i], vvencGOPEntry() );
   }
   opts.addOptions()("decode",                          m_decode,                                        "decode only");
 
