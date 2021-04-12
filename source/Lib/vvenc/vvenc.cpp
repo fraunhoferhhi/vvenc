@@ -123,8 +123,8 @@ VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const v
   for ( int i = 0; i < 3; i++ )
   {
     vvencYUVPlane&    yuvPlane = yuvBuffer->planes[ i ];
-    yuvPlane.width  = vvenc_getWidthOfComponent ( chFmt, frameWidth,  i );
-    yuvPlane.height = vvenc_getHeightOfComponent( chFmt, frameHeight, i );
+    yuvPlane.width  = vvenc_get_width_of_component ( chFmt, frameWidth,  i );
+    yuvPlane.height = vvenc_get_height_of_component( chFmt, frameHeight, i );
     yuvPlane.stride = yuvPlane.width;
     const int size  = yuvPlane.stride * yuvPlane.height;
     yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
@@ -425,12 +425,7 @@ VVENC_DECL void vvenc_decode_bitstream( const char* FileName)
   vvenc::VVEncImpl::decodeBitstream( FileName );
 }
 
-VVENC_DECL int  vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
-VVENC_DECL int  vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
-
-
-
-int vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId )
+VVENC_DECL int vvenc_get_width_of_component( const vvencChromaFormat& chFmt, const int frameWidth, const int compId )
 {
   int w = frameWidth;
   if ( compId > 0 )
@@ -446,7 +441,7 @@ int vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWi
   return w;
 }
 
-int vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId )
+VVENC_DECL int vvenc_get_height_of_component( const vvencChromaFormat& chFmt, const int frameHeight, const int compId )
 {
   int h = frameHeight;
   if ( compId > 0 )

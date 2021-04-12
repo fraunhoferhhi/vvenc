@@ -339,8 +339,8 @@ VVENC_DECL bool  vvenc_is_tracing_enabled( void );            // checks if libra
 VVENC_DECL const char* vvenc_get_compile_info_string( void ); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
 VVENC_DECL void   vvenc_decode_bitstream( const char* FileName);
 
-VVENC_DECL int  vvenc_getWidthOfComponent( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
-VVENC_DECL int  vvenc_getHeightOfComponent( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
+VVENC_DECL int  vvenc_get_width_of_component( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
+VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
 
 VVENC_NAMESPACE_END
 

@@ -1221,7 +1221,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
       error = true;
     }
     if( ( conf.m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( conf.m_outputBitDepth[ 1 ] != 10 && conf.m_outputBitDepth[ 1 ] != 12 )
-          || ( ( vvenc_getWidthOfComponent( conf.m_internChromaFormat, conf.m_SourceWidth, 1 ) & ( 1 + ( conf.m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
+          || ( ( vvenc_get_width_of_component( conf.m_internChromaFormat, conf.m_SourceWidth, 1 ) & ( 1 + ( conf.m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
     {
       cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
       error = true;
