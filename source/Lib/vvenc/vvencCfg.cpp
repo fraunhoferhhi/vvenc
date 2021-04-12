@@ -1098,13 +1098,13 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
    * This permits the ability to omit a GOP structure specification */
   if ( c->m_IntraPeriod == 1 && c->m_GOPList[0].m_POC == -1 )
   {
-    c->m_GOPList[0] = vvencGOPEntry();
+    vvenc_GOPEntry_default( &c->m_GOPList[0] );
     c->m_GOPList[0].m_QPFactor = 1;
     c->m_GOPList[0].m_betaOffsetDiv2 = 0;
     c->m_GOPList[0].m_tcOffsetDiv2 = 0;
     c->m_GOPList[0].m_POC = 1;
-    c->m_RPLList0[0] = vvencRPLEntry();
-    c->m_RPLList1[0] = vvencRPLEntry();
+    vvenc_RPLEntry_default( &c->m_RPLList0[0] );
+    vvenc_RPLEntry_default( &c->m_RPLList1[0] );
     c->m_RPLList0[0].m_POC = c->m_RPLList1[0].m_POC = 1;
     c->m_RPLList0[0].m_numRefPicsActive = 4;
     c->m_GOPList[0].m_numRefPicsActive[0] = 4;
@@ -1116,7 +1116,7 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
     {
       for( int i = 0; i < 16; i++ )
       {
-        c->m_GOPList[i] = vvencGOPEntry();
+        vvenc_GOPEntry_default( &c->m_GOPList[i] );
         c->m_GOPList[i].m_sliceType = 'B';
         c->m_GOPList[i].m_QPFactor = 1;
 

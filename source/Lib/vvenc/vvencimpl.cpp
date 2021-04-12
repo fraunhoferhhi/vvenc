@@ -311,12 +311,10 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
 
   // reset AU data
 
-  if( !*ppcAccessUnit )
+  if( *ppcAccessUnit )
   {
-    *ppcAccessUnit = vvenc_accessUnit_alloc();
+    vvenc_accessUnit_reset(*ppcAccessUnit);
   }
-
-  vvenc_accessUnit_reset(*ppcAccessUnit);
   *pbEncodeDone  = false;
 
   AccessUnitList cAu;
@@ -330,7 +328,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  if( pbEncodeDone )
+  if( *pbEncodeDone )
   {
     if( m_eState == INTERNAL_STATE_FLUSHING )
     {
@@ -345,6 +343,10 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   /* copy output AU */
   if ( !cAu.empty() )
   {
+    if( !*ppcAccessUnit )
+    {
+      *ppcAccessUnit = vvenc_accessUnit_alloc();
+    }
     iRet = xCopyAu( **ppcAccessUnit, cAu  );
   }
 
@@ -537,7 +539,7 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
     rcAccessUnit.refPic          = rcAuList.refPic;
     rcAccessUnit.temporalLayer   = rcAuList.temporalLayer;
     rcAccessUnit.poc             = rcAuList.poc;
-    rcAccessUnit.infoString      = rcAuList.InfoString;
+    //rcAccessUnit.infoString      = rcAuList.InfoString; // TODO: cl do we want support this in c?
     rcAccessUnit.status          = rcAuList.status;
   }
 

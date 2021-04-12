@@ -135,7 +135,8 @@ VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
 {
   for ( int i = 0; i < 3; i++ )
   {
-    delete [] yuvBuffer->planes[ i ].ptr;
+    if( yuvBuffer->planes[ i ].ptr )
+      delete [] yuvBuffer->planes[ i ].ptr;
   }
 }
 
@@ -275,8 +276,7 @@ VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass )
     return VVENC_ERR_INITIALIZE;
   }
 
-  d->initPass( pass );
-  return VVENC_OK;
+  return d->initPass( pass );
 }
 
 
@@ -288,8 +288,7 @@ VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvenc
     return VVENC_ERR_INITIALIZE;
   }
 
-  d->encode( YUVBuffer, accessUnit, encodeDone );
-  return VVENC_OK;
+  return d->encode( YUVBuffer, accessUnit, encodeDone );
 }
 
 VVENC_DECL int vvenc_get_config( vvencEncoder *enc, VVEncCfg* cfg )
@@ -300,8 +299,7 @@ VVENC_DECL int vvenc_get_config( vvencEncoder *enc, VVEncCfg* cfg )
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  d->getConfig( *cfg );
-  return VVENC_OK;
+  return d->getConfig( *cfg );
 }
 
 
@@ -313,8 +311,7 @@ VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const VVEncCfg *cfg )
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  d->reconfig( *cfg );
-  return VVENC_OK;
+  return d->reconfig( *cfg );
 }
 
 VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const VVEncCfg *cfg )
@@ -325,8 +322,7 @@ VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const VVEncCfg *cfg )
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  d->checkConfig( *cfg );
-  return VVENC_OK;
+  return d->checkConfig( *cfg );
 }
 
 VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )
@@ -381,8 +377,7 @@ VVENC_DECL int vvenc_print_summary( vvencEncoder *enc )
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  d->printSummary();
-  return VVENC_OK;
+  return d->printSummary();
 }
 
 

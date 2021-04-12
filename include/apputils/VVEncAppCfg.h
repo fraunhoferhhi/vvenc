@@ -81,6 +81,7 @@ public:
 
   VVEncAppCfg()
   {
+    vvenc_cfg_default( &conf );
   }
 
   virtual ~VVEncAppCfg();

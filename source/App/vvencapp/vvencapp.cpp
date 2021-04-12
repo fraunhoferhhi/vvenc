@@ -217,7 +217,7 @@ int main( int argc, char* argv[] )
   }
 
   // --- allocate memory for output packets
-  vvencAccessUnit *AU;
+  vvencAccessUnit *AU = nullptr;
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun = std::chrono::steady_clock::now();

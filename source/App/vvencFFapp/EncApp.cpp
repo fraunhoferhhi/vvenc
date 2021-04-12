@@ -172,7 +172,7 @@ void EncApp::encode()
     default: break;
   }
 
-  vvencAccessUnit *au;
+  vvencAccessUnit *au = nullptr;
 
   int framesRcvd = 0;
   for( int pass = 0; pass < vvencCfg.m_RCNumPasses; pass++ )

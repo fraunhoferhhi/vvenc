@@ -224,6 +224,8 @@ int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, co
 int testLibParameterRanges()
 {
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams, false );
 
   testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2 } );
@@ -240,8 +242,8 @@ int testLibParameterRanges()
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 
-  testParamList( "Tier",                                   vvencParams.m_levelTier,                       vvencParams, { 0,1 } );
-  testParamList( "Tier",                                   vvencParams.m_levelTier,                       vvencParams, { -1,2 }, true );
+  testParamList( "Tier",                                   vvencParams.m_levelTier,                  vvencParams, { 0,1 } );
+  testParamList( "Tier",                                   vvencParams.m_levelTier,                  vvencParams, { -1,2 }, true );
 
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 16,32 } );
   vvencParams.m_IntraPeriod = 1;
@@ -249,14 +251,14 @@ int testLibParameterRanges()
   vvencParams.m_IntraPeriod = 32;
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128 }, true ); //th is this intended
 
-  testParamList( "Width",                                  vvencParams.m_SourceWidth,                      vvencParams, { 320,1920,3840 } );
-  testParamList( "Width",                                  vvencParams.m_SourceWidth,                      vvencParams, { -1,0 }, true );
+  testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { 320,1920,3840 } );
+  testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { -1,0 }, true );
 
-  testParamList( "Height",                                 vvencParams.m_SourceHeight,                     vvencParams, { 16,32,1080,1088 } );
-  testParamList( "Height",                                 vvencParams.m_SourceHeight,                     vvencParams, { -1,0 }, true );
+  testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { 16,32,1080,1088 } );
+  testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { -1,0 }, true );
 
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 16,32,48, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 1,-1,17,24 }, true );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 16,32,48, 0 } );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 1,-1,17,24 }, true );
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );
@@ -264,22 +266,22 @@ int testLibParameterRanges()
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
 
-  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { 0,1000000,20000000 } );
-  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,800000001 }, true );
+  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,            vvencParams, { 0,1000000,20000000 } );
+  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,            vvencParams, { -1,800000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 1;
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,3 }, true );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1,2 } );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,3 }, true );
   vvencParams.m_RCTargetBitrate = 0;
 
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1 } );
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,2 }, true );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1 } );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,2 }, true );
 
-  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],              vvencParams, { 8,10 } );
-  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],              vvencParams, { 0,1,7,9,11 }, true );
+  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
+  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
 
-  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],           vvencParams, { 8,10 } );
-  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
+  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 8,10 } );
+  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 0,1,7,9,11 }, true );
 
 //  vvencParams.temporalScale = 1;
 //  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { 1,25,30,50,60,100,120 } );
@@ -335,6 +337,8 @@ int callingOrderInvalidUninit()
 int callingOrderInitNoUninit()
 {
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams, true );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -354,7 +358,9 @@ int callingOrderInitNoUninit()
 
 int callingOrderInitTwice()
 {
-  VVEncCfg vvencParams; //
+  VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -382,8 +388,10 @@ int callingOrderInitTwice()
 
 int callingOrderNoInit()
 {
-  vvencAccessUnit* AU;
+  vvencAccessUnit* AU = nullptr;
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -412,6 +420,8 @@ int callingOrderNoInit()
 int callingOrderRegular()
 {
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -426,7 +436,7 @@ int callingOrderRegular()
     return -1;
   }
 
-  vvencAccessUnit* AU;
+  vvencAccessUnit* AU = nullptr;
   vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
@@ -471,6 +481,8 @@ int callingOrderRegular()
 int callingOrderNotRegular()
 {
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -485,7 +497,7 @@ int callingOrderNotRegular()
     return -1;
   }
 
-  vvencAccessUnit* AU;
+  vvencAccessUnit* AU = nullptr;
   vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
@@ -529,6 +541,8 @@ int callingOrderNotRegular()
 int callingOrderRegularInitPass()
 {
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -543,7 +557,7 @@ int callingOrderRegularInitPass()
     return -1;
   }
 
-  vvencAccessUnit* AU;
+  vvencAccessUnit* AU = nullptr;
 
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
@@ -579,6 +593,8 @@ int callingOrderRegularInitPass()
 int callingOrderRegularInit2Pass()
 {
   VVEncCfg vvencParams;
+  vvenc_cfg_default( &vvencParams );
+
   vvencParams.m_RCNumPasses = 2;
   vvencParams.m_RCTargetBitrate = 500000;
 
@@ -596,7 +612,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  vvencAccessUnit *AU;
+  vvencAccessUnit *AU = nullptr;
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
@@ -654,6 +670,7 @@ int checkSDKDefaultBehaviourRC()
   VVEncCfg vvencParams;
   defaultSDKInit( vvencParams,  500000 );
   vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
+  vvencParams.m_numThreads = 0;
 
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )
@@ -667,7 +684,7 @@ int checkSDKDefaultBehaviourRC()
     return -1;
   }
 
-  vvencAccessUnit *AU;
+  vvencAccessUnit *AU = nullptr;
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
@@ -762,7 +779,7 @@ int inputBufTest( vvencYUVBuffer* pcYuvPicture )
     return -1;
   }
 
-  vvencAccessUnit* AU;
+  vvencAccessUnit* AU = nullptr;
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone))
   {
@@ -805,12 +822,11 @@ int invaildInputInvalidPicSize( )
 
   if( 0 != inputBufTest( pcYuvPicture ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
     return -1;
   }
 
-  vvenc_YUVBuffer_free( pcYuvPicture, true );
-
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
 
   return 0;
 }
@@ -829,11 +845,11 @@ int invaildInputInvalidLumaStride( )
 
   if( 0 != inputBufTest( pcYuvPicture ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
     return -1;
   }
 
-  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
   return 0;
 }
 
@@ -855,11 +871,11 @@ int invaildInputInvalidChromaStride( )
 
   if( 0 != inputBufTest( pcYuvPicture ))
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
     return -1;
   }
 
-  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
   return 0;
 }
 

@@ -99,7 +99,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg, vvencYUVWriterCallback call
   const_cast<VVEncCfg&>(m_cEncCfg) = encCfg;
   m_cBckCfg = encCfg;
 
-  m_yuvWriterIf = callback;
+  m_yuvWriterIf = callback; // TODO: callback not yet implemented
 
   // initialize first pass
   initPass( 0 );
