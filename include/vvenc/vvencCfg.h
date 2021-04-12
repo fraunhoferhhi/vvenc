@@ -591,7 +591,6 @@ typedef struct VVEncCfg
 
   unsigned            m_maxNumMergeCand;                                                  ///< Max number of merge candidates
   unsigned            m_maxNumAffineMergeCand;                                            ///< Max number of affine merge candidates
-//  unsigned            m_maxNumIBCMergeCand;                                             ///< Max number of IBC merge candidates
   int                 m_Geo;
   unsigned            m_maxNumGeoCand;
   int                 m_FastIntraTools;
@@ -645,6 +644,11 @@ typedef struct VVEncCfg
   bool                m_resChangeInClvsEnabled;
   bool                m_craAPSreset;
   bool                m_rprRASLtoolSwitch;
+
+#if 1 // IBC_VTM
+  int                 m_IBCMode;
+  int                 m_IBCFastMethod;
+#endif
 
   bool                m_bLoopFilterDisable;                                              ///< flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                                           ///< offset for deblocking filter in 0 = slice header, 1 = PPS

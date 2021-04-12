@@ -333,6 +333,9 @@ void CodingUnit::initData()
   treeType          = TREE_D;
   modeType          = MODE_TYPE_ALL;
   modeTypeSeries    = 0;
+#if IBC_VTM
+  mcControl         = 0;
+#endif
 }
 
 
@@ -360,6 +363,10 @@ void CodingUnit::initPuData()
   geoSplitDir       = MAX_UCHAR;
   geoMergeIdx0      = MAX_UCHAR;
   geoMergeIdx1      = MAX_UCHAR;
+#if IBC_VTM
+  bv.setZero();
+  bvd.setZero();
+#endif
 
   mcControl         = 0;
 
@@ -418,6 +425,10 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
   interDir          = other.interDir;
   mergeType         = other.mergeType;
   mvRefine          = other.mvRefine;
+#if IBC_VTM
+  bv                = other.bv;
+  bvd               = other.bvd;
+#endif
 
   if( other.mergeFlag && mvdL0SubPu )
   {

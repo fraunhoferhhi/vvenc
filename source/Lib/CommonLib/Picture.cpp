@@ -182,6 +182,9 @@ Picture::Picture()
     , useScMCTF         ( false )
     , useScTS           ( false )
     , useScBDPCM        ( false )
+#if IBC_VTM
+    , useScIBC          ( false )
+#endif
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )

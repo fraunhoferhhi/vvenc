@@ -560,7 +560,6 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   const unsigned src1Stride = pred.stride;
   const unsigned src2Stride = resi.stride;
   const unsigned destStride =      stride;
-
   if( src2Stride == width )
   {
     g_pelBufOP.reco( pred.buf, resi.buf, buf, width * height, clpRng );

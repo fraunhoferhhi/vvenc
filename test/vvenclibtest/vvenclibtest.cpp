@@ -72,6 +72,7 @@ int g_verbose = 0;
 int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
+int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
 
 int main( int argc, char* argv[] )
 {
@@ -117,10 +118,16 @@ int main( int argc, char* argv[] )
     testInvalidInputParams(); 
     break;
   }
+  case 4:
+  {
+    testSDKDefaultBehaviour();
+    break;
+  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
     testInvalidInputParams();
+    testSDKDefaultBehaviour();
     break;
   }
 
@@ -160,6 +167,16 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_internChromaFormat         =  VVENC_CHROMA_420;
 
   vvenc_init_preset(  &rcEncCfg, vvencPresetMode::VVENC_FASTER );
+  if( callInitCfgParameter )
+  {
+    vvenc_init_cfg_parameter( &rcEncCfg );
+  }
+}
+
+void defaultSDKInit( VVEncCfg& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
+{
+  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32,  vvencPresetMode::VVENC_MEDIUM );
+
   if( callInitCfgParameter )
   {
     vvenc_init_cfg_parameter( &rcEncCfg );
@@ -227,6 +244,9 @@ int testLibParameterRanges()
   testParamList( "Tier",                                   vvencParams.m_levelTier,                       vvencParams, { -1,2 }, true );
 
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 16,32 } );
+  vvencParams.m_IntraPeriod = 1;
+  testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1 } );
+  vvencParams.m_IntraPeriod = 32;
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128 }, true ); //th is this intended
 
   testParamList( "Width",                                  vvencParams.m_SourceWidth,                      vvencParams, { 320,1920,3840 } );
@@ -629,6 +649,80 @@ int callingOrderRegularInit2Pass()
 }
 
 
+int checkSDKDefaultBehaviourRC()
+{
+  VVEncCfg vvencParams;
+  defaultSDKInit( vvencParams,  500000 );
+  vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
+  {
+    return -1;
+  }
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit *AU;
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
+
+  int validAUs = 0;
+
+  bool encodeDone = false;
+  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+    return -1;
+  }
+
+  if( AU && AU->payloadUsedSize > 0 )
+  {
+    validAUs++;
+  }
+
+  while ( !encodeDone )
+  {
+    if( 0 != vvenc_encode( enc, nullptr, &AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+
+    if( AU && AU->payloadUsedSize > 0 )
+    {
+      validAUs++;
+    }
+  }
+
+  if( 0 != vvenc_encoder_close( enc ))
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+    return -1;
+  }
+
+
+  if( validAUs != 1 )
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+    return -1;
+  }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+
+  return 0;
+}
+
 
 int testLibCallingOrder()
 {
@@ -645,6 +739,11 @@ int testLibCallingOrder()
   return 0;
 }
 
+int testSDKDefaultBehaviour()
+{
+  testfunc( "checkSDKDefaultBehaviourRC", &checkSDKDefaultBehaviourRC, false );
+  return 0;
+}
 
 int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {

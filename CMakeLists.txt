@@ -1,10 +1,10 @@
 # Top level CMakeLists.txt
 #
 # minimum required cmake version
-cmake_minimum_required( VERSION 3.12.0 FATAL_ERROR )
+cmake_minimum_required( VERSION 3.13.0 FATAL_ERROR )
 
 # set cmake policy
-if( NOT CMAKE_VERSION VERSION_LESS 3.12.0 )
+if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
   # Use latest policy
   cmake_policy( VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION} )
 endif()
@@ -53,6 +53,13 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # set exception handling
   if( MSVC )
     add_compile_options( "/EHsc" )
+  endif()
+  
+  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencFFapp" vvEncFfAppFound )
+  list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencapp" vvEncAppFound )
+  
+  if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
+    list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
   endif()
 
   # vvenc embedded by superproject, always include source/Lib/vvenc  as first component
@@ -280,17 +287,19 @@ enable_testing()
 add_test( NAME Test_vvenclibtest-paramerter_range COMMAND vvenclibtest 1 )
 add_test( NAME Test_vvenclibtest-calling_order COMMAND vvenclibtest 2 )
 add_test( NAME Test_vvenclibtest-input_params COMMAND vvenclibtest 3 )
-add_test( NAME Test_vvenclibtest-output_params COMMAND vvenclibtest 4 )
+add_test( NAME Test_vvenclibtest-sdk_default COMMAND vvenclibtest 4 )
 
 add_test( NAME Test_vvencapp-tooltest COMMAND vvencapp --preset tooltest -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 8 -o out.vvc )
 set_tests_properties( Test_vvencapp-tooltest PROPERTIES TIMEOUT 90 )
 add_test( NAME Test_vvencFFapp-tooltest COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b outf.vvc )
 set_tests_properties( Test_vvencFFapp-tooltest PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+#add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+add_test( NAME Test_compare_output-tooltest COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out.vvc outf.vvc )
 
 add_test( NAME Test_vvencFFapp-tooltest-Scalar COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 -b outf.vvc --SIMD=SCALAR )
 set_tests_properties( Test_vvencFFapp-tooltest-Scalar PROPERTIES TIMEOUT 70 )
-add_test( NAME Test_compare_output-tooltest-Scalar COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+#add_test( NAME Test_compare_output-tooltest-Scalar COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+add_test( NAME Test_compare_output-tooltest-Scalar COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out.vvc outf.vvc )
 
 add_test( NAME Test_vvencFFapp-tooltesttrans COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg -c ../../test/data/RTn23.cfg -f 8 --DebugBitstream=outf.vvc --DebugPOC=3 -b out.vvc )
 set_tests_properties( Test_vvencFFapp-tooltesttrans PROPERTIES TIMEOUT 20 )
@@ -330,7 +339,10 @@ add_test( NAME Test_vvencFFapp-medium_noqpa_0thr COMMAND vvencFFapp -c ../../cfg
 set_tests_properties( Test_vvencFFapp-medium_noqpa_0thr PROPERTIES TIMEOUT 30 )
 add_test( NAME Test_compare_output-medium_noqpa_0thr COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
 
-add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv  )
+add_test( NAME Test_vvencFFapp-lowdelay_medium_enc COMMAND vvencFFapp -c ../../cfg/experimental/lowdelay_medium.cfg -c ../../test/data/RTn23.cfg --IntraPeriod=-1 -dph 1 -f 8 -b outf.vvc )
+add_test( NAME Test_vvencFFapp-lowdelay_medium_dec COMMAND vvencFFapp --decode -b outf.vvc )
+
+add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc  )
  
 
 if( VVENC_ENABLE_INSTALL )

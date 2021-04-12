@@ -80,6 +80,10 @@ enum EncTestModeType
   ETM_SPLIT_TT_H,
   ETM_SPLIT_TT_V,
   ETM_RECO_CACHED,
+#if IBC_VTM
+  ETM_IBC,    // ibc mode
+  ETM_IBC_MERGE, // ibc merge mode
+#endif
   ETM_INVALID
 };
 

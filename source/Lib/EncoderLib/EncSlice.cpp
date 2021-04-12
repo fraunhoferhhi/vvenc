@@ -248,6 +248,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
     lnRsc->m_ReuseUniMv.resetReusedUniMvs();
     lnRsc->m_encCu.initPic( pic );
   }
+
 }
 
 
@@ -851,6 +852,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           lineEncRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
           lineEncRsrc->m_ReuseUniMv.resetReusedUniMvs();
           pic->cs->motionLutBuf[ ctuPosY ].lut.resize(0);
+#if IBC_VTM
+          pic->cs->motionLutBuf[ctuPosY].lutIbc.resize(0);
+#endif
         }
 
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );

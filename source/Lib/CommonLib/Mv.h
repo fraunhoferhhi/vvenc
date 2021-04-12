@@ -283,6 +283,9 @@ public:
 void clipMv ( Mv& rcMv, const Position& pos,
               const Size& size,
               const PreCalcValues& pcv );
+#if IBC_VTM 
+void clipMv(Mv& rcMv, const Position& pos, const Size& size, const PreCalcValues& pcv, const PPS& pps,bool m_clipMvInSubPic);
+#endif
 
 bool wrapClipMv( Mv& rcMv, const Position& pos,
                  const Size& size,
@@ -295,7 +298,7 @@ void roundAffineMv( int& mvx, int& mvy, int nShift );
 namespace std
 {
   template <>
-  struct hash<vvenc::Mv> : public std::unary_function<vvenc::Mv, uint64_t>
+  struct hash<vvenc::Mv>
   {
     uint64_t operator()(const vvenc::Mv& value) const
     {

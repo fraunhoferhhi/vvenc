@@ -340,7 +340,6 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
 
   c->m_maxNumMergeCand                         = 5;                                     ///< Max number of merge candidates
   c->m_maxNumAffineMergeCand                   = 5;                                     ///< Max number of affine merge candidates
-//  c->m_maxNumIBCMergeCand                    = 6;                                     ///< Max number of IBC merge candidates
   c->m_Geo                                     = 0;
   c->m_maxNumGeoCand                           = 5;
   c->m_FastIntraTools                          = 0;
@@ -394,6 +393,11 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_resChangeInClvsEnabled                  = false;
   c->m_craAPSreset                             = false;
   c->m_rprRASLtoolSwitch                       = false;
+
+#if 1 // IBC_VTM
+  c->m_IBCMode                                 = 0;
+  c->m_IBCFastMethod                           = 1;
+#endif
 
   c->m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter
   c->m_loopFilterOffsetInPPS                   = true;                                  ///< offset for deblocking filter in 0 = slice header, 1 = PPS
@@ -518,8 +522,8 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_inputBitDepth[0] != 8 && c->m_inputBitDepth[0] != 10,                  "Input bitdepth must be 8 or 10 bit" );
   vvenc_confirmParameter( c, c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
 
-  vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                           "Frame rate must be more than 1" );
-  vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                       "TicksPerSecond must be in range from 1 to 27000000" );
+  vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be more than 1" );
+  vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                 "TicksPerSecond must be in range from 1 to 27000000" );
 
   int temporalRate   = c->m_FrameRate;
   int temporalScale  = 1;
@@ -536,18 +540,16 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
-  vvenc_confirmParameter( c, c->m_IntraPeriod < 0,                 "IDR period (in frames) must be >= 0");
-  vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,              "IDR period (in seconds) must be >= 0");
+  vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                            "IDR period (in frames) must be >= -1");
+  vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
 
-  vvenc_confirmParameter( c, c->m_GOPSize < 1 ,                                                             "GOP Size must be greater or equal to 1" );
-  vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                            "GOP Size must be a multiple of 2, if GOP Size is greater than 1" );
-  vvenc_confirmParameter( c, c->m_GOPSize > 64,                                                             "GOP size must be <= 64" );
-  vvenc_confirmParameter( c, c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32,                       "GOP size only supporting: 1, 16, 32" );
+  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > 64,                                                        "GOP Size must be between 1 and 64" );
+  vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                                        "GOP Size must be a multiple of 2" );
+  vvenc_confirmParameter( c, c->m_GOPList[0].m_POC == -1 && c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32, "GOP list auto config only supported GOP sizes: 1, 16, 32" );
 
-  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                  "QP exceeds supported range (0 to 63)" );
+  vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                 "QP exceeds supported range (0 to 63)" );
 
-  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,                     "TargetBitrate must be between 0 - 800000000" );
+  vvenc_confirmParameter( c, c->m_RCTargetBitrate < 0 || c->m_RCTargetBitrate > 800000000,                           "TargetBitrate must be between 0 - 800000000" );
 
   if( 0 == c->m_RCTargetBitrate )
    {
@@ -652,10 +654,7 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
   }
 
   // rate control
-  if( c->m_RCNumPasses < 0 )
-  {
-    c->m_RCNumPasses = c->m_RCTargetBitrate > 0 ? 2 : 1;
-  }
+  if( c->m_RCNumPasses < 0 ) c->m_RCNumPasses = 1;
 
   // threading
   if( c->m_numThreads < 0 )
@@ -2023,12 +2022,16 @@ static bool checkCfgParameter( VVEncCfg *c )
   vvenc_confirmParameter( c, c->m_LFNST< 0 || c->m_LFNST> 3,                  "LFNST out of range [0..3]" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF < 0 || c->m_vvencMCTF.MCTF > 2,  "MCTF out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_ISP  < 0 || c->m_ISP > 3,                    "ISP out of range [0..3]" );
-  vvenc_confirmParameter( c, c->m_TS   < 0 || c->m_TS > 2,                       "TS out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_TS   < 0 || c->m_TS > 2,                     "TS out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_TSsize < 2 || c->m_TSsize > 5,               "TSsize out of range [2..5]" );
   vvenc_confirmParameter( c, c->m_useBDPCM < 0 || c->m_useBDPCM > 2,           "BDPCM out of range [0..2]");
   vvenc_confirmParameter( c, c->m_useBDPCM  && c->m_TS==0,                     "BDPCM cannot be used when transform skip is disabled" );
   vvenc_confirmParameter( c, c->m_useBDPCM==1  && c->m_TS==2,                  "BDPCM cannot be permanently used when transform skip is auto" );
   vvenc_confirmParameter( c, c->m_FastIntraTools <0 || c->m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
+#if IBC_VTM
+  vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
+  vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 5,"IBCFastMethod out of range [0..5]");
+#endif
 
   if( c->m_alf )
   {
@@ -2503,6 +2506,7 @@ VVENC_DECL int vvenc_init_preset( VVEncCfg *c, vvencPresetMode preset )
   c->m_maxMTTDepthIChroma            = 3;
 
   // disable tools
+
   c->m_Affine                        = 0;
   c->m_alf                           = 0;
   c->m_allowDisFracMMVD              = 0;
@@ -2536,6 +2540,10 @@ VVENC_DECL int vvenc_init_preset( VVEncCfg *c, vvencPresetMode preset )
   c->m_TS                            = 0;
   c->m_useNonLinearAlfChroma         = 0;
   c->m_useNonLinearAlfLuma           = 0;
+#if 1 // IBC_VTM
+  c->m_IBCMode                       = 0;
+  c->m_IBCFastMethod                 = 1;
+#endif
 
   // enable speedups
   c->m_qtbttSpeedUp                  = 2;
@@ -3029,6 +3037,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *c, vvencMsgLevel eM
     css << "useChromaTS:" << c->m_useChromaTS << " ";
   }
   css << "BDPCM:" << c->m_useBDPCM << " ";
+#if IBC_VTM
+  css << "IBC:" << c->m_IBCMode << " ";
+#endif
 
   css << "\nENC. ALG. CFG: ";
   css << "QPA:" << c->m_usePerceptQPA << " ";
@@ -3065,6 +3076,13 @@ VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *c, vvencMsgLevel eM
   css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
+#if IBC_VTM
+  if( c->m_IBCMode )
+  {
+    css << "IBCfastMethod:" << c->m_IBCFastMethod << " ";
+  }
+#endif
+
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";

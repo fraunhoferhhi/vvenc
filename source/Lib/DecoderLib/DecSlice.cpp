@@ -195,6 +195,10 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
     if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
     {
       cs.motionLut.lut.resize(0);
+#if IBC_VTM
+      cs.motionLut.lutIbc.resize(0);
+      cs.resetIBCBuffer = true;
+#endif
     }
 
     cabacReader.coding_tree_unit( cs, ctuArea, pic->cs->prevQP, ctuRsAddr );

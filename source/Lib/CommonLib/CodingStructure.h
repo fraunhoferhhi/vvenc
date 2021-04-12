@@ -229,6 +229,9 @@ private:
 
 public:
   CodingStructure*  bestParent;
+#if IBC_VTM
+  bool              resetIBCBuffer;
+#endif
 
   MotionBuf getMotionBuf( const     Area& _area );
   MotionBuf getMotionBuf( const UnitArea& _area ) { return getMotionBuf( _area.Y() ); }

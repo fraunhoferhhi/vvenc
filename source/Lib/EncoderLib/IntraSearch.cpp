@@ -1998,11 +1998,13 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     saveCS.pcv = cs.pcv;
     saveCS.picture = cs.picture;
     saveCS.area.repositionTo(cs.area);
+#if IBC_VTM
+    saveCS.initStructData(MAX_INT, true);
+#endif
 
     TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
     tmpTU.initData();
     tmpTU.UnitArea::operator=(currArea);
-
     const unsigned      numTBlocks = getNumberValidTBlocks(*cs.pcv);
 
     CompArea& cbArea = currTU.blocks[COMP_Cb];

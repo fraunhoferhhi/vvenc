@@ -134,7 +134,20 @@ void EncApp::encode()
 
   vvenc_get_config( m_encCtx, &vvencCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
 
-  msgApp( VVENC_INFO, "%s",m_cEncAppCfg.getConfigAsString( vvencCfg.m_verbosity ));
+  msgApp( VVENC_INFO, "%s", m_cEncAppCfg.getConfigAsString( vvencCfg.m_verbosity ).c_str());
+
+  if( m_cEncAppCfg.m_inputFileName.empty() )
+  {
+    if( m_cEncAppCfg.conf.m_RCNumPasses > 1 )
+    {
+      msgApp( VVENC_ERROR, " no input file given and 2 pass rate control is enabled; not supported yet\n" );
+      return;
+    }
+    else
+    {
+      msgApp( VVENC_INFO, " no input file given. trying to read from stdin\n" );
+    }
+  }
 
   if( ! openFileIO() )
   {

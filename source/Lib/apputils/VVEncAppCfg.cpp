@@ -527,6 +527,11 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     conf.m_internChromaFormat = m_inputFileChromaFormat;
   }
 
+  if( conf.m_RCNumPasses < 0 )
+  {
+    conf.m_RCNumPasses = conf.m_RCTargetBitrate > 0 ? 2 : 1;
+  }
+
   return true;
 }
 
@@ -557,31 +562,31 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<vvencChromaFormat>  toInputFileCoFormat          ( &m_inputFileChromaFormat,       &ChromaFormatToEnumMap  );
   IStreamToEnum<vvencChromaFormat>  toInternCoFormat             ( &this->conf.m_internChromaFormat,          &ChromaFormatToEnumMap  );
   IStreamToEnum<vvencHashType>      toHashType                   ( &this->conf.m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
-  IStreamToArr<int>            toQpInCb                     ( &this->conf.m_qpInValsCb[0], VVENC_MAX_QP_VALS_CHROMA            );
-  IStreamToArr<int>            toQpOutCb                    ( &this->conf.m_qpOutValsCb[0], VVENC_MAX_QP_VALS_CHROMA           );
-  IStreamToArr<int>            toQpInCr                     ( &this->conf.m_qpInValsCr[0], VVENC_MAX_QP_VALS_CHROMA            );
-  IStreamToArr<int>            toQpOutCr                    ( &this->conf.m_qpOutValsCr[0], VVENC_MAX_QP_VALS_CHROMA           );
-  IStreamToArr<int>            toQpInCbCr                   ( &this->conf.m_qpInValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA          );
-  IStreamToArr<int>            toQpOutCbCr                  ( &this->conf.m_qpOutValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA         );
-  IStreamToArr<double>         toIntraLambdaModifier        ( &this->conf.m_adIntraLambdaModifier[0], VVENC_MAX_TLAYER );
+  IStreamToArr<int>                 toQpInCb                     ( &this->conf.m_qpInValsCb[0], VVENC_MAX_QP_VALS_CHROMA            );
+  IStreamToArr<int>                 toQpOutCb                    ( &this->conf.m_qpOutValsCb[0], VVENC_MAX_QP_VALS_CHROMA           );
+  IStreamToArr<int>                 toQpInCr                     ( &this->conf.m_qpInValsCr[0], VVENC_MAX_QP_VALS_CHROMA            );
+  IStreamToArr<int>                 toQpOutCr                    ( &this->conf.m_qpOutValsCr[0], VVENC_MAX_QP_VALS_CHROMA           );
+  IStreamToArr<int>                 toQpInCbCr                   ( &this->conf.m_qpInValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA          );
+  IStreamToArr<int>                 toQpOutCbCr                  ( &this->conf.m_qpOutValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA         );
+  IStreamToArr<double>              toIntraLambdaModifier        ( &this->conf.m_adIntraLambdaModifier[0], VVENC_MAX_TLAYER );
 
-  IStreamToArr<int>            toMCTFFrames                 ( &this->conf.m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
-  IStreamToArr<double>         toMCTFStrengths              ( &this->conf.m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
-  IStreamToEnum<vvencSegmentMode>   toSegment               ( &this->conf.m_SegmentMode,            &SegmentToEnumMap );
-  IStreamToEnum<vvencHDRMode>       toHDRMode               ( &this->conf.m_HdrMode,                &HdrModeToIntMap       );
-  IStreamToEnum<int>           toColorPrimaries             ( &this->conf.m_colourPrimaries,        &ColorPrimariesToIntMap );
-  IStreamToEnum<int>           toTransferCharacteristics    ( &this->conf.m_transferCharacteristics,&TransferCharacteristicsToIntMap );
-  IStreamToEnum<int>           toColorMatrix                ( &this->conf.m_matrixCoefficients,     &ColorMatrixToIntMap );
-  IStreamToEnum<int>           toPrefTransferCharacteristics( &this->conf.m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
+  IStreamToArr<int>                 toMCTFFrames                 ( &this->conf.m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
+  IStreamToArr<double>              toMCTFStrengths              ( &this->conf.m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
+  IStreamToEnum<vvencSegmentMode>   toSegment                    ( &this->conf.m_SegmentMode,            &SegmentToEnumMap );
+  IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &this->conf.m_HdrMode,                &HdrModeToIntMap       );
+  IStreamToEnum<int>                toColorPrimaries             ( &this->conf.m_colourPrimaries,        &ColorPrimariesToIntMap );
+  IStreamToEnum<int>                toTransferCharacteristics    ( &this->conf.m_transferCharacteristics,&TransferCharacteristicsToIntMap );
+  IStreamToEnum<int>                toColorMatrix                ( &this->conf.m_matrixCoefficients,     &ColorMatrixToIntMap );
+  IStreamToEnum<int>                toPrefTransferCharacteristics( &this->conf.m_preferredTransferCharacteristics, &TransferCharacteristicsToIntMap );
 
-  IStreamToArr<unsigned int>   toMasteringDisplay           ( &this->conf.m_masteringDisplay[0], 10  );
-  IStreamToArr<unsigned int>   toContentLightLevel          ( &this->conf.m_contentLightLevel[0], 2 );
+  IStreamToArr<unsigned int>        toMasteringDisplay           ( &this->conf.m_masteringDisplay[0], 10  );
+  IStreamToArr<unsigned int>        toContentLightLevel          ( &this->conf.m_contentLightLevel[0], 2 );
 
-  IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType  ( &this->conf.m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
+  IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &this->conf.m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
-  IStreamToEnum<int>           toAud                        ( &this->conf.m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>           toHrd                        ( &this->conf.m_hrdParametersPresent,            &FlagToIntMap );
-  IStreamToEnum<int>           toVui                        ( &this->conf.m_vuiParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>                toAud                        ( &this->conf.m_AccessUnitDelimiter,             &FlagToIntMap );
+  IStreamToEnum<int>                toHrd                        ( &this->conf.m_hrdParametersPresent,            &FlagToIntMap );
+  IStreamToEnum<int>                toVui                        ( &this->conf.m_vuiParametersPresent,            &FlagToIntMap );
 
   //
   // setup configuration parameters
@@ -600,11 +605,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("InputFile,i",                                     m_inputFileName,                                  "Original YUV input file name")
   ("Size,s",                                          toSourceSize,                                     "Input resolution (WidthxHeight)")
-  ("InputBitDepth",                                   conf.m_inputBitDepth[ 0 ],                          "Bit-depth of input file")
-  ("FramesToBeEncoded,f",                             conf.m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
-  ("FrameRate,-fr",                                   conf.m_FrameRate,                                      "Frame rate")
-  ("FrameSkip,-fs",                                   conf.m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
-  ("TicksPerSecond",                                  conf.m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("InputBitDepth",                                   conf.m_inputBitDepth[ 0 ],                        "Bit-depth of input file")
+  ("FramesToBeEncoded,f",                             conf.m_framesToBeEncoded,                         "Number of frames to be encoded (default=all)")
+  ("FrameRate,-fr",                                   conf.m_FrameRate,                                 "Frame rate")
+  ("FrameSkip,-fs",                                   conf.m_FrameSkip,                                 "Number of frames to skip at start of input YUV")
+  ("TicksPerSecond",                                  conf.m_TicksPerSecond,                            "Ticks Per Second for dts generation, ( 1..27000000)")
 
   ("segment",                                         toSegment,                                        "when encoding multiple separate segments, specify segment position to enable segment concatenation (first, mid, last) [off]\n"
                                                                                                         "first: first segment           \n"
@@ -616,7 +621,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("BitstreamFile,b",                                 m_bitstreamFileName,                              "Bitstream output file name")
   ("ReconFile,o",                                     m_reconFileName,                                  "Reconstructed YUV output file name")
-  ("OutputBitDepth",                                  conf.m_outputBitDepth[ 0 ],                         "Bit-depth of output file")
+  ("OutputBitDepth",                                  conf.m_outputBitDepth[ 0 ],                       "Bit-depth of output file")
   ;
 
   opts.setSubSection("Profile, Level, Tier");
@@ -628,24 +633,24 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Threading, performance");
   opts.addOptions()
-  ("Threads,t",                                       conf.m_numThreads,                                     "Number of threads")
+  ("Threads,t",                                       conf.m_numThreads,                                "Number of threads")
   ("preset",                                          toPreset,                                         "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
   ;
 
   opts.setSubSection("Slice decision options");
   opts.addOptions()
-  ("IntraPeriod,-ip",                                 conf.m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
-  ("RefreshSec,-rs",                                  conf.m_IntraPeriodSec,                                 "Intra period in seconds")
+  ("IntraPeriod,-ip",                                 conf.m_IntraPeriod,                               "Intra period in frames, (-1: only first frame)")
+  ("RefreshSec,-rs",                                  conf.m_IntraPeriodSec,                            "Intra period in seconds")
   ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI)")
-  ("GOPSize,g",                                       conf.m_GOPSize,                                        "GOP size of temporal structure")
+  ("GOPSize,g",                                       conf.m_GOPSize,                                   "GOP size of temporal structure")
   ;
 
   opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
-  ("NumPasses",                                       conf.m_RCNumPasses,                                    "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
-  ("TargetBitrate",                                   conf.m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
+  ("NumPasses",                                       conf.m_RCNumPasses,                               "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
+  ("TargetBitrate",                                   conf.m_RCTargetBitrate,                           "Rate control: target bit-rate [bps]" )
 
-  ("PerceptQPA,-qpa",                                 conf.m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
+  ("PerceptQPA,-qpa",                                 conf.m_usePerceptQPA,                             "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
   ;
 
 
@@ -671,28 +676,28 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   {
     opts.setSubSection("Tracing");
     opts.addOptions()
-    ("TraceChannelsList",                             conf.m_listTracingChannels,                            "List all available tracing channels")
-    ("TraceRule",                                     conf.m_traceRule,                                      "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("TraceFile",                                     conf.m_traceFile,                                      "Tracing file")
+    ("TraceChannelsList",                             conf.m_listTracingChannels,                       "List all available tracing channels")
+    ("TraceRule",                                     conf.m_traceRule,                                 "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("TraceFile",                                     conf.m_traceFile,                                 "Tracing file")
     ;
   }
 
   // file, i/o and source parameters
   opts.setSubSection("Input options");
   opts.addOptions()
-  ("SourceWidth",                                     conf.m_SourceWidth,                                    "Source picture width")
-  ("SourceHeight",                                    conf.m_SourceHeight,                                   "Source picture height")
+  ("SourceWidth",                                     conf.m_SourceWidth,                               "Source picture width")
+  ("SourceHeight",                                    conf.m_SourceHeight,                              "Source picture height")
 
-  ("ConformanceWindowMode",                           conf.m_conformanceWindowMode,                          "Window conformance mode (0:off, 1:automatic padding, 2:padding, 3:conformance")
-  ("ConfWinLeft",                                     conf.m_confWinLeft,                                    "Left offset for window conformance mode 3")
-  ("ConfWinRight",                                    conf.m_confWinRight,                                   "Right offset for window conformance mode 3")
-  ("ConfWinTop",                                      conf.m_confWinTop,                                     "Top offset for window conformance mode 3")
-  ("ConfWinBottom",                                   conf.m_confWinBottom,                                  "Bottom offset for window conformance mode 3")
+  ("ConformanceWindowMode",                           conf.m_conformanceWindowMode,                     "Window conformance mode (0:off, 1:automatic padding, 2:padding, 3:conformance")
+  ("ConfWinLeft",                                     conf.m_confWinLeft,                               "Left offset for window conformance mode 3")
+  ("ConfWinRight",                                    conf.m_confWinRight,                              "Right offset for window conformance mode 3")
+  ("ConfWinTop",                                      conf.m_confWinTop,                                "Top offset for window conformance mode 3")
+  ("ConfWinBottom",                                   conf.m_confWinBottom,                             "Bottom offset for window conformance mode 3")
 
-  ("TemporalSubsampleRatio",                          conf.m_temporalSubsampleRatio,                         "Temporal sub-sample ratio when reading input YUV")
+  ("TemporalSubsampleRatio",                          conf.m_temporalSubsampleRatio,                    "Temporal sub-sample ratio when reading input YUV")
 
-  ("HorizontalPadding",                               conf.m_aiPad[0],                                       "Horizontal source padding for conformance window mode 2")
-  ("VerticalPadding",                                 conf.m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
+  ("HorizontalPadding",                               conf.m_aiPad[0],                                  "Horizontal source padding for conformance window mode 2")
+  ("VerticalPadding",                                 conf.m_aiPad[1],                                  "Vertical source padding for conformance window mode 2")
 
   ("InputChromaFormat",                               toInputFileCoFormat,                              "input file chroma format (400, 420, 422, 444)")
   ;
@@ -801,15 +806,15 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MaxMTTHierarchyDepthISliceL",                     conf.m_maxMTTDepthI,                              "maxMTTDepthISliceL")
   ("MaxMTTHierarchyDepthISliceC",                     conf.m_maxMTTDepthIChroma,                        "maxMTTDepthISliceC")
   // <-- deprecated
-  ("MaxBTLumaISlice",                                 conf.m_maxBT[0],                                       "MaxBTLumaISlice")
-  ("MaxBTChromaISlice",                               conf.m_maxBT[2],                                       "MaxBTChromaISlice")
-  ("MaxBTNonISlice",                                  conf.m_maxBT[1],                                       "MaxBTNonISlice")
-  ("MaxTTLumaISlice",                                 conf.m_maxTT[0],                                       "MaxTTLumaISlice")
-  ("MaxTTChromaISlice",                               conf.m_maxTT[2],                                       "MaxTTChromaISlice")
-  ("MaxTTNonISlice",                                  conf.m_maxTT[1],                                       "MaxTTNonISlice")
-  ("DualITree",                                       conf.m_dualITree,                                      "Use separate luma and chroma QTBT trees for intra slice")
-  ("Log2MaxTbSize",                                   conf.m_log2MaxTbSize,                                  "Maximum transform block size in logarithm base 2")
-  ("Log2MinCodingBlockSize",                          conf.m_log2MinCodingBlockSize,                         "Minimum coding block size in logarithm base 2")
+  ("MaxBTLumaISlice",                                 conf.m_maxBT[0],                                  "MaxBTLumaISlice")
+  ("MaxBTChromaISlice",                               conf.m_maxBT[2],                                  "MaxBTChromaISlice")
+  ("MaxBTNonISlice",                                  conf.m_maxBT[1],                                  "MaxBTNonISlice")
+  ("MaxTTLumaISlice",                                 conf.m_maxTT[0],                                  "MaxTTLumaISlice")
+  ("MaxTTChromaISlice",                               conf.m_maxTT[2],                                  "MaxTTChromaISlice")
+  ("MaxTTNonISlice",                                  conf.m_maxTT[1],                                  "MaxTTNonISlice")
+  ("DualITree",                                       conf.m_dualITree,                                 "Use separate luma and chroma QTBT trees for intra slice")
+  ("Log2MaxTbSize",                                   conf.m_log2MaxTbSize,                             "Maximum transform block size in logarithm base 2")
+  ("Log2MinCodingBlockSize",                          conf.m_log2MinCodingBlockSize,                    "Minimum coding block size in logarithm base 2")
   ;
 
   opts.setSubSection("Coding tools");
@@ -848,7 +853,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FastMIP",                                         conf.m_useFastMIP,                                "Fast encoder search for MIP (matrix-based intra prediction)")
   ("MaxNumMergeCand",                                 conf.m_maxNumMergeCand,                           "Maximum number of merge candidates")
   ("MaxNumAffineMergeCand",                           conf.m_maxNumAffineMergeCand,                     "Maximum number of affine merge candidates")
-//  ("MaxNumIBCMergeCand",                            conf.m_maxNumIBCMergeCand,                        "Maximum number of IBC merge candidates")
   ("Geo",                                             conf.m_Geo,                                       "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   conf.m_maxNumGeoCand,                             "Maximum number of geometric partitioning mode candidates")
   ("FastIntraTools",                                  conf.m_FastIntraTools,                            "SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)")
@@ -870,42 +874,42 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   // Deblocking filter parameters
   opts.setSubSection("Loop filters (deblock and SAO)");
   opts.addOptions()
-  ("LoopFilterDisable",                               conf.m_bLoopFilterDisable,                             "")
-  ("LoopFilterOffsetInPPS",                           conf.m_loopFilterOffsetInPPS,                          "")
-  ("LoopFilterBetaOffset_div2",                       conf.m_loopFilterBetaOffsetDiv2[0],                    "")
-  ("LoopFilterTcOffset_div2",                         conf.m_loopFilterTcOffsetDiv2[0],                      "")
-  ("LoopFilterCbBetaOffset_div2",                     conf.m_loopFilterBetaOffsetDiv2[1],                    "")
-  ("LoopFilterCbTcOffset_div2",                       conf.m_loopFilterTcOffsetDiv2[1],                      "")
-  ("LoopFilterCrBetaOffset_div2",                     conf.m_loopFilterBetaOffsetDiv2[2],                    "")
-  ("LoopFilterCrTcOffset_div2",                       conf.m_loopFilterTcOffsetDiv2[2],                      "")
-  ("DeblockingFilterMetric",                          conf.m_deblockingFilterMetric,                         "")
+  ("LoopFilterDisable",                               conf.m_bLoopFilterDisable,                        "")
+  ("LoopFilterOffsetInPPS",                           conf.m_loopFilterOffsetInPPS,                     "")
+  ("LoopFilterBetaOffset_div2",                       conf.m_loopFilterBetaOffsetDiv2[0],               "")
+  ("LoopFilterTcOffset_div2",                         conf.m_loopFilterTcOffsetDiv2[0],                 "")
+  ("LoopFilterCbBetaOffset_div2",                     conf.m_loopFilterBetaOffsetDiv2[1],               "")
+  ("LoopFilterCbTcOffset_div2",                       conf.m_loopFilterTcOffsetDiv2[1],                 "")
+  ("LoopFilterCrBetaOffset_div2",                     conf.m_loopFilterBetaOffsetDiv2[2],               "")
+  ("LoopFilterCrTcOffset_div2",                       conf.m_loopFilterTcOffsetDiv2[2],                 "")
+  ("DeblockingFilterMetric",                          conf.m_deblockingFilterMetric,                    "")
 
-  ("LFCrossTileBoundaryFlag",                         conf.m_bLFCrossTileBoundaryFlag,                       "Enable cross-tile-boundary loop filtering")
-  ("LFCrossSliceBoundaryFlag",                        conf.m_bLFCrossSliceBoundaryFlag,                      "Enable cross-slice-boundary loop filtering")
-  ("LoopFilterAcrossTileGroupsEnabled",               conf.m_loopFilterAcrossSlicesEnabled,                  "Enable loop filtering across tile groups")
+  ("LFCrossTileBoundaryFlag",                         conf.m_bLFCrossTileBoundaryFlag,                  "Enable cross-tile-boundary loop filtering")
+  ("LFCrossSliceBoundaryFlag",                        conf.m_bLFCrossSliceBoundaryFlag,                 "Enable cross-slice-boundary loop filtering")
+  ("LoopFilterAcrossTileGroupsEnabled",               conf.m_loopFilterAcrossSlicesEnabled,             "Enable loop filtering across tile groups")
 
-  ("SAO",                                             conf.m_bUseSAO,                                        "Enable Sample Adaptive Offset")
-  ("SaoEncodingRate",                                 conf.m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
-  ("SaoEncodingRateChroma",                           conf.m_saoEncodingRateChroma,                          "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
-  ("SaoLumaOffsetBitShift",                           conf.m_saoOffsetBitShift[ 0 ],                         "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
-  ("SaoChromaOffsetBitShift",                         conf.m_saoOffsetBitShift[ 1 ],                         "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
+  ("SAO",                                             conf.m_bUseSAO,                                   "Enable Sample Adaptive Offset")
+  ("SaoEncodingRate",                                 conf.m_saoEncodingRate,                           "When >0 SAO early picture termination is enabled for luma and chroma")
+  ("SaoEncodingRateChroma",                           conf.m_saoEncodingRateChroma,                     "The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma")
+  ("SaoLumaOffsetBitShift",                           conf.m_saoOffsetBitShift[ 0 ],                    "Specify the luma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
+  ("SaoChromaOffsetBitShift",                         conf.m_saoOffsetBitShift[ 1 ],                    "Specify the chroma SAO bit-shift. If negative, automatically calculate a suitable value based upon bit depth and initial QP")
   ;
 
   opts.setSubSection("VUI and SEI options");
   opts.addOptions()
   ("SEIDecodedPictureHash,-dph",                      toHashType,                                       "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
-  ("SEIBufferingPeriod",                              conf.m_bufferingPeriodSEIEnabled,                      "Control generation of buffering period SEI messages")
-  ("SEIPictureTiming",                                conf.m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
-  ("SEIDecodingUnitInfo",                             conf.m_decodingUnitInfoSEIEnabled,                     "Control generation of decoding unit information SEI message.")
-  ("EnableDecodingParameterSet",                      conf.m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
+  ("SEIBufferingPeriod",                              conf.m_bufferingPeriodSEIEnabled,                 "Control generation of buffering period SEI messages")
+  ("SEIPictureTiming",                                conf.m_pictureTimingSEIEnabled,                   "Control generation of picture timing SEI messages")
+  ("SEIDecodingUnitInfo",                             conf.m_decodingUnitInfoSEIEnabled,                "Control generation of decoding unit information SEI message.")
+  ("EnableDecodingParameterSet",                      conf.m_decodingParameterSetEnabled,               "Enable writing of Decoding Parameter Set")
   ("AccessUnitDelimiter,-aud",                        toAud,                                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)" , true)
   ("VuiParametersPresent,-vui",                       toVui,                                            "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)", true)
   ("HrdParametersPresent,-hrd",                       toHrd,                                            "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)", true)
-  ("AspectRatioInfoPresent",                          conf.m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
-  ("AspectRatioIdc",                                  conf.m_aspectRatioIdc,                                 "aspect_ratio_idc")
-  ("SarWidth",                                        conf.m_sarWidth,                                       "horizontal size of the sample aspect ratio")
-  ("SarHeight",                                       conf.m_sarHeight,                                      "vertical size of the sample aspect ratio")
-  ("ColourDescriptionPresent",                        conf.m_colourDescriptionPresent,                       "Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present")
+  ("AspectRatioInfoPresent",                          conf.m_aspectRatioInfoPresent,                    "Signals whether aspect_ratio_idc is present")
+  ("AspectRatioIdc",                                  conf.m_aspectRatioIdc,                            "aspect_ratio_idc")
+  ("SarWidth",                                        conf.m_sarWidth,                                  "horizontal size of the sample aspect ratio")
+  ("SarHeight",                                       conf.m_sarHeight,                                 "vertical size of the sample aspect ratio")
+  ("ColourDescriptionPresent",                        conf.m_colourDescriptionPresent,                  "Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present")
   ("ColourPrimaries",                                 toColorPrimaries,                                 "Specify color primaries (0-13): reserved, bt709, unknown, empty, bt470m, bt470bg, smpte170m, "
                                                                                                         "smpte240m, film, bt2020, smpte428, smpte431, smpte432")
 
@@ -915,14 +919,14 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MatrixCoefficients",                              toColorMatrix,                                    "Specify color matrix setting to derive luma/chroma from RGB primaries (0-14): gbr, bt709, unknown, empty, fcc, bt470bg, smpte170m, "
                                                                                                         "smpte240m, ycgco, bt2020nc, bt2020c, smpte2085, chroma-derived-nc, chroma-derived-c, ictcp")
 
-  ("ChromaLocInfoPresent",                            conf.m_chromaLocInfoPresent,                           "Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present")
-  ("ChromaSampleLocTypeTopField",                     conf.m_chromaSampleLocTypeTopField,                    "Specifies the location of chroma samples for top field")
-  ("ChromaSampleLocTypeBottomField",                  conf.m_chromaSampleLocTypeBottomField,                 "Specifies the location of chroma samples for bottom field")
-  ("ChromaSampleLocType",                             conf.m_chromaSampleLocType,                            "Specifies the location of chroma samples for progressive content")
-  ("OverscanInfoPresent",                             conf.m_overscanInfoPresent,                            "Indicates whether conformant decoded pictures are suitable for display using overscan")
-  ("OverscanAppropriate",                             conf.m_overscanAppropriateFlag,                        "Indicates whether conformant decoded pictures are suitable for display using overscan")
-  ("VideoSignalTypePresent",                          conf.m_videoSignalTypePresent,                         "Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present")
-  ("VideoFullRange",                                  conf.m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
+  ("ChromaLocInfoPresent",                            conf.m_chromaLocInfoPresent,                      "Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present")
+  ("ChromaSampleLocTypeTopField",                     conf.m_chromaSampleLocTypeTopField,               "Specifies the location of chroma samples for top field")
+  ("ChromaSampleLocTypeBottomField",                  conf.m_chromaSampleLocTypeBottomField,            "Specifies the location of chroma samples for bottom field")
+  ("ChromaSampleLocType",                             conf.m_chromaSampleLocType,                       "Specifies the location of chroma samples for progressive content")
+  ("OverscanInfoPresent",                             conf.m_overscanInfoPresent,                       "Indicates whether conformant decoded pictures are suitable for display using overscan")
+  ("OverscanAppropriate",                             conf.m_overscanAppropriateFlag,                   "Indicates whether conformant decoded pictures are suitable for display using overscan")
+  ("VideoSignalTypePresent",                          conf.m_videoSignalTypePresent,                    "Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present")
+  ("VideoFullRange",                                  conf.m_videoFullRangeFlag,                        "Indicates the black level and range of luma and chroma signals")
 
 
   ("MasteringDisplayColourVolume",                    toMasteringDisplay,                               "SMPTE ST 2086 mastering display colour volume info SEI (HDR), "
@@ -1024,6 +1028,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("ChromaTS",                                        conf.m_useChromaTS,                         "Enable encoder search of chromaTS")
   ("BDPCM",                                           conf.m_useBDPCM,                            "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
   ("RPR",                                             conf.m_rprEnabledFlag,                      "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
+#if 1 // IBC_VTM
+  ( "IBC",                                            conf.m_IBCMode,                             "IBCMode (0:off, 1:IBC, 2: IBC with SCC detection)")
+  ( "IBCFastMethod",                                  conf.m_IBCFastMethod,                       "Fast methods for IBC . 1:default, [2..5]speedups")
+#endif
   ;
 
   opts.setSubSection("Input options");
@@ -1037,8 +1045,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Reconstructed video options");
   opts.addOptions()
-  ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                  "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
-  ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
+  ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,            "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
+  ("PYUV",                                            m_packedYUVMode,                            "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
     ;
 
 
@@ -1060,18 +1068,18 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("EnablePictureHeaderInSliceHeader",                this->conf.m_enablePictureHeaderInSliceHeader,    "Enable Picture Header in Slice Header")
 
-  ("CropOffsetLeft",                                  cropOffsetLeft,                        "Crop Offset Left position")
-  ("CropOffsetTop",                                   cropOffsetTop,                         "Crop Offset Top position")
-  ("CropOffsetRight",                                 cropOffsetRight,                       "Crop Offset Right position")
-  ("CropOffsetBottom",                                cropOffsetBottom,                      "Crop Offset Bottom position")
-  ("CalculateHdrMetrics",                             calculateHdrMetrics,                   "Enable HDR metric calculation")
+  ("CropOffsetLeft",                                  cropOffsetLeft,                                   "Crop Offset Left position")
+  ("CropOffsetTop",                                   cropOffsetTop,                                    "Crop Offset Top position")
+  ("CropOffsetRight",                                 cropOffsetRight,                                  "Crop Offset Right position")
+  ("CropOffsetBottom",                                cropOffsetBottom,                                 "Crop Offset Bottom position")
+  ("CalculateHdrMetrics",                             calculateHdrMetrics,                              "Enable HDR metric calculation")
 
-  ("SignalledIdFlag",                                 signalledSliceIdFlag,                  "Signalled Slice ID Flag")
-  ("SignalledSliceIdLengthMinus1",                    signalledSliceIdLengthMinus1,          "Signalled Tile Group Length minus 1")
-  ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                   "Rectangular slices boundaries in Pic")
-  ("SignalledSliceId",                                toSignalledSliceId,                    "Signalled rectangular slice ID")
+  ("SignalledIdFlag",                                 signalledSliceIdFlag,                             "Signalled Slice ID Flag")
+  ("SignalledSliceIdLengthMinus1",                    signalledSliceIdLengthMinus1,                     "Signalled Tile Group Length minus 1")
+  ("RectSlicesBoundaryArray",                         toRectSliceBoundary,                              "Rectangular slices boundaries in Pic")
+  ("SignalledSliceId",                                toSignalledSliceId,                               "Signalled rectangular slice ID")
 
-  ("isSDR",                                           sdr,                                   "compatibility")
+  ("isSDR",                                           sdr,                                              "compatibility")
   ;
   
   
@@ -1085,7 +1093,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     cOSS << "Frame" << i+1;
     opts.addOptions()(cOSS.str(), conf.m_GOPList[i], vvencGOPEntry());
   }
-  opts.addOptions()("decode",                          m_decode,                                         "decode only");
+  opts.addOptions()("decode",                          m_decode,                                        "decode only");
 
   //
   // parse command line parameters and read configuration files
@@ -1197,6 +1205,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   if ( conf.m_internChromaFormat < 0 || conf.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
     conf.m_internChromaFormat = m_inputFileChromaFormat;
+  }
+
+  if( conf.m_RCNumPasses < 0 )
+  {
+    conf.m_RCNumPasses = conf.m_RCTargetBitrate > 0 ? 2 : 1;
   }
 
   if( m_packedYUVMode && ! m_reconFileName.empty() )  
