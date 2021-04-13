@@ -316,10 +316,6 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_HdrMode                                 = VVENC_HDR_OFF;
 
   // expert options
-  c->m_listTracingChannels                     = false;
-  c->m_traceRule                               = NULL;
-  c->m_traceFile                               = NULL;
-
   c->m_conformanceWindowMode                   = 1;
   c->m_confWinLeft                             = 0;
   c->m_confWinRight                            = 0;
@@ -444,13 +440,13 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
   c->m_contentBasedFastQtbt                    = false;
-  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;              ///< Parameter that controls fast encoder settings
-  c->m_bUseEarlyCU                             = false;                                 ///< flag for using Early CU setting
-  c->m_useFastDecisionForMerge                 = true;                                  ///< flag for using Fast Decision Merge RD-Cost
-  c->m_useEarlySkipDetection                   = false;                                 ///< flag for using Early SKIP Detection
+  c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
+  c->m_bUseEarlyCU                             = false;
+  c->m_useFastDecisionForMerge                 = true;
+  c->m_useEarlySkipDetection                   = false;
 
-  c->m_bDisableIntraCUsInInterSlices           = false;                                 ///< Flag for disabling intra predicted CUs in inter slices.
-  c->m_bUseConstrainedIntraPred                = false;                                 ///< flag for using constrained intra prediction
+  c->m_bDisableIntraCUsInInterSlices           = false;
+  c->m_bUseConstrainedIntraPred                = false;
   c->m_bFastUDIUseMPMEnabled                   = true;
   c->m_bFastMEForGenBLowDelayEnabled           = true;
 
@@ -462,8 +458,8 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_MIP                                     = false;
   c->m_useFastMIP                              = 0;
 
-  c->m_maxNumMergeCand                         = 5;                                     ///< Max number of merge candidates
-  c->m_maxNumAffineMergeCand                   = 5;                                     ///< Max number of affine merge candidates
+  c->m_maxNumMergeCand                         = 5;
+  c->m_maxNumAffineMergeCand                   = 5;
   c->m_Geo                                     = 0;
   c->m_maxNumGeoCand                           = 5;
   c->m_FastIntraTools                          = 0;
@@ -472,12 +468,12 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_RCForceIntraQP                          = false;
 
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
-  c->m_bRestrictMESampling                     = false;                                 ///< Restrict sampling for the Selective ME
-  c->m_SearchRange                             = 96;                                    ///< ME search range
-  c->m_bipredSearchRange                       = 4;                                     ///< ME search range for bipred refinement
-  c->m_minSearchWindow                         = 8;                                     ///< ME minimum search window size for the Adaptive Window ME
-  c->m_bClipForBiPredMeEnabled                 = false;                                 ///< Enables clipping for Bi-Pred ME.
-  c->m_bFastMEAssumingSmootherMVEnabled        = true;                                  ///< Enables fast ME assuming a smoother MV.
+  c->m_bRestrictMESampling                     = false;
+  c->m_SearchRange                             = 96;
+  c->m_bipredSearchRange                       = 4;
+  c->m_minSearchWindow                         = 8;
+  c->m_bClipForBiPredMeEnabled                 = false;
+  c->m_bFastMEAssumingSmootherMVEnabled        = true;
   c->m_fastSubPel                              = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
@@ -503,7 +499,7 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_allowDisFracMMVD                        = false;
   c->m_CIIP                                    = 0;
   c->m_SbTMVP                                  = false;
-  c->m_SBT                                     = 0;                                     ///< Sub-Block Transform for inter blocks
+  c->m_SBT                                     = 0;
   c->m_LFNST                                   = 0;
   c->m_MTS                                     = 0;
   c->m_MTSIntraMaxCand                         = 3;
@@ -523,69 +519,55 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_IBCFastMethod                           = 1;
 #endif
 
-  c->m_bLoopFilterDisable                      = false;                                 ///< flag for using deblocking filter
-  c->m_loopFilterOffsetInPPS                   = true;                                  ///< offset for deblocking filter in 0 = slice header, 1 = PPS
+  c->m_bLoopFilterDisable                      = false;
+  c->m_loopFilterOffsetInPPS                   = true;
 
-  memset(&c->m_loopFilterBetaOffsetDiv2,0, sizeof(c->m_loopFilterBetaOffsetDiv2)); ///< beta offset for deblocking filter
-  memset(&c->m_loopFilterTcOffsetDiv2,0, sizeof(c->m_loopFilterTcOffsetDiv2));     ///< tc offset for deblocking filter
+  memset(&c->m_loopFilterBetaOffsetDiv2,0, sizeof(c->m_loopFilterBetaOffsetDiv2));
+  memset(&c->m_loopFilterTcOffsetDiv2,0, sizeof(c->m_loopFilterTcOffsetDiv2));
 
   c->m_deblockingFilterMetric                  = 0;
 
   c->m_bLFCrossTileBoundaryFlag                = true;
-  c->m_bLFCrossSliceBoundaryFlag               = true;                                  ///< 1: filter across slice boundaries 0: do not filter across slice boundaries
+  c->m_bLFCrossSliceBoundaryFlag               = true;
   c->m_loopFilterAcrossSlicesEnabled           = false;
 
   c->m_bUseSAO                                 = true;
-  c->m_saoEncodingRate                         = -1.0;                                  ///< When >0 SAO early picture termination is enabled for luma and chroma
-  c->m_saoEncodingRateChroma                   = -1.0;                                  ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
-  c->m_log2SaoOffsetScale[0]=c->m_log2SaoOffsetScale[1] = 0;                              ///< n umber of bits for the upward bit shift operation on the decoded SAO offsets
+  c->m_saoEncodingRate                         = -1.0;
+  c->m_saoEncodingRateChroma                   = -1.0;
+  c->m_log2SaoOffsetScale[0]=c->m_log2SaoOffsetScale[1] = 0;
   c->m_saoOffsetBitShift[0]=c->m_saoOffsetBitShift[1] = 0;
 
-  c->m_decodingParameterSetEnabled             = false;                                 ///< enable decoding parameter set
-  c->m_vuiParametersPresent                    = -1;                                    ///< enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
-  c->m_hrdParametersPresent                    = -1;                                    ///< enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
-  c->m_aspectRatioInfoPresent                  = false;                                 ///< Signals whether aspect_ratio_idc is present
-  c->m_aspectRatioIdc                          = 0;                                     ///< aspect_ratio_idc
-  c->m_sarWidth                                = 0;                                     ///< horizontal size of the sample aspect ratio
-  c->m_sarHeight                               = 0;                                     ///< vertical size of the sample aspect ratio
-  c->m_colourDescriptionPresent                = false;                                 ///< Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present
-  c->m_colourPrimaries                         = 2;                                     ///< Indicates chromaticity coordinates of the source primaries
-  c->m_transferCharacteristics                 = 2;                                     ///< Indicates the opto-electronic transfer characteristics of the source
-  c->m_matrixCoefficients                      = 2;                                     ///< Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
-  c->m_chromaLocInfoPresent                    = false;                                 ///< Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
-  c->m_chromaSampleLocTypeTopField             = 0;                                     ///< Specifies the location of chroma samples for top field
-  c->m_chromaSampleLocTypeBottomField          = 0;                                     ///< Specifies the location of chroma samples for bottom field
-  c->m_chromaSampleLocType                     = 0;                                     ///< Specifies the location of chroma samples for progressive content
-  c->m_overscanInfoPresent                     = false;                                 ///< Signals whether overscan_appropriate_flag is present
-  c->m_overscanAppropriateFlag                 = false;                                 ///< Indicates whether conformant decoded pictures are suitable for display using overscan
-  c->m_videoSignalTypePresent                  = false;                                 ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
-  c->m_videoFullRangeFlag                      = false;                                 ///< Indicates the black level and range of luma and chroma signals
+  c->m_decodingParameterSetEnabled             = false;
+  c->m_vuiParametersPresent                    = -1;
+  c->m_hrdParametersPresent                    = -1;
+  c->m_aspectRatioInfoPresent                  = false;
+  c->m_aspectRatioIdc                          = 0;
+  c->m_sarWidth                                = 0;
+  c->m_sarHeight                               = 0;
+  c->m_colourDescriptionPresent                = false;
+  c->m_colourPrimaries                         = 2;
+  c->m_transferCharacteristics                 = 2;
+  c->m_matrixCoefficients                      = 2;
+  c->m_chromaLocInfoPresent                    = false;
+  c->m_chromaSampleLocTypeTopField             = 0;
+  c->m_chromaSampleLocTypeBottomField          = 0;
+  c->m_chromaSampleLocType                     = 0;
+  c->m_overscanInfoPresent                     = false;
+  c->m_overscanAppropriateFlag                 = false;
+  c->m_videoSignalTypePresent                  = false;
+  c->m_videoFullRangeFlag                      = false;
 
-  memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));                      ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
-                                                                                        ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
-                                                                                        ///< min/max luminance value in units of 1/10000 candela per square metre
-  memset(&c->m_contentLightLevel,0, sizeof(c->m_contentLightLevel));                    ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
-  c->m_preferredTransferCharacteristics        = -1;                                    ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
+  memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));
+  memset(&c->m_contentLightLevel,0, sizeof(c->m_contentLightLevel));
+  c->m_preferredTransferCharacteristics        = -1;
 
-  c->m_summaryOutFilename                      = NULL;                                  ///< filename to use for producing summary output file.
-  c->m_summaryPicFilenameBase                  = NULL;                                  ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
-  c->m_summaryVerboseness                      = 0;                                     ///< Specifies the level of the verboseness of the text output.
-
-  c->m_decodeBitstreams[0]=c->m_decodeBitstreams[1] = NULL;                             ///< filename for decode bitstreams.
-  c->m_switchPOC                               = -1;                                    ///< dbg poc.
-  c->m_switchDQP                               = 0;                                     ///< switch DQP.
-  c->m_fastForwardToPOC                        = -1;                                    ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC
-  c->m_stopAfterFFtoPOC                        = false;
-  c->m_bs2ModPOCAndType                        = false;
-  c->m_forceDecodeBitstream1                   = false;
-
-  c->m_alf                                     = false;                                 ///> Adaptive Loop Filter
+  c->m_alf                                     = false;
   c->m_useNonLinearAlfLuma                     = true;
   c->m_useNonLinearAlfChroma                   = true;
   c->m_maxNumAlfAlternativesChroma             = VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
   c->m_ccalf                                   = false;
   c->m_ccalfQpThreshold                        = 37;
-  c->m_alfTempPred                             = -1;                                    ///> Indicates using of temporal filter data prediction through APS
+  c->m_alfTempPred                             = -1;
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
@@ -595,9 +577,27 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_fastLocalDualTreeMode                   = 0;
 
   c->m_maxParallelFrames                       = -1;
-  c->m_ensureWppBitEqual                       = -1;            ///< Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+  c->m_ensureWppBitEqual                       = -1;
 
   c->m_picPartitionFlag                        = false;
+
+  c->m_summaryOutFilename[0]                   = '\0';
+  c->m_summaryPicFilenameBase[0]               = '\0';
+  c->m_summaryVerboseness                      = 0;
+
+  c->m_decodeBitstreams[0][0]                  = '\0';
+  c->m_decodeBitstreams[1][0]                  = '\0';
+
+  c->m_switchPOC                               = -1;
+  c->m_switchDQP                               = 0;
+  c->m_fastForwardToPOC                        = -1;
+  c->m_stopAfterFFtoPOC                        = false;
+  c->m_bs2ModPOCAndType                        = false;
+  c->m_forceDecodeBitstream1                   = false;
+
+  c->m_listTracingChannels                     = false;
+  c->m_traceRule[0]                            = '\0';
+  c->m_traceFile[0]                            = '\0';
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
@@ -2238,7 +2238,7 @@ static bool checkCfgParameter( VVEncCfg *c )
     vvenc_confirmParameter(c, c->m_saoEncodingRate > 0.0, "Frame parallel processing: SaoEncodingRate is not supported (must be disabled)" );
     vvenc_confirmParameter(c, c->m_alfTempPred,           "Frame parallel processing: ALFTempPred is not supported (must be disabled)" );
 #if ENABLE_TRACING
-    vvenc_confirmParameter(c, !c->m_traceFile.empty() && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
+    vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_InputQueueSize, "Max parallel frames should be less than size of input queue" );
   }

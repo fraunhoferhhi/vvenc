@@ -588,6 +588,13 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<int>                toHrd                        ( &this->conf.m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>                toVui                        ( &this->conf.m_vuiParametersPresent,            &FlagToIntMap );
 
+  IStreamToArr<char>                toTraceRule                   ( &this->conf.m_traceRule[0], VVENC_MAX_STRING_LEN  );
+  IStreamToArr<char>                toTraceFile                   ( &this->conf.m_traceFile[0], VVENC_MAX_STRING_LEN  );
+  IStreamToArr<char>                toDecodeBitstreams0           ( &this->conf.m_decodeBitstreams[0][0], VVENC_MAX_STRING_LEN  );
+  IStreamToArr<char>                toDecodeBitstreams1           ( &this->conf.m_decodeBitstreams[1][0], VVENC_MAX_STRING_LEN  );
+  IStreamToArr<char>                toSummaryOutFilename          ( &this->conf.m_summaryOutFilename[0], VVENC_MAX_STRING_LEN  );
+  IStreamToArr<char>                toSummaryPicFilenameBase      ( &this->conf.m_summaryPicFilenameBase[0], VVENC_MAX_STRING_LEN  );
+
   //
   // setup configuration parameters
   //
@@ -677,8 +684,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     opts.setSubSection("Tracing");
     opts.addOptions()
     ("TraceChannelsList",                             conf.m_listTracingChannels,                       "List all available tracing channels")
-    ("TraceRule",                                     conf.m_traceRule,                                 "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("TraceFile",                                     conf.m_traceFile,                                 "Tracing file")
+    ("TraceRule",                                     toTraceRule,                                      "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("TraceFile",                                     toTraceFile,                                      "Tracing file")
     ;
   }
 
@@ -941,16 +948,16 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Summary options (debugging)");
   opts.addOptions()
-  ("SummaryOutFilename",                              conf.m_summaryOutFilename,                  "Filename to use for producing summary output file. If empty, do not produce a file.")
-  ("SummaryPicFilenameBase",                          conf.m_summaryPicFilenameBase,              "Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended. If empty, do not produce a file.")
-  ("SummaryVerboseness",                              conf.m_summaryVerboseness,                  "Specifies the level of the verboseness of the text output")
+  ("SummaryOutFilename",                              toSummaryOutFilename,                            "Filename to use for producing summary output file. If empty, do not produce a file.")
+  ("SummaryPicFilenameBase",                          toSummaryPicFilenameBase,                        "Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended. If empty, do not produce a file.")
+  ("SummaryVerboseness",                              conf.m_summaryVerboseness,                       "Specifies the level of the verboseness of the text output")
   ;
 
   opts.setSubSection("Decoding options (debugging)");
   opts.addOptions()
-  ("DebugBitstream",                                  conf.m_decodeBitstreams[0],                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-  ("DecodeBitstream1",                                conf.m_decodeBitstreams[0],                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
-  ("DecodeBitstream2",                                conf.m_decodeBitstreams[1],                 "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
+  ("DebugBitstream",                                  toDecodeBitstreams0,                        "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
+  ("DecodeBitstream1",                                toDecodeBitstreams0,                        "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
+  ("DecodeBitstream2",                                toDecodeBitstreams1,                        "Assume the frames up to POC DebugPOC will be the same as in this bitstream. Load those frames from the bitstream instead of encoding them." )
   ("DebugPOC",                                        conf.m_switchPOC,                           "If DebugBitstream is present, load frames up to this POC from this bitstream. Starting with DebugPOC, return to normal encoding." )
   ("SwitchPOC",                                       conf.m_switchPOC,                           "If DebugBitstream is present, load frames up to this POC from this bitstream. Starting with DebugPOC, return to normal encoding." )
   ("SwitchDQP",                                       conf.m_switchDQP,                           "delta QP applied to picture with switchPOC and subsequent pictures." )
@@ -1170,12 +1177,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   }
   else
   {
-    if( conf.m_decodeBitstreams[0] != nullptr && conf.m_decodeBitstreams[0] == m_bitstreamFileName )
+    if( conf.m_decodeBitstreams[0][0] != '\0' && conf.m_decodeBitstreams[0] == m_bitstreamFileName )
     {
       cout <<  "error: Debug bitstream and the output bitstream cannot be equal" << std::endl;
       error = true;
     }
-    if( conf.m_decodeBitstreams[1] != nullptr && conf.m_decodeBitstreams[1] == m_bitstreamFileName )
+    if( conf.m_decodeBitstreams[1][0] != '\0' && conf.m_decodeBitstreams[1] == m_bitstreamFileName )
     {
       cout <<  "error: Decode2 bitstream and the output bitstream cannot be equal" << std::endl;
       error = true;

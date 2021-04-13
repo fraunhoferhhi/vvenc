@@ -424,8 +424,8 @@ class APPUTILS_DECL IStreamToArr
 {
   public:
     IStreamToArr( T* v, size_t maxSize )
-    : _valVec( v )
-    , _maxSize ( maxSize )
+    : _valVec        ( v )
+    , _maxSize       ( maxSize )
     {
     }
 
@@ -447,7 +447,7 @@ class APPUTILS_DECL IStreamToArr
 template<typename T>
 inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
 {
-  for( int i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(T));
+  for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(T));
 
   bool fail = false;
   int pos = 0;
@@ -491,6 +491,48 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
   return in;
 }
 
+template<>
+inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
+{
+  for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(char));
+
+  bool fail = false;
+  int size = 0;
+  // split into multiple lines if any
+  while ( ! in.eof() )
+  {
+    std::string line;
+    std::getline( in, line );
+
+    if( line == "" || line == "[]" || line == "empty"  )
+    {
+      return in;    // forcing empty entry
+    }
+    else
+    {
+      if( line.size() >= toArr._maxSize )
+      {
+        line.copy( toArr._valVec , toArr._maxSize-1 );
+        toArr._valVec[toArr._maxSize-1] = '\0';
+        fail = true;
+      }
+      else
+      {
+        line.copy( toArr._valVec , line.size()+1 );
+        toArr._valVec[line.size()] = '\0';
+        size = line.size();
+      }
+    }
+  }
+
+  if ( fail || ( 0 == size ) )
+  {
+    in.setstate( std::ios::failbit );
+  }
+
+  return in;
+}
+
 template<typename T>
 inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<T>& toArr )
 {
@@ -518,6 +560,30 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<T>& toAr
     {
       os << ",";
     }
+    os << toArr._valVec[i];
+  }
+
+  return os;
+}
+
+template<>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& toArr )
+{
+  int size=0;
+  for ( size_t i = 0; i < toArr._maxSize; i++ )
+  {
+    if( toArr._valVec[i] != '\0' ) size++;
+    else break;
+  }
+
+  if( 0 == size )
+  {
+    os << "";
+    return os;
+  }
+
+  for ( int i = 0; i < size; i++ )
+  {
     os << toArr._valVec[i];
   }
 

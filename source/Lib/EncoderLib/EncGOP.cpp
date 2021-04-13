@@ -130,7 +130,7 @@ bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int in
 void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap )
 {
   // check if we should decode a leading bitstream
-  if( cfg.m_decodeBitstreams[ 0 ] != NULL )
+  if( cfg.m_decodeBitstreams[0][0] != '\0' )
   {
     if( ffwdDecoder.bDecode1stPart )
     {
@@ -163,7 +163,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
 
 
   // check if we should decode a trailing bitstream
-  if( cfg.m_decodeBitstreams[ 1 ] != NULL )
+  if( cfg.m_decodeBitstreams[1][0] != '\0' )
   {
     const int  iNextKeyPOC    = (1+cfg.m_switchPOC  / cfg.m_GOPSize)     *cfg.m_GOPSize;
     const int  iNextIntraPOC  = (1+(cfg.m_switchPOC / cfg.m_IntraPeriod))*cfg.m_IntraPeriod;
@@ -255,7 +255,7 @@ EncGOP::EncGOP()
 
 EncGOP::~EncGOP()
 {
-  if( m_pcEncCfg && ( NULL != m_pcEncCfg->m_decodeBitstreams[0] || NULL != m_pcEncCfg->m_decodeBitstreams[1] ) )
+  if( m_pcEncCfg && ( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' || m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' ) )
   {
     // reset potential decoder resources
     tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap );
@@ -494,7 +494,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
 {
 
-  if( m_pcEncCfg->m_decodeBitstreams[ 0 ] != NULL && m_pcEncCfg->m_decodeBitstreams[ 1 ] != NULL && m_pcEncCfg->m_fastForwardToPOC < 0 )
+  if( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' && m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' && m_pcEncCfg->m_fastForwardToPOC < 0 )
   {
     CHECK( !( numAllPicCoded == m_AnalyzeAll.getNumPic() ), "Unspecified error" );
   }
@@ -522,13 +522,13 @@ void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, c
   msg( VVENC_DETAILS,"\n\nB Slices--------------------------------------------------------\n" );
   m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
 
-  if (m_pcEncCfg->m_summaryOutFilename)
+  if (m_pcEncCfg->m_summaryOutFilename[0] != '\0' )
   {
     std::string summaryOutFilename(m_pcEncCfg->m_summaryOutFilename);
     m_AnalyzeAll.printSummary(chFmt, printSequenceMSE, printHexPsnr, bitDepths, summaryOutFilename);
   }
 
-  if (m_pcEncCfg->m_summaryPicFilenameBase)
+  if (m_pcEncCfg->m_summaryPicFilenameBase[0] != '\0' )
   {
     std::string summaryPicFilenameBase(m_pcEncCfg->m_summaryPicFilenameBase);
 
