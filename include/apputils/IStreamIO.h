@@ -497,7 +497,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
   for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(char));
 
   bool fail = false;
-  int size = 0;
+  size_t size = 0;
   // split into multiple lines if any
   while ( ! in.eof() )
   {
