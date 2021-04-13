@@ -114,7 +114,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, vvencYUVWriterCallback callback )
+int VVEncImpl::init( const VVEncCfg& rcVVEncCfg )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -144,7 +144,7 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg, vvencYUVWriterCallback callback
 
   try
   {
-    m_pEncLib->initEncoderLib( m_cVVEncCfg, callback );
+    m_pEncLib->initEncoderLib( m_cVVEncCfg );
   }
   catch( std::exception& e )
   {
@@ -222,6 +222,13 @@ bool VVEncImpl::isInitialized() const
   return m_bInitialized;
 }
 
+int VVEncImpl::setYUVWriterCallback( void * ctx, vvencYUVWriterCallback callback )
+{
+  if( !m_bInitialized || !m_pEncLib ){ return VVENC_ERR_INITIALIZE; }
+
+   m_pEncLib->setYUVWriterCallback( ctx, callback );
+  return VVENC_OK;
+}
 
 int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone )
 {

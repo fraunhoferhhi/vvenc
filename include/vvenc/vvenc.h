@@ -69,15 +69,12 @@ extern "C" {
 VVENC_NAMESPACE_BEGIN
 
 
-/**
-  The class HhiVvcEnc provides the encoder's user interface. The simplest way to use the encoder is to call init() to initialize an encoder instance with the
-  the given VVEncCfg. After initialization the encoding of the video is performed by using the encode() method to hand over frame by frame in display order
+/*
+  The vvencEncoder struct provides the encoder's user interface.
+  The simplest way to use the encoder is to call vvenc_encoder_create() to create an encoder instance and initialize it by using vvenc_encoder_open() with the
+  the given VVEncCfg. After initialization the encoding of the video is performed by using the vvenc_encode() method to hand over frame by frame in display order
   and retrieve the compressed bitstream chunks of already processed pictures. The encoding can be end by calling flush() that causes the encoder to finish encoding of all pending pictures.
-  Finally calling uninit() releases all allocated resources held by the encoder internally.
-  Beside the basic functionality of encoding there are some more methods available.
-  For instance, the reconfig() is used to reconfigure a running encoder. There are also method providing some service functionality like getting or printing encoder configuration,
-  or getting information about the encoder or it's current state.
-  The HhiVvcEnc also provides a static call that used the encoder as remote support client for joint encoding on two machines.
+  Finally calling vvenc_encoder_close() releases all allocated resources held by the encoder internally.
 */
 
 
@@ -90,8 +87,7 @@ typedef struct vvencEncoder vvencEncoder;
 */
 typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 
-/**
-  \ingroup VVEncExternalInterfaces
+/*
   \enum ErrorCodes
   The enum ErrorCodes enumerates error codes returned by the encoder.
 */
@@ -108,11 +104,9 @@ enum ErrorCodes
   VVENC_ERR_CPU              = -30     ///< unsupported CPU SSE 4.1 needed
 };
 
-/**
-  \ingroup VVEncExternalInterfaces
-  The struct YUVBuffer contains attributes to hand over the uncompressed input picture and metadata related to picture.
+/*
+  The struct vvencYUVPlane contains the data of an plane of an uncompressed input picture.
 */
-
 typedef struct vvencYUVPlane
 {
   int16_t*  ptr     = nullptr;      ///< pointer to plane buffer
@@ -121,6 +115,9 @@ typedef struct vvencYUVPlane
   int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
 }vvencYUVPlane;
 
+/*
+  The struct vvencYUVBuffer contains the data and attributes to hand over the uncompressed input picture and metadata related to picture.
+*/
 typedef struct vvencYUVBuffer
 {
   vvencYUVPlane planes[ 3 ];
@@ -129,21 +126,46 @@ typedef struct vvencYUVBuffer
   bool          ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
+/* vvencYUVWriterCallback:
+   callback function to receive reconstructed yuv data of an encoded picture
+*/
 typedef void (*vvencYUVWriterCallback)(void*, vvencYUVBuffer* );
 
+/* vvenc_YUVBuffer_alloc:
+   Allocates an vvencYUVBuffer instance.
+   The returned vvencYUVBuffer is set to default values.
+   The payload memory must be allocated seperately by using vvenc_YUVBuffer_alloc_buffer.
+   To free the memory use vvenc_YUVBuffer_free.
+*/
 VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc( void );
+
+/* vvenc_YUVBuffer_free:
+   release storage of an vvencYUVBuffer instance.
+   The payload memory is also released if the flag freePicBuffer is set.
+*/
 VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer, bool freePicBuffer );
+
+/* vvenc_YUVBuffer_default:
+  Initialize vvencYUVBuffer structure to default values
+*/
 VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer );
 
+/* vvenc_YUVBuffer_alloc_buffer:
+   Allocates the payload buffer of a vvencYUVBuffer instance.
+   To free the buffer memory use vvenc_YUVBuffer_free_buffer.
+*/
 VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight );
+
+/* vvenc_YUVBuffer_free_buffer:
+   release storage of the payload in a vvencYUVBuffer instance.
+*/
 VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer );
 
 // ----------------------------------------
 
 
-/**
-  \ingroup VVEncExternalInterfaces
-  The struct AccessUnit contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
+/*
+  The struct vvencAccessUnit contains attributes that are assigned to the compressed output of the encoder for a specific input picture.
   The structure contains buffer and size information of the compressed payload as well as timing, access and debug information.
   The smallest output unit of VVC encoders are NalUnits. A set of NalUnits that belong to the same access unit are delivered in a continuous bitstream,
   where the NalUnits are separated by three byte start codes.
@@ -175,7 +197,12 @@ typedef struct vvencAccessUnit
 
 } vvencAccessUnit;
 
-
+/* vvenc_accessUnit_alloc:
+   Allocates an vvencAccessUnit instance.
+   The returned accessUnit is set to default values.
+   The payload memory must be allocated seperately by using vvenc_accessUnit_alloc_payload.
+   To free the memory use vvencAccessUnit_free.
+*/
 VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc( void );
 
 /* vvdec_accessUnit_free:
@@ -184,45 +211,40 @@ VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc( void );
 */
 VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit, bool freePayload );
 
-/* vvdec_accessUnit_alloc_payload:
+/* vvenc_accessUnit_alloc_payload:
    Allocates the memory for an accessUnit payload.
    To free the memory use vvdecAccessUnit_free_payload.
-   When the vvdecAccessUnit memory is released the payload memory is also released.
+   When the vvencAccessUnit memory is released the payload memory is also released.
 */
 VVENC_DECL void vvenc_accessUnit_alloc_payload(vvencAccessUnit *accessUnit, int payload_size );
 
-/* vvdec_accessUnit_free_payload:
-   release storage of the payload in an vvdecAccessUnit instance.
+/* vvenc_accessUnit_free_payload:
+   release storage of the payload in an vvencAccessUnit instance.
 */
 VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit );
 
 /* vvenc_accessUnit_reset:
-  resets vvdecAccessUnit structure
+  resets vvdencAccessUnit structure to its default values. payload data will not be resetted.
 */
 VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit );
 
-/* vvdec_accessUnit_default:
-  Initialize vvdecAccessUnit structure to default values (including au payload)
+/* vvenc_accessUnit_default:
+  Initialize vvencAccessUnit structure to default values (including au payload)
 */
 VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit );
 
-/**
+/*
  This method returns the encoder version number as a string.
  \param      None
  \retval     std::string returns the version number
 */
 VVENC_DECL const char* vvenc_get_version( void );
 
-/**
-  This method initializes the encoder instance.
-  This method is used to initially set up the encoder with the assigned encoder parameter struct.
-  The method fails if the encoder is already initialized or if the assigned parameter struct
-  does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
-  insufficient CPU-capabilities.
-  \param[in]  rcVVEncCfg const reference of VVEncCfg struct that holds initial encoder parameters.
-  \param[in]  ptrYUVWriterIf pointer to callback interface YUVWriteIf used to emit reconstruced samples.
-  \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
-  \pre        The encoder must not be initialized.
+/* vvenc_encoder_create
+  This method creates a vvenc encoder instance.
+  \param[in]  none.
+  \retval     vvencEncoder pointer of the encoder handler if successful, otherwise NULL
+  \pre        The encoder must not be initialized (pointer of decoder handler must be null).
 */
 VVENC_DECL vvencEncoder* vvenc_encoder_create( void );
 
@@ -232,12 +254,12 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create( void );
   The method fails if the encoder is already initialized or if the assigned parameter struct
   does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
   insufficient CPU-capabilities.
+  \param[in]  vvencEncoder pointer to opaque handler.
   \param[in]  rcVVEncCfg const reference of VVEncCfg struct that holds initial encoder parameters.
-  \param[in]  ptrYUVWriterIf pointer to callback interface YUVWriteIf used to emit reconstruced samples.
   \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
   \pre        The encoder must not be initialized.
 */
-VVENC_DECL int vvenc_encoder_open( vvencEncoder*, VVEncCfg*, vvencYUVWriterCallback callback );
+VVENC_DECL int vvenc_encoder_open( vvencEncoder*, VVEncCfg* );
 
 /**
  This method resets the encoder instance.
@@ -250,7 +272,7 @@ VVENC_DECL int vvenc_encoder_open( vvencEncoder*, VVEncCfg*, vvencYUVWriterCallb
 VVENC_DECL int vvenc_encoder_close(vvencEncoder *);
 
 
-VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *, vvencYUVWriterCallback callback );
+VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *, void * ctx, vvencYUVWriterCallback callback );
 
 /**
   This method initializes the encoder instance in dependency to the encoder pass.

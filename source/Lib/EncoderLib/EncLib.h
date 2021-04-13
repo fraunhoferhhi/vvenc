@@ -90,6 +90,7 @@ private:
   PicList                   m_cListPic;
 
   std::function<void( void*, vvencYUVBuffer* )> m_yuvWriterIf;
+  void*                     m_yuvWriterCtx;
 
   NoMallocThreadPool*       m_threadPool;
   RateCtrl                  m_cRateCtrl;                          ///< Rate control class
@@ -109,11 +110,13 @@ public:
   EncLib();
   virtual ~EncLib();
 
-  void     initEncoderLib      ( const VVEncCfg& encCfg, vvencYUVWriterCallback callback );
+  void     initEncoderLib      ( const VVEncCfg& encCfg );
   void     initPass            ( int pass );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
+
+  void     setYUVWriterCallback( void *, vvencYUVWriterCallback );
 
 private:
   void     xUninitLib          ();

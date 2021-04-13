@@ -125,17 +125,16 @@ void EncApp::encode()
     return;
   }
 
-  vvencYUVWriterCallback vvencYUVWriterCallbackIf = nullptr;
-  if ( ! m_cEncAppCfg.m_reconFileName.empty() )
-  {
-    vvencYUVWriterCallbackIf = outputYuv;
-  }
-
-  if( 0 != vvenc_encoder_open( m_encCtx, &vvencCfg, vvencYUVWriterCallbackIf ) )
+  if( 0 != vvenc_encoder_open( m_encCtx, &vvencCfg ) )
   {
     msgApp( VVENC_ERROR, vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
     return;
+  }
+
+  if ( ! m_cEncAppCfg.m_reconFileName.empty() )
+  {
+    vvenc_encoder_set_YUVWriterCallback( m_encCtx, this, outputYuv );
   }
 
   vvenc_get_config( m_encCtx, &vvencCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
@@ -281,13 +280,15 @@ void EncApp::outputAU( const vvencAccessUnit& au )
   m_bitstream.flush();
 }
 
-void EncApp::outputYuv( void* encapp, vvencYUVBuffer* yuvOutBuf )
+void EncApp::outputYuv( void* ctx, vvencYUVBuffer* yuvOutBuf )
 {
-  auto d = (EncApp*)encapp;
-
-  if ( ! d->m_cEncAppCfg.m_reconFileName.empty() && nullptr != yuvOutBuf )
+  EncApp* encapp = ctx ? (EncApp*)ctx : nullptr;
+  if( encapp )
   {
-    d->m_yuvReconFile.writeYuvBuf( *yuvOutBuf );
+    if ( ! encapp->m_cEncAppCfg.m_reconFileName.empty() && nullptr != yuvOutBuf )
+    {
+      encapp->m_yuvReconFile.writeYuvBuf( *yuvOutBuf );
+    }
   }
 }
 

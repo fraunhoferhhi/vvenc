@@ -55,34 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvencimpl.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 VVENC_NAMESPACE_BEGIN
-
-
-//YUVBufferStorage::YUVBufferStorage( const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight )
-//  : YUVBuffer()
-//{
-//  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
-//  {
-//    YUVBuffer::Plane& yuvPlane = planes[ i ];
-//    yuvPlane.width  = vvenc_getWidthOfComponent ( chFmt, frameWidth,  i );
-//    yuvPlane.height = vvenc_getHeightOfComponent( chFmt, frameHeight, i );
-//    yuvPlane.stride = yuvPlane.width;
-//    const int size  = yuvPlane.stride * yuvPlane.height;
-//    yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
-//  }
-//}
-
-//YUVBufferStorage::~YUVBufferStorage()
-//{
-//  for ( int i = 0; i < VVENC_MAX_NUM_COMP; i++ )
-//  {
-//    delete [] planes[ i ].ptr;
-//  }
-//}
 
 VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
 {
@@ -217,7 +190,7 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create()
 }
 
 
-VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, VVEncCfg* config, vvencYUVWriterCallback callback )
+VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, VVEncCfg* config )
 {
   if (nullptr == config)
   {
@@ -231,7 +204,7 @@ VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, VVEncCfg* config, vvencYUV
     return VVENC_ERR_INITIALIZE;
   }
 
-  int ret = d->init(*config, callback );
+  int ret = d->init( *config );
   if (ret != 0)
   {
     // Error initializing the decoder
@@ -256,7 +229,7 @@ VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
   return ret;
 }
 
-VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, vvencYUVWriterCallback callback )
+VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, void * ctx, vvencYUVWriterCallback callback )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -264,7 +237,7 @@ VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, vvencYUVWr
     return VVENC_ERR_INITIALIZE;
   }
 
-  //d->setYUVWriterCallback( callback );
+  d->setYUVWriterCallback( ctx, callback );
   return VVENC_OK;
 }
 
@@ -458,7 +431,3 @@ VVENC_DECL int vvenc_get_height_of_component( const vvencChromaFormat& chFmt, co
 }
 
 VVENC_NAMESPACE_END
-
-#ifdef __cplusplus
-};
-#endif

@@ -96,12 +96,14 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncCfg& rcVVEncCfg, vvencYUVWriterCallback callback );
+  int init( const VVEncCfg& rcVVEncCfg );
 
   int initPass( int pass );
   int uninit();
 
   bool isInitialized() const;
+
+  int setYUVWriterCallback( void *, vvencYUVWriterCallback );
 
   int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone );
 

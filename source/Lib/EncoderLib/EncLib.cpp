@@ -70,6 +70,7 @@ EncLib::EncLib()
   : m_cEncCfg       ()
   , m_cGOPEncoder   ( nullptr )
   , m_yuvWriterIf   ( nullptr )
+  , m_yuvWriterCtx  ( nullptr )
   , m_threadPool    ( nullptr )
   , m_spsMap        ( MAX_NUM_SPS )
   , m_ppsMap        ( MAX_NUM_PPS )
@@ -93,13 +94,11 @@ void EncLib::xResetLib()
   m_numPassInitialized = -1;
 }
 
-void EncLib::initEncoderLib( const VVEncCfg& encCfg, vvencYUVWriterCallback callback )
+void EncLib::initEncoderLib( const VVEncCfg& encCfg )
 {
   // copy config parameter
   const_cast<VVEncCfg&>(m_cEncCfg) = encCfg;
   m_cBckCfg = encCfg;
-
-  m_yuvWriterIf = callback; // TODO: callback not yet implemented
 
   // initialize first pass
   initPass( 0 );
@@ -315,6 +314,12 @@ void EncLib::initPass( int pass )
   m_numPassInitialized = pass;
 }
 
+void EncLib::setYUVWriterCallback( void * ctx, vvencYUVWriterCallback callback )
+{
+  m_yuvWriterCtx = ctx;
+  m_yuvWriterIf = callback;
+}
+
 void EncLib::xUninitLib()
 {
 
@@ -343,6 +348,9 @@ void EncLib::xUninitLib()
   // cleanup parameter sets
   m_spsMap.clearMap();
   m_ppsMap.clearMap();
+
+  m_yuvWriterIf = nullptr;
+  m_yuvWriterCtx = nullptr;
 
   // reset internal data
   xResetLib();
@@ -1250,7 +1258,7 @@ void EncLib::xOutputRecYuv()
       vvencYUVBuffer yuvBuffer;
       setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
 
-      m_yuvWriterIf( this, &yuvBuffer );
+      m_yuvWriterIf( m_yuvWriterCtx, &yuvBuffer );
     }
     m_pocRecOut = picItr->poc + 1;
     picItr->isNeededForOutput = false;
