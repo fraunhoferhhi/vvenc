@@ -347,7 +347,7 @@ int callingOrderInitNoUninit()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -369,13 +369,13 @@ int callingOrderInitTwice()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -430,7 +430,7 @@ int callingOrderRegular()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -491,7 +491,7 @@ int callingOrderNotRegular()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -551,7 +551,7 @@ int callingOrderRegularInitPass()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -606,7 +606,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -677,7 +677,7 @@ int checkSDKDefaultBehaviourRC()
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -772,7 +772,7 @@ int inputBufTest( vvencYUVBuffer* pcYuvPicture )
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;
@@ -890,7 +890,7 @@ int invaildInputBuf( )
     return -1;
   }
 
-  if( 0 != vvenc_encoder_open( enc, &vvencParams, NULL ) )
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
     vvenc_encoder_close( enc );
     return -1;

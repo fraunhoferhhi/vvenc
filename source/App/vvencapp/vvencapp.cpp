@@ -184,7 +184,7 @@ int main( int argc, char* argv[] )
   }
 
   // initialize the encoder
-  iRet = vvenc_encoder_open( enc, &vvencappCfg.conf, NULL );
+  iRet = vvenc_encoder_open( enc, &vvencappCfg.conf );
   if( 0 != iRet )
   {
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, vvenc_get_last_error( enc ) );

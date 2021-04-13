@@ -58,6 +58,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <math.h>
 #include <thread>
 
+VVENC_NAMESPACE_BEGIN
+
+static bool checkCfgParameter( VVEncCfg *cfg );
+static std::string vvenc_cfgString;
 
 static int vvenc_getQpValsSize( int QpVals[] )
 {
@@ -184,16 +188,6 @@ static inline std::string vvenc_getContentLightLevelStr( unsigned int cll[2] )
   css << cll[0] << "," << cll[1] << " (cll,fall)";
   return css.str();
 }
-
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-VVENC_NAMESPACE_BEGIN
-
-static bool checkCfgParameter( VVEncCfg *cfg );
-static std::string vvenc_cfgString;
 
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry )
 {
@@ -3109,11 +3103,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *c, vvencMsgLevel eM
   vvenc_cfgString = css.str();
   return vvenc_cfgString.c_str();
 }
-
-
-#ifdef __cplusplus
-};
-#endif
 
 VVENC_NAMESPACE_END
 
