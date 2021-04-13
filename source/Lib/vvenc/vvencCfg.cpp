@@ -561,17 +561,17 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   c->m_videoSignalTypePresent                  = false;                                 ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
   c->m_videoFullRangeFlag                      = false;                                 ///< Indicates the black level and range of luma and chroma signals
 
-  memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));              ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
-                                                                                                ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
-                                                                                                ///< min/max luminance value in units of 1/10000 candela per square metre
-  memset(&c->m_contentLightLevel,0, sizeof(c->m_contentLightLevel));            ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
+  memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));                      ///< mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)
+                                                                                        ///< GBR xy coordinates in increments of 1/50000 (in the ranges 0 to 50000) (e.g. 0.333 = 16667)
+                                                                                        ///< min/max luminance value in units of 1/10000 candela per square metre
+  memset(&c->m_contentLightLevel,0, sizeof(c->m_contentLightLevel));                    ///< upper bound on the max light level and max avg light level among all individual samples in a 4:4:4 representation. in units of candelas per square metre (SEI)
   c->m_preferredTransferCharacteristics        = -1;                                    ///< Alternative transfer characteristics SEI which will override the corresponding entry in the VUI, if < 0 SEI is not written")
 
-  c->m_summaryOutFilename                      = NULL;                                    ///< filename to use for producing summary output file.
-  c->m_summaryPicFilenameBase                  = NULL;                                    ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
+  c->m_summaryOutFilename                      = NULL;                                  ///< filename to use for producing summary output file.
+  c->m_summaryPicFilenameBase                  = NULL;                                  ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   c->m_summaryVerboseness                      = 0;                                     ///< Specifies the level of the verboseness of the text output.
 
-  c->m_decodeBitstreams[0]=c->m_decodeBitstreams[1] = NULL;                            ///< filename for decode bitstreams.
+  c->m_decodeBitstreams[0]=c->m_decodeBitstreams[1] = NULL;                             ///< filename for decode bitstreams.
   c->m_switchPOC                               = -1;                                    ///< dbg poc.
   c->m_switchDQP                               = 0;                                     ///< switch DQP.
   c->m_fastForwardToPOC                        = -1;                                    ///< get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC

@@ -270,7 +270,7 @@ void EncApp::encode()
 
 void EncApp::outputAU( const vvencAccessUnit& au )
 {
- if( au.payloadUsedSize )
+ if( au.payloadUsedSize == 0 )
  {
    return;
  } 

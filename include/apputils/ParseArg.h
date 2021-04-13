@@ -174,6 +174,22 @@ namespace df
       return oss.str();
     }
 
+    template<>
+    inline
+    const std::string Option<char*>::getValue( )
+    {
+      std::ostringstream oss;
+      if( opt_storage == nullptr )
+      {
+        oss << "\"\"";
+      }
+      else
+      {
+        oss << opt_storage;
+      }
+      return oss.str();
+    }
+
     template<typename T>
     inline 
     const std::string Option<T>::getDefault( )
@@ -213,6 +229,13 @@ namespace df
     Option<std::string>::parse(const std::string& arg, ErrorReporter&)
     {
       opt_storage = arg;
+    }
+
+    template<>
+    inline void
+    Option<const char *>::parse(const std::string& arg, ErrorReporter&)
+    {
+      opt_storage = arg.c_str();
     }
 
     template<>
