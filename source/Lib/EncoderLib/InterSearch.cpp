@@ -6686,7 +6686,7 @@ checkXonly:
   return false;
 }
 
-bool InterSearch::searchBvIBC(CodingUnit& cu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize)
+bool InterSearch::searchBvIBC(const CodingUnit& cu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const
 {
   const int ctuSizeLog2 = Log2(ctuSize);
 
@@ -6750,52 +6750,44 @@ bool InterSearch::searchBvIBC(CodingUnit& cu, int xPos, int yPos, int width, int
     return false;
   }
 
-  // in the same CTU line
-  int numLeftCTUs = (1 << ((7 - ctuSizeLog2) << 1)) - ((ctuSizeLog2 < 7) ? 1 : 0);
-  if ((refRightX >> ctuSizeLog2 <= xPos >> ctuSizeLog2) && (refLeftX >> ctuSizeLog2 >= (xPos >> ctuSizeLog2) - numLeftCTUs))
-  {
+  const Position cuPos{ xPos, yPos };
 
+  //int numLeftCTUs = (1 << ((7 - ctuSizeLog2) << 1)) - ((ctuSizeLog2 < 7) ? 1 : 0);
+  static const int numLeftCTUsLUT[3] = { 15, 3, 1 };
+
+  // in the same CTU line
+  const int numLeftCTUs = numLeftCTUsLUT[ctuSizeLog2 - 5];
+
+  if( ( refRightX >> ctuSizeLog2 <= xPos >> ctuSizeLog2 ) && ( refLeftX >> ctuSizeLog2 >= ( xPos >> ctuSizeLog2 ) - numLeftCTUs ) )
+  {
     // in the same CTU, or left CTU
     // if part of ref block is in the left CTU, some area can be referred from the not-yet updated local CTU buffer
-    if (((refLeftX >> ctuSizeLog2) == ((xPos >> ctuSizeLog2) - 1)) && (ctuSizeLog2 == 7))
+    if( ( ctuSizeLog2 == 7 ) && ( ( refLeftX >> ctuSizeLog2 ) == ( ( xPos >> ctuSizeLog2 ) - 1 ) ) )
     {
       // ref block's collocated block in current CTU
-      const Position refPosCol = cu.Y().topLeft().offset(xBv + ctuSize, yBv);
-      int offset64x = (refPosCol.x >> (ctuSizeLog2 - 1)) << (ctuSizeLog2 - 1);
-      int offset64y = (refPosCol.y >> (ctuSizeLog2 - 1)) << (ctuSizeLog2 - 1);
-      const Position refPosCol64x64 = { offset64x, offset64y };
+      const Position refPosCol64x64{ ( refLeftX + ctuSize ) & ~63, refTopY & ~63 };
+      if( refPosCol64x64 == Position{ xPos & ~63, yPos & ~63 } )
+        return false;
+
       //CodingUnit* curef = cu.cs->getCU(refPosCol64x64, CH_L, cu.treeType);
       //bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
-      bool isDecomp = isYPartBefore( cu.splitSeries, ctuSizeLog2, cu.Y().pos(), refPosCol64x64 );
-      if (isDecomp)
+      bool isDecomp = isYPartBefore( cu.splitSeries, ctuSizeLog2, cuPos, refPosCol64x64 );
+      if( isDecomp )
       {
         return false;
       }
-      if (refPosCol64x64 == cu.Y().topLeft())
-        return false;
     }
   }
   else
     return false;
 
   // in the same CTU, or valid area from left CTU. Check if the reference block is already coded
-  const Position refPosLT = cu.Y().topLeft().offset(xBv, yBv);
-  const Position refPosBR = cu.Y().bottomRight().offset(xBv, yBv);
+  const Position refPosBR{ refRightX, refBottomY };
   //CodingUnit* curef = cu.cs->getCU(refPosBR, CH_L, cu.treeType);
   //bool isDecomp = curef && ((cu.cs != curef->cs) || cu.idx < curef->idx);
-  bool isDecomp = ( ( refPosBR.x >> ctuSizeLog2 ) < ( cu.lx() >> ctuSizeLog2 ) ) || isYPartBefore( cu.splitSeries, ctuSizeLog2, cu.Y().pos(), refPosBR );
-  if (!isDecomp)
-  {
-    return false;
-  }
-  //CodingUnit* curef2 = cu.cs->getCU(refPosLT, CH_L, cu.treeType);
-  //isDecomp = curef && ((cu.cs != curef2->cs) || cu.idx < curef2->idx);
-  isDecomp = ( ( refPosLT.x >> ctuSizeLog2 ) < ( cu.lx() >> ctuSizeLog2 ) ) || isYPartBefore( cu.splitSeries, ctuSizeLog2, cu.Y().pos(), refPosLT );
-  if (!isDecomp)
-  {
-    return false;
-  }
-  return true;
+  bool isDecomp = ( ( refPosBR.x >> ctuSizeLog2 ) < ( cuPos.x >> ctuSizeLog2 ) ) || ( refRightX < xPos && refBottomY < yPos ) || isYPartBefore( cu.splitSeries, ctuSizeLog2, cuPos, refPosBR );
+
+  return isDecomp;
 }
 #endif
 

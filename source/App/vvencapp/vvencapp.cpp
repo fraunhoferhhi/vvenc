@@ -148,17 +148,17 @@ int main( int argc, char* argv[] )
   }
   // assign verbosity used for encoder output
   g_verbosity = vvencappCfg.conf.m_verbosity;
-
-  if( vvencappCfg.m_inputFileName.empty() )
+  
+  if( !strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
   {
     if( vvencappCfg.conf.m_RCNumPasses > 1 )
     {
-      std::cout << cAppname << " [error]: no input file given and 2 pass rate control is enabled; not supported yet" << std::endl;
+      std::cout << cAppname << " [error]: 2 pass rate control and reading from stdin is not supported yet" << std::endl;
       return -1;
     }
     else
     {
-      std::cout << cAppname << " no input file given. trying to read from stdin" << std::endl;
+      std::cout << cAppname << " trying to read from stdin" << std::endl;
     }
   }
 

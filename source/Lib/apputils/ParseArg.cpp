@@ -605,6 +605,13 @@ namespace df
             storePair(true, false, option, val);
             return extra_argc_consumed;
           }
+          else if( val_sep == 0 && val.size() == 1 )
+          {
+            extra_argc_consumed++;
+            /* argument occurs after option_sep */
+            storePair(true, false, option, val);
+            return extra_argc_consumed;
+          }
         }
 
         /* no argument found => argument in argv[1] (maybe) */

@@ -436,7 +436,7 @@ public:
     }
     m_defaultCachedBvs.currCnt = 0;
   }
- bool searchBvIBC(CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize);
+ bool searchBvIBC(const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
 
 #endif
 private:
