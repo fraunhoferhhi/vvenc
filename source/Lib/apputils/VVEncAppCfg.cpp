@@ -420,7 +420,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ;
   opts.setSubSection("Input Options");
   opts.addOptions()
-  ("input,i",           m_inputFileName,          "original YUV input file name")
+  ("input,i",           m_inputFileName,          "original YUV input file name or '-' for reading from stdin")
   ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
   ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
 
@@ -607,7 +607,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Input options");
   opts.addOptions()
-  ("InputFile,i",                                     m_inputFileName,                                  "Original YUV input file name")
+  ("InputFile,i",                                     m_inputFileName,                                  "Original YUV input file name or '-' for reading from stdin")
   ("Size,s",                                          toSourceSize,                                     "Input resolution (WidthxHeight)")
   ("InputBitDepth",                                   m_inputBitDepth[ CH_L ],                          "Bit-depth of input file")
   ("FramesToBeEncoded,f",                             m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
