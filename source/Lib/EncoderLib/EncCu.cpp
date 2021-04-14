@@ -2844,9 +2844,10 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
     ComponentID compId = (ComponentID)compIdx;
     {
       CompArea compArea = currCsArea.block( compId );
-      compArea.x -= cu->blocks[compIdx].x;
-      compArea.y -= cu->blocks[compIdx].y;
-      CPelBuf reco      = picDbBuf.getBuf( compArea );
+      CompArea         locArea  = compArea;
+      locArea.x -= cu->blocks[compIdx].x;
+      locArea.y -= cu->blocks[compIdx].y;
+      CPelBuf reco      = picDbBuf.getBuf( locArea );
       CPelBuf org       = cs.getOrgBuf( compId );
       distCur += xGetDistortionDb( cs, org, reco, compArea, false );
     }
@@ -2924,7 +2925,11 @@ Distortion EncCu::xGetDistortionDb(CodingStructure &cs, CPelBuf& org, CPelBuf& r
     }
     else
     {
-      CPelBuf orgLuma = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( cs.area.blocks[COMP_Y] ): cs.picture->getOrigBuf( cs.area.blocks[COMP_Y] );
+      const int csx = getComponentScaleX( compID, cs.area.chromaFormat );
+      const int csy = getComponentScaleY( compID, cs.area.chromaFormat );
+      CompArea lumaArea = compArea.compID ? CompArea( COMP_Y, cs.area.chromaFormat, Area( compArea.x << csx, compArea.y << csy, compArea.width << csx, compArea.height << csy), true) : cs.area.blocks[COMP_Y];
+      CPelBuf orgLuma = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( lumaArea ): cs.picture->getOrigBuf( lumaArea );
+//      CPelBuf orgLuma = cs.picture->getFilteredOrigBuffer().valid() ? cs.picture->getRspOrigBuf( cs.area.blocks[COMP_Y] ): cs.picture->getOrigBuf( cs.area.blocks[COMP_Y] );
       dist = m_cRdCost.getDistPart( org, reco, cs.sps->bitDepths[toChannelType( compID )], compID, DF_SSE_WTD, &orgLuma );
     }
     return dist;
