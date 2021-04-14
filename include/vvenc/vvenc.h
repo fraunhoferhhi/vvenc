@@ -93,15 +93,15 @@ typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 */
 enum ErrorCodes
 {
-  VVENC_OK                   = 0,      ///< success
-  VVENC_ERR_UNSPECIFIED      = -1,     ///< unspecified malfunction
-  VVENC_ERR_INITIALIZE       = -2,     ///< encoder not initialized or tried to initialize multiple times
-  VVENC_ERR_ALLOCATE         = -3,     ///< internal allocation error
-  VVENC_NOT_ENOUGH_MEM       = -5,     ///< allocated memory to small to receive encoded data. After allocating sufficient memory the failed call can be repeated.
-  VVENC_ERR_PARAMETER        = -7,     ///< inconsistent or invalid parameters
-  VVENC_ERR_NOT_SUPPORTED    = -10,    ///< unsupported request
-  VVENC_ERR_RESTART_REQUIRED = -11,    ///< encoder requires restart
-  VVENC_ERR_CPU              = -30     ///< unsupported CPU SSE 4.1 needed
+  VVENC_OK                   = 0,      // success
+  VVENC_ERR_UNSPECIFIED      = -1,     // unspecified malfunction
+  VVENC_ERR_INITIALIZE       = -2,     // encoder not initialized or tried to initialize multiple times
+  VVENC_ERR_ALLOCATE         = -3,     // internal allocation error
+  VVENC_NOT_ENOUGH_MEM       = -5,     // allocated memory to small to receive encoded data. After allocating sufficient memory the failed call can be repeated.
+  VVENC_ERR_PARAMETER        = -7,     // inconsistent or invalid parameters
+  VVENC_ERR_NOT_SUPPORTED    = -10,    // unsupported request
+  VVENC_ERR_RESTART_REQUIRED = -11,    // encoder requires restart
+  VVENC_ERR_CPU              = -30     // unsupported CPU SSE 4.1 needed
 };
 
 /*
@@ -109,10 +109,10 @@ enum ErrorCodes
 */
 typedef struct vvencYUVPlane
 {
-  int16_t*  ptr     = nullptr;      ///< pointer to plane buffer
-  int       width   = 0;            ///< width of the plane
-  int       height  = 0;            ///< height of the plane
-  int       stride  = 0;            ///< stride (width + left margin + right margins) of plane in samples
+  int16_t*  ptr     = nullptr;         // pointer to plane buffer
+  int       width   = 0;               // width of the plane
+  int       height  = 0;               // height of the plane
+  int       stride  = 0;               // stride (width + left margin + right margins) of plane in samples
 }vvencYUVPlane;
 
 /*
@@ -121,9 +121,9 @@ typedef struct vvencYUVPlane
 typedef struct vvencYUVBuffer
 {
   vvencYUVPlane planes[ 3 ];
-  uint64_t      sequenceNumber  = 0;      ///< sequence number of the picture
-  uint64_t      cts             = 0;      ///< composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
-  bool          ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
+  uint64_t      sequenceNumber  = 0;      // sequence number of the picture
+  uint64_t      cts             = 0;      // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  bool          ctsValid        = false;  // composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
 /* vvencRecYUVBufferCallback:

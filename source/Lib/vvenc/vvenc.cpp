@@ -80,14 +80,14 @@ VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
 {
   for( int i = 0; i < 3; i ++ )
   {
-    yuvBuffer->planes[i].ptr     = NULL;          // pointer to plane buffer
-    yuvBuffer->planes[i].width   = 0;             // width of the plane
-    yuvBuffer->planes[i].height  = 0;             // height of the plane
-    yuvBuffer->planes[i].stride  = 0;             // stride (width + left margin + right margins) of plane in samples
+    yuvBuffer->planes[i].ptr     = NULL;
+    yuvBuffer->planes[i].width   = 0;
+    yuvBuffer->planes[i].height  = 0;
+    yuvBuffer->planes[i].stride  = 0;
   }
-  yuvBuffer->sequenceNumber  = 0;                 // sequence number of the picture
-  yuvBuffer->cts             = 0;                 // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
-  yuvBuffer->ctsValid        = false;             // composition time stamp valid flag (true: valid, false: CTS not set)
+  yuvBuffer->sequenceNumber  = 0;
+  yuvBuffer->cts             = 0;
+  yuvBuffer->ctsValid        = false;
 }
 
 
@@ -171,8 +171,8 @@ VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
 
 VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
 {
-  accessUnit->payload         = NULL;         ///< pointer to buffer that retrieves the coded data,
-  accessUnit->payloadSize     = 0;            ///< size of the allocated buffer in bytes
+  accessUnit->payload         = NULL;
+  accessUnit->payloadSize     = 0;
   vvenc_accessUnit_reset( accessUnit );
 }
 
