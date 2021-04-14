@@ -168,6 +168,7 @@ public:
   ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
   const ParameterSetMap<APS>& getSharedApsMap() const { return m_gopApsMap; }
   bool                        anyFramesInOutputQueue() { return !m_gopEncListOutput.empty(); }
+  const EncReshape&           getReshaper() const      { return m_Reshaper; }
 
 private:
   void xUpdateRasInit                 ( Slice* slice );
