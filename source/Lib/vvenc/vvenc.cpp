@@ -152,21 +152,21 @@ VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit )
 
 VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
 {
-  accessUnit->payloadUsedSize = 0;            ///< length of the coded data in bytes
-  accessUnit->cts             = 0;            ///< composition time stamp in TicksPerSecond (see VVCDecoderParameter)
-  accessUnit->dts             = 0;            ///< decoding time stamp in TicksPerSecond (see VVCDecoderParameter)
-  accessUnit->ctsValid        = false;        ///< composition time stamp valid flag (true: valid, false: CTS not set)
-  accessUnit->dtsValid        = false;        ///< decoding time stamp valid flag (true: valid, false: DTS not set)
-  accessUnit->rap             = false;        ///< random access point flag (true: AU is random access point, false: sequential access)
-  accessUnit->sliceType       = VVENC_NUMBER_OF_SLICE_TYPES; ///< slice type (I/P/B) */
-  accessUnit->refPic          = false;         ///< reference picture
-  accessUnit->temporalLayer   = 0;             ///< temporal layer
-  accessUnit->poc             = 0;             ///< picture order count
+  accessUnit->payloadUsedSize = 0;
+  accessUnit->cts             = 0;
+  accessUnit->dts             = 0;
+  accessUnit->ctsValid        = false;
+  accessUnit->dtsValid        = false;
+  accessUnit->rap             = false;
+  accessUnit->sliceType       = VVENC_NUMBER_OF_SLICE_TYPES;
+  accessUnit->refPic          = false;
+  accessUnit->temporalLayer   = 0;
+  accessUnit->poc             = 0;
+  accessUnit->status          = 0;
+  accessUnit->essentialBytes  = 0;
 
-  accessUnit->status          = 0;        ///< additional info (see Status)
-  //accessUnit->infoString;                    ///< debug info from inside the encoder
-
-  accessUnit->essentialBytes =0;
+  memset( accessUnit->infoString, 0, sizeof( accessUnit->infoString ) );
+  accessUnit->infoString[0]   ='\0';
 }
 
 VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )

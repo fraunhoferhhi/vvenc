@@ -188,11 +188,8 @@ typedef struct vvencAccessUnit
   uint64_t        poc;                 // picture order count
 
   int             status;              // additional info (see Status)
-  //std::string     infoString;        // debug info from inside the encoder
-
   int             essentialBytes;      // number of bytes in nalus of type SLICE_*, DCI, VPS, SPS, PPS, PREFIX_APS, SUFFIX_APS
-//  std::vector<vvencNalUnitType> nalUnitTypeVec;
-//  std::vector<uint32_t>    annexBsizeVec;
+  char            infoString[VVENC_MAX_STRING_LEN]; // debug info from inside the encoder
 } vvencAccessUnit;
 
 /* vvenc_accessUnit_alloc:

@@ -544,8 +544,26 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
     rcAccessUnit.refPic          = rcAuList.refPic;
     rcAccessUnit.temporalLayer   = rcAuList.temporalLayer;
     rcAccessUnit.poc             = rcAuList.poc;
-    //rcAccessUnit.infoString      = rcAuList.InfoString; // TODO: cl do we want support this in c?
     rcAccessUnit.status          = rcAuList.status;
+
+    if ( !rcAuList.InfoString.empty() )
+    {
+      if( rcAuList.InfoString.size() >= VVENC_MAX_STRING_LEN )
+      {
+        rcAuList.InfoString.copy( rcAccessUnit.infoString , VVENC_MAX_STRING_LEN-1 );
+        rcAccessUnit.infoString[VVENC_MAX_STRING_LEN-1] = '\0';
+      }
+      else
+      {
+        rcAuList.InfoString.copy( rcAccessUnit.infoString , rcAuList.InfoString.size()+1 );
+        rcAccessUnit.infoString[rcAuList.InfoString.size()] = '\0';
+      }
+    }
+    else
+    {
+      rcAccessUnit.infoString[0] = '\0';
+    }
+
   }
 
   return 0;
