@@ -1464,7 +1464,8 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
 
   //===== update distortion =====
-  if( (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag()) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
+  const bool reshapeIntraCMD = m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ;
+  if(((cs.picHeader->lmcsEnabled && (reshapeData.getCTUFlag() || (isChroma(compID) && reshapeIntraCMD))) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled ) )
   {
     const CPelBuf orgLuma = cs.getOrgBuf( cs.area.blocks[COMP_Y] );
     if( compID == COMP_Y && !m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )

@@ -342,12 +342,14 @@ private:
 class EncAdaptiveLoopFilter : public AdaptiveLoopFilter
 {
 public:
-  inline void           setAlfWSSD(int alfWSSD) { m_alfWSSD = alfWSSD; }
-  static std::vector<double>  m_lumaLevelToWeightPLUT;
+  inline void            setAlfWSSD(int alfWSSD) { m_alfWSSD = alfWSSD; }
+  inline std::vector<double>&
+                         getLumaLevelWeightTable() { return m_lumaLevelToWeightPLUT; }
 
 private:
-  int m_alfWSSD;
-  const vvenc_config*        m_encCfg;
+  std::vector<double>    m_lumaLevelToWeightPLUT;
+  int                    m_alfWSSD;
+  const vvenc_config*    m_encCfg;
   AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
   AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];
