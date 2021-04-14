@@ -327,31 +327,6 @@ typedef struct vvencGOPEntry
   int    m_deltaRefPics[ 2 ][ VVENC_MAX_NUM_REF_PICS ];
   bool   m_isEncoded;
   bool   m_ltrp_in_slice_header_flag;
-
-  vvencGOPEntry()
-  {
-    m_POC                       = -1;
-    m_QPOffset                  = 0;
-    m_QPOffsetModelOffset       = 0.0;
-    m_QPOffsetModelScale        = 0.0;
-    m_CbQPoffset                = 0;
-    m_CrQPoffset                = 0;
-    m_QPFactor                  = 0.0;
-    m_tcOffsetDiv2              = 0;
-    m_betaOffsetDiv2            = 0;
-    m_CbTcOffsetDiv2            = 0;
-    m_CbBetaOffsetDiv2          = 0;
-    m_CrTcOffsetDiv2            = 0;
-    m_CrBetaOffsetDiv2          = 0;
-    m_temporalId                = 0;
-    m_refPic                    = false;
-    m_sliceType                 = 'P';
-    memset( m_numRefPicsActive, 0, sizeof( m_numRefPicsActive ) );
-    memset( m_numRefPics, 0, sizeof( m_numRefPics ) );
-    memset( m_deltaRefPics, 0, sizeof( m_deltaRefPics ) );
-    m_isEncoded                 = false;
-    m_ltrp_in_slice_header_flag = false;
-  }
 }vvencGOPEntry;
 
 VVENC_DECL void vvenc_GOPEntry_default(vvencGOPEntry *GOPEntry );

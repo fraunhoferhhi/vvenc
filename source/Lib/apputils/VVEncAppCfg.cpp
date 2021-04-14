@@ -1098,7 +1098,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   {
     std::ostringstream cOSS;
     cOSS << "Frame" << i+1;
-    opts.addOptions()(cOSS.str(), conf.m_GOPList[i], vvencGOPEntry() );
+    opts.addOptions()(cOSS.str(), conf.m_GOPList[i] );
   }
   opts.addOptions()("decode",                          m_decode,                                        "decode only");
 
