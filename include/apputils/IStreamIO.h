@@ -477,13 +477,17 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
         T val;
         convStream >> val;
         fail |= convStream.fail();
-        toArr._valVec[pos] = val;
+
+        if ( pos < toArr._maxSize )
+        {
+          toArr._valVec[pos] = val;
+        }
         pos++;
       }
     }
   }
 
-  if ( fail || ( 0 == pos ) )
+  if ( fail || ( 0 == pos ) || (pos >= toArr._maxSize) )
   {
     in.setstate( std::ios::failbit );
   }
