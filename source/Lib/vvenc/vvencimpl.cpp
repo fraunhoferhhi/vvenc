@@ -475,7 +475,6 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
         default:
           break;
       }
-      rcAccessUnit.totalBytes += size;
     }
 
     if( rcAccessUnit.payloadSize < (int)sizeSum )

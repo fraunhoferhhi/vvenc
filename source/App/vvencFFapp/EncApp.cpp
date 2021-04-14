@@ -328,35 +328,8 @@ void EncApp::closeFileIO()
 
 void EncApp::rateStatsAccum(const vvencAccessUnit& au )
 {
-//  std::vector<vvencNalUnitType>::const_iterator it_nal = au.nalUnitTypeVec.begin();
-//  std::vector<uint32_t>::const_iterator it_nalsize = au.annexBsizeVec.begin();
-
-//  for( ; it_nal != au.nalUnitTypeVec.end(); it_nal++, it_nalsize++ )
-//  {
-//    switch( (*it_nal) )
-//    {
-//      case VVENC_NAL_UNIT_CODED_SLICE_TRAIL:
-//      case VVENC_NAL_UNIT_CODED_SLICE_STSA:
-//      case VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL:
-//      case VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP:
-//      case VVENC_NAL_UNIT_CODED_SLICE_CRA:
-//      case VVENC_NAL_UNIT_CODED_SLICE_GDR:
-//      case VVENC_NAL_UNIT_CODED_SLICE_RADL:
-//      case VVENC_NAL_UNIT_CODED_SLICE_RASL:
-//      case VVENC_NAL_UNIT_DCI:
-//      case VVENC_NAL_UNIT_VPS:
-//      case VVENC_NAL_UNIT_SPS:
-//      case VVENC_NAL_UNIT_PPS:
-//      case VVENC_NAL_UNIT_PREFIX_APS:
-//      case VVENC_NAL_UNIT_SUFFIX_APS:
-//        m_essentialBytes += *it_nalsize;
-//        break;
-//      default:
-//        break;
-//    }
-
-//    m_totalBytes += *it_nalsize;
-//  }
+  m_totalBytes     += au.payloadUsedSize;
+  m_essentialBytes += au.essentialBytes;
 }
 
 void EncApp::printRateSummary( int framesRcvd )

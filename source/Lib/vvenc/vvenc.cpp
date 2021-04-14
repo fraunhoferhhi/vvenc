@@ -163,11 +163,10 @@ VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
   accessUnit->temporalLayer   = 0;             ///< temporal layer
   accessUnit->poc             = 0;             ///< picture order count
 
-  accessUnit->status        = 0;        ///< additional info (see Status)
+  accessUnit->status          = 0;        ///< additional info (see Status)
   //accessUnit->infoString;                    ///< debug info from inside the encoder
 
   accessUnit->essentialBytes =0;
-  accessUnit->totalBytes = 0;
 }
 
 VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
