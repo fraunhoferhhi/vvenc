@@ -553,12 +553,6 @@ typedef struct vvenc_config
   bool                m_entropyCodingSyncEnabled;
   bool                m_entryPointsPresent;
 
-//  bool                m_signalledSliceIdFlag                                           // unused, only for conmpatiblity
-//  int                 m_signalledSliceIdLengthMinus1                                   // unused, only for conmpatiblity
-//  int                 m_rectSliceBoundary[8];                                          // unused, only for conmpatiblity
-//  int                 m_signalledSliceId[8];                                           // unused, only for conmpatiblity
-//  int                 m_sliceId[8];                                                    // unused, only for conmpatiblity
-
   unsigned            m_CTUSize;
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
   unsigned            m_maxMTTDepth;
@@ -645,7 +639,7 @@ typedef struct vvenc_config
   bool                m_allowDisFracMMVD;
   int                 m_CIIP;
   bool                m_SbTMVP;
-  int                 m_SBT;                                                            // Sub-Block Transform for inter blocks
+  int                 m_SBT;                                                             // Sub-Block Transform for inter blocks
   int                 m_LFNST;
   int                 m_MTS;
   int                 m_MTSIntraMaxCand;
