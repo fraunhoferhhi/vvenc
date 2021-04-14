@@ -150,7 +150,9 @@ void EncPicture::finalizePicture( Picture& pic )
   if( pic.writePic )
   {
     // write picture
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
     xWriteSliceData( pic );
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
   }
 
   // finalize
