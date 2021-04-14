@@ -69,8 +69,8 @@ namespace vvenc {
 EncLib::EncLib()
   : m_cEncCfg       ()
   , m_cGOPEncoder   ( nullptr )
-  , m_yuvWriterIf   ( nullptr )
-  , m_yuvWriterCtx  ( nullptr )
+  , m_RecYUVBufferCallback     ( nullptr )
+  , m_RecYUVBufferCallbackCtx  ( nullptr )
   , m_threadPool    ( nullptr )
   , m_spsMap        ( MAX_NUM_SPS )
   , m_ppsMap        ( MAX_NUM_PPS )
@@ -94,10 +94,10 @@ void EncLib::xResetLib()
   m_numPassInitialized = -1;
 }
 
-void EncLib::initEncoderLib( const VVEncCfg& encCfg )
+void EncLib::initEncoderLib( const vvenc_config& encCfg )
 {
   // copy config parameter
-  const_cast<VVEncCfg&>(m_cEncCfg) = encCfg;
+  const_cast<vvenc_config&>(m_cEncCfg) = encCfg;
   m_cBckCfg = encCfg;
 
   // initialize first pass
@@ -314,10 +314,10 @@ void EncLib::initPass( int pass )
   m_numPassInitialized = pass;
 }
 
-void EncLib::setYUVWriterCallback( void * ctx, vvencYUVWriterCallback callback )
+void EncLib::setRecYUVBufferCallback( void *ctx, vvencRecYUVBufferCallback callback )
 {
-  m_yuvWriterCtx = ctx;
-  m_yuvWriterIf = callback;
+  m_RecYUVBufferCallbackCtx = ctx;
+  m_RecYUVBufferCallback    = callback;
 }
 
 void EncLib::xUninitLib()
@@ -349,8 +349,8 @@ void EncLib::xUninitLib()
   m_spsMap.clearMap();
   m_ppsMap.clearMap();
 
-  m_yuvWriterIf = nullptr;
-  m_yuvWriterCtx = nullptr;
+  m_RecYUVBufferCallback    = nullptr;
+  m_RecYUVBufferCallbackCtx = nullptr;
 
   // reset internal data
   xResetLib();
@@ -359,7 +359,7 @@ void EncLib::xUninitLib()
 void EncLib::xSetRCEncCfg( int pass )
 {
   // restore encoder configuration for second rate control passes
-  const_cast<VVEncCfg&>(m_cEncCfg) = m_cBckCfg;
+  const_cast<vvenc_config&>(m_cEncCfg) = m_cBckCfg;
 
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
@@ -382,7 +382,7 @@ void EncLib::xSetRCEncCfg( int pass )
       m_cBckCfg.m_cuQpDeltaSubdiv = 0;
     }
 
-    std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
+    std::swap( const_cast<vvenc_config&>(m_cEncCfg), m_cBckCfg );
   }
 }
 
@@ -1252,13 +1252,13 @@ void EncLib::xOutputRecYuv()
       continue;
     if( ! picItr->isReconstructed || picItr->poc != m_pocRecOut )
       return;
-    if( m_cRateCtrl.rcIsFinalPass && m_yuvWriterIf )
+    if( m_cRateCtrl.rcIsFinalPass && m_RecYUVBufferCallback )
     {
       const PPS& pps = *(picItr->cs->pps);
       vvencYUVBuffer yuvBuffer;
       setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
 
-      m_yuvWriterIf( m_yuvWriterCtx, &yuvBuffer );
+      m_RecYUVBufferCallback( m_RecYUVBufferCallbackCtx, &yuvBuffer );
     }
     m_pocRecOut = picItr->poc + 1;
     picItr->isNeededForOutput = false;

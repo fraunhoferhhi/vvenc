@@ -88,25 +88,24 @@ VVEncImpl::~VVEncImpl()
 
 }
 
-int VVEncImpl::getConfig( VVEncCfg& rcVVEncCfg ) const
+int VVEncImpl::getConfig( vvenc_config& config ) const
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
-  rcVVEncCfg = m_cVVEncCfg;
+  config = m_cVVEncCfg;
   return VVENC_OK;
 }
 
-int VVEncImpl::reconfig( const VVEncCfg& rcVVEncCfg )
+int VVEncImpl::reconfig( const vvenc_config&  )
 {
   if( !m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
   return VVENC_ERR_NOT_SUPPORTED;
 }
 
-int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
+int VVEncImpl::checkConfig( const vvenc_config& config )
 {
-  VVEncCfg cVVEncCfgCopy = rcVVEncCfg;
-
-  if ( vvenc_init_cfg_parameter(&cVVEncCfgCopy) )
+  vvenc_config configCpy = config;
+  if ( vvenc_init_config_parameter(&configCpy) )
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -114,7 +113,7 @@ int VVEncImpl::checkConfig( const VVEncCfg& rcVVEncCfg )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const VVEncCfg& rcVVEncCfg )
+int VVEncImpl::init( const vvenc_config& config )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
 
@@ -123,10 +122,10 @@ int VVEncImpl::init( const VVEncCfg& rcVVEncCfg )
   const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
   pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
 
-  m_cVVEncCfgExt = rcVVEncCfg;
-  m_cVVEncCfg    = rcVVEncCfg;
+  m_cVVEncCfgExt = config;
+  m_cVVEncCfg    = config;
 
-  if ( vvenc_init_cfg_parameter(&m_cVVEncCfg) ) // init auto/dependent options
+  if ( vvenc_init_config_parameter(&m_cVVEncCfg) ) // init auto/dependent options
   {
     return VVENC_ERR_INITIALIZE;
   }
@@ -222,11 +221,11 @@ bool VVEncImpl::isInitialized() const
   return m_bInitialized;
 }
 
-int VVEncImpl::setYUVWriterCallback( void * ctx, vvencYUVWriterCallback callback )
+int VVEncImpl::setRecYUVBufferCallback( void * ctx, vvencRecYUVBufferCallback callback )
 {
   if( !m_bInitialized || !m_pEncLib ){ return VVENC_ERR_INITIALIZE; }
 
-   m_pEncLib->setYUVWriterCallback( ctx, callback );
+   m_pEncLib->setRecYUVBufferCallback( ctx, callback );
   return VVENC_OK;
 }
 

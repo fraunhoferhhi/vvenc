@@ -82,15 +82,15 @@ private:
   int                       m_TicksPerFrameMul4;
   int                       m_numPassInitialized;
 
-  const VVEncCfg            m_cEncCfg;
-  VVEncCfg                  m_cBckCfg;
+  const vvenc_config        m_cEncCfg;
+  vvenc_config              m_cBckCfg;
   EncGOP*                   m_cGOPEncoder;
   EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
   PicList                   m_cListPic;
 
-  std::function<void( void*, vvencYUVBuffer* )> m_yuvWriterIf;
-  void*                     m_yuvWriterCtx;
+  std::function<void( void*, vvencYUVBuffer* )> m_RecYUVBufferCallback;
+  void*                     m_RecYUVBufferCallbackCtx;
 
   NoMallocThreadPool*       m_threadPool;
   RateCtrl                  m_cRateCtrl;                          ///< Rate control class
@@ -110,13 +110,13 @@ public:
   EncLib();
   virtual ~EncLib();
 
-  void     initEncoderLib      ( const VVEncCfg& encCfg );
+  void     initEncoderLib      ( const vvenc_config& encCfg );
   void     initPass            ( int pass );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
 
-  void     setYUVWriterCallback( void *, vvencYUVWriterCallback );
+  void     setRecYUVBufferCallback( void *, vvencRecYUVBufferCallback );
 
 private:
   void     xUninitLib          ();

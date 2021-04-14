@@ -78,7 +78,7 @@ IntraSearch::IntraSearch()
 {
 }
 
-void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache )
+void IntraSearch::init(const vvenc_config &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache )
 {
   IntraPrediction::init( (ChromaFormat)encCfg.m_internChromaFormat, encCfg.m_internalBitDepth[ CH_L ] );
 

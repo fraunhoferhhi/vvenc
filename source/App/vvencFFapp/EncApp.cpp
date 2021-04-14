@@ -111,7 +111,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
  */
 void EncApp::encode()
 {
-  VVEncCfg& vvencCfg = m_cEncAppCfg.conf;
+  vvenc_config& vvencCfg = m_cEncAppCfg.conf;
   if( m_cEncAppCfg.m_decode )
   {
     vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str() );
@@ -134,7 +134,7 @@ void EncApp::encode()
 
   if ( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    vvenc_encoder_set_YUVWriterCallback( m_encCtx, this, outputYuv );
+    vvenc_encoder_set_RecYUVBufferCallback( m_encCtx, this, outputYuv );
   }
 
   vvenc_get_config( m_encCtx, &vvencCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)

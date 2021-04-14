@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-struct VVEncCfg;
+struct vvenc_config;
 
 namespace vvenc {
 
@@ -97,7 +97,7 @@ class EncSlice
 {
 private:
   // encoder configuration
-  const VVEncCfg*              m_pcEncCfg;                           ///< encoder configuration class
+  const vvenc_config*          m_pcEncCfg;                           ///< encoder configuration class
 
   std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
   std::vector<LineEncRsrc*>    m_LineEncRsrc;
@@ -127,7 +127,7 @@ public:
   EncSlice();
   virtual ~EncSlice();
 
-  void    init                ( const VVEncCfg& encCfg,
+  void    init                ( const vvenc_config& encCfg,
                                 const SPS& sps,
                                 const PPS& pps,
                                 std::vector<int>* const globalCtuQpVector,

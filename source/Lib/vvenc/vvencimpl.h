@@ -96,20 +96,20 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncCfg& rcVVEncCfg );
+  int init( const vvenc_config& rcVVEncCfg );
 
   int initPass( int pass );
   int uninit();
 
   bool isInitialized() const;
 
-  int setYUVWriterCallback( void *, vvencYUVWriterCallback );
+  int setRecYUVBufferCallback( void *, vvencRecYUVBufferCallback );
 
   int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone );
 
-  int getConfig( VVEncCfg& rcVVEncCfg ) const;
-  int checkConfig( const VVEncCfg& rcVVEncCfg );
-  int reconfig( const VVEncCfg& rcVVEncCfg );
+  int getConfig( vvenc_config& rcVVEncCfg ) const;
+  int checkConfig( const vvenc_config& rcVVEncCfg );
+  int reconfig( const vvenc_config& rcVVEncCfg );
 
   int setAndRetErrorMsg( int Ret );
 
@@ -138,8 +138,8 @@ private:
   VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
   bool                   m_bInitialized         = false;
 
-  VVEncCfg               m_cVVEncCfgExt;      // external (user) config ( not usd currently)
-  VVEncCfg               m_cVVEncCfg;         // internal (adapted) config
+  vvenc_config           m_cVVEncCfgExt;      // external (user) config ( not usd currently)
+  vvenc_config           m_cVVEncCfg;         // internal (adapted) config
 
   std::string            m_cErrorString;
   std::string            m_cEncoderInfo;

@@ -90,7 +90,7 @@ struct LineEncRsrc
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
-  LineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
+  LineEncRsrc( const vvenc_config& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
 };
 
 struct PerThreadRsrc
@@ -162,7 +162,7 @@ EncSlice::~EncSlice()
   m_saoStatData.clear();
 }
 
-void EncSlice::init( const VVEncCfg& encCfg,
+void EncSlice::init( const vvenc_config& encCfg,
                      const SPS& sps,
                      const PPS& pps,
                      std::vector<int>* const globalCtuQpVector,

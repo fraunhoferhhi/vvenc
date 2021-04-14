@@ -190,11 +190,11 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create()
 }
 
 
-VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, VVEncCfg* config )
+VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
 {
   if (nullptr == config)
   {
-    vvenc::msg( VVENC_ERROR, "VVEncCfg is null\n" );
+    vvenc::msg( VVENC_ERROR, "vvenc_config is null\n" );
     return VVENC_ERR_PARAMETER;
   }
 
@@ -229,7 +229,7 @@ VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
   return ret;
 }
 
-VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, void * ctx, vvencYUVWriterCallback callback )
+VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *enc, void * ctx, vvencRecYUVBufferCallback callback )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -237,7 +237,7 @@ VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *enc, void * ctx
     return VVENC_ERR_INITIALIZE;
   }
 
-  d->setYUVWriterCallback( ctx, callback );
+  d->setRecYUVBufferCallback( ctx, callback );
   return VVENC_OK;
 }
 
@@ -264,7 +264,7 @@ VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvenc
   return d->encode( YUVBuffer, accessUnit, encodeDone );
 }
 
-VVENC_DECL int vvenc_get_config( vvencEncoder *enc, VVEncCfg* cfg )
+VVENC_DECL int vvenc_get_config( vvencEncoder *enc, vvenc_config* cfg )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -276,7 +276,7 @@ VVENC_DECL int vvenc_get_config( vvencEncoder *enc, VVEncCfg* cfg )
 }
 
 
-VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const VVEncCfg *cfg )
+VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const vvenc_config *cfg )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -287,7 +287,7 @@ VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const VVEncCfg *cfg )
   return d->reconfig( *cfg );
 }
 
-VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const VVEncCfg *cfg )
+VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const vvenc_config *cfg )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)

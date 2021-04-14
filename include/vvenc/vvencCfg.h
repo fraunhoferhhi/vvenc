@@ -436,7 +436,7 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF );
 
 // ====================================================================================================================
 
-typedef struct VVEncCfg
+typedef struct vvenc_config
 {
 
   // basic config params
@@ -747,19 +747,17 @@ typedef struct VVEncCfg
   char                m_summaryOutFilename[VVENC_MAX_STRING_LEN];                        // filename to use for producing summary output file.
   char                m_summaryPicFilenameBase[VVENC_MAX_STRING_LEN];                    // Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   unsigned            m_summaryVerboseness;                                              // Specifies the level of the verboseness of the text output.
+}vvenc_config;
 
+VVENC_DECL void vvenc_config_default( vvenc_config *cfg );
 
-}VVEncCfg;
+VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
 
-VVENC_DECL void vvenc_cfg_default( VVEncCfg *cfg );
+VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM );
 
-VVENC_DECL int vvenc_init_preset( VVEncCfg *cfg, vvencPresetMode preset );
+VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *cfg );
 
-VVENC_DECL int vvenc_init_default( VVEncCfg *cfg, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM );
-
-VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *cfg );
-
-VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *cfg, vvencMsgLevel eMsgLevel );
+VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *cfg, vvencMsgLevel eMsgLevel );
 
 #ifdef __cplusplus
 }

@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-struct VVEncCfg;
+struct vvenc_config;
 
 namespace vvenc {
 
@@ -69,7 +69,7 @@ class EncGOP;
 class EncPicture
 {
   private:
-    const VVEncCfg*          m_pcEncCfg;
+    const vvenc_config*      m_pcEncCfg;
     EncSlice                 m_SliceEncoder;
     LoopFilter               m_LoopFilter;
     EncAdaptiveLoopFilter    m_ALF;
@@ -89,7 +89,7 @@ class EncPicture
     {}
     virtual ~EncPicture() {}
 
-    void init                   ( const VVEncCfg& encCfg,
+    void init                   ( const vvenc_config& encCfg,
                                   std::vector<int>* const globalCtuQpVector,
                                   const SPS& sps,
                                   const PPS& pps,

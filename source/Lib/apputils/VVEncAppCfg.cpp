@@ -1258,7 +1258,7 @@ std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
     css << "Reconstruction File                    : " << m_reconFileName << "\n";
   }
 
-  std::string config ( vvenc_get_config_as_string( (VVEncCfg*)&conf, eMsgLevel) );
+  std::string config ( vvenc_get_config_as_string( (vvenc_config*)&conf, eMsgLevel) );
   css << config;
   css << "\n";
 

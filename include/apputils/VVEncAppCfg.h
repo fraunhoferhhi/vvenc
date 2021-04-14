@@ -66,7 +66,7 @@ namespace apputils {
 class APPUTILS_DECL VVEncAppCfg
 {
 public:
-  VVEncCfg     conf;
+  vvenc_config conf;
 
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
@@ -81,7 +81,7 @@ public:
 
   VVEncAppCfg()
   {
-    vvenc_cfg_default( &conf );
+    vvenc_config_default( &conf );
   }
 
   virtual ~VVEncAppCfg();

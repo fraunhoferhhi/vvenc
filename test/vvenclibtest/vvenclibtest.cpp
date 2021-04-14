@@ -149,7 +149,7 @@ int main( int argc, char* argv[] )
 }
 
 
-void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true )
+void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = true )
 {
   rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
   rcEncCfg.m_SourceHeight               = 144;                 // luminance height of input picture
@@ -169,17 +169,17 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   vvenc_init_preset(  &rcEncCfg, vvencPresetMode::VVENC_FASTER );
   if( callInitCfgParameter )
   {
-    vvenc_init_cfg_parameter( &rcEncCfg );
+    vvenc_init_config_parameter( &rcEncCfg );
   }
 }
 
-void defaultSDKInit( VVEncCfg& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
+void defaultSDKInit( vvenc_config& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
   vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32,  vvencPresetMode::VVENC_MEDIUM );
 
   if( callInitCfgParameter )
   {
-    vvenc_init_cfg_parameter( &rcEncCfg );
+    vvenc_init_config_parameter( &rcEncCfg );
   }
 }
 
@@ -193,7 +193,7 @@ void fillInputPic( vvencYUVBuffer* pcYuvBuffer, const short val = 512 )
 }
 
 template< typename T, typename V = int>
-int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
+int testParamList( const std::string& w, T& testParam, vvenc_config& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
 {
   vvencEncoder *enc = vvenc_encoder_create();
 
@@ -223,8 +223,8 @@ int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, co
 
 int testLibParameterRanges()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams, false );
 
@@ -336,8 +336,8 @@ int callingOrderInvalidUninit()
 
 int callingOrderInitNoUninit()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams, true );
 
@@ -358,8 +358,8 @@ int callingOrderInitNoUninit()
 
 int callingOrderInitTwice()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams );
 
@@ -389,8 +389,8 @@ int callingOrderInitTwice()
 int callingOrderNoInit()
 {
   vvencAccessUnit* AU = nullptr;
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams );
 
@@ -419,8 +419,8 @@ int callingOrderNoInit()
 
 int callingOrderRegular()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams );
 
@@ -480,8 +480,8 @@ int callingOrderRegular()
 
 int callingOrderNotRegular()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams );
 
@@ -540,8 +540,8 @@ int callingOrderNotRegular()
 
 int callingOrderRegularInitPass()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams );
 
@@ -592,8 +592,8 @@ int callingOrderRegularInitPass()
 
 int callingOrderRegularInit2Pass()
 {
-  VVEncCfg vvencParams;
-  vvenc_cfg_default( &vvencParams );
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
 
   vvencParams.m_RCNumPasses = 2;
   vvencParams.m_RCTargetBitrate = 500000;
@@ -667,7 +667,7 @@ int callingOrderRegularInit2Pass()
 
 int checkSDKDefaultBehaviourRC()
 {
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
   defaultSDKInit( vvencParams,  500000 );
   vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
 
@@ -763,7 +763,7 @@ int testSDKDefaultBehaviour()
 
 int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -881,7 +881,7 @@ int invaildInputInvalidChromaStride( )
 
 int invaildInputBuf( )
 {
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();

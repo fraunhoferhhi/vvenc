@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 //! \ingroup EncoderLib
 //! \{
-struct VVEncCfg;
+struct vvenc_config;
 
 namespace vvenc {
 
@@ -97,7 +97,7 @@ private:
 
 protected:
   // interface to option
-  const VVEncCfg* m_pcEncCfg;
+  const vvenc_config* m_pcEncCfg;
 
   // interface to classes
   TrQuant*        m_pcTrQuant;
@@ -165,7 +165,7 @@ public:
 
   ISPTestedModesInfo m_ispTestedModes[ NUM_LFNST_NUM_PER_SET ];
 
-  void init                       ( const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
+  void init                       ( const vvenc_config &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
   void setCtuEncRsrc              ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
   void destroy                    ();
 

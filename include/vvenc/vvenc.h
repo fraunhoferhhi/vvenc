@@ -72,7 +72,7 @@ VVENC_NAMESPACE_BEGIN
 /*
   The vvencEncoder struct provides the encoder's user interface.
   The simplest way to use the encoder is to call vvenc_encoder_create() to create an encoder instance and initialize it by using vvenc_encoder_open() with the
-  the given VVEncCfg. After initialization the encoding of the video is performed by using the vvenc_encode() method to hand over frame by frame in display order
+  the given vvenc_config. After initialization the encoding of the video is performed by using the vvenc_encode() method to hand over frame by frame in display order
   and retrieve the compressed bitstream chunks of already processed pictures. The encoding can be end by calling flush() that causes the encoder to finish encoding of all pending pictures.
   Finally calling vvenc_encoder_close() releases all allocated resources held by the encoder internally.
 */
@@ -126,10 +126,10 @@ typedef struct vvencYUVBuffer
   bool          ctsValid        = false;  ///< composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
-/* vvencYUVWriterCallback:
+/* vvencRecYUVBufferCallback:
    callback function to receive reconstructed yuv data of an encoded picture
 */
-typedef void (*vvencYUVWriterCallback)(void*, vvencYUVBuffer* );
+typedef void (*vvencRecYUVBufferCallback)(void*, vvencYUVBuffer* );
 
 /* vvenc_YUVBuffer_alloc:
    Allocates an vvencYUVBuffer instance.
@@ -177,8 +177,8 @@ typedef struct vvencAccessUnit
   int             payloadSize;         // size of the allocated buffer in bytes
   int             payloadUsedSize;     // length of the coded data in bytes
 
-  uint64_t        cts;                 // composition time stamp in TicksPerSecond (see VVEncCfg)
-  uint64_t        dts;                 // decoding time stamp in TicksPerSecond (see VVEncCfg)
+  uint64_t        cts;                 // composition time stamp in TicksPerSecond (see vvenc_config)
+  uint64_t        dts;                 // decoding time stamp in TicksPerSecond (see vvenc_config)
   bool            ctsValid;            // composition time stamp valid flag (true: valid, false: CTS not set)
   bool            dtsValid;            // decoding time stamp valid flag (true: valid, false: DTS not set)
   bool            rap;                 // random access point flag (true: AU is random access point, false: sequential access)
@@ -248,121 +248,178 @@ VVENC_DECL const char* vvenc_get_version( void );
 */
 VVENC_DECL vvencEncoder* vvenc_encoder_create( void );
 
-/**
+/* vvenc_encoder_open
   This method initializes the encoder instance.
   This method is used to initially set up the encoder with the assigned encoder parameter struct.
   The method fails if the encoder is already initialized or if the assigned parameter struct
   does not pass the consistency check. Other possibilities for an unsuccessful call are missing encoder license, or an machine with
   insufficient CPU-capabilities.
   \param[in]  vvencEncoder pointer to opaque handler.
-  \param[in]  rcVVEncCfg const reference of VVEncCfg struct that holds initial encoder parameters.
+  \param[in]  vvenc_config* pointer to vvenc_config struct that holds initial encoder parameters.
   \retval     int  if non-zero an error occurred (see ErrorCodes), otherwise the return value indicates success VVENC_OK
   \pre        The encoder must not be initialized.
 */
-VVENC_DECL int vvenc_encoder_open( vvencEncoder*, VVEncCfg* );
+VVENC_DECL int vvenc_encoder_open( vvencEncoder*, vvenc_config* );
 
-/**
+/* vvenc_encoder_close
  This method resets the encoder instance.
  This method clears the encoder and releases all internally allocated memory.
  Calling uninit cancels all pending encoding calls. In order to finish pending input pictures use the flush method.
- \param[in]  None
+ \param[in]  vvencEncoder pointer to opaque handler.
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        None
 */
 VVENC_DECL int vvenc_encoder_close(vvencEncoder *);
 
+/* vvenc_encoder_set_RecYUVBufferCallback
+ This method sets the callback to get the reconstructed YUV buffer.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \param[in]  ctx pointer of the caller of null
+ \param[in]  implementation of the callback
+ \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
+ \pre        None
+*/
+VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *, void * ctx, vvencRecYUVBufferCallback callback );
 
-VVENC_DECL int vvenc_encoder_set_YUVWriterCallback(vvencEncoder *, void * ctx, vvencYUVWriterCallback callback );
-
-/**
+/* vvenc_init_pass
   This method initializes the encoder instance in dependency to the encoder pass.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \param[in]  pass number of current pass to init
+ \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
+ \pre        None
 */
 VVENC_DECL int vvenc_init_pass( vvencEncoder *, int pass );
 
-/**
+/* vvenc_encode
   This method encodes a picture.
   Uncompressed input pictures are passed to the encoder in display order. A compressed bitstream chunks is returned by filling the assigned AccessUnit struct.
   Data in AcccessUnit struct are valid if the encoder call returns success and the UsedSize attribute is non-zero.
   If the input parameter pcInputPicture is NULL, the encoder just returns a pending bitstream chunk if available.
   If the call returns VVENC_NOT_ENOUGH_MEM, the BufSize attribute in AccessUnit struct indicates that the buffer is to small to retrieve the compressed data waiting for delivery.
   In this case the UsedSize attribute returns the minimum buffersize required to fetch the pending chunk. After allocating sufficient memory the encoder can retry the last call with the parameter pcInputPicture set to NULL to prevent encoding the last picture twice.
-  \param[in]  pcYUVBuffer pointer to YUVBuffer structure containing uncompressed picture data and meta information, to flush the encoder pcYUVBuffer must be NULL.
-  \param[out] rcAccessUnit reference to AccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
-  \param[out] rbEncodeDone reference to flag that indicates that the encoder completed the last frame after flushing.
+  \param[in]  vvencEncoder pointer to opaque handler
+  \param[in]  pcYUVBuffer pointer to vvencYUVBuffer structure containing uncompressed picture data and meta information, to flush the encoder YUVBuffer must be NULL.
+  \param[out] accessUnit pointer of pointer to vvencAccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
+  \param[out] encodeDone pointer to flag that indicates that the encoder completed the last frame after flushing.
   \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
   \pre        The encoder has to be initialized successfully.
 */
 VVENC_DECL int vvenc_encode( vvencEncoder *, vvencYUVBuffer* YUVBuffer, vvencAccessUnit** accessUnit, bool* encodeDone );
 
-/**
+/* vvenc_get_config
  This method fetches the current encoder configuration.
  The method fails if the encoder is not initialized.
- \param[in]  rcVVEncCfg reference to an VVEncCfg struct that returns the current encoder setup.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \param[in]  vvenc_config reference to an vvenc_config struct that returns the current encoder setup.
  \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
  \pre        The encoder has to be initialized.
 */
-VVENC_DECL int vvenc_get_config( vvencEncoder *,VVEncCfg* VVEncCfg );
+VVENC_DECL int vvenc_get_config( vvencEncoder *,vvenc_config * );
 
-/**
+/* vvenc_reconfig
  This method reconfigures the encoder instance.
  This method is used to change encoder settings during the encoding process when the encoder was already initialized.
  Some parameter changes might require an internal encoder restart, especially when previously used parameter sets VPS, SPS or PPS
  become invalid after the parameter change. If changes are limited to TargetBitRate or QP changes then the encoder continues encoding
  without interruption, using the new parameters. Some parameters e.g. NumTheads are not reconfigurable - in this case the encoder returns an Error.
- The method fails if the encoder is not initialized or if the assigned parameter set given in VVEncCfg struct
+ The method fails if the encoder is not initialized or if the assigned parameter set given in vvenc_config struct
  does not pass the consistency and parameter check.
- \param[in]  rcVVEncCfg const reference to VVEncCfg struct that holds the new encoder parameters.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \param[in]  vvenc_config const reference to vvenc_config struct that holds the new encoder parameters.
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        The encoder has to be initialized successfully.
 */
-VVENC_DECL int vvenc_reconfig( vvencEncoder *, const VVEncCfg* );
+VVENC_DECL int vvenc_reconfig( vvencEncoder *, const vvenc_config * );
 
-/**
+/* vvenc_check_config
  This method checks the passed configuration.
  The method fails if the encoder is not initialized.
+ \param[in]  vvencEncoder pointer to opaque handler
  \param[in]  rcVVCEncParameter reference to an VVCEncParameter struct that returns the current encoder setup.
  \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
 */
-VVENC_DECL int vvenc_check_config( vvencEncoder *, const VVEncCfg* );
+VVENC_DECL int vvenc_check_config( vvencEncoder *, const vvenc_config * );
 
-/**
+/* vvenc_get_last_error
  This method returns the last occurred error as a string.
- \param      None
- \retval     std::string empty string for no error assigned
+ \param[in]  vvencEncoder pointer to opaque handler
+ \retval     const char empty string for no error assigned
 */
 VVENC_DECL const char* vvenc_get_last_error( vvencEncoder * );
 
+/* vvenc_get_enc_information
+ This method returns information about the encoder as a string.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \retval     const char* encoder information
+*/
 VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder * );
 
+/* vvenc_get_num_lead_frames
+ This method the number of needed lead frames (used for MCTF)
+ \param[in]  vvencEncoder pointer to opaque handler
+ \retval     number of leading frames
+*/
 VVENC_DECL int vvenc_get_num_lead_frames( vvencEncoder * );
 
+/* vvenc_get_num_trail_frames
+ This method the number of needed trailing frames (used for MCTF)
+ \param[in]  vvencEncoder pointer to opaque handler
+ \retval     number of trailing frames
+*/
 VVENC_DECL int vvenc_get_num_trail_frames( vvencEncoder * );
 
+/* vvenc_print_summary
+ This method prints the summary of a encoder run.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
+*/
 VVENC_DECL int vvenc_print_summary( vvencEncoder * );
 
-/**
+/* vvenc_get_error_msg
  This static function returns a string according to the passed parameter nRet.
  \param[in]  nRet return value code to translate
- \retval[ ]  std::string empty string for no error
+ \retval[ ]  const char*  empty string for no error
 */
 VVENC_DECL const char* vvenc_get_error_msg( int nRet );
 
-/**
+/* vvenc_set_logging_callback
  This method registers a log message callback function to the encoder library.
  If no such function has been registered, the library will omit all messages.
  \param      Log message callback function.
+ \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
 */
 VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback );
 
-///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId );
+/* vvenc_get_compile_info_string
+ creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+ \retval[ ]  const char* compiler infoa as string
+*/
+VVENC_DECL const char* vvenc_get_compile_info_string( void );
 
-VVENC_DECL bool  vvenc_is_tracing_enabled( void );            // checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL const char* vvenc_get_compile_info_string( void ); // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-VVENC_DECL void   vvenc_decode_bitstream( const char* FileName);
+/* vvenc_set_SIMD_extension
+  tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+ \param      const char* simdId: empty string to set highest possible extension, otherwise set simd extension
+ \retval[ ]  const char* current simd exentsion
+*/
+VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId );
 
 VVENC_DECL int  vvenc_get_width_of_component( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
 VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
+
+/* Debug section */
+
+/* vvenc_is_tracing_enabled
+ checks if library has tracing supported enabled (see ENABLE_TRACING).
+ \retval[ ]  true if tracing is enabled, else false
+*/
+VVENC_DECL bool  vvenc_is_tracing_enabled( void );
+
+/* vvenc_decode_bitstream
+ * set filename of a bitstream that should be decoded
+ \retval[ ] const char* file name of bitstream
+*/
+VVENC_DECL void   vvenc_decode_bitstream( const char* FileName);
+
 
 VVENC_NAMESPACE_END
 

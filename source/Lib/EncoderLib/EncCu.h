@@ -180,7 +180,7 @@ private:
   PelStorage            m_pRspBuffer[maxCuDepth];
 
   //  Access channel
-  const VVEncCfg*       m_pcEncCfg;
+  const vvenc_config*   m_pcEncCfg;
   IntraSearch           m_cIntraSearch;
   InterSearch           m_cInterSearch;
   RdCost                m_cRdCost;
@@ -213,7 +213,7 @@ public:
   EncCu();
   virtual ~EncCu();
 
-  void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
+  void  init                  ( const vvenc_config& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
   void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
   void  destroy               ();
 

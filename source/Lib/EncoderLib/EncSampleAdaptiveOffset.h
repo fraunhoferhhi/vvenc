@@ -56,7 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-struct VVEncCfg;
+struct vvenc_config;
 
 namespace vvenc {
 
@@ -100,7 +100,7 @@ public:
   virtual ~EncSampleAdaptiveOffset();
 
   //interface
-  void init                  ( const VVEncCfg& encCfg );
+  void init                  ( const vvenc_config& encCfg );
   void initSlice             ( const Slice* slice );
   void setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
 
@@ -124,7 +124,7 @@ private:
 
 private:
 
-  const VVEncCfg* m_EncCfg;
+  const vvenc_config* m_EncCfg;
 
   //for RDO
   CABACWriter*  m_CABACEstimator;

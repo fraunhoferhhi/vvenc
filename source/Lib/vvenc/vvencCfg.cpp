@@ -45,7 +45,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     VVEncCfg.cpp
+/** \file     vvenc_config.cpp
     \brief    encoder configuration class
 */
 
@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 VVENC_NAMESPACE_BEGIN
 
-static bool checkCfgParameter( VVEncCfg *cfg );
+static bool checkCfgParameter( vvenc_config *cfg );
 static std::string vvenc_cfgString;
 
 static int vvenc_getQpValsSize( int QpVals[] )
@@ -273,7 +273,7 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
 
-VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
+VVENC_DECL void vvenc_config_default(vvenc_config *c )
 {
   int i = 0;
 
@@ -603,7 +603,7 @@ VVENC_DECL void vvenc_cfg_default(VVEncCfg *c )
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
 
-static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* message )
+static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
@@ -612,7 +612,7 @@ static bool vvenc_confirmParameter ( VVEncCfg *c, bool bflag, const char* messag
   return true;
 }
 
-VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
+VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 {
   c->m_confirmFailed = false;
 
@@ -821,8 +821,8 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
     c->m_useSameChromaQPTables   = false;
     c->m_verCollocatedChromaFlag = true;
 
-    VVEncCfg cBaseCfg;
-    vvenc_cfg_default(&cBaseCfg);
+    vvenc_config cBaseCfg;
+    vvenc_config_default(&cBaseCfg);
     if( c->m_qpInValsCb == cBaseCfg.m_qpInValsCb )
     {
       memset(&c->m_qpInValsCb,0, sizeof(c->m_qpInValsCb));
@@ -881,8 +881,8 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
     c->m_useSameChromaQPTables   = true;
     c->m_verCollocatedChromaFlag = true;
 
-    VVEncCfg cBaseCfg;
-    vvenc_cfg_default(&cBaseCfg);
+    vvenc_config cBaseCfg;
+    vvenc_config_default(&cBaseCfg);
     if( c->m_qpInValsCb == cBaseCfg.m_qpInValsCb )
     {
       std::vector<int>  qpVals = { 9, 23, 33, 42 };
@@ -1939,7 +1939,7 @@ VVENC_DECL bool vvenc_init_cfg_parameter( VVEncCfg *c )
   return( c->m_confirmFailed );
 }
 
-static bool checkCfgParameter( VVEncCfg *c )
+static bool checkCfgParameter( vvenc_config *c )
 {
   // run base check first
   vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "can not determin auto profile");
@@ -2538,10 +2538,10 @@ static bool checkCfgParameter( VVEncCfg *c )
   return( c->m_confirmFailed );
 }
 
-VVENC_DECL int vvenc_init_default( VVEncCfg *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
+VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
 {
   int iRet = 0;
-  vvenc_cfg_default(c);
+  vvenc_config_default(c);
   c->m_SourceWidth         = width;                    // luminance width of input picture
   c->m_SourceHeight        = height;                   // luminance height of input picture
 
@@ -2562,7 +2562,7 @@ VVENC_DECL int vvenc_init_default( VVEncCfg *c, int width, int height, int frame
   return iRet;
 }
 
-VVENC_DECL int vvenc_init_preset( VVEncCfg *c, vvencPresetMode preset )
+VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 {
   memset(&c->m_qpInValsCb ,0, sizeof(c->m_qpInValsCb));
   memset(&c->m_qpOutValsCb,0, sizeof(c->m_qpOutValsCb));
@@ -2900,7 +2900,7 @@ VVENC_DECL int vvenc_init_preset( VVEncCfg *c, vvencPresetMode preset )
   return 0;
 }
 
-VVENC_DECL const char* vvenc_get_config_as_string( VVEncCfg *c, vvencMsgLevel eMsgLevel )
+VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLevel eMsgLevel )
 {
   std::stringstream css;
 

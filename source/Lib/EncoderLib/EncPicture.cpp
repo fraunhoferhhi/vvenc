@@ -71,7 +71,7 @@ static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-void EncPicture::init( const VVEncCfg& encCfg,
+void EncPicture::init( const vvenc_config& encCfg,
                        std::vector<int>* const globalCtuQpVector,
                        const SPS& sps,
                        const PPS& pps,
