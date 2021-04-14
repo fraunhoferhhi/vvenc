@@ -2716,15 +2716,6 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
           {
             for( int l = k; l < shape.numCoeff; l++ )
             {
-#if 0
-              for( int b0 = 0; b0 < numBins; b0++ )
-              {
-                for( int b1 = 0; b1 < numBins; b1++ )
-                {
-                  alfCovariance[classIdx].E[b0][b1][k][l] += weight * (ELocal[k][b0] * ( double ) ELocal[l][b1]);
-                }
-              }
-#else
               int Elocalkb0 = ELocal[k][0];
               int Elocalkb1 = ELocal[k][1];
               int Elocalkb2 = ELocal[k][2];
@@ -2754,7 +2745,6 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               alfCovariance[classIdx].E[3][1][k][l] += weight * (Elocalkb3 * ( double ) Elocallb1);
               alfCovariance[classIdx].E[3][2][k][l] += weight * (Elocalkb3 * ( double ) Elocallb2);
               alfCovariance[classIdx].E[3][3][k][l] += weight * (Elocalkb3 * ( double ) Elocallb3);
-#endif
             }
 
             for( int b = 0; b < numBins; b++ )
