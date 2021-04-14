@@ -51,7 +51,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <string>
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 #include "vvenc/vvenc.h"
 #include "EncoderLib/EncLib.h"
 

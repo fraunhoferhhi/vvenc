@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <cstdarg>
 
 #include "vvenc/vvenc.h"
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 

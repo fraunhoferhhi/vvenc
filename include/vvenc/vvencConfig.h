@@ -43,7 +43,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     vvencCfg.h
+/** \file     vvencConfig.h
     \brief    encoder configuration class (header)
 */
 
@@ -55,9 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "vvenc/vvencCfg.h"
-
-#include <string>
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END

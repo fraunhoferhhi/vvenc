@@ -50,7 +50,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "vvenc/vvenc.h"
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 #include "vvenc/version.h"
 
 #include "vvencimpl.h"

@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "EncHRD.h"
 #include "CommonLib/MCTF.h"
 #include "CommonLib/Nal.h"
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 
 #include <mutex>
 

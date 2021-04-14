@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/Reshape.h"
 #include <math.h>
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 
 //! \ingroup EncoderLib
 //! \{

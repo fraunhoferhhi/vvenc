@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
     \brief    encoder configuration class
 */
 
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"

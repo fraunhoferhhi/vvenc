@@ -57,7 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 #include "Utilities/NoMallocThreadPool.h"
 
 

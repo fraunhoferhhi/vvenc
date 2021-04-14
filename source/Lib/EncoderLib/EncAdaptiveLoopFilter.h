@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 #include "CABACWriter.h"
 #include "CommonLib/AdaptiveLoopFilter.h"
 

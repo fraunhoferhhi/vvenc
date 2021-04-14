@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 
 #include "apputils/VVEncAppCfg.h"
-#include <vvenc/vvencCfg.h>
+#include <vvenc/vvencConfig.h>
 
 //! \ingroup Interface
 //! \{

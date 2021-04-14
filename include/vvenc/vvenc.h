@@ -57,7 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "vvenc/vvencCfg.h"
+#include "vvenc/vvencConfig.h"
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END
@@ -188,7 +188,7 @@ typedef struct vvencAccessUnit
   uint64_t        poc;                 // picture order count
 
   int             status;              // additional info (see Status)
-  std::string     infoString;          // debug info from inside the encoder
+  //std::string     infoString;          // debug info from inside the encoder
 
   int             essentialBytes;
   int             totalBytes;
