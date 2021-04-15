@@ -56,7 +56,7 @@ namespace vvenc {
   class EncHRD :public HRD
   {
   public:
-    void initHRDParameters( const vvenc_config& encCfg, const SPS& sps );
+    void initHRDParameters( const VVEncCfg& encCfg, const SPS& sps );
 
   protected:
     // calculate scale value of bitrate and initial delay

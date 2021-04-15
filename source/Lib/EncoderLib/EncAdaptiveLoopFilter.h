@@ -58,8 +58,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #define ALF_CTU_PAR_TRACING ( 0 && ENABLE_TRACING )
 
-struct vvenc_config;
-
 namespace vvenc {
 
 class NoMallocThreadPool;
@@ -349,7 +347,7 @@ public:
 private:
   std::vector<double>    m_lumaLevelToWeightPLUT;
   int                    m_alfWSSD;
-  const vvenc_config*    m_encCfg;
+  const VVEncCfg*    m_encCfg;
   AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
   AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];
@@ -400,7 +398,7 @@ private:
 public:
   EncAdaptiveLoopFilter();
   virtual ~EncAdaptiveLoopFilter() { destroy(); }
-  void init                         ( const vvenc_config& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
+  void init                         ( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool );
   void destroy                      ();
   void initDistortion               ();
   std::vector<int> getAvaiApsIdsLuma( CodingStructure& cs, int& newApsId );

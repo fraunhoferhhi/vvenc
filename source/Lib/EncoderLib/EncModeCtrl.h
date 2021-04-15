@@ -347,7 +347,7 @@ class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache
 {
 protected:
 
-  const vvenc_config*   m_pcEncCfg;
+  const VVEncCfg*       m_pcEncCfg;
         RdCost*         m_pcRdCost;
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
@@ -357,7 +357,7 @@ public:
 
   ~EncModeCtrl    () { destroy(); }
 
-  void init               ( const vvenc_config& encCfg, RdCost *pRdCost );
+  void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
   void initCTUEncoding    ( const Slice &slice );
   void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs );

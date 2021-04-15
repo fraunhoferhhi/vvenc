@@ -571,7 +571,7 @@ EncAdaptiveLoopFilter::EncAdaptiveLoopFilter()
   m_alfCovarianceFrameCcAlf[1] = nullptr;
 }
 
-void EncAdaptiveLoopFilter::init( const vvenc_config& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
+void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEstimator, CtxCache& ctxCache, NoMallocThreadPool* threadpool )
 {
 
   AdaptiveLoopFilter::create( encCfg.m_PadSourceWidth, encCfg.m_PadSourceHeight, (vvenc::ChromaFormat)encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_MaxCodingDepth, encCfg.m_internalBitDepth );

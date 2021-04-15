@@ -211,6 +211,8 @@ int VVEncImpl::uninit()
     }
   }
 
+  m_cLastAu.clear();
+
   m_bInitialized = false;
   m_eState       = INTERNAL_STATE_UNINITIALIZED;
   return VVENC_OK;
@@ -233,6 +235,17 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
 {
   if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
   if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
+
+  if( !*ppcAccessUnit )
+  {
+    m_cErrorString = "vvencAccessUnit is null. AU memory must be allocated before encode call.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+  if( (*ppcAccessUnit)->payloadSize <= 0 )
+  {
+    m_cErrorString = "vvencAccessUnit has no payload size. AU payload must have a sufficient size to store encoded data.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
 
   int iRet= VVENC_OK;
 
@@ -316,7 +329,6 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   }
 
   // reset AU data
-
   if( *ppcAccessUnit )
   {
     vvenc_accessUnit_reset(*ppcAccessUnit);
@@ -349,15 +361,62 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   /* copy output AU */
   if ( !cAu.empty() )
   {
-    if( !*ppcAccessUnit )
+    m_cLastAu = cAu;  // save AU list, to restore it, if memory of vvencAccessUnit is not big enough
+
+    int sizeAu = xGetAccessUnitsSize( cAu );
+    if( (*ppcAccessUnit)->payloadSize < sizeAu )
     {
-      *ppcAccessUnit = vvenc_accessUnit_alloc();
+      std::stringstream css;
+      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << (*ppcAccessUnit)->payloadSize << ", needed " << sizeAu << ")";
+      m_cErrorString =css.str();
+      return VVENC_NOT_ENOUGH_MEM;
     }
+
     iRet = xCopyAu( **ppcAccessUnit, cAu  );
   }
 
   return iRet;
 }
+
+int VVEncImpl::getLastAccessUnit( vvencAccessUnit** ppcAccessUnit )
+{
+  if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
+  if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
+
+  if( !*ppcAccessUnit )
+  {
+    m_cErrorString = "vvencAccessUnit is null. AU memory must be allocated before encode call.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+  if( (*ppcAccessUnit)->payloadSize <= 0 )
+  {
+    m_cErrorString = "vvencAccessUnit has no payload size. AU payload must have a sufficient size to store encoded data.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+
+  int iRet= VVENC_OK;
+  /* copy output AU */
+  if ( !m_cLastAu.empty() )
+  {
+    int sizeAu = xGetAccessUnitsSize( m_cLastAu );
+    if( (*ppcAccessUnit)->payloadSize < sizeAu )
+    {
+      std::stringstream css;
+      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << (*ppcAccessUnit)->payloadSize << ", needed " << sizeAu << ")";
+      m_cErrorString =css.str();
+      return sizeAu;
+    }
+
+    iRet = xCopyAu( **ppcAccessUnit, m_cLastAu  );
+  }
+  else
+  {
+    iRet= VVENC_ERR_UNSPECIFIED;
+  }
+
+  return iRet;
+}
+
 
 const char* VVEncImpl::getVersionNumber()
 {
@@ -421,6 +480,36 @@ int VVEncImpl::printSummary() const
   return 0;
 }
 
+int VVEncImpl::xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList )
+{
+  uint32_t sizeSum = 0;
+  if ( ! rcAuList.empty() )
+  {
+    for (vvenc::AccessUnitList::const_iterator it = rcAuList.begin(); it != rcAuList.end(); it++)
+    {
+      const vvenc::NALUnitEBSP& nalu = **it;
+      if (it == rcAuList.begin() ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_DCI ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_SPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_VPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_PPS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_PREFIX_APS ||
+          nalu.m_nalUnitType == VVENC_NAL_UNIT_SUFFIX_APS )
+      {
+        sizeSum += 4;
+      }
+      else
+      {
+        sizeSum += 3;
+      }
+      sizeSum += uint32_t(nalu.m_nalUnitData.str().size());
+    }
+  }
+
+  return sizeSum;
+}
+
+
 int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitList& rcAuList )
 {
   rcAccessUnit.rap = false;
@@ -479,11 +568,7 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
 
     if( rcAccessUnit.payloadSize < (int)sizeSum )
     {
-      if ( rcAccessUnit.payload )
-      {
-        vvenc_accessUnit_free_payload( &rcAccessUnit );
-      }
-      vvenc_accessUnit_alloc_payload( &rcAccessUnit, sizeSum );
+      return -1;
     }
 
     uint32_t iUsedSize = 0;
@@ -563,7 +648,6 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
     {
       rcAccessUnit.infoString[0] = '\0';
     }
-
   }
 
   return 0;

@@ -67,8 +67,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-struct vvenc_config;
-
 namespace vvenc {
 
 // ====================================================================================================================
@@ -356,7 +354,7 @@ private:
 
 protected:
   // interface to option
-  const vvenc_config*   m_pcEncCfg;
+  const VVEncCfg*   m_pcEncCfg;
 
   // interface to classes
   TrQuant*          m_pcTrQuant;
@@ -402,7 +400,7 @@ public:
   InterSearch();
   virtual ~InterSearch();
 
-  void init                         ( const vvenc_config& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
+  void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
   void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
 
   void destroy                      ();
@@ -412,7 +410,7 @@ public:
   /// set ME search range
   void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
 
-  void setSearchRange               ( const Slice* slice, const vvenc_config& encCfg );
+  void setSearchRange               ( const Slice* slice, const VVEncCfg& encCfg );
 
   void resetSavedAffineMotion       ();
   void storeAffineMotion            ( Mv acAffineMv[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int BcwIdx);

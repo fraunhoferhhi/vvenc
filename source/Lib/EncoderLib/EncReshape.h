@@ -110,7 +110,7 @@ public:
   EncReshape();
   ~EncReshape();
 
-  void init( const vvenc_config& encCfg );
+  void init( const VVEncCfg& encCfg );
   void destroy();
 
   void calcSeqStats     ( Picture& pic, SeqInfo &stats);

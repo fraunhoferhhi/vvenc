@@ -127,7 +127,7 @@ bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int in
   return curTLayer <= tarTL && curId == 0;
 }
 
-void trySkipOrDecodePicture( bool& decPic, bool& encPic, const vvenc_config& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap )
+void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap )
 {
   // check if we should decode a leading bitstream
   if( cfg.m_decodeBitstreams[0][0] != '\0' )
@@ -273,7 +273,7 @@ EncGOP::~EncGOP()
 }
 
 
-void EncGOP::init( const vvenc_config& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
+void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;

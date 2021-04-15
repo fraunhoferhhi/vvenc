@@ -263,6 +263,17 @@ VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvenc
   return d->encode( YUVBuffer, accessUnit, encodeDone );
 }
 
+VVENC_DECL int vvenc_get_last_access_unit( vvencEncoder *enc, vvencAccessUnit** accessUnit )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  return d->getLastAccessUnit( accessUnit );
+}
+
 VVENC_DECL int vvenc_get_config( vvencEncoder *enc, vvenc_config* cfg )
 {
   auto d = (vvenc::VVEncImpl*)enc;

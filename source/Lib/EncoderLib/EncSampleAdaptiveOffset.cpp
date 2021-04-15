@@ -101,7 +101,7 @@ EncSampleAdaptiveOffset::~EncSampleAdaptiveOffset()
 {
 }
 
-void EncSampleAdaptiveOffset::init( const vvenc_config& encCfg )
+void EncSampleAdaptiveOffset::init( const VVEncCfg& encCfg )
 {
   m_EncCfg = &encCfg;
 

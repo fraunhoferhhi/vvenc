@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-void SEIEncoder::init( const vvenc_config& encCfg, EncHRD& encHRD)
+void SEIEncoder::init( const VVEncCfg& encCfg, EncHRD& encHRD)
 {
   m_pcEncCfg      = &encCfg;
   m_pcEncHRD      = &encHRD;

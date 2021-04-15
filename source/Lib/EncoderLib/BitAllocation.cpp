@@ -313,7 +313,7 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
 
 // public functions
 
-int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const vvenc_config* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
+int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
                                             int optChromaQPOffset[2])
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
@@ -376,7 +376,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const vvenc_conf
   return savedLumaQP;
 }
 
-int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const vvenc_config* encCfg, const int savedQP, const double lambda,
+int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
                                           std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
                                           const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr)
 {
@@ -557,7 +557,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const vvenc_config
   return adaptedSliceQP;
 }
 
-int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const vvenc_config* encCfg, const Area& lumaArea)
+int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEnerPic, hpEnerSub = 0.0;
@@ -629,7 +629,7 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   return pumpingReducQP;
 }
 
-double BitAllocation::getPicVisualActivity (const Slice* slice, const vvenc_config* encCfg, const PelBuf* origBuf /*= nullptr*/)
+double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const PelBuf* origBuf /*= nullptr*/)
 {
   Picture* const pic    = (slice != nullptr ? slice->pic : nullptr);
 

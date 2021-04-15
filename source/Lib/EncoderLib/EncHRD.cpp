@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Fï¿½rderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -68,7 +68,7 @@ int EncHRD::xCalcScale(int x)
   return scaleValue;
 }
 
-void EncHRD::initHRDParameters(const vvenc_config& encCfg, const SPS& sps)
+void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
 {
 //  if (!encCfg.m_hrdParametersPresent && !encCfg.getCpbSaturationEnabled())
 //  {

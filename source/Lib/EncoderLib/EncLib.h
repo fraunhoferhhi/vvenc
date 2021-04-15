@@ -82,8 +82,8 @@ private:
   int                       m_TicksPerFrameMul4;
   int                       m_numPassInitialized;
 
-  const vvenc_config        m_cEncCfg;
-  vvenc_config              m_cBckCfg;
+  const VVEncCfg            m_cEncCfg;
+  VVEncCfg                  m_cBckCfg;
   EncGOP*                   m_cGOPEncoder;
   EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
@@ -110,7 +110,7 @@ public:
   EncLib();
   virtual ~EncLib();
 
-  void     initEncoderLib      ( const vvenc_config& encCfg );
+  void     initEncoderLib      ( const VVEncCfg& encCfg );
   void     initPass            ( int pass );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();

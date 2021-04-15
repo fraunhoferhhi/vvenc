@@ -63,6 +63,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvencConfig.h"
 
+typedef struct vvenc_config VVEncCfg;
 
 //! \ingroup CommonLib
 //! \{

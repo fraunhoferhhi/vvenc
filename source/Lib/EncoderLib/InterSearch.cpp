@@ -216,7 +216,7 @@ InterSearch::~InterSearch()
   destroy();
 }
 
-void InterSearch::init( const vvenc_config& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
+void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
   InterPrediction::init( pRdCost, (ChromaFormat)encCfg.m_internChromaFormat, encCfg.m_CTUSize );
 #if IBC_VTM
@@ -5837,7 +5837,7 @@ uint32_t InterSearch::xCalcAffineMVBits(CodingUnit& cu, Mv acMvTemp[3], Mv acMvP
 
 
 //! set adaptive search range based on poc difference
-void InterSearch::setSearchRange( const Slice* slice, const vvenc_config& encCfg )
+void InterSearch::setSearchRange( const Slice* slice, const VVEncCfg& encCfg )
 {
   if( !encCfg.m_bUseASR || slice->isIRAP() )
   {

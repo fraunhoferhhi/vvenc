@@ -388,11 +388,13 @@ int callingOrderInitTwice()
 
 int callingOrderNoInit()
 {
-  vvencAccessUnit* AU = nullptr;
   vvenc_config vvencParams;
   vvenc_config_default( &vvencParams );
 
   fillEncoderParameters( vvencParams );
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
 
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )
@@ -436,7 +438,9 @@ int callingOrderRegular()
     return -1;
   }
 
-  vvencAccessUnit* AU = nullptr;
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
   vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
@@ -497,7 +501,9 @@ int callingOrderNotRegular()
     return -1;
   }
 
-  vvencAccessUnit* AU = nullptr;
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
   vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
@@ -557,7 +563,8 @@ int callingOrderRegularInitPass()
     return -1;
   }
 
-  vvencAccessUnit* AU = nullptr;
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
 
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
@@ -612,7 +619,9 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  vvencAccessUnit *AU = nullptr;
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
@@ -683,7 +692,9 @@ int checkSDKDefaultBehaviourRC()
     return -1;
   }
 
-  vvencAccessUnit *AU = nullptr;
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
@@ -778,7 +789,9 @@ int inputBufTest( vvencYUVBuffer* pcYuvPicture )
     return -1;
   }
 
-  vvencAccessUnit* AU = nullptr;
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
   bool encodeDone = false;
   if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone))
   {

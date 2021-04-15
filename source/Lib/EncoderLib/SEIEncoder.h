@@ -52,8 +52,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-struct vvenc_config;
-
 namespace vvenc {
 
 // forward declarations
@@ -79,7 +77,7 @@ public:
   {};
   virtual ~SEIEncoder(){};
 
-  void init( const vvenc_config& encCfg, EncHRD& encHRD);
+  void init( const VVEncCfg& encCfg, EncHRD& encHRD);
   void initDecodedPictureHashSEI  ( SEIDecodedPictureHash& dphSei, const CPelUnitBuf& pic, std::string &rHashString, const BitDepths &bitDepths);
 
   void initBufferingPeriodSEI     ( SEIBufferingPeriod& bpSei, bool noLeadingPictures);
@@ -91,12 +89,12 @@ public:
   void initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL);
 
 private:
-  const vvenc_config* m_pcEncCfg;
-  EncHRD*             m_pcEncHRD;
-  bool                m_isInitialized;
-  bool                m_rapWithLeading;
-  uint32_t            m_lastBPSEI[VVENC_MAX_TLAYER];
-  uint32_t            m_totalCoded[VVENC_MAX_TLAYER];
+  const VVEncCfg* m_pcEncCfg;
+  EncHRD*         m_pcEncHRD;
+  bool            m_isInitialized;
+  bool            m_rapWithLeading;
+  uint32_t        m_lastBPSEI[VVENC_MAX_TLAYER];
+  uint32_t        m_totalCoded[VVENC_MAX_TLAYER];
 };
 
 } // namespace vvenc

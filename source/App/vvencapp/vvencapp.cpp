@@ -217,7 +217,12 @@ int main( int argc, char* argv[] )
   }
 
   // --- allocate memory for output packets
-  vvencAccessUnit *AU = nullptr;
+  vvencAccessUnit *AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
+
+  vvencYUVBuffer cYUVInputBuffer;
+  vvenc_YUVBuffer_default( &cYUVInputBuffer );
+  vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun = std::chrono::steady_clock::now();
@@ -258,10 +263,6 @@ int main( int argc, char* argv[] )
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
       return -1;
     }
-
-    vvencYUVBuffer cYUVInputBuffer;
-    vvenc_YUVBuffer_default( &cYUVInputBuffer );
-    vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
 
     const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - vvenc_get_num_lead_frames(enc), 0 );
     const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
@@ -326,7 +327,6 @@ int main( int argc, char* argv[] )
       }
     }
 
-    vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
     cYuvFileInput.close();
   }
 
@@ -348,6 +348,7 @@ int main( int argc, char* argv[] )
     return iRet;
   }
 
+  vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
   vvenc_accessUnit_free( AU, true );
 
   if( 0 == uiFrames )

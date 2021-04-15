@@ -107,6 +107,8 @@ public:
 
   int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone );
 
+  int getLastAccessUnit( vvencAccessUnit** ppcAccessUnit );
+
   int getConfig( vvenc_config& rcVVEncCfg ) const;
   int checkConfig( const vvenc_config& rcVVEncCfg );
   int reconfig( const vvenc_config& rcVVEncCfg );
@@ -131,7 +133,7 @@ public:
   static void decodeBitstream( const char* FileName);
 
 private:
-
+  int xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList );
   int xCopyAu( vvencAccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
 private:
@@ -146,6 +148,9 @@ private:
   std::string            m_sEncoderCapabilities;
 
   EncLib*                m_pEncLib = nullptr;
+
+  AccessUnitList         m_cLastAu;
+
 };
 
 
