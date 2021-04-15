@@ -82,6 +82,7 @@ StatCounters::StatCounter2DSet<int64_t> g_cuCounters2D( std::vector<std::string>
 #endif
 
 std::function<void( void*, int, const char*, va_list )> g_msgFnc = nullptr;
+void * m_msgFncCtx = nullptr;
 
 // ====================================================================================================================
 // LFNST Tables

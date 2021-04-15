@@ -174,22 +174,6 @@ namespace df
       return oss.str();
     }
 
-    template<>
-    inline
-    const std::string Option<char*>::getValue( )
-    {
-      std::ostringstream oss;
-      if( opt_storage == nullptr )
-      {
-        oss << "\"\"";
-      }
-      else
-      {
-        oss << opt_storage;
-      }
-      return oss.str();
-    }
-
     template<typename T>
     inline 
     const std::string Option<T>::getDefault( )

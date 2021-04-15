@@ -571,9 +571,10 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
 
 
 ///< set message output function for encoder lib. if not set, no messages will be printed.
-void VVEncImpl::registerMsgCbf( vvencLoggingCallback msgFnc )
+void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 {
-  g_msgFnc = msgFnc;
+  g_msgFnc    = msgFnc;
+  m_msgFncCtx = ctx;
 }
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.

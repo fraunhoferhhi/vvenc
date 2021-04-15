@@ -58,6 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #include <iomanip>
 
+#include "vvenc/vvenc.h"
 #include "apputils/ParseArg.h"
 
 using namespace std;

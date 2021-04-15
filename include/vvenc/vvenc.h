@@ -126,11 +126,6 @@ typedef struct vvencYUVBuffer
   bool          ctsValid        = false;  // composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
-/* vvencRecYUVBufferCallback:
-   callback function to receive reconstructed yuv data of an encoded picture
-*/
-typedef void (*vvencRecYUVBufferCallback)(void*, vvencYUVBuffer* );
-
 /* vvenc_YUVBuffer_alloc:
    Allocates an vvencYUVBuffer instance.
    The returned vvencYUVBuffer is set to default values.
@@ -266,10 +261,15 @@ VVENC_DECL int vvenc_encoder_open( vvencEncoder*, vvenc_config* );
 */
 VVENC_DECL int vvenc_encoder_close(vvencEncoder *);
 
+/* vvencRecYUVBufferCallback:
+   callback function to receive reconstructed yuv data of an encoded picture
+*/
+typedef void (*vvencRecYUVBufferCallback)(void*, vvencYUVBuffer* );
+
 /* vvenc_encoder_set_RecYUVBufferCallback
  This method sets the callback to get the reconstructed YUV buffer.
  \param[in]  vvencEncoder pointer to opaque handler
- \param[in]  ctx pointer of the caller of null
+ \param[in]  ctx pointer of the caller, if not needed set it to null
  \param[in]  implementation of the callback
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        None
@@ -380,10 +380,11 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet );
 /* vvenc_set_logging_callback
  This method registers a log message callback function to the encoder library.
  If no such function has been registered, the library will omit all messages.
- \param      Log message callback function.
+ \param[in]  ctx pointer of the caller, if not needed set it to null
+ \paramin]   Log message callback function.
  \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
 */
-VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback );
+VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback );
 
 /* vvenc_get_compile_info_string
  creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
@@ -398,7 +399,21 @@ VVENC_DECL const char* vvenc_get_compile_info_string( void );
 */
 VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId );
 
+/* vvenc_get_height_of_component
+
+ \param      chFmt  Chroma Format
+ \param      frameWidth width
+ \param      compId component ID
+ \retval[ ]  width of compontent
+*/
 VVENC_DECL int  vvenc_get_width_of_component( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
+
+/* vvenc_get_height_of_component
+ \param      chFmt Chroma Format
+ \param      frameHeight
+ \param      compId component ID
+ \retval[ ]  height of compontent
+*/
 VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
 
 /* Debug section */

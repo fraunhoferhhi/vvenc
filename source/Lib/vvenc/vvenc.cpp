@@ -364,9 +364,9 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet )
 }
 
 
-VVENC_DECL int vvenc_set_logging_callback( vvencLoggingCallback callback )
+VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback )
 {
-  vvenc::VVEncImpl::registerMsgCbf ( callback );
+  vvenc::VVEncImpl::registerMsgCbf ( ctx, callback );
   return VVENC_OK;
 }
 

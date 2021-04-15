@@ -133,7 +133,7 @@ int main( int argc, char* argv[] )
 
   int iRet = 0;
 
-  vvenc_set_logging_callback( msgFnc );
+  vvenc_set_logging_callback( nullptr, msgFnc );
 
   std::string cInputFile;
   std::string cOutputfile = "";

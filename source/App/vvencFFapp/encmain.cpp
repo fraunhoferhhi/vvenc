@@ -75,7 +75,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 int main(int argc, char* argv[])
 {
-  vvenc_set_logging_callback( msgFnc );
+  vvenc_set_logging_callback( nullptr, msgFnc );
 
   std::string simdOpt;
   apputils::df::program_options_lite::Options opts;
