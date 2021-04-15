@@ -408,7 +408,9 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     // decoder in encoder
     bool decPic = false;
     bool encPic = false;
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
     trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
 
@@ -1313,6 +1315,7 @@ void EncGOP::xSyncAlfAps( Picture& pic, ParameterSetMap<APS>& dst, const Paramet
 
 void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef )
 {
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
   pic.encTime.startTimer();
 
   au.poc           = pic.poc;
@@ -1332,6 +1335,7 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
   std::string digestStr;
   xWriteTrailingSEIs( pic, au, digestStr );
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
 }
 
 

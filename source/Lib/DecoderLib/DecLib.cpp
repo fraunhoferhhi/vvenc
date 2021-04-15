@@ -95,6 +95,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
       // initialize decoder class
       ffwdDecoder.pcDecLib->init();
 
+      ffwdDecoder.pcDecLib->setDecoderInEncoderMode        ( true );
       ffwdDecoder.pcDecLib->setDebugPOC                    ( debugPOC );
       ffwdDecoder.pcDecLib->setDecodedPictureHashSEIEnabled( true );
       if(apsMap) ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
@@ -191,11 +192,11 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
                     if( pic->cs->sps->alfEnabled )
                     {
+                      pcEncPic->resizeAlfCtuBuffers( pic->cs->pcv->sizeInCtus );
                       for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
                       {
                         std::copy( pic->m_alfCtuEnabled[ compIdx ].begin(), pic->m_alfCtuEnabled[ compIdx ].end(), pcEncPic->m_alfCtuEnabled[ compIdx ].begin() );
                       }
-                      pcEncPic->resizeAlfCtuBuffers(pic->cs->pcv->sizeInCtus);
                       std::copy( pic->m_alfCtbFilterIndex.begin(), pic->m_alfCtbFilterIndex.end(), pcEncPic->m_alfCtbFilterIndex.begin() );
 
                       std::copy( pic->m_alfCtuAlternative[COMP_Cb].begin(), pic->m_alfCtuAlternative[COMP_Cb].end(), pcEncPic->m_alfCtuAlternative[COMP_Cb].begin() );
@@ -412,6 +413,7 @@ DecLib::DecLib()
   , m_warningMessageSkipPicture(false)
   , m_prefixSEINALUs()
   , m_debugPOC( -1 )
+  , m_isDecoderInEncoder( false )
   , m_vps( nullptr )
   , m_scalingListUpdateFlag(true)
   , m_PreScalingListAPSId(-1)
@@ -1358,7 +1360,8 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   m_apcSlicePilot->associatedIRAP = (m_pocCRA);
   m_apcSlicePilot->associatedIRAPType = (m_associatedIRAPType);
 
-  if (m_apcSlicePilot->isIRAP())
+  // Notice, we can also run into these part from encoder due to DebugBitstream mode, then the changes of pic.header should be avoided.
+  if (m_apcSlicePilot->isIRAP() && !m_isDecoderInEncoder )
   {
     //the inference for NoOutputPriorPicsFlag
     // KJS: This cannot happen at the encoder
