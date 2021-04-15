@@ -1360,7 +1360,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   m_apcSlicePilot->associatedIRAP = (m_pocCRA);
   m_apcSlicePilot->associatedIRAPType = (m_associatedIRAPType);
 
-  // With debugPOC we can check whether decoder used in encoder, where changes of pic.header should be avoided.
+  // Notice, we can also run into these part from encoder due to DebugBitstream mode, then the changes of pic.header should be avoided.
   if (m_apcSlicePilot->isIRAP() && !m_isDecoderInEncoder )
   {
     //the inference for NoOutputPriorPicsFlag
