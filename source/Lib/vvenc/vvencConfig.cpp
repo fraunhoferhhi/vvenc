@@ -86,6 +86,38 @@ static std::vector<int> vvenc_getQpValsAsVec( int QpVals[] )
   return QpValsVec;
 }
 
+
+static void vvenc_checkCharArrayStr( char array[], int size )
+{
+  bool resetArray = false;
+  if ( 0 == strcmp(array, "empty") )
+  {
+    resetArray = true;
+  }
+  else if ( 0 == strcmp(array, "undef") )
+  {
+    resetArray = true;
+  }
+  else if ( 0 == strcmp(array, "''") )
+  {
+    resetArray = true;
+  }
+  else if ( 0 == strcmp(array, "\"\"") )
+  {
+    resetArray = true;
+  }
+  else if ( 0 == strcmp(array, "[]") )
+  {
+    resetArray = true;
+  }
+
+  if( resetArray )
+  {
+    for( int i = 0; i < size; i++ ) memset(&array[i],0, sizeof(char));
+    array[0] = '\0';
+  }
+}
+
 static inline std::string getProfileStr( int profile )
 {
   std::string cT;
@@ -1934,6 +1966,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_PROF = bool(c->m_Affine);
     c->m_AffineType = (c->m_Affine == 2) ? true : false;
   }
+
+  // check char array and reset them, if they seems to be unset
+  vvenc_checkCharArrayStr( c->m_decodeBitstreams[0], VVENC_MAX_STRING_LEN);
+  vvenc_checkCharArrayStr( c->m_decodeBitstreams[1], VVENC_MAX_STRING_LEN);
+  vvenc_checkCharArrayStr( c->m_traceRule, VVENC_MAX_STRING_LEN);
+  vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
+  vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
+  vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
 
   c->m_confirmFailed = checkCfgParameter(c);
   return( c->m_confirmFailed );

@@ -508,7 +508,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
     std::string line;
     std::getline( in, line );
 
-    if( line == "" || line == "[]" || line == "empty"  )
+    if( line == "" || line == "\"\"" || line == "[]" || line == "empty" || line == "''"  )
     {
       return in;    // forcing empty entry
     }
@@ -582,7 +582,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& t
 
   if( 0 == size )
   {
-    os << "";
+    os << "''";
     return os;
   }
 
