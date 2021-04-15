@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1830,6 +1830,10 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
   Distortion uiSum   = 0;
   uint32_t uiShift = 16 + (DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth) << 1);
 
+  // cf, column factor, offset of the second column, to be set to '0' for width of '1'
+  const int cf =  1 - ( iCols & 1 );
+  CHECK( ( iCols & 1 ) && iCols != 1, "Width can only be even or equal to '1'!" );
+
   if ((m_signalType == RESHAPE_SIGNAL_SDR || m_signalType == RESHAPE_SIGNAL_HLG) && rcDtParam.compID != COMP_Y)
   {
     const int64_t fixedPTweight = (int64_t)(m_chromaWeight * (double)(1 << 16));
@@ -1838,8 +1842,8 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
     {
       for (int n = 0; n < iCols; n+=2 )
       {
-        uiSum += getWeightedMSE( piOrg[n  ], piCur[n  ], fixedPTweight, uiShift );
-        uiSum += getWeightedMSE( piOrg[n+1], piCur[n+1], fixedPTweight, uiShift );
+        uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], fixedPTweight, uiShift );
+        uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], fixedPTweight, uiShift );
       }
       piOrg += iStrideOrg;
       piCur += iStrideCur;
@@ -1851,8 +1855,8 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
     {
       for (int n = 0; n < iCols; n+=2 )
       {
-        uiSum += getWeightedMSE( piOrg[n  ], piCur[n  ], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[n  ]], uiShift );
-        uiSum += getWeightedMSE( piOrg[n+1], piCur[n+1], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[n+1]], uiShift );
+        uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[n   ]], uiShift );
+        uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[n+cf]], uiShift );
       }
       piOrg += iStrideOrg;
       piCur += iStrideCur;
@@ -1869,15 +1873,17 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
     {
       for (int n = 0; n < iCols; n+=2 )
       {
-        uiSum += getWeightedMSE( piOrg[n  ], piCur[n  ], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[(n  )<<cShiftX]], uiShift );
-        uiSum += getWeightedMSE( piOrg[n+1], piCur[n+1], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[(n+1)<<cShiftX]], uiShift );
+        uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[(n   )<<cShiftX]], uiShift );
+        uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[(n+cf)<<cShiftX]], uiShift );
       }
       piOrg += iStrideOrg;
       piCur += iStrideCur;
       piOrgLuma += iStrideOrgLuma<<cShiftY;
     }
   }
-  return ( uiSum );
+
+  // if the width is '1', cf is '0', the differences are counted double and need to be normalized
+  return ( uiSum >> ( 1 - cf ) );
 }
 
 void RdCost::setDistParamGeo(DistParam &rcDP, const CPelBuf &org, const Pel *piRefY, int iRefStride, const Pel *mask,

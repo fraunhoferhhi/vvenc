@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -315,7 +315,7 @@ SampleAdaptiveOffset::~SampleAdaptiveOffset()
 void SampleAdaptiveOffset::init( ChromaFormat format, uint32_t maxCUWidth, uint32_t maxCUHeight, uint32_t lumaBitShift, uint32_t chromaBitShift )
 {
   offsetBlock = offsetBlock_core;
-#if   ENABLE_SIMD_OPT_SAO
+#if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_X86 )
   initSampleAdaptiveOffsetX86();
 #endif
 

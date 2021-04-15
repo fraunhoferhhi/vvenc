@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Unit.h"
 #include "Slice.h"
 #include "InterpolationFilter.h"
-#include "vvenc/Basics.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -355,10 +354,9 @@ PelBufferOps::PelBufferOps()
 
   copyBuffer        = copyBufferCore;
   padding           = paddingCore;
-#if ENABLE_SIMD_OPT_BCW
+
   removeHighFreq8   = removeHighFreq;
   removeHighFreq4   = removeHighFreq;
-#endif
 
   transpose4x4      = transposeNxNCore<Pel,4>;
   transpose8x8      = transposeNxNCore<Pel,8>;
@@ -482,7 +480,7 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
   const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + 1;
   const int      offset     = (1 << (shiftNum - 1)) + 2 * IF_INTERNAL_OFFS;
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
   if( destStride == width )
   {
     g_pelBufOP.addAvg(src0, src2, dest, width * height, shiftNum, offset, clpRng);
@@ -651,7 +649,7 @@ void AreaBuf<Pel>::linearTransform( const int scale, const unsigned shift, const
   }
 }
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 
 template<>
 void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other )
@@ -754,6 +752,7 @@ PelStorage::~PelStorage()
 void PelStorage::create( const UnitArea& _UnitArea )
 {
   create( _UnitArea.chromaFormat, _UnitArea.blocks[0] );
+  m_maxArea = _UnitArea;
 }
 
 void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
@@ -790,6 +789,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
     bufs.push_back( PelBuf( topLeft, totalWidth, totalWidth, totalHeight ) );
     topLeft += area;
   }
+
+  m_maxArea = UnitArea( _chromaFormat, _area );
 }
 
 void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area, const unsigned _maxCUSize, const unsigned _margin, const unsigned _alignment, const bool _scaleChromaMargin )
@@ -835,6 +836,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area, c
     Pel* topLeft = m_origin[i] + totalWidth * ymargin + xmargin;
     bufs.push_back( PelBuf( topLeft, totalWidth, _area.width >> scaleX, _area.height >> scaleY ) );
   }
+
+  m_maxArea = UnitArea( _chromaFormat, _area );
 }
 
 void PelStorage::createFromBuf( PelUnitBuf buf )
@@ -852,6 +855,19 @@ void PelStorage::createFromBuf( PelUnitBuf buf )
   }
 }
 
+void PelStorage::compactResize( const UnitArea& area )
+{
+  CHECK( bufs.size() < area.blocks.size(), "Cannot increase buffer size when compacting!" );
+
+  for( uint32_t i = 0; i < area.blocks.size(); i++ )
+  {
+    CHECK( m_maxArea.blocks[i].area() < area.blocks[i].area(), "Cannot increase buffer size when compacting!" );
+
+    bufs[i].Size::operator=( area.blocks[i].size() );
+    bufs[i].stride = bufs[i].width;
+  }
+}
+
 void PelStorage::takeOwnership( PelStorage& other )
 {
   chromaFormat = other.chromaFormat;
@@ -866,6 +882,9 @@ void PelStorage::takeOwnership( PelStorage& other )
     bufs[i] = PelBuf( cPelBuf.bufAt( 0, 0 ), cPelBuf.stride, cPelBuf.width, cPelBuf.height );
     std::swap( m_origin[i], other.m_origin[i]);
   }
+
+  m_maxArea = other.m_maxArea;
+
   other.destroy();
 }
 
@@ -985,6 +1004,37 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
+{
+  CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
+  pelUnitBuf.chromaFormat = chFmt;
+  const int numComp = getNumberValidComponents( chFmt );
+  for ( int i = 0; i < numComp; i++ )
+  {
+    const YUVBuffer::Plane& src = yuvBuffer.planes[ i ];
+    CHECK( src.ptr == nullptr, "yuvBuffer not setup" );
+    PelBuf& dest = pelUnitBuf.bufs[i];
+    CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
+
+    for( int y = 0; y < src.height; y++ )
+    {
+      ::memcpy( dest.buf + y*dest.stride, src.ptr + y*src.stride, src.width * sizeof(int16_t) );
+
+      // pad right if required
+      for( int x = src.width; x < dest.width; x++ )
+      {
+        dest.buf[ x + y*dest.stride] = dest.buf[ src.width - 1 + y*dest.stride];
+      }
+    }
+
+    // pad bottom if required
+    for( int y = src.height; y < dest.height; y++ )
+    {
+      ::memcpy( dest.buf + y*dest.stride, dest.buf + (src.height-1)*dest.stride, dest.width * sizeof(int16_t) );
+    }
+  }
+}
+/*
 void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt )
 {
   CHECK( pelUnitBuf.bufs.size() != 0, "pelUnitBuf already in use" );
@@ -992,13 +1042,13 @@ void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const 
   const int numComp = getNumberValidComponents( chFmt );
   for ( int i = 0; i < numComp; i++ )
   {
-    const YUVPlane& yuvPlane = yuvBuffer.yuvPlanes[ i ];
-    CHECK( yuvPlane.planeBuf == nullptr, "yuvBuffer not setup" );
-    PelBuf area( yuvPlane.planeBuf, yuvPlane.stride, yuvPlane.width, yuvPlane.height );
+    const YUVBuffer::Plane& yuvPlane = yuvBuffer.planes[ i ];
+    CHECK( yuvPlane.ptr == nullptr, "yuvBuffer not setup" );
+    PelBuf area( yuvPlane.ptr, yuvPlane.stride, yuvPlane.width, yuvPlane.height );
     pelUnitBuf.bufs.push_back( area );
   }
 }
-
+*/
 void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow )
 {
   const ChromaFormat chFmt = pelUnitBuf.chromaFormat;
@@ -1009,9 +1059,9 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
           PelBuf area        = pelUnitBuf.get( compId );
     const int sx             = getComponentScaleX( compId, chFmt );
     const int sy             = getComponentScaleY( compId, chFmt );
-    YUVPlane& yuvPlane       = yuvBuffer.yuvPlanes[ i ];
-    CHECK( yuvPlane.planeBuf != nullptr, "yuvBuffer already in use" );
-    yuvPlane.planeBuf        = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
+    YUVBuffer::Plane& yuvPlane = yuvBuffer.planes[ i ];
+    CHECK( yuvPlane.ptr != nullptr, "yuvBuffer already in use" );
+    yuvPlane.ptr             = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
     yuvPlane.width           = ( ( area.width  << sx ) - ( confWindow->winLeftOffset + confWindow->winRightOffset  ) ) >> sx;
     yuvPlane.height          = ( ( area.height << sy ) - ( confWindow->winTopOffset  + confWindow->winBottomOffset ) ) >> sy;
     yuvPlane.stride          = area.stride;

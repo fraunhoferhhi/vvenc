@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -101,7 +101,7 @@ EncSampleAdaptiveOffset::~EncSampleAdaptiveOffset()
 {
 }
 
-void EncSampleAdaptiveOffset::init( const EncCfg& encCfg )
+void EncSampleAdaptiveOffset::init( const VVEncCfg& encCfg )
 {
   m_EncCfg = &encCfg;
 
@@ -338,7 +338,7 @@ void EncSampleAdaptiveOffset::decideCtuParams( CodingStructure& cs, const std::v
 
   // reset CABAC estimator
   if( m_EncCfg->m_ensureWppBitEqual
-      && m_EncCfg->m_numWppThreads < 1
+      && m_EncCfg->m_numThreads < 1
       && ctuPosX == 0
       && ctuPosY > 0 )
   {

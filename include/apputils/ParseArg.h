@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -45,6 +45,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 #pragma once
 
+#include "apputils/apputilsDecl.h"
+
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -54,7 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup Interface
 //! \{
 
-namespace VVCEncoderFFApp {
+namespace apputils {
 
 namespace df
 {
@@ -76,7 +78,7 @@ namespace df
       const char* what() const throw() { return "Option Parse Failure"; }
     };
 
-    struct ErrorReporter
+    struct APPUTILS_DECL ErrorReporter
     {
       ErrorReporter() : is_errored(0) {}
       virtual ~ErrorReporter() {}
@@ -87,27 +89,29 @@ namespace df
 
     extern ErrorReporter default_error_reporter;
 
-    struct SilentReporter : ErrorReporter
+    struct APPUTILS_DECL SilentReporter : ErrorReporter
     {
       SilentReporter() { }
       virtual ~SilentReporter() { }
-      virtual std::ostream& error( const std::string& where ) { return dest; }
-      virtual std::ostream& warn( const std::string& where ) { return dest; }
+      virtual std::ostream& error( const std::string& ) { return dest; }
+      virtual std::ostream& warn( const std::string& ) { return dest; }
       std::stringstream dest;
     };
 
-    void doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
-    std::list<const char*> scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
-    void setDefaults(Options& opts);
-    void parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
+    void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
+    void APPUTILS_DECL saveConfig(std::ostream& out, Options& opts, std::list<std::string> ignoreParamLst, unsigned columns = 240 );
+
+    std::list<const char*> APPUTILS_DECL scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter = default_error_reporter);
+    void APPUTILS_DECL setDefaults(Options& opts);
+    void APPUTILS_DECL parseConfigFile(Options& opts, const std::string& filename, ErrorReporter& error_reporter = default_error_reporter);
 
     /** OptionBase: Virtual base class for storing information relating to a
      * specific option This base class describes common elements.  Type specific
      * information should be stored in a derived class. */
     struct OptionBase
     {
-      OptionBase(const std::string& name, const std::string& desc)
-      : opt_string(name), opt_desc(desc)
+      OptionBase(const std::string& name, const std::string& desc, const bool bool_switch )
+      : opt_string(name), opt_desc(desc), is_bool_switch(bool_switch)
       {};
 
       virtual ~OptionBase() {}
@@ -116,18 +120,20 @@ namespace df
       virtual void parse(const std::string& arg, ErrorReporter&) = 0;
       /* set the argument to the default value */
       virtual void setDefault() = 0;
-      virtual const std::string getDefault() { return std::string(); }
+      virtual const std::string getDefault( ) { return std::string(); }
+      virtual const std::string getValue( ) { return std::string(); }
 
       std::string opt_string;
       std::string opt_desc;
+      bool        is_bool_switch = false;
     };
 
     /** Type specific option storage */
     template<typename T>
     struct Option : public OptionBase
     {
-      Option(const std::string& name, T& storage, T default_val, const std::string& desc)
-      : OptionBase(name, desc), opt_storage(storage), opt_default_val(default_val)
+      Option(const std::string& name, T& storage, T default_val, const std::string& desc, const bool bool_switch )
+      : OptionBase(name, desc, bool_switch), opt_storage(storage), opt_default_val(default_val)
       {}
 
       void parse(const std::string& arg, ErrorReporter&);
@@ -136,18 +142,44 @@ namespace df
       {
         opt_storage = opt_default_val;
       }
-      virtual const std::string getDefault(); 
+      virtual const std::string getDefault( );
+      virtual const std::string getValue  ( );
 
       T& opt_storage;
       T opt_default_val;
     };
 
     template<typename T>
+    inline
+    const std::string Option<T>::getValue( )
+    {
+      std::ostringstream oss;
+      oss << opt_storage;
+      return oss.str();
+    }
+
+    template<>
+    inline
+    const std::string Option<std::string>::getValue( )
+    {
+      std::ostringstream oss;
+      if( opt_storage.empty() )
+      {
+        oss << "\"\"";
+      }
+      else
+      {
+        oss << opt_storage;
+      }
+      return oss.str();
+    }
+
+    template<typename T>
     inline 
-    const std::string Option<T>::getDefault() 
+    const std::string Option<T>::getDefault( )
     { 
       std::ostringstream oss;
-      oss << " [" << opt_default_val << "] ";
+      oss << opt_default_val;
       return oss.str(); 
     }
 
@@ -156,7 +188,13 @@ namespace df
     inline void
     Option<T>::parse(const std::string& arg, ErrorReporter&)
     {
-      std::istringstream arg_ss (arg,std::istringstream::in);
+      std::string param = arg;
+      if( is_bool_switch )
+      {
+        if( arg.empty() ) { param = "1"; }
+      }
+
+      std::istringstream arg_ss (param,std::istringstream::in);
       arg_ss.exceptions(std::ios::failbit);
       try
       {
@@ -164,7 +202,7 @@ namespace df
       }
       catch (...)
       {
-        throw ParseFailure(opt_string, arg);
+        throw ParseFailure(opt_string, param);
       }
     }
 
@@ -177,13 +215,36 @@ namespace df
       opt_storage = arg;
     }
 
+    template<>
+    inline void
+    Option<bool>::parse(const std::string& arg, ErrorReporter&)
+    {
+      if( arg.empty() )
+      {
+        opt_storage = true;
+      }
+      else
+      {
+        std::istringstream arg_ss (arg,std::istringstream::in);
+        arg_ss.exceptions(std::ios::failbit);
+        try
+        {
+          arg_ss >> opt_storage;
+        }
+        catch (...)
+        {
+          throw ParseFailure(opt_string, arg);
+        }
+      }
+    }
+
     /** Option class for argument handling using a user provided function */
     struct OptionFunc : public OptionBase
     {
       typedef void (Func)(Options&, const std::string&, ErrorReporter&);
 
       OptionFunc(const std::string& name, Options& parent_, Func *func_, const std::string& desc)
-      : OptionBase(name, desc), parent(parent_), func(func_)
+      : OptionBase(name, desc, false), parent(parent_), func(func_)
       {}
 
       void parse(const std::string& arg, ErrorReporter& error_reporter)
@@ -202,7 +263,7 @@ namespace df
     };
 
     class OptionSpecific;
-    struct Options
+    struct APPUTILS_DECL Options
     {
       ~Options();
 
@@ -231,10 +292,19 @@ namespace df
       typedef std::map<std::string, NamesPtrList> NamesMap;
       NamesMap opt_long_map;
       NamesMap opt_short_map;
+
+      int setSubSection(std::string subSection);
+
+      typedef std::list<std::string> subSectionsPtrList;
+      subSectionsPtrList subSections_list;
+      std::string curSubSection;
+      
+      typedef std::map<std::string, std::list<std::string> > SubSectionNamesListMap;
+      SubSectionNamesListMap sub_section_namelist_map;
     };
 
     /* Class with templated overloaded operator(), for use by Options::addOptions() */
-    class OptionSpecific
+    class APPUTILS_DECL OptionSpecific
     {
     public:
       OptionSpecific(Options& parent_) : parent(parent_) {}
@@ -247,9 +317,9 @@ namespace df
        */
       template<typename T>
       OptionSpecific&
-      operator()(const std::string& name, T& storage, T default_val, const std::string& desc = "")
+      operator()(const std::string& name, T& storage, T default_val, const std::string& desc = "", bool bool_switch = false)
       {
-        parent.addOption(new Option<T>(name, storage, default_val, desc));
+        parent.addOption(new Option<T>(name, storage, default_val, desc, bool_switch));
         return *this;
       }
 
@@ -259,9 +329,9 @@ namespace df
        */
       template<typename T>
       OptionSpecific&
-      operator()(const std::string& name, T& storage, const std::string& desc = "")
+      operator()(const std::string& name, T& storage, const std::string& desc = "", bool bool_switch = false )
       {
-        parent.addOption(new Option<T>(name, storage, storage, desc));
+        parent.addOption(new Option<T>(name, storage, storage, desc, bool_switch));
         return *this;
       }
 

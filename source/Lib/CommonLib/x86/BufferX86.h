@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -160,7 +160,10 @@ void mipMatrixMul_SSE( Pel* res, const Pel* input, const uint8_t* weight, const 
   CHECK( inputSize != 4 * (inputSize >> 2), "Error, input size not divisible by four" );
 
 #if USE_AVX2
-  static const __m256i perm = _mm256_setr_epi32(0,4,1,5,2,6,3,7);
+#if !ENABLE_VALGRIND_CODE
+  static
+#endif
+  const __m256i perm = _mm256_setr_epi32(0,4,1,5,2,6,3,7);
   __m256i vibdimin  = _mm256_set1_epi16( 0 );
   __m256i vibdimax  = _mm256_set1_epi16( maxVal );
   if( inputSize == 4 && outputSize == 4)

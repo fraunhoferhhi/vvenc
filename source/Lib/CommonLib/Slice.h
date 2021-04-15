@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -55,6 +55,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Common.h"
 #include "MotionInfo.h"
 #include "HRD.h"
+
+#include "vvenc/vvencCfgExpert.h"
+
 
 #include <cstring>
 #include <list>
@@ -261,23 +264,23 @@ struct ConstraintInfo
 
 struct ProfileTierLevel
 {
-  Level::Tier           tierFlag;
-  Profile::Name         profileIdc;
+  Tier                  tierFlag;
+  Profile               profileIdc;
   uint8_t               numSubProfile;
   std::vector<uint32_t> subProfileIdc;
-  Level::Name           levelIdc;
+  Level                 levelIdc;
   bool                  frameOnlyConstraintFlag;
   bool                  multiLayerEnabledFlag;
   ConstraintInfo        constraintInfo;
   bool                  subLayerLevelPresent[MAX_TLAYER - 1];
-  Level::Name           subLayerLevelIdc[MAX_TLAYER - 1];
+  Level                 subLayerLevelIdc[MAX_TLAYER - 1];
 
   ProfileTierLevel()
-    : tierFlag        (Level::MAIN)
-    , profileIdc      (Profile::NONE)
+    : tierFlag        ( TIER_MAIN )
+    , profileIdc      ( PROFILE_AUTO )
     , numSubProfile   (0)
     , subProfileIdc   (0)
-    , levelIdc        (Level::NONE)
+    , levelIdc        ( LEVEL_AUTO )
     , frameOnlyConstraintFlag ( true )
     , multiLayerEnabledFlag   ( false )
   {
@@ -980,7 +983,8 @@ struct APS
   CcAlfFilterParam       ccAlfParam;
   bool                   hasPrefixNalUnitType;
   bool                   chromaPresent;
-  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresent( false )
+  int                    poc;
+  APS() : apsId(0), temporalId( 0 ), layerId( 0 ), apsType(0), hasPrefixNalUnitType(false), chromaPresent( false ), poc(-1)
   { }
 };
 
@@ -1211,8 +1215,9 @@ NalUnitType                 nalUnitType;         ///< Nal unit type for the slic
   bool                        pendingRasInit;
   bool                        checkLDC;
   bool                        biDirPred;
+  bool                        lmChromaCheckDisable;
   int                         symRefIdx[2];
-
+  
   //  Data
   int                         sliceChromaQpDelta[MAX_NUM_COMP+1];
   Picture*                    refPicList [NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
@@ -1334,12 +1339,22 @@ private:
   int                       m_maxId;
   std::vector<int>          m_activePsId;
   T*                        m_lastActiveParameterSet;
+  int                       m_apsIdStart;
 
 public:
+  ParameterSetMap()
+  : m_maxId                 ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
+  , m_activePsId            ()
+  , m_lastActiveParameterSet( nullptr )
+  , m_apsIdStart            ( ALF_CTB_MAX_NUM_APS )
+  {
+  }
+
   ParameterSetMap( int maxId )
   : m_maxId                 ( maxId )
   , m_activePsId            ()
   , m_lastActiveParameterSet( nullptr )
+  , m_apsIdStart            ( ALF_CTB_MAX_NUM_APS )
   {
   }
 
@@ -1469,8 +1484,19 @@ public:
     return (m_paramsetMap.begin() == m_paramsetMap.end() ) ? NULL : m_paramsetMap.begin()->second.parameterSet;
   }
 
-  void setActive(int psId) { m_activePsId.push_back(psId); }
-  void clear() { m_activePsId.clear(); }
+  void      setActive(int psId)           { m_activePsId.push_back(psId); }
+  void      clearActive()                 { m_activePsId.clear(); m_apsIdStart = ALF_CTB_MAX_NUM_APS; }
+  int       getApsIdStart()               { return m_apsIdStart; }
+  const int getApsIdStart() const         { return m_apsIdStart; }
+  void      setApsIdStart( const int id ) { m_apsIdStart = id; }
+//   void      reset()                       
+//   { 
+//     m_apsIdStart = m_apsIdStart = ALF_CTB_MAX_NUM_APS; 
+//     for( typename std::map<int,MapData<T> >::iterator i = m_paramsetMap.begin(); i != m_paramsetMap.end(); i++ )
+//     {
+//       (*i).second.bChanged = false;
+//     }
+//   }
 
 private:
   static void setID(T* parameterSet, const int psId);

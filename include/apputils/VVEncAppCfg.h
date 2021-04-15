@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -43,69 +43,52 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncoderIf.h
-    \brief    encoder lib interface
+/** \file     VVEncAppCfg.h
+    \brief    Handle encoder configuration parameters (header)
 */
 
 #pragma once
+#include "apputils/apputilsDecl.h"
+#include "vvenc/vvencCfg.h"
 
-#include <string>
-#include <functional>
-#include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
+namespace apputils {
 
-//! \ingroup Interface
+//! \ingroup apputils
 //! \{
 
-namespace vvenc {
-
-class  EncLib;
-class  EncCfg;
-class  AccessUnit;
-struct YUVBuffer;
-
+// ====================================================================================================================
+// Class definition
 // ====================================================================================================================
 
-class VVENC_DECL YUVWriterIf
+/// encoder configuration class
+class APPUTILS_DECL VVEncAppCfg : public vvenc::VVEncCfg
 {
-protected:
-  YUVWriterIf() {}
-  virtual ~YUVWriterIf() {}
+public:
+  std::string  m_inputFileName;                                ///< source file name
+  std::string  m_bitstreamFileName;                            ///< output bitstream file
+  std::string  m_reconFileName;                                ///< output reconstruction file
+  vvenc::ChromaFormat m_inputFileChromaFormat  = vvenc::CHROMA_420;
+  bool         m_bClipInputVideoToRec709Range  = false;
+  bool         m_bClipOutputVideoToRec709Range = false;
+  bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_decode                        = false;
 
 public:
-  virtual void outputYuv( const YUVBuffer& /*yuvOutBuf*/ )
+
+  VVEncAppCfg()
   {
   }
+
+  virtual ~VVEncAppCfg();
+
+public:
+  bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
+  bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+
+  virtual std::string getConfigAsString( vvenc::MsgLevel eMsgLevel ) const;
 };
 
-// ====================================================================================================================
-
-class VVENC_DECL EncoderIf
-{
-  private:
-    EncLib* m_pEncLib;
-
-  public:
-    EncoderIf();
-
-    ~EncoderIf();
-
-    void  initEncoderLib  ( const EncCfg& encCfg, YUVWriterIf* yuvWriterIf = nullptr );
-    void  initPass        ( int pass = 0 );
-    void  encodePicture   ( bool flush, const YUVBuffer& yuvInBuf, AccessUnit& au, bool& isQueueEmpty );
-    void  uninitEncoderLib();
-    void  printSummary    ();
-};
-
-// ====================================================================================================================
-
-void        VVENC_DECL registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
-std::string VVENC_DECL setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-bool        VVENC_DECL isTracingEnabled();                                                          ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-std::string VVENC_DECL getCompileInfoString();                                                      ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-void        VVENC_DECL decodeBitstream( const std::string& FileName);                               ///< decode bitstream with limited build in decoder
-
-} // namespace vvenc
+} // namespace
 
 //! \}
 

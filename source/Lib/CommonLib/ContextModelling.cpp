@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -78,9 +78,8 @@ CoeffCodingContext::CoeffCodingContext( const TransformUnit& tu, ComponentID com
   , m_signHiding                (signHide)
   , m_extendedPrecision         (tu.cs->sps->spsRExt.extendedPrecisionProcessing)
   , m_maxLog2TrDynamicRange     (tu.cs->sps->getMaxLog2TrDynamicRange(m_chType))
-  , m_scanType                  (SCAN_DIAG)
-  , m_scan                      (g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, m_scanType, m_log2BlockWidth, m_log2BlockHeight ))
-  , m_scanCG                    (g_scanOrderRom.getScanOrder( SCAN_UNGROUPED  , m_scanType, Log2(m_widthInGroups), Log2(m_heightInGroups)))
+  , m_scan                      (getScanOrder( SCAN_GROUPED_4x4, m_log2BlockWidth, m_log2BlockHeight ))
+  , m_scanCG                    (getScanOrder( SCAN_UNGROUPED  , Log2(m_widthInGroups), Log2(m_heightInGroups)))
   , m_CtxSetLastX               (Ctx::LastX[m_chType])
   , m_CtxSetLastY               (Ctx::LastY[m_chType])
   , m_maxLastPosX               (g_uiGroupIdx[std::min<unsigned>(JVET_C0024_ZERO_OUT_TH, m_width) - 1])

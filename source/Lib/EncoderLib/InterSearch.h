@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -190,7 +190,7 @@ struct BlkUniMvInfoBuffer
 };
 
 class EncPicture;
-class EncCfg;
+class VVEncCfg;
 class EncModeCtrl;
 class EncReshape;
 class EncCu;
@@ -340,7 +340,7 @@ private:
 
 protected:
   // interface to option
-  const EncCfg*     m_pcEncCfg;
+  const VVEncCfg*   m_pcEncCfg;
 
   // interface to classes
   TrQuant*          m_pcTrQuant;
@@ -382,7 +382,7 @@ public:
   InterSearch();
   virtual ~InterSearch();
 
-  void init                         ( const EncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
+  void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
   void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
 
   void destroy                      ();
@@ -392,7 +392,7 @@ public:
   /// set ME search range
   void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
 
-  void setSearchRange               ( const Slice* slice, const EncCfg& encCfg );
+  void setSearchRange               ( const Slice* slice, const VVEncCfg& encCfg );
 
   void resetSavedAffineMotion       ();
   void storeAffineMotion            ( Mv acAffineMv[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int BcwIdx);

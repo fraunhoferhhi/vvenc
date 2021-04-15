@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -93,7 +93,7 @@ private:
   void(*xFpProfGradFilter)    ( const Pel* pSrc, int srcStride, int width, int height, int gradStride, Pel* gradX, Pel* gradY, const int bitDepth );
   void(*xFpApplyPROF)         ( Pel* dst, int dstStride, const Pel* src, int srcStride, int width, int height, const Pel* gradX, const Pel* gradY, int gradStride, const int* dMvX, const int* dMvY, int dMvStride, const bool& bi, int shiftNum, Pel offset, const ClpRng& clpRng );
 
-#if ENABLE_SIMD_OPT_BDOF
+#if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
   void initInterPredictionX86();
   template <X86_VEXT vext>
   void _initInterPredictionX86();

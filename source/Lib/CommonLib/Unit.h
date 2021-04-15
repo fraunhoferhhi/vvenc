@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -372,7 +372,7 @@ struct CodingUnit : public UnitArea, public IntraPredictionData, public InterPre
 
   // needed for fast imv mode decisions
 
-  CodingUnit() : chType( CH_L ) {}
+  CodingUnit() = default;
   CodingUnit(const UnitArea& unit);
   CodingUnit(const ChromaFormat _chromaFormat, const Area& area);
 
@@ -420,7 +420,7 @@ struct TransformUnit : public UnitArea
   TransformUnit*   next;
   TransformUnit*   prev;
 
-  TransformUnit                           () : chType( CH_L ) { }
+  TransformUnit                           () = default;
   TransformUnit                           ( const UnitArea& unit);
   TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area);
   void          initData                  ();
@@ -501,19 +501,6 @@ typedef UnitTraverser<TransformUnit>  TUTraverser;
 
 typedef UnitTraverser<const CodingUnit>     cCUTraverser;
 typedef UnitTraverser<const TransformUnit>  cTUTraverser;
-
-template<typename T>
-struct SecureUnitTraverser
-{
-  T* begin;
-  T* last;
-
-  SecureUnitTraverser(                     ) : begin( nullptr ), last( nullptr ) { }
-  SecureUnitTraverser( T* _begin, T* _last ) : begin( _begin  ), last( _last   ) { }
-};
-
-typedef SecureUnitTraverser< const CodingUnit>     cCUSecureTraverser;
-typedef SecureUnitTraverser< const TransformUnit>  cTUSecureTraverser;
 
 } // namespace vvenc
 

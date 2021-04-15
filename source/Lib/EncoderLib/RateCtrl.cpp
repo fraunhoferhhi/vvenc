@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -58,12 +58,9 @@ namespace vvenc {
 static const int    RC_SMOOTH_WINDOW_SIZE =                           40;
 static const int    RC_MAX_PIC_LIST_SIZE =                            64;
 static const int    RC_ITERATION_NUM =                                20;
-static const int    RC_LCU_SMOOTH_WINDOW_SIZE =                        4;
 static const int    RC_LAMBDA_PREC =                             1000000;
-static const int    RC_GOP_ID_QP_OFFSET[ 6 ] =           { 0, 0, 0, 3, 1, 1 };
-static const int    RC_GOP_ID_QP_OFFSET_GOP32[ 7 ] =     { 0, 0, 0, 0, 3, 1, 1 };
-static const int    RC_GOP_ID_QP_OFFSET_GRC[ 6 ] =       { 0, 3, 0, 3, 1, 1 };
-static const int    RC_GOP_ID_QP_OFFSET_GRC_GOP32[ 7 ] = { 0, 0, 3, 0, 3, 1, 1 };
+static const int    RC_GOP_ID_QP_OFFSET[ 6 ] =      { 0, 0, 0, 3, 1, 1 };
+static const int    RC_GOP_ID_QP_OFFSET_GOP32[ 7 ] = { 0, 0, 0, 0, 3, 1, 1 };
 static const double RC_WEIGHT_PIC_TARGET_BIT_IN_GOP =                0.9;
 static const double RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER =             1.0 - RC_WEIGHT_PIC_TARGET_BIT_IN_GOP;
 static const double RC_WEIGHT_HISTORY_LAMBDA =                       0.5;
@@ -79,8 +76,8 @@ static const double RC_BETA2 =                                    1.7860;
 //sequence level
 EncRCSeq::EncRCSeq()
 {
-  rcMode              = 0;
   twoPass             = false;
+  fppParFrames        = 0;
   totalFrames         = 0;
   targetRate          = 0;
   frameRate           = 0;
@@ -97,14 +94,12 @@ EncRCSeq::EncRCSeq()
   bitsRatio           = NULL;
   gopID2Level         = NULL;
   picParam            = NULL;
-  lcuParam            = NULL;
   numberOfPixel       = 0;
   framesCoded         = 0;
   bitsUsed            = 0;
   framesLeft          = 0;
   bitsLeft            = 0;
   estimatedBitUsage   = 0;
-  useLCUSeparateModel = false;
   adaptiveBits        = 0;
   bitUsageRatio       = 0.0;
   lastLambda          = 0.0;
@@ -116,10 +111,9 @@ EncRCSeq::~EncRCSeq()
   destroy();
 }
 
-void EncRCSeq::create( int RCMode, bool twoPassRC, int totFrames, int targetBitrate, int frRate, int intraPer, int GOPSize, int pictureWidth, int pictureHeight, int LCUWidth, int LCUHeight, int numOfLevel, bool useLCUSepModel, int adaptiveBit, std::list<TRCPassStats> &firstPassStats )
+void EncRCSeq::create( bool twoPassRC, int totFrames, int targetBitrate, int frRate, int intraPer, int GOPSize, int pictureWidth, int pictureHeight, int LCUWidth, int LCUHeight, int numOfLevel, int adaptiveBit, std::list<TRCPassStats> &firstPassStats )
 {
   destroy();
-  rcMode              = RCMode;
   twoPass             = twoPassRC;
   totalFrames         = totFrames;
   targetRate          = targetBitrate;
@@ -131,7 +125,6 @@ void EncRCSeq::create( int RCMode, bool twoPassRC, int totFrames, int targetBitr
   lcuWidth            = LCUWidth;
   lcuHeight           = LCUHeight;
   numberOfLevel       = numOfLevel;
-  useLCUSeparateModel = useLCUSepModel;
   firstPassData       = firstPassStats;
 
   numberOfPixel = picWidth * picHeight;
@@ -143,14 +136,10 @@ void EncRCSeq::create( int RCMode, bool twoPassRC, int totFrames, int targetBitr
   numberOfLCU     = picWidthInBU * picHeightInBU;
 
   bitsRatio = new int[ gopSize ];
-  for ( int i = 0; i < gopSize; i++ )
-  {
-    bitsRatio[ i ] = 1;
-  }
-
   gopID2Level = new int[ gopSize ];
   for ( int i = 0; i < gopSize; i++ )
   {
+    bitsRatio[ i ] = 1;
     gopID2Level[ i ] = 1;
   }
 
@@ -161,22 +150,6 @@ void EncRCSeq::create( int RCMode, bool twoPassRC, int totFrames, int targetBitr
     picParam[ i ].beta = 0.0;
     picParam[ i ].validPix = -1;
     picParam[ i ].skipRatio = 0.0;
-  }
-
-  if ( useLCUSeparateModel )
-  {
-    lcuParam = new TRCParameter*[ numberOfLevel ];
-    for ( int i = 0; i < numberOfLevel; i++ )
-    {
-      lcuParam[ i ] = new TRCParameter[ numberOfLCU ];
-      for ( int j = 0; j < numberOfLCU; j++ )
-      {
-        lcuParam[ i ][ j ].alpha = 0.0;
-        lcuParam[ i ][ j ].beta = 0.0;
-        lcuParam[ i ][ j ].validPix = -1;
-        lcuParam[ i ][ j ].skipRatio = 0.0;
-      }
-    }
   }
 
   framesCoded = 0;
@@ -209,15 +182,6 @@ void EncRCSeq::destroy()
     picParam = NULL;
   }
 
-  if ( lcuParam != NULL )
-  {
-    for ( int i = 0; i < numberOfLevel; i++ )
-    {
-      delete[] lcuParam[ i ];
-    }
-    delete[] lcuParam;
-    lcuParam = NULL;
-  }
 }
 
 void EncRCSeq::initBitsRatio( int bRatio[] )
@@ -244,15 +208,14 @@ void EncRCSeq::initPicPara( TRCParameter* picPara )
   {
     for ( int i = 0; i < numberOfLevel; i++ )
     {
-      if (i>0)
+      int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
+      if ( i > 0 )
       {
-        int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
         picParam[ i ].alpha = 3.2003 * pow( 2.0, bitdepthLumaScale );
         picParam[ i ].beta = -1.367;
       }
       else
       {
-        int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
         picParam[ i ].alpha = pow( 2.0, bitdepthLumaScale ) * RC_ALPHA;
         picParam[ i ].beta = RC_BETA2;
       }
@@ -267,55 +230,27 @@ void EncRCSeq::initPicPara( TRCParameter* picPara )
   }
 }
 
-void EncRCSeq::initLCUPara( TRCParameter** LCUPara )
+void EncRCSeq::updateAfterPic ( int bits, int tgtBits )
 {
-  if ( lcuParam == NULL )
-  {
-    return;
-  }
-  if ( LCUPara == NULL )
-  {
-    for ( int i = 0; i < numberOfLevel; i++ )
-    {
-      for ( int j = 0; j < numberOfLCU; j++ )
-      {
-        lcuParam[ i ][ j ].alpha = picParam[ i ].alpha;
-        lcuParam[ i ][ j ].beta = picParam[ i ].beta;
-      }
-    }
-  }
-  else
-  {
-    for ( int i = 0; i < numberOfLevel; i++ )
-    {
-      for ( int j = 0; j < numberOfLCU; j++ )
-      {
-        lcuParam[ i ][ j ] = LCUPara[ i ][ j ];
-      }
-    }
-  }
-}
-
-void EncRCSeq::updateAfterPic ( int bits )
-{
+  estimatedBitUsage += tgtBits;
   bitsUsed += bits;
   framesCoded++;
   bitsLeft -= bits;
   framesLeft--;
 }
 
-void EncRCSeq::getTargetBitsFromFirstPass( int numPicCoded, int &targetBits, double &gopVsBitrateRatio, bool &isNewScene, double alpha[] )
+void EncRCSeq::getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, double alpha[] )
 {
-  int picCounter = 0;
   int numOfLevels = int( log( gopSize ) / log( 2 ) + 0.5 ) + 2;
 
   std::list<TRCPassStats>::iterator it;
-  for ( it = firstPassData.begin(); it != firstPassData.end(); it++, picCounter++ )
+  for ( it = firstPassData.begin(); it != firstPassData.end(); it++ )
   {
-    if ( numPicCoded == picCounter )
+    if ( poc == it->poc )
     {
       targetBits = it->targetBits;
       gopVsBitrateRatio = it->gopBitsVsBitrate;
+      frameVsGopRatio = it->frameInGopRatio;
       isNewScene = it->isNewScene;
       for ( int i = 0; i < numOfLevels; i++ )
       {
@@ -336,24 +271,6 @@ void EncRCSeq::setAllBitRatio( double basicLambda, double* equaCoeffA, double* e
   initBitsRatio( bitsRatio );
   delete[] bitsRatio;
 }
-void EncRCSeq::setQpInGOP( int gopId, int gopQp, int &qp )
-{
-  bool isFirstPicInGOP = 0 == gopId;
-  bool isLastIncompleteGOP = totalFrames > 0 && framesLeft == ( totalFrames - 1 ) % gopSize;
-
-  if ( !isFirstPicInGOP && !isLastIncompleteGOP )
-  {
-    qp = gopQp;
-  }
-}
-
-bool EncRCSeq::isQpResetRequired( int gopId )
-{
-  bool isFirstPicInGOP = 0 == gopId || ( totalFrames > 0 && framesLeft == ( totalFrames - 1 ) % gopSize );
-  bool resetRequired = rcMode < 3 || ( rcMode == 3 && isFirstPicInGOP );
-
-  return resetRequired;
-}
 
 //GOP level
 EncRCGOP::EncRCGOP()
@@ -366,8 +283,6 @@ EncRCGOP::EncRCGOP()
   bitsLeft           = 0;
   minEstLambda       = 0.0;
   maxEstLambda       = 0.0;
-  gopQP              = 0;
-  idealTargetGOPBits = -1;
 }
 
 EncRCGOP::~EncRCGOP()
@@ -650,8 +565,6 @@ int EncRCGOP::xEstGOPTargetBits( EncRCSeq* encRCSeq, int GOPSize )
   int currentTargetBitsPerPic = (int)( ( averageTargetBitsPerPic * ( encRCSeq->framesCoded + realInfluencePicture ) - encRCSeq->bitsUsed ) / realInfluencePicture );
   int targetBits = currentTargetBitsPerPic * GOPSize;
 
-  idealTargetGOPBits = (int)( GOPSize * encRCSeq->targetRate / (double)encRCSeq->frameRate );
-
   if ( targetBits < 200 )
   {
     targetBits = 200;   // at least allocate 200 bits for one GOP
@@ -670,11 +583,11 @@ EncRCPic::EncRCPic()
   numberOfPixel       = 0;
   numberOfLCU         = 0;
   targetBits          = 0;
+  tmpTargetBits       = 0;
   estHeaderBits       = 0;
   picQPOffsetQPA      = 0;
   picLambdaOffsetQPA  = 0.0;
   picEstLambda        = 0.0;
-  lcuLeft             = 0;
   bitsLeft            = 0;
   lcu                 = NULL;
   picActualHeaderBits = 0;
@@ -684,6 +597,8 @@ EncRCPic::EncRCPic()
   picMSE              = 0.0;
   validPixelsInPic    = 0;
   isNewScene          = false;
+  finalLambda         = 0.0;
+  estimatedBits       = 0;
 }
 
 EncRCPic::~EncRCPic()
@@ -693,13 +608,12 @@ EncRCPic::~EncRCPic()
 
 int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
 {
-  int targetBits        = 0;
-  int GOPbitsLeft       = encRcGOP->bitsLeft;
+  int targetBits    = 0;
+  int GOPbitsLeft   = encRcGOP->bitsLeft;
+  int currPicRatio  = encRcSeq->bitsRatio[ rcIdxInGop ];
+  int totalPicRatio = 0;
 
-  int currPicPosition = encRcGOP->numPics - encRcGOP->picsLeft;
-  int currPicRatio    = encRcSeq->bitsRatio[ currPicPosition ];
-  int totalPicRatio   = 0;
-  for ( int i = currPicPosition; i < encRcGOP->numPics; i++ )
+  for ( int i = rcIdxInGop; i < encRcGOP->numPics; i++ )
   {
     totalPicRatio += encRcSeq->bitsRatio[ i ];
   }
@@ -711,39 +625,31 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
     targetBits = 100;   // at least allocate 100 bits for one picture
   }
 
-  if ( encRCSeq->framesLeft > encRCSeq->gopSize || encRCSeq->totalFrames < 1 )
+  if ( encRcSeq->framesLeft > encRcSeq->gopSize || encRcSeq->totalFrames < 1 )
   {
-    targetBits = int( RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER * targetBits + RC_WEIGHT_PIC_TARGET_BIT_IN_GOP * encRCGOP->picTargetBitInGOP[ currPicPosition ] );
+    targetBits = int( RC_WEIGHT_PIC_TARGET_BIT_IN_BUFFER * targetBits + RC_WEIGHT_PIC_TARGET_BIT_IN_GOP * encRCGOP->picTargetBitInGOP[ rcIdxInGop ] );
   }
 
   // bit allocation for 2-pass RC
   if ( encRcSeq->twoPass )
   {
     double gopVsBitrateRatio = 1.0;
-    int tmpTargetBits = 0;
+    double frameVsGopRatio = 1.0;
     double alpha[ 7 ] = { 0.0 };
-    encRcSeq->getTargetBitsFromFirstPass( encRcSeq->framesCoded, tmpTargetBits, gopVsBitrateRatio, isNewScene, alpha );
-    if ( currPicPosition == 0 || encRCSeq->framesLeft < encRcSeq->gopSize )
-    {
-      targetBits = int( ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * gopVsBitrateRatio + tmpTargetBits ); // calculate the difference of under/overspent bits and adjust the current target bits based on the gop ratio only for the first frame in the gop
-    }
-    else
-    {
-      targetBits = tmpTargetBits;
-    }
+    encRcSeq->getTargetBitsFromFirstPass( poc, tmpTargetBits, gopVsBitrateRatio, frameVsGopRatio, isNewScene, alpha );
+    targetBits = int( ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * gopVsBitrateRatio * frameVsGopRatio + tmpTargetBits ); // calculate the difference of under/overspent bits and adjust the current target bits based on the gop and frame ratio for every frame
 
     if ( encRcSeq->bitsUsed > 0 )
     {
       encRcSeq->bitUsageRatio = double( encRcSeq->estimatedBitUsage ) / encRcSeq->bitsUsed;
     }
-    encRcSeq->estimatedBitUsage += int64_t( tmpTargetBits );
     if ( isNewScene )
     {
-      int bitdepthLumaScale = 2 * ( encRCSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
+      int bitdepthLumaScale = 2 * ( encRcSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRcSeq->bitDepth ) );
       int numOfLevels = int( log( encRcSeq->gopSize ) / log( 2 ) + 0.5 ) + 2;
       for ( int i = 1; i < numOfLevels; i++ )
       {
-        encRCSeq->picParam[ i ].alpha = alpha[ i ] * pow( 2.0, bitdepthLumaScale );
+        encRcSeq->picParam[ i ].alpha = alpha[ i ] * pow( 2.0, bitdepthLumaScale );
         encRcSeq->picParam[ i ].beta = -1.367;
       }
     }
@@ -789,11 +695,13 @@ void EncRCPic::addToPictureList( std::list<EncRCPic*>& listPreviousPictures )
   listPreviousPictures.push_back( this );
 }
 
-void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, std::list<EncRCPic*>& listPreviousPictures )
+void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int framePoc, int frameRcIdxInGop, std::list<EncRCPic*>& listPreviousPictures )
 {
   destroy();
-  encRCSeq = encRcSeq;
-  encRCGOP = encRcGOP;
+  encRCSeq   = encRcSeq;
+  encRCGOP   = encRcGOP;
+  poc        = framePoc;
+  rcIdxInGop = frameRcIdxInGop;
 
   int tgtBits    = xEstPicTargetBits( encRcSeq, encRcGOP );
   int estHeadBits = xEstPicHeaderBits( listPreviousPictures, frameLvl );
@@ -810,6 +718,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, std
   targetBits       = tgtBits;
   estHeaderBits    = estHeadBits;
   bitsLeft         = targetBits;
+  estimatedBits    = targetBits;
   int picWidth       = encRcSeq->picWidth;
   int picHeight      = encRcSeq->picHeight;
   int LCUWidth       = encRcSeq->lcuWidth;
@@ -817,24 +726,18 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, std
   int picWidthInLCU  = ( picWidth  % LCUWidth  ) == 0 ? picWidth  / LCUWidth  : picWidth  / LCUWidth  + 1;
   int picHeightInLCU = ( picHeight % LCUHeight ) == 0 ? picHeight / LCUHeight : picHeight / LCUHeight + 1;
 
-  lcuLeft         = numberOfLCU;
   bitsLeft       -= estHeaderBits;
 
   lcu = new TRCLCU[ numberOfLCU ];
-  int i, j;
   int LCUIdx;
-  for ( i=0; i<picWidthInLCU; i++ )
+  for ( int i = 0; i < picWidthInLCU; i++ )
   {
-    for ( j=0; j<picHeightInLCU; j++ )
+    for ( int j = 0; j < picHeightInLCU; j++ )
     {
-      LCUIdx = j*picWidthInLCU + i;
-      lcu[ LCUIdx ].actualBits = 0;
+      LCUIdx = j * picWidthInLCU + i;
       lcu[ LCUIdx ].actualSSE = 0.0;
       lcu[ LCUIdx ].actualMSE = 0.0;
-      lcu[ LCUIdx ].QP = 0;
       lcu[ LCUIdx ].lambda = 0.0;
-      lcu[ LCUIdx ].targetBits = 0;
-      lcu[ LCUIdx ].bitWeight = 1.0;
       int currWidth = ( ( i == picWidthInLCU - 1 ) ? picWidth - LCUWidth * ( picWidthInLCU - 1 ) : LCUWidth );
       int currHeight = ( ( j == picHeightInLCU - 1 ) ? picHeight - LCUHeight * ( picHeightInLCU - 1 ) : LCUHeight );
       lcu[ LCUIdx ].numberOfPixel = currWidth * currHeight;
@@ -890,111 +793,21 @@ double EncRCPic::estimatePicLambda( std::list<EncRCPic*>& listPreviousPictures, 
     estLambda = alpha * pow( bpp, beta );
   }
 
-  switch ( encRCSeq->rcMode )
+
+  if ( encRCSeq->twoPass )
   {
-  case 1:
-    clipLambdaConventional( listPreviousPictures, estLambda, bitdepthLumaScale );
-    break;
-  case 2:
-    if ( encRCSeq->twoPass )
-    {
-      clipLambdaTwoPass( listPreviousPictures, estLambda, bitdepthLumaScale );
-    }
-    else
-    {
-      clipLambdaFrameRc( listPreviousPictures, estLambda, bitdepthLumaScale );
-    }
-    break;
-  case 3:
-    clipLambdaGopRc( listPreviousPictures, estLambda, bitdepthLumaScale );
-    break;
-  default:
-    clipLambdaConventional( listPreviousPictures, estLambda, bitdepthLumaScale );
-    break;
+    clipLambdaTwoPass( listPreviousPictures, estLambda, bitdepthLumaScale );
+  }
+  else
+  {
+    clipLambdaFrameRc( listPreviousPictures, estLambda, bitdepthLumaScale );
   }
 
   //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
   estLambda = double( int64_t( estLambda * (double)RC_LAMBDA_PREC + 0.5 ) ) / (double)RC_LAMBDA_PREC;
   picEstLambda = estLambda;
 
-  double totalWeight = 0.0;
-  // initial BU bit allocation weight
-  for ( int i = 0; i < numberOfLCU; i++ )
-  {
-    double alphaLCU, betaLCU;
-    if ( encRCSeq->useLCUSeparateModel )
-    {
-      alphaLCU = encRCSeq->lcuParam[ frameLevel][ i ].alpha;
-      betaLCU  = encRCSeq->lcuParam[ frameLevel][ i ].beta;
-    }
-    else
-    {
-      alphaLCU = encRCSeq->picParam[ frameLevel ].alpha;
-      betaLCU  = encRCSeq->picParam[ frameLevel ].beta;
-    }
-
-    lcu[ i ].bitWeight = lcu[ i ].numberOfPixel * pow( estLambda / alphaLCU, 1.0 / betaLCU );
-
-    if ( lcu[ i ].bitWeight < 0.01 )
-    {
-      lcu[ i ].bitWeight = 0.01;
-    }
-    totalWeight += lcu[ i ].bitWeight;
-  }
-  for ( int i = 0; i < numberOfLCU; i++ )
-  {
-    double BUTargetBits = targetBits * lcu[ i ].bitWeight / totalWeight;
-    lcu[ i ].bitWeight = BUTargetBits;
-  }
-
   return estLambda;
-}
-
-void EncRCPic::clipLambdaConventional( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale )
-{
-  double lastLevelLambda = -1.0;
-  double lastPicLambda = -1.0;
-  double lastValidLambda = -1.0;
-  std::list<EncRCPic*>::iterator it;
-  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
-  {
-    if ( ( *it )->frameLevel == frameLevel )
-    {
-      lastLevelLambda = ( *it )->picLambda;
-    }
-    lastPicLambda = ( *it )->picLambda;
-
-    if ( lastPicLambda > 0.0 )
-    {
-      lastValidLambda = lastPicLambda;
-    }
-  }
-
-  if ( lastLevelLambda > 0.0 )
-  {
-    lastLevelLambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lastLevelLambda );
-    lambda = Clip3( lastLevelLambda * pow( 2.0, -3.0 / 3.0 ), lastLevelLambda * pow( 2.0, 3.0 / 3.0 ), lambda );
-  }
-
-  if ( lastPicLambda > 0.0 )
-  {
-    lastPicLambda = Clip3( encRCGOP->minEstLambda, 2000.0 * pow( 2.0, bitdepthLumaScale ), lastPicLambda );
-    lambda = Clip3( lastPicLambda * pow( 2.0, -10.0 / 3.0 ), lastPicLambda * pow( 2.0, 10.0 / 3.0 ), lambda );
-  }
-  else if ( lastValidLambda > 0.0 )
-  {
-    lastValidLambda = Clip3( encRCGOP->minEstLambda, 2000.0 * pow( 2.0, bitdepthLumaScale ), lastValidLambda );
-    lambda = Clip3( lastValidLambda * pow( 2.0, -10.0 / 3.0 ), lastValidLambda * pow( 2.0, 10.0 / 3.0 ), lambda );
-  }
-  else
-  {
-    lambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lambda );
-  }
-
-  if ( lambda < encRCGOP->minEstLambda )
-  {
-    lambda = encRCGOP->minEstLambda;
-  }
 }
 
 void EncRCPic::clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale )
@@ -1031,7 +844,7 @@ void EncRCPic::clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, do
   if ( lastLevelLambda > 0.0 )
   {
     lastLevelLambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lastLevelLambda );
-    lambda = Clip3( lastLevelLambda * pow( 2.0, -5.0 / 3.0 ), lastLevelLambda * pow( 2.0, 5.0 / 3.0 ), lambda );
+    lambda = Clip3( lastLevelLambda * pow( 2.0, -( 5.0 + encRCSeq->fppParFrames ) / 3.0 ), lastLevelLambda * pow( 2.0, ( 5.0 + encRCSeq->fppParFrames ) / 3.0 ), lambda );
   }
 
   if ( frameLevel > 2 )
@@ -1043,117 +856,14 @@ void EncRCPic::clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, do
   if ( lastPicLambda > 0.0 )
   {
     lastPicLambda = Clip3( encRCGOP->minEstLambda, 2000.0 * pow( 2.0, bitdepthLumaScale ), lastPicLambda );
-    if ( frameLevel > 1 )
-    {
-      lambda = Clip3( lastPicLambda * pow( 2.0, -10.0 / 3.0 ), lastPicLambda * pow( 2.0, 10.0 / 3.0 ), lambda );
-    }
-    else
-    {
-      lambda = Clip3( lastPicLambda * pow( 2.0, -12.0 / 3.0 ), lastPicLambda * pow( 2.0, 12.0 / 3.0 ), lambda );
-    }
+    double clipRange = frameLevel > 1 ? 10.0 : 12.0;
+    lambda = Clip3( lastPicLambda * pow( 2.0, -clipRange / 3.0 ), lastPicLambda * pow( 2.0, clipRange / 3.0 ), lambda );
   }
   else if ( lastValidLambda > 0.0 )
   {
     lastValidLambda = Clip3( encRCGOP->minEstLambda, 2000.0 * pow( 2.0, bitdepthLumaScale ), lastValidLambda );
-    if ( frameLevel > 1 )
-    {
-      lambda = Clip3( lastValidLambda * pow( 2.0, -10.0 / 3.0 ), lastValidLambda * pow( 2.0, 10.0 / 3.0 ), lambda );
-    }
-    else
-    {
-      lambda = Clip3( lastValidLambda * pow( 2.0, -12.0 / 3.0 ), lastValidLambda * pow( 2.0, 12.0 / 3.0 ), lambda );
-    }
-  }
-  else
-  {
-    lambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lambda );
-  }
-
-  if ( lambda < encRCGOP->minEstLambda )
-  {
-    lambda = encRCGOP->minEstLambda;
-  }
-}
-
-void EncRCPic::clipLambdaGopRc( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale )
-{
-  double lastPrevTLLambda = -1.0;
-  double lastLevelLambda = -1.0;
-  double lastPicLambda = -1.0;
-  double lastValidLambda = -1.0;
-  std::list<EncRCPic*>::iterator it;
-  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
-  {
-    if ( ( *it )->frameLevel == frameLevel - 1 && ( *it )->picLambda > 0.0 )
-    {
-      lastPrevTLLambda = ( *it )->picLambda;
-    }
-    if ( ( *it )->frameLevel == frameLevel && ( *it )->picLambda > 0.0 )
-    {
-      lastLevelLambda = ( *it )->picLambda;
-    }
-    lastPicLambda = ( *it )->picLambda;
-
-    if ( lastPicLambda > 0.0 )
-    {
-      lastValidLambda = lastPicLambda;
-    }
-  }
-
-  if ( lastLevelLambda > 0.0 )
-  {
-    lastLevelLambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lastLevelLambda );
-    if ( frameLevel < 1 )
-    {
-      double lowerClippingBoundary = Clip3( -5.0, 5.0, round( -10 * ( encRCGOP->targetBits / (double)encRCGOP->idealTargetGOPBits ) + 5 ) );
-      double upperClippingBoundary = Clip3( -5.0, 5.0, round( -10 * ( encRCGOP->targetBits / (double)encRCGOP->idealTargetGOPBits ) + 11 ) );
-      lambda = Clip3( lastLevelLambda * pow( 2.0, lowerClippingBoundary / 3.0 ), lastLevelLambda * pow( 2.0, upperClippingBoundary / 3.0 ), lambda );
-    }
-    else
-    {
-      lambda = Clip3( lastLevelLambda * pow( 2.0, -5.0 / 3.0 ), lastLevelLambda * pow( 2.0, 5.0 / 3.0 ), lambda );
-    }
-  }
-
-  if ( ( encRCSeq->framesCoded < encRCSeq->intraPeriod && frameLevel > 1 ) || ( encRCSeq->framesCoded >= encRCSeq->intraPeriod && frameLevel > 0 ) )
-  {
-    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GRC_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET_GRC[ frameLevel ];
-    lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
-  }
-
-  if ( lastPicLambda > 0.0 )
-  {
-    lastPicLambda = Clip3( encRCGOP->minEstLambda, 2000.0 * pow( 2.0, bitdepthLumaScale ), lastPicLambda );
-    if ( frameLevel > 1 )
-    {
-      lambda = Clip3( lastPicLambda * pow( 2.0, -10.0 / 3.0 ), lastPicLambda * pow( 2.0, 10.0 / 3.0 ), lambda );
-    }
-    else
-    {
-      double limitTH[ 3 ] = { pow( 2.0, bitdepthLumaScale ) * exp( ( 26 - 13.7122 ) / 4.2005 ), pow( 2.0, bitdepthLumaScale ) * exp( ( 30 - 13.7122 ) / 4.2005 ), pow( 2.0, bitdepthLumaScale ) * exp( ( 35 - 13.7122 ) / 4.2005 ) };
-      if ( frameLevel == 0 )
-      {
-        double intraLimit = lastPicLambda < limitTH[ 0 ] ? 11.0 : ( lastPicLambda < limitTH[ 1 ] ? 12.0 : ( lastPicLambda < limitTH[ 2 ] ? 13.0 : 14.0 ) );
-        lambda = Clip3( lastPicLambda * pow( 2.0, -intraLimit / 3.0 ), lastPicLambda * pow( 2.0, intraLimit / 3.0 ), lambda );
-      }
-      else
-      {
-        double intraLimit = lastPicLambda < limitTH[ 0 ] ? 8.0 : ( lastPicLambda < limitTH[ 1 ] ? 9.0 : ( lastPicLambda < limitTH[ 2 ] ? 10.0 : 11.0 ) );
-        lambda = Clip3( lastPicLambda * pow( 2.0, -intraLimit / 3.0 ), lastPicLambda * pow( 2.0, intraLimit / 3.0 ), lambda );
-      }
-    }
-  }
-  else if ( lastValidLambda > 0.0 )
-  {
-    lastValidLambda = Clip3( encRCGOP->minEstLambda, 2000.0 * pow( 2.0, bitdepthLumaScale ), lastValidLambda );
-    if ( frameLevel > 1 )
-    {
-      lambda = Clip3( lastValidLambda * pow( 2.0, -10.0 / 3.0 ), lastValidLambda * pow( 2.0, 10.0 / 3.0 ), lambda );
-    }
-    else
-    {
-      lambda = Clip3( lastValidLambda * pow( 2.0, -12.0 / 3.0 ), lastValidLambda * pow( 2.0, 12.0 / 3.0 ), lambda );
-    }
+    double clipRange = frameLevel > 1 ? 10.0 : 12.0;
+    lambda = Clip3( lastValidLambda * pow( 2.0, -clipRange / 3.0 ), lastValidLambda * pow( 2.0, clipRange / 3.0 ), lambda );
   }
   else
   {
@@ -1203,14 +913,8 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
   if ( lastLevelLambda > 0.0 )
   {
     lastLevelLambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lastLevelLambda );
-    if( isNewScene )
-    {
-      lambda = Clip3( lastLevelLambda * pow( 2.0, -6.0 / 3.0 ), lastLevelLambda * pow( 2.0, 6.0 / 3.0 ), lambda );
-    }
-    else
-    {
-      lambda = Clip3( lastLevelLambda * pow( 2.0, -3.0 / 3.0 ), lastLevelLambda * pow( 2.0, 3.0 / 3.0 ), lambda );
-    }
+    double clipRange = isNewScene ? 6.0 : 3.0;
+    lambda = Clip3( lastLevelLambda * pow( 2.0, -clipRange / 3.0 ), lastLevelLambda * pow( 2.0, clipRange / 3.0 ), lambda );
   }
 
   // prevent frames from higher TLs to have lower lambda values than frames at lower TLs
@@ -1271,64 +975,16 @@ int EncRCPic::estimatePicQP( double lambda, std::list<EncRCPic*>& listPreviousPi
 
   int QP = int( 4.2005 * log( lambda / pow( 2.0, bitdepthLumaScale ) ) + 13.7122 + 0.5 );
 
-  switch ( encRCSeq->rcMode )
+  if ( encRCSeq->twoPass )
   {
-  case 1:
-    clipQpConventional( listPreviousPictures, QP );
-    break;
-  case 2:
-    if ( encRCSeq->twoPass )
-    {
-      clipQpTwoPass( listPreviousPictures, QP );
-    }
-    else
-    {
-      clipQpFrameRc( listPreviousPictures, QP );
-    }
-    break;
-  case 3:
-    clipQpGopRc( listPreviousPictures, QP );
-    break;
-  default:
-    clipQpConventional( listPreviousPictures, QP );
-    break;
+    clipQpTwoPass( listPreviousPictures, QP );
+  }
+  else
+  {
+    clipQpFrameRc( listPreviousPictures, QP );
   }
 
   return QP;
-}
-
-void EncRCPic::clipQpConventional( std::list<EncRCPic*>& listPreviousPictures, int & QP )
-{
-  int lastLevelQP = RC_INVALID_QP_VALUE;
-  int lastPicQP = RC_INVALID_QP_VALUE;
-  int lastValidQP = RC_INVALID_QP_VALUE;
-  std::list<EncRCPic*>::iterator it;
-  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
-  {
-    if ( ( *it )->frameLevel == frameLevel )
-    {
-      lastLevelQP = ( *it )->picQP;
-    }
-    lastPicQP = ( *it )->picQP;
-    if ( lastPicQP > RC_INVALID_QP_VALUE )
-    {
-      lastValidQP = lastPicQP;
-    }
-  }
-
-  if ( lastLevelQP > RC_INVALID_QP_VALUE )
-  {
-    QP = Clip3( lastLevelQP - 3, lastLevelQP + 3, QP );
-  }
-
-  if ( lastPicQP > RC_INVALID_QP_VALUE )
-  {
-    QP = Clip3( lastPicQP - 10, lastPicQP + 10, QP );
-  }
-  else if ( lastValidQP > RC_INVALID_QP_VALUE )
-  {
-    QP = Clip3( lastValidQP - 10, lastValidQP + 10, QP );
-  }
 }
 
 void EncRCPic::clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &QP )
@@ -1363,7 +1019,7 @@ void EncRCPic::clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( lastLevelQP > RC_INVALID_QP_VALUE )
   {
-    QP = Clip3( lastLevelQP - 5, lastLevelQP + 5, QP );
+    QP = Clip3( lastLevelQP - ( 5 + encRCSeq->fppParFrames ), lastLevelQP + ( 5 + encRCSeq->fppParFrames ), QP );
   }
 
   if ( frameLevel > 2 )
@@ -1374,102 +1030,13 @@ void EncRCPic::clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( lastPicQP > RC_INVALID_QP_VALUE )
   {
-    if ( frameLevel > 1 )
-    {
-      QP = Clip3( lastPicQP - 10, lastPicQP + 10, QP );
-    }
-    else
-    {
-      QP = Clip3( lastPicQP - 12, lastPicQP + 12, QP );
-    }
+    int clipRange = frameLevel > 1 ? 10 : 12;
+    QP = Clip3( lastPicQP - clipRange, lastPicQP + clipRange, QP );
   }
   else if ( lastValidQP > RC_INVALID_QP_VALUE )
   {
-    if ( frameLevel > 1 )
-    {
-      QP = Clip3( lastValidQP - 10, lastValidQP + 10, QP );
-    }
-    else
-    {
-      QP = Clip3( lastValidQP - 12, lastValidQP + 12, QP );
-    }
-  }
-}
-
-void EncRCPic::clipQpGopRc( std::list<EncRCPic*>& listPreviousPictures, int &QP )
-{
-  int lastPrevTLQP = RC_INVALID_QP_VALUE;
-  int lastLevelQP = RC_INVALID_QP_VALUE;
-  int lastPicQP = RC_INVALID_QP_VALUE;
-  int lastValidQP = RC_INVALID_QP_VALUE;
-  std::list<EncRCPic*>::iterator it;
-  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
-  {
-    if ( ( *it )->frameLevel == frameLevel - 1 && ( *it )->picQP > RC_INVALID_QP_VALUE )
-    {
-      lastPrevTLQP = ( *it )->picQP;
-    }
-    if ( ( *it )->frameLevel == frameLevel && ( *it )->picQP > RC_INVALID_QP_VALUE ) // use the QP value from the last available frame of that level
-    {
-      lastLevelQP = ( *it )->picQP;
-    }
-    lastPicQP = ( *it )->picQP;
-    if ( lastPicQP > RC_INVALID_QP_VALUE )
-    {
-      lastValidQP = lastPicQP;
-    }
-  }
-
-  if ( lastLevelQP > RC_INVALID_QP_VALUE )
-  {
-    if ( frameLevel < 1 )
-    {
-      int lowerClippingBoundary = Clip3( -5, 5, (int)round( -10 * ( encRCGOP->targetBits / (double)encRCGOP->idealTargetGOPBits ) + 5 ) );
-      int upperClippingBoundary = Clip3( -5, 5, (int)round( -10 * ( encRCGOP->targetBits / (double)encRCGOP->idealTargetGOPBits ) + 11 ) );
-      QP = Clip3( lastLevelQP + lowerClippingBoundary, lastLevelQP + upperClippingBoundary, QP );
-    }
-    else
-    {
-      QP = Clip3( lastLevelQP - 5, lastLevelQP + 5, QP );
-    }
-  }
-
-  if ( ( encRCSeq->framesCoded < encRCSeq->intraPeriod && frameLevel > 1 ) || ( encRCSeq->framesCoded >= encRCSeq->intraPeriod && frameLevel > 0 ) )
-  {
-    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GRC_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET_GRC[ frameLevel ];
-    QP = Clip3( lastPrevTLQP + tlQpOffset, MAX_QP, QP );
-  }
-
-  if ( lastPicQP > RC_INVALID_QP_VALUE )
-  {
-    if ( frameLevel > 1 )
-    {
-      QP = Clip3( lastPicQP - 10, lastPicQP + 10, QP );
-    }
-    else
-    {
-      if ( frameLevel == 0 )
-      {
-        int intraLimit = lastPicQP < 26 ? 11 : ( lastPicQP < 30 ? 12 : ( lastPicQP < 35 ? 13 : 14 ) );
-        QP = Clip3( lastPicQP - intraLimit, lastPicQP + intraLimit, QP );
-      }
-      else
-      {
-        int intraLimit = lastPicQP < 26 ? 8 : ( lastPicQP < 30 ? 9 : ( lastPicQP < 35 ? 10 : 11 ) );
-        QP = Clip3( lastPicQP - intraLimit, lastPicQP + intraLimit, QP );
-      }
-    }
-  }
-  else if ( lastValidQP > RC_INVALID_QP_VALUE )
-  {
-    if ( frameLevel > 1 )
-    {
-      QP = Clip3( lastValidQP - 10, lastValidQP + 10, QP );
-    }
-    else
-    {
-      QP = Clip3( lastValidQP - 12, lastValidQP + 12, QP );
-    }
+    int clipRange = frameLevel > 1 ? 10 : 12;
+    QP = Clip3( lastValidQP - clipRange, lastValidQP + clipRange, QP );
   }
 }
 
@@ -1505,14 +1072,8 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( lastLevelQP > RC_INVALID_QP_VALUE )
   {
-    if ( isNewScene )
-    {
-      QP = Clip3( lastLevelQP - 6, lastLevelQP + 6, QP );
-    }
-    else
-    {
-      QP = Clip3( lastLevelQP - 3, lastLevelQP + 3, QP );
-    }
+    int clipRange = isNewScene ? 6 : 3;
+    QP = Clip3( lastLevelQP - clipRange, lastLevelQP + clipRange, QP );
   }
 
   if ( frameLevel > 2 ) // in any case frame level has to be GREATER than 1
@@ -1554,254 +1115,30 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
   }
 }
 
-double EncRCPic::getLCUTargetBpp(bool isIRAP, const int ctuRsAddr )
+void EncRCPic::updateAfterCTU( int LCUIdx, int bits, double lambda )
 {
-  int   LCUIdx    = ctuRsAddr;
-  double bpp      = -1.0;
-  int avgBits     = 0;
-
-  if (isIRAP)
-  {
-    int bitrateWindow = std::min( 4, lcuLeft );
-    double MAD = lcu[ LCUIdx ].costIntra;
-
-    if ( remainingCostIntra > 0.1 )
-    {
-      double weightedBitsLeft = ( bitsLeft * bitrateWindow + ( bitsLeft - lcu[ LCUIdx ].targetBitsLeft ) * lcuLeft ) / (double)bitrateWindow;
-      avgBits = int( MAD * weightedBitsLeft / remainingCostIntra );
-    }
-    else
-    {
-      avgBits = int( bitsLeft / lcuLeft );
-    }
-    remainingCostIntra -= MAD;
-  }
-  else
-  {
-    double totalWeight = 0;
-    for ( int i = LCUIdx; i < numberOfLCU; i++ )
-    {
-      totalWeight += lcu[ i ].bitWeight;
-    }
-    int realInfluenceLCU = std::min( RC_LCU_SMOOTH_WINDOW_SIZE, lcuLeft );
-    avgBits = (int)( lcu[ LCUIdx ].bitWeight - ( totalWeight - bitsLeft ) / realInfluenceLCU + 0.5 );
-  }
-
-  if ( avgBits < 1 )
-  {
-    avgBits = 1;
-  }
-
-  bpp = (double)avgBits / (double)lcu[ LCUIdx ].numberOfPixel;
-  lcu[ LCUIdx ].targetBits = avgBits;
-
-  return bpp;
-}
-
-double EncRCPic::getLCUEstLambda( double bpp, const int ctuRsAddr )
-{
-  int   LCUIdx = ctuRsAddr;
-  double alpha;
-  double beta;
-  if ( encRCSeq->useLCUSeparateModel )
-  {
-    alpha = encRCSeq->lcuParam[ frameLevel][ LCUIdx ].alpha;
-    beta  = encRCSeq->lcuParam[ frameLevel][ LCUIdx ].beta;
-  }
-  else
-  {
-    alpha = encRCSeq->picParam[ frameLevel ].alpha;
-    beta  = encRCSeq->picParam[ frameLevel ].beta;
-  }
-
-  double estLambda = alpha * pow( bpp, beta );
-  //for Lambda clip, picture level clip
-  double clipPicLambda = picEstLambda;
-
-  //for Lambda clip, LCU level clip
-  double clipNeighbourLambda = -1.0;
-  for ( int i = LCUIdx - 1; i >= 0; i-- )
-  {
-    if ( lcu[ i ].lambda > 0 )
-    {
-      clipNeighbourLambda = lcu[ i ].lambda;
-      break;
-    }
-  }
-
-  if ( clipNeighbourLambda > 0.0 )
-  {
-    estLambda = Clip3( clipNeighbourLambda * pow( 2.0, -1.0/3.0 ), clipNeighbourLambda * pow( 2.0, 1.0/3.0 ), estLambda );
-  }
-
-  if ( clipPicLambda > 0.0 )
-  {
-    estLambda = Clip3( clipPicLambda * pow( 2.0, -2.0/3.0 ), clipPicLambda * pow( 2.0, 2.0/3.0 ), estLambda );
-  }
-  else
-  {
-    int bitdepthLumaScale = 2 * ( encRCSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
-    estLambda = Clip3(10.0 * pow(2.0, bitdepthLumaScale ), 1000.0 * pow(2.0, bitdepthLumaScale ), estLambda);
-  }
-
-  if ( estLambda < 0.1 )
-  {
-    estLambda = 0.1;
-  }
-
-  //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
-  estLambda = double(int64_t(estLambda * (double)RC_LAMBDA_PREC + 0.5)) / (double)RC_LAMBDA_PREC;
-  return estLambda;
-}
-
-int EncRCPic::getLCUEstQP( double lambda, int clipPicQP, const int ctuRsAddr )
-{
-  int LCUIdx = ctuRsAddr;
-  int bitdepthLumaScale = 2 * ( encRCSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
-
-  int estQP = int( 4.2005 * log( lambda / pow( 2.0, bitdepthLumaScale ) ) + 13.7122 + 0.5 );
-
-  //for Lambda clip, LCU level clip
-  int clipNeighbourQP = RC_INVALID_QP_VALUE;
-  for ( int i = LCUIdx - 1; i >= 0; i-- )
-  {
-    if ( lcu[ i ].QP > RC_INVALID_QP_VALUE )
-    {
-      clipNeighbourQP = lcu[ i ].QP;
-      break;
-    }
-  }
-
-  if ( clipNeighbourQP > RC_INVALID_QP_VALUE )
-  {
-    estQP = Clip3( clipNeighbourQP - 1, clipNeighbourQP + 1, estQP );
-  }
-
-  estQP = Clip3( clipPicQP - 2, clipPicQP + 2, estQP );
-
-  return estQP;
-}
-
-void EncRCPic::updateAfterCTU(int LCUIdx, int bits, int QP, double lambda, double skipRatio, bool updateLCUParameter)
-{
-  lcu[ LCUIdx ].actualBits = bits;
-  lcu[ LCUIdx ].QP = QP;
   lcu[ LCUIdx ].lambda = lambda;
   lcu[ LCUIdx ].actualSSE = lcu[ LCUIdx ].actualMSE * lcu[ LCUIdx ].numberOfPixel;
 
-  lcuLeft--;
   bitsLeft -= bits;
-
-  if ( !updateLCUParameter )
-  {
-    return;
-  }
-
-  if ( !encRCSeq->useLCUSeparateModel )
-  {
-    return;
-  }
-
-
-  int LCUActualBits = lcu[ LCUIdx ].actualBits;
-  int LCUTotalPixels = lcu[ LCUIdx ].numberOfPixel;
-  double bpp = (double)LCUActualBits / (double)LCUTotalPixels;
-  double inputLambda = lcu[ LCUIdx ].lambda;
-
-
-  TRCParameter rcPara;
-  rcPara.skipRatio = skipRatio;
-  if ( QP == RC_INVALID_QP_VALUE && encRCSeq->adaptiveBits == 1 )
-  {
-    rcPara.validPix = 0;
-  }
-  else
-  {
-    rcPara.validPix = LCUTotalPixels;
-  }
-
-  double MSE = lcu[ LCUIdx ].actualMSE;
-  double updatedK = MSE > 0 ? bpp * inputLambda / MSE : 0.0;
-  double updatedC = MSE / pow(bpp, -updatedK);
-  rcPara.alpha = updatedC * updatedK;
-  rcPara.beta = -updatedK - 1.0;
-
-  if (MSE > 0)
-  {
-    rcPara.alpha = clipRcAlpha( encRCSeq->bitDepth, rcPara.alpha );
-    rcPara.beta = clipRcBeta( rcPara.beta );
-    encRCSeq->lcuParam[ frameLevel ][ LCUIdx ] = rcPara;
-  }
 }
 
-double EncRCPic::calAverageQP()
+void EncRCPic::calPicMSE()
 {
-  int totalQPs = 0;
-  int numTotalLCUs = 0;
-
-  int i;
-  for ( i = 0; i < numberOfLCU; i++ )
-  {
-    if ( lcu[ i ].QP > 0 )
-    {
-      totalQPs += lcu[ i ].QP;
-      numTotalLCUs++;
-    }
-  }
-
-  double avgQP = 0.0;
-  if ( numTotalLCUs == 0 )
-  {
-    avgQP = RC_INVALID_QP_VALUE;
-  }
-  else
-  {
-    avgQP = ( (double)totalQPs ) / ( (double)numTotalLCUs );
-  }
-  return avgQP;
-}
-
-double EncRCPic::calAverageLambda()
-{
-  double totalLambdas = 0.0;
-  int numTotalLCUs = 0;
-
   double totalSSE = 0.0;
   int totalPixels = 0;
-  int i;
-  for ( i = 0; i < numberOfLCU; i++ )
+  for ( int i = 0; i < numberOfLCU; i++ )
   {
-    if ( lcu[ i ].lambda > 0.01 )
+    if ( lcu[ i ].lambda > 0.1 && encRCSeq->adaptiveBits > 0 )
     {
-      if ( lcu[ i ].QP > 0 || encRCSeq->adaptiveBits != 1 )
-      {
-        validPixelsInPic += lcu[ i ].numberOfPixel;
-
-        totalLambdas += log( lcu[ i ].lambda );
-        numTotalLCUs++;
-      }
-
-      if ( lcu[ i ].QP > 0 || encRCSeq->adaptiveBits != 1 )
-      {
-        totalSSE += lcu[ i ].actualSSE;
-        totalPixels += lcu[ i ].numberOfPixel;
-       }
+      validPixelsInPic += lcu[ i ].numberOfPixel;
+      totalSSE += lcu[ i ].actualSSE;
+      totalPixels += lcu[ i ].numberOfPixel;
     }
   }
 
-  picMSE = totalPixels > 0 ? totalSSE / (double)totalPixels : 1.0; //1.0 is useless in the following process, just to make sure the divisor not be 0
-  double avgLambda;
-  if( numTotalLCUs == 0 )
-  {
-    avgLambda = -1.0;
-  }
-  else
-  {
-    avgLambda = pow( 2.7183, totalLambdas / numTotalLCUs );
-  }
-  return avgLambda;
+  picMSE = totalPixels > 0 ? totalSSE / (double)totalPixels : 1.0;
 }
-
 
 void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, double averageQP, double averageLambda, bool isIRAP)
 {
@@ -1822,20 +1159,13 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
   int numOfSkipPixel = 0;
   for (int LCUIdx = 0; LCUIdx < numberOfLCU; LCUIdx++)
   {
-    if ( encRCSeq->useLCUSeparateModel )
-    {
-      numOfSkipPixel += int( encRCSeq->lcuParam[ frameLevel ][ LCUIdx ].skipRatio * lcu[ LCUIdx ].numberOfPixel );
-    }
-    else
-    {
-      numOfSkipPixel += int( encRCSeq->picParam[ frameLevel ].skipRatio * lcu[ LCUIdx ].numberOfPixel );
-    }
+    numOfSkipPixel += int( encRCSeq->picParam[ frameLevel ].skipRatio * lcu[ LCUIdx ].numberOfPixel );
   }
   skipRatio = (double)numOfSkipPixel / (double)numberOfPixel;
 
   if (isIRAP)
   {
-    updateAlphaBetaIntra(&alpha, &beta);
+    updateAlphaBetaIntra(alpha, beta);
     TRCParameter rcPara;
     rcPara.skipRatio = skipRatio;
     rcPara.validPix = validPixelsInPic;
@@ -1858,8 +1188,8 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
     rcPara.beta = -updatedK - 1.0;
     if ( validPixelsInPic > 0 )
     {
-      rcPara.alpha = clipRcAlpha( encRCSeq->bitDepth, rcPara.alpha );
-      rcPara.beta = clipRcBeta( rcPara.beta );
+      clipRcAlpha( encRCSeq->bitDepth, rcPara.alpha );
+      clipRcBeta( rcPara.beta );
       encRCSeq->picParam[ frameLevel ] = rcPara;
     }
     if ( frameLevel == 1 )
@@ -1871,30 +1201,23 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
   }
 }
 
-double EncRCPic::clipRcAlpha(const int bitdepth, const double alpha)
+void EncRCPic::clipRcAlpha( const int bitdepth, double& alpha )
 {
   int bitdepthLumaScale = 2 * ( bitdepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
-  return Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
+  alpha = Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
 }
 
-double EncRCPic::clipRcBeta(const double beta)
+void EncRCPic::clipRcBeta( double& beta)
 {
-  return Clip3( RC_BETA_MIN_VALUE, RC_BETA_MAX_VALUE, beta );
+  beta =  Clip3( RC_BETA_MIN_VALUE, RC_BETA_MAX_VALUE, beta );
 }
 
 int EncRCPic::getRefineBitsForIntra( int orgBits )
 {
-  double alpha=0.25, beta=0.5582;
+  double alpha = 0.25, beta = 0.5582;
   int iIntraBits;
 
-  if (orgBits * 40 < numberOfPixel)
-  {
-    alpha=0.25;
-  }
-  else
-  {
-    alpha=0.30;
-  }
+  alpha = orgBits * 40 < numberOfPixel ? 0.25 : 0.3 ;
 
   iIntraBits = (int)( alpha * pow( totalCostIntra * 4.0 / (double)orgBits, beta ) * (double)orgBits + 0.5 );
 
@@ -1903,76 +1226,17 @@ int EncRCPic::getRefineBitsForIntra( int orgBits )
 
 double EncRCPic::calculateLambdaIntra(double alpha, double beta, double MADPerPixel, double bitsPerPixel)
 {
-  return ( (alpha/256.0) * pow( MADPerPixel/bitsPerPixel, beta ) );
+  return ( (alpha / 256.0) * pow( MADPerPixel / bitsPerPixel, beta ) );
 }
 
-void EncRCPic::updateAlphaBetaIntra(double *alpha, double *beta)
+void EncRCPic::updateAlphaBetaIntra(double& alpha, double& beta)
 {
   double lnbpp = log( pow( totalCostIntra / (double)numberOfPixel, RC_BETA1 ) ) - log( (double)picActualBits / (double)numberOfPixel );
-  double diffLambda = ( *beta ) * ( log( (double)picActualBits ) - log( (double)targetBits ) );
+  double diffLambda = beta * ( log( (double)picActualBits ) - log( (double)targetBits ) );
 
   diffLambda = Clip3(-0.125, 0.125, 0.25*diffLambda);
-  *alpha    =  (*alpha) * exp(diffLambda);
-  *beta     =  (*beta) + diffLambda / lnbpp;
-}
-
-
-void EncRCPic::getLCUInitTargetBits()
-{
-  int iAvgBits     = 0;
-
-  remainingCostIntra = totalCostIntra;
-  for ( int i = numberOfLCU - 1; i >= 0; i-- )
-  {
-    iAvgBits += int( targetBits * lcu[ i ].costIntra / totalCostIntra );
-    lcu[ i ].targetBitsLeft = iAvgBits;
-  }
-}
-
-
-double EncRCPic::getLCUEstLambdaAndQP(double bpp, int clipPicQP, int *estQP, const int ctuRsAddr )
-{
-  int   LCUIdx = ctuRsAddr;
-
-  double   alpha = encRCSeq->picParam[ frameLevel ].alpha;
-  double   beta  = encRCSeq->picParam[ frameLevel ].beta;
-
-  double costPerPixel = lcu[ LCUIdx ].costIntra / (double)lcu[ LCUIdx ].numberOfPixel;
-  costPerPixel = pow( costPerPixel, RC_BETA1 );
-  double estLambda = calculateLambdaIntra( alpha, beta, costPerPixel, bpp );
-
-  int clipNeighbourQP = RC_INVALID_QP_VALUE;
-  for ( int i = LCUIdx - 1; i >= 0; i-- )
-  {
-    if ( lcu[ i ].QP > RC_INVALID_QP_VALUE )
-    {
-      clipNeighbourQP = lcu[ i ].QP;
-      break;
-    }
-  }
-
-  int minQP = clipPicQP - 2;
-  int maxQP = clipPicQP + 2;
-
-  if ( clipNeighbourQP > RC_INVALID_QP_VALUE )
-  {
-    maxQP = std::min( clipNeighbourQP + 1, maxQP );
-    minQP = std::max( clipNeighbourQP - 1, minQP );
-  }
-
-  int bitdepthLumaScale = 2 * ( encRCSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
-
-  double maxLambda = exp( ( (double)( maxQP + 0.49 ) - 13.7122 ) / 4.2005 ) * pow( 2.0, bitdepthLumaScale );
-  double minLambda = exp( ( (double)( minQP - 0.49 ) - 13.7122 ) / 4.2005 ) * pow( 2.0, bitdepthLumaScale );
-
-  estLambda = Clip3(minLambda, maxLambda, estLambda);
-
-  //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
-  estLambda = double( int64_t( estLambda * (double)RC_LAMBDA_PREC + 0.5 ) ) / (double)RC_LAMBDA_PREC;
-  *estQP = int( 4.2005 * log( estLambda / pow( 2.0, bitdepthLumaScale ) ) + 13.7122 + 0.5 );
-  *estQP = Clip3( minQP, maxQP, *estQP );
-
-  return estLambda;
+  alpha    =  alpha * exp(diffLambda);
+  beta     =  beta + diffLambda / lnbpp;
 }
 
 RateCtrl::RateCtrl()
@@ -1980,7 +1244,6 @@ RateCtrl::RateCtrl()
   encRCSeq      = NULL;
   encRCGOP      = NULL;
   encRCPic      = NULL;
-  rcQP          = 0;
   rcPass        = 0;
   rcMaxPass     = 0;
   rcIsFinalPass = true;
@@ -2011,7 +1274,7 @@ void RateCtrl::destroy()
   }
 }
 
-void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, int keepHierBits, bool useLCUSeparateModel, const GOPEntry  GOPList[ MAX_GOP ] )
+void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, const GOPEntry  GOPList[ MAX_GOP ], int maxParallelFrames )
 {
   destroy();
 
@@ -2027,7 +1290,7 @@ void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRa
 
   int numberOfLevel = 1;
   int adaptiveBit = 0;
-  if ( keepHierBits > 0 || ( !isLowdelay && ( GOPSize == 32 || GOPSize == 16 || GOPSize == 8 ) ) )
+  if ( !isLowdelay && ( GOPSize == 32 || GOPSize == 16 || GOPSize == 8 ) )
   {
     numberOfLevel = int( log( (double)GOPSize ) / log( 2.0 ) + 0.5 ) + 1;
   }
@@ -2046,160 +1309,145 @@ void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRa
     }
   }
 
-  if ( keepHierBits > 0 )
+  double bpp = (double)( targetBitrate / (double)( frameRate * picWidth * picHeight ) );
+  if ( GOPSize == 4 && isLowdelay )
   {
-    double bpp = (double)( targetBitrate / (double)( frameRate * picWidth * picHeight ) );
-    if ( GOPSize == 4 && isLowdelay )
+    if ( bpp > 0.2 )
     {
-      if ( bpp > 0.2 )
-      {
-        bitsRatio[0] = 2;
-        bitsRatio[1] = 3;
-        bitsRatio[2] = 2;
-        bitsRatio[3] = 6;
-      }
-      else if( bpp > 0.1 )
-      {
-        bitsRatio[0] = 2;
-        bitsRatio[1] = 3;
-        bitsRatio[2] = 2;
-        bitsRatio[3] = 10;
-      }
-      else if ( bpp > 0.05 )
-      {
-        bitsRatio[0] = 2;
-        bitsRatio[1] = 3;
-        bitsRatio[2] = 2;
-        bitsRatio[3] = 12;
-      }
-      else
-      {
-        bitsRatio[0] = 2;
-        bitsRatio[1] = 3;
-        bitsRatio[2] = 2;
-        bitsRatio[3] = 14;
-      }
-
-      if ( keepHierBits == 2 )
-      {
-        adaptiveBit = 1;
-      }
+      bitsRatio[ 0 ] = 2;
+      bitsRatio[ 1 ] = 3;
+      bitsRatio[ 2 ] = 2;
+      bitsRatio[ 3 ] = 6;
     }
-    else if ( GOPSize == 8 && !isLowdelay )
+    else if ( bpp > 0.1 )
     {
-      if ( bpp > 0.2 )
-      {
-        bitsRatio[0] = 15;
-        bitsRatio[1] = 5;
-        bitsRatio[2] = 4;
-        bitsRatio[3] = 1;
-        bitsRatio[4] = 1;
-        bitsRatio[5] = 4;
-        bitsRatio[6] = 1;
-        bitsRatio[7] = 1;
-      }
-      else if ( bpp > 0.1 )
-      {
-        bitsRatio[0] = 20;
-        bitsRatio[1] = 6;
-        bitsRatio[2] = 4;
-        bitsRatio[3] = 1;
-        bitsRatio[4] = 1;
-        bitsRatio[5] = 4;
-        bitsRatio[6] = 1;
-        bitsRatio[7] = 1;
-      }
-      else if ( bpp > 0.05 )
-      {
-        bitsRatio[0] = 25;
-        bitsRatio[1] = 7;
-        bitsRatio[2] = 4;
-        bitsRatio[3] = 1;
-        bitsRatio[4] = 1;
-        bitsRatio[5] = 4;
-        bitsRatio[6] = 1;
-        bitsRatio[7] = 1;
-      }
-      else
-      {
-        bitsRatio[0] = 30;
-        bitsRatio[1] = 8;
-        bitsRatio[2] = 4;
-        bitsRatio[3] = 1;
-        bitsRatio[4] = 1;
-        bitsRatio[5] = 4;
-        bitsRatio[6] = 1;
-        bitsRatio[7] = 1;
-      }
-
-      if ( keepHierBits == 2 )
-      {
-        adaptiveBit = 2;
-      }
+      bitsRatio[ 0 ] = 2;
+      bitsRatio[ 1 ] = 3;
+      bitsRatio[ 2 ] = 2;
+      bitsRatio[ 3 ] = 10;
     }
-    else if ( GOPSize == 16 && !isLowdelay )
+    else if ( bpp > 0.05 )
     {
-      bitsRatio[ 0 ] = (int)( ( -0.5691 * bpp + 0.3577 ) * 1000 + 0.5 );
-      bitsRatio[ 1 ] = (int)( ( -0.0332 * bpp + 0.1782 ) * 1000 + 0.5 );
-      bitsRatio[ 2 ] = (int)( ( 0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
-      bitsRatio[ 3 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-      bitsRatio[ 4 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 5 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 6 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-      bitsRatio[ 7 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 8 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 9 ] = (int)( ( 0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
-      bitsRatio[ 10 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-      bitsRatio[ 11 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 12 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 13 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-      bitsRatio[ 14 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-      bitsRatio[ 15 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-
-      if (keepHierBits == 2)
-      {
-        adaptiveBit = 2;
-      }
-    }
-    else if ( GOPSize == 32 && !isLowdelay )
-    {
-      int bitsRatioInit[ 4 ][ 6 ] = {
-        { 16, 10, 8, 4, 2, 1 },
-        { 16, 10, 8, 4, 2, 1 },
-        { 16, 10, 8, 4, 2, 1 },
-        { 10, 8, 6, 4, 2, 1 }};
-      int cls;
-      if ( bpp > 0.2 )
-      {
-        cls = 0;
-      }
-      else if ( bpp > 0.1 )
-      {
-        cls = 1;
-      }
-      else if ( bpp > 0.05 )
-      {
-        cls = 2;
-      }
-      else
-      {
-        cls = 3;
-      }
-      int index[ 32 ] = { 0, 1, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5 };
-
-      for ( int i = 0; i < 32; i++ )
-      {
-        bitsRatio[ i ] = bitsRatioInit[ cls ][ index[ i ] ];
-      }
-      if ( keepHierBits == 2 )
-      {
-        adaptiveBit = 2;
-      }
+      bitsRatio[ 0 ] = 2;
+      bitsRatio[ 1 ] = 3;
+      bitsRatio[ 2 ] = 2;
+      bitsRatio[ 3 ] = 12;
     }
     else
     {
-      msg( WARNING, "\n hierarchical bit allocation is not support for the specified coding structure currently.\n" );
+      bitsRatio[ 0 ] = 2;
+      bitsRatio[ 1 ] = 3;
+      bitsRatio[ 2 ] = 2;
+      bitsRatio[ 3 ] = 14;
     }
+
+    adaptiveBit = 1;
+  }
+  else if ( GOPSize == 8 && !isLowdelay )
+  {
+    if ( bpp > 0.2 )
+    {
+      bitsRatio[ 0 ] = 15;
+      bitsRatio[ 1 ] = 5;
+      bitsRatio[ 2 ] = 4;
+      bitsRatio[ 3 ] = 1;
+      bitsRatio[ 4 ] = 1;
+      bitsRatio[ 5 ] = 4;
+      bitsRatio[ 6 ] = 1;
+      bitsRatio[ 7 ] = 1;
+    }
+    else if ( bpp > 0.1 )
+    {
+      bitsRatio[ 0 ] = 20;
+      bitsRatio[ 1 ] = 6;
+      bitsRatio[ 2 ] = 4;
+      bitsRatio[ 3 ] = 1;
+      bitsRatio[ 4 ] = 1;
+      bitsRatio[ 5 ] = 4;
+      bitsRatio[ 6 ] = 1;
+      bitsRatio[ 7 ] = 1;
+    }
+    else if ( bpp > 0.05 )
+    {
+      bitsRatio[ 0 ] = 25;
+      bitsRatio[ 1 ] = 7;
+      bitsRatio[ 2 ] = 4;
+      bitsRatio[ 3 ] = 1;
+      bitsRatio[ 4 ] = 1;
+      bitsRatio[ 5 ] = 4;
+      bitsRatio[ 6 ] = 1;
+      bitsRatio[ 7 ] = 1;
+    }
+    else
+    {
+      bitsRatio[ 0 ] = 30;
+      bitsRatio[ 1 ] = 8;
+      bitsRatio[ 2 ] = 4;
+      bitsRatio[ 3 ] = 1;
+      bitsRatio[ 4 ] = 1;
+      bitsRatio[ 5 ] = 4;
+      bitsRatio[ 6 ] = 1;
+      bitsRatio[ 7 ] = 1;
+    }
+
+    adaptiveBit = 2;
+  }
+  else if ( GOPSize == 16 && !isLowdelay )
+  {
+    bitsRatio[ 0 ] = (int)( ( -0.5691 * bpp + 0.3577 ) * 1000 + 0.5 );
+    bitsRatio[ 1 ] = (int)( ( -0.0332 * bpp + 0.1782 ) * 1000 + 0.5 );
+    bitsRatio[ 2 ] = (int)( ( 0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
+    bitsRatio[ 3 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[ 4 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 5 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 6 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[ 7 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 8 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 9 ] = (int)( ( 0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
+    bitsRatio[ 10 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[ 11 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 12 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 13 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[ 14 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 15 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+
+    adaptiveBit = 2;
+  }
+  else if ( GOPSize == 32 && !isLowdelay )
+  {
+    int bitsRatioInit[ 4 ][ 6 ] = {
+      { 16, 10, 8, 4, 2, 1 },
+      { 16, 10, 8, 4, 2, 1 },
+      { 16, 10, 8, 4, 2, 1 },
+      { 10, 8, 6, 4, 2, 1 } };
+    int cls;
+    if ( bpp > 0.2 )
+    {
+      cls = 0;
+    }
+    else if ( bpp > 0.1 )
+    {
+      cls = 1;
+    }
+    else if ( bpp > 0.05 )
+    {
+      cls = 2;
+    }
+    else
+    {
+      cls = 3;
+    }
+    int index[ 32 ] = { 0, 1, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5 };
+
+    for ( int i = 0; i < 32; i++ )
+    {
+      bitsRatio[ i ] = bitsRatioInit[ cls ][ index[ i ] ];
+    }
+    adaptiveBit = 2;
+  }
+  else
+  {
+    msg( WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
   }
 
   int* GOPID2Level = new int[ GOPSize ];
@@ -2212,76 +1460,73 @@ void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRa
     }
   }
 
-  if ( keepHierBits > 0 )
+  if ( GOPSize == 4 && isLowdelay )
   {
-    if ( GOPSize == 4 && isLowdelay )
-    {
-      GOPID2Level[0] = 3;
-      GOPID2Level[1] = 2;
-      GOPID2Level[2] = 3;
-      GOPID2Level[3] = 1;
-    }
-    else if ( GOPSize == 8 && !isLowdelay )
-    {
-      GOPID2Level[0] = 1;
-      GOPID2Level[1] = 2;
-      GOPID2Level[2] = 3;
-      GOPID2Level[3] = 4;
-      GOPID2Level[4] = 4;
-      GOPID2Level[5] = 3;
-      GOPID2Level[6] = 4;
-      GOPID2Level[7] = 4;
-    }
-    else if (GOPSize == 16 && !isLowdelay)
-    {
-      GOPID2Level[0] = 1;
-      GOPID2Level[1] = 2;
-      GOPID2Level[2] = 3;
-      GOPID2Level[3] = 4;
-      GOPID2Level[4] = 5;
-      GOPID2Level[5] = 5;
-      GOPID2Level[6] = 4;
-      GOPID2Level[7] = 5;
-      GOPID2Level[8] = 5;
-      GOPID2Level[9] = 3;
-      GOPID2Level[10] = 4;
-      GOPID2Level[11] = 5;
-      GOPID2Level[12] = 5;
-      GOPID2Level[13] = 4;
-      GOPID2Level[14] = 5;
-      GOPID2Level[15] = 5;
-    }
+    GOPID2Level[ 0 ] = 3;
+    GOPID2Level[ 1 ] = 2;
+    GOPID2Level[ 2 ] = 3;
+    GOPID2Level[ 3 ] = 1;
+  }
+  else if ( GOPSize == 8 && !isLowdelay )
+  {
+    GOPID2Level[ 0 ] = 1;
+    GOPID2Level[ 1 ] = 2;
+    GOPID2Level[ 2 ] = 3;
+    GOPID2Level[ 3 ] = 4;
+    GOPID2Level[ 4 ] = 4;
+    GOPID2Level[ 5 ] = 3;
+    GOPID2Level[ 6 ] = 4;
+    GOPID2Level[ 7 ] = 4;
+  }
+  else if ( GOPSize == 16 && !isLowdelay )
+  {
+    GOPID2Level[ 0 ] = 1;
+    GOPID2Level[ 1 ] = 2;
+    GOPID2Level[ 2 ] = 3;
+    GOPID2Level[ 3 ] = 4;
+    GOPID2Level[ 4 ] = 5;
+    GOPID2Level[ 5 ] = 5;
+    GOPID2Level[ 6 ] = 4;
+    GOPID2Level[ 7 ] = 5;
+    GOPID2Level[ 8 ] = 5;
+    GOPID2Level[ 9 ] = 3;
+    GOPID2Level[ 10 ] = 4;
+    GOPID2Level[ 11 ] = 5;
+    GOPID2Level[ 12 ] = 5;
+    GOPID2Level[ 13 ] = 4;
+    GOPID2Level[ 14 ] = 5;
+    GOPID2Level[ 15 ] = 5;
   }
 
   if ( !isLowdelay && GOPSize == 8 )
   {
-    GOPID2Level[0] = 1;
-    GOPID2Level[1] = 2;
-    GOPID2Level[2] = 3;
-    GOPID2Level[3] = 4;
-    GOPID2Level[4] = 4;
-    GOPID2Level[5] = 3;
-    GOPID2Level[6] = 4;
-    GOPID2Level[7] = 4;
+    GOPID2Level[ 0 ] = 1;
+    GOPID2Level[ 1 ] = 2;
+    GOPID2Level[ 2 ] = 3;
+    GOPID2Level[ 3 ] = 4;
+    GOPID2Level[ 4 ] = 4;
+    GOPID2Level[ 5 ] = 3;
+    GOPID2Level[ 6 ] = 4;
+    GOPID2Level[ 7 ] = 4;
   }
-  else if (GOPSize == 16 && !isLowdelay)
+  else if ( GOPSize == 16 && !isLowdelay )
   {
-    GOPID2Level[0] = 1;
-    GOPID2Level[1] = 2;
-    GOPID2Level[2] = 3;
-    GOPID2Level[3] = 4;
-    GOPID2Level[4] = 5;
-    GOPID2Level[5] = 5;
-    GOPID2Level[6] = 4;
-    GOPID2Level[7] = 5;
-    GOPID2Level[8] = 5;
-    GOPID2Level[9] = 3;
-    GOPID2Level[10] = 4;
-    GOPID2Level[11] = 5;
-    GOPID2Level[12] = 5;
-    GOPID2Level[13] = 4;
-    GOPID2Level[14] = 5;
-    GOPID2Level[15] = 5;
+    GOPID2Level[ 0 ] = 1;
+    GOPID2Level[ 1 ] = 2;
+    GOPID2Level[ 2 ] = 3;
+    GOPID2Level[ 3 ] = 4;
+    GOPID2Level[ 4 ] = 5;
+    GOPID2Level[ 5 ] = 5;
+    GOPID2Level[ 6 ] = 4;
+    GOPID2Level[ 7 ] = 5;
+    GOPID2Level[ 8 ] = 5;
+    GOPID2Level[ 9 ] = 3;
+    GOPID2Level[ 10 ] = 4;
+    GOPID2Level[ 11 ] = 5;
+    GOPID2Level[ 12 ] = 5;
+    GOPID2Level[ 13 ] = 4;
+    GOPID2Level[ 14 ] = 5;
+    GOPID2Level[ 15 ] = 5;
   }
   else if ( GOPSize == 32 && !isLowdelay )
   {
@@ -2321,24 +1566,15 @@ void RateCtrl::init( int RCMode, int totalFrames, int targetBitrate, int frameRa
 
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( RCMode, rcMaxPass == 1, totalFrames, targetBitrate, frameRate, intraPeriod, GOPSize, picWidth, picHeight, LCUWidth, LCUHeight, numberOfLevel, useLCUSeparateModel, adaptiveBit, getFirstPassStats() );
+  encRCSeq->create( rcMaxPass == 1, totalFrames, targetBitrate, frameRate, intraPeriod, GOPSize, picWidth, picHeight, LCUWidth, LCUHeight, numberOfLevel, adaptiveBit, getFirstPassStats() );
   encRCSeq->initBitsRatio( bitsRatio );
   encRCSeq->initGOPID2Level( GOPID2Level );
   encRCSeq->bitDepth = bitDepth;
   encRCSeq->initPicPara();
-  if ( useLCUSeparateModel )
-  {
-    encRCSeq->initLCUPara();
-  }
+  encRCSeq->fppParFrames = maxParallelFrames;
 
   delete[] bitsRatio;
   delete[] GOPID2Level;
-}
-
-void RateCtrl::initRCPic( int frameLevel )
-{
-  encRCPic = new EncRCPic;
-  encRCPic->create( encRCSeq, encRCGOP, frameLevel, m_listRCPictures );
 }
 
 void RateCtrl::initRCGOP( int numberOfPictures )
@@ -2360,7 +1596,7 @@ void RateCtrl::setRCPass( int pass, int maxPass )
   rcIsFinalPass = ( pass >= maxPass );
 }
 
-void RateCtrl::processFirstPassData()
+void RateCtrl::processFirstPassData( const unsigned sizeInCtus )
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
@@ -2385,6 +1621,25 @@ void RateCtrl::processFirstPassData()
     {
       estimateAlphaFirstPass( numOfLevels, it->poc, encRCSeq->intraPeriod, it->estAlpha );
     }
+  }
+
+  // derive average temporal stationarity index from perceptual QPA statistics, adapt lambdas
+  if ((m_listRCIntraPQPAStats.size() > 0) && rcIsFinalPass)
+  {
+    const uint64_t pairCount = m_listRCIntraPQPAStats.size();
+    uint64_t averageTempStat = 0, p;
+
+    for (p = 0; p < pairCount; p++)
+    {
+      averageTempStat += (m_listRCIntraPQPAStats[p] >> 4) + (m_listRCIntraPQPAStats[p] & 15);
+    }
+    p <<= 1; // number of CTUs
+    if (sizeInCtus & 1) // odd
+    {
+      p = (p / (sizeInCtus + 1u)) * sizeInCtus; // compensate for missing last (odd) CTU data
+    }
+    rcPQPAOffset = Clip3 (0, 15, int (averageTempStat / p)); // delta-QP offset for stability
+    rcPQPAOffset = (rcPQPAOffset > 8 && encRCSeq->targetRate < 25000000 ? 6 : 7);
   }
 }
 
@@ -2449,7 +1704,7 @@ void RateCtrl::detectNewScene()
         gopFeature[ counter[ 0 ] ] /= meanFeatureValueInter; // normalize GOP feature values
         if ( counter[ 0 ] > 0 )
         {
-          if ( abs( gopFeature[ counter[ 0 ] ] - gopFeature[ counter[ 0 ] - 1 ] ) > newSceneDetectionTH && it->poc - encRCSeq->gopSize > pocOfLastSceneChange[ 1 ] ) // detect scene cut
+          if ( std::abs( gopFeature[ counter[ 0 ] ] - gopFeature[ counter[ 0 ] - 1 ] ) > newSceneDetectionTH && it->poc - encRCSeq->gopSize > pocOfLastSceneChange[ 1 ] ) // detect scene cut
           {
             it->isNewScene = true;
             pocOfLastSceneChange[ 0 ] = it->poc;
@@ -2462,7 +1717,7 @@ void RateCtrl::detectNewScene()
         gopFeatureIntra[ counter[ 1 ] ] /= meanFeatureValueIntra; // normalize GOP feature values
         if ( counter[ 1 ] > 0 )
         {
-          if ( abs( gopFeatureIntra[ counter[ 1 ] ] - gopFeatureIntra[ counter[ 1 ] - 1 ] ) > newSceneDetectionTHIntra && it->poc - encRCSeq->intraPeriod > pocOfLastSceneChange[ 0 ] ) // detect scene cut
+          if ( std::abs( gopFeatureIntra[ counter[ 1 ] ] - gopFeatureIntra[ counter[ 1 ] - 1 ] ) > newSceneDetectionTHIntra && it->poc - encRCSeq->intraPeriod > pocOfLastSceneChange[ 0 ] ) // detect scene cut
           {
             it->isNewScene = true;
             pocOfLastSceneChange[ 1 ] = it->poc;
@@ -2747,14 +2002,13 @@ static int xCalcHADs8x8_ISlice( const Pel *piOrg, const int iStrideOrg )
   {
     for ( j = 0; j < 8; j++ )
     {
-      iSumHad += abs( m2[ i ][ j ] );
+      iSumHad += std::abs( m2[ i ][ j ] );
     }
   }
-  iSumHad -= abs( m2[ 0 ][ 0 ] );
+  iSumHad -= std::abs( m2[ 0 ][ 0 ] );
   iSumHad = ( iSumHad + 2 ) >> 2;
   return( iSumHad );
 }
-
 
 static int updateCtuDataISlice( const CPelBuf buf )
 {
@@ -2793,7 +2047,6 @@ void EncRCPic::calCostSliceI( Picture* pic ) // TODO: this only analyses the fir
     int iSumHad = updateCtuDataISlice( pic->getOrigBuf( blk ) );
 
     int cost = ( iSumHad + offset ) >> shift;
-    lcu[ ctuRsAddr ].costIntra = cost;
     iSumHadSlice += cost;
   }
 

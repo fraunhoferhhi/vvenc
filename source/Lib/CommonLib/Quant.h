@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -105,7 +105,7 @@ public:
 class Quant
 {
 public:
-  Quant( const Quant* other );
+  Quant( const Quant* other, bool useScalingLists );
   virtual ~Quant();
 
   // initialize class
@@ -126,7 +126,7 @@ public:
     return (m_scalingListEnabled && !isTransformSkip && (!lfnstApplied));
   };
   bool getScalingListEnabled      ()   { return m_scalingListEnabled; }
-  virtual void setFlatScalingList ( const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths);
+  virtual void setFlatScalingList ( const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths );
 
   // quantization
   virtual void quant              ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx );
@@ -136,7 +136,7 @@ public:
 protected:
   bool    xNeedRDOQ               ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, const QpParam& cQP );
 private:
-  void    xInitScalingList        ( const Quant* other );
+  void    xInitScalingList        ( const Quant* other, bool useScalingLists );
   void    xDestroyScalingList     ();
   void    xSetFlatScalingList     ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp );
   void    xSignBitHidingHDQ       ( TCoeff* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange);

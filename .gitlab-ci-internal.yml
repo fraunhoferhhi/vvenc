@@ -1,37 +1,156 @@
 stages:
    - build
 
-.build_template:
+.build_only_template:
    stage: build
+   interruptible: true
    script:
-      - make all
-      - make test
-   only:
-      - web
-      - schedules
-      - merge_requests
+      - make disable-lto=1 all
+   rules:
+      - if: '$CI_PIPELINE_SOURCE == "web"'
+      - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
 
-build_ubuntu1804:
-   extends: .build_template
+.build_only_template_full:
+   extends: .build_only_template
+   rules:
+      - if: '$FULL_BUILD == "1"'
+
+.build_test_template:
+   stage: build
+   interruptible: true
+   variables:
+     CTEST_OUTPUT_ON_FAILURE: 1
+   script:
+      - make disable-lto=1 all
+      - make disable-lto=1 test
+   rules:
+      - if: '$CI_PIPELINE_SOURCE == "web"'
+      - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+       
+
+.build_only_macos_arm64_template:
+   extends: .build_only_template
+   script:
+      - make osx-arch=arm64 disable-lto=1 all
+
+.build_only_macos_x86_64_template:
+   extends: .build_only_template
+   script:
+      - make osx-arch=x86_64 disable-lto=1 all
+
+build_gcc5_ubuntu1804:
+   extends: .build_only_template_full
+   variables:
+     CC: gcc-5
+     CXX: g++-5
    tags:
       - ubuntu1804
 
-build_ubuntu2004:
-   extends: .build_template
+build_gcc6_ubuntu1804:
+   extends: .build_only_template_full
+   variables:
+     CC: gcc-6
+     CXX: g++-6
+   tags:
+      - ubuntu1804
+
+build_gcc7_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: gcc-7
+     CXX: g++-7
    tags:
       - ubuntu2004
 
-build_vc191x:
-   extends: .build_template
+build_gcc8_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: gcc-8
+     CXX: g++-8
+   tags:
+      - ubuntu2004
+
+build_gcc9_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: gcc-9
+     CXX: g++-9
+   tags:
+      - ubuntu2004
+
+build_gcc10_ubuntu2004:
+   extends: .build_only_template
+   variables:
+     CC: gcc-10
+     CXX: g++-10
+   tags:
+      - ubuntu2004
+
+build_clang7_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: clang-7
+     CXX: clang++-7
+   tags:
+      - ubuntu2004
+
+build_clang8_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: clang-8
+     CXX: clang++-8
+   tags:
+      - ubuntu2004
+
+build_clang9_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: clang-9
+     CXX: clang++-9
+   tags:
+      - ubuntu2004
+
+build_clang10_ubuntu2004:
+   extends: .build_only_template_full
+   variables:
+     CC: clang-10
+     CXX: clang++-10
+   tags:
+      - ubuntu2004
+
+test_ubuntu1804:
+   extends: .build_test_template
+   tags:
+      - ubuntu1804
+
+test_ubuntu2004:
+   extends: .build_test_template
+   tags:
+      - ubuntu2004
+
+test_vc191x:
+   extends: .build_test_template
    tags:
       - vc191x
 
-build_vc192x:
-   extends: .build_template
+test_vc192x:
+   extends: .build_test_template
    tags:
       - vc192x
 
-build_macos:
-   extends: .build_template
+test_macos:
+   extends: .build_test_template
+   tags:
+      - macos
+
+build_macos_arm64:
+   extends: .build_only_macos_arm64_template
+   tags:
+      - macos
+
+build_macos_x86_64:
+   extends: .build_only_macos_x86_64_template
    tags:
       - macos

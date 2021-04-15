@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -163,15 +163,6 @@ inline PartSplit getPartSplit( const EncTestMode& encTestmode )
   }
 }
 
-inline EncTestMode getCSEncMode( const CodingStructure& cs )
-{
-  return EncTestMode( EncTestModeType( (unsigned)cs.features[ENC_FT_ENC_MODE_TYPE] ),
-                      EncTestModeOpts( (unsigned)cs.features[ENC_FT_ENC_MODE_OPTS] ),
-                      false);
-}
-
-
-
 //////////////////////////////////////////////////////////////////////////
 // EncModeCtrl controls if specific modes should be tested
 //////////////////////////////////////////////////////////////////////////
@@ -188,6 +179,7 @@ struct ComprCUCtx
     , bestCS        ( nullptr    )
     , bestCU        ( nullptr    )
     , bestTU        ( nullptr    )
+    , bestMode      ()
     , bestInterCost             ( MAX_DOUBLE )
     , bestCostVertSplit     (MAX_DOUBLE)
     , bestCostHorzSplit     (MAX_DOUBLE)
@@ -211,6 +203,10 @@ struct ComprCUCtx
     , didVertSplit          (false)
     , isBestNoSplitSkip     (false)
     , skipSecondMTSPass     (false)
+    , intraWasTested        (false)
+    , relatedCuIsValid      (false)
+    , bestIntraMode         (0)
+    , isIntra               (false)
   {
   }
 
@@ -219,6 +215,7 @@ struct ComprCUCtx
   CodingStructure*  bestCS;
   CodingUnit*       bestCU;
   TransformUnit*    bestTU;
+  EncTestMode       bestMode;
   double            bestInterCost;
   double            bestCostVertSplit;
   double            bestCostHorzSplit;
@@ -243,35 +240,15 @@ struct ComprCUCtx
   bool              didVertSplit;
   bool              isBestNoSplitSkip;
   bool              skipSecondMTSPass;
+  bool              intraWasTested;
+  bool              relatedCuIsValid;
+  int               bestIntraMode;
+  bool              isIntra;
 };
 
 //////////////////////////////////////////////////////////////////////////
 // some utility interfaces that expose some functionality that can be used without concerning about which particular controller is used
 //////////////////////////////////////////////////////////////////////////
-struct SaveLoadStructSbt
-{
-  uint8_t  numPuInfoStored;
-  uint32_t puSse[SBT_NUM_SL];
-  uint8_t  puSbt[SBT_NUM_SL];
-};
-
-class SaveLoadEncInfoSbt
-{
-protected:
-  void init( const Slice &slice );
-  void create();
-  void destroy();
-
-private:
-  SaveLoadStructSbt m_saveLoadSbt[6][6][32][32];
-  const PreCalcValues* m_pcv;
-
-public:
-  virtual  ~SaveLoadEncInfoSbt() { }
-  void     resetSaveloadSbt   ( int maxSbtSize );
-  uint8_t  findBestSbt        ( const UnitArea& area, const uint32_t curPuSse );
-  bool     saveBestSbt        ( const UnitArea& area, const uint32_t curPuSse, const uint8_t curPuSbt );
-};
 
 static const int MAX_STORED_CU_INFO_REFS = 4;
 
@@ -282,10 +259,17 @@ struct CodedCUInfo
   bool isSkip;
   bool isMMVDSkip;
   bool isIBC;
-  bool validMv[NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
-  Mv   saveMv [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
-
   uint8_t BcwIdx;
+  int  ctuRsAddr, poc;
+  uint8_t  numPuInfoStored;
+  bool validMv  [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  Mv   saveMv   [NUM_REF_PIC_LIST_01][MAX_STORED_CU_INFO_REFS];
+  uint32_t puSse[SBT_NUM_SL];
+  uint8_t  puSbt[SBT_NUM_SL];
+  double bestCost;
+  bool   relatedCuIsValid;
+  int    bestIntraMode;
+
   bool getMv  ( const RefPicList refPicList, const int iRefIdx,       Mv& rMv ) const;
   void setMv  ( const RefPicList refPicList, const int iRefIdx, const Mv& rMv );
 };
@@ -295,6 +279,7 @@ class CacheBlkInfoCtrl
 protected:
   // x in CTU, y in CTU, width, height
   CodedCUInfo*         m_codedCUInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
+  CodedCUInfo*         m_codedCUInfoBuf;
   const PreCalcValues* m_pcv;
 
 protected:
@@ -304,21 +289,24 @@ protected:
   void init     ( const Slice &slice );
 
 public:
-  virtual ~CacheBlkInfoCtrl() {}
+  CacheBlkInfoCtrl() : m_codedCUInfoBuf( nullptr ) {}
+  ~CacheBlkInfoCtrl () {}
 
-  CodedCUInfo& getBlkInfo( const UnitArea& area );
+  CodedCUInfo& getBlkInfo   ( const UnitArea& area );
+  void         initBlk      ( const UnitArea& area, int poc );
+
+  uint8_t      findBestSbt  ( const UnitArea& area, const uint32_t curPuSse );
+  bool         saveBestSbt  ( const UnitArea& area, const uint32_t curPuSse, const uint8_t curPuSbt );
 };
 
 struct BestEncodingInfo
 { 
-  BestEncodingInfo( int dmvrSize ) { dmvrMvdBuffer.resize(dmvrSize); }
   CodingUnit      cu;
   TransformUnit   tu;
   EncTestMode     testMode;
   int             poc;
   Distortion      dist;
   double          costEDO;
-  std::vector<Mv> dmvrMvdBuffer;
 };
 
 class BestEncInfoCache
@@ -327,6 +315,8 @@ private:
   const PreCalcValues* m_pcv;
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
   TCoeff*              m_pCoeff;
+  BestEncodingInfo*    m_encInfoBuf;
+  Mv*                  m_dmvrMvBuf;
   CodingStructure      m_dummyCS;
   XUCache              m_dummyCache;
 
@@ -335,12 +325,12 @@ protected:
   void create   ( const ChromaFormat chFmt );
   void destroy  ();
 public:
-  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
-  virtual ~BestEncInfoCache() {}
+  BestEncInfoCache() : m_pcv( nullptr ), m_pCoeff( nullptr ), m_encInfoBuf( nullptr ), m_dmvrMvBuf( nullptr ), m_dummyCS( m_dummyCache, nullptr ) {}
+  ~BestEncInfoCache() {}
 
   void init             ( const Slice &slice );
-  bool setCsFrom        ( CodingStructure& cs, EncTestMode& testMode, const Partitioner& partitioner ) const;
-  bool setFromCs        ( const CodingStructure& cs, const Partitioner& partitioner );
+  bool setCsFrom        (       CodingStructure& cs,       EncTestMode& testMode, const Partitioner& partitioner ) const;
+  bool setFromCs        ( const CodingStructure& cs, const EncTestMode& testMode, const Partitioner& partitioner );
   bool isReusingCuValid ( const CodingStructure &cs, const Partitioner &partitioner, int qp );
 };
 
@@ -349,11 +339,11 @@ public:
 //                    - only 2Nx2N, no RQT, additional binary/triary CU splits
 //////////////////////////////////////////////////////////////////////////
 
-class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache, public SaveLoadEncInfoSbt
+class EncModeCtrl: public CacheBlkInfoCtrl, public BestEncInfoCache
 {
 protected:
 
-  const EncCfg*         m_pcEncCfg;
+  const VVEncCfg*       m_pcEncCfg;
         RdCost*         m_pcRdCost;
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
@@ -361,9 +351,9 @@ protected:
 public:
   ComprCUCtx*           comprCUCtx;
 
-  virtual ~EncModeCtrl    () { destroy(); }
+  ~EncModeCtrl    () { destroy(); }
 
-  void init               ( const EncCfg& encCfg, RdCost *pRdCost );
+  void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
   void initCTUEncoding    ( const Slice &slice );
   void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs );
@@ -374,10 +364,6 @@ public:
   bool useModeResult      ( const EncTestMode& encTestmode, CodingStructure*& tempCS,  Partitioner& partitioner, const bool useEDO );
 
   void beforeSplit        ( Partitioner& partitioner );
-
-private:
-  void xExtractFeatures   ( const EncTestMode& encTestmode, CodingStructure& cs );
-
 };
 
 } // namespace vvenc

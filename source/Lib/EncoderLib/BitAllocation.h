@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/Unit.h"
 
@@ -61,16 +61,16 @@ namespace vvenc {
   // BitAllocation functions
   namespace BitAllocation
   {
-    int applyQPAdaptationChroma (const Slice* slice, const EncCfg* encCfg, const int sliceQP,
+    int applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
                                  std::vector<int>& ctuPumpRedQP,
-                                 int optChromaQPOffset[2], const bool isHDR = false);
-    int applyQPAdaptationLuma   (const Slice* slice, const EncCfg* encCfg, const int savedQP, const double lambda,
-                                 std::vector<int>& ctuPumpRedQP,
-                                 const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr, const bool isHDR = false);
-    int applyQPAdaptationSubCtu (const Slice* slice, const EncCfg* encCfg, const Area& lumaArea, const bool isHDR = false);
+                                 int optChromaQPOffset[2]);
+    int applyQPAdaptationLuma   (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
+                                 std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
+                                 const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr);
+    int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea);
     int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
                                  std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
-    double getPicVisualActivity (const Slice* slice, const EncCfg* encCfg, const PelBuf* origBuf = nullptr);
+    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const PelBuf* origBuf = nullptr);
   }
 
 } // namespace vvenc

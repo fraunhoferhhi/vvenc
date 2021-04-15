@@ -38,12 +38,24 @@ ifneq ($(address-sanitizer),)
 CONFIG_OPTIONS += -DVVENC_USE_ADDRESS_SANITIZER=$(address-sanitizer)
 endif
 
+ifneq ($(enable-arch),)
+CONFIG_OPTIONS += -DVVENC_OPT_TARGET_ARCH=$(enable-arch)
+endif
+
+ifneq ($(disable-lto),)
+CONFIG_OPTIONS += -DVVENC_ENABLE_LINK_TIME_OPT=OFF
+endif
+
 ifneq ($(enable-build-type-postfix),)
 CONFIG_OPTIONS += -DVVENC_ENABLE_BUILD_TYPE_POSTFIX=ON
 endif
 
 ifneq ($(install-prefix),)
 CONFIG_OPTIONS += -DCMAKE_INSTALL_PREFIX=$(install-prefix)
+endif
+
+ifneq ($(osx-arch),)
+CONFIG_OPTIONS += -DCMAKE_OSX_ARCHITECTURES=$(osx-arch)
 endif
 
 ifeq ($(j),)

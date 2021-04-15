@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -43,48 +43,56 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     FileIO.h
-    \brief    file I/O class (header)
+/** \file     YuvFileIO.h
+    \brief    yuv file I/O class (header)
 */
 
 #pragma once
 
+#include "apputils/apputilsDecl.h"
 #include <fstream>
-#include <vector>
-#include "vvenc/vvencDecl.h"
-#include "vvenc/Basics.h"
+#include <string>
+
+#include "vvenc/vvencCfgExpert.h"
 
 //! \ingroup Interface
 //! \{
 
 namespace vvenc {
+struct YUVBuffer;
+}
+
+namespace apputils {
 
 // ====================================================================================================================
 
-class VVENC_DECL YuvIO
+class APPUTILS_DECL YuvFileIO
 {
 private:
-  std::fstream  m_cHandle;                            ///< file handle
-  int           m_fileBitdepth[ MAX_NUM_CH ];         ///< bitdepth of input/output video file
-  int           m_MSBExtendedBitDepth[ MAX_NUM_CH ];  ///< bitdepth after addition of MSBs (with value 0)
-  int           m_bitdepthShift[ MAX_NUM_CH ];        ///< number of bits to increase or decrease image by before/after write/read
+  std::fstream        m_cHandle;              ///< file handle
+  int                 m_fileBitdepth;         ///< bitdepth of input/output video file
+  int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
+  int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
+  vvenc::ChromaFormat m_fileChrFmt;           ///< chroma format of the file
+  vvenc::ChromaFormat m_bufferChrFmt;         ///< chroma format of the buffer
+  bool                m_clipToRec709;         ///< clip data according to Recom.709
+  bool                m_packedYUVMode;        ///< used packed buffer file format
+  std::string         m_lastError;            ///< temporal storage for last occured error 
+  bool                m_readStdin;
 
 public:
-  void  open( const std::string &fileName, bool bWriteMode, const int fileBitDepth[ MAX_NUM_CH ], const int MSBExtendedBitDepth[ MAX_NUM_CH ], const int internalBitDepth[ MAX_NUM_CH ] );
+  int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
+              vvenc::ChromaFormat fileChrFmt, vvenc::ChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
   void  close();
   bool  isEof();
   bool  isFail();
-  void  skipYuvFrames( int numFrames, const ChromaFormat& inputChFmt, int width, int height );
-  bool  readYuvBuf   ( YUVBuffer& yuvInBuf,        const ChromaFormat& inputChFmt,  const ChromaFormat& internChFmt, const int pad[ 2 ], bool bClipToRec709 );
-  bool  writeYuvBuf  ( const YUVBuffer& yuvOutBuf, const ChromaFormat& internChFmt, const ChromaFormat& outputChFmt, bool bPackedYUVOutputMode, bool bClipToRec709 );
+  void  skipYuvFrames( int numFrames, int width, int height );
+  bool  readYuvBuf   ( vvenc::YUVBuffer& yuvInBuf );
+  bool  writeYuvBuf  ( const vvenc::YUVBuffer& yuvOutBuf );
+  std::string getLastError() const { return m_lastError; }   
 };
 
-// ====================================================================================================================
-
-class AccessUnit;
-std::vector<uint32_t> VVENC_DECL writeAnnexB( std::ostream& out, const AccessUnit& au );
-
-} // namespace vvenc
+} // namespace apputils
 
 //! \}
 

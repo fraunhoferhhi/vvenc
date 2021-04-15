@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -108,9 +108,7 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
 
   if (slice->sliceMap.ctuAddrInSlice[0] == 0)
   {
-    cs.picture->resizeAlfCtuEnabled( cs.pcv->sizeInCtus );
-    cs.picture->resizeAlfCtbFilterIndex(cs.pcv->sizeInCtus);
-    cs.picture->resizeAlfCtuAlternative( cs.pcv->sizeInCtus );
+    cs.picture->resizeAlfCtuBuffers( cs.pcv->sizeInCtus );
   }
 
   const unsigned numSubstreams = slice->getNumberOfSubstreamSizes() + 1;

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/dtrace_codingstruct.h"
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -71,35 +71,95 @@ static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-void EncPicture::init( const EncCfg& encCfg, std::vector<int>* const globalCtuQpVector,
-                       const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool )
+void EncPicture::init( const VVEncCfg& encCfg,
+                       std::vector<int>* const globalCtuQpVector,
+                       const SPS& sps,
+                       const PPS& pps,
+                       RateCtrl& rateCtrl,
+                       NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg = &encCfg;
 
-  m_ALF.init         ( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
-  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool );
+  if( encCfg.m_alf || encCfg.m_ccalf )
+    m_ALF       .init( encCfg, m_CABACEstimator, m_CtxCache, threadPool );
+
+  m_SliceEncoder.init( encCfg, sps, pps, globalCtuQpVector, m_LoopFilter, m_ALF, rateCtrl, threadPool, &m_ctuTasksDoneCounter );
+  m_pcRateCtrl = &rateCtrl;
 }
 
 
-void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, EncGOP& gopEncoder )
+void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 {
   ITT_TASKSTART( itt_domain_picEncoder, itt_handle_start );
 
   pic.encTime.startTimer();
 
-  // compress picture
-  if ( pic.encPic )
+  pic.createTempBuffers( pic.cs->pcv->maxCUSize );
+  pic.cs->createCoeffs();
+  pic.cs->createTempBuffers( true );
+  pic.cs->initStructData();
+
+  if( m_pcEncCfg->m_lumaReshapeEnable && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
   {
-    xInitPicEncoder ( pic );
-    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[ 0 ] );
-    xCompressPicture( pic );
-  }
-  else
-  {
-    xSkipCompressPicture( pic, shrdApsMap );
+    const double *weights = gopEncoder.getReshaper().getlumaLevelToWeightPLUT();
+    auto& vec = m_ALF.getLumaLevelWeightTable();
+    const size_t numEl = size_t( 1 ) << m_pcEncCfg->m_internalBitDepth[0];
+
+    vec.resize( numEl );
+    std::copy( weights, weights + numEl, vec.begin() );
+
+    m_ALF.setAlfWSSD( 1 );
   }
 
-  if( pic.writePic)
+  // compress picture
+  xInitPicEncoder ( pic );
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    pic.encRCPic = new EncRCPic;
+    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, pic.rcIdxInGop, m_pcRateCtrl->m_listRCPictures );
+    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], this );
+  }
+
+  // compress current slice
+  pic.cs->slice = pic.slices[0];
+  m_SliceEncoder.compressSlice( &pic );
+
+  ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
+}
+
+void EncPicture::finalizePicture( Picture& pic )
+{
+  CodingStructure& cs = *(pic.cs);
+  Slice* slice        = pic.slices[0];
+  // ALF
+  if( slice->sps->alfEnabled && pic.encPic )
+  {
+#ifdef TRACE_ENABLE_ITT
+    std::stringstream ss;
+    ss << "ALF_post_" << slice->poc;
+    __itt_string_handle* itt_handle_post = __itt_string_handle_create( ss.str().c_str() );
+#endif
+    ITT_TASKSTART( itt_domain_ALF_post, itt_handle_post );
+
+    if( m_pcEncCfg->m_ccalf )
+    {
+      m_ALF.performCCALF( pic, cs );
+    }
+    ITT_TASKEND( itt_domain_ALF_post, itt_handle_post );
+    pic.picApsMap.setApsIdStart( m_ALF.getApsIdStart() );
+
+    cs.slice->ccAlfFilterParam      = m_ALF.getCcAlfFilterParam();
+    cs.slice->ccAlfFilterControl[0] = m_ALF.getCcAlfControlIdc(COMP_Cb);
+    cs.slice->ccAlfFilterControl[1] = m_ALF.getCcAlfControlIdc(COMP_Cr);
+
+    DTRACE( g_trace_ctx, D_CRC, "ALF" );
+    DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.getRecoBuf() );
+    DTRACE_PIC_COMP( D_REC_CB_LUMA_ALF,   cs, cs.getRecoBuf(), COMP_Y  );
+    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cb );
+    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
+  }
+
+  if( pic.writePic )
   {
     // write picture
     xWriteSliceData( pic );
@@ -107,23 +167,18 @@ void EncPicture::encodePicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap, 
 
   // finalize
   pic.extendPicBorder();
-  pic.slices[ 0 ]->updateRefPicCounter( -1 );
   if ( m_pcEncCfg->m_useAMaxBT )
   {
     pic.picBlkStat.storeBlkSize( pic );
   }
   // cleanup
-  pic.destroyTempBuffers();
-  pic.cs->destroyCoeffs();
   pic.cs->releaseIntermediateData();
+  pic.cs->destroyTempBuffers();
+  pic.cs->destroyCoeffs();
+  pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
-
-  gopEncoder.finishEncPicture( this, pic );
-
-  ITT_TASKEND( itt_domain_picEncoder, itt_handle_start );
 }
-
 
 void EncPicture::xInitPicEncoder( Picture& pic )
 {
@@ -146,6 +201,11 @@ void EncPicture::xInitPicEncoder( Picture& pic )
 
 void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
 {
+  if( m_pcEncCfg->m_rprRASLtoolSwitch )
+  {
+    return;
+  }
+  
   if ( slice->sliceType == B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed
@@ -188,40 +248,7 @@ void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
 }
 
 
-void EncPicture::xCompressPicture( Picture& pic )
-{
-  Slice* slice             = pic.slices[0];
-
-  // set current slice
-  pic.cs->slice = slice;
-
-  m_SliceEncoder.compressSlice( &pic );
-
-  CodingStructure& cs = *(pic.cs);
-
-  // ALF
-  if( slice->sps->alfEnabled )
-  {
-    ITT_TASKSTART( itt_domain_ALF_post, itt_handle_post );
-    if( m_pcEncCfg->m_ccalf )
-    {
-      m_ALF.performCCALF( pic, cs );
-    }
-    ITT_TASKEND( itt_domain_ALF_post, itt_handle_post );
-
-    cs.slice->ccAlfFilterParam      = m_ALF.getCcAlfFilterParam();
-    cs.slice->ccAlfFilterControl[0] = m_ALF.getCcAlfControlIdc(COMP_Cb);
-    cs.slice->ccAlfFilterControl[1] = m_ALF.getCcAlfControlIdc(COMP_Cr);
-
-    DTRACE( g_trace_ctx, D_CRC, "ALF" );
-    DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.getRecoBuf() );
-    DTRACE_PIC_COMP( D_REC_CB_LUMA_ALF,   cs, cs.getRecoBuf(), COMP_Y  );
-    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cb );
-    DTRACE_PIC_COMP( D_REC_CB_CHROMA_ALF, cs, cs.getRecoBuf(), COMP_Cr );
-  }
-}
-
-void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
+void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdApsMap )
 {
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[ 0 ];
@@ -244,7 +271,7 @@ void EncPicture::xSkipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdA
       m_ALF.setApsIdStart( ALF_CTB_MAX_NUM_APS );
 
       ParameterSetMap<APS>* apsMap = &pic.picApsMap;
-      apsMap->clear();
+      apsMap->clearActive();
 
       for( int apsId = 0; apsId < ALF_CTB_MAX_NUM_APS; apsId++ )
       {

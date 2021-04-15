@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -54,27 +54,30 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "InterSearch.h"
 
+#include <atomic>
+
 //! \ingroup EncoderLib
 //! \{
 
 namespace vvenc {
 
-class EncCfg;
+class VVEncCfg;
 struct SAOStatData;
 class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
 class EncPicture;
 class NoMallocThreadPool;
+struct WaitCounter;
 
 // ====================================================================================================================
 // Class definition
 // ====================================================================================================================
 
 struct LineEncRsrc;
-struct CtuTaskRsrc;
+struct PerThreadRsrc;
 struct CtuEncParam;
 
-enum ProcessCtuState {
+enum TaskType {
   CTU_ENCODE     = 0,
   RESHAPE_LF_VER,
   LF_HOR,
@@ -82,19 +85,23 @@ enum ProcessCtuState {
   ALF_GET_STATISTICS,
   ALF_DERIVE_FILTER,
   ALF_RECONSTRUCT,
+  FINISH_SLICE,
   PROCESS_DONE
 };
+
+using ProcessCtuState = std::atomic<TaskType>;
 
 /// slice encoder class
 class EncSlice
 {
 private:
   // encoder configuration
-  const EncCfg*                m_pcEncCfg;                           ///< encoder configuration class
+  const VVEncCfg*              m_pcEncCfg;                           ///< encoder configuration class
 
-  std::vector<CtuTaskRsrc*>    m_CtuTaskRsrc;
+  std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
   std::vector<LineEncRsrc*>    m_LineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
+  WaitCounter*                 m_ctuTasksDoneCounter;
   std::vector<ProcessCtuState> m_processStates;
 
   LoopFilter*                  m_pLoopFilter;
@@ -113,19 +120,21 @@ private:
   bool                         m_saoAllDisabled;
   std::vector<SAOBlkParam>     m_saoReconParams;
   std::vector<SAOStatData**>   m_saoStatData;
+  std::vector<CtuEncParam>     ctuEncParams;
 
 public:
   EncSlice();
   virtual ~EncSlice();
 
-  void    init                ( const EncCfg& encCfg,
+  void    init                ( const VVEncCfg& encCfg,
                                 const SPS& sps,
                                 const PPS& pps,
                                 std::vector<int>* const globalCtuQpVector,
                                 LoopFilter& loopFilter,
                                 EncAdaptiveLoopFilter& alf,
                                 RateCtrl& rateCtrl,
-                                NoMallocThreadPool* threadPool );
+                                NoMallocThreadPool* threadPool,
+                                WaitCounter* ctuTasksDoneCounter );
 
   void    initPic             ( Picture* pic, int gopId );
 
@@ -133,14 +142,14 @@ public:
   void    compressSlice       ( Picture* pic );      ///< analysis stage of slice                     s
   void    encodeSliceData     ( Picture* pic );
   void    saoDisabledRate     ( CodingStructure& cs, SAOBlkParam* reconParams );
+  void    finishCompressSlice ( Picture* pic, Slice& slice );
 
-  void    resetQP              ( Picture* pic, int sliceQP, double lambda );
+  void    resetQP             ( Picture* pic, int sliceQP, double& lambda );
 
 private:
   void    xInitSliceLambdaQP   ( Slice* slice, int gopId );
   double  xCalculateLambda     ( const Slice* slice, const int GOPid, const int depth, const double refQP, const double dQP, int& iQP );
   void    xProcessCtus         ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
-
   template<bool checkReadyState=false>
   static bool xProcessCtuTask  ( int taskIdx, CtuEncParam* ctuEncParam );
 

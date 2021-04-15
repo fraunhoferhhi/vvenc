@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -118,7 +118,6 @@ private:
   double                  m_DistScaleUnadjusted;
 
   const uint32_t*         m_reshapeLumaLevelToWeightPLUT;
-  const double*           m_lumaLevelToWeightPLUT; //ALF
 
   uint32_t                m_signalType;
   double                  m_chromaWeight;
@@ -132,8 +131,7 @@ private:
   Mv                      m_bvPredictors[2];
   double                  m_motionLambda;
   int                     m_iCostScale;
-
-  double                  m_dCost; // for ibc
+  
 public:
   RdCost();
   virtual ~RdCost();

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // forward declarations
-class EncCfg;
+class VVEncCfg;
 class EncHRD;
 
 struct DUData
@@ -78,20 +78,24 @@ public:
   {};
   virtual ~SEIEncoder(){};
 
-  void init( const EncCfg& encCfg, EncHRD& encHRD);
+  void init( const VVEncCfg& encCfg, EncHRD& encHRD);
   void initDecodedPictureHashSEI  ( SEIDecodedPictureHash& dphSei, const CPelUnitBuf& pic, std::string &rHashString, const BitDepths &bitDepths);
 
   void initBufferingPeriodSEI     ( SEIBufferingPeriod& bpSei, bool noLeadingPictures);
   void initPictureTimingSEI       ( SEIMessages& seiMessages, SEIMessages& nestedSeiMessages, SEIMessages& duInfoSeiMessages, const Slice *slice, const uint32_t numDU, const bool bpPresentInAU);
   void initDrapSEI                ( SEIDependentRAPIndication& drapSei) {};
 
+  void initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *seiAltTransCharacteristics);
+  void initSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourVolume *seiMDCV);
+  void initSEIContentLightLevel(SEIContentLightLevelInfo *seiCLL);
+
 private:
-  const EncCfg* m_pcEncCfg;
-  EncHRD*       m_pcEncHRD;
-  bool          m_isInitialized;
-  bool          m_rapWithLeading;
-  uint32_t      m_lastBPSEI[MAX_TLAYER];
-  uint32_t      m_totalCoded[MAX_TLAYER];
+  const VVEncCfg* m_pcEncCfg;
+  EncHRD*         m_pcEncHRD;
+  bool            m_isInitialized;
+  bool            m_rapWithLeading;
+  uint32_t        m_lastBPSEI[MAX_TLAYER];
+  uint32_t        m_totalCoded[MAX_TLAYER];
 };
 
 } // namespace vvenc

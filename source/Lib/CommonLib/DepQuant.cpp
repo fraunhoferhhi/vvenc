@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -126,7 +126,6 @@ namespace DQIntern
     unsigned          m_sbbMask;
     unsigned          m_widthInSbb;
     unsigned          m_heightInSbb;
-    CoeffScanType     m_scanType;
     const ScanElement *m_scanSbbId2SbbPos;
     const ScanElement *m_scanId2BlkPos;
     const NbInfoSbb*  m_scanId2NbInfoSbb;
@@ -186,10 +185,9 @@ namespace DQIntern
         const uint32_t      groupWidth    = 1 << log2CGWidth;
         const uint32_t      groupHeight   = 1 << log2CGHeight;
         const uint32_t      groupSize     = groupWidth * groupHeight;
-        const CoeffScanType scanType      = SCAN_DIAG;
         const SizeType      blkWidthIdx   = Log2( blockWidth );
         const SizeType      blkHeightIdx  = Log2( blockHeight );
-        const ScanElement * scanId2RP     = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, scanType, blkWidthIdx, blkHeightIdx );
+        const ScanElement * scanId2RP     = getScanOrder( SCAN_GROUPED_4x4, blkWidthIdx, blkHeightIdx );
         NbInfoSbb*&         sId2NbSbb     = m_scanId2NbInfoSbbArray[hd][vd];
         NbInfoOut*&         sId2NbOut     = m_scanId2NbInfoOutArray[hd][vd];
         // consider only non-zero-out region
@@ -360,13 +358,12 @@ namespace DQIntern
     m_widthInSbb  = nonzeroWidth >> m_log2SbbWidth;
     m_heightInSbb = nonzeroHeight >> m_log2SbbHeight;
     m_numSbb              = m_widthInSbb * m_heightInSbb;
-    m_scanType            = SCAN_DIAG;
     SizeType        hsbb  = Log2( m_widthInSbb  );
     SizeType        vsbb  = Log2( m_heightInSbb );
     SizeType        hsId  = Log2( m_width  );
     SizeType        vsId  = Log2( m_height );
-    m_scanSbbId2SbbPos    = g_scanOrderRom.getScanOrder( SCAN_UNGROUPED   , m_scanType , hsbb , vsbb );
-    m_scanId2BlkPos       = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4 , m_scanType , hsId , vsId );
+    m_scanSbbId2SbbPos    = getScanOrder( SCAN_UNGROUPED   , hsbb , vsbb );
+    m_scanId2BlkPos       = getScanOrder( SCAN_GROUPED_4x4 , hsId , vsId );
     int log2W             = Log2( m_width  );
     int log2H             = Log2( m_height );
     m_scanId2NbInfoSbb    = rom.getNbInfoSbb( log2W, log2H );
@@ -723,8 +720,7 @@ namespace DQIntern
     const int           numCoeff  = area.area();
     const SizeType      hsId      = Log2( area.width );
     const SizeType      vsId      = Log2( area.height );
-    const CoeffScanType scanType  = SCAN_DIAG;
-    const ScanElement *scan       = g_scanOrderRom.getScanOrder( SCAN_GROUPED_4x4, scanType, hsId, vsId );
+    const ScanElement *scan       = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
     const TCoeff*       qCoeff    = tu.getCoeffs( compID ).buf;
           TCoeff*       tCoeff    = recCoeff.buf;
 
@@ -1660,7 +1656,7 @@ namespace DQIntern
 
 
 //===== interface class =====
-DepQuant::DepQuant( const Quant* other, bool enc ) : QuantRDOQ2( other )
+DepQuant::DepQuant( const Quant* other, bool enc, bool useScalingLists ) : QuantRDOQ2( other, useScalingLists )
 {
   const DepQuant* dq = dynamic_cast<const DepQuant*>( other );
   CHECK( other && !dq, "The DepQuant cast must be successfull!" );

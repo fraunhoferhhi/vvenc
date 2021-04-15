@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -88,28 +88,28 @@ struct ScanElement
 };
 
 
-class ScanOrderRom
+class InitGeoRom
 {
   public:
-    ScanOrderRom() { initScanOrderRom(); }
+    InitGeoRom() { initGeoTemplate(); }
 
-    ~ScanOrderRom() { destroyScanOrderRom(); }
-
-    const ScanElement* getScanOrder( int g, int t, int w2, int h2 ) const { return m_scanOrder[ g ][ t ][ w2 ][ h2 ]; }
+    ~InitGeoRom() { }
 
   private:
-    void initScanOrderRom();
-    void destroyScanOrderRom();
-    void initGeoTemplate();
+    void initGeoTemplate() const;
 
   private:
-    ScanElement *m_scanOrder[ SCAN_NUMBER_OF_GROUP_TYPES ][ SCAN_NUMBER_OF_TYPES ][ MAX_CU_SIZE / 2 + 1 ][ MAX_CU_SIZE / 2 + 1 ];
 };
 
-extern ScanOrderRom g_scanOrderRom;
+extern const ScanElement  m_scanOrderBuf[32258];
+extern const ScanElement* m_scanOrder[SCAN_NUMBER_OF_GROUP_TYPES][MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX];
+
+const ScanElement* const getScanOrder( int g, int w2, int h2 );
+
+extern const InitGeoRom g_scanOrderRom;
 
 extern const uint32_t g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2];
-extern ScanElement g_coefTopLeftDiagScan8x8[MAX_CU_SIZE / 2 + 1][64];
+extern const ScanElement g_coefTopLeftDiagScan8x8[MAX_TU_SIZE_IDX][64];
 
 extern const int g_quantScales   [2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // Q(QP%6)
 extern const int g_invQuantScales[2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // IQ(QP%6)
@@ -211,12 +211,12 @@ constexpr uint8_t g_tbMax[257] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 
 
 //! \}
 
-extern int16_t **g_GeoParams;
-extern int16_t * g_globalGeoWeights[GEO_NUM_PRESTORED_MASK];
-extern int16_t * g_globalGeoEncSADmask[GEO_NUM_PRESTORED_MASK];
-extern int8_t    g_angle2mask[GEO_NUM_ANGLES];
-extern int8_t    g_Dis[GEO_NUM_ANGLES];
-extern int8_t    g_angle2mirror[GEO_NUM_ANGLES];
+extern int16_t   g_GeoParams[GEO_NUM_PARTITION_MODE][2];
+extern int16_t   g_globalGeoWeights[GEO_NUM_PRESTORED_MASK]   [GEO_WEIGHT_MASK_SIZE * GEO_WEIGHT_MASK_SIZE];
+extern int16_t   g_globalGeoEncSADmask[GEO_NUM_PRESTORED_MASK][GEO_WEIGHT_MASK_SIZE * GEO_WEIGHT_MASK_SIZE];
+extern const int8_t    g_angle2mask[GEO_NUM_ANGLES];
+extern const int8_t    g_Dis[GEO_NUM_ANGLES];
+extern const int8_t    g_angle2mirror[GEO_NUM_ANGLES];
 extern int16_t   g_weightOffset[GEO_NUM_CU_SIZE][GEO_NUM_CU_SIZE][GEO_NUM_PARTITION_MODE][2];
 
 #if ENABLE_CU_MODE_COUNTERS

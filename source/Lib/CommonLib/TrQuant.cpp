@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -237,6 +237,7 @@ void TrQuant::init( const Quant* otherQuant,
                     const int  rdoq,
                     const bool bUseRDOQTS,
                     const bool useSelectiveRDOQ,
+                    const bool scalingListsEnabled,
                     const bool bEnc,
                     const bool useTransformSkipFast,
                     const int  dqThrVal
@@ -248,7 +249,7 @@ void TrQuant::init( const Quant* otherQuant,
   m_quant = nullptr;
 
   {
-    m_quant = new DepQuant( otherQuant, bEnc );
+    m_quant = new DepQuant( otherQuant, bEnc, scalingListsEnabled );
   }
 
   if( m_quant )
@@ -501,19 +502,20 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
   }
 #endif //ENABLE_SIMD_TRAFO
 
-  const int      shift_1st              = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
-  const int      shift_2nd              =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT                          + COM16_C806_TRANS_PREC;
-  CHECK( shift_1st < 0, "Negative shift" );
-  CHECK( shift_2nd < 0, "Negative shift" );
-
   if (width > 1 && height > 1)
   {
+    const int shift_1st = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    const int shift_2nd =  (Log2(height))            + TRANSFORM_MATRIX_SHIFT                          + COM16_C806_TRANS_PREC;
+    CHECK( shift_1st < 0, "Negative shift" );
+    CHECK( shift_2nd < 0, "Negative shift" );
     fastFwdTrans[trTypeHor][transformWidthIndex](block, tmp, shift_1st, height, 0, skipWidth);
     fastFwdTrans[trTypeVer][transformHeightIndex](tmp, dstCoeff.buf, shift_2nd, width, skipWidth, skipHeight);
   }
   else if (height == 1)   // 1-D horizontal transform
   {
-    fastFwdTrans[trTypeHor][transformWidthIndex](block, dstCoeff.buf, shift_1st, 1, 0, skipWidth);
+    const int shift = ((Log2(width )) + bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange + COM16_C806_TRANS_PREC;
+    CHECK( shift < 0, "Negative shift" );
+    fastFwdTrans[trTypeHor][transformWidthIndex](block, dstCoeff.buf, shift, 1, 0, skipWidth);
   }
   else   // if (iWidth == 1) //1-D vertical transform
   {
@@ -562,14 +564,14 @@ void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoe
     }
   }
 
-  const int      shift_1st              =   TRANSFORM_MATRIX_SHIFT + 1 + COM16_C806_TRANS_PREC; // 1 has been added to shift_1st at the expense of shift_2nd
-  const int      shift_2nd              = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth + COM16_C806_TRANS_PREC;
-  CHECK( shift_1st < 0, "Negative shift" );
-  CHECK( shift_2nd < 0, "Negative shift" );
   TCoeff *block = m_blk;
   TCoeff *tmp   = m_tmp;
   if (width > 1 && height > 1)   // 2-D transform
   {
+    const int shift_1st =   TRANSFORM_MATRIX_SHIFT + 1 + COM16_C806_TRANS_PREC; // 1 has been added to shift_1st at the expense of shift_2nd
+    const int shift_2nd = ( TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1 ) - bitDepth + COM16_C806_TRANS_PREC;
+    CHECK( shift_1st < 0, "Negative shift" );
+    CHECK( shift_2nd < 0, "Negative shift" );
     fastInvTrans[trTypeVer][transformHeightIndex](pCoeff.buf, tmp, shift_1st, width, skipWidth, skipHeight, clipMinimum, clipMaximum);
     fastInvTrans[trTypeHor][transformWidthIndex](tmp, block, shift_2nd, height, 0, skipWidth, clipMinimum, clipMaximum);
   }
@@ -861,7 +863,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width), Log2(area.height));
+        : getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode( cu.intraDir[toChannelType(compID)]))
@@ -966,9 +968,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
     const ScanElement *scan =
       whge3
         ? g_coefTopLeftDiagScan8x8[Log2(width)] 
-        : g_scanOrderRom.getScanOrder(
-          SCAN_GROUPED_4x4, SCAN_DIAG, Log2(area.width),
-          Log2(area.height));   
+        : getScanOrder(SCAN_GROUPED_4x4, Log2(area.width), Log2(area.height));   
     uint32_t intraMode = CU::getFinalIntraMode(cu, toChannelType(compID));
 
     if (CU::isLMCMode(cu.intraDir[toChannelType(compID)]))

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -156,6 +156,11 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
               {
                 if( pic->poc == poc && (!bDecodeUntilPocFound || expectedPoc == poc ) )
                 {
+                  pcEncPic->createTempBuffers( pic->cs->pcv->maxCUSize );
+                  pcEncPic->cs->createCoeffs();
+                  pcEncPic->cs->createTempBuffers( true );
+                  pcEncPic->cs->initStructData();
+
                   CHECK( pcEncPic->slices.size() == 0, "at least one slice should be available" );
 
                   CHECK( expectedPoc != poc, "mismatch in POC - check encoder configuration" );
@@ -186,16 +191,15 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
                     if( pic->cs->sps->alfEnabled )
                     {
-                      std::copy(pic->getAlfCtbFilterIndexVec().begin(), pic->getAlfCtbFilterIndexVec().end(), pcEncPic->getAlfCtbFilterIndexVec().begin());
                       for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
                       {
-                        std::copy( pic->getAlfCtuEnabled()[compIdx].begin(), pic->getAlfCtuEnabled()[compIdx].end(), pcEncPic->getAlfCtuEnabled()[compIdx].begin() );
+                        std::copy( pic->m_alfCtuEnabled[ compIdx ].begin(), pic->m_alfCtuEnabled[ compIdx ].end(), pcEncPic->m_alfCtuEnabled[ compIdx ].begin() );
                       }
-                      pcEncPic->resizeAlfCtbFilterIndex(pic->cs->pcv->sizeInCtus);
-                      memcpy( pcEncPic->getAlfCtbFilterIndex(), pic->getAlfCtbFilterIndex(), sizeof(short)*pic->cs->pcv->sizeInCtus );
+                      pcEncPic->resizeAlfCtuBuffers(pic->cs->pcv->sizeInCtus);
+                      std::copy( pic->m_alfCtbFilterIndex.begin(), pic->m_alfCtbFilterIndex.end(), pcEncPic->m_alfCtbFilterIndex.begin() );
 
-                      std::copy( pic->getAlfCtuAlternative(COMP_Cb).begin(), pic->getAlfCtuAlternative(COMP_Cb).end(), pcEncPic->getAlfCtuAlternative(COMP_Cb).begin() );
-                      std::copy( pic->getAlfCtuAlternative(COMP_Cr).begin(), pic->getAlfCtuAlternative(COMP_Cr).end(), pcEncPic->getAlfCtuAlternative(COMP_Cr).begin() );
+                      std::copy( pic->m_alfCtuAlternative[COMP_Cb].begin(), pic->m_alfCtuAlternative[COMP_Cb].end(), pcEncPic->m_alfCtuAlternative[COMP_Cb].begin() );
+                      std::copy( pic->m_alfCtuAlternative[COMP_Cr].begin(), pic->m_alfCtuAlternative[COMP_Cr].end(), pcEncPic->m_alfCtuAlternative[COMP_Cr].begin() );
 
                       for( int i = 0; i < pic->slices.size(); i++ )
                       {
@@ -415,10 +419,10 @@ DecLib::DecLib()
   , m_maxDecSliceAddrInSubPic(-1)
   , m_apsMapEnc( nullptr )
 {
-#if ENABLE_SIMD_OPT_BUFFER
+#if ENABLE_SIMD_OPT_BUFFER && defined( TARGET_SIMD_X86 )
   g_pelBufOP.initPelBufOpsX86();
 #endif
-#if ENABLE_SIMD_TRAFO
+#if ENABLE_SIMD_TRAFO  && defined( TARGET_SIMD_X86 )
   g_tCoeffOps.initTCoeffOpsX86();
 #endif
 }
@@ -669,9 +673,10 @@ void DecLib::finishPicture(int& poc, PicList*& rpcListPic, MsgLevel msgl )
   m_maxDecSubPicIdx = 0;
   m_maxDecSliceAddrInSubPic = -1;
 
-  m_pic->destroyTempBuffers();
-  m_pic->cs->destroyCoeffs();
   m_pic->cs->releaseIntermediateData();
+  m_pic->cs->destroyTempBuffers();
+  m_pic->cs->destroyCoeffs();
+  m_pic->destroyTempBuffers();
   m_pic->cs->picHeader->initPicHeader();
 }
 
@@ -957,7 +962,7 @@ void DecLib::xActivateParameterSets( const int layerId)
       THROW("Parameter set activation failed!");
     }
 
-    m_parameterSetManager.getApsMap()->clear();
+    m_parameterSetManager.getApsMap()->clearActive();
     //luma APSs
     for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
     {
@@ -1007,6 +1012,8 @@ void DecLib::xActivateParameterSets( const int layerId)
 
     m_pic->createTempBuffers( m_pic->cs->pps->pcv->maxCUSize );
     m_pic->cs->createCoeffs();
+    m_pic->cs->createTempBuffers( true );
+    m_pic->cs->initStructData();
 
     m_pic->allocateNewSlice();
     // make the slice-pilot a real slice, and set up the slice-pilot for the next slice

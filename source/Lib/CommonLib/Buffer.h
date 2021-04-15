@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <type_traits>
 #include <typeinfo>
+
+#include "vvenc/vvenc.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -605,7 +607,7 @@ void AreaBuf<T>::padBorderPel( unsigned marginX, unsigned marginY, int dir )
 }
 
 
-#if ENABLE_SIMD_OPT_BUFFER && defined(TARGET_SIMD_X86)
+#if ENABLE_SIMD_OPT_BUFFER
 template<> void AreaBuf<Pel>::transposedFrom( const AreaBuf<const Pel>& other );
 #endif
 
@@ -936,6 +938,7 @@ struct PelStorage : public PelUnitBuf
   void create( const ChromaFormat &_chromaFormat, const Area& _area );
   void create( const ChromaFormat &_chromaFormat, const Area& _area, const unsigned _maxCUSize, const unsigned _margin = 0, const unsigned _alignment = 0, const bool _scaleChromaMargin = true );
   void destroy();
+  void compactResize( const UnitArea& area );
 
          PelBuf getBuf( const CompArea& blk );
   const CPelBuf getBuf( const CompArea& blk ) const;
@@ -961,6 +964,7 @@ struct PelStorage : public PelUnitBuf
 
 private:
 
+  UnitArea m_maxArea;
   Pel* m_origin[MAX_NUM_COMP];
 };
 
@@ -1064,7 +1068,8 @@ private:
 struct YUVBuffer;
 struct Window;
 
-void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
+//void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
 void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow );
 
 } // namespace vvenc

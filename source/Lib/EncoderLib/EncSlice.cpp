@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/NoMallocThreadPool.h"
 
 #include <math.h>
-#include "vvenc/EncCfg.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -87,16 +87,15 @@ struct LineEncRsrc
   ReuseUniMv              m_ReuseUniMv;
   BlkUniMvInfoBuffer      m_BlkUniMvInfoBuffer;
   AffineProfList          m_AffineProfList;
-  int                     m_prevQp[ MAX_NUM_CH ];
-  LineEncRsrc( const EncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
-};
-
-struct CtuTaskRsrc
-{
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
-  CtxCache                m_CtxCache;
-  CtuTaskRsrc() {}
+  int                     m_prevQp[ MAX_NUM_CH ];
+  LineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
+};
+
+struct PerThreadRsrc
+{
+  CtxCache  m_CtxCache;
 };
 
 struct CtuEncParam
@@ -106,9 +105,16 @@ struct CtuEncParam
   int       ctuRsAddr;
   int       ctuPosX;
   int       ctuPosY;
+  UnitArea  ctuArea;
 
-  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ) {}
-  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y ) : pic( _p ), encSlice( _s ), ctuRsAddr( _r ), ctuPosX( _x ), ctuPosY( _y ) {}
+  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ), ctuArea() {}
+  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y )
+    : pic( _p )
+    , encSlice( _s )
+    , ctuRsAddr( _r )
+    , ctuPosX( _x )
+    , ctuPosY( _y )
+    , ctuArea( pic->chromaFormat, pic->slices[0]->pps->pcv->getCtuArea( _x, _y ) ) {}
 };
 
 // ====================================================================================================================
@@ -116,14 +122,15 @@ struct CtuEncParam
 // ====================================================================================================================
 
 EncSlice::EncSlice()
-  : m_pcEncCfg         ( nullptr)
-  , m_threadPool       ( nullptr )
-  , m_pLoopFilter      ( nullptr )
-  , m_pALF             ( nullptr )
-  , m_pcRateCtrl       ( nullptr )
-  , m_CABACWriter      ( m_BinEncoder )
-  , m_encCABACTableIdx ( I_SLICE )
-  , m_appliedSwitchDQQ ( 0 )
+  : m_pcEncCfg           ( nullptr)
+  , m_threadPool         ( nullptr )
+  , m_ctuTasksDoneCounter( nullptr )
+  , m_pLoopFilter        ( nullptr )
+  , m_pALF               ( nullptr )
+  , m_pcRateCtrl         ( nullptr )
+  , m_CABACWriter        ( m_BinEncoder )
+  , m_encCABACTableIdx   ( I_SLICE )
+  , m_appliedSwitchDQQ   ( 0 )
 {
 }
 
@@ -142,7 +149,6 @@ EncSlice::~EncSlice()
   }
   m_CtuTaskRsrc.clear();
 
-  m_processStates.clear();
   m_saoReconParams.clear();
 
   for( int i = 0; i < m_saoStatData.size(); i++ )
@@ -156,53 +162,53 @@ EncSlice::~EncSlice()
   m_saoStatData.clear();
 }
 
-void EncSlice::init( const EncCfg& encCfg,
+void EncSlice::init( const VVEncCfg& encCfg,
                      const SPS& sps,
                      const PPS& pps,
                      std::vector<int>* const globalCtuQpVector,
                      LoopFilter& loopFilter,
                      EncAdaptiveLoopFilter& alf,
                      RateCtrl& rateCtrl,
-                     NoMallocThreadPool* threadPool
-                   )
+                     NoMallocThreadPool* threadPool,
+                     WaitCounter* ctuTasksDoneCounter )
 {
-  m_pcEncCfg        = &encCfg;
-  m_pLoopFilter     = &loopFilter;
-  m_pALF            = &alf;
-  m_pcRateCtrl      = &rateCtrl;
-  m_threadPool      = threadPool;
+  m_pcEncCfg            = &encCfg;
+  m_pLoopFilter         = &loopFilter;
+  m_pALF                = &alf;
+  m_pcRateCtrl          = &rateCtrl;
+  m_threadPool          = threadPool;
+  m_ctuTasksDoneCounter = ctuTasksDoneCounter;
   m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.pcv->heightInCtus : 0 );
 
-  const int maxCntRscr = ( encCfg.m_numWppThreads > 0 ) ? pps.pcv->heightInCtus : 1;
-  const int maxCntEnc  = ( encCfg.m_numWppThreads > 0 ) ? std::min( (int)pps.pcv->heightInCtus, encCfg.m_numWppThreads ) : 1;
+  const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.pcv->heightInCtus : 1;
+  const int maxCtuEnc  = ( encCfg.m_numThreads > 0 && threadPool ) ? threadPool->numThreads() : 1;
 
-  m_CtuTaskRsrc.resize( maxCntEnc,  nullptr );
+  m_CtuTaskRsrc.resize( maxCtuEnc,  nullptr );
   m_LineEncRsrc.resize( maxCntRscr, nullptr );
 
-  for( CtuTaskRsrc*& taskRsc : m_CtuTaskRsrc )
+  for( PerThreadRsrc*& taskRsc : m_CtuTaskRsrc )
   {
-    taskRsc = new CtuTaskRsrc();
-    taskRsc->m_encCu.init( encCfg,
-                           sps,
-                           &loopFilter,
-                           globalCtuQpVector,
-                           m_syncPicCtx.data(),
-                           &rateCtrl );
-    if( sps.saoEnabled )
-    {
-      taskRsc->m_encSao.init( encCfg );
-    }
+    taskRsc = new PerThreadRsrc();
   }
 
   for( LineEncRsrc*& lnRsc : m_LineEncRsrc )
   {
     lnRsc = new LineEncRsrc( encCfg );
+    lnRsc->m_encCu.init( encCfg,
+                         sps,
+                         globalCtuQpVector,
+                         m_syncPicCtx.data(),
+                         &rateCtrl );
+    if( sps.saoEnabled )
+    {
+      lnRsc->m_encSao.init( encCfg );
+    }
   }
 
   m_appliedSwitchDQQ = 0;
 
   const int sizeInCtus = pps.pcv->sizeInCtus;
-  m_processStates.resize( sizeInCtus );
+  m_processStates = std::vector<ProcessCtuState>( sizeInCtus );
   m_saoReconParams.resize( sizeInCtus );
 
   ::memset( m_saoDisabledRate, 0, sizeof( m_saoDisabledRate ) );
@@ -220,6 +226,7 @@ void EncSlice::init( const EncCfg& encCfg,
       }
     }
   }
+  ctuEncParams.resize( sizeInCtus );
 }
 
 
@@ -239,12 +246,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
   for( auto* lnRsc : m_LineEncRsrc )
   {
     lnRsc->m_ReuseUniMv.resetReusedUniMvs();
-  }
-
-  // set adaptive search range for non-intra-slices
-  for( auto& taskRsc : m_CtuTaskRsrc )
-  {
-    taskRsc->m_encCu.initPic( pic );
+    lnRsc->m_encCu.initPic( pic );
   }
 }
 
@@ -260,22 +262,42 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   double dLambda = xCalculateLambda( slice, gopId, slice->depth, dQP, dQP, iQP );
   int sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] };
 
-  if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_RCRateControlMode != 1 &&
+  if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA &&
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {
-    adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_CtuTaskRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                            sliceChromaQpOffsetIntraOrPeriodic, m_pcEncCfg->m_usePerceptQPA > 2); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
+    adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
+                                                            sliceChromaQpOffsetIntraOrPeriodic ); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
+    const bool rcIsFirstPassOf2 = (m_pcEncCfg->m_RCTargetBitrate == 0 && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) ? m_pcEncCfg->m_RCNumPasses == 2 && !m_pcRateCtrl->rcIsFinalPass : false);
     uint32_t  startCtuTsAddr    = slice->sliceMap.ctuAddrInSlice[0];
     uint32_t  boundingCtuTsAddr = slice->pic->cs->pcv->sizeInCtus;
+
+    if ((m_pcEncCfg->m_RCNumPasses == 2) && m_pcRateCtrl->rcIsFinalPass && slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (boundingCtuTsAddr > startCtuTsAddr))
+    {
+      const int nCtu = int (boundingCtuTsAddr - startCtuTsAddr);
+      const int offs = (slice->poc / m_pcEncCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
+      std::vector<uint8_t>& ctuQPMem = *m_pcRateCtrl->getIntraPQPAStats(); // unpack pass-1 red. QPs
+      std::vector<int>& ctuPumpRedQP = *m_LineEncRsrc[0]->m_encCu.getQpPtr();
+
+      if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
+      {
+        for (uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++)
+        {
+          const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
+
+          ctuPumpRedQP[ctuRsAddr] = int ((ctuRsAddr & 1) ? ctuQPMem[offs + (ctuRsAddr >> 1)] >> 4 : ctuQPMem[offs + (ctuRsAddr >> 1)] & 15) - 8;
+        }
+      }
+    }
 
     slice->sliceQp = iQP; // start slice QP for reference
     slice->pic->picInitialQP = iQP;
 
-    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_CtuTaskRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                     startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_usePerceptQPA > 2)) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
+    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
+                                                     (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
+                                                     startCtuTsAddr, boundingCtuTsAddr )) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
     {
       dLambda *= pow (2.0, ((double) iQP - dQP) / 3.0); // adjust lambda based on change of slice QP
     }
@@ -308,15 +330,15 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     slice->sliceChromaQpDelta[COMP_JOINT_CbCr] = 0;
   }
 
-  for( auto& taskRsc : m_CtuTaskRsrc )
+  for( auto& lineRsc : m_LineEncRsrc )
   {
-    taskRsc->m_encCu.setUpLambda( *slice, dLambda, iQP, true, true );
+    lineRsc->m_encCu.setUpLambda( *slice, dLambda, iQP, true, true );
   }
 
   slice->sliceQp       = iQP;
   slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen>0;
 
-  if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && (m_pcEncCfg->m_usePerceptQPA == 0) && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
+  if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && (!m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
   {
     // overwrite chroma qp offset for dual tree
     slice->sliceChromaQpDelta[ COMP_Cb ] = m_pcEncCfg->m_chromaCbQpOffsetDualTree;
@@ -325,33 +347,29 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     {
       slice->sliceChromaQpDelta[ COMP_JOINT_CbCr ] = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree;
     }
-    for( auto& taskRsc : m_CtuTaskRsrc )
+    for( auto& lineRsc : m_LineEncRsrc )
     {
-      taskRsc->m_encCu.setUpLambda( *slice, slice->getLambdas()[0], slice->sliceQp, true, false );
+      lineRsc->m_encCu.setUpLambda( *slice, slice->getLambdas()[0], slice->sliceQp, true, false );
     }
   }
 }
 
-void EncSlice::resetQP( Picture* pic, int sliceQP, double lambda )
+void EncSlice::resetQP( Picture* pic, int sliceQP, double& lambda )
 {
   Slice* slice = pic->cs->slice;
-  if ( 3 == m_pcEncCfg->m_RCRateControlMode ) // GOP-level RC
-  {
-    int gopQp = sliceQP - (( slice->sliceType == I_SLICE ) ? m_pcEncCfg->m_intraQPOffset : 1);
-    m_pcRateCtrl->encRCGOP->gopQP = gopQp;
-  }
 
   if ( m_pcEncCfg->m_usePerceptQPA )
   {
-    m_pcRateCtrl->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
-    m_pcRateCtrl->encRCPic->picLambdaOffsetQPA = lambda / slice->getLambdas()[ 0 ];
+    pic->encRCPic->picQPOffsetQPA = sliceQP - slice->sliceQp;
+    pic->encRCPic->picLambdaOffsetQPA = pow (2.0, (double) pic->encRCPic->picQPOffsetQPA / 3.0);
+    lambda = slice->getLambdas()[0] * pic->encRCPic->picLambdaOffsetQPA;
   }
 
   // store lambda
   slice->sliceQp = sliceQP;
-  for ( auto& taskRsc : m_CtuTaskRsrc )
+  for( auto& lineRsc : m_LineEncRsrc )
   {
-    taskRsc->m_encCu.setUpLambda( *slice, lambda, sliceQP, true, true, true );
+    lineRsc->m_encCu.setUpLambda( *slice, lambda, sliceQP, true, true, true );
   }
 }
 
@@ -369,11 +387,6 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     const SliceType sliceType = slice->sliceType;
 
     qp = m_pcEncCfg->m_QP;
-    if ( 3 == m_pcEncCfg->m_RCRateControlMode )
-    {
-      m_pcRateCtrl->encRCSeq->setQpInGOP( gopId, m_pcRateCtrl->encRCGOP->gopQP, qp );
-    }
-
     // switch at specific qp and keep this qp offset
     if( slice->poc == m_pcEncCfg->m_switchPOC )
     {
@@ -511,14 +524,10 @@ void EncSlice::compressSlice( Picture* pic )
     lnRsrc->m_SaoCABACEstimator.initCtxModels( *slice );
     lnRsrc->m_AffineProfList.resetAffineMVList();
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
-  }
-
-  for( auto& taskRsc : m_CtuTaskRsrc )
-  {
-    taskRsc->m_encCu.initSlice( slice );
+    lnRsrc->m_encCu.initSlice( slice );
     if( slice->sps->saoEnabled )
     {
-      taskRsc->m_encSao.initSlice( slice );
+      lnRsrc->m_encSao.initSlice( slice );
     }
   }
 
@@ -590,10 +599,10 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
     int getNextTsAddr( const int _tsAddr ) const
     {
       const PreCalcValues& pcv  = *cs.pcv;
-      const int startSliceRsRow = m_startTsAddr / pcv.widthInCtus;     
-      const int startSliceRsCol = m_startTsAddr % pcv.widthInCtus;     
-      const int endSliceRsRow   = (m_endTsAddr - 1) / pcv.widthInCtus; 
-      const int endSliceRsCol   = (m_endTsAddr - 1) % pcv.widthInCtus; 
+      const int startSliceRsRow = m_startTsAddr / pcv.widthInCtus;
+      const int startSliceRsCol = m_startTsAddr % pcv.widthInCtus;
+      const int endSliceRsRow   = (m_endTsAddr - 1) / pcv.widthInCtus;
+      const int endSliceRsCol   = (m_endTsAddr - 1) % pcv.widthInCtus;
             int ctuTsAddr = _tsAddr;
       CHECK( ctuTsAddr > m_endTsAddr, "error: array index out of bounds" );
       while( ctuTsAddr < m_endTsAddr )
@@ -668,6 +677,30 @@ void EncSlice::saoDisabledRate( CodingStructure& cs, SAOBlkParam* reconParams )
   EncSampleAdaptiveOffset::disabledRate( cs, m_saoDisabledRate, reconParams, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, m_pcEncCfg->m_internChromaFormat );
 }
 
+void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
+{
+  CodingStructure& cs = *pic->cs;
+
+  // finalize
+  if( slice.sps->saoEnabled )
+  {
+    // store disabled statistics
+    saoDisabledRate( cs, &m_saoReconParams[ 0 ] );
+
+    // set slice header flags
+    CHECK( m_saoEnabled[ COMP_Cb ] != m_saoEnabled[ COMP_Cr ], "Unspecified error");
+    for( auto s : pic->slices )
+    {
+      s->saoEnabled[ CH_L ] = m_saoEnabled[ COMP_Y  ];
+      s->saoEnabled[ CH_C ] = m_saoEnabled[ COMP_Cb ];
+    }
+  }
+
+  CS::setRefinedMotionField( cs );
+
+  // cleanup
+  pic->getFilteredOrigBuffer().destroy();
+}
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
 {
@@ -703,9 +736,8 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   std::fill( m_processStates.begin(), m_processStates.end(), CTU_ENCODE );
 
   // fill encoder parameter list
-  std::vector<CtuEncParam> ctuEncParams = std::vector<CtuEncParam>( pcv.sizeInCtus );
   int idx = 0;
-  auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numWppThreads > 0 );
+  auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
   for( auto ctuPos : ctuIter )
   {
     ctuEncParams[ idx ].pic       = pic;
@@ -713,25 +745,23 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     ctuEncParams[ idx ].ctuRsAddr = ctuPos.ctuRsAddr;
     ctuEncParams[ idx ].ctuPosX   = ctuPos.ctuPosX;
     ctuEncParams[ idx ].ctuPosY   = ctuPos.ctuPosY;
+    ctuEncParams[ idx ].ctuArea   = UnitArea( pic->chromaFormat, slice.pps->pcv->getCtuArea( ctuPos.ctuPosX, ctuPos.ctuPosY ) );
     idx++;
   }
   CHECK( idx != pcv.sizeInCtus, "array index out of bounds" );
 
   // process ctu's until last ctu is done
-  if( m_pcEncCfg->m_numWppThreads > 0 )
+  if( m_pcEncCfg->m_numThreads > 0 )
   {
-    WaitCounter ctuTaskCounter;
     for( auto& ctuEncParam : ctuEncParams )
     {
       m_threadPool->addBarrierTask<CtuEncParam>( EncSlice::xProcessCtuTask<false>,
                                                  &ctuEncParam,
-                                                 &ctuTaskCounter,
+                                                 m_ctuTasksDoneCounter,
                                                  nullptr,
                                                  {},
                                                  EncSlice::xProcessCtuTask<true> );
     }
-    ctuTaskCounter.wait();
-    CHECK( m_processStates[ boundingCtuTsAddr - 1 ] != PROCESS_DONE, "ctu tasks not finished yet, but main task continues" );
   }
   else
   {
@@ -750,30 +780,10 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     }
     while( m_processStates[ boundingCtuTsAddr - 1 ] != PROCESS_DONE );
   }
-
-  // finalize
-  if( slice.sps->saoEnabled )
-  {
-    // store disabled statistics
-    saoDisabledRate( cs, &m_saoReconParams[ 0 ] );
-
-    // set slice header flags
-    CHECK( m_saoEnabled[ COMP_Cb ] != m_saoEnabled[ COMP_Cr ], "Unspecified error");
-    for( auto s : pic->slices )
-    {
-      s->saoEnabled[ CH_L ] = m_saoEnabled[ COMP_Y  ];
-      s->saoEnabled[ CH_C ] = m_saoEnabled[ COMP_Cb ];
-    }
-  }
-
-  CS::setRefinedMotionField( cs );
-
-  // cleanup
-  pic->getFilteredOrigBuffer().destroy();
 }
 
 template<bool checkReadyState>
-bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
+bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 {
   Picture* pic                   = ctuEncParam->pic;
   EncSlice* encSlice             = ctuEncParam->encSlice;
@@ -789,17 +799,18 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
   const int height               = std::min( pcv.maxCUSize, pcv.lumaHeight - y );
   const int ctuStride            = pcv.widthInCtus;
   ProcessCtuState* processStates = encSlice->m_processStates.data();
-  const UnitArea ctuArea( pcv.chrFormat, Area( x, y, width, height ) );
+  const UnitArea& ctuArea        = ctuEncParam->ctuArea;
+  const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "poc", cs.slice->poc ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
   // process ctu's line wise from left to right
-  if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] )
+  if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;
 
-  switch( processStates[ ctuRsAddr ] )
+  switch( processStates[ ctuRsAddr ].load() )
   {
     // encode
     case CTU_ENCODE:
@@ -807,7 +818,7 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
         // general wpp conditions, top and top-right ctu have to be encoded
         if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE )
+        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
           return false;
 
         if( checkReadyState )
@@ -822,8 +833,8 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
 
         const int lineIdx        = std::min( (int)( encSlice->m_LineEncRsrc.size() ) - 1, ctuPosY );
         LineEncRsrc* lineEncRsrc = encSlice->m_LineEncRsrc[ lineIdx ];
-        CtuTaskRsrc* taskRsrc    = encSlice->m_CtuTaskRsrc[ taskIdx ];
-        EncCu& encCu             = taskRsrc->m_encCu;
+        PerThreadRsrc* taskRsrc  = encSlice->m_CtuTaskRsrc[ threadIdx ];
+        EncCu& encCu             = lineEncRsrc->m_encCu;
 
         encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList );
         encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
@@ -944,8 +955,8 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
         {
           const int lineIdx               = std::min( (int)( encSlice->m_LineEncRsrc.size() ) - 1, ctuPosY );
           LineEncRsrc* lineEncRsrc        = encSlice->m_LineEncRsrc[ lineIdx ];
-          CtuTaskRsrc* taskRsrc           = encSlice->m_CtuTaskRsrc[ taskIdx ];
-          EncSampleAdaptiveOffset& encSao = taskRsrc->m_encSao;
+          PerThreadRsrc* taskRsrc         = encSlice->m_CtuTaskRsrc[ threadIdx ];
+          EncSampleAdaptiveOffset& encSao = lineEncRsrc->m_encSao;
 
           encSao.setCtuEncRsrc( &lineEncRsrc->m_SaoCABACEstimator, &taskRsrc->m_CtxCache );
           encSao.storeCtuReco( cs, ctuArea );
@@ -1063,16 +1074,43 @@ bool EncSlice::xProcessCtuTask( int taskIdx, CtuEncParam* ctuEncParam )
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_recon );
 
+        // perform finish only once for whole picture
+        const unsigned finishCtu = pcv.sizeInCtus - 1;
+        if( ctuRsAddr < finishCtu )
+        {
+          processStates[ ctuRsAddr ] = PROCESS_DONE;
+          // processing done => terminate thread
+          return true;
+        }
+        processStates[ ctuRsAddr ] = FINISH_SLICE;
+      }
+
+    case FINISH_SLICE:
+      {
+        CHECK( ctuRsAddr != pcv.sizeInCtus - 1, "invalid state, finish slice only once for last ctu" );
+
+        // ensure ALF has been done for all previous ctu's
+        for( int i = 0; i < ctuRsAddr; i++ )
+          if( processStates[ i ] <= ALF_RECONSTRUCT )
+            return false;
+
+        if( checkReadyState )
+          return true;
+
+        encSlice->finishCompressSlice( cs.picture, slice );
+
         processStates[ ctuRsAddr ] = PROCESS_DONE;
+        // processing done => terminate thread
         return true;
       }
 
     case PROCESS_DONE:
+      CHECK( true, "process state is PROCESS_DONE, but thread is still running" );
       return true;
 
     default:
       CHECK( true, "unknown process state" );
-      break;
+      return true;
   }
 
   return false;

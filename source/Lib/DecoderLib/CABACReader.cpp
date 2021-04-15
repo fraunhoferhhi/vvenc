@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -133,7 +133,7 @@ void CABACReader::remaining_bytes( bool noTrailingBytesExpected )
 void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, int (&qps)[2], unsigned ctuRsAddr )
 {
   CUCtx cuCtx( qps[CH_L] );
-  Partitioner *partitioner = PartitionerFactory::get( *cs.slice );
+  Partitioner* partitioner = &m_partitioner[0];
 
   partitioner->initCtu( area, CH_L, *cs.slice );
   partitioner->treeType = TREE_D;
@@ -160,7 +160,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
     {
       if (cs.slice->tileGroupAlfEnabled[compIdx])
       {
-        uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+        uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
         int ctx = 0;
         ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
         ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
@@ -177,7 +177,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
           CHECK(cs.slice->alfAps[apsIdx] == nullptr, "APS not initialized");
           const AlfParam& alfParam = cs.slice->alfAps[apsIdx]->alfParam;
           const int numAlts = alfParam.numAlternativesChroma;
-          uint8_t* ctbAlfAlternative = cs.slice->pic->getAlfCtuAlternativeData( compIdx );
+          uint8_t* ctbAlfAlternative = cs.slice->pic->m_alfCtuAlternative[compIdx].data();
           ctbAlfAlternative[ctuRsAddr] = 0;
           if( ctbAlfFlag[ctuRsAddr] )
           {
@@ -211,13 +211,12 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
   if ( CS::isDualITree(cs) && cs.pcv->chrFormat != CHROMA_400 && cs.pcv->maxCUSize > 64 )
   {
-    Partitioner *chromaPartitioner = PartitionerFactory::get(*cs.slice);
+    Partitioner* chromaPartitioner = &m_partitioner[1];
     chromaPartitioner->initCtu(area, CH_C, *cs.slice);
     CUCtx cuCtxChroma(qps[CH_C]);
     coding_tree(cs, *partitioner, cuCtx, chromaPartitioner, &cuCtxChroma);
     qps[CH_L] = cuCtx.qp;
     qps[CH_C] = cuCtxChroma.qp;
-    delete chromaPartitioner;
   }
   else
   {
@@ -234,13 +233,11 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
   DTRACE_COND( ctuRsAddr == 0, g_trace_ctx, D_QP_PER_CTU, "\n%4d %2d", cs.picture->poc, cs.slice->sliceQp );
   DTRACE     (                 g_trace_ctx, D_QP_PER_CTU, " %3d",           qps[CH_L] - cs.slice->sliceQp );
-
-  delete partitioner;
 }
 
 void CABACReader::readAlfCtuFilterIndex(CodingStructure& cs, unsigned ctuRsAddr)
 {
-  short* alfCtbFilterSetIndex = cs.slice->pic->getAlfCtbFilterIndex();
+  short* alfCtbFilterSetIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
   unsigned numAps = cs.slice->tileGroupNumAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
   uint32_t filtIndex = 0;

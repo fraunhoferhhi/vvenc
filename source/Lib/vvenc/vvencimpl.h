@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -44,22 +44,19 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \ingroup VVEncExternalInterfaces
   \file    hhivvcencimpl.h
-  \brief   This file contains the internal interface of the hhivvcenc SDK.
-  \author  christian.lehmann@hhi.fraunhofer.de
-  \date    08/10/2019
+  \brief   This file contains the internal interface of the vvenc SDK.
 */
 
 #pragma once
 
-#include <chrono>
-#include "vvenc/EncCfg.h"
-#include "vvenc/EncoderIf.h"
+#include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 
 namespace vvenc {
 
+class EncLib;
+class AccessUnitList;
 /**
   \ingroup VVEncExternalInterfaces
   The class HhiVvcDec provides the decoder user interface. The simplest way to use the decoder is to call init() to initialize an decoder instance with the
@@ -71,63 +68,63 @@ class VVEncImpl
 {
 public:
 
+  enum VVEncInternalState
+  {
+    INTERNAL_STATE_UNINITIALIZED = 0,
+    INTERNAL_STATE_INITIALIZED   = 1,
+    INTERNAL_STATE_ENCODING      = 2,
+    INTERNAL_STATE_FLUSHING      = 3,
+    INTERNAL_STATE_FINALIZED     = 4
+  };
+
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const VVEncParameter& rcVVEncParameter );
+  int init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf );
+
   int initPass( int pass );
   int uninit();
 
-  int encode( InputPicture* pcInputPicture, VvcAccessUnit& rcVvcAccessUnit);
-  int flush( VvcAccessUnit& rcVvcAccessUnit );
+  bool isInitialized() const;
 
-  int getPreferredBuffer( PicBuffer &rcPicBuffer );
-  int getConfig( VVEncParameter& rcVVEncParameter );
-  int checkConfig( const vvenc::VVEncParameter& rcVVEncParameter );
+  int encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rEncodeDone);
 
-  void clockStartTime();
-  void clockEndTime();
-  double clockGetTimeDiffMs();
+  int getConfig( VVEncCfg& rcVVEncCfg ) const;
+  int checkConfig( const VVEncCfg& rcVVEncCfg );
+  int reconfig( const VVEncCfg& rcVVEncCfg );
 
   int setAndRetErrorMsg( int Ret );
 
-  int getNumLeadFrames();
-  int getNumTrailFrames();
+  int getNumLeadFrames() const;
+  int getNumTrailFrames() const;
 
-  const char* getEncoderInfo();
+  int printSummary() const;
 
-  static const char* getErrorMsg( int nRet );
-  static const char* getVersionNumber();
+  std::string getEncoderInfo() const;
 
-  static const char* getPresetParamsAsStr( int iQuality );
+  std::string getLastError() const;
+
+  static std::string getErrorMsg( int nRet );
+  static std::string getVersionNumber();
+  
+  static void        registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc );   ///< set message output function for encoder lib. if not set, no messages will be printed.
+  static std::string setSIMDExtension( const std::string& simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 
 private:
 
-  int xCheckParameter ( const VVEncParameter& rcSrc, std::string& rcErrorString );
+  int xCopyAu( AccessUnit& rcAccessUnit, const AccessUnitList& rcAu );
 
-  int xInitLibCfg( const VVEncParameter& rcVVEncParameter, vvenc::EncCfg& rcEncCfg );
+private:
+  VVEncInternalState     m_eState               = INTERNAL_STATE_UNINITIALIZED;
+  bool                   m_bInitialized         = false;
 
-  int xCopyAndPadInputPlane( int16_t* pDes, const int iDesStride, const int iDesWidth, const int iDesHeight,
-                       const int16_t* pSrc, const int iSrcStride, const int iSrcWidth, const int iSrcHeight, const int iMargin );
-  int xCopyAu( VvcAccessUnit& rcVvcAccessUnit, const vvenc::AccessUnit& rcAu );
+  VVEncCfg               m_cVVEncCfgExt;      // external (user) config ( not usd currently)
+  VVEncCfg               m_cVVEncCfg;         // internal (adapted) config
 
-public:
-  bool                                                        m_bInitialized         = false;
-  bool                                                        m_bFlushed             = false;
+  std::string            m_cErrorString;
+  std::string            m_sEncoderCapabilities;
 
-  vvenc::EncoderIf                                            m_cEncoderIf;                      ///< encoder library class
-
-  VVEncParameter                                              m_cVVEncParameter;
-  vvenc::EncCfg                                               m_cEncCfg;
-
-  std::string                                                 m_sEncoderInfo;
-  std::string                                                 m_cErrorString;
-  std::string                                                 m_sEncoderCapabilities;
-  static std::string                                          m_sPresetAsStr;
-  static std::string                                          m_cTmpErrorString;
-
-  std::chrono::steady_clock::time_point                       m_cTPStart;
-  std::chrono::steady_clock::time_point                       m_cTPEnd;
+  EncLib*                m_pEncLib = nullptr;
 };
 
 

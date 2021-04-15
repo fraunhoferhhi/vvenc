@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -56,15 +56,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
+#if ENABLE_SIMD_TRAFO
 struct TCoeffOps
 {
   TCoeffOps();
 
+#if defined( TARGET_SIMD_X86 )
   void initTCoeffOpsX86();
   template<X86_VEXT vext>
   void _initTCoeffOpsX86();
 
+#endif
   void( *cpyResi8 )       ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
   void( *cpyResi4 )       ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
   void( *cpyCoeff8 )      ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );

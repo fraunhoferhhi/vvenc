@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -162,6 +162,7 @@ Picture::Picture()
     , isBorderExtended  ( false )
     , isReferenced      ( false )
     , isNeededForOutput ( false )
+    , isFinished        ( false )
     , isLongTerm        ( false )
     , encPic            ( true )
     , writePic          ( true )
@@ -169,6 +170,7 @@ Picture::Picture()
     , refCounter        ( 0 )
     , poc               ( 0 )
     , gopId             ( 0 )
+    , rcIdxInGop        ( 0 )
     , TLayer            ( std::numeric_limits<uint32_t>::max() )
     , layerId           ( 0 )
     , isSubPicBorderSaved (false)
@@ -176,8 +178,13 @@ Picture::Picture()
     , cts               ( 0 )
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
-    , picInitialQP    ( 0 )
-    , useSC           ( 0 )
+    , picInitialQP      ( 0 )
+    , useScMCTF         ( false )
+    , useScTS           ( false )
+    , useScBDPCM        ( false )
+    , actualHeadBits    ( 0 )
+    , actualTotalBits   ( 0 )
+    , encRCPic          ( nullptr )
 {
 }
 
@@ -187,7 +194,6 @@ void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _ma
   margin            =  _margin;
   const Area a      = Area( Position(), size );
   m_bufs[ PIC_RECONSTRUCTION ].create( _chromaFormat, a, _maxCUSize, _margin, MEMORY_ALIGN_DEF_SIZE );
-  m_bufs[ PIC_SAO_TEMP ].create( _chromaFormat, a, _maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
 
   if( _decoder )
   {
@@ -230,11 +236,17 @@ void Picture::destroy()
 
 void Picture::createTempBuffers( unsigned _maxCUSize )
 {
+  CHECK( !cs, "Coding structure is required a this point!" );
+
+  m_bufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
+
   if( cs ) cs->rebindPicBufs();
 }
 
 void Picture::destroyTempBuffers()
 {
+  m_bufs[PIC_SAO_TEMP].destroy();
+
   if( cs ) cs->rebindPicBufs();
 }
 
@@ -262,7 +274,6 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
 
   if( cs )
   {
-    cs->initStructData();
     CHECK( cs->sps != &sps, "picture initialization error: sps changed" );
     CHECK( cs->vps != &_vps, "picture initialization error: vps changed" );
   }
@@ -444,6 +455,28 @@ Pel* Picture::getOrigin( const PictureType& type, const ComponentID compID ) con
   return m_bufs[ type ].getOrigin( compID );
 
 }
+
+void Picture::resizeAlfCtuBuffers( int numEntries )
+{
+  for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    m_alfCtuEnabled[compIdx].resize( numEntries );
+    std::fill( m_alfCtuEnabled[compIdx].begin(), m_alfCtuEnabled[compIdx].end(), 0 );
+  }
+
+  m_alfCtbFilterIndex.resize(numEntries);
+  for (int i = 0; i < numEntries; i++)
+  {
+    m_alfCtbFilterIndex[i] = 0;
+  }
+
+  for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  {
+    m_alfCtuAlternative[compIdx].resize( numEntries );
+    std::fill( m_alfCtuAlternative[compIdx].begin(), m_alfCtuAlternative[compIdx].end(), 0 );
+  }
+}
+
 
 } // namespace vvenc
 

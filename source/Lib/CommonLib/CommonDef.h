@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -63,8 +63,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma warning( disable : 4800 )
 #endif // _MSC_VER > 1000
 
-#include "vvenc/Basics.h"
-
 #define __IN_COMMONDEF_H__
 #include "TypeDef.h"
 #undef __IN_COMMONDEF_H__
@@ -99,22 +97,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 # define GCC_WARNING_RESET
 #endif
 
+#ifdef TARGET_SIMD_X86
 #if ENABLE_SIMD_OPT
-
-#if defined(__i386__) || defined(i386) || defined(__x86_64__) || defined(_M_X64) || defined (_WIN32) || defined (_MSC_VER)
-#define TARGET_SIMD_X86
-#elif defined (__ARM_NEON__)
-#define TARGET_SIMD_ARM 1
-#else
-#error no simd target
-#endif
-
 #define SIMD_PREFETCH_T0(_s)  _mm_prefetch( (char*)(_s), _MM_HINT_T0 )
 #else
 #define SIMD_PREFETCH_T0(_s)
 #endif //ENABLE_SIMD_OPT
 
-#ifdef TARGET_SIMD_X86
 #ifdef _WIN32
 # include <intrin.h>
 #else
@@ -382,7 +371,6 @@ static const int MIN_PU_SIZE =                                      4;
 static const int MAX_NUM_PARTS_IN_CTU =                         ( ( MAX_CU_SIZE * MAX_CU_SIZE ) >> ( MIN_CU_LOG2 << 1 ) );
 static const int MAX_NUM_TUS =                                     16; ///< Maximum number of TUs within one CU. When max TB size is 32x32, up to 16 TUs within one CU (128x128) is supported
 static const int MAX_LOG2_DIFF_CU_TR_SIZE =                         3;
-static const int MAX_CU_TILING_PARTITIONS = 1 << ( MAX_LOG2_DIFF_CU_TR_SIZE << 1 );
 
 static const int JVET_C0024_ZERO_OUT_TH =                          32;
 
@@ -496,7 +484,11 @@ static const int GEO_MAX_TRY_WEIGHTED_SAD = 60;
 static const int GEO_MAX_TRY_WEIGHTED_SATD = 8;
 
 static const int SBT_MAX_SIZE =                                    64; ///< maximum CU size for using SBT
+#if INTER_FULL_SEARCH
 static const int SBT_NUM_SL =                                      10; ///< maximum number of historical PU decision saved for a CU
+#else
+static const int SBT_NUM_SL =                                       4; ///< maximum number of historical PU decision saved for a CU
+#endif
 static const int SBT_NUM_RDO =                                      2; ///< maximum number of SBT mode tried for a PU
 static const int SBT_FAST64_WIDTH_THRESHOLD =                    1920;
 
@@ -782,17 +774,17 @@ static inline int ceilLog2(uint32_t x)
 //======================================================================================================================
 
 
-static inline ChannelType toChannelType             (const ComponentID id)                         { return (id==COMP_Y)? CH_L : CH_C;                     }
 static inline bool        isLuma                    (const ComponentID id)                         { return (id==COMP_Y);                                  }
 static inline bool        isLuma                    (const ChannelType id)                         { return (id==CH_L);                                    }
 static inline bool        isChroma                  (const ComponentID id)                         { return (id!=COMP_Y);                                  }
 static inline bool        isChroma                  (const ChannelType id)                         { return (id!=CH_L);                                    }
-static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt==CHROMA_444)) ? 0 : 1;     }
-static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt!=CHROMA_420)) ? 0 : 1;     }
-static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
-static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
-static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
-static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
+//static inline ChannelType toChannelType             (const ComponentID id)                         { return (id==COMP_Y)? CH_L : CH_C;                     }
+//static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt==CHROMA_444)) ? 0 : 1;     }
+//static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt!=CHROMA_420)) ? 0 : 1;     }
+//static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
+//static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
+//static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
+//static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
 static inline bool        isChromaEnabled           (const ChromaFormat fmt)                       { return !(fmt==CHROMA_400);                            }
 static inline ComponentID getFirstComponentOfChannel(const ChannelType id)                         { return (isLuma(id) ? COMP_Y : COMP_Cb);               }
 

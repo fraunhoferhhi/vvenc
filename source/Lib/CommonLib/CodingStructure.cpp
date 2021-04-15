@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -104,7 +104,6 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   }
 
   m_motionBuf = nullptr;
-  features.resize( NUM_ENC_FEATURES );
 }
 
 void CodingStructure::destroy()
@@ -122,24 +121,10 @@ void CodingStructure::destroy()
 
   destroyCoeffs();
 
-  for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
-  {
-    delete[] m_cuPtr[ i ];
-    m_cuPtr[ i ] = nullptr;
-
-    delete[] m_tuPtr[ i ];
-    m_tuPtr[ i ] = nullptr;
-  }
-
-  for( int i = 0; i < NUM_EDGE_DIR; i++ )
-  {
-    xFree( m_lfParam[ i ] );
-    m_lfParam[ i ] = nullptr;
-  }
-
   delete[] m_motionBuf;
   m_motionBuf = nullptr;
 
+  destroyTempBuffers();
 
   if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
 
@@ -324,7 +309,13 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
 
   if( prevCU )
   {
-    prevCU->next = cu;
+    const int prevCuCtuRsAddr = getCtuAddr( recalcPosition( area.chromaFormat, prevCU->chType, CH_L, prevCU->blocks[prevCU->chType] ), *pcv );
+    const int currCuCtuRsAddr = getCtuAddr( recalcPosition( area.chromaFormat,         chType, CH_L,     cu->blocks[        chType] ), *pcv );
+
+    if( prevCuCtuRsAddr == currCuCtuRsAddr )
+    {
+      prevCU->next = cu;
+    }
   }
 
   cus.push_back( cu );
@@ -332,9 +323,11 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   uint32_t idx = ++m_numCUs;
   cu->idx  = idx;
   cu->mvdL0SubPu = nullptr;
-  if( isLuma( chType ) && unit.lheight() >= 8 && unit.lwidth()  >= 8 && unit.Y().area() >= 128 )
+
+  if( isLuma( chType ) && unit.lheight() >= 8 && unit.lwidth() >= 8 && unit.Y().area() >= 128 )
   {
-    CHECKD( m_dmvrMvCacheOffset >= m_dmvrMvCache.size(), "dmvr cache offset out of bounds" )
+    CHECKD( m_dmvrMvCacheOffset >= m_dmvrMvCache.size(), "dmvr cache offset out of bounds" );
+
     cu->mvdL0SubPu       = &m_dmvrMvCache[m_dmvrMvCacheOffset];
     m_dmvrMvCacheOffset += std::max<int>( 1, unit.lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, unit.lheight() >> DMVR_SUBCU_SIZE_LOG2 );
   }
@@ -354,8 +347,10 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
     const UnitScale& scale = unitScale[_blk.compID];
     const Area scaledSelf  = scale.scale( _selfBlk );
     const Area scaledBlk   = scale.scale(     _blk );
-    CodingUnit **cuPtr    = m_cuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
+    CodingUnit **cuPtr     = m_cuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
+
     CHECK( *cuPtr, "Overwriting a pre-existing value, should be '0'!" );
+
     g_pelBufOP.fillPtrMap( ( void** ) cuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) cu );
   }
 
@@ -398,9 +393,9 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
   }
 
   uint32_t idx = ++m_numTUs;
-  tu->idx  = idx;
+  tu->idx = idx;
 
-  TCoeff *coeffs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+  TCoeff *coeffs[3] = { nullptr, nullptr, nullptr };
 
   uint32_t numCh = getNumberValidComponents( area.chromaFormat );
 
@@ -430,7 +425,9 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const Area scaledSelf  = scale.scale( _selfBlk );
         const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
+
         CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
+
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
       }
     }
@@ -471,7 +468,7 @@ void CodingStructure::addEmptyTUs( Partitioner &partitioner, CodingUnit* cu )
 
 CUTraverser CodingStructure::traverseCUs( const UnitArea& unit, const ChannelType effChType )
 {
-//  CHECK( _treeType != treeType, "not good");
+  //  CHECK( _treeType != treeType, "not good");
   CodingUnit* firstCU = getCU( isLuma( effChType ) ? unit.lumaPos() : unit.chromaPos(), effChType, TREE_D );
   CodingUnit* lastCU = firstCU;
   if( !CS::isDualITree( *this ) ) //for a more generalized separate tree
@@ -511,51 +508,6 @@ CUTraverser CodingStructure::traverseCUs( const UnitArea& unit, const ChannelTyp
   }
 
   return CUTraverser( firstCU, lastCU );
-}
-
-cCUSecureTraverser CodingStructure::secureTraverseCUs( const UnitArea& unit, const ChannelType effChType ) const
-{
-//  CHECK( _treeType != treeType, "not good");
-  const CodingUnit* firstCU = getCU( isLuma( effChType ) ? unit.lumaPos() : unit.chromaPos(), effChType, TREE_D );
-  const CodingUnit* lastCU = firstCU;
-  if( !CS::isDualITree( *this ) ) //for a more generalized separate tree
-  {
-    bool bContinue = true;
-    const CodingUnit* currCU = firstCU;
-    while( bContinue )
-    {
-      if( currCU == nullptr )
-      {
-        bContinue = false;
-      }
-      else if( currCU->chType != effChType )
-      {
-        lastCU = currCU;
-        currCU = currCU->next;
-      }
-      else
-      {
-        if( unit.contains( *currCU ) )
-        {
-          lastCU = currCU;
-          currCU = currCU->next;
-        }
-        else
-        {
-          bContinue = false;
-        }
-      }
-    }
-  }
-  else
-  {
-    if(lastCU->next)
-    {
-      do { lastCU = lastCU->next; } while(  lastCU->next && unit.contains( *lastCU->next ) );
-    }
-  }
-
-  return cCUSecureTraverser( firstCU, lastCU );
 }
 
 TUTraverser CodingStructure::traverseTUs( const UnitArea& unit, const ChannelType effChType )
@@ -642,7 +594,8 @@ void CodingStructure::create(const UnitArea& _unit, const bool isTopLayer, const
 
 void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLayer )
 {
-  area = _unit;
+  area     = _unit;
+  _maxArea = _unit;
 
   memcpy( unitScale, UnitScaleArray[area.chromaFormat], sizeof( unitScale ) );
 
@@ -650,30 +603,8 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   parent  = nullptr;
   refCS   = nullptr;
 
-  unsigned numCh = getNumberValidChannels(area.chromaFormat);
-
-  for (unsigned i = 0; i < numCh; i++)
-  {
-    Size allocArea = area.blocks[i].size();
-    m_mapSize[i] = unitScale[i].scale(allocArea);
-
-    unsigned _area = unitScale[i].scale( area.blocks[i].size() ).area();
-
-    m_cuPtr[i]    = _area > 0 ? new CodingUnit*    [_area] : nullptr;
-    m_tuPtr[i]    = _area > 0 ? new TransformUnit* [_area] : nullptr;
-  }
-
-  for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
-  {
-    m_lfParam[i] = ( isTopLayer && m_mapSize[0].area() > 0 ) ? ( LoopFilterParam* ) xMalloc( LoopFilterParam, m_mapSize[0].area() ) : nullptr;
-  }
-
-  numCh = getNumberValidComponents(area.chromaFormat);
-
-  for (unsigned i = 0; i < numCh; i++)
-  {
-    m_offsets[i] = 0;
-  }
+  unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
+  m_motionBuf = new MotionInfo[_lumaAreaScaled];
 
   if( isTopLayer )
   {
@@ -682,15 +613,54 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   else
   {
     createCoeffs();
+    createTempBuffers( false );
+    initStructData();
+  }
+}
+
+void CodingStructure::createTempBuffers( const bool isTopLayer )
+{
+  unsigned numCh = getNumberValidChannels( area.chromaFormat );
+
+  for( unsigned i = 0; i < numCh; i++ )
+  {
+    Size allocArea  = area.blocks[i].size();
+    m_mapSize[i]    = unitScale[i].scale(allocArea);
+
+    unsigned _area  = unitScale[i].scale( area.blocks[i].size() ).area();
+
+    m_cuPtr[i]      = _area > 0 ? new CodingUnit*    [_area] : nullptr;
+    m_tuPtr[i]      = _area > 0 ? new TransformUnit* [_area] : nullptr;
   }
 
-  unsigned _lumaAreaScaled = g_miScaling.scale( area.lumaSize() ).area();
-  m_motionBuf       = new MotionInfo[_lumaAreaScaled];
+  for( unsigned i = 0; i < NUM_EDGE_DIR; i++ )
+  {
+    m_lfParam[i] = ( isTopLayer && m_mapSize[0].area() > 0 ) ? ( LoopFilterParam* ) xMalloc( LoopFilterParam, m_mapSize[0].area() ) : nullptr;
+  }
 
   unsigned _maxNumDmvrMvs = ( area.lwidth() >> 3 ) * ( area.lheight() >> 3 );
   m_dmvrMvCache.resize( _maxNumDmvrMvs );
+}
 
-  initStructData();
+void CodingStructure::destroyTempBuffers()
+{
+  for( uint32_t i = 0; i < MAX_NUM_CH; i++ )
+  {
+    delete[] m_cuPtr[i];
+    m_cuPtr[i] = nullptr;
+
+    delete[] m_tuPtr[i];
+    m_tuPtr[i] = nullptr;
+  }
+
+  for( int i = 0; i < NUM_EDGE_DIR; i++ )
+  {
+    xFree( m_lfParam[i] );
+    m_lfParam[i] = nullptr;
+  }
+
+  // swap the contents of the vector so that memory released
+  std::vector<Mv>().swap( m_dmvrMvCache );
 }
 
 void CodingStructure::addMiToLut(static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> &lut, const HPMVInfo &mi)
@@ -739,6 +709,11 @@ void CodingStructure::createCoeffs()
 
     m_coeffs[i] = _area > 0 ? ( TCoeff* ) xMalloc( TCoeff, _area ) : nullptr;
   }
+
+  for( unsigned i = 0; i < numComp; i++ )
+  {
+    m_offsets[i] = 0;
+  }
 }
 
 void CodingStructure::destroyCoeffs()
@@ -753,22 +728,24 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 {
   CHECK( this == &subStruct, "Trying to init self as sub-structure" );
 
-  subStruct.m_org = ( pOrgBuffer ) ? pOrgBuffer : m_org;
-  subStruct.m_rsporg = ( pRspBuffer ) ? pRspBuffer : m_rsporg;
+  subStruct.parent = this;
+
+  if( pOrgBuffer ) pOrgBuffer->compactResize( subArea );
+  UnitArea subAreaLuma = subArea.singleChan( CH_L );
+  subAreaLuma.blocks.resize( 1 );
+  if( pRspBuffer ) pRspBuffer->compactResize( subAreaLuma );
+
+  subStruct.m_org    = (pOrgBuffer) ? pOrgBuffer : m_org;
+  subStruct.m_rsporg = (pRspBuffer) ? pRspBuffer : m_rsporg;
+
+  subStruct.compactResize( subArea );
 
   subStruct.costDbOffset = 0;
-
-  for( uint32_t i = 0; i < subStruct.area.blocks.size(); i++ )
-  {
-    CHECKD( subStruct.area.blocks[i].size() != subArea.blocks[i].size(), "Trying to init sub-structure of incompatible size" );
-
-    subStruct.area.blocks[i].pos() = subArea.blocks[i].pos();
-  }
 
   if( parent )
   {
     // allow this to be false at the top level (need for edge CTU's)
-    CHECKD( !area.contains( subStruct.area ), "Trying to init sub-structure not contained in the parent" );
+    CHECKD( !area.contains( subArea ), "Trying to init sub-structure not contained in the parent" );
   }
 
   subStruct.parent    = this;
@@ -794,7 +771,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   if( nullptr == parent )
   {
-    int ctuPosY = subStruct.area.ly() >> pcv->maxCUSizeLog2;
+    int ctuPosY = subArea.ly() >> pcv->maxCUSizeLog2;
     subStruct.motionLut = motionLutBuf[ctuPosY];
   }
   else
@@ -965,10 +942,30 @@ void CodingStructure::copyStructure( const CodingStructure& other, const Channel
   }
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
+void CodingStructure::compactResize( const UnitArea& _area )
+{
+  UnitArea areaLuma = _area.singleChan( CH_L );
+  areaLuma.blocks.resize( 1 );
+
+  m_pred   .compactResize( _area );
+  m_reco   .compactResize( _area );
+  m_resi   .compactResize( _area );
+  m_rspreco.compactResize( areaLuma );
+
+  for( uint32_t i = 0; i < _area.blocks.size(); i++ )
+  {
+    CHECK( _maxArea.blocks[i].area() < _area.blocks[i].area(), "Trying to init sub-structure of incompatible size" );
+  }
+
+  area = _area;
+}
+
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
 {
   clearTUs();
   clearCUs();
+
+  if( _area ) compactResize( *_area );
 
   if( QP < MAX_INT )
   {
@@ -977,7 +974,7 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf )
 
   if (!skipMotBuf && (!parent || ((!slice->isIntra() || slice->sps->IBC) && !m_isTuEnc)))
   {
-    getMotionBuf()      .memset( 0 );
+    getMotionBuf().memset( 0 );
   }
 
   m_dmvrMvCacheOffset = 0;

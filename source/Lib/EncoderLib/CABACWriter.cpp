@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,7 @@ void CABACWriter::end_of_slice()
 void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, int (&qps)[2], unsigned ctuRsAddr, bool skipSao /* = false */, bool skipAlf /* = false */ )
 {
   CUCtx cuCtx( qps[CH_L] );
-  Partitioner *partitioner = PartitionerFactory::get( *cs.slice );
+  Partitioner *partitioner = &m_partitioner[0];
 
   partitioner->initCtu( area, CH_L, *cs.slice );
 
@@ -179,7 +179,7 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
       }
       if (isChroma(ComponentID(compIdx)))
       {
-        uint8_t* ctbAlfFlag = cs.slice->tileGroupAlfEnabled[compIdx] ? cs.slice->pic->getAlfCtuEnabled( compIdx ) : nullptr;
+        const uint8_t* ctbAlfFlag = cs.slice->tileGroupAlfEnabled[compIdx] ? cs.slice->pic->m_alfCtuEnabled[ compIdx ].data() : nullptr;
         if( ctbAlfFlag && ctbAlfFlag[ctuRsAddr] )
         {
           codeAlfCtuAlternative( cs, ctuRsAddr, compIdx );
@@ -209,13 +209,11 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
   if ( CS::isDualITree(cs) && cs.pcv->chrFormat != CHROMA_400 && cs.pcv->maxCUSize > 64 )
   {
     CUCtx chromaCuCtx(qps[CH_C]);
-    Partitioner *chromaPartitioner = PartitionerFactory::get(*cs.slice);
+    Partitioner *chromaPartitioner = &m_partitioner[1];
     chromaPartitioner->initCtu(area, CH_C, *cs.slice);
     coding_tree(cs, *partitioner, cuCtx, chromaPartitioner, &chromaCuCtx);
     qps[CH_L] = cuCtx.qp;
     qps[CH_C] = chromaCuCtx.qp;
-
-    delete chromaPartitioner;
   }
   else
   {
@@ -229,8 +227,6 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
       qps[CH_C] = cuCtxChroma.qp;
     }
   }
-
-  delete partitioner;
 }
 
 
@@ -2435,21 +2431,18 @@ void CABACWriter::residual_lfnst_mode( const CodingUnit& cu, CUCtx& cuCtx )
 
     bool isTrSkip = false;
 
-    cTUSecureTraverser trv( cu.firstTU, cu.lastTU );
-    const auto* currTU = trv.begin;
-    do
+    for( const auto& currTU : cTUTraverser( cu.firstTU, cu.lastTU->next ) )
     {
       const uint32_t numValidComp = getNumberValidComponents(cu.chromaFormat);
       for (uint32_t compID = COMP_Y; compID < numValidComp; compID++)
       {
-        if (currTU->blocks[compID].valid() && TU::getCbf(*currTU, (ComponentID)compID) && currTU->mtsIdx[compID] == MTS_SKIP)
+        if (currTU.blocks[compID].valid() && TU::getCbf(currTU, (ComponentID)compID) && currTU.mtsIdx[compID] == MTS_SKIP)
         {
           isTrSkip = true;
           break;
         }
       }
     }
-    while( currTU != trv.last && (0!=(currTU = currTU->next)));
 
     if( (!cuCtx.lfnstLastScanPos && !cu.ispMode) || nonZeroCoeffNonTsCorner8x8 || isTrSkip )
     {
@@ -2933,7 +2926,7 @@ void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr
     int leftCTUAddr = leftAvail ? ctuRsAddr - 1 : -1;
     int aboveCTUAddr = aboveAvail ? ctuRsAddr - frame_width_in_ctus : -1;
 
-    uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+    const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
     int ctx = 0;
     ctx += leftCTUAddr > -1 ? ( ctbAlfFlag[leftCTUAddr] ? 1 : 0 ) : 0;
     ctx += aboveCTUAddr > -1 ? ( ctbAlfFlag[aboveCTUAddr] ? 1 : 0 ) : 0;
@@ -3031,13 +3024,13 @@ void CABACWriter::codeAlfCtuFilterIndex(CodingStructure& cs, uint32_t ctuRsAddr,
     return;
   }
 
-  uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled(COMP_Y);
+  const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ COMP_Y ].data();
   if (!ctbAlfFlag[ctuRsAddr])
   {
     return;
   }
 
-  short* alfCtbFilterIndex = cs.slice->pic->getAlfCtbFilterIndex();
+  const short* alfCtbFilterIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
   const unsigned filterSetIdx = alfCtbFilterIndex[ctuRsAddr];
   unsigned numAps = cs.slice->tileGroupNumAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
@@ -3084,7 +3077,7 @@ void CABACWriter::codeAlfCtuAlternatives( CodingStructure& cs, ComponentID compI
   if( compID == COMP_Y )
     return;
   uint32_t numCTUs = cs.pcv->sizeInCtus;
-  uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compID );
+  const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compID ].data();
 
   for( int ctuIdx = 0; ctuIdx < numCTUs; ctuIdx++ )
   {
@@ -3105,12 +3098,12 @@ void CABACWriter::codeAlfCtuAlternative( CodingStructure& cs, uint32_t ctuRsAddr
 
   if( alfParam || (cs.sps->alfEnabled && cs.slice->tileGroupAlfEnabled[compIdx]) )
   {
-    uint8_t* ctbAlfFlag = cs.slice->pic->getAlfCtuEnabled( compIdx );
+    const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
 
     if( ctbAlfFlag[ctuRsAddr] )
     {
       const int numAlts = alfParamRef.numAlternativesChroma;
-      uint8_t* ctbAlfAlternative = cs.slice->pic->getAlfCtuAlternativeData( compIdx );
+      const uint8_t* ctbAlfAlternative = cs.slice->pic->m_alfCtuAlternative[compIdx].data();
       unsigned numOnes = ctbAlfAlternative[ctuRsAddr];
       assert( ctbAlfAlternative[ctuRsAddr] < numAlts );
       for( int i = 0; i < numOnes; ++i )

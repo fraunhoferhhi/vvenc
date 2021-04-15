@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -332,6 +332,7 @@ inter3 = _mm_add_epi64(inter0, inter3);                                         
 
   template void AffineGradientSearch::_initAffineGradientSearchX86<SIMDX86>();
 
-#endif //#ifdef TARGET_SIMD_X86
 }
+
+#endif //#ifdef TARGET_SIMD_X86
 //! \}

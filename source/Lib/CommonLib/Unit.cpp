@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -521,7 +521,7 @@ void TransformUnit::initData()
 
 void TransformUnit::init(TCoeff** coeffs)
 {
-  uint32_t numBlocks = getNumberValidTBlocks(*cs->pcv);
+  uint32_t numBlocks = getNumberValidComponents( chromaFormat );
 
   for (uint32_t i = 0; i < numBlocks; i++)
   {

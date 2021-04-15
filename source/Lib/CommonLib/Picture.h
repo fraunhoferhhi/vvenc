@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <deque>
 #include <chrono>
+#include <atomic>
 
 //! \ingroup CommonLib
 //! \{
@@ -67,6 +68,7 @@ namespace vvenc {
 
 class SEI;
 class SEIDecodedPictureHash;
+class EncRCPic;
 
 typedef std::list<SEI*> SEIMessages;
 
@@ -137,7 +139,6 @@ protected:
   uint32_t m_uiPrevISlicePOC;
   bool     m_bResetAMaxBT;
 };
-
 
 struct Picture : public UnitArea
 {
@@ -214,10 +215,11 @@ public:
 
   bool                          isMctfProcessed;
   bool                          isInitDone;
-  bool                          isReconstructed;
+  std::atomic_bool              isReconstructed;
   bool                          isBorderExtended;
   bool                          isReferenced;
   bool                          isNeededForOutput;
+  bool                          isFinished;
   bool                          isLongTerm;
   bool                          encPic;
   bool                          writePic;
@@ -226,6 +228,7 @@ public:
   int                           refCounter;
   int                           poc;
   int                           gopId;
+  int                           rcIdxInGop;
   unsigned                      TLayer;
   int                           layerId;
   bool                          isSubPicBorderSaved;
@@ -241,9 +244,13 @@ public:
   std::mutex                    wppMutex;
   int                           picInitialQP;
   StopClock                     encTime;
-  bool                          useSC;
+  bool                          useScMCTF;
+  bool                          useScTS;
+  bool                          useScBDPCM;
+  int                           actualHeadBits;
+  int                           actualTotalBits;
+  EncRCPic*                     encRCPic;
 
-private:
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];
   std::vector<short>            m_alfCtbFilterIndex;
@@ -257,40 +264,10 @@ public:
   void            resizeSAO (unsigned numEntries, int dstid) { m_sao[dstid].resize(numEntries); }
   void            copySAO   (const Picture& src, int dstid)  { std::copy(src.m_sao[0].begin(), src.m_sao[0].end(), m_sao[dstid].begin()); }
 
-  uint8_t* getAlfCtuEnabled( int compIdx ) { return m_alfCtuEnabled[compIdx].data(); }
-  std::vector<uint8_t>* getAlfCtuEnabled() { return m_alfCtuEnabled; }
-  void resizeAlfCtuEnabled( int numEntries )
-  {
-    for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
-    {
-      m_alfCtuEnabled[compIdx].resize( numEntries );
-      std::fill( m_alfCtuEnabled[compIdx].begin(), m_alfCtuEnabled[compIdx].end(), 0 );
-    }
-  }
-  short* getAlfCtbFilterIndex() { return m_alfCtbFilterIndex.data(); }
-  std::vector<short>& getAlfCtbFilterIndexVec() { return m_alfCtbFilterIndex; }
-  void resizeAlfCtbFilterIndex(int numEntries)
-  {
-    m_alfCtbFilterIndex.resize(numEntries);
-    for (int i = 0; i < numEntries; i++)
-    {
-      m_alfCtbFilterIndex[i] = 0;
-    }
-  }
-  std::vector<uint8_t>& getAlfCtuAlternative( int compIdx ) { return m_alfCtuAlternative[compIdx]; }
-  uint8_t* getAlfCtuAlternativeData( int compIdx ) { return m_alfCtuAlternative[compIdx].data(); }
-  void resizeAlfCtuAlternative( int numEntries )
-  {
-    for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
-    {
-      m_alfCtuAlternative[compIdx].resize( numEntries );
-      std::fill( m_alfCtuAlternative[compIdx].begin(), m_alfCtuAlternative[compIdx].end(), 0 );
-    }
-  }
+  void            resizeAlfCtuBuffers( int numEntries );
 };
 
 int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
-
 
 typedef std::list<Picture*> PicList;
 

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -88,6 +88,7 @@ class CodingStructure
 public:
 
   UnitArea         area;
+  UnitArea         _maxArea;
 
   Picture*         picture;
   CodingStructure* parent;
@@ -150,14 +151,11 @@ public:
   CUTraverser     traverseCUs(const UnitArea& _unit, const ChannelType _chType);
   TUTraverser     traverseTUs(const UnitArea& _unit, const ChannelType _chType);
 
-  cCUSecureTraverser secureTraverseCUs(const UnitArea& _unit, const ChannelType _chType) const;
   cCUTraverser    traverseCUs(const UnitArea& _unit, const ChannelType _chType) const;
   cTUTraverser    traverseTUs(const UnitArea& _unit, const ChannelType _chType) const;
   // ---------------------------------------------------------------------------
   // encoding search utilities
   // ---------------------------------------------------------------------------
-
-  static_vector<double, NUM_ENC_FEATURES> features;
 
   double      cost;
   double      costDbOffset;
@@ -166,8 +164,9 @@ public:
   Distortion  dist;
   Distortion  interHad;
 
-  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false);
+  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr );
   void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
+  void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
   void useSubStructure (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
@@ -176,6 +175,8 @@ public:
   void clearCUs();
   const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 
+  void createTempBuffers( const bool isTopLayer );
+  void destroyTempBuffers();
 private:
   void createInternals(const UnitArea& _unit, const bool isTopLayer);
 
@@ -251,7 +252,7 @@ public:
   LoopFilterParam      * getLFPMapPtr   ( const DeblockEdgeDir edgeDir )       { return m_lfParam[edgeDir]; }
   ptrdiff_t              getLFPMapStride() const { return ( ptrdiff_t ) m_mapSize[CH_L].width; }
 
-  UnitScale getScaling(const UnitScale::ScaliningType type, const ChannelType chType = CH_L)
+  UnitScale getScaling(const UnitScale::ScaliningType type, const ChannelType chType = CH_L) const
   {
     return type == UnitScale::MI_MAP ? g_miScaling : unitScale[chType];
   }

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -295,7 +295,7 @@ void roundAffineMv( int& mvx, int& mvy, int nShift );
 namespace std
 {
   template <>
-  struct hash<vvenc::Mv> : public std::unary_function<vvenc::Mv, uint64_t>
+  struct hash<vvenc::Mv>
   {
     uint64_t operator()(const vvenc::Mv& value) const
     {

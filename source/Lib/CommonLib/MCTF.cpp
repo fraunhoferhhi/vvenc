@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2020, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -270,9 +270,11 @@ Picture* MCTF::createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc )
   Picture* pic = new Picture;
   pic->create( m_chromaFormatIDC, m_area, m_ctuSize, m_ctuSize + 16, false, m_padding );
 
-  PelUnitBuf yuvOrgBuf;
-  setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_chromaFormatIDC );
-  pic->getOrigBuf().copyFrom( yuvOrgBuf );
+  copyPadToPelUnitBuf( pic->getOrigBuf(), yuvInBuf, m_chromaFormatIDC );
+
+//  PelUnitBuf yuvOrgBuf;
+//  setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_chromaFormatIDC );
+//  pic->getOrigBuf().copyFrom( yuvOrgBuf );
   pic->getOrigBuf().extendBorderPel( m_padding, true );
 
   pic->poc = poc;
@@ -305,6 +307,26 @@ void MCTF::addTrailFrame( const YUVBuffer& yuvInBuf )
   Picture* pic = createLeadTrailPic( yuvInBuf, poc );
   m_trailFifo.push_back( pic );
   m_picFifo.push_back( pic );
+}
+
+void MCTF::assignQpaBufs( Picture* pic )
+{
+  if ( pic == nullptr ) return;
+
+  // set pointers to previous pictures for QP adaptation
+  pic->m_bufsOrigPrev[0] = &pic->m_bufs[PIC_ORIGINAL];
+  pic->m_bufsOrigPrev[1] = nullptr;
+  // and optimize if MCTF related pictures are available
+  if ( m_picFifo.size() > 0 )
+  {
+    auto it_end = m_picFifo.rbegin();
+    pic->m_bufsOrigPrev[0] = &(*it_end)->m_bufs[PIC_ORIGINAL];
+    if ( m_picFifo.size() > 1 )
+    {
+      it_end++;
+      pic->m_bufsOrigPrev[1] = &(*it_end)->m_bufs[PIC_ORIGINAL];
+    }
+  }
 }
 
 void MCTF::filter( Picture* pic )
@@ -353,11 +375,6 @@ void MCTF::filter( Picture* pic )
       break;
     }
   }
-  if ( m_MCTFMode == 1 )
-  {
-    // disable filter for the very first and very last frame of a sequence to use it with parcat
-    isFilterThisFrame &= ( process_poc != m_picFifo.front()->poc ) && ( process_poc != m_picFifo.back()->poc );
-  }
 
   Picture* fltrPic = nullptr;
   for ( int idx = 0; idx < m_picFifo.size(); idx++ )
@@ -367,6 +384,10 @@ void MCTF::filter( Picture* pic )
       fltrPic = m_picFifo[ idx ];
       break;
     }
+  }
+  if( !fltrPic->useScMCTF )
+  {
+    isFilterThisFrame = false;
   }
   CHECK( fltrPic == nullptr || fltrPic->poc != process_poc, "error: picture not found in fifo" );
 
