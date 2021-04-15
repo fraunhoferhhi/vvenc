@@ -117,7 +117,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     msgApp( nullptr, VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-  g_verbosity = rcVVEncAppCfg.conf.m_verbosity;
+  g_verbosity = rcVVEncAppCfg.m_verbosity;
 
   return true;
 }
@@ -139,7 +139,7 @@ int main( int argc, char* argv[] )
   std::string cOutputfile = "";
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-  vvenc_init_default( &vvencappCfg.conf, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
@@ -147,11 +147,11 @@ int main( int argc, char* argv[] )
     return 1;
   }
   // assign verbosity used for encoder output
-  g_verbosity = vvencappCfg.conf.m_verbosity;
+  g_verbosity = vvencappCfg.m_verbosity;
   
   if( !strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
   {
-    if( vvencappCfg.conf.m_RCNumPasses > 1 )
+    if( vvencappCfg.m_RCNumPasses > 1 )
     {
       std::cout << cAppname << " [error]: 2 pass rate control and reading from stdin is not supported yet" << std::endl;
       return -1;
@@ -171,7 +171,7 @@ int main( int argc, char* argv[] )
   cInputFile  = vvencappCfg.m_inputFileName;
   cOutputfile = vvencappCfg.m_bitstreamFileName;
 
-  if( vvencappCfg.conf.m_verbosity > VVENC_SILENT && vvencappCfg.conf.m_verbosity < VVENC_NOTICE )
+  if( vvencappCfg.m_verbosity > VVENC_SILENT && vvencappCfg.m_verbosity < VVENC_NOTICE )
   {
     std::cout << "-------------------" << std::endl;
     std::cout << cAppname  << " version " << vvenc_get_version() << std::endl;
@@ -184,7 +184,7 @@ int main( int argc, char* argv[] )
   }
 
   // initialize the encoder
-  iRet = vvenc_encoder_open( enc, &vvencappCfg.conf );
+  iRet = vvenc_encoder_open( enc, &vvencappCfg );
   if( 0 != iRet )
   {
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, vvenc_get_last_error( enc ) );
@@ -192,16 +192,16 @@ int main( int argc, char* argv[] )
     return iRet;
   }
 
-  if( vvencappCfg.conf.m_verbosity > VVENC_WARNING )
+  if( vvencappCfg.m_verbosity > VVENC_WARNING )
   {
     std::cout << cAppname << ": " << vvenc_get_enc_information( enc ) << std::endl;
   }
 
-  vvenc_get_config( enc, &vvencappCfg.conf ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
+  vvenc_get_config( enc, &vvencappCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
 
-  if( vvencappCfg.conf.m_verbosity >= VVENC_INFO )
+  if( vvencappCfg.m_verbosity >= VVENC_INFO )
   {
-    std::cout << vvencappCfg.getConfigAsString( vvencappCfg.conf.m_verbosity ) << std::endl;
+    std::cout << vvencappCfg.getConfigAsString( vvencappCfg.m_verbosity ) << std::endl;
   }
 
   // open output file
@@ -221,17 +221,17 @@ int main( int argc, char* argv[] )
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun = std::chrono::steady_clock::now();
-  if( vvencappCfg.conf.m_verbosity > VVENC_WARNING )
+  if( vvencappCfg.m_verbosity > VVENC_WARNING )
   {
     std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
   // calc temp. rate/scale
-  int temporalRate   = vvencappCfg.conf.m_FrameRate;
+  int temporalRate   = vvencappCfg.m_FrameRate;
   int temporalScale  = 1;
 
-  switch( vvencappCfg.conf.m_FrameRate )
+  switch( vvencappCfg.m_FrameRate )
   {
   case 23: temporalRate = 24000; temporalScale = 1001; break;
   case 29: temporalRate = 30000; temporalScale = 1001; break;
@@ -240,7 +240,7 @@ int main( int argc, char* argv[] )
   }
 
   unsigned int uiFrames = 0;
-  for( int pass = 0; pass < vvencappCfg.conf.m_RCNumPasses; pass++ )
+  for( int pass = 0; pass < vvencappCfg.m_RCNumPasses; pass++ )
   {
     // initialize the encoder pass
     iRet = vvenc_init_pass( enc, pass );
@@ -252,8 +252,8 @@ int main( int argc, char* argv[] )
 
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
-    if( 0 != cYuvFileInput.open( cInputFile, false, vvencappCfg.conf.m_inputBitDepth[0], vvencappCfg.conf.m_MSBExtendedBitDepth[0], vvencappCfg.conf.m_internalBitDepth[0],
-                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.conf.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false ) )
+    if( 0 != cYuvFileInput.open( cInputFile, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0],
+                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
       return -1;
@@ -261,10 +261,10 @@ int main( int argc, char* argv[] )
 
     vvencYUVBuffer cYUVInputBuffer;
     vvenc_YUVBuffer_default( &cYUVInputBuffer );
-    vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.conf.m_internChromaFormat, vvencappCfg.conf.m_SourceWidth, vvencappCfg.conf.m_SourceHeight );
+    vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
 
-    const int iFrameSkip  = std::max( vvencappCfg.conf.m_FrameSkip - vvenc_get_num_lead_frames(enc), 0 );
-    const int64_t iMaxFrames  = vvencappCfg.conf.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
+    const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - vvenc_get_num_lead_frames(enc), 0 );
+    const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     bool          bEncodeDone = false;
@@ -273,7 +273,7 @@ int main( int argc, char* argv[] )
 
     if( iFrameSkip )
     {
-      cYuvFileInput.skipYuvFrames(iFrameSkip, vvencappCfg.conf.m_SourceWidth, vvencappCfg.conf.m_SourceHeight);
+      cYuvFileInput.skipYuvFrames(iFrameSkip, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight);
       iSeqNumber=iFrameSkip;
     }
 
@@ -286,7 +286,7 @@ int main( int argc, char* argv[] )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
-          cYUVInputBuffer.cts             = iSeqNumber * vvencappCfg.conf.m_TicksPerSecond * temporalScale / temporalRate;
+          cYUVInputBuffer.cts             = iSeqNumber * vvencappCfg.m_TicksPerSecond * temporalScale / temporalRate;
           cYUVInputBuffer.ctsValid        = true;
           ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;
@@ -294,7 +294,7 @@ int main( int argc, char* argv[] )
         }
         else
         {
-          if( vvencappCfg.conf.m_verbosity > VVENC_ERROR && vvencappCfg.conf.m_verbosity < VVENC_NOTICE )
+          if( vvencappCfg.m_verbosity > VVENC_ERROR && vvencappCfg.m_verbosity < VVENC_NOTICE )
           {
             std::cout << "EOF reached" << std::endl;
           }
@@ -355,9 +355,9 @@ int main( int argc, char* argv[] )
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && vvencappCfg.conf.m_verbosity > VVENC_SILENT )
+  if( uiFrames && vvencappCfg.m_verbosity > VVENC_SILENT )
   {
-    if( vvencappCfg.conf.m_verbosity > VVENC_WARNING )
+    if( vvencappCfg.m_verbosity > VVENC_WARNING )
     {
       std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;

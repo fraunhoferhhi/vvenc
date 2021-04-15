@@ -50,6 +50,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 #include "apputils/apputilsDecl.h"
 #include "vvenc/vvencConfig.h"
+#include <string>
 
 namespace apputils {
 
@@ -63,15 +64,15 @@ namespace apputils {
 /// encoder configuration class
 ///
 
-class APPUTILS_DECL VVEncAppCfg
+class APPUTILS_DECL VVEncAppCfg : public vvenc_config
 {
 public:
-  vvenc_config conf;
+  //vvenc_config conf;
 
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
   std::string  m_reconFileName;                                ///< output reconstruction file
-  vvencChromaFormat m_inputFileChromaFormat  = VVENC_CHROMA_420;
+  vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
   bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
@@ -81,7 +82,7 @@ public:
 
   VVEncAppCfg()
   {
-    vvenc_config_default( &conf );
+    vvenc_config_default( this );
   }
 
   virtual ~VVEncAppCfg();

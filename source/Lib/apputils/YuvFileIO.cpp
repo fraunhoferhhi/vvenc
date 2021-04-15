@@ -533,6 +533,11 @@ void YuvFileIO::close()
     m_cHandle.close();
 }
 
+bool YuvFileIO::isOpen()
+{
+  return m_cHandle.is_open();
+}
+
 bool YuvFileIO::isEof()
 {
   return m_cHandle.eof();

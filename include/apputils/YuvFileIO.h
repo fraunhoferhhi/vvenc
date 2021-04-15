@@ -82,6 +82,7 @@ public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
               vvencChromaFormat fileChrFmt, vvencChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
   void  close();
+  bool  isOpen();
   bool  isEof();
   bool  isFail();
   void  skipYuvFrames( int numFrames, int width, int height );

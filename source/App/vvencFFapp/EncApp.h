@@ -113,7 +113,6 @@ private:
   void closeFileIO();
 
   // statistics
-  void rateStatsAccum  ( const vvencAccessUnit& au );
   void printRateSummary( int framesRcvd );
   void printChromaFormat();
 };

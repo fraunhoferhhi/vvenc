@@ -102,7 +102,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
     msgApp( VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-  g_verbosity = m_cEncAppCfg.conf.m_verbosity;
+  g_verbosity = m_cEncAppCfg.m_verbosity;
   return true;
 }
 
@@ -111,7 +111,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
  */
 void EncApp::encode()
 {
-  vvenc_config& vvencCfg = m_cEncAppCfg.conf;
+  vvenc_config& vvencCfg = m_cEncAppCfg;
   if( m_cEncAppCfg.m_decode )
   {
     vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str() );
@@ -134,7 +134,7 @@ void EncApp::encode()
 
   if ( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    vvenc_encoder_set_RecYUVBufferCallback( m_encCtx, this, outputYuv );
+    vvenc_encoder_set_RecYUVBufferCallback( m_encCtx, &this->m_yuvReconFile, outputYuv );
   }
 
   vvenc_get_config( m_encCtx, &vvencCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
@@ -143,7 +143,7 @@ void EncApp::encode()
 
   if( !strcmp( m_cEncAppCfg.m_inputFileName.c_str(), "-" ) )
   {
-    if( m_cEncAppCfg.conf.m_RCNumPasses > 1 )
+    if( m_cEncAppCfg.m_RCNumPasses > 1 )
     {
       msgApp( VVENC_ERROR, " 2 pass rate control and reading from stdin is not supported yet\n" );
       return;
@@ -276,18 +276,21 @@ void EncApp::outputAU( const vvencAccessUnit& au )
  } 
 
   m_bitstream.write(reinterpret_cast<const char*>(au.payload), au.payloadUsedSize);
-  rateStatsAccum( au );
+
+  m_totalBytes     += au.payloadUsedSize;
+  m_essentialBytes += au.essentialBytes;
+
   m_bitstream.flush();
 }
 
 void EncApp::outputYuv( void* ctx, vvencYUVBuffer* yuvOutBuf )
 {
-  EncApp* encapp = ctx ? (EncApp*)ctx : nullptr;
-  if( encapp )
+  apputils::YuvFileIO* yuvReconFile = ctx ? (apputils::YuvFileIO*)ctx : nullptr;
+  if( yuvReconFile )
   {
-    if ( ! encapp->m_cEncAppCfg.m_reconFileName.empty() && nullptr != yuvOutBuf )
+    if ( yuvReconFile->isOpen() && nullptr != yuvOutBuf )
     {
-      encapp->m_yuvReconFile.writeYuvBuf( *yuvOutBuf );
+      yuvReconFile->writeYuvBuf( *yuvOutBuf );
     }
   }
 }
@@ -301,8 +304,8 @@ bool EncApp::openFileIO()
   // output YUV
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.conf.m_outputBitDepth[0], m_cEncAppCfg.conf.m_outputBitDepth[0], m_cEncAppCfg.conf.m_internalBitDepth[0],
-                             m_cEncAppCfg.conf.m_internChromaFormat, m_cEncAppCfg.conf.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
+    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0],
+                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
     {
       msgApp( VVENC_ERROR, "%s", m_yuvReconFile.getLastError().c_str() );
       return false;
@@ -327,19 +330,13 @@ void EncApp::closeFileIO()
   m_bitstream.close();
 }
 
-void EncApp::rateStatsAccum(const vvencAccessUnit& au )
-{
-  m_totalBytes     += au.payloadUsedSize;
-  m_essentialBytes += au.essentialBytes;
-}
-
 void EncApp::printRateSummary( int framesRcvd )
 {
   vvenc_print_summary( m_encCtx );
 
-  double time = (double) framesRcvd / m_cEncAppCfg.conf.m_FrameRate * m_cEncAppCfg.conf.m_temporalSubsampleRatio;
+  double time = (double) framesRcvd / m_cEncAppCfg.m_FrameRate * m_cEncAppCfg.m_temporalSubsampleRatio;
   msgApp( VVENC_DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
-  if( m_cEncAppCfg.conf.m_summaryVerboseness > 0 )
+  if( m_cEncAppCfg.m_summaryVerboseness > 0 )
   {
     msgApp( VVENC_DETAILS, "Bytes for SPS/PPS/APS/Slice (Incl. Annex B): %u (%.3f kbps)\n", m_essentialBytes, 0.008 * m_essentialBytes / time );
   }
@@ -347,7 +344,7 @@ void EncApp::printRateSummary( int framesRcvd )
 
 void EncApp::printChromaFormat()
 {
-  if( m_cEncAppCfg.conf.m_verbosity >= VVENC_DETAILS )
+  if( m_cEncAppCfg.m_verbosity >= VVENC_DETAILS )
   {
     std::stringstream ssOut;
     ssOut << std::setw(43) << "Input ChromaFormat = ";
@@ -363,7 +360,7 @@ void EncApp::printChromaFormat()
     ssOut << std::endl;
 
     ssOut << std::setw(43) << "Output (intern) ChromaFormat = ";
-    switch( m_cEncAppCfg.conf.m_internChromaFormat )
+    switch( m_cEncAppCfg.m_internChromaFormat )
     {
       case VVENC_CHROMA_400:  ssOut << "  400"; break;
       case VVENC_CHROMA_420:  ssOut << "  420"; break;
