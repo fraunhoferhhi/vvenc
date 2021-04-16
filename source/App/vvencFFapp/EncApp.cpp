@@ -168,9 +168,8 @@ void EncApp::encode()
 
   // create sufficient memory for output data
   vvencAccessUnit au;
-  vvencAccessUnit *p_au = &au;
-  vvenc_accessUnit_default( p_au );
-  vvenc_accessUnit_alloc_payload( p_au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
+  vvenc_accessUnit_default( &au );
+  vvenc_accessUnit_alloc_payload( &au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
 
   // main loop
   int tempRate   = vvencCfg.m_FrameRate;
