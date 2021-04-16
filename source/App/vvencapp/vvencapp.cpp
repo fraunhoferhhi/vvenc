@@ -220,6 +220,7 @@ int main( int argc, char* argv[] )
   vvencAccessUnit *AU = vvenc_accessUnit_alloc();
   vvenc_accessUnit_alloc_payload( AU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
 
+  // --- allocate memory for YUV input picture
   vvencYUVBuffer cYUVInputBuffer;
   vvenc_YUVBuffer_default( &cYUVInputBuffer );
   vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );

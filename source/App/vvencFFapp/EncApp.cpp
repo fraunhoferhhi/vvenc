@@ -166,6 +166,10 @@ void EncApp::encode()
   vvenc_YUVBuffer_default( &yuvInBuf );
   vvenc_YUVBuffer_alloc_buffer( &yuvInBuf, vvencCfg.m_internChromaFormat, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
 
+  // create sufficient memory for output data
+  vvencAccessUnit *au = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
+
   // main loop
   int tempRate   = vvencCfg.m_FrameRate;
   int tempScale  = 1;
@@ -176,9 +180,6 @@ void EncApp::encode()
     case 59: tempRate = 60000; tempScale = 1001; break;
     default: break;
   }
-
-  vvencAccessUnit *au = vvenc_accessUnit_alloc();
-  vvenc_accessUnit_alloc_payload( au, 50 );
 
   int framesRcvd = 0;
   for( int pass = 0; pass < vvencCfg.m_RCNumPasses; pass++ )
