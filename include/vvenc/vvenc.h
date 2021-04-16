@@ -301,17 +301,6 @@ VVENC_DECL int vvenc_init_pass( vvencEncoder *, int pass );
 */
 VVENC_DECL int vvenc_encode( vvencEncoder *, vvencYUVBuffer* YUVBuffer, vvencAccessUnit** accessUnit, bool* encodeDone );
 
-/* vvenc_get_last_access_unit
-  Usually the vvenc_encode call return the access unit. In case the access unit of a previous call is needed explicitly, this function can be used.
-  If the access unit payload size is not large enough to store all data, the vvenc_encode call returns with VVENC_NOT_ENOUGH_MEM.
-  In that case the caller must resize the access unit and call vvenc_get_last_access_unit.
-  \param[in]  vvencEncoder pointer to opaque handler
-  \param[out] accessUnit pointer of pointer to vvencAccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
-  \retval     int if non-zero either an error is occured (<0) or the needed payload size is returned (>0), otherwise the retval indicates success VVENC_OK
-  \pre        The encoder has to be initialized successfully.
-*/
-VVENC_DECL int vvenc_get_last_access_unit( vvencEncoder *, vvencAccessUnit** accessUnit );
-
 /* vvenc_get_config
  This method fetches the current encoder configuration.
  The method fails if the encoder is not initialized.

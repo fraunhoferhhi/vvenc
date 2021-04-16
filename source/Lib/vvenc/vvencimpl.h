@@ -148,9 +148,6 @@ private:
   std::string            m_sEncoderCapabilities;
 
   EncLib*                m_pEncLib = nullptr;
-
-  AccessUnitList         m_cLastAu;
-
 };
 
 

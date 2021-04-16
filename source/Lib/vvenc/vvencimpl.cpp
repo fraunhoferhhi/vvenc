@@ -211,8 +211,6 @@ int VVEncImpl::uninit()
     }
   }
 
-  m_cLastAu.clear();
-
   m_bInitialized = false;
   m_eState       = INTERNAL_STATE_UNINITIALIZED;
   return VVENC_OK;
@@ -361,8 +359,6 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   /* copy output AU */
   if ( !cAu.empty() )
   {
-    m_cLastAu = cAu;  // save AU list, to restore it, if memory of vvencAccessUnit is not big enough
-
     int sizeAu = xGetAccessUnitsSize( cAu );
     if( (*ppcAccessUnit)->payloadSize < sizeAu )
     {
@@ -377,46 +373,6 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
 
   return iRet;
 }
-
-int VVEncImpl::getLastAccessUnit( vvencAccessUnit** ppcAccessUnit )
-{
-  if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
-  if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
-
-  if( !*ppcAccessUnit )
-  {
-    m_cErrorString = "vvencAccessUnit is null. AU memory must be allocated before encode call.";
-    return VVENC_NOT_ENOUGH_MEM;
-  }
-  if( (*ppcAccessUnit)->payloadSize <= 0 )
-  {
-    m_cErrorString = "vvencAccessUnit has no payload size. AU payload must have a sufficient size to store encoded data.";
-    return VVENC_NOT_ENOUGH_MEM;
-  }
-
-  int iRet= VVENC_OK;
-  /* copy output AU */
-  if ( !m_cLastAu.empty() )
-  {
-    int sizeAu = xGetAccessUnitsSize( m_cLastAu );
-    if( (*ppcAccessUnit)->payloadSize < sizeAu )
-    {
-      std::stringstream css;
-      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << (*ppcAccessUnit)->payloadSize << ", needed " << sizeAu << ")";
-      m_cErrorString =css.str();
-      return sizeAu;
-    }
-
-    iRet = xCopyAu( **ppcAccessUnit, m_cLastAu  );
-  }
-  else
-  {
-    iRet= VVENC_ERR_UNSPECIFIED;
-  }
-
-  return iRet;
-}
-
 
 const char* VVEncImpl::getVersionNumber()
 {

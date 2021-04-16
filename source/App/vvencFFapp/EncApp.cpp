@@ -237,40 +237,9 @@ void EncApp::encode()
       int iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
       if( 0 != iRet )
       {
-        if( iRet == VVENC_NOT_ENOUGH_MEM )
-        {
-          int iNewSize = au->payloadSize << 1;
-          vvenc_accessUnit_free_payload( au );
-          vvenc_accessUnit_alloc_payload( au, iNewSize );
-
-          int RetGetAu = vvenc_get_last_access_unit( m_encCtx, &au );
-          if( RetGetAu < 0 )
-          {
-            iRet = RetGetAu;
-            msgApp( VVENC_ERROR, "encoding failed: cannot retrieve last access unit. err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
-            encDone = true;
-            inputDone = true;
-          }
-          if( RetGetAu > 0 )
-          {
-            vvenc_accessUnit_free_payload( au );
-            vvenc_accessUnit_alloc_payload( au, RetGetAu );
-            int RetGetAu = vvenc_get_last_access_unit( m_encCtx, &au );
-            if( RetGetAu < 0 )
-            {
-              iRet = RetGetAu;
-              msgApp( VVENC_ERROR, "encoding failed: cannot retrieve last access unit. err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
-              encDone = true;
-              inputDone = true;
-            }
-          }
-        }
-        else
-        {
-          msgApp( VVENC_ERROR, "encoding failed: err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
-          encDone = true;
-          inputDone = true;
-        }
+        msgApp( VVENC_ERROR, "encoding failed: err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
+        encDone = true;
+        inputDone = true;
       }
 
       // write out encoded access units
