@@ -105,9 +105,7 @@ public:
 
   int setRecYUVBufferCallback( void *, vvencRecYUVBufferCallback );
 
-  int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone );
-
-  int getLastAccessUnit( vvencAccessUnit** ppcAccessUnit );
+  int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUnit, bool* pbEncodeDone );
 
   int getConfig( vvenc_config& rcVVEncCfg ) const;
   int checkConfig( const vvenc_config& rcVVEncCfg );

@@ -294,12 +294,12 @@ VVENC_DECL int vvenc_init_pass( vvencEncoder *, int pass );
   In this case the UsedSize attribute returns the minimum buffersize required to fetch the pending chunk. After allocating sufficient memory the encoder can retry the last call with the parameter pcInputPicture set to NULL to prevent encoding the last picture twice.
   \param[in]  vvencEncoder pointer to opaque handler
   \param[in]  pcYUVBuffer pointer to vvencYUVBuffer structure containing uncompressed picture data and meta information, to flush the encoder YUVBuffer must be NULL.
-  \param[out] accessUnit pointer of pointer to vvencAccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
+  \param[out] accessUnit pointer to vvencAccessUnit that retrieves compressed access units and side information, data are valid if UsedSize attribute is non-zero and the call was successful.
   \param[out] encodeDone pointer to flag that indicates that the encoder completed the last frame after flushing.
   \retval     int if non-zero an error occurred, otherwise the retval indicates success VVENC_OK
   \pre        The encoder has to be initialized successfully.
 */
-VVENC_DECL int vvenc_encode( vvencEncoder *, vvencYUVBuffer* YUVBuffer, vvencAccessUnit** accessUnit, bool* encodeDone );
+VVENC_DECL int vvenc_encode( vvencEncoder *, vvencYUVBuffer* YUVBuffer, vvencAccessUnit* accessUnit, bool* encodeDone );
 
 /* vvenc_get_config
  This method fetches the current encoder configuration.

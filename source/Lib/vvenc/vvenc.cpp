@@ -252,7 +252,7 @@ VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass )
 }
 
 
-VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvencAccessUnit** accessUnit, bool* encodeDone )
+VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvencAccessUnit* accessUnit, bool* encodeDone )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)

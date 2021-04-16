@@ -236,7 +236,7 @@ void EncApp::encode()
         inputPacket = &yuvInBuf;
       }
 
-      int iRet = vvenc_encode( m_encCtx, inputPacket, &p_au, &encDone );
+      int iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
       if( 0 != iRet )
       {
         msgApp( VVENC_ERROR, "encoding failed: err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );

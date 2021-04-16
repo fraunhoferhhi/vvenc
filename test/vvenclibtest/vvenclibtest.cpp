@@ -406,7 +406,7 @@ int callingOrderNoInit()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -447,7 +447,7 @@ int callingOrderRegular()
   fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -455,7 +455,7 @@ int callingOrderRegular()
   }
 
   vvencYUVBuffer* pcYUVBufferFlush = nullptr;
-  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -509,7 +509,7 @@ int callingOrderNotRegular()
   fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -517,14 +517,14 @@ int callingOrderNotRegular()
   }
 
   vvencYUVBuffer* pcYUVBufferFlush = nullptr;
-  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -577,7 +577,7 @@ int callingOrderRegularInitPass()
     return -1;
   }
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -633,14 +633,14 @@ int callingOrderRegularInit2Pass()
   }
 
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != vvenc_encode( enc, nullptr, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -654,7 +654,7 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -702,7 +702,7 @@ int checkSDKDefaultBehaviourRC()
   int validAUs = 0;
 
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -716,7 +716,7 @@ int checkSDKDefaultBehaviourRC()
 
   while ( !encodeDone )
   {
-    if( 0 != vvenc_encode( enc, nullptr, &AU, &encodeDone ))
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
       vvenc_YUVBuffer_free( pcYuvPicture, true );
       vvenc_accessUnit_free( AU, true );
@@ -793,7 +793,7 @@ int inputBufTest( vvencYUVBuffer* pcYuvPicture )
   vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
 
   bool encodeDone = false;
-  if( 0 != vvenc_encode( enc, pcYuvPicture, &AU, &encodeDone))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
     return -1;
   }

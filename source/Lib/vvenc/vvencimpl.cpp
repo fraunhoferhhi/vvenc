@@ -229,17 +229,17 @@ int VVEncImpl::setRecYUVBufferCallback( void * ctx, vvencRecYUVBufferCallback ca
   return VVENC_OK;
 }
 
-int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessUnit, bool* pbEncodeDone )
+int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUnit, bool* pbEncodeDone )
 {
   if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
   if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
 
-  if( !*ppcAccessUnit )
+  if( !pcAccessUnit )
   {
     m_cErrorString = "vvencAccessUnit is null. AU memory must be allocated before encode call.";
     return VVENC_NOT_ENOUGH_MEM;
   }
-  if( (*ppcAccessUnit)->payloadSize <= 0 )
+  if( pcAccessUnit->payloadSize <= 0 )
   {
     m_cErrorString = "vvencAccessUnit has no payload size. AU payload must have a sufficient size to store encoded data.";
     return VVENC_NOT_ENOUGH_MEM;
@@ -327,9 +327,9 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   }
 
   // reset AU data
-  if( *ppcAccessUnit )
+  if( pcAccessUnit )
   {
-    vvenc_accessUnit_reset(*ppcAccessUnit);
+    vvenc_accessUnit_reset(pcAccessUnit);
   }
   *pbEncodeDone  = false;
 
@@ -360,15 +360,15 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit** ppcAccessU
   if ( !cAu.empty() )
   {
     int sizeAu = xGetAccessUnitsSize( cAu );
-    if( (*ppcAccessUnit)->payloadSize < sizeAu )
+    if( pcAccessUnit->payloadSize < sizeAu )
     {
       std::stringstream css;
-      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << (*ppcAccessUnit)->payloadSize << ", needed " << sizeAu << ")";
+      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << pcAccessUnit->payloadSize << ", needed " << sizeAu << ")";
       m_cErrorString =css.str();
       return VVENC_NOT_ENOUGH_MEM;
     }
 
-    iRet = xCopyAu( **ppcAccessUnit, cAu  );
+    iRet = xCopyAu( *pcAccessUnit, cAu  );
   }
 
   return iRet;

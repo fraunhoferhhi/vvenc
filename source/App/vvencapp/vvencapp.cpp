@@ -218,10 +218,8 @@ int main( int argc, char* argv[] )
 
   // --- allocate memory for output packets
   vvencAccessUnit AU;
-  vvencAccessUnit *pAU = &AU;
-
-  vvenc_accessUnit_default( pAU );
-  vvenc_accessUnit_alloc_payload( pAU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
+  vvenc_accessUnit_default( &AU );
+  vvenc_accessUnit_alloc_payload( &AU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
 
   // --- allocate memory for YUV input picture
   vvencYUVBuffer cYUVInputBuffer;
@@ -308,7 +306,7 @@ int main( int argc, char* argv[] )
       }
 
       // call encode
-      iRet = vvenc_encode( enc, ptrYUVInputBuffer, &pAU, &bEncodeDone );
+      iRet = vvenc_encode( enc, ptrYUVInputBuffer, &AU, &bEncodeDone );
       if( 0 != iRet )
       {
         printVVEncErrorMsg( cAppname, "encoding failed", iRet, vvenc_get_last_error( enc ) );
