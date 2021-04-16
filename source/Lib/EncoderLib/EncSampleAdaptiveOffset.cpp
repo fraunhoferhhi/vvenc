@@ -107,7 +107,7 @@ void EncSampleAdaptiveOffset::init( const VVEncCfg& encCfg )
 
   if ( encCfg.m_bUseSAO )
   {
-    SampleAdaptiveOffset::init( (ChromaFormat)encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_log2SaoOffsetScale[CH_L], encCfg.m_log2SaoOffsetScale[CH_C] );
+    SampleAdaptiveOffset::init( encCfg.m_internChromaFormat, encCfg.m_CTUSize, encCfg.m_CTUSize, encCfg.m_log2SaoOffsetScale[CH_L], encCfg.m_log2SaoOffsetScale[CH_C] );
   }
 }
 

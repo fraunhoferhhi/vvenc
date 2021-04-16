@@ -680,7 +680,7 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
 
 void EncSlice::saoDisabledRate( CodingStructure& cs, SAOBlkParam* reconParams )
 {
-  EncSampleAdaptiveOffset::disabledRate( cs, m_saoDisabledRate, reconParams, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, (ChromaFormat)m_pcEncCfg->m_internChromaFormat );
+  EncSampleAdaptiveOffset::disabledRate( cs, m_saoDisabledRate, reconParams, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, m_pcEncCfg->m_internChromaFormat );
 }
 
 void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
@@ -723,7 +723,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   if( slice.sps->saoEnabled )
   {
     // check SAO enabled or disabled
-    EncSampleAdaptiveOffset::decidePicParams( cs, m_saoDisabledRate, m_saoEnabled, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, (ChromaFormat)m_pcEncCfg->m_internChromaFormat );
+    EncSampleAdaptiveOffset::decidePicParams( cs, m_saoDisabledRate, m_saoEnabled, m_pcEncCfg->m_saoEncodingRate, m_pcEncCfg->m_saoEncodingRateChroma, m_pcEncCfg->m_internChromaFormat );
 
     m_saoAllDisabled = true;
     for( int compIdx = 0; compIdx < getNumberValidComponents( pcv.chrFormat ); compIdx++ )

@@ -218,7 +218,7 @@ InterSearch::~InterSearch()
 
 void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
-  InterPrediction::init( pRdCost, (ChromaFormat)encCfg.m_internChromaFormat, encCfg.m_CTUSize );
+  InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
 #if IBC_VTM
   m_numBVs = 0;
   for (int i = 0; i < IBC_NUM_CANDIDATES; i++)
@@ -261,7 +261,7 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
     }
   }
 
-  const ChromaFormat cform = (ChromaFormat)encCfg.m_internChromaFormat;
+  const ChromaFormat cform = encCfg.m_internChromaFormat;
   for( uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++ )
   {
     m_tmpPredStorage[i].create( UnitArea( cform, Area( 0, 0, MAX_CU_SIZE, MAX_CU_SIZE ) ) );

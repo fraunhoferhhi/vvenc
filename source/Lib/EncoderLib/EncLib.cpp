@@ -256,7 +256,7 @@ void EncLib::initPass( int pass )
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
-               (ChromaFormat)m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_vvencMCTF, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
+               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_vvencMCTF, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
 
   CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
   m_cGOPEncoder = new EncGOP;
@@ -419,7 +419,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
       pic = xGetNewPicBuffer( pps, sps );
 
-      copyPadToPelUnitBuf( pic->getOrigBuf(), *yuvInBuf, (ChromaFormat)m_cEncCfg.m_internChromaFormat );
+      copyPadToPelUnitBuf( pic->getOrigBuf(), *yuvInBuf, m_cEncCfg.m_internChromaFormat );
 
       if( yuvInBuf->ctsValid )
       {
@@ -867,7 +867,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.maxPicWidthInLumaSamples      = m_cEncCfg.m_PadSourceWidth;
   sps.maxPicHeightInLumaSamples     = m_cEncCfg.m_PadSourceHeight;
   sps.conformanceWindow.setWindow( m_cEncCfg.m_confWinLeft, m_cEncCfg.m_confWinRight, m_cEncCfg.m_confWinTop, m_cEncCfg.m_confWinBottom );
-  sps.chromaFormatIdc               = (ChromaFormat)m_cEncCfg.m_internChromaFormat;
+  sps.chromaFormatIdc               = m_cEncCfg.m_internChromaFormat;
   sps.CTUSize                       = m_cEncCfg.m_CTUSize;
   sps.maxMTTDepth[0]                = m_cEncCfg.m_maxMTTDepthI;
   sps.maxMTTDepth[1]                = m_cEncCfg.m_maxMTTDepth;
@@ -878,7 +878,7 @@ void EncLib::xInitSPS(SPS &sps) const
     sps.maxBTSize[i]                = m_cEncCfg.m_maxBT[i];
     sps.maxTTSize[i]                = m_cEncCfg.m_maxTT[i];
   }
-  sps.minQTSize[2]                <<= getChannelTypeScaleX(CH_C, (ChromaFormat)m_cEncCfg.m_internChromaFormat);
+  sps.minQTSize[2]                <<= getChannelTypeScaleX(CH_C, m_cEncCfg.m_internChromaFormat);
 
   sps.maxNumMergeCand               = m_cEncCfg.m_maxNumMergeCand;
   sps.maxNumAffineMergeCand         = m_cEncCfg.m_Affine ? m_cEncCfg.m_maxNumAffineMergeCand : 0;

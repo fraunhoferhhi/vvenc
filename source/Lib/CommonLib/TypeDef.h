@@ -65,6 +65,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 typedef struct vvenc_config VVEncCfg;
 
+typedef vvencChromaFormat ChromaFormat;
+
 //! \ingroup CommonLib
 //! \{
 
@@ -203,6 +205,12 @@ typedef       uint64_t          Distortion;        ///< distortion measurement
 // Enumeration
 // ====================================================================================================================
 
+#define CHROMA_400 VVENC_CHROMA_400
+#define CHROMA_420 VVENC_CHROMA_420
+#define CHROMA_422 VVENC_CHROMA_422
+#define CHROMA_444 VVENC_CHROMA_444
+#define NUM_CHROMA_FORMAT VVENC_NUM_CHROMA_FORMAT
+
 enum ChannelType
 {
   CH_L = 0,
@@ -218,15 +226,6 @@ enum ComponentID
   MAX_NUM_COMP    = 3,
   COMP_JOINT_CbCr = MAX_NUM_COMP,
   MAX_NUM_TBLOCKS = MAX_NUM_COMP
-};
-
-enum ChromaFormat
-{
-  CHROMA_400        = 0,
-  CHROMA_420        = 1,
-  CHROMA_422        = 2,
-  CHROMA_444        = 3,
-  NUM_CHROMA_FORMAT = 4
 };
 
 enum ApsType

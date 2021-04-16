@@ -506,7 +506,7 @@ void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, c
   m_AnalyzeP.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
   m_AnalyzeB.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
 
-  const ChromaFormat chFmt = (ChromaFormat)m_pcEncCfg->m_internChromaFormat;
+  const ChromaFormat chFmt = m_pcEncCfg->m_internChromaFormat;
 
   //-- all
   msg( VVENC_INFO, "\n" );

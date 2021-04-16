@@ -530,7 +530,7 @@ void EncModeCtrl::init( const VVEncCfg& encCfg, RdCost* pRdCost )
   comprCUCtx  = nullptr;
 
   CacheBlkInfoCtrl::create();
-  BestEncInfoCache::create( (ChromaFormat)encCfg.m_internChromaFormat );
+  BestEncInfoCache::create( encCfg.m_internChromaFormat );
 }
 
 void EncModeCtrl::destroy()
