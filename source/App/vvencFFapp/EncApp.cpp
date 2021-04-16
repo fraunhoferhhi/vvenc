@@ -167,8 +167,10 @@ void EncApp::encode()
   vvenc_YUVBuffer_alloc_buffer( &yuvInBuf, vvencCfg.m_internChromaFormat, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
 
   // create sufficient memory for output data
-  vvencAccessUnit *au = vvenc_accessUnit_alloc();
-  vvenc_accessUnit_alloc_payload( au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
+  vvencAccessUnit au;
+  vvencAccessUnit *p_au = &au;
+  vvenc_accessUnit_default( p_au );
+  vvenc_accessUnit_alloc_payload( p_au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
 
   // main loop
   int tempRate   = vvencCfg.m_FrameRate;
@@ -234,7 +236,7 @@ void EncApp::encode()
         inputPacket = &yuvInBuf;
       }
 
-      int iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
+      int iRet = vvenc_encode( m_encCtx, inputPacket, &p_au, &encDone );
       if( 0 != iRet )
       {
         msgApp( VVENC_ERROR, "encoding failed: err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
@@ -243,9 +245,9 @@ void EncApp::encode()
       }
 
       // write out encoded access units
-      if( au != nullptr )
+      if( au.payloadUsedSize )
       {
-        outputAU( *au );
+        outputAU( au );
       }
 
       // temporally skip frames
@@ -265,7 +267,7 @@ void EncApp::encode()
   vvenc_encoder_close( m_encCtx );
 
   vvenc_YUVBuffer_free_buffer( &yuvInBuf );
-  vvenc_accessUnit_free( au, true );
+  vvenc_accessUnit_free_payload( &au );
 
   closeFileIO();
 }

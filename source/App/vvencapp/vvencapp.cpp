@@ -217,8 +217,11 @@ int main( int argc, char* argv[] )
   }
 
   // --- allocate memory for output packets
-  vvencAccessUnit *AU = vvenc_accessUnit_alloc();
-  vvenc_accessUnit_alloc_payload( AU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
+  vvencAccessUnit AU;
+  vvencAccessUnit *pAU = &AU;
+
+  vvenc_accessUnit_default( pAU );
+  vvenc_accessUnit_alloc_payload( pAU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
 
   // --- allocate memory for YUV input picture
   vvencYUVBuffer cYUVInputBuffer;
@@ -305,19 +308,19 @@ int main( int argc, char* argv[] )
       }
 
       // call encode
-      iRet = vvenc_encode( enc, ptrYUVInputBuffer, &AU, &bEncodeDone );
+      iRet = vvenc_encode( enc, ptrYUVInputBuffer, &pAU, &bEncodeDone );
       if( 0 != iRet )
       {
         printVVEncErrorMsg( cAppname, "encoding failed", iRet, vvenc_get_last_error( enc ) );
         return iRet;
       }
 
-      if( AU && AU->payloadUsedSize > 0 )
+      if( AU.payloadUsedSize > 0 )
       {
         if( cOutBitstream.is_open() )
         {
           // write output
-          cOutBitstream.write( (const char*)AU->payload, AU->payloadUsedSize );
+          cOutBitstream.write( (const char*)AU.payload, AU.payloadUsedSize );
         }
         uiFrames++;
       }
@@ -350,7 +353,7 @@ int main( int argc, char* argv[] )
   }
 
   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-  vvenc_accessUnit_free( AU, true );
+  vvenc_accessUnit_free_payload( &AU );
 
   if( 0 == uiFrames )
   {
