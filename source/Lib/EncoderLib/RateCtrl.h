@@ -244,7 +244,8 @@ namespace vvenc {
     RateCtrl();
     ~RateCtrl();
 
-    void init( int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, const GOPEntry GOPList[ MAX_GOP ], int maxParallelFrames );
+    void init( int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight,
+               int LCUWidth, int LCUHeight, int bitDepth, const vvencGOPEntry GOPList[ VVENC_MAX_GOP ], int maxParallelFrames );
     void destroy();
     void initRCGOP( int numberOfPictures );
     void destroyRCGOP();

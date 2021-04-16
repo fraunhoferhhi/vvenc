@@ -208,7 +208,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
     return;
   }
   
-  if ( slice->sliceType == B_SLICE )
+  if ( slice->sliceType == VVENC_B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed
     const Picture* refPicL0 = slice->getRefPic( REF_PIC_LIST_0, refIdx );
@@ -220,7 +220,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
 
 void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
 {
-  if ( slice->sliceType == B_SLICE )
+  if ( slice->sliceType == VVENC_B_SLICE )
   {
     bool bLowDelay = true;
     int  iCurrPOC  = slice->poc;

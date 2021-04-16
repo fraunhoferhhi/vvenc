@@ -124,7 +124,7 @@ void RdCost::create()
 #endif
 #endif
 
-  m_costMode      = COST_STANDARD_LOSSY;
+  m_costMode      = VVENC_COST_STANDARD_LOSSY;
   m_motionLambda  = 0;
   m_iCostScale    = 0;
 }

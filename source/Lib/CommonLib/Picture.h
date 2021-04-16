@@ -270,7 +270,7 @@ public:
   void            resizeAlfCtuBuffers( int numEntries );
 };
 
-int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl);
+int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl);
 
 typedef std::list<Picture*> PicList;
 

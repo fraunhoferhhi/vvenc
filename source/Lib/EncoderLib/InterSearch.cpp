@@ -195,7 +195,7 @@ InterSearch::InterSearch()
   , m_pcTrQuant                   (nullptr)
   , m_iSearchRange                (0)
   , m_bipredSearchRange           (0)
-  , m_motionEstimationSearchMethod(MESEARCH_FULL)
+  , m_motionEstimationSearchMethod(VVENC_MESEARCH_FULL)
   , m_CABACEstimator              (nullptr)
   , m_CtxCache                    (nullptr)
   , m_pTempPel                    (nullptr)
@@ -235,7 +235,7 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
 
   m_iSearchRange                 = encCfg.m_SearchRange;
   m_bipredSearchRange            = encCfg.m_bipredSearchRange;
-  m_motionEstimationSearchMethod = MESearchMethod( encCfg.m_motionEstimationSearchMethod );
+  m_motionEstimationSearchMethod = vvencMESearchMethod( encCfg.m_motionEstimationSearchMethod );
 
   for( uint32_t iDir = 0; iDir < MAX_NUM_REF_LIST_ADAPT_SR; iDir++ )
   {
@@ -1243,7 +1243,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
           int iNumIter = 4;
 
           // fast encoder setting: only one iteration
-          if ( m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE2 || cs.picHeader->mvdL1Zero )
+          if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 || cs.picHeader->mvdL1Zero )
           {
             iNumIter = 1;
           }
@@ -1252,7 +1252,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
           {
             int         iRefList    = iIter % 2;
 
-            if ( m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==FASTINTERSEARCH_MODE2 )
+            if ( m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode==VVENC_FASTINTERSEARCH_MODE2 )
             {
               if( uiCost[0] <= uiCost[1] )
               {
@@ -1972,9 +1972,9 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   m_pcRdCost->setCostScale(2);
 
   //  Do integer search
-  if( ( m_motionEstimationSearchMethod == MESEARCH_FULL ) || bBi || bQTBTMV )
+  if( ( m_motionEstimationSearchMethod == VVENC_MESEARCH_FULL ) || bBi || bQTBTMV )
   {
-    cStruct.subShiftMode = m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE3 ? 2 : 0;
+    cStruct.subShiftMode = m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ? 2 : 0;
     m_pcRdCost->setDistParam(m_cDistParam, *cStruct.pcPatternKey, cStruct.piRefY, cStruct.iRefStride, m_lumaClpRng.bd, COMP_Y, cStruct.subShiftMode);
 
     Mv bestInitMv = (bBi ? rcMv : rcMvPred);
@@ -2025,14 +2025,14 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   else if( bQTBTMV2 )
   {
     rcMv = cIntMv;
-    cStruct.subShiftMode = ( !m_pcEncCfg->m_bRestrictMESampling && m_pcEncCfg->m_motionEstimationSearchMethod == MESEARCH_SELECTIVE ) ? 1 :
-                            ( m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE3 ) ? 2 : 0;
+    cStruct.subShiftMode = ( !m_pcEncCfg->m_bRestrictMESampling && m_pcEncCfg->m_motionEstimationSearchMethod == VVENC_MESEARCH_SELECTIVE ) ? 1 :
+                            ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 2 : 0;
     xTZSearch(cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, NULL, false, true);
   }
   else
   {
-    cStruct.subShiftMode = ( !m_pcEncCfg->m_bRestrictMESampling && m_pcEncCfg->m_motionEstimationSearchMethod == MESEARCH_SELECTIVE ) ? 1 :
-                            ( m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE3 ) ? 2 : 0;
+    cStruct.subShiftMode = ( !m_pcEncCfg->m_bRestrictMESampling && m_pcEncCfg->m_motionEstimationSearchMethod == VVENC_MESEARCH_SELECTIVE ) ? 1 :
+                            ( m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE3 ) ? 2 : 0;
     rcMv = rcMvPred;
     const Mv *pIntegerMv2Nx2NPred = nullptr;
     xPatternSearchFast(cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiCost, pIntegerMv2Nx2NPred);
@@ -2151,22 +2151,22 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
 {
   switch ( m_motionEstimationSearchMethod )
   {
-  case MESEARCH_DIAMOND_FAST:
+  case VVENC_MESEARCH_DIAMOND_FAST:
     xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false, true );
     break;
-  case MESEARCH_DIAMOND:
+  case VVENC_MESEARCH_DIAMOND:
     xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
     break;
 
-  case MESEARCH_SELECTIVE:
+  case VVENC_MESEARCH_SELECTIVE:
     xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
     break;
 
-  case MESEARCH_DIAMOND_ENHANCED:
+  case VVENC_MESEARCH_DIAMOND_ENHANCED:
     xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
     break;
 
-  case MESEARCH_FULL: // shouldn't get here.
+  case VVENC_MESEARCH_FULL: // shouldn't get here.
   default:
     break;
   }
@@ -5001,7 +5001,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
       // 4-times iteration (default)
       int iNumIter = 4;
       // fast encoder setting or GPB: only one iteration
-      if (m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE2 || slice.picHeader->mvdL1Zero)
+      if (m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE2 || slice.picHeader->mvdL1Zero)
       {
         iNumIter = 1;
       }
@@ -5010,7 +5010,7 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
       {
         // Set RefList
         int iRefList = iIter % 2;
-        if (m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == FASTINTERSEARCH_MODE2)
+        if (m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE1 || m_pcEncCfg->m_fastInterSearchMode == VVENC_FASTINTERSEARCH_MODE2)
         {
           if (uiCost[0] <= uiCost[1])
           {

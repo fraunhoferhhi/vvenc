@@ -180,7 +180,7 @@ private:
   PelStorage            m_pRspBuffer[maxCuDepth];
 
   //  Access channel
-  const VVEncCfg*       m_pcEncCfg;
+  const VVEncCfg*   m_pcEncCfg;
   IntraSearch           m_cIntraSearch;
   InterSearch           m_cInterSearch;
   RdCost                m_cRdCost;

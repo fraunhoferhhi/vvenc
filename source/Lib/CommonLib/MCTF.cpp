@@ -71,7 +71,7 @@ static __itt_domain* itt_domain_MCTF_flt   = __itt_domain_create( "MCTFFlt" );
 const double MCTF::m_chromaFactor = 0.55;
 const double MCTF::m_sigmaMultiplier = 9.0;
 const double MCTF::m_sigmaZeroPoint = 10.0;
-const int MCTF::m_range = MCTF_RANGE;
+const int MCTF::m_range = VVENC_MCTF_RANGE;
 const int MCTF::m_motionVectorFactor = 16;
 const int MCTF::m_padding = MCTF_PADDING;
 const int16_t MCTF::m_interpolationFilter[16][8] =
@@ -230,16 +230,11 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
                  const int ctuSize,
                  const ChromaFormat inputChromaFormatIDC,
                  const int qp,
-                 const std::vector<int>&    filterFrames,
-                 const std::vector<double>& filterStrengths,
-                 const bool filterFutureReference,
-                 const int MCTFMode,
-                 const int numLeadFrames,
-                 const int numTrailFrames,
+                 const vvencMCTF MCTFCfg,
                  const int framesToBeEncoded,
                  NoMallocThreadPool* threadPool)
 {
-  CHECK( filterFrames.size() != filterStrengths.size(), "should have been checked before" );
+  CHECK( MCTFCfg.numFrames != MCTFCfg.numStrength, "should have been checked before" );
   for (int i = 0; i < MAX_NUM_CH; i++)
   {
     m_internalBitDepth[i] = internalBitDepth[i];
@@ -249,14 +244,18 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_ctuSize               = ctuSize;
   m_QP                    = qp;
   m_chromaFormatIDC       = inputChromaFormatIDC;
-  m_FilterFrames          = filterFrames;
-  m_FilterStrengths       = filterStrengths;
-  m_filterFutureReference = filterFutureReference;
+
+  for( int i = 0; i < MCTFCfg.numFrames; i++ )
+  {
+    m_FilterFrames.push_back( MCTFCfg.MCTFFrames[i] );
+    m_FilterStrengths.push_back( MCTFCfg.MCTFStrengths[i] );
+  }
+  m_filterFutureReference = MCTFCfg.MCTFFutureReference;
   m_input_cnt             = 0;
   m_cur_delay             = 0;
-  m_MCTFMode              = MCTFMode;
-  m_numLeadFrames         = numLeadFrames;
-  m_numTrailFrames        = numTrailFrames;
+  m_MCTFMode              = MCTFCfg.MCTF;
+  m_numLeadFrames         = MCTFCfg.MCTFNumLeadFrames;
+  m_numTrailFrames        = MCTFCfg.MCTFNumTrailFrames;
   m_framesToBeEncoded     = framesToBeEncoded;
   m_threadPool            = threadPool;
 }
@@ -265,7 +264,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
 // Public member functions
 // ====================================================================================================================
 
-Picture* MCTF::createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc )
+Picture* MCTF::createLeadTrailPic( const vvencYUVBuffer& yuvInBuf, const int poc )
 {
   Picture* pic = new Picture;
   pic->create( m_chromaFormatIDC, m_area, m_ctuSize, m_ctuSize + 16, false, m_padding );
@@ -282,7 +281,7 @@ Picture* MCTF::createLeadTrailPic( const YUVBuffer& yuvInBuf, const int poc )
   return pic;
 }
 
-void MCTF::addLeadFrame( const YUVBuffer& yuvInBuf )
+void MCTF::addLeadFrame( const vvencYUVBuffer& yuvInBuf )
 {
   const int poc = m_leadFifo.size() ? m_leadFifo.back()->poc + 1 : 0 - m_numLeadFrames;
 
@@ -295,7 +294,7 @@ void MCTF::addLeadFrame( const YUVBuffer& yuvInBuf )
   m_picFifo.push_back( pic );
 }
 
-void MCTF::addTrailFrame( const YUVBuffer& yuvInBuf )
+void MCTF::addTrailFrame( const vvencYUVBuffer& yuvInBuf )
 {
   const int poc = m_trailFifo.size() ? m_trailFifo.back()->poc + 1 : m_framesToBeEncoded;
 

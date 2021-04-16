@@ -199,7 +199,7 @@ CtxSet ContextSetCfg::addCtxSet( std::initializer_list<std::initializer_list<uin
 
 
 #define CNU 35
-std::vector<std::vector<uint8_t>> ContextSetCfg::sm_InitTables(NUMBER_OF_SLICE_TYPES + 1);
+std::vector<std::vector<uint8_t>> ContextSetCfg::sm_InitTables(VVENC_NUMBER_OF_SLICE_TYPES + 1);
 
 // clang-format off
 const CtxSet ContextSetCfg::SplitFlag = ContextSetCfg::addCtxSet
@@ -899,7 +899,7 @@ void CtxStore::init( int qp, int initId )
   const std::vector<uint8_t>& initTable = ContextSetCfg::getInitTable( initId );
   CHECK( m_CtxBuffer.size() != initTable.size(),
         "Size of init table (" << initTable.size() << ") does not match size of context buffer (" << m_CtxBuffer.size() << ")." );
-  const std::vector<uint8_t> &rateInitTable = ContextSetCfg::getInitTable(NUMBER_OF_SLICE_TYPES);
+  const std::vector<uint8_t> &rateInitTable = ContextSetCfg::getInitTable(VVENC_NUMBER_OF_SLICE_TYPES);
   CHECK(m_CtxBuffer.size() != rateInitTable.size(),
         "Size of rate init table (" << rateInitTable.size() << ") does not match size of context buffer ("
                                     << m_CtxBuffer.size() << ").");

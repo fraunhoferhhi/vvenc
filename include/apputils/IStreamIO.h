@@ -415,6 +415,253 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToVec<T>& toVe
 }
 
 
+// ====================================================================================================================
+// string -> array
+// ====================================================================================================================
+
+template<typename T>
+class APPUTILS_DECL IStreamToArr
+{
+  public:
+    IStreamToArr( T* v, size_t maxSize )
+    : _valVec        ( v )
+    , _maxSize       ( maxSize )
+    {
+    }
+
+    ~IStreamToArr()
+    {
+    }
+
+    template<typename F>
+    friend std::istream& operator >> ( std::istream& in, IStreamToArr<F>& toArr );
+
+    template<typename F>
+    friend std::ostream& operator << ( std::ostream& in, const IStreamToArr<F>& toArr );
+
+  private:
+    T*     _valVec;
+    size_t _maxSize;
+};
+
+template<typename T>
+inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
+{
+  for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(T));
+
+  bool fail = false;
+  int pos = 0;
+  // split into multiple lines if any
+  while ( ! in.eof() )
+  {
+    std::string line;
+    std::getline( in, line );
+
+    if( line == "[]" || line == "empty"  )
+    {
+      return in;    // forcing empty entry
+    }
+    else
+    {
+      // treat all whitespaces and commas as valid separators
+      replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
+      std::stringstream tokenStream( line );
+      std::string token;
+      // split into multiple tokens if any
+      while( std::getline( tokenStream, token, ' ' ) )
+      {
+        if ( ! token.length() )
+          continue;
+        // convert to value
+        std::stringstream convStream( token );
+        T val;
+        convStream >> val;
+        fail |= convStream.fail();
+
+        if ( pos < toArr._maxSize )
+        {
+          toArr._valVec[pos] = val;
+        }
+        pos++;
+      }
+    }
+  }
+
+  if ( fail || ( 0 == pos ) || (pos >= toArr._maxSize) )
+  {
+    in.setstate( std::ios::failbit );
+  }
+
+  return in;
+}
+
+template<>
+inline std::istream& operator >> ( std::istream& in, IStreamToArr<char>& toArr )
+{
+  for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(char));
+
+  bool fail = false;
+  size_t size = 0;
+  // split into multiple lines if any
+  while ( ! in.eof() )
+  {
+    std::string line;
+    std::getline( in, line );
+
+    if( line == "" || line == "\"\"" || line == "[]" || line == "empty" || line == "''"  )
+    {
+      return in;    // forcing empty entry
+    }
+    else
+    {
+      if( line.size() >= toArr._maxSize )
+      {
+        line.copy( toArr._valVec , toArr._maxSize-1 );
+        toArr._valVec[toArr._maxSize-1] = '\0';
+        fail = true;
+      }
+      else
+      {
+        line.copy( toArr._valVec , line.size()+1 );
+        toArr._valVec[line.size()] = '\0';
+        size = line.size();
+      }
+    }
+  }
+
+  if ( fail || ( 0 == size ) )
+  {
+    in.setstate( std::ios::failbit );
+  }
+
+  return in;
+}
+
+template<typename T>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<T>& toArr )
+{
+  int size=0;
+  for ( int i = 0; i < toArr._maxSize; i++ )
+  {
+    if( toArr._valVec[i] != 0 ) size++;
+    else break;
+  }
+
+  if( 0 == size )
+  {
+    os << "[]";
+    return os;
+  }
+
+  bool bfirst = true;
+  for ( int i = 0; i < size; i++ )
+  {
+    if( bfirst )
+    {
+      bfirst = false;
+    }
+    else
+    {
+      os << ",";
+    }
+    os << toArr._valVec[i];
+  }
+
+  return os;
+}
+
+template<>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& toArr )
+{
+  int size=0;
+  for ( size_t i = 0; i < toArr._maxSize; i++ )
+  {
+    if( toArr._valVec[i] != '\0' ) size++;
+    else break;
+  }
+
+  if( 0 == size )
+  {
+    os << "''";
+    return os;
+  }
+
+  for ( int i = 0; i < size; i++ )
+  {
+    os << toArr._valVec[i];
+  }
+
+  return os;
+}
+
+// ====================================================================================================================
+// vvencGOPEntry
+// ====================================================================================================================
+
+
+inline std::ostream& operator<< ( std::ostream& os, const vvencGOPEntry& entry )
+{
+  os << entry.m_sliceType;
+  os << entry.m_POC;
+  os << entry.m_QPOffset;
+  os << entry.m_QPOffsetModelOffset;
+  os << entry.m_QPOffsetModelScale;
+  os << entry.m_CbQPoffset;
+  os << entry.m_CrQPoffset;
+  os << entry.m_QPFactor;
+  os << entry.m_tcOffsetDiv2;
+  os << entry.m_betaOffsetDiv2;
+  os << entry.m_CbTcOffsetDiv2;
+  os << entry.m_CbBetaOffsetDiv2;
+  os << entry.m_CrTcOffsetDiv2;
+  os << entry.m_CrBetaOffsetDiv2;
+  os << entry.m_temporalId;
+
+  for( int l = 0; l < 2; l++)
+  {
+    os <<  entry.m_numRefPicsActive[l];
+    os <<  entry.m_numRefPics[l];
+    for ( int i = 0; i < entry.m_numRefPics[l]; i++ )
+    {
+      os <<  entry.m_deltaRefPics[l][i];
+    }
+  }
+
+  return os;
+}
+
+inline std::istream& operator>> ( std::istream& in, vvencGOPEntry& entry )
+{
+  in >> entry.m_sliceType;
+  in >> entry.m_POC;
+  in >> entry.m_QPOffset;
+  in >> entry.m_QPOffsetModelOffset;
+  in >> entry.m_QPOffsetModelScale;
+  in >> entry.m_CbQPoffset;
+  in >> entry.m_CrQPoffset;
+  in >> entry.m_QPFactor;
+  in >> entry.m_tcOffsetDiv2;
+  in >> entry.m_betaOffsetDiv2;
+  in >> entry.m_CbTcOffsetDiv2;
+  in >> entry.m_CbBetaOffsetDiv2;
+  in >> entry.m_CrTcOffsetDiv2;
+  in >> entry.m_CrBetaOffsetDiv2;
+  in >> entry.m_temporalId;
+
+  for( int l = 0; l < 2; l++)
+  {
+    in >> entry.m_numRefPicsActive[l];
+    in >> entry.m_numRefPics[l];
+    for ( int i = 0; i < entry.m_numRefPics[l]; i++ )
+    {
+      in >> entry.m_deltaRefPics[l][i];
+    }
+  }
+
+  return in;
+}
+
+
 } // namespace
 
 //! \}

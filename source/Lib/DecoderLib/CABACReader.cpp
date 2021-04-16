@@ -72,11 +72,11 @@ void CABACReader::initCtxModels( Slice& slice )
   {
     switch( sliceType )
     {
-    case P_SLICE:           // change initialization table to B_SLICE initialization
-      sliceType = B_SLICE;
+    case VVENC_P_SLICE:           // change initialization table to B_SLICE initialization
+      sliceType = VVENC_B_SLICE;
       break;
-    case B_SLICE:           // change initialization table to P_SLICE initialization
-      sliceType = P_SLICE;
+    case VVENC_B_SLICE:           // change initialization table to P_SLICE initialization
+      sliceType = VVENC_P_SLICE;
       break;
     default     :           // should not occur
       THROW( "Invalid slice type" );

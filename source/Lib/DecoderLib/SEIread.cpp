@@ -130,7 +130,7 @@ static inline void output_sei_message_header(SEI &sei, std::ostream *pDecodedMes
  * unmarshal a single SEI message from bitstream bs
  */
  // note: for independent parsing no parameter set should not be required here
-void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const NalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
+void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
 {
   SEIMessages   seiListInCurNalu;
   setBitstream(bs);
@@ -152,7 +152,7 @@ void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const Nal
   xReadRbspTrailingBits();
 }
 
-void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
+void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
 {
   DTRACE( g_trace_ctx, D_HEADER, "=========== SEI message ===========\n" );
 
@@ -187,7 +187,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType
   const SEIBufferingPeriod *bp = NULL;
   const SEIPictureTiming *pt = NULL;
 
-  if(nalUnitType == NAL_UNIT_PREFIX_SEI)
+  if(nalUnitType == VVENC_NAL_UNIT_PREFIX_SEI)
   {
     switch (payloadType)
     {
@@ -199,7 +199,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType
       bp = &hrd.bufferingPeriodSEI;
       if (!bp)
       {
-        msg( WARNING, "Warning: Found Decoding unit information SEI message, but no active buffering period is available. Ignoring.");
+        msg( VVENC_WARNING, "Warning: Found Decoding unit information SEI message, but no active buffering period is available. Ignoring.");
       }
       else
       {
@@ -217,7 +217,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType
         bp = &hrd.bufferingPeriodSEI;
         if (!bp)
         {
-          msg( WARNING, "Warning: Found Picture timing SEI message, but no active buffering period is available. Ignoring.");
+          msg( VVENC_WARNING, "Warning: Found Picture timing SEI message, but no active buffering period is available. Ignoring.");
         }
         else
         {
@@ -310,7 +310,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType
         uint32_t seiByte;
         sei_read_code (NULL, 8, seiByte, "unknown prefix SEI payload byte");
       }
-      msg( WARNING, "Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
+      msg( VVENC_WARNING, "Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
       if (pDecodedMessageOutputStream)
       {
         (*pDecodedMessageOutputStream) << "Unknown prefix SEI message (payloadType = " << payloadType << ") was found!\n";
@@ -340,7 +340,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType
           uint32_t seiByte;
           sei_read_code( NULL, 8, seiByte, "unknown suffix SEI payload byte");
         }
-        msg( WARNING, "Unknown suffix SEI message (payloadType = %d) was found!\n", payloadType);
+        msg( VVENC_WARNING, "Unknown suffix SEI message (payloadType = %d) was found!\n", payloadType);
         if (pDecodedMessageOutputStream)
         {
           (*pDecodedMessageOutputStream) << "Unknown suffix SEI message (payloadType = " << payloadType << ") was found!\n";
@@ -445,7 +445,7 @@ void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, uint32_t
 
   uint32_t val;
   sei_read_code( pDecodedMessageOutputStream, 8, val, "dpb_sei_hash_type");
-  sei.method = static_cast<HashType>(val); bytesRead++;
+  sei.method = static_cast<vvencHashType>(val); bytesRead++;
   sei_read_code( pDecodedMessageOutputStream, 1, val, "dph_sei_single_component_flag");
   sei.singleCompFlag = val;
   sei_read_code( pDecodedMessageOutputStream, 7, val, "dph_sei_reserved_zero_7bits");
@@ -456,9 +456,9 @@ void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, uint32_t
   const char *traceString="\0";
   switch (sei.method)
   {
-    case HASHTYPE_MD5: traceString="picture_md5"; break;
-    case HASHTYPE_CRC: traceString="picture_crc"; break;
-    case HASHTYPE_CHECKSUM: traceString="picture_checksum"; break;
+    case VVENC_HASHTYPE_MD5: traceString="picture_md5"; break;
+    case VVENC_HASHTYPE_CRC: traceString="picture_crc"; break;
+    case VVENC_HASHTYPE_CHECKSUM: traceString="picture_checksum"; break;
     default: THROW("Unknown hash type"); break;
   }
 
@@ -484,7 +484,7 @@ void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, uint32_t
   }
 }
 
-void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const NalUnitType nalUnitType, const uint32_t nuhLayerId, uint32_t payloadSize, const VPS *vps, const SPS *sps, std::ostream *decodedMessageOutputStream)
+void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNalUnitType nalUnitType, const uint32_t nuhLayerId, uint32_t payloadSize, const VPS *vps, const SPS *sps, std::ostream *decodedMessageOutputStream)
 {
   uint32_t symbol;
   SEIMessages seis;
@@ -582,7 +582,7 @@ void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const NalUnitT
   }
 }
 
-void SEIReader::xCheckScalableNestingConstraints(const SEIScalableNesting& sei, const NalUnitType nalUnitType, const VPS* vps)
+void SEIReader::xCheckScalableNestingConstraints(const SEIScalableNesting& sei, const vvencNalUnitType nalUnitType, const VPS* vps)
 {
   const std::vector<int> vclAssociatedSeiList { 3, 19, 45, 129, 137, 144, 145, 147, 148, 149, 150, 153, 154, 155, 156, 168, 204 };
 
@@ -593,9 +593,9 @@ void SEIReader::xCheckScalableNestingConstraints(const SEIScalableNesting& sei, 
   {
     CHECK(nestedsei->payloadType() == SEI::FILLER_PAYLOAD || nestedsei->payloadType() == SEI::SCALABLE_NESTING, "An SEI message that has payloadType equal to filler payload or scalable nesting shall not be contained in a scalable nesting SEI message");
 
-    CHECK(nestedsei->payloadType() != SEI::FILLER_PAYLOAD && nestedsei->payloadType() != SEI::DECODED_PICTURE_HASH && nalUnitType != NAL_UNIT_PREFIX_SEI, "When a scalable nesting SEI message contains an SEI message that has payloadType not equal to filler payload or decoded picture hash, the SEI NAL unit containing the scalable nesting SEI message shall have nal_unit_type equal to PREFIX_SEI_NUT");
+    CHECK(nestedsei->payloadType() != SEI::FILLER_PAYLOAD && nestedsei->payloadType() != SEI::DECODED_PICTURE_HASH && nalUnitType != VVENC_NAL_UNIT_PREFIX_SEI, "When a scalable nesting SEI message contains an SEI message that has payloadType not equal to filler payload or decoded picture hash, the SEI NAL unit containing the scalable nesting SEI message shall have nal_unit_type equal to PREFIX_SEI_NUT");
 
-    CHECK(nestedsei->payloadType() == SEI::DECODED_PICTURE_HASH && nalUnitType != NAL_UNIT_SUFFIX_SEI, "When a scalable nesting SEI message contains an SEI message that has payloadType equal to decoded picture hash, the SEI NAL unit containing the scalable nesting SEI message shall have nal_unit_type equal to SUFFIX_SEI_NUT");
+    CHECK(nestedsei->payloadType() == SEI::DECODED_PICTURE_HASH && nalUnitType != VVENC_NAL_UNIT_SUFFIX_SEI, "When a scalable nesting SEI message contains an SEI message that has payloadType equal to decoded picture hash, the SEI NAL unit containing the scalable nesting SEI message shall have nal_unit_type equal to SUFFIX_SEI_NUT");
 
     CHECK(nestedsei->payloadType() == SEI::DECODED_PICTURE_HASH && !sei.snSubpicFlag, "When the scalable nesting SEI message contains an SEI message that has payloadType equal to decoded picture hash, the value of sn_subpic_flag shall be equal to 1");
 
@@ -1450,7 +1450,7 @@ void SEIReader::xParseSEISubpictureLevelInfo(SEISubpicureLevelInfo& sei, uint32_
     sei.refLevelIdc[i].resize(sei.sliMaxSublayers);
     for (int k = 0; k < sei.sliMaxSublayers; k++)
       {
-      sei.refLevelIdc[i][k] = Level::LEVEL15_5;
+      sei.refLevelIdc[i][k] = vvencLevel::VVENC_LEVEL15_5;
     }
   }
   if (sei.explicitFractionPresent)
@@ -1475,8 +1475,8 @@ void SEIReader::xParseSEISubpictureLevelInfo(SEISubpicureLevelInfo& sei, uint32_
   {
     for (int i = 0; i < sei.numRefLevels; i++)
     {
-      sei_read_code(pDecodedMessageOutputStream, 8, val, "sli_non_subpic_layers_fraction[i][k]");    sei.nonSubpicLayersFraction[i][k] = (Level) val;
-      sei_read_code(pDecodedMessageOutputStream, 8, val, "sli_ref_level_idc[i][k]");                 sei.refLevelIdc[i][k] = (Level) val;
+      sei_read_code(pDecodedMessageOutputStream, 8, val, "sli_non_subpic_layers_fraction[i][k]");    sei.nonSubpicLayersFraction[i][k] = (vvencLevel) val;
+      sei_read_code(pDecodedMessageOutputStream, 8, val, "sli_ref_level_idc[i][k]");                 sei.refLevelIdc[i][k] = (vvencLevel) val;
 
       if (sei.explicitFractionPresent)
       {

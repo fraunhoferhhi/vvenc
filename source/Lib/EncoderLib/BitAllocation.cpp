@@ -53,6 +53,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include <math.h>
 
+#include "vvenc/vvencCfg.h"
+
 
 //! \ingroup EncoderLib
 //! \{
@@ -321,7 +323,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr || optChromaQPOffset == nullptr) return -1;
 
-  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
 
@@ -385,7 +387,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
   if (pic == nullptr || pic->cs == nullptr || encCfg == nullptr || ctuStartAddr >= ctuBoundingAddr) return -1;
 
-  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const bool useFrameWiseQPA  = (encCfg->m_QP > MAX_QP_PERCEPT_QPA);
   const int          bitDepth = slice->sps->bitDepths[CH_L];
@@ -564,7 +566,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   if (pic == nullptr || encCfg == nullptr) return -1;
 
-  const bool isHDR            = encCfg->m_HdrMode != HDRMode::HDR_OFF;
+  const bool isHDR            = encCfg->m_HdrMode != vvencHDRMode::VVENC_HDR_OFF;
   const bool isHighResolution = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const int         bitDepth  = slice->sps->bitDepths[CH_L];
   const PosType     guardSize = (isHighResolution ? 2 : 1);

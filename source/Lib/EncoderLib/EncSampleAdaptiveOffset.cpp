@@ -122,7 +122,7 @@ void EncSampleAdaptiveOffset::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCac
   m_CtxCache       = ctxCache;
 }
 
-void EncSampleAdaptiveOffset::disabledRate( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat )
+void EncSampleAdaptiveOffset::disabledRate( CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], SAOBlkParam* reconParams, const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat )
 {
   if ( saoEncodingRate > 0.0 )
   {
@@ -156,7 +156,7 @@ void EncSampleAdaptiveOffset::disabledRate( CodingStructure& cs, double saoDisab
   }
 }
 
-void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ MAX_TLAYER ], bool saoEnabled[ MAX_NUM_COMP ], const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat )
+void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ], bool saoEnabled[ MAX_NUM_COMP ], const double saoEncodingRate, const double saoEncodingRateChroma, const ChromaFormat& chromaFormat )
 {
   const Slice& slice           = *cs.slice;
   const int numberOfComponents = getNumberValidComponents( chromaFormat );
@@ -166,7 +166,7 @@ void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double
   {
     for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
     {
-      for( int tempLayer = 1; tempLayer < MAX_TLAYER; tempLayer++ )
+      for( int tempLayer = 1; tempLayer < VVENC_MAX_TLAYER; tempLayer++ )
       {
         saoDisabledRate[ compIdx ][ tempLayer ] = 0.0;
       }

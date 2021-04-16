@@ -304,7 +304,7 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   const UnitArea ctuArea( cs.area.chromaFormat, Area( pos.x, pos.y, pcv.maxCUSize, pcv.maxCUSize ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
 
-  if ((cs.slice->sliceType != I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
+  if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
   {
     cs.motionLut.lut.resize(0);
     cs.motionLutBuf[ctuYPosInCtus].lut.resize(0);
@@ -1540,7 +1540,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   const Slice &slice = *tempCS->slice;
   const SPS& sps = *tempCS->sps;
 
-  CHECK( slice.sliceType == I_SLICE, "Merge modes not available for I-slices" );
+  CHECK( slice.sliceType == VVENC_I_SLICE, "Merge modes not available for I-slices" );
 
   tempCS->initStructData( encTestMode.qp );
 
@@ -2147,7 +2147,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         {
           m_modeCtrl.comprCUCtx->earlySkip = true;
         }
-        else if( m_pcEncCfg->m_motionEstimationSearchMethod != MESEARCH_SELECTIVE )
+        else if( m_pcEncCfg->m_motionEstimationSearchMethod != VVENC_MESEARCH_SELECTIVE )
         {
           int absolute_MV = 0;
 
@@ -3670,7 +3670,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
 
   const Slice &slice = *tempCS->slice;
 
-  CHECK(slice.sliceType == I_SLICE, "Affine Merge modes not available for I-slices");
+  CHECK(slice.sliceType == VVENC_I_SLICE, "Affine Merge modes not available for I-slices");
 
   tempCS->initStructData(encTestMode.qp);
 
@@ -3941,7 +3941,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
         {
           m_modeCtrl.comprCUCtx->earlySkip = true;
         }
-        else if (m_pcEncCfg->m_motionEstimationSearchMethod != MESEARCH_SELECTIVE)
+        else if (m_pcEncCfg->m_motionEstimationSearchMethod != VVENC_MESEARCH_SELECTIVE)
         {
           int absolute_MV = 0;
 

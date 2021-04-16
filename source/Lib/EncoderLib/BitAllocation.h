@@ -49,12 +49,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/vvencCfg.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/Unit.h"
 
 //! \ingroup EncoderLib
 //! \{
+
+//struct VVEncCfg;
 
 namespace vvenc {
 

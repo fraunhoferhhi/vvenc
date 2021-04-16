@@ -1274,7 +1274,9 @@ void RateCtrl::destroy()
   }
 }
 
-void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, const GOPEntry  GOPList[ MAX_GOP ], int maxParallelFrames )
+void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize,
+                     int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth,
+                     const vvencGOPEntry  GOPList[ VVENC_MAX_GOP ], int maxParallelFrames )
 {
   destroy();
 
@@ -1447,7 +1449,7 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
   }
   else
   {
-    msg( WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
+    msg( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
   }
 
   int* GOPID2Level = new int[ GOPSize ];

@@ -129,7 +129,7 @@ EncSlice::EncSlice()
   , m_pALF               ( nullptr )
   , m_pcRateCtrl         ( nullptr )
   , m_CABACWriter        ( m_BinEncoder )
-  , m_encCABACTableIdx   ( I_SLICE )
+  , m_encCABACTableIdx   ( VVENC_I_SLICE )
   , m_appliedSwitchDQQ   ( 0 )
 {
 }
@@ -255,7 +255,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
-  const GOPEntry* gopList = m_pcEncCfg->m_GOPList;
+  const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
 
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
@@ -379,7 +379,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
   const int lumaQpBDOffset = slice->sps->qpBDOffset[ CH_L ];
   int qp;
 
-  if ( m_pcEncCfg->m_costMode == COST_LOSSLESS_CODING )
+  if ( m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
   {
     qp = LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP;
   }
@@ -395,7 +395,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     }
     qp += m_appliedSwitchDQQ;
 
-    if( sliceType == I_SLICE )
+    if( sliceType == VVENC_I_SLICE )
     {
       qp += m_pcEncCfg->m_intraQPOffset;
     }
@@ -403,7 +403,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     {
       if ( ! ( qp == -lumaQpBDOffset ) )
       {
-        const GOPEntry &gopEntry = m_pcEncCfg->m_GOPList[ gopId ];
+        const vvencGOPEntry &gopEntry = m_pcEncCfg->m_GOPList[ gopId ];
         // adjust QP according to the QP offset for the GOP entry.
         qp += gopEntry.m_QPOffset;
 
@@ -426,11 +426,16 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
                                   const double     dQP,   // initial double-precision QP
                                           int&     iQP )  // returned integer QP.
 {
-  const  GOPEntry* gopList       = m_pcEncCfg->m_GOPList;
+  const  vvencGOPEntry* gopList  = m_pcEncCfg->m_GOPList;
   const  int       NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
   const  int       SHIFT_QP      = 12;
   const int temporalId           = gopList[ GOPid ].m_temporalId;
-  const std::vector<double> &intraLambdaModifiers = m_pcEncCfg->m_adIntraLambdaModifier;
+  std::vector<double> intraLambdaModifiers;
+  for ( int i = 0; i < VVENC_MAX_TLAYER; i++ )
+  {
+    if( m_pcEncCfg->m_adIntraLambdaModifier[i] != 0.0 ) intraLambdaModifiers.push_back( m_pcEncCfg->m_adIntraLambdaModifier[i] );
+    else break;
+  }
 
   int bitdepth_luma_qp_scale = 6
                                * (slice->sps->bitDepths[ CH_L ] - 8
@@ -438,9 +443,9 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   double qp_temp = dQP + bitdepth_luma_qp_scale - SHIFT_QP;
   // Case #1: I or P-slices (key-frame)
   double dQPFactor = gopList[ GOPid ].m_QPFactor;
-  if( slice->sliceType == I_SLICE )
+  if( slice->sliceType == VVENC_I_SLICE )
   {
-    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopList[ GOPid ].m_sliceType != I_SLICE)
+    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopList[ GOPid ].m_sliceType != VVENC_I_SLICE)
     {
       dQPFactor = m_pcEncCfg->m_dIntraQpFactor;
     }
@@ -468,13 +473,13 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   }
 
   // if hadamard is used in ME process
-  if ( !m_pcEncCfg->m_bUseHADME && slice->sliceType != I_SLICE )
+  if ( !m_pcEncCfg->m_bUseHADME && slice->sliceType != VVENC_I_SLICE )
   {
     dLambda *= 0.95;
   }
 
   double lambdaModifier;
-  if( slice->sliceType != I_SLICE || intraLambdaModifiers.empty())
+  if( slice->sliceType != VVENC_I_SLICE || intraLambdaModifiers.empty())
   {
     lambdaModifier = m_pcEncCfg->m_adLambdaModifier[ temporalId ];
   }
