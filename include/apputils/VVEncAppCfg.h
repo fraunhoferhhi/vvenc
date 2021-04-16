@@ -62,8 +62,6 @@ namespace apputils {
 // ====================================================================================================================
 
 /// encoder configuration class
-///
-
 class APPUTILS_DECL VVEncAppCfg : public vvenc_config
 {
 public:
