@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include <math.h>
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 
 //! \ingroup EncoderLib

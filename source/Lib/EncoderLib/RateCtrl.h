@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "CommonLib/CommonDef.h"
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 #include <vector>
 #include <algorithm>

@@ -46,7 +46,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/Common.h"
 #include "CommonLib/HRD.h"
 #include "CommonLib/Slice.h"

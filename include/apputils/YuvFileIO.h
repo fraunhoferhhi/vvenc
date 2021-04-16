@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fstream>
 #include <string>
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup Interface
 //! \{

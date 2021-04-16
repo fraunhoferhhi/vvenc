@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 #include "CABACWriter.h"
 #include "IntraSearch.h"
 #include "InterSearch.h"

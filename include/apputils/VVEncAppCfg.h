@@ -49,7 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 #include "apputils/apputilsDecl.h"
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 #include <string>
 
 namespace apputils {

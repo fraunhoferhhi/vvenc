@@ -47,7 +47,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "SEIEncoder.h"
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/SEI.h"
 #include "CommonLib/PicYuvMD5.h"

@@ -43,7 +43,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     vvencConfig.h
+/** \file     vvencCfg.h
     \brief    encoder configuration class (header)
 */
 

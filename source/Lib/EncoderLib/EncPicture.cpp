@@ -55,7 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/dtrace_codingstruct.h"
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{

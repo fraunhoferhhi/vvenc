@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Utilities/NoMallocThreadPool.h"
 
 #include <math.h>
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{

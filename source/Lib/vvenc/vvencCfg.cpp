@@ -45,11 +45,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 
-/** \file     vvenc_config.cpp
+/** \file     vvencCfg.cpp
     \brief    encoder configuration class
 */
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"

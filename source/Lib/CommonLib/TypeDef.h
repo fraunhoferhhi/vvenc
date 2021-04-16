@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <cassert>
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 typedef struct vvenc_config VVEncCfg;
 

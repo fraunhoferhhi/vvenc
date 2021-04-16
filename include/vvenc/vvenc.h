@@ -57,7 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "vvenc/vvencConfig.h"
+#include "vvenc/vvencCfg.h"
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END
