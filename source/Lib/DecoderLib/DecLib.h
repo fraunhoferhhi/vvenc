@@ -135,6 +135,7 @@ private:
 
   std::list<InputNALUnit*> m_prefixSEINALUs; /// Buffered up prefix SEI NAL Units.
   int                     m_debugPOC;
+  bool                    m_isDecoderInEncoder;
   std::vector<std::pair<vvencNalUnitType, int>> m_accessUnitNals;
   struct AccessUnitPicInfo
   {
@@ -188,6 +189,7 @@ public:
   void resetAccessUnitNals()              { m_accessUnitNals.clear();    }
   void resetAccessUnitPicInfo()           { m_accessUnitPicInfo.clear();    }
   void resetAccessUnitApsNals()           { m_accessUnitApsNals.clear(); }
+  void setDecoderInEncoderMode( bool m )  { m_isDecoderInEncoder = m; }
   bool isSliceNaluFirstInAU( bool newPicture, InputNALUnit &nalu );
 
   const VPS* getVPS()                     { return m_vps; }
