@@ -66,7 +66,7 @@ namespace vvenc {
 
 void CABACReader::initCtxModels( Slice& slice )
 {
-  vvencSliceType sliceType  = slice.sliceType;
+  SliceType sliceType  = slice.sliceType;
   int       qp         = slice.sliceQp;
   if( slice.pps->cabacInitPresent && slice.cabacInitFlag )
   {

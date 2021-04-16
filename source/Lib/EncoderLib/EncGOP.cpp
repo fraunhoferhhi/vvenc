@@ -735,7 +735,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   Slice* slice          = pic.allocateNewSlice();
   pic.cs->picHeader     = new PicHeader;
   const SPS& sps        = *(slice->sps);
-  vvencSliceType sliceType   = ( curPoc % (unsigned)(m_pcEncCfg->m_IntraPeriod) == 0 || m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'I' ) ? ( VVENC_I_SLICE ) : ( m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? VVENC_P_SLICE : VVENC_B_SLICE );
+  SliceType sliceType   = ( curPoc % (unsigned)(m_pcEncCfg->m_IntraPeriod) == 0 || m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'I' ) ? ( VVENC_I_SLICE ) : ( m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? VVENC_P_SLICE : VVENC_B_SLICE );
   vvencNalUnitType naluType  = xGetNalUnitType( curPoc, m_lastIDR );
 
   pic.rcIdxInGop = std::max( 0, m_codingOrderIdx - 1 ) % m_pcEncCfg->m_GOPSize;
@@ -1111,7 +1111,7 @@ void EncGOP::xInitLMCS( Picture& pic )
     return;
   }
 
-  const vvencSliceType sliceType = slice->sliceType;
+  const SliceType sliceType = slice->sliceType;
 
   m_Reshaper.getReshapeCW()->rspTid = slice->TLayer + (slice->isIntra() ? 0 : 1);
   m_Reshaper.getSliceReshaperInfo().chrResScalingOffset = m_pcEncCfg->m_LMCSOffset;

@@ -1938,7 +1938,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
     {
       if( !slice->isIntra() && slice->pps->cabacInitPresent )
       {
-        const vvencSliceType encCABACTableIdx = slice->encCABACTableIdx;
+        const SliceType encCABACTableIdx = slice->encCABACTableIdx;
         bool encCabacInitFlag = ( slice->sliceType != encCABACTableIdx && encCABACTableIdx != VVENC_I_SLICE ) ? true : false;
         WRITE_FLAG( encCabacInitFlag ? 1 : 0, "sh_cabac_init_flag" );
       }

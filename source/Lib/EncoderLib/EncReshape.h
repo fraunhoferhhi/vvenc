@@ -114,8 +114,8 @@ public:
   void destroy();
 
   void calcSeqStats     ( Picture& pic, SeqInfo &stats);
-  void preAnalyzerLMCS  ( Picture& pic, const uint32_t signalType, const vvencSliceType sliceType, const vvencReshapeCW& reshapeCW);
-  void preAnalyzerHDR   ( Picture& pic, const vvencSliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT);
+  void preAnalyzerLMCS  ( Picture& pic, const uint32_t signalType, const SliceType sliceType, const vvencReshapeCW& reshapeCW);
+  void preAnalyzerHDR   ( Picture& pic, const SliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT);
   void bubbleSortDsd    ( double *array, int * idx, int n);
   void cwPerturbation   ( int startBinIdx, int endBinIdx, uint16_t maxCW);
   void cwReduction      ( int startBinIdx, int endBinIdx);

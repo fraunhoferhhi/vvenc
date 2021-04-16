@@ -237,7 +237,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
   slice->sliceMap.addCtusToSlice( 0, pic->cs->pcv->widthInCtus, 0, pic->cs->pcv->heightInCtus, pic->cs->pcv->widthInCtus);
 
   // this ensures that independently encoded bitstream chunks can be combined to bit-equal
-  const vvencSliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
+  const SliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
   slice->encCABACTableIdx = cabacTableIdx;
 
   // set QP and lambda values
@@ -385,7 +385,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
   }
   else
   {
-    const vvencSliceType sliceType = slice->sliceType;
+    const SliceType sliceType = slice->sliceType;
 
     qp = m_pcEncCfg->m_QP;
     // switch at specific qp and keep this qp offset
@@ -1134,7 +1134,7 @@ void EncSlice::encodeSliceData( Picture* pic )
   const bool wavefrontsEnabled     = slice->sps->entropyCodingSyncEnabled;
 
   // this ensures that independently encoded bitstream chunks can be combined to bit-equal
-  const vvencSliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
+  const SliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
   slice->encCABACTableIdx = cabacTableIdx;
 
   // initialise entropy coder for the slice

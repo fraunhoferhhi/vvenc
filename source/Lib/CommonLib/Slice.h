@@ -1198,7 +1198,7 @@ class Slice
   bool                        pictureHeaderInSliceHeader;
   uint32_t                    nuhLayerId;
   vvencNalUnitType            nalUnitType;         ///< Nal unit type for the slice
-  vvencSliceType              sliceType;
+  SliceType                   sliceType;
   int                         sliceQp;
   bool                        chromaQpAdjEnabled;
   bool                        lmcsEnabled;
@@ -1246,7 +1246,7 @@ class Slice
   std::vector<uint32_t>       substreamSizes;
   bool                        cabacInitFlag;
   uint32_t                    sliceSubPicId;
-  vvencSliceType              encCABACTableIdx;           // Used to transmit table selection across slices.
+  SliceType                   encCABACTableIdx;           // Used to transmit table selection across slices.
   APS*                        alfAps[ALF_CTB_MAX_NUM_APS];
   bool                        tileGroupAlfEnabled[MAX_NUM_COMP];
   int                         tileGroupNumAps;
@@ -1617,7 +1617,7 @@ public:
   unsigned getMaxBtSize   ( const Slice &slice, const ChannelType chType ) const;
   unsigned getMaxTtSize   ( const Slice &slice, const ChannelType chType ) const;
   unsigned getMinQtSize   ( const Slice &slice, const ChannelType chType ) const;
-  unsigned getMaxDepth    ( const vvencSliceType slicetype, const ChannelType chType )   const { return maxCUSizeLog2 - Log2(slicetype == VVENC_I_SLICE ? (chType == CH_L ? minQtSize[0] : minQtSize[2]) : minQtSize[1]); }
+  unsigned getMaxDepth    ( const SliceType slicetype, const ChannelType chType )   const { return maxCUSizeLog2 - Log2(slicetype == VVENC_I_SLICE ? (chType == CH_L ? minQtSize[0] : minQtSize[2]) : minQtSize[1]); }
   Area     getCtuArea     ( const int ctuPosX, const int ctuPosY ) const;
 };
 

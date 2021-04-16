@@ -156,7 +156,7 @@ void  EncReshape::destroy()
 \param   pcPic describe pointer of current coding picture
 \param   sliceType describe the slice type
 */
-void EncReshape::preAnalyzerHDR(Picture& pic, const vvencSliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT)
+void EncReshape::preAnalyzerHDR(Picture& pic, const SliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT)
 {
   if (m_lumaBD >= 10)
   {
@@ -424,7 +424,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
   }
 }
 
-void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const vvencSliceType sliceType, const vvencReshapeCW& reshapeCW)
+void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const SliceType sliceType, const vvencReshapeCW& reshapeCW)
 {
   m_sliceReshapeInfo.sliceReshaperModelPresent = true;
   m_sliceReshapeInfo.sliceReshaperEnabled = true;

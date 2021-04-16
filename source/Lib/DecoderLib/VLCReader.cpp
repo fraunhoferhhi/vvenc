@@ -2484,7 +2484,7 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
 
   if (picHeader->picInterSliceAllowed)
   {
-    READ_UVLC (    uiCode, "slice_type" );            pcSlice->sliceType = ((vvencSliceType)uiCode);
+    READ_UVLC (    uiCode, "slice_type" );            pcSlice->sliceType = ((SliceType)uiCode);
   }
   else
   {
@@ -3396,7 +3396,7 @@ void HLSyntaxReader::parsePredWeightTable( Slice* slice, const SPS *sps )
   const ChromaFormat    chFmt        = sps->chromaFormatIdc;
   const int             numValidComp = int(getNumberValidComponents(chFmt));
   const bool            bChroma      = (chFmt!=CHROMA_400);
-  const vvencSliceType  eSliceType   = slice->sliceType;
+  const SliceType       eSliceType   = slice->sliceType;
   const int             iNbRef       = (eSliceType == VVENC_B_SLICE ) ? (2) : (1);
   uint32_t              log2WeightDenomLuma=0, log2WeightDenomChroma=0;
   uint32_t              uiTotalSignalledWeightFlags = 0;

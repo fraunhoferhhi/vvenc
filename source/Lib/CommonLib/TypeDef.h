@@ -66,6 +66,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 typedef struct vvenc_config VVEncCfg;
 
 typedef vvencChromaFormat ChromaFormat;
+typedef vvencSliceType    SliceType;
 
 //! \ingroup CommonLib
 //! \{

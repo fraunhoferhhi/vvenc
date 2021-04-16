@@ -68,7 +68,7 @@ public:
 public:
   DeriveCtx&  getDeriveCtx              ()                                                    { return *this; }
   void        initCtxModels             ( const Slice&                  slice );
-  vvencSliceType getCtxInitId              ( const Slice&                  slice );
+  SliceType   getCtxInitId              ( const Slice&                  slice );
   void        initBitstream             ( OutputBitstream*              bitstream )           { m_Bitstream = bitstream; m_BinEncoder.init( m_Bitstream ); }
 
   const Ctx&  getCtx                    ()                                            const   { return m_BinEncoder.getCtx();  }

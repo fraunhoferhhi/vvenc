@@ -66,8 +66,8 @@ namespace vvenc {
 void CABACWriter::initCtxModels( const Slice& slice )
 {
   int       qp                = slice.sliceQp;
-  vvencSliceType sliceType         = slice.sliceType;
-  vvencSliceType encCABACTableIdx  = slice.encCABACTableIdx;
+  SliceType sliceType         = slice.sliceType;
+  SliceType encCABACTableIdx  = slice.encCABACTableIdx;
   if( !slice.isIntra() && (encCABACTableIdx==VVENC_B_SLICE || encCABACTableIdx==VVENC_P_SLICE) && slice.pps->cabacInitPresent )
   {
     sliceType = encCABACTableIdx;
@@ -77,20 +77,20 @@ void CABACWriter::initCtxModels( const Slice& slice )
 
 
 
-vvencSliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ctxTest )
+SliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ctxTest )
 {
   const CtxStore& ctxStoreTest = static_cast<const CtxStore&>( ctxTest );
   const CtxStore& ctxStoreRef  = static_cast<const CtxStore&>( binEncoder.getCtx() );
   int qp = slice.sliceQp;
   if( !slice.isIntra() )
   {
-    vvencSliceType aSliceTypeChoices[] = { VVENC_B_SLICE, VVENC_P_SLICE };
+    SliceType aSliceTypeChoices[] = { VVENC_B_SLICE, VVENC_P_SLICE };
     uint64_t  bestCost                 = std::numeric_limits<uint64_t>::max();
-    vvencSliceType bestSliceType       = aSliceTypeChoices[0];
+    SliceType bestSliceType       = aSliceTypeChoices[0];
     for (uint32_t idx=0; idx<2; idx++)
     {
       uint64_t  curCost           = 0;
-      vvencSliceType curSliceType = aSliceTypeChoices[idx];
+      SliceType curSliceType = aSliceTypeChoices[idx];
       ctxTest.init( qp, (int)curSliceType );
       for( int k = 0; k < Ctx::NumberOfContexts; k++ )
       {
@@ -114,7 +114,7 @@ vvencSliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ct
 }
 
 
-vvencSliceType CABACWriter::getCtxInitId( const Slice& slice )
+SliceType CABACWriter::getCtxInitId( const Slice& slice )
 {
   return  xGetCtxInitId( slice, m_BinEncoder, m_TestCtx );
 }
