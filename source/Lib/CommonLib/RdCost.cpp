@@ -1973,10 +1973,11 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
   absCand[0] = abs(rmvH[0]) + abs(rmvV[0]);
   absCand[1] = abs(rmvH[1]) + abs(rmvV[1]);
 
-  int rmvHQP[2];
-  int rmvVQP[2];
-  if (x % 4 == 0 && y % 4 == 0 && useIMV)
+  if (useIMV && x % 4 == 0 && y % 4 == 0)
   {
+    int rmvHQP[2];
+    int rmvVQP[2];
+
     int imvShift = 2;
     int offset = 1 << (imvShift - 1);
 
@@ -2019,7 +2020,6 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
     }
   }
   else
-
   {
     if (absCand[0] < absCand[1])
     {
