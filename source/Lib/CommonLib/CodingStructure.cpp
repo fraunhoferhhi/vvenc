@@ -997,12 +997,15 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 void CodingStructure::clearTUs()
 {
   int numCh = getNumberValidChannels( area.chromaFormat );
+  
   for( int i = 0; i < numCh; i++ )
   {
     size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
 
-    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
-
+//    if( m_tuPtr[i] != NULL )
+    {
+      memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
+    }
   }
 
   numCh = getNumberValidComponents( area.chromaFormat );
@@ -1028,7 +1031,10 @@ void CodingStructure::clearCUs()
   int numCh = getNumberValidChannels( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
-    memset( m_cuPtr[i], 0, sizeof( *m_cuPtr[0] ) * unitScale[i].scaleArea( area.blocks[i].area() ) );
+//    if( m_cuPtr[i] != NULL )
+    {
+      memset( m_cuPtr[i], 0, sizeof( *m_cuPtr[0] ) * unitScale[i].scaleArea( area.blocks[i].area() ) );
+    }
   }
 
   if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
