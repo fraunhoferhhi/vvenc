@@ -619,7 +619,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   {
     createCoeffs();
     createTempBuffers( false );
-    initStructData();
+    initStructData( MAX_INT, false, nullptr, true );
   }
 }
 
@@ -966,10 +966,10 @@ void CodingStructure::compactResize( const UnitArea& _area )
   area = _area;
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area, bool force )
 {
-  clearTUs();
-  clearCUs();
+  clearTUs( force );
+  clearCUs( force );
 
   if( _area ) compactResize( *_area );
 
@@ -994,8 +994,10 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 }
 
 
-void CodingStructure::clearTUs()
+void CodingStructure::clearTUs( bool force )
 {
+  if( !m_numTUs && !force ) return;
+
   int numCh = getNumberValidChannels( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
@@ -1023,8 +1025,10 @@ void CodingStructure::clearTUs()
   m_numTUs = 0;
 }
 
-void CodingStructure::clearCUs()
+void CodingStructure::clearCUs( bool force )
 {
+  if( !m_numCUs && !force ) return;
+
   int numCh = getNumberValidChannels( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
