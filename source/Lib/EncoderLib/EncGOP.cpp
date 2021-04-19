@@ -210,6 +210,10 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
     return;
   }
 
+  if( pic->poc == 24 )
+  {
+    printf("\nbase");
+  }
   // this is the forward to poc section
   if( ffwdDecoder.bHitFastForwardPOC || isPicEncoded( cfg.m_fastForwardToPOC, pic->getPOC(), pic->TLayer, cfg.m_GOPSize, cfg.m_IntraPeriod ) )
   {
@@ -414,6 +418,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
 
+    printf( "\nbase poc %d  encPic %d\n", pic->poc, pic->encPic );
     if( m_pcEncCfg->m_alfTempPred )
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
