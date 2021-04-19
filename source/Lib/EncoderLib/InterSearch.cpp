@@ -6038,7 +6038,9 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
   int         bestCandIdx = 0;
 
   Distortion  sadBestCand[CHROMA_REFINEMENT_CANDIDATES];
-  Mv      cMVCand[CHROMA_REFINEMENT_CANDIDATES];
+  Mv          cMVCand[CHROMA_REFINEMENT_CANDIDATES];
+
+  const bool  useAmvr = cu.cs->sps->AMVR;
 
 
   for (int cand = 0; cand < CHROMA_REFINEMENT_CANDIDATES; cand++)
@@ -6079,7 +6081,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
         if (validCand)
         {
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(xPred, yPred, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(xPred, yPred, useAmvr);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * yPred + xPred;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6101,7 +6103,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
         continue;
       }
 
-      sad = m_pcRdCost->getBvCostMultiplePredsIBC(0, y, cu.cs->sps->AMVR);
+      sad = m_pcRdCost->getBvCostMultiplePredsIBC(0, y, useAmvr);
       m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y;
       sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6126,7 +6128,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
         continue;
       }
 
-      sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, 0, cu.cs->sps->AMVR);
+      sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, 0, useAmvr);
       m_cDistParam.cur.buf = piRefSrch + x;
       sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6147,7 +6149,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
     bestX = cMVCand[0].hor;
     bestY = cMVCand[0].ver;
     sadBest = sadBestCand[0];
-    if ((!bestX && !bestY) || (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR) <= 32))
+    if ((!bestX && !bestY) || (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, useAmvr) <= 32))
     {
       //chroma refine
       bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
@@ -6193,7 +6195,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
           lastDec = true;
 
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6204,7 +6206,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
       bestX = cMVCand[0].hor;
       bestY = cMVCand[0].ver;
       sadBest = sadBestCand[0];
-      if (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR) <= 16)
+      if (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, useAmvr) <= 16)
       {
         //chroma refine
         bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
@@ -6232,7 +6234,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
             continue;
           }
 
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
@@ -6256,7 +6258,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
       bestY = cMVCand[0].ver;
       sadBest = sadBestCand[0];
 
-      if ((sadBest >= tempSadBest) || ((sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR)) <= 32))
+      if ((sadBest >= tempSadBest) || ((sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, useAmvr)) <= 32))
       {
         //chroma refine
         bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
@@ -6285,7 +6287,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
             continue;
           }
 
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
+          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
           m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
           sad += m_cDistParam.distFunc(m_cDistParam);
 
