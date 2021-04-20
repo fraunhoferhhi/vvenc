@@ -174,7 +174,10 @@ void EncPicture::finalizePicture( Picture& pic )
     pic.picBlkStat.storeBlkSize( pic );
   }
   // cleanup
-  pic.cs->releaseIntermediateData();
+  if( pic.encPic )
+  {
+    pic.cs->releaseIntermediateData();
+  }
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
   pic.destroyTempBuffers();
