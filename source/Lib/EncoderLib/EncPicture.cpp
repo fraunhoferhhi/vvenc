@@ -97,7 +97,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );
-  pic.cs->initStructData();
+  pic.cs->initStructData( MAX_INT, false, nullptr, true );
 
   if( m_pcEncCfg->m_lumaReshapeEnable && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
   {

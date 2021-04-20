@@ -164,15 +164,15 @@ public:
   Distortion  dist;
   Distortion  interHad;
 
-  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr );
+  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr, bool force = false );
   void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
   void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
   void useSubStructure (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
 
-  void clearTUs();
-  void clearCUs();
+  void clearTUs( bool force = false );
+  void clearCUs( bool force = false );
   const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 
   void createTempBuffers( const bool isTopLayer );

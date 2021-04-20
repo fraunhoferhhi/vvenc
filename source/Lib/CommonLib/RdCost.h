@@ -172,6 +172,11 @@ public:
   static uint32_t    xGetExpGolombNumberOfBits( int iVal )
   {
     CHECKD( iVal == std::numeric_limits<int>::min(), "Wrong value" );
+
+#if ENABLE_SIMD_OPT && defined( TARGET_SIMD_X86 )
+    // the proper Log2 is not restricted to 0...MAX_CU_SIZE
+    return 1 + ( Log2( iVal <= 0 ? ( unsigned( -iVal ) << 1 ) + 1 : unsigned( iVal << 1 ) ) << 1 );
+#else
     unsigned uiLength2 = 1, uiTemp2 = ( iVal <= 0 ) ? ( unsigned( -iVal ) << 1 ) + 1 : unsigned( iVal << 1 );
 
     while( uiTemp2 > MAX_CU_SIZE )
@@ -181,6 +186,7 @@ public:
     }
 
     return uiLength2 + ( Log2(uiTemp2) << 1 );
+#endif
   }
   Distortion     getCostOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return Distortion( m_motionLambda * getBitsOfVectorWithPredictor(x, y, imvShift )); }
   uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return xGetExpGolombNumberOfBits(((x << m_iCostScale) - m_mvPredictor.hor)>>imvShift) + xGetExpGolombNumberOfBits(((y << m_iCostScale) - m_mvPredictor.ver)>>imvShift); }
