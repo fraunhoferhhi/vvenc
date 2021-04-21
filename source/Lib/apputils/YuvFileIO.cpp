@@ -56,6 +56,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <vector>
 
+#if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
+#include <windows.h>
+#endif
+
 //! \ingroup Interface
 //! \{
 
