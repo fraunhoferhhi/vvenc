@@ -143,7 +143,7 @@ const std::vector<SVPair<vvencProfile>> ProfileToEnumMap =
   { "multilayer_main_10_444",                vvencProfile::VVENC_MULTILAYER_MAIN_10_444 },
   { "multilayer_main_10_still_picture",      vvencProfile::VVENC_MULTILAYER_MAIN_10_STILL_PICTURE },
   { "multilayer_main_10_444_still_picture",  vvencProfile::VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE },
-  { "auto",                                  vvencProfile::VVENC_PROFILE_AUTO }
+  { "auto",                                  vvencProfile::VVENC_PROFILE_AUTO },
 };
 
 const std::vector<SVPair<vvencLevel>> LevelToEnumMap =

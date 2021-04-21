@@ -348,7 +348,7 @@ void MCTF::filter( Picture* pic )
   m_cur_delay = m_picFifo.size() ? m_picFifo.back()->poc - process_poc : 0;
   m_cur_delay = std::max<int>( m_cur_delay, 0 );
 
-  if ( process_poc < 0 || ( m_framesToBeEncoded > 0 && process_poc >= m_framesToBeEncoded ) )
+  if ( process_poc < 0 || ( m_framesToBeEncoded > 0 && process_poc >= m_framesToBeEncoded ) || m_picFifo.empty() )
   {
     return;
   }

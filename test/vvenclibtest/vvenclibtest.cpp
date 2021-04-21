@@ -237,8 +237,8 @@ int testLibParameterRanges()
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
 
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,1,2 } );
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 3,4,5,6,7,8,9,10 }, true );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,1,17,33,49,65,81,97,113 } );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 2,3,5,6,7,8,9,114 }, true );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 

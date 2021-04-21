@@ -86,7 +86,7 @@ public:
   bool  isEof();
   bool  isFail();
   void  skipYuvFrames( int numFrames, int width, int height );
-  bool  readYuvBuf   ( vvencYUVBuffer& yuvInBuf );
+  int   readYuvBuf   ( vvencYUVBuffer& yuvInBuf, bool& eof );
   bool  writeYuvBuf  ( const vvencYUVBuffer& yuvOutBuf );
   std::string getLastError() const { return m_lastError; }   
 };

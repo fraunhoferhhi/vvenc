@@ -126,16 +126,15 @@ typedef enum
 */
 typedef enum
 {
-  VVENC_PROFILE_AUTO                         = 0,
-  VVENC_MAIN_10                              = 1,
-  VVENC_MAIN_10_STILL_PICTURE                = 2,
-  VVENC_MAIN_10_444                          = 3,
-  VVENC_MAIN_10_444_STILL_PICTURE            = 4,
-  VVENC_MULTILAYER_MAIN_10                   = 5,
-  VVENC_MULTILAYER_MAIN_10_STILL_PICTURE     = 6,
-  VVENC_MULTILAYER_MAIN_10_444               = 7,
-  VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE = 8,
-  VVENC_NUMBER_OF_PROFILES
+  VVENC_PROFILE_AUTO                         =  0,
+  VVENC_MAIN_10                              =  1,
+  VVENC_MAIN_10_STILL_PICTURE                =  1 + 64,
+  VVENC_MAIN_10_444                          = 33,
+  VVENC_MAIN_10_444_STILL_PICTURE            = 33 + 64,
+  VVENC_MULTILAYER_MAIN_10                   = 17,
+  VVENC_MULTILAYER_MAIN_10_STILL_PICTURE     = 17 + 64,
+  VVENC_MULTILAYER_MAIN_10_444               = 49,
+  VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE = 49 + 64,
 }vvencProfile;
 
 

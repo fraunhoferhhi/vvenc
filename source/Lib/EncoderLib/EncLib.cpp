@@ -433,6 +433,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       m_numPicsInQueue += 1;
     }
   }
+  else
+  {
+    CHECK( 0 == m_numPicsRcvd, "invalid call, non-empty input buffer expected" );
+  }
 
   // MCTF process
   if ( m_cEncCfg.m_usePerceptQPA ) m_MCTF.assignQpaBufs( pic );
