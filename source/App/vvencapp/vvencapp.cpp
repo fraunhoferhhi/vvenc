@@ -285,13 +285,12 @@ int main( int argc, char* argv[] )
       vvencYUVBuffer* ptrYUVInputBuffer = nullptr;
       if( !bEof )
       {
-        bEof = cYuvFileInput.isEof();
-        if( 0 != cYuvFileInput.readYuvBuf( cYUVInputBuffer ) )
+        if( 0 != cYuvFileInput.readYuvBuf( cYUVInputBuffer, bEof ) )
         {
           std::cout << " [error]: read file failed: " << cYuvFileInput.getLastError() << std::endl;
           return -1;
         }
-        if( !bEof )
+        if( ! bEof )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
@@ -301,12 +300,9 @@ int main( int argc, char* argv[] )
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.m_uiSequenceNumber << " cts " << cYUVInputBuffer.m_uiCts << std::endl;
         }
-        else
+        else if( vvencappCfg.m_verbosity > VVENC_ERROR && vvencappCfg.m_verbosity < VVENC_NOTICE )
         {
-          if( vvencappCfg.m_verbosity > VVENC_ERROR && vvencappCfg.m_verbosity < VVENC_NOTICE )
-          {
-            std::cout << "EOF reached" << std::endl;
-          }
+          std::cout << "EOF reached" << std::endl;
         }
       }
 

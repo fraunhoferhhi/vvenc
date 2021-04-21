@@ -587,12 +587,14 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
   m_cHandle.read( buf, offset_mod_bufsize );
 }
 
-int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf )
+int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
 {
+  eof = false;
   // check end-of-file
   if ( isEof() )
   {
     m_lastError = "end of file";
+    eof = true;
     return -1;
   }
 
@@ -610,16 +612,16 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf )
     {
       if ( ! readYuvPlane( std::cin, yuvPlane, is16bit, m_fileBitdepth, comp, m_fileChrFmt, m_bufferChrFmt ) )
       {
-        m_lastError = "can not read entire picture - out of data";
-        return -1;
+        eof = true;
+        return 0;
       }
     }
     else
     {
       if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, comp, m_fileChrFmt, m_bufferChrFmt ) )
       {
-        m_lastError = "can not read entire picture - out of data";
-        return -1;
+        eof = true;
+        return 0;
       }
     }
     if ( m_bufferChrFmt == VVENC_CHROMA_400 )
@@ -627,6 +629,7 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf )
 
     if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
     {
+      eof = true;
       m_lastError = "Source image contains values outside the specified bit range!";
       return -1;
     }
