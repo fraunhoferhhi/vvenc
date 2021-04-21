@@ -349,9 +349,6 @@ void EncLib::xUninitLib()
   m_spsMap.clearMap();
   m_ppsMap.clearMap();
 
-  m_RecYUVBufferCallback    = nullptr;
-  m_RecYUVBufferCallbackCtx = nullptr;
-
   // reset internal data
   xResetLib();
 }
