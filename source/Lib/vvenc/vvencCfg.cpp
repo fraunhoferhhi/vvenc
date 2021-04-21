@@ -731,7 +731,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
-    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight );
+    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, temporalRate, temporalScale, c->m_RCTargetBitrate );
   }
 
   if ( c->m_InputQueueSize <= 0 )

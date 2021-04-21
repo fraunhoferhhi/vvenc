@@ -68,7 +68,7 @@ struct LevelTierFeatures
   uint32_t      getMaxPicWidthInLumaSamples()  const;
   uint32_t      getMaxPicHeightInLumaSamples() const;
 
-  static vvencLevel getLevelForInput( uint32_t width, uint32_t height );
+  static vvencLevel getLevelForInput( uint32_t width, uint32_t height, bool tier, int temporalRate, int temporalScale, int bitrate );
 };
 
 
