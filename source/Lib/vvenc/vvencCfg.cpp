@@ -1983,7 +1983,15 @@ static bool checkCfgParameter( vvenc_config *c )
 {
   // run base check first
   vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "can not determin auto profile");
-  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10 && c->m_profile != VVENC_MAIN_10_STILL_PICTURE ), "unsupported profile. currently only supporting auto,main10,main10stillpicture");
+  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10 
+                           && c->m_profile != vvencProfile::VVENC_MAIN_10_STILL_PICTURE
+                           && c->m_profile != vvencProfile::VVENC_MAIN_10_444
+                           && c->m_profile != vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE
+                           && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10
+                           && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_STILL_PICTURE
+                           && c->m_profile != vvencProfile::  VVENC_MULTILAYER_MAIN_10_444
+                           && c->m_profile != vvencProfile::VVENC_MULTILAYER_MAIN_10_444_STILL_PICTURE),
+                              "unsupported profile. currently only supporting auto,main10,main10stillpicture");
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
