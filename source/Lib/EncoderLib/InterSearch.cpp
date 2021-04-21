@@ -6161,142 +6161,116 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
       goto end;
     }
 
-    if ((m_pcEncCfg->m_IBCFastMethod < 5) && cu.lwidth() < 16 && cu.lheight() < 16)
+    if (cu.lwidth() < 16 && cu.lheight() < 16)
     {
       int stepS = 2;
-      if (m_pcEncCfg->m_IBCFastMethod > 3)
+      if (m_pcEncCfg->m_IBCFastMethod > 2)
       {
-        stepS = 8;
+        if (m_pcEncCfg->m_IBCFastMethod == 5)
+        {
+          stepS = 8;
+        }
+        else if ((cu.lwidth() > 4) || (cu.lheight() > 4))
+        {
+          stepS = 4;
+        }
       }
+
       const int minCuLog2 = m_pcEncCfg->m_log2MinCodingBlockSize;
-      const int minCuMask = ( 1 << minCuLog2 ) - 1;
+      const int minCuMask = (1 << minCuLog2) - 1;
       bool lastDec = false;
-      for (int y = std::max(srchRngVerTop, -cuPelY); y <= srchRngVerBottom; y += stepS)
-      {
-        if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
-          continue;
 
-        bool firstX = true;
-        for (int x = std::max(srchRngHorLeft, -cuPelX); x <= srchRngHorRight; firstX = false, x++)
+      for (int searchStep = 0; searchStep < 3; searchStep++)
+      {
+        int delaySy = searchStep ? 1 : 0;
+        int delaySx = searchStep > 1 ? 1 : 0;
+        int startY = (std::max(srchRngVerTop, -cuPelY) + delaySy);
+        int startX = (std::max(srchRngHorLeft, -cuPelX) + delaySx);
+        int endY = srchRngVerBottom;
+        int endX = srchRngHorRight;
+
+        if (m_pcEncCfg->m_IBCFastMethod > 5)
         {
-          if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
-            continue;
-
-          bool isSameAsLast = !firstX && ( ( cuPelX + x ) & minCuMask ) > 1;
-
-          if( ( isSameAsLast && !lastDec ) || ( !isSameAsLast && !searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth ) ) )
+          startY = bestY - 4;
+          endY = bestY + 4;
+          startX = bestX - 4;
+          endX = bestX + 4;
+          stepS = 1;
+          if (searchStep)
           {
-            CHECKD( isSameAsLast && lastDec, "" );
-            lastDec = false;
-            continue;
-          }
-
-          CHECKD( isSameAsLast && !lastDec, "" );
-
-          lastDec = true;
-
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
-          m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
-          sad += m_cDistParam.distFunc(m_cDistParam);
-
-          xIBCSearchMVCandUpdate(sad, x, y, sadBestCand, cMVCand);
-        }
-      }
-
-      bestX = cMVCand[0].hor;
-      bestY = cMVCand[0].ver;
-      sadBest = sadBestCand[0];
-      if (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, useAmvr) <= 16)
-      {
-        //chroma refine
-        bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
-
-        bestX = cMVCand[bestCandIdx].hor;
-        bestY = cMVCand[bestCandIdx].ver;
-        sadBest = sadBestCand[bestCandIdx];
-        rcMv.set(bestX, bestY);
-        ruiCost = sadBest;
-        goto end;
-      }
-
-      for (int y = (std::max(srchRngVerTop, -cuPelY) + 1); y <= srchRngVerBottom; y += stepS)
-      {
-        if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
-          continue;
-
-        for (int x = std::max(srchRngHorLeft, -cuPelX); x <= srchRngHorRight; x += stepS)
-        {
-          if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
-            continue;
-
-          if( !searchBvIBC( cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth ) )
-          {
-            continue;
-          }
-
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
-          m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
-          sad += m_cDistParam.distFunc(m_cDistParam);
-
-
-          xIBCSearchMVCandUpdate(sad, x, y, sadBestCand, cMVCand);
-          if (sadBestCand[0] <= 5)
-          {
-            //chroma refine & return
-            bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
-            bestX = cMVCand[bestCandIdx].hor;
-            bestY = cMVCand[bestCandIdx].ver;
-            sadBest = sadBestCand[bestCandIdx];
-            rcMv.set(bestX, bestY);
-            ruiCost = sadBest;
-            goto end;
+            break;
           }
         }
-      }
 
-      bestX = cMVCand[0].hor;
-      bestY = cMVCand[0].ver;
-      sadBest = sadBestCand[0];
-
-      if ((sadBest >= tempSadBest) || ((sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, useAmvr)) <= 32))
-      {
-        //chroma refine
-        bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
-        bestX = cMVCand[bestCandIdx].hor;
-        bestY = cMVCand[bestCandIdx].ver;
-        sadBest = sadBestCand[bestCandIdx];
-        rcMv.set(bestX, bestY);
-        ruiCost = sadBest;
-        goto end;
-      }
-
-      tempSadBest = sadBestCand[0];
-
-      for (int y = (std::max(srchRngVerTop, -cuPelY) + 1); y <= srchRngVerBottom; y += stepS)
-      {
-        if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
-          continue;
-
-        for (int x = (std::max(srchRngHorLeft, -cuPelX) + 1); x <= srchRngHorRight; x += stepS)
+        for (int y = startY; y <= endY; y += stepS)
         {
-          if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
+          if ((y == 0) || ((int)(cuPelY + y + roiHeight) >= picHeight))
             continue;
-
-          if( !searchBvIBC( cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth ) )
+          bool firstX = true;
+          int stepSx = searchStep ? stepS : 1;
+          for (int x = startX; x <= endX; firstX = false, x += stepSx)
           {
-            continue;
+            if ((x == 0) || ((int)(cuPelX + x + roiWidth) >= picWidth))
+              continue;
+
+            bool isSameAsLast = !firstX && ((cuPelX + x) & minCuMask) > 1;
+            if (searchStep || (m_pcEncCfg->m_IBCFastMethod > 5))
+            {
+              if (!searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth))
+              {
+                continue;
+              }
+            }
+            else if ((isSameAsLast && !lastDec) || (!isSameAsLast && !searchBvIBC(cu, cuPelX, cuPelY, roiWidth, roiHeight, picWidth, picHeight, x, y, lcuWidth)))
+            {
+              lastDec = false;
+              continue;
+            }
+            lastDec = true;
+
+            sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, cu.cs->sps->AMVR);
+            m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
+            sad += m_cDistParam.distFunc(m_cDistParam);
+
+            xIBCSearchMVCandUpdate(sad, x, y, sadBestCand, cMVCand);
+
+
+            if (searchStep && sadBestCand[0] <= 5)
+            {
+              //chroma refine & return
+              bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
+              bestX = cMVCand[bestCandIdx].hor;
+              bestY = cMVCand[bestCandIdx].ver;
+              sadBest = sadBestCand[bestCandIdx];
+              rcMv.set(bestX, bestY);
+              ruiCost = sadBest;
+              goto end;
+            }
           }
+        }
 
-          sad = m_pcRdCost->getBvCostMultiplePredsIBC(x, y, useAmvr);
-          m_cDistParam.cur.buf = piRefSrch + cStruct.iRefStride * y + x;
-          sad += m_cDistParam.distFunc(m_cDistParam);
-
-
-          xIBCSearchMVCandUpdate(sad, x, y, sadBestCand, cMVCand);
-          if (sadBestCand[0] <= 5)
+        if ((searchStep < 2) && (m_pcEncCfg->m_IBCFastMethod < 6))
+        {
+          if ((m_pcEncCfg->m_IBCFastMethod > 2) && (m_pcEncCfg->m_IBCFastMethod < 5))
           {
-            //chroma refine & return
+            if ((bestX == cMVCand[0].hor) && (bestY == cMVCand[0].ver))
+            {
+              sadBest = sadBestCand[bestCandIdx];
+              rcMv.set(bestX, bestY);
+              ruiCost = sadBest;
+              goto end;
+            }
+          }
+          bestX = cMVCand[0].hor;
+          bestY = cMVCand[0].ver;
+          sadBest = sadBestCand[0];
+
+          int StopSearch = searchStep ? 32 : 16;
+          if ((searchStep && (sadBest >= tempSadBest)) || (sadBest - m_pcRdCost->getBvCostMultiplePredsIBC(bestX, bestY, cu.cs->sps->AMVR) <= StopSearch))
+          {
+            //chroma refine
             bestCandIdx = xIBCSearchMVChromaRefine(cu, roiWidth, roiHeight, cuPelX, cuPelY, sadBestCand, cMVCand);
+
             bestX = cMVCand[bestCandIdx].hor;
             bestY = cMVCand[bestCandIdx].ver;
             sadBest = sadBestCand[bestCandIdx];

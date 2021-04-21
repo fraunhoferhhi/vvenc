@@ -1010,7 +1010,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     {
       return false;
     }
-    if ((m_pcEncCfg->m_IBCFastMethod > 2) &&(lumaArea.width == 4 && lumaArea.height == 4 && !slice.isIntra()))
+    if ((m_pcEncCfg->m_IBCFastMethod > 3) &&(lumaArea.width == 4 && lumaArea.height == 4 && !slice.isIntra()))
     {
       return false;
     }
