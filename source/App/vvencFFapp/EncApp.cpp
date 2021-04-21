@@ -215,7 +215,7 @@ void EncApp::encode()
       // read input YUV
       if( ! inputDone )
       {
-        inputDone = ! m_yuvInputFile.isEof();
+        inputDone = m_yuvInputFile.isEof();
         if( 0 != m_yuvInputFile.readYuvBuf( yuvInBuf ) )
         {
           msgApp( VVENC_ERROR, "read file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
