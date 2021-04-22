@@ -122,12 +122,16 @@ const ProfileFeatures *ProfileFeatures::getProfileFeatures(const vvencProfile p)
   return &validProfiles[i];
 }
 
-vvencLevel LevelTierFeatures::getLevelForInput( uint32_t width, uint32_t height )
+vvencLevel LevelTierFeatures::getLevelForInput( uint32_t width, uint32_t height, bool tier, int temporalRate, int temporalScale, int bitrate )
 {
+  uint64_t samplesPerSec = (uint64_t)(temporalRate*width*height)/temporalScale;
+  int br = bitrate ? bitrate/1000 : samplesPerSec/3000;  //assume a min compression factor of 36 in the case of fix qp
   for (const auto& info: mainLevelTierInfo )
   {
     if ( width <= info.getMaxPicWidthInLumaSamples() &&
         height <=  info.getMaxPicHeightInLumaSamples() &&
+        samplesPerSec <=  info.maxLumaSr &&
+        br <= info.maxBr[tier?1:0] &&
         info.level != VVENC_LEVEL_AUTO )
     {
       return info.level;
