@@ -55,6 +55,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <iostream>
 
+#if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 //! \ingroup Interface
 //! \{
 using namespace vvenc;
@@ -513,6 +518,13 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
     if( !strcmp( fileName.c_str(), "-" ) )
     {
       m_readStdin = true;
+#if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
+      if( _setmode( _fileno( stdin ), _O_BINARY ) == -1 )
+      {
+        m_lastError =  "\nError: Failed to set stdin to binary mode";
+        return -1;
+      }
+#endif
       return 0;
     }
 
