@@ -1299,6 +1299,7 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
   if( blkDst.width & 7 )
   {
     simdFilterBlkCcAlf<SSE42>( dstBuf, recSrc, blkDst, blkSrc, compId, filterCoeff, clpRngs, cs, vbCTUHeight, vbPos );
+    return;
   }
 
   CHECK( 1 << floorLog2( vbCTUHeight ) != vbCTUHeight, "Not a power of 2" );

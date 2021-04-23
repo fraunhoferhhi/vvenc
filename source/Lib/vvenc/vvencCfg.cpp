@@ -655,7 +655,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_inputBitDepth[0] != 8 && c->m_inputBitDepth[0] != 10,                  "Input bitdepth must be 8 or 10 bit" );
   vvenc_confirmParameter( c, c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
 
-  vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be more than 1" );
+  vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                 "TicksPerSecond must be in range from 1 to 27000000" );
 
   int temporalRate   = c->m_FrameRate;
@@ -1190,7 +1190,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
   {
     c->m_usePerceptQPATempFiltISlice = 0;
-    if ( c->m_usePerceptQPA ) // auto mode for temp.filt.
+    if ( c->m_usePerceptQPA ) // automatic mode for temporal filtering depending on RC
     {
       c->m_usePerceptQPATempFiltISlice = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 2 ? 2 : 1 );
     }
@@ -1226,6 +1226,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
+
+  if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
 
   /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
    * This permits the ability to omit a GOP structure specification */
@@ -2706,8 +2708,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
   switch( preset )
   {
-    case vvencPresetMode::VVENC_FIRSTPASS:
     case vvencPresetMode::VVENC_FASTER:
+#if RC_INTRA_MODEL_OPT
+      c->m_BDOF                      = 1;
+      c->m_DMVR                      = 1;
+#endif
+    case vvencPresetMode::VVENC_FIRSTPASS:
       // CTUSize64 QT44MTT00
       c->m_CTUSize                   = 64;
       c->m_MinQT[ 0 ]                = 4;
@@ -2721,13 +2727,16 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled     = 1;
 
       c->m_useBDPCM                  = 2;
+#if !RC_INTRA_MODEL_OPT
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
+#endif
       c->m_LMChroma                  = 1;
       c->m_MTSImplicit               = 1;
       c->m_bUseSAO                   = 1;
       c->m_TMVPModeId                = 1;
       c->m_TS                        = 2;
+
       break;
 
     case vvencPresetMode::VVENC_FAST:

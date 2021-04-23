@@ -122,6 +122,7 @@ namespace vvenc {
 #define INTRA_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 #define INTER_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 
+#define RC_INTRA_MODEL_OPT                                1 ///< enables new model to derive QP/lambda from target bits
 
 // This can be enabled by the makefile
 #ifndef RExt__HIGH_BIT_DEPTH_SUPPORT
