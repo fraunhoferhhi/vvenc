@@ -361,6 +361,9 @@ void EncLib::xSetRCEncCfg( int pass )
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
+#if RC_INTRA_MODEL_OPT
+    const double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
+#endif
     // preserve MCTF settings
     const int mctf = m_cBckCfg.m_vvencMCTF.MCTF;
 
@@ -368,7 +371,11 @@ void EncLib::xSetRCEncCfg( int pass )
 
     // use fixQP encoding in first pass
     m_cBckCfg.m_RCTargetBitrate = 0;
+#if RC_INTRA_MODEL_OPT
+    m_cBckCfg.m_QP              = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
+#else
     m_cBckCfg.m_QP              = 32;
+#endif
 
     // restore MCTF
     m_cBckCfg.m_vvencMCTF.MCTF  = mctf;
@@ -381,6 +388,35 @@ void EncLib::xSetRCEncCfg( int pass )
 
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
+#if RC_INTRA_MODEL_OPT
+  else // estimate near-optimal base QP for PPS in second RC pass
+  {
+    const unsigned fps = m_cEncCfg.m_FrameRate;
+    uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
+    std::list<TRCPassStats>& firstPassData = m_cRateCtrl.getFirstPassStats();
+    std::list<TRCPassStats>::iterator it;
+
+    for (it = firstPassData.begin(); it != firstPassData.end(); it++)
+    {
+      sumFrBits += it->numBits;
+      sumVisAct += it->visActY;
+    }
+    if ((firstPassData.size() > 0) && (fps > 0))
+    {
+      double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
+      const double qpSizeOffset = (d < 2.0 ? 2.0 /*UHD*/ : 1.0 + log (d) / log (2.0) /*HD, SD*/);
+      const uint64_t frameCount = (uint64_t) firstPassData.size();
+      const int firstPassBaseQP = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
+
+      sumFrBits = (sumFrBits + (frameCount >> 1)) / frameCount; // average bits/frame
+      sumVisAct = (sumVisAct + (frameCount >> 1)) / frameCount; // luma vis. activity
+
+      d = ((35.0 + qpSizeOffset - sumVisAct * 0.015625) / 256.0) * firstPassBaseQP * log (m_cEncCfg.m_RCTargetBitrate / double (sumFrBits * fps)) / log (2.0);
+      const_cast<VVEncCfg&>(m_cEncCfg).m_QP = int (0.5 + firstPassBaseQP - d);
+      const_cast<VVEncCfg&>(m_cEncCfg).m_QP = Clip3 (17, firstPassBaseQP + 1, m_cEncCfg.m_QP - std::min (0, (firstPassBaseQP + 3 * (m_cEncCfg.m_QP - firstPassBaseQP) + 2) >> 2));
+    }
+  }
+#endif
 }
 
 // ====================================================================================================================
@@ -436,8 +472,14 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   }
 
   // MCTF process
-  if ( m_cEncCfg.m_usePerceptQPA ) m_MCTF.assignQpaBufs( pic );
-
+#if RC_INTRA_MODEL_OPT
+  if (m_cEncCfg.m_usePerceptQPA || (m_cEncCfg.m_RCNumPasses == 2))
+#else
+  if ( m_cEncCfg.m_usePerceptQPA )
+#endif
+  {
+    m_MCTF.assignQpaBufs( pic );
+  }
   int mctfDelay = 0;
   if ( m_cEncCfg.m_vvencMCTF.MCTF )
   {
