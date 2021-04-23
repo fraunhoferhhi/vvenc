@@ -635,21 +635,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
 
-static bool  checkVals(int  *v1,int *v2 )
-{
-  bool	ret=true;
-  for (int i =0; i<VVENC_MAX_QP_VALS_CHROMA;i++)
-  {
-    if  (v1[i]   != v2[i] )
-	{
-    	ret=false;
-    	break;
-	}
-  }
-return ret;
-}
-
-
 static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* message )
 {
   if ( ! bflag )
@@ -869,37 +854,37 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_verCollocatedChromaFlag = true;
     vvenc_config cBaseCfg;
     vvenc_config_default(&cBaseCfg);
-    if( checkVals(c->m_qpInValsCb,cBaseCfg.m_qpInValsCb) )
+    if( memcmp(c->m_qpInValsCb,cBaseCfg.m_qpInValsCb,VVENC_MAX_QP_VALS_CHROMA) ==0 )
     {
       memset(&c->m_qpInValsCb,0, sizeof(c->m_qpInValsCb));
       std::vector<int>  qpInVals = { 13,20,36,38,43,54 };
       std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpInValsCb);
     }
-    if( checkVals(c->m_qpOutValsCb ,cBaseCfg.m_qpOutValsCb ))
+    if( memcmp(c->m_qpOutValsCb ,cBaseCfg.m_qpOutValsCb,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       memset(&c->m_qpOutValsCb,0, sizeof(c->m_qpOutValsCb));
       std::vector<int>  qpInVals = { 13,21,29,29,32,37 };
       std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpOutValsCb);
     }
-    if(checkVals( c->m_qpInValsCr ,cBaseCfg.m_qpInValsCr ))
+    if(memcmp( c->m_qpInValsCr ,cBaseCfg.m_qpInValsCr ,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       memset(&c->m_qpInValsCr,0, sizeof(c->m_qpInValsCr));
       std::vector<int>  qpInVals = { 13,20,37,41,44,54 };
       std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpInValsCr);
     }
-    if( checkVals(c->m_qpOutValsCr ,cBaseCfg.m_qpOutValsCr ))
+    if( memcmp(c->m_qpOutValsCr ,cBaseCfg.m_qpOutValsCr,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       memset(&c->m_qpOutValsCr,0, sizeof(c->m_qpOutValsCr));
       std::vector<int>  qpInVals = { 13,21,27,29,32,37 };
       std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpOutValsCr);
     }
-    if( checkVals(c->m_qpInValsCbCr, cBaseCfg.m_qpInValsCbCr) )
+    if( memcmp(c->m_qpInValsCbCr, cBaseCfg.m_qpInValsCbCr,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       memset(&c->m_qpInValsCbCr,0, sizeof(c->m_qpInValsCbCr));
       std::vector<int>  qpInVals = { 12,21,41,43,54 };
       std::copy(qpInVals.begin(), qpInVals.end(), c->m_qpInValsCbCr);
     }
-    if( checkVals(c->m_qpOutValsCbCr , cBaseCfg.m_qpOutValsCbCr ))
+    if( memcmp(c->m_qpOutValsCbCr , cBaseCfg.m_qpOutValsCbCr,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       memset(&c->m_qpOutValsCbCr,0, sizeof(c->m_qpOutValsCbCr));
       std::vector<int>  qpInVals = { 12,22,30,32,37 };
@@ -929,12 +914,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
     vvenc_config cBaseCfg;
     vvenc_config_default(&cBaseCfg);
-    if( c->m_qpInValsCb == cBaseCfg.m_qpInValsCb )
+    if( memcmp(c->m_qpInValsCb,cBaseCfg.m_qpInValsCb,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       std::vector<int>  qpVals = { 9, 23, 33, 42 };
       std::copy(qpVals.begin(), qpVals.end(), c->m_qpInValsCb);
     }
-    if( c->m_qpOutValsCb == cBaseCfg.m_qpOutValsCb )
+    if( memcmp(c->m_qpOutValsCb,cBaseCfg.m_qpOutValsCb,VVENC_MAX_QP_VALS_CHROMA) ==0  )
     {
       std::vector<int>  qpVals = { 9, 24, 33, 37 };
       std::copy(qpVals.begin(), qpVals.end(), c->m_qpOutValsCb);
