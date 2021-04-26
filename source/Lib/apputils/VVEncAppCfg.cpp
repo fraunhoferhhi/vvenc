@@ -580,6 +580,17 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ;
   }
 
+#if GDR_ENABLED
+  opts.setSubSection(GDR options");
+  opts.addOptions()
+  ("GdrEnabled",                                      m_gdrEnabled,                                     "GDR enabled")
+  ("GdrPocStart",                                     m_gdrPocStart,                                    "GDR poc start")
+  ("GdrPeriod",                                       m_gdrPeriod,                                      "Number of frames between GDR picture to the next GDR picture")
+  ("GdrInterval",                                     m_gdrInterval,                                    "Number of frames from GDR picture to the recovery point picture")  
+  ("GdrNoHash",                                       m_gdrNoHash,                                      "Do not generate decode picture hash SEI messages for GDR and recovering pictures")  
+  ;
+#endif
+
   opts.setSubSection("Profile, Level, Tier");
   opts.addOptions()
   ("Profile",                                           toProfile,                                           "select profile (main10, main10_stillpic)")
