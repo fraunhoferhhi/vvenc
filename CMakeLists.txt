@@ -342,19 +342,7 @@ add_test( NAME Test_compare_output-medium_noqpa_0thr COMMAND ${CMAKE_COMMAND} -E
 add_test( NAME Test_vvencFFapp-lowdelay_medium_enc COMMAND vvencFFapp -c ../../cfg/experimental/lowdelay_medium.cfg -c ../../test/data/RTn23.cfg --IntraPeriod=-1 -dph 1 -f 8 -b outf.vvc )
 add_test( NAME Test_vvencFFapp-lowdelay_medium_dec COMMAND vvencFFapp --decode -b outf.vvc )
 
-add_test( NAME Test_vvencFFapp-tooltest-mt1 COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg --CTUSize=32 -c ../../test/data/RTn23.cfg -f 11 -b out1.vvc )
-set_tests_properties( Test_vvencFFapp-tooltest-mt1 PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_vvencFFapp-tooltest-mt2 COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg --CTUSize=32 -c ../../test/data/RTn23.cfg -f 11 -b out2.vvc )
-set_tests_properties( Test_vvencFFapp-tooltest-mt2 PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_vvencFFapp-tooltest-mt3 COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg --CTUSize=32 -c ../../test/data/RTn23.cfg -f 11 -b out3.vvc --SIMD=SCALAR )
-set_tests_properties( Test_vvencFFapp-tooltest-mt3 PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_vvencFFapp-tooltest-mt4 COMMAND vvencFFapp -c ../../cfg/randomaccess_tooltest.cfg --CTUSize=32 -c ../../test/data/RTn23.cfg -f 11 -b out4.vvc --SIMD=SCALAR )
-set_tests_properties( Test_vvencFFapp-tooltest-mt4 PROPERTIES TIMEOUT 60 )
-add_test( NAME Test_compare_output-tooltest-mt2 COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out1.vvc out2.vvc )
-add_test( NAME Test_compare_output-tooltest-mt3 COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out1.vvc out3.vvc )
-add_test( NAME Test_compare_output-tooltest-mt4 COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol out1.vvc out4.vvc )
-
-add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc out1.vvc out2.vvc out3.vvc out4.vvc )
+add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc )
  
 
 if( VVENC_ENABLE_INSTALL )
