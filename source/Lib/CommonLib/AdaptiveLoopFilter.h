@@ -107,7 +107,7 @@ public:
   void        ALFProcess              ( CodingStructure& cs);
   void        create                  ( const int picWidth, const int picHeight, const ChromaFormat format, const int maxCUWidth, const int maxCUHeight, const int maxCUDepth, const int inputBitDepth[MAX_NUM_CH] );
   void        destroy                 ();
-  static void deriveClassificationBlk ( AlfClassifier *classifier, int **laplacian[NUM_DIRECTIONS],
+  static void deriveClassificationBlk ( AlfClassifier *classifier,
                                        const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift,
                                        const int vbCTUHeight, int vbPos);
   void        deriveClassification    ( AlfClassifier* classifier, const CPelBuf& srcLuma, const Area& blkDst, const Area& blk );
@@ -121,9 +121,7 @@ public:
                                        const Area& blkDst, const Area& blk, const ComponentID compId, const short *filterSet,
                                        const short *fClipSet, const ClpRng &clpRng, const CodingStructure &cs, const int vbCTUHeight,
                                        int vbPos);
-  void (*m_deriveClassificationBlk) ( AlfClassifier *classifier, int **laplacian[NUM_DIRECTIONS], const CPelBuf& srcLuma,
-                                      const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight,
-                                      int vbPos);
+  void (*m_deriveClassificationBlk) ( AlfClassifier *classifier, const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight, int vbPos);
   void (*m_filterCcAlf)             ( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const Area &blkDst, const Area &blkSrc,
                                       const ComponentID compId, const int16_t *filterCoeff, const ClpRngs &clpRngs,
                                       CodingStructure &cs, int vbCTUHeight, int vbPos);
@@ -167,7 +165,6 @@ protected:
   short                        m_coeffFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_clippFinal[MAX_NUM_ALF_CLASSES * MAX_NUM_ALF_LUMA_COEFF];
   short                        m_chromaClippFinal[VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA][MAX_NUM_ALF_LUMA_COEFF];
-  int**                        m_laplacian[NUM_DIRECTIONS];
   uint8_t*                     m_ctuEnableFlag[MAX_NUM_COMP];
   uint8_t*                     m_ctuAlternative[MAX_NUM_COMP];
   PelStorage                   m_tempBuf;
