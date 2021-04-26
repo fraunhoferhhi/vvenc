@@ -66,6 +66,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TrQuant_EMT.h"
 #endif
 
+#if _DEBUG
+#define HANDLE_EXCEPTION 0
+#else
+#define HANDLE_EXCEPTION 1
+#endif
+
+
 namespace vvenc {
 
 #define ROTPARAMS(x, message) if(x) { rcErrorString = message; return VVENC_ERR_PARAMETER;}
@@ -141,15 +148,19 @@ int VVEncImpl::init( const vvenc_config& config )
   // initialize the encoder
   m_pEncLib = new EncLib;
 
+#if HANDLE_EXCEPTION
   try
+#endif
   {
     m_pEncLib->initEncoderLib( m_cVVEncCfg );
   }
+#if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
+#endif
 
   m_bInitialized = true;
   m_eState       = INTERNAL_STATE_INITIALIZED;
@@ -177,15 +188,19 @@ int VVEncImpl::initPass( int pass )
 
   if ( m_pEncLib )
   {
+#if HANDLE_EXCEPTION
     try
+#endif
     {
       m_pEncLib->initPass( pass );
     }
+#if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
+#endif
   }
 
   m_eState = INTERNAL_STATE_INITIALIZED;
@@ -198,17 +213,21 @@ int VVEncImpl::uninit()
 
   if ( m_pEncLib )
   {
+#if HANDLE_EXCEPTION
     try
+#endif
     {
       m_pEncLib->uninitEncoderLib();
       delete m_pEncLib;
       m_pEncLib = nullptr;
     }
+#if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
+#endif
   }
 
   m_bInitialized = false;
@@ -334,15 +353,19 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
   *pbEncodeDone  = false;
 
   AccessUnitList cAu;
+#if HANDLE_EXCEPTION
   try
+#endif
   {
     m_pEncLib->encodePicture( bFlush, pcYUVBuffer, cAu, *pbEncodeDone );
   }
+#if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
+#endif
 
   if( *pbEncodeDone )
   {
@@ -646,8 +669,9 @@ const char* VVEncImpl::getCompileInfoString()
 }
 
 ///< decode bitstream with limited build in decoder
-void VVEncImpl::decodeBitstream( const char* FileName)
+int VVEncImpl::decodeBitstream( const char* FileName)
 {
+  int ret = 0;
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
 
@@ -656,15 +680,25 @@ void VVEncImpl::decodeBitstream( const char* FileName)
 #endif
 
   std::string filename(FileName );
-  if( tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false ))
+#if HANDLE_EXCEPTION
+  try
+#endif
   {
-    msg( VVENC_ERROR, "decoding failed");
-    THROW("error decoding");
+    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
+    if( ret )  { msg( VVENC_ERROR, "decoding failed"); }
   }
+#if HANDLE_EXCEPTION
+  catch( std::exception& e )
+  {
+    msg( VVENC_ERROR, "decoding failed %s", e.what() );
+    return VVENC_ERR_UNSPECIFIED;
+  }
+#endif
 
 #if ENABLE_TRACING
   tracing_uninit( g_trace_ctx );
 #endif
+  return ret;
 }
 
 
