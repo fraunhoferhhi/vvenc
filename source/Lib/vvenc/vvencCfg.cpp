@@ -83,6 +83,10 @@ static std::vector<int> vvenc_getQpValsAsVec( int QpVals[] )
     if( QpVals[i] > 0) QpValsVec.push_back( QpVals[i] );
     else break;
   }
+  if( QpValsVec.empty() )
+  {
+    QpValsVec = { 0 };
+  }
   return QpValsVec;
 }
 
