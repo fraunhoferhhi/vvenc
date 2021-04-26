@@ -69,7 +69,12 @@ static int vvenc_getQpValsSize( int QpVals[] )
   for ( int i = 0; i < VVENC_MAX_QP_VALS_CHROMA; i++ )
   {
     if( QpVals[i] > 0) size++;
-    else return size;
+    else break;
+  }
+
+  if( size == 0)
+  {
+    size = 1;  // at least first value must be set to 0
   }
 
   return size;
