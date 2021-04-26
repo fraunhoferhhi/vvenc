@@ -641,6 +641,7 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #endif
 }
 
+#if ENABLE_SIMD_OPT_BDOF
 template<X86_VEXT vext>
 void InterPredInterpolation::_initInterPredictionX86()
 {
@@ -651,6 +652,7 @@ void InterPredInterpolation::_initInterPredictionX86()
 }
 template void InterPredInterpolation::_initInterPredictionX86<SIMDX86>();
 
+#endif
 } // namespace vvenc
 
 //! \}

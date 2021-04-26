@@ -100,10 +100,8 @@ struct PelBufferOps
   void ( *linTf8 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *copyBuffer )    ( const char* src, int srcStride, char* dst, int dstStride, int width, int height );
   void ( *padding )       ( Pel* dst, int stride, int width, int height, int padSize);
-#if ENABLE_SIMD_OPT_BCW
   void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
-#endif
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *transpose8x8 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *roundIntVector) ( int* v, int size, unsigned int nShift, const int dmvLimit);
