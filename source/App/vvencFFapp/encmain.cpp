@@ -62,12 +62,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderApp
 //! \{
 
-#if _DEBUG
-#define HANDLE_EXCEPTION 0
-#else
-#define HANDLE_EXCEPTION 1
-#endif
-
 // ====================================================================================================================
 // Main function
 // ====================================================================================================================
@@ -115,24 +109,8 @@ int main(int argc, char* argv[])
   clock_t startClock = clock();
 
   // call encoding function
-#if HANDLE_EXCEPTION
-  try
-  {
-#endif
-    pcEncApp->encode();
-#if HANDLE_EXCEPTION
-  }
-  catch( std::exception &e )
-  {
-    msgApp( VVENC_ERROR, "%s\n", e.what() );
-    return 1;
-  }
-  catch( ... )
-  {
-    msgApp( VVENC_ERROR, "Unspecified error occurred\n" );
-    return 1;
-  }
-#endif
+  int ret = pcEncApp->encode();
+
   // ending time
   clock_t endClock = clock();
   auto endTime = std::chrono::steady_clock::now();
@@ -144,7 +122,7 @@ int main(int argc, char* argv[])
   msgApp( VVENC_INFO, "\n finished @ %s", std::ctime(&endTime2) );
   msgApp( VVENC_INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
 
-  return 0;
+  return ret;
 }
 
 //! \}

@@ -109,27 +109,27 @@ bool EncApp::parseCfg( int argc, char* argv[])
 /**
  * main encode function
  */
-void EncApp::encode()
+int EncApp::encode()
 {
   vvenc_config& vvencCfg = m_cEncAppCfg;
   if( m_cEncAppCfg.m_decode )
   {
-    vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str() );
-    return;
+    return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str() );
   }
 
   // initialize encoder lib
   m_encCtx = vvenc_encoder_create();
   if( nullptr == m_encCtx )
   {
-    return;
+    return -1;
   }
 
-  if( 0 != vvenc_encoder_open( m_encCtx, &vvencCfg ) )
+  int iRet = vvenc_encoder_open( m_encCtx, &vvencCfg ); 
+  if( 0 != iRet )
   {
     msgApp( VVENC_ERROR, vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
-    return;
+    return iRet;
   }
 
   if ( ! m_cEncAppCfg.m_reconFileName.empty() )
@@ -146,7 +146,7 @@ void EncApp::encode()
     if( m_cEncAppCfg.m_RCNumPasses > 1 )
     {
       msgApp( VVENC_ERROR, " 2 pass rate control and reading from stdin is not supported yet\n" );
-      return;
+      return -1;
     }
     else
     {
@@ -156,7 +156,7 @@ void EncApp::encode()
 
   if( ! openFileIO() )
   {
-    return;
+    return -1;
   }
 
   printChromaFormat();
@@ -218,7 +218,7 @@ void EncApp::encode()
         if( 0 != m_yuvInputFile.readYuvBuf( yuvInBuf, inputDone ) )
         {
           msgApp( VVENC_ERROR, "read file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
-          return;
+          return -1;
         }
         if( !inputDone )
         {
@@ -238,7 +238,7 @@ void EncApp::encode()
         inputPacket = &yuvInBuf;
       }
 
-      int iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
+      iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
       if( 0 != iRet )
       {
         msgApp( VVENC_ERROR, "encoding failed: err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
@@ -272,15 +272,11 @@ void EncApp::encode()
   vvenc_accessUnit_free_payload( &au );
 
   closeFileIO();
+  return iRet;
 }
 
 void EncApp::outputAU( const vvencAccessUnit& au )
 {
- if( au.payloadUsedSize == 0 )
- {
-   return;
- } 
-
   m_bitstream.write(reinterpret_cast<const char*>(au.payload), au.payloadUsedSize);
 
   m_totalBytes     += au.payloadUsedSize;
