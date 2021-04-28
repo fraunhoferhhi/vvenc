@@ -102,6 +102,11 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+  if( pcEncApp->isShowVersion() )
+  {
+    return 0;
+  }
+
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
   std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());

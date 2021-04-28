@@ -415,6 +415,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("help",              do_help,                  "this help text")
   ("fullhelp",          do_full_help,             "show full text")
   ("verbosity,v",       toMsgLevel,               "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
+  ("version",           m_showVersion,            "show version ")
   ;
   opts.setSubSection("Input Options");
   opts.addOptions()
@@ -515,6 +516,11 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   // check own parameters
   //
 
+  if( m_showVersion )
+  {
+    return true;
+  }
+
   if( m_bitstreamFileName.empty() )
   {
     cout <<  "error: A bitstream file name must be specified (--output=bit.266)" << std::endl;
@@ -606,6 +612,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("help",                                            do_help,                                          "this help text")
   ("fullhelp",                                        do_expert_help,                                   "expert help text")
   ("Verbosity,v",                                     toMsgLevel,                                       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)")
+  ("version",                                         m_showVersion,                                    "show version ")
   ;
 
   opts.setSubSection("Input options");
@@ -1169,6 +1176,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // check own parameters
   //
+
+  if( m_showVersion )
+  {
+    return true;
+  }
+
   bool error = false;
   if( m_bitstreamFileName.empty() )
   {

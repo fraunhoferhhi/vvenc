@@ -107,6 +107,11 @@ public:
     }
   }
 
+  bool isShowVersion()
+  {
+    return m_cEncAppCfg.m_showVersion;
+  }
+
 private:
   // file I/O
   bool openFileIO();
