@@ -141,6 +141,11 @@ int main( int argc, char* argv[] )
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
   vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
+  if( vvencappCfg.m_verbosity > VVENC_SILENT)
+  {
+    std::cout << cAppname  << " version " << vvenc_get_version() << " " << vvenc_get_compile_info_string() << std::endl;
+  }
+
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
   {
@@ -170,12 +175,6 @@ int main( int argc, char* argv[] )
 
   cInputFile  = vvencappCfg.m_inputFileName;
   cOutputfile = vvencappCfg.m_bitstreamFileName;
-
-  if( vvencappCfg.m_verbosity > VVENC_SILENT && vvencappCfg.m_verbosity < VVENC_NOTICE )
-  {
-    std::cout << "-------------------" << std::endl;
-    std::cout << cAppname  << " version " << vvenc_get_version() << std::endl;
-  }
 
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )
