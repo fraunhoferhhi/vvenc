@@ -143,7 +143,7 @@ int main( int argc, char* argv[] )
 
   if( vvencappCfg.m_verbosity > VVENC_SILENT)
   {
-    std::cout << cAppname  << " version " << vvenc_get_version() << " " << vvenc_get_compile_info_string() << std::endl;
+    std::cout << cAppname  << " version " << vvenc_get_version() << std::endl;
   }
 
   // parse configuration
