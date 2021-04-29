@@ -3148,7 +3148,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
   if( c->m_IBCMode )
   {
-    css << "IBCfastMethod:" << c->m_IBCFastMethod << " ";
+    css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
   }
 
   css << "\nRATE CONTROL CFG: ";
