@@ -1,4 +1,25 @@
 /////////////////////////////////////////
+tag 1.0.0
+
+* libvvenc:
+  - add pkgconfig
+  - rewriting the vvenc interface in c
+    - restructuring vvenc.h and vvencCfg.h to pure C syntax
+    - removing namespace vvenc and replacing all struct and enumx to typedefs with prefix 'vvenc'
+    - removing file vvencCfgExpert.h and integrating all expert options into single struct vvenc_config
+    - vvencCfg replacing existing lists/vector by fixed size arrays, std::strings are fixed size char arrays now
+    
+* vvencapp:
+  - adding parameter --version to show current version
+   
+* vvencFFapp:
+ - adding parameter --version/-v to show current version
+ - vvenc::YUVWriterIf is replaced by callback function vvencRecYUVBufferCallback
+ 
+
+* bugfixes
+
+/////////////////////////////////////////
 tag 0.3.1.0
 
 * libvvenc:
