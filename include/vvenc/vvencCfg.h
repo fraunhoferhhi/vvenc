@@ -718,7 +718,7 @@ VVENC_DECL void vvenc_config_default( vvenc_config *cfg );
 
 VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
 
-VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int framerate, int targetbitrate = 0, int qp = 32, vvencPresetMode preset = vvencPresetMode::VVENC_MEDIUM );
+VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset );
 
 VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *cfg );
 

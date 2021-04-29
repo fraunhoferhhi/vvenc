@@ -149,7 +149,7 @@ VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer );
    Allocates the payload buffer of a vvencYUVBuffer instance.
    To free the buffer memory use vvenc_YUVBuffer_free_buffer.
 */
-VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat& chFmt, const int frameWidth, const int frameHeight );
+VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat chFmt, const int frameWidth, const int frameHeight );
 
 /* vvenc_YUVBuffer_free_buffer:
    release storage of the payload in a vvencYUVBuffer instance.
