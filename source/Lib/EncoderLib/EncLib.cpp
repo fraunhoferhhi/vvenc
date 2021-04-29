@@ -1291,6 +1291,7 @@ void EncLib::xOutputRecYuv()
     {
       const PPS& pps = *(picItr->cs->pps);
       vvencYUVBuffer yuvBuffer;
+      vvenc_YUVBuffer_default( &yuvBuffer );
       setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
 
       m_RecYUVBufferCallback( m_RecYUVBufferCallbackCtx, &yuvBuffer );
