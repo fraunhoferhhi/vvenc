@@ -178,7 +178,6 @@ inline Area clipArea(const Area& _area, const Area& boundingBox)
 
 } // namespace vvenc
 
-#if IBC_VTM
 namespace std
 {
   template <>
@@ -199,7 +198,6 @@ namespace std
     }
   };
 }
-#endif
 
 //! \}
 

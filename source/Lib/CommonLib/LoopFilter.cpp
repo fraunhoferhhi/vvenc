@@ -1300,9 +1300,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( lfp.bs & bsMask )
   {
     tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Y  ) || TU::getCbf( tuP, COMP_Y  )                                   ) ? 1 : 0, COMP_Y  );
-#if IBC_VTM
     if (!(MODE_INTRA != cuP.predMode && MODE_INTRA != cuQ.predMode && cuPcIsIntra))
-#endif
     {
       tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cb) || TU::getCbf(tuP, COMP_Cb) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cb);
       tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cr) || TU::getCbf(tuP, COMP_Cr) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cr);

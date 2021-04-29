@@ -73,8 +73,6 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define IBC_VTM                                           1
-
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
@@ -504,10 +502,8 @@ enum MergeType
 {
   MRG_TYPE_DEFAULT_N        = 0, // 0
   MRG_TYPE_SUBPU_ATMVP,
-#if IBC_VTM
   MRG_TYPE_IBC,
-#endif
-  NUM_MRG_TYPE                   // 5
+  NUM_MRG_TYPE
 };
 
 //////////////////////////////////////////////////////////////////////////

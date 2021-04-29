@@ -96,13 +96,11 @@ void DecCu::init( TrQuant* pcTrQuant, IntraPrediction* pcIntra, InterPrediction*
 void DecCu::decompressCtu( CodingStructure& cs, const UnitArea& ctuArea )
 {
   const int maxNumChannelType = cs.pcv->chrFormat != CHROMA_400 && CS::isDualITree( cs ) ? 2 : 1;
-#if IBC_VTM
   if (cs.resetIBCBuffer)
   {
     m_pcInterPred->resetIBCBuffer(cs.pcv->chrFormat, cs.slice->sps->CTUSize);
     cs.resetIBCBuffer = false;
   }
-#endif
   m_pcIntraPred->reset();
 
   for( int ch = 0; ch < maxNumChannelType; ch++ )
@@ -111,7 +109,6 @@ void DecCu::decompressCtu( CodingStructure& cs, const UnitArea& ctuArea )
 
     for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, chType, TREE_D ), chType ) )
     {
-#if IBC_VTM
       if (currCU.Y().valid())
       {
         const int vSize = cs.slice->sps->CTUSize > 64 ? 64 : cs.slice->sps->CTUSize;
@@ -126,7 +123,6 @@ void DecCu::decompressCtu( CodingStructure& cs, const UnitArea& ctuArea )
           }
         }
       }
-#endif
       if (currCU.predMode != MODE_INTRA && currCU.predMode != MODE_PLT && currCU.Y().valid())
       {
         xDeriveCUMV(currCU);
@@ -146,9 +142,7 @@ void DecCu::decompressCtu( CodingStructure& cs, const UnitArea& ctuArea )
         THROW( "Invalid prediction mode" );
         break;
       }
-#if IBC_VTM
       m_pcInterPred->xFillIBCBuffer(currCU);
-#endif
       LoopFilter::calcFilterStrengths(currCU);
 
       DTRACE_BLOCK_REC( cs.picture->getRecoBuf( currCU ), currCU, currCU.predMode );
@@ -342,15 +336,8 @@ void DecCu::xReconInter(CodingUnit &cu)
     m_pcInterPred->motionCompensationGeo(cu, predBuf, m_geoMrgCtx);
     CU::spanGeoMotionInfo(cu, m_geoMrgCtx, cu.geoSplitDir, cu.geoMergeIdx0, cu.geoMergeIdx1);
   }
-#if !IBC_VTM
-  else if( cu.predMode == MODE_IBC )
-  {
-    THROW("no IBC support");
-  }
-#endif
   else
   {
-#if IBC_VTM
     CHECK(CU::isIBC(cu) && cu.ciip, "IBC and Ciip cannot be used together");
     CHECK(CU::isIBC(cu) && cu.affine, "IBC and Affine cannot be used together");
     CHECK(CU::isIBC(cu) && cu.geo, "IBC and geo cannot be used together");
@@ -358,14 +345,11 @@ void DecCu::xReconInter(CodingUnit &cu)
     const bool luma = cu.Y().valid();
     const bool chroma = isChromaEnabled(cu.chromaFormat) && cu.Cb().valid();
     if (luma && (chroma || !isChromaEnabled(cu.chromaFormat)))
-#endif
     {
-    
-    cu.mvRefine = true;
-    m_pcInterPred->motionCompensation(cu, predBuf);
-    cu.mvRefine = false;
+      cu.mvRefine = true;
+      m_pcInterPred->motionCompensation(cu, predBuf);
+      cu.mvRefine = false;
     }
-#if IBC_VTM
     else
     {
       cu.mcControl = luma ? 0 : 4;
@@ -378,22 +362,12 @@ void DecCu::xReconInter(CodingUnit &cu)
       bool isIbcSmallBlk = CU::isIBC(cu) && (cu.lwidth() * cu.lheight() <= 16);
       //CU::saveMotionInHMVP(cu, isIbcSmallBlk);
       if (!cu.affine && !cu.geo && !isIbcSmallBlk)
-#else
-
-        if (!cu.affine && !cu.geo)
-#endif
-        {
-          const MotionInfo& mi = cu.getMotionInfo();
-          HPMVInfo hMi(mi, (mi.interDir == 3) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL);
-#if IBC_VTM
-          cs.addMiToLut(CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
-#else
-          cs.addMiToLut(cu.cs->motionLut.lut, hMi);
-#endif
-        }
-#if IBC_VTM
+      {
+        const MotionInfo& mi = cu.getMotionInfo();
+        HPMVInfo hMi(mi, (mi.interDir == 3) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL);
+        cs.addMiToLut(CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
+      }
     }
-#endif
 
     if (cu.ciip)
     {
@@ -431,23 +405,19 @@ void DecCu::xReconInter(CodingUnit &cu)
   // inter recon
   xDecodeInterTexture(cu);
 
-#if IBC_VTM
   bool LumaOnly = predBuf.bufs.size() > 1 ? false : true;
   if (predBuf.bufs[1].stride == 0 || predBuf.bufs[2].stride == 0)
   {
     LumaOnly = true;
   }
-#endif
   if (cu.rootCbf)
   {
-#if IBC_VTM
     if (LumaOnly)
     {
       cs.getResiBuf(cu.Y()).reconstruct(predBuf.Y(), cs.getResiBuf(cu.Y()), cs.slice->clpRngs.comp[COMP_Y]);
       cs.getRecoBuf(cu.Y()).copyFrom(cs.getResiBuf(cu.Y()));
     }
     else
-#endif
     {
       cs.getResiBuf(cu).reconstruct(predBuf, cs.getResiBuf(cu), cs.slice->clpRngs);
       cs.getRecoBuf(cu).copyFrom(cs.getResiBuf(cu));
@@ -455,13 +425,11 @@ void DecCu::xReconInter(CodingUnit &cu)
   }
   else
   {
-#if IBC_VTM
     if (LumaOnly)
     {
       cs.getRecoBuf(cu.Y()).copyClip(predBuf.Y(), cs.slice->clpRngs.comp[COMP_Y]);
     }
     else
-#endif
     {
       cs.getRecoBuf(cu).copyClip(predBuf, cs.slice->clpRngs);
     }
@@ -608,15 +576,13 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         }
         else
         {
-#if IBC_VTM
           if (CU::isIBC(cu))
           {
             CU::getIBCMergeCandidates(cu, mrgCtx, cu.mergeIdx);
           }
           else
-#endif
           {
-          CU::getInterMergeCandidates(cu, mrgCtx, 0, cu.mergeIdx);
+            CU::getInterMergeCandidates(cu, mrgCtx, 0, cu.mergeIdx);
           }
           mrgCtx.setMergeInfo(cu, cu.mergeIdx);
         }
@@ -667,7 +633,6 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
         }
       }
     }
-#if IBC_VTM
     else if (CU::isIBC(cu) && cu.interDir == 1)
     {
       AMVPInfo amvpInfo;
@@ -685,7 +650,6 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
       cu.mv[REF_PIC_LIST_0] = amvpInfo.mvCand[cu.mvpIdx[REF_PIC_LIST_0]] + mvd;
       cu.mv[REF_PIC_LIST_0].mvCliptoStorageBitDepth();
     }
-#endif
     else
     {
       for ( uint32_t uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
@@ -707,7 +671,6 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
     }
     CU::spanMotionInfo( cu, mrgCtx );
   }
-#if IBC_VTM
   if (CU::isIBC(cu)) //only check
   {
     const int cuPelX = cu.Y().x;
@@ -719,7 +682,6 @@ void DecCu::xDeriveCUMV( CodingUnit &cu )
     int yPred = cu.mv[0].ver >> MV_FRACTIONAL_BITS_INTERNAL;
     CHECK(!m_pcInterPred->isLumaBvValidIBC(lcuWidth, cuPelX, cuPelY, roiWidth, roiHeight, xPred, yPred), "invalid block vector for IBC detected.");
   }
-#endif
 }
 
 } // namespace vvenc

@@ -1042,10 +1042,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("ChromaTS",                                        m_useChromaTS,                                    "Enable encoder search of chromaTS")
   ("BDPCM",                                           m_useBDPCM,                                       "BDPCM (0:off, 1:luma and chroma, 2: BDPCM with SCC detection)")
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
-#if 1 // IBC_VTM
-  ( "IBC",                                            m_IBCMode,                                        "IBCMode (0:off, 1:IBC, 2: IBC with SCC detection)")
-  ( "IBCFastMethod",                                  m_IBCFastMethod,                                  "Fast methods for IBC . 1:default, [2..6]speedups")
-#endif
+  ("IBC",                                             m_IBCMode,                                        "IBCMode (0:off, 1:IBC, 2: IBC with SCC detection)")
+  ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC . 1:default, [2..6]speedups")
   ;
 
   opts.setSubSection("Input options");
