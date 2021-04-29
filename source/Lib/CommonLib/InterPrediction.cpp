@@ -193,9 +193,7 @@ void calcBDOFSumsCore(const Pel* srcY0Tmp, const Pel* srcY1Tmp, Pel* gradX0, Pel
 InterPrediction::InterPrediction()
   : m_currChromaFormat( NUM_CHROMA_FORMAT )
   , m_subPuMC(false)
-#if IBC_VTM
   , m_IBCBufferWidth(0)
-#endif
 {
 }
 
@@ -212,9 +210,7 @@ void InterPrediction::destroy()
   }
   m_geoPartBuf[0].destroy();
   m_geoPartBuf[1].destroy();
-#if IBC_VTM
   m_IBCBuffer.destroy();
-#endif
 }
 
 void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize )
@@ -241,7 +237,6 @@ void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int c
     m_geoPartBuf[0].create(UnitArea(chFormat, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE)));
     m_geoPartBuf[1].create(UnitArea(chFormat, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE)));
   }
-#if IBC_VTM
   if (m_IBCBufferWidth != g_IBCBufferSize / ctuSize)
   {
     m_IBCBuffer.destroy();
@@ -251,7 +246,6 @@ void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int c
     m_IBCBufferWidth = g_IBCBufferSize / ctuSize;
     m_IBCBuffer.create(UnitArea(chFormat, Area(0, 0, m_IBCBufferWidth, ctuSize)));
   }
-#endif
 }
 
 // ====================================================================================================================
@@ -332,13 +326,11 @@ void InterPrediction::xPredInterUni(const CodingUnit& cu, const RefPicList& refP
   int iRefIdx = cu.refIdx[refPicList];
   Mv mv[3];
   bool isIBC = false;
-#if IBC_VTM
   CHECK(!CU::isIBC(cu) && cu.lwidth() == 4 && cu.lheight() == 4, "invalid 4x4 inter blocks");
   if (CU::isIBC(cu))
   {
     isIBC = true;
   }
-#endif
   if (cu.affine)
   {
     CHECK(iRefIdx < 0, "iRefIdx incorrect.");
@@ -350,21 +342,14 @@ void InterPrediction::xPredInterUni(const CodingUnit& cu, const RefPicList& refP
   else
   {
     mv[0] = cu.mv[refPicList];
-#if IBC_VTM
     if (!isIBC )
-#endif
       clipMv(mv[0], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
   }
 
   for( uint32_t comp = COMP_Y; comp < pcYuvPred.bufs.size(); comp++ )
   {
-#if IBC_VTM
     bool luma = cu.mcControl <= 3;
     bool chroma = (cu.mcControl >> 1) != 1 ;
-#else
-    bool luma   = cu.mcControl > 3         ? false : true;
-    bool chroma = (cu.mcControl >> 1) == 1 ? false : true;
-#endif
     const ComponentID compID = ComponentID( comp );
     if (compID == COMP_Y && !luma)
       continue;
@@ -376,13 +361,11 @@ void InterPrediction::xPredInterUni(const CodingUnit& cu, const RefPicList& refP
     }
     else
     {
-#if IBC_VTM
       if (isIBC)
       {
         xPredInterBlk(compID, cu, cu.slice->pic, mv[0], pcYuvPred, bi, cu.slice->clpRngs[compID], bdofApplied, isIBC);
       }
       else
-#endif
       {
         xPredInterBlk(compID, cu, cu.slice->getRefPic(refPicList, iRefIdx), mv[0], pcYuvPred, bi, cu.slice->clpRngs[compID], bdofApplied, isIBC, refPicList);
       }
@@ -425,7 +408,6 @@ void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, c
 
 void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf )
 {
-#if IBC_VTM
   if (!cu.cs->pcv->isEncoder)
   {
     if (CU::isIBC(cu))
@@ -442,7 +424,6 @@ void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf
       return;
     }
   }
-#endif
   // dual tree handling for IBC as the only ref
   xPredInterUni(cu, REF_PIC_LIST_0, predBuf, false, false );
 }
@@ -486,11 +467,7 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
     {
       xSubPuBDOF( cu, predBuf, refPicList );
     }
-#if IBC_VTM
     else if (cu.mergeType != MRG_TYPE_DEFAULT_N && cu.mergeType != MRG_TYPE_IBC)
-#else
-    else if (cu.mergeType != MRG_TYPE_DEFAULT_N /*&& cu.mergeType != MRG_TYPE_IBC*/)
-#endif
     {
       xSubPuMC(cu, predBuf, refPicList);
     }
@@ -714,12 +691,10 @@ void InterPredInterpolation::xPredInterBlk ( const ComponentID compID, const Cod
   }
   int xFrac = mv.hor & ((1 << shiftHor) - 1);
   int yFrac = mv.ver & ((1 << shiftVer) - 1);
-#if IBC_VTM
   if (isIBC)
   {
     xFrac = yFrac = 0;
   }
-#endif
 
   PelBuf& dstBuf  = dstPic.bufs[compID];
   unsigned width  = dstBuf.width;
@@ -1871,7 +1846,6 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
 
 }
 
-#if IBC_VTM
 void InterPrediction::xFillIBCBuffer(CodingUnit& cu)
 {
   for (auto& currPU : CU::traverseTUs(cu))
@@ -1974,7 +1948,6 @@ bool InterPrediction::isLumaBvValidIBC(const int ctuSize, const int xCb, const i
   return true;
 }
 
-#endif
 } // namespace vvenc
 
 //! \}

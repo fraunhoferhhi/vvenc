@@ -283,9 +283,7 @@ public:
 void clipMv ( Mv& rcMv, const Position& pos,
               const Size& size,
               const PreCalcValues& pcv );
-#if IBC_VTM 
 void clipMv(Mv& rcMv, const Position& pos, const Size& size, const PreCalcValues& pcv, const PPS& pps,bool m_clipMvInSubPic);
-#endif
 
 bool wrapClipMv( Mv& rcMv, const Position& pos,
                  const Size& size,

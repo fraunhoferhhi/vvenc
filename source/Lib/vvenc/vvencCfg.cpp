@@ -555,10 +555,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_craAPSreset                             = false;
   c->m_rprRASLtoolSwitch                       = false;
 
-#if 1 // IBC_VTM
   c->m_IBCMode                                 = 0;
   c->m_IBCFastMethod                           = 1;
-#endif
 
   c->m_bLoopFilterDisable                      = false;
   c->m_loopFilterOffsetInPPS                   = true;
@@ -2190,10 +2188,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_useBDPCM  && c->m_TS==0,                     "BDPCM cannot be used when transform skip is disabled" );
   vvenc_confirmParameter( c, c->m_useBDPCM==1  && c->m_TS==2,                  "BDPCM cannot be permanently used when transform skip is auto" );
   vvenc_confirmParameter( c, c->m_FastIntraTools <0 || c->m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
-#if IBC_VTM
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
-#endif
 
   if( c->m_alf )
   {
@@ -2681,6 +2677,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_DMVR                          = 0;
   c->m_EDO                           = 0;
   c->m_Geo                           = 0;
+  c->m_IBCMode                       = 0;
+  c->m_IBCFastMethod                 = 1;
   c->m_AMVRspeed                     = 0;
   c->m_ISP                           = 0;
   c->m_JointCbCrMode                 = 0;
@@ -2702,10 +2700,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_TS                            = 0;
   c->m_useNonLinearAlfChroma         = 0;
   c->m_useNonLinearAlfLuma           = 0;
-#if 1 // IBC_VTM
-  c->m_IBCMode                       = 0;
-  c->m_IBCFastMethod                 = 1;
-#endif
 
   // enable speedups
   c->m_qtbttSpeedUp                  = 2;
@@ -2742,6 +2736,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
 #endif
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 6;
       c->m_LMChroma                  = 1;
       c->m_MTSImplicit               = 1;
       c->m_bUseSAO                   = 1;
@@ -2769,6 +2765,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useBDPCM                  = 2;
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 4;
       c->m_AMVRspeed                 = 5;
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
@@ -2801,6 +2799,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 2;
       c->m_Geo                       = 3;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 3;
       c->m_AMVRspeed                 = 5;
       c->m_ISP                       = 3;
       c->m_JointCbCrMode             = 1;
@@ -2843,6 +2843,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 2;
       c->m_Geo                       = 1;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 1;
       c->m_AMVRspeed                 = 1;
       c->m_ISP                       = 3;
       c->m_JointCbCrMode             = 1;
@@ -2889,6 +2891,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 2;
       c->m_Geo                       = 1;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 1;
       c->m_AMVRspeed                 = 1;
       c->m_ISP                       = 1;
       c->m_JointCbCrMode             = 1;
@@ -2939,6 +2943,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 1;
       c->m_Geo                       = 2;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 5;
       c->m_AMVRspeed                 = 3;
       c->m_ISP                       = 2;
       c->m_JointCbCrMode             = 1;
@@ -3103,9 +3109,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "useChromaTS:" << c->m_useChromaTS << " ";
   }
   css << "BDPCM:" << c->m_useBDPCM << " ";
-#if IBC_VTM
   css << "IBC:" << c->m_IBCMode << " ";
-#endif
 
   css << "\nENC. ALG. CFG: ";
   css << "QPA:" << c->m_usePerceptQPA << " ";
@@ -3142,13 +3146,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
-#if IBC_VTM
   if( c->m_IBCMode )
   {
     css << "IBCfastMethod:" << c->m_IBCFastMethod << " ";
   }
-#endif
-
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";

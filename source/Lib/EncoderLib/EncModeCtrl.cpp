@@ -880,10 +880,8 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   const uint32_t         numComp      = getNumberValidComponents( slice.sps->chromaFormatIdc );
   const CodedCUInfo      &relatedCU   = getBlkInfo( partitioner.currArea() );
   const Area             &lumaArea    = partitioner.currArea().Y();
-#if IBC_VTM
   const CodingStructure* bestCS       = cuECtx.bestCS;
   const EncTestMode      bestMode     = bestCS ?cuECtx.bestMode : EncTestMode();
-#endif
 
   if( encTestmode.type == ETM_INTRA )
   {
@@ -900,13 +898,11 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     }
 
     // INTRA MODES
-#if IBC_VTM
     if (cs.sps->IBC && !cuECtx.bestTU)
     {
      // return true;
     }
     else
-#endif
     if( partitioner.isConsIntra() && !cuECtx.bestTU )
     {
       //return true;
@@ -917,13 +913,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       //return true;
     }
     else
-#if IBC_VTM
-      if (!(slice.isIRAP() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
-#else
-    if( !( slice.isIRAP() || /*bestModeType == ETM_INTRA || */!cuECtx.bestTU ||
-#endif
+    if (!(slice.isIRAP() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
       ((!m_pcEncCfg->m_bDisableIntraCUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
-                                         ( cuECtx.bestTU->cbf[0] != 0 ) ||
+                                    ( cuECtx.bestTU->cbf[0] != 0 ) ||
            ( ( numComp > COMP_Cb ) && cuECtx.bestTU->cbf[1] != 0 ) ||
            ( ( numComp > COMP_Cr ) && cuECtx.bestTU->cbf[2] != 0 )  // avoid very complex intra if it is unlikely
          ) ) ) )
@@ -941,7 +933,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
         cuECtx.interHad = distParam.distFunc( distParam );
       }
     }
-#if IBC_VTM
     if ((m_pcEncCfg->m_IBCFastMethod > 1) && !cs.slice->isIntra()//IBC_FAST_METHOD_NOINTRA_IBCCBF0
       && (bestMode.type == ETM_IBC || bestMode.type == ETM_IBC_MERGE)
       && (!cuECtx.bestCU->Y().valid() || cuECtx.bestTU->cbf[0] == 0)
@@ -950,7 +941,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     {
       return false;
     }
-#endif
     if (m_pcEncCfg->m_FastIntraTools)
     {
       if (relatedCU.relatedCuIsValid)
@@ -998,7 +988,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       return false;
     }
   }
-#if IBC_VTM 
   else if (encTestmode.type == ETM_IBC || encTestmode.type == ETM_IBC_MERGE)
   {
     if ((m_pcEncCfg->m_IBCFastMethod > 1) && !(slice.isIRAP() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
@@ -1017,7 +1006,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     // IBC MODES
     return slice.sps->IBC && (partitioner.currArea().lumaSize().width < 128 && partitioner.currArea().lumaSize().height < 128);
   }
-#endif
   else
   {
     THROW("problem");
@@ -1060,13 +1048,11 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
     relatedCU.isMMVDSkip |= bestCU.mmvdSkip;
     relatedCU.BcwIdx      = bestCU.BcwIdx;
   }
-#if IBC_VTM
   else if (CU::isIBC(bestCU))
   {
     relatedCU.isIBC = true;
     relatedCU.isSkip |= bestCU.skip;
   }
-#endif
   else if( CU::isIntra( bestCU ) )
   {
     relatedCU.isIntra     = true;

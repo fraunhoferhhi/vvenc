@@ -131,9 +131,7 @@ private:
   Mv                      m_bvPredictors[2];
   double                  m_motionLambda;
   int                     m_iCostScale;
-#if IBC_VTM
   double                  m_dCostIBC;
-#endif
 public:
   RdCost();
   virtual ~RdCost();
@@ -193,8 +191,7 @@ public:
 
   void           saveUnadjustedLambda ();
   void           setReshapeInfo       ( uint32_t type, int lumaBD, ChromaFormat cf )   { m_signalType = type; m_lumaBD = lumaBD; m_cf = cf; }
-#if IBC_VTM
-  void          setPredictorsIBC(Mv* pcMv)
+  void           setPredictorsIBC     (Mv* pcMv)
   {
     for (int i = 0; i < 2; i++)
     {
@@ -203,7 +200,6 @@ public:
   }
   void           getMotionCostIBC(int add) { m_dCostIBC = m_dLambdaMotionSAD + add; }
   Distortion     getBvCostMultiplePredsIBC(int x, int y, bool useIMV);
-#endif
 private:
          Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
 
@@ -249,9 +245,7 @@ private:
   static Distortion xGetSADwMask_SIMD( const DistParam &pcDtParam );
 #endif
 
-#if IBC_VTM
   unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
-#endif
 public:
 
   Distortion   getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma = NULL );

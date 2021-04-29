@@ -628,10 +628,8 @@ typedef struct vvenc_config
   bool                m_craAPSreset;
   bool                m_rprRASLtoolSwitch;
 
-#if 1 // IBC_VTM
   int                 m_IBCMode;
   int                 m_IBCFastMethod;
-#endif
 
   bool                m_bLoopFilterDisable;                                              // flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS

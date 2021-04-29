@@ -119,18 +119,14 @@ struct MotionInfo
   uint16_t sliceIdx = 0;
   bool     isInter  = false;
   char     interDir = 0;
-#if IBC_VTM
   bool     isIBCmot = false;
   Mv       bv;
-#endif
 
   bool operator==( const MotionInfo& mi ) const
   {
     if( isInter  != mi.isInter  ) return false;
-#if IBC_VTM
-    if(isIBCmot != mi.isIBCmot) return false;
+    if( isIBCmot != mi.isIBCmot ) return false;
     if (isInter)
-#endif
     {
       if (sliceIdx != mi.sliceIdx) return false;
       if (interDir != mi.interDir) return false;
@@ -164,10 +160,7 @@ struct HPMVInfo
   char     interDir = 0;
   uint8_t  BcwIdx   = 0;
   bool     useAltHpelIf = false;
-#if IBC_VTM
   Mv       bv;
-#endif
-
 
   HPMVInfo() = default;
   HPMVInfo( const MotionInfo& mi, uint8_t _bcwIdx, bool _useAltHpelIf )
@@ -182,9 +175,7 @@ struct HPMVInfo
 
     BcwIdx       = _bcwIdx;
     useAltHpelIf = _useAltHpelIf;
-#if IBC_VTM
     bv           = mi.bv;
-#endif
   }
 
   bool operator==( const HPMVInfo& mi ) const
@@ -239,18 +230,14 @@ struct HPMVInfo
 struct LutMotionCand
 {
   static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lut;
-#if IBC_VTM
   static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lutIbc;
-#endif
 };
 
-#if IBC_VTM
 struct PatentBvCand
 {
   Mv m_bvCands[IBC_NUM_CANDIDATES];
   int currCnt;
 };
-#endif
 } // namespace vvenc
 
 //! \}

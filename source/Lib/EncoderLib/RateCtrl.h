@@ -152,7 +152,7 @@ namespace vvenc {
     double          bitUsageRatio;
     double          lastLambda;
 #if RC_INTRA_MODEL_OPT
-    int8_t          qpCorrection[4];
+    int8_t          qpCorrection[8];
 #endif
     TRCParameter*   picParam;
     int*            bitsRatio;
