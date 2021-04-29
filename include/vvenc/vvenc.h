@@ -109,10 +109,10 @@ enum ErrorCodes
 */
 typedef struct vvencYUVPlane
 {
-  int16_t*  ptr     = nullptr;         // pointer to plane buffer
-  int       width   = 0;               // width of the plane
-  int       height  = 0;               // height of the plane
-  int       stride  = 0;               // stride (width + left margin + right margins) of plane in samples
+  int16_t*  ptr;                       // pointer to plane buffer
+  int       width;                     // width of the plane
+  int       height;                    // height of the plane
+  int       stride;                    // stride (width + left margin + right margins) of plane in samples
 }vvencYUVPlane;
 
 /*
@@ -120,10 +120,10 @@ typedef struct vvencYUVPlane
 */
 typedef struct vvencYUVBuffer
 {
-  vvencYUVPlane planes[ 3 ];
-  uint64_t      sequenceNumber  = 0;      // sequence number of the picture
-  uint64_t      cts             = 0;      // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
-  bool          ctsValid        = false;  // composition time stamp valid flag (true: valid, false: CTS not set)
+  vvencYUVPlane planes[ 3 ];           // plane buffer for 3 components (yuv)
+  uint64_t      sequenceNumber;        // sequence number of the picture
+  uint64_t      cts;                   // composition time stamp in TicksPerSecond (see HEVCEncoderParameter)
+  bool          ctsValid;              // composition time stamp valid flag (true: valid, false: CTS not set)
 }vvencYUVBuffer;
 
 /* vvenc_YUVBuffer_alloc:
@@ -406,7 +406,7 @@ VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId );
  \param      compId component ID
  \retval[ ]  width of compontent
 */
-VVENC_DECL int  vvenc_get_width_of_component( const vvencChromaFormat& chFmt, const int frameWidth, const int compId );
+VVENC_DECL int  vvenc_get_width_of_component( const vvencChromaFormat chFmt, const int frameWidth, const int compId );
 
 /* vvenc_get_height_of_component
  \param      chFmt Chroma Format
@@ -414,7 +414,7 @@ VVENC_DECL int  vvenc_get_width_of_component( const vvencChromaFormat& chFmt, co
  \param      compId component ID
  \retval[ ]  height of compontent
 */
-VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat& chFmt, const int frameHeight, const int compId );
+VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat chFmt, const int frameHeight, const int compId );
 
 /* Debug section */
 

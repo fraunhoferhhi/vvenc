@@ -397,7 +397,7 @@ VVENC_DECL int vvenc_decode_bitstream( const char* FileName)
   return vvenc::VVEncImpl::decodeBitstream( FileName );
 }
 
-VVENC_DECL int vvenc_get_width_of_component( const vvencChromaFormat& chFmt, const int frameWidth, const int compId )
+VVENC_DECL int vvenc_get_width_of_component( const vvencChromaFormat chFmt, const int frameWidth, const int compId )
 {
   int w = frameWidth;
   if ( compId > 0 )
@@ -413,7 +413,7 @@ VVENC_DECL int vvenc_get_width_of_component( const vvencChromaFormat& chFmt, con
   return w;
 }
 
-VVENC_DECL int vvenc_get_height_of_component( const vvencChromaFormat& chFmt, const int frameHeight, const int compId )
+VVENC_DECL int vvenc_get_height_of_component( const vvencChromaFormat chFmt, const int frameHeight, const int compId )
 {
   int h = frameHeight;
   if ( compId > 0 )

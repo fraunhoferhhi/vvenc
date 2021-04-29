@@ -68,16 +68,16 @@ VVENC_NAMESPACE_BEGIN
 
 // ====================================================================================================================
 
-static const int VVENC_MAX_GOP                         = 64;     // max. value of hierarchical GOP size
-static const int VVENC_MAX_NUM_REF_PICS                = 29;     // max. number of pictures used for reference
-static const int VVENC_MAX_TLAYER                      =  7;     // Explicit temporal layer QP offset - max number of temporal layer
-static const int VVENC_MAX_NUM_CQP_MAPPING_TABLES      =  3;     // Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
-static const int VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA =  8;
-static const int VVENC_MCTF_RANGE                      =  2;     // max number of frames used for MCTF filtering in forward / backward direction
-static const int VVENC_MAX_NUM_COMP                    =  3;     // max number of components
-static const int VVENC_MAX_QP_VALS_CHROMA              =  8;     // max number qp vals in array
-static const int VVENC_MAX_MCTF_FRAMES                 =  16;
-static const int VVENC_MAX_STRING_LEN                  =  1024;  // max length of string/filename
+#define VVENC_MAX_GOP                         64     // max. value of hierarchical GOP size
+#define VVENC_MAX_NUM_REF_PICS                29     // max. number of pictures used for reference
+#define VVENC_MAX_TLAYER                      7      // Explicit temporal layer QP offset - max number of temporal layer
+#define VVENC_MAX_NUM_CQP_MAPPING_TABLES      3      // Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
+#define VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA 8
+#define VVENC_MCTF_RANGE                      2      // max number of frames used for MCTF filtering in forward / backward direction
+#define VVENC_MAX_NUM_COMP                    3      // max number of components
+#define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
+#define VVENC_MAX_MCTF_FRAMES                 16
+#define VVENC_MAX_STRING_LEN                  1024   // max length of string/filename
 
 // ====================================================================================================================
 
