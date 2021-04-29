@@ -1734,7 +1734,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
     double qp_temp = (double)sliceQP + bitdepth_luma_qp_scale - SHIFT_QP;
     lambda = dQPFactor * pow( 2.0, qp_temp / 3.0 );
   }
-  else if (frameLevel <= 3) // intra case, but use the model
+  else if (frameLevel <= 7)
   {
 #if RC_INTRA_MODEL_OPT
     if (m_pcEncCfg->m_RCNumPasses == 2)
@@ -1750,6 +1750,9 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
           const double qpSizeOffset = (d < 2.0 ? 2.0 /*UHD*/ : 1.0 + log (d) / log (2.0) /*HD, SD*/);
           const int firstPassMeanQP = it->qp; // slice QP
           uint16_t visAct = it->visActY;
+
+          // if bits remain after coding the first I-picture, distribute some of the unused bits among the remaining temporal layers
+          if ((frameLevel > 0) && (it->poc <= encRCSeq->gopSize) && (encRCSeq->qpCorrection[0] < 0)) encRCPic->targetBits = (encRCPic->targetBits * 5) >> 2;
 
           if (it->isNewScene) // spatiotemporal visual activity is transient at camera/scene change, find next steady-state activity
           {
@@ -1768,20 +1771,19 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
           }
           if (it->refreshParameters) encRCSeq->qpCorrection[frameLevel] = 0;
           CHECK (frameLevel != it->tempLayer, "RC temp. level data mismatch");
-          CHECK (slice->TLayer > 2, "analyzed RC frame must have TLayer < 3");
+          CHECK (slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7");
 
           d = ((35.0 + qpSizeOffset - visAct * 0.015625) / 256.0) * firstPassMeanQP * log (encRCPic->targetBits / (double) it->numBits) / log (2.0);
           sliceQP = int (0.5 + firstPassMeanQP - d + encRCSeq->qpCorrection[frameLevel]);
-          sliceQP = Clip3 (0, MAX_QP, sliceQP - std::min (0, (firstPassMeanQP + (2 + (frameLevel >> 1)) * (sliceQP - firstPassMeanQP) + 2) >> 2));
+          sliceQP = Clip3 (0, MAX_QP, sliceQP - std::min (0, (firstPassMeanQP + (2 + std::min (1, frameLevel >> 1)) * (sliceQP - firstPassMeanQP) + 2) >> 2));
           lambda  = it->lambda * pow (2.0, double (sliceQP - firstPassMeanQP) / 3.0);
           lambda  = Clip3 (m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, lambda);
 
           encRCPic->clipLambdaTwoPass (m_pcRateCtrl->getPicList(), lambda);
-          encRCPic->clipQpTwoPass (m_pcRateCtrl->getPicList(), sliceQP);
+          encRCPic->clipQpTwoPass (m_pcRateCtrl->getPicList(), sliceQP); // TODO: unify funcs
           break;
         }
       }
-      if (frameLevel == 0) encRCPic->bitsLeft = encRCPic->targetBits;
     }
     else // single-pass rate control
     {

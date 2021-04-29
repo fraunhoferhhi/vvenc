@@ -104,10 +104,7 @@ EncRCSeq::EncRCSeq()
   bitUsageRatio       = 0.0;
   lastLambda          = 0.0;
 #if RC_INTRA_MODEL_OPT
-  qpCorrection[0]/*I*/= 0;
-  qpCorrection[1]/*0*/= 0;
-  qpCorrection[2]/*1*/= 0;
-  qpCorrection[3]/*2*/= 0;
+  std::memset (qpCorrection, 0, sizeof (qpCorrection));
 #endif
   bitDepth            = 0;
 }
@@ -167,7 +164,7 @@ void EncRCSeq::create( bool twoPassRC, int totFrames, int targetBitrate, int frR
   adaptiveBits = adaptiveBit;
   lastLambda = 0.0;
 #if RC_INTRA_MODEL_OPT
-  qpCorrection[0] = qpCorrection[1] = qpCorrection[2] = qpCorrection[3] = 0;
+  std::memset (qpCorrection, 0, sizeof (qpCorrection));
 #endif
 }
 
@@ -897,12 +894,12 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
 #endif
                                   )
 {
-  bool setLastLevelLambda = false;
   double lastPrevTLLambda = -1.0;
   double lastLevelLambda = -1.0;
 #if !RC_INTRA_MODEL_OPT
   double lastPicLambda = -1.0;
   double lastValidLambda = -1.0;
+  bool setLastLevelLambda = false;
 #endif
   std::list<EncRCPic*>::iterator it;
   for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
@@ -916,13 +913,15 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
     if ( ( *it )->frameLevel == frameLevel && ( *it )->picLambda > 0.0 )
     {
       lastLevelLambda = ( *it )->picLambda;
+#if !RC_INTRA_MODEL_OPT
       setLastLevelLambda = true;
+#endif
     }
+#if !RC_INTRA_MODEL_OPT
     else if ( encRCSeq->framesCoded < encRCSeq->gopSize && ( *it )->frameLevel < frameLevel && ( *it )->picLambda > 0.0 && !setLastLevelLambda ) // at the beginning, treat frames from the lower TLs as if they are in the same TL
     {
       lastLevelLambda = ( *it )->picLambda;
     }
-#if !RC_INTRA_MODEL_OPT
     lastPicLambda = ( *it )->picLambda;
 
     if ( lastPicLambda > 0.0 )
@@ -947,8 +946,10 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
   // prevent frames from higher TLs to have lower lambda values than frames at lower TLs
   if ( frameLevel > 2 )
   {
+#if RC_INTRA_MODEL_OPT
+    const int tlQpOffset = int (0.5 + sqrt (1.75 * encRCSeq->gopSize) / frameLevel);
+#else
     const int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
-#if !RC_INTRA_MODEL_OPT
     if ( encRCSeq->bitUsageRatio > 1.0 )
     {
       lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), lambda );
@@ -1071,12 +1072,12 @@ void EncRCPic::clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
 void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &QP )
 {
-  bool setLastLevelQP = false;
   int lastPrevTLQP = RC_INVALID_QP_VALUE;
   int lastLevelQP = RC_INVALID_QP_VALUE;
 #if !RC_INTRA_MODEL_OPT
   int lastPicQP = RC_INVALID_QP_VALUE;
   int lastValidQP = RC_INVALID_QP_VALUE;
+  bool setLastLevelQP = false;
 #endif
   std::list<EncRCPic*>::iterator it;
   for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
@@ -1088,13 +1089,15 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
     if ( ( *it )->frameLevel == frameLevel && ( *it )->picQP > RC_INVALID_QP_VALUE ) // use the QP value from the last available frame of that level
     {
       lastLevelQP = ( *it )->picQP;
+#if !RC_INTRA_MODEL_OPT
       setLastLevelQP = true;
+#endif
     }
+#if !RC_INTRA_MODEL_OPT
     else if ( encRCSeq->framesCoded < encRCSeq->gopSize && ( *it )->frameLevel < frameLevel && ( *it )->picQP > RC_INVALID_QP_VALUE && !setLastLevelQP )
     {
       lastLevelQP = ( *it )->picQP;
     }
-#if !RC_INTRA_MODEL_OPT
     lastPicQP = ( *it )->picQP;
     if ( lastPicQP > RC_INVALID_QP_VALUE )
     {
@@ -1115,8 +1118,10 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
   if ( frameLevel > 2 ) // in any case frame level has to be GREATER than 1
   {
+#if RC_INTRA_MODEL_OPT
+    const int tlQpOffset = int (0.5 + sqrt (1.75 * encRCSeq->gopSize) / frameLevel);
+#else
     const int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
-#if !RC_INTRA_MODEL_OPT
     if ( encRCSeq->bitUsageRatio > 1.0 )
     {
       QP = Clip3( lastPrevTLQP + tlQpOffset, lastPrevTLQP + tlQpOffset, QP );
@@ -1244,7 +1249,7 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
     }
   }
 #if RC_INTRA_MODEL_OPT
-  if ((frameLevel <= 3) && (picActualBits > 0) && (targetBits > 0))
+  if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update qpCorrection for EncGOP::picInitRateControl()
   {
     encRCSeq->qpCorrection[frameLevel] += int8_t (floor (0.5 + log ((double) picActualBits / (double) targetBits) / log (2.0)));
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-12, 12, (int) encRCSeq->qpCorrection[frameLevel]);
@@ -1718,13 +1723,15 @@ int64_t RateCtrl::getTotalBitsInFirstPass()
 void RateCtrl::detectNewScene()
 {
 #if RC_INTRA_MODEL_OPT
-  uint16_t visActPrev = 0.0;
+  uint16_t visActPrev = 0;
+  double  yPsnrPrev = 0.0;
   std::list<TRCPassStats>::iterator it;
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
   {
-    it->isNewScene = (it->visActY * 4 > visActPrev * 11);
+    it->isNewScene = ((it->visActY * 4 > visActPrev * 11) || (it->isIntra && it->visActY > visActPrev && abs(it->yPsnr - yPsnrPrev) > 4.5));
     visActPrev = it->visActY;
+    if (it->isIntra) yPsnrPrev = it->yPsnr;
   }
 #else
   double meanFeatureValueInter = 0.0;
@@ -1959,7 +1966,7 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
   {
     if ( it->poc >= startPoc && it->poc < startPoc + pocRange )
     {
-      if ( it->poc >= startPoc + 8 && it->isNewScene )
+      if ( it->poc >= startPoc + (encRCSeq->gopSize >> 1) && it->isNewScene )
       {
         break;
       }
@@ -2081,7 +2088,7 @@ void RateCtrl::updateAlpha()
   {
     if ( it->isNewScene ) // filter out scene cuts which happen too close to the previous detected scene cut
     {
-      if ( it->poc >= prevSceneChange + 8 )
+      if ( it->poc >= prevSceneChange + (encRCSeq->gopSize >> 1) )
       {
         prevSceneChange = it->poc;
       }
