@@ -204,11 +204,7 @@ bool CU::checkCCLMAllowed(const CodingUnit& cu)
 
 uint8_t CU::checkAllowedSbt(const CodingUnit& cu) 
 {
-#if IBC_VTM
   if (!cu.slice->sps->SBT || cu.predMode != MODE_INTER || cu.ciip || cu.predMode == MODE_IBC)
-#else
-  if( !cu.slice->sps->SBT || cu.predMode != MODE_INTER || cu.ciip)
-#endif
   {
     return 0;
   }
@@ -328,11 +324,7 @@ void CU::saveMotionInHMVP( const CodingUnit& cu, const bool isToBeDone )
     bool enableHmvp = ((xBr >> log2ParallelMergeLevel) > (cu.Y().x >> log2ParallelMergeLevel)) && ((yBr >> log2ParallelMergeLevel) > (cu.Y().y >> log2ParallelMergeLevel));
     bool enableInsertion = CU::isIBC(cu) || enableHmvp;
     if (enableInsertion)
-#if IBC_VTM
       cu.cs->addMiToLut( CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, mi);
-#else
-      cu.cs->addMiToLut( /*CU::isIBC(cu) ? cu.cs->motionLut.lutIbc :*/ cu.cs->motionLut.lut, mi);
-#endif
   }
 }
 
@@ -729,11 +721,7 @@ bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
 {
   const Slice& slice = *cs.slice;
   HPMVInfo miNeighbor;
-#if IBC_VTM
   auto& lut = ibcFlag ? cs.motionLut.lutIbc : cs.motionLut.lut;
-#else
-  auto &lut = /*ibcFlag ? cs.motionLut.lutIbc :*/ cs.motionLut.lut;
-#endif
   int num_avai_candInLUT = (int) lut.size();
 
   for (int mrgIdx = 1; mrgIdx <= num_avai_candInLUT; mrgIdx++)
@@ -774,7 +762,6 @@ bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
   return false;
 }
 
-#if IBC_VTM
 void CU::getIBCMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int& mrgCandIdx)
 {
   const CodingStructure& cs = *cu.cs;
@@ -876,7 +863,6 @@ void CU::getIBCMergeCandidates(const CodingUnit& cu, MergeCtx& mrgCtx, const int
 
   mrgCtx.numValidMergeCand = cnt;
 }
-#endif
 
 void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mmvdList, const int mrgCandIdx )
 {
@@ -1264,11 +1250,7 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
 
     if ( mrgCtx.interDirNeighbours[uiArrayAddr] == 1 && cu.cs->slice->getRefPic(REF_PIC_LIST_0, mrgCtx.mvFieldNeighbours[uiArrayAddr << 1].refIdx)->getPOC() == cu.cs->slice->poc)
     {
-#if IBC_VTM
       mrgCtx.mrgTypeNeighbours[uiArrayAddr] = MRG_TYPE_IBC;
-#else
-      THROW("no IBC support");
-#endif
     }
 
     uiArrayAddr++;
@@ -1436,12 +1418,10 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   {
     return false;
   }
-#if IBC_VTM
   if (mi.isIBCmot)
   {
     return false;
   }
-#endif
   if (CU::isIBC(cu))
   {
     return false;
@@ -1525,7 +1505,6 @@ bool CU::getColocatedMVP(const CodingUnit& cu, const RefPicList refPicList, cons
   return true;
 }
 
-#if IBC_VTM
 void CU::getIbcMVPsEncOnly(CodingUnit& cu, Mv* mvPred, int& nbPred)
 {
   const PreCalcValues& pcv = *cu.cs->pcv;
@@ -1679,7 +1658,6 @@ void CU::fillIBCMvpCand(CodingUnit& cu, AMVPInfo& amvpInfo)
     mv.roundIbcPrecInternal2Amvr(cu.imv);
   }
 }
-#endif
 
 bool CU::isDiffMER(const Position &pos1, const Position &pos2, const unsigned plevel)
 {
@@ -2204,11 +2182,7 @@ bool CU::addMVPCandUnscaled( const CodingUnit& cu, const RefPicList refPicList, 
 void CU::addAMVPHMVPCand(const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info)
 {
   const Slice &slice = *(*cu.cs).slice;
-#if IBC_VTM
   auto& lut = CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut;
-#else
-  auto &lut = /*CU::isIBC(cu) ? cu.cs->motionLut.lutIbc :*/ cu.cs->motionLut.lut;
-#endif
   int num_avai_candInLUT = (int) lut.size();
   int num_allowedCand = std::min(MAX_NUM_HMVP_AVMPCANDS, num_avai_candInLUT);
   const RefPicList refPicList2nd = (refPicList == REF_PIC_LIST_0) ? REF_PIC_LIST_1 : REF_PIC_LIST_0;
@@ -2454,11 +2428,7 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& L
   // derivation of center motion parameters from the collocated CU
   const MotionInfo &mi = pColPic->cs->getMotionInfo(centerPos);
 
-#if IBC_VTM
   if (mi.isInter && mi.isIBCmot == false)
-#else
-  if (mi.isInter)
-#endif
   {
     mrgCtx.interDirNeighbours[count] = 0;
 
@@ -2513,12 +2483,8 @@ bool CU::getInterMergeSbTMVPCand(const CodingUnit& cu, MergeCtx& mrgCtx, bool& L
         found = false;
         mi.isInter = true;
         mi.sliceIdx = slice.independentSliceIdx;
-#if IBC_VTM
         mi.isIBCmot = false;
         if (colMi.isInter && colMi.isIBCmot == false)
-#else
-        if (colMi.isInter)
-#endif
         {
           for (unsigned currRefListId = 0; currRefListId < (bBSlice ? 2 : 1); currRefListId++)
           {
@@ -3057,20 +3023,12 @@ void clipColPos(int& posX, int& posY, const CodingUnit& cu)
 void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
 {
   MotionBuf mb = cu.getMotionBuf();
-#if IBC_VTM
   if (!cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N || cu.mergeType == MRG_TYPE_IBC)
-#else
-  if (!cu.mergeFlag || cu.mergeType == MRG_TYPE_DEFAULT_N)
-#endif
   {
     MotionInfo mi;
 
-#if IBC_VTM
-    mi.isInter = !CU::isIntra(cu);
+    mi.isInter  = !CU::isIntra(cu);
     mi.isIBCmot = CU::isIBC(cu);
-#else
-    mi.isInter = CU::isInter(cu);
-#endif
     mi.sliceIdx = cu.slice->independentSliceIdx;
 
     if( mi.isInter )
@@ -3082,12 +3040,10 @@ void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
         mi.mv[i]     = cu.mv[i];
         mi.refIdx[i] = cu.refIdx[i];
       }
-#if IBC_VTM
       if (mi.isIBCmot)
       {
         mi.bv = cu.bv;
       }
-#endif
       if (cu.affine)
       {
         for (int y = 0; y < mb.height; y++)
@@ -3095,10 +3051,8 @@ void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
           for (int x = 0; x < mb.width; x++)
           {
             MotionInfo &dest = mb.at(x, y);
-            dest.isInter = mi.isInter;
-#if IBC_VTM
+            dest.isInter  = mi.isInter;
             dest.isIBCmot = false;
-#endif
             dest.interDir = mi.interDir;
             dest.sliceIdx = mi.sliceIdx;
             for (int i = 0; i < NUM_REF_PIC_LIST_01; i++)

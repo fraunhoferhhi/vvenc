@@ -85,9 +85,7 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   , m_tuCache       ( unitCache.tuCache )
   , m_unitCacheMutex( mutex )
   , bestParent      ( nullptr )
-#if IBC_VTM
   , resetIBCBuffer  ( false )
-#endif
 {
   for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
   {
@@ -462,11 +460,7 @@ void CodingStructure::addEmptyTUs( Partitioner &partitioner, CodingUnit* cu )
   }
   else
   {
-#if IBC_VTM
     TransformUnit& tu = addTU(CS::getArea(*this, area, partitioner.chType, TreeType(partitioner.treeType)), partitioner.chType, cu);
-#else
-    TransformUnit &tu = addTU( CS::getArea( *this, area, partitioner.chType, TREE_D ), partitioner.chType, cu );
-#endif
     tu.depth = trDepth;
   }
 }

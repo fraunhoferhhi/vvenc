@@ -58,10 +58,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/RdCost.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/AffineGradientSearch.h"
-#if IBC_VTM 
-#include <unordered_map>
-#endif
 
+#include <unordered_map>
 #include <vector>
 
 //! \ingroup EncoderLib
@@ -83,12 +81,11 @@ struct BlkUniMvInfo
   int x, y, w, h;
 };
 
-#if IBC_VTM
 struct BlkRecord
 {
   std::unordered_map<Mv, Distortion> bvRecord;
 };
-#endif
+
 struct BlkUniMvInfoBuffer
 {
   BlkUniMvInfo* getBlkUniMvInfo( int i ) const { return m_uniMvList + ((m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)); }
@@ -345,12 +342,10 @@ private:
   CodingStructure** m_pSaveCS;
 
   ClpRng            m_lumaClpRng;
-#if IBC_VTM
   Mv                m_acBVs[2 * IBC_NUM_CANDIDATES];
   unsigned int      m_numBVs;
   PatentBvCand      m_defaultCachedBvs;
   std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
-#endif
 
 protected:
   // interface to option
@@ -391,10 +386,7 @@ public:
   ReuseUniMv*         m_ReuseUniMv;
   BlkUniMvInfoBuffer* m_BlkUniMvInfoBuffer;
   AffineProfList*     m_AffineProfList;
-
-#if IBC_VTM
   bool                m_clipMvInSubPic;
-#endif
 
 public:
   InterSearch();
@@ -423,7 +415,6 @@ public:
   void       initSbtRdoOrder        ( uint8_t sbtMode )                 { m_sbtRdoOrder[0] = sbtMode; m_estMinDistSbt[0] = m_estMinDistSbt[sbtMode]; }
 
   void       getBestSbt             ( CodingStructure* tempCS, CodingUnit* cu, uint8_t& histBestSbt, Distortion& curPuSse, uint8_t sbtAllowed, bool doPreAnalyzeResi, bool mtsAllowed );
-#if IBC_VTM
   void       resetCtuRecordIBC(){ m_ctuRecord.clear(); }
   bool       predIBCSearch(CodingUnit& cu, Partitioner& partitioner);
   void       resetIbcSearch()
@@ -436,7 +427,6 @@ public:
   }
  bool searchBvIBC(const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
 
-#endif
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
   /// sub-function for motion vector refinement used in fractional-pel accuracy
@@ -614,13 +604,11 @@ private:
   void xEncodeInterResidualQT         ( CodingStructure &cs, Partitioner &partitioner, const ComponentID compID );
   void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist = NULL );
   uint64_t xGetSymbolFracBitsInter    ( CodingStructure &cs, Partitioner &partitioner );
-#if IBC_VTM
   void  xSetIntraSearchRangeIBC       ( CodingUnit& pu, int iRoiWidth, int iRoiHeight, const int localSearchRangeX, const int localSearchRangeY, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
   void  xIBCEstimation                ( CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost, const int localSearchRangeX, const int localSearchRangeY);
   void  xIBCSearchMVCandUpdate        ( Distortion  uiSad, int x, int y, Distortion* uiSadBestCand, Mv* cMVCand);
   int   xIBCSearchMVChromaRefine      ( CodingUnit& cu, int iRoiWidth, int iRoiHeight, int cuPelX, int cuPelY, Distortion* uiSadBestCand, Mv* cMVCand);
   void  xIntraPatternSearchIBC        ( CodingUnit& pu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* cMvSrchRngLT, Mv* cMvSrchRngRB, Mv* pcMvPred);
-#endif
 };// END CLASS DEFINITION EncSearch
 
 } // namespace vvenc
