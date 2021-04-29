@@ -2681,6 +2681,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_DMVR                          = 0;
   c->m_EDO                           = 0;
   c->m_Geo                           = 0;
+  c->m_IBCMode                       = 0;
+  c->m_IBCFastMethod                 = 0;
   c->m_AMVRspeed                     = 0;
   c->m_ISP                           = 0;
   c->m_JointCbCrMode                 = 0;
@@ -2742,6 +2744,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
 #endif
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 6;
       c->m_LMChroma                  = 1;
       c->m_MTSImplicit               = 1;
       c->m_bUseSAO                   = 1;
@@ -2769,6 +2773,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useBDPCM                  = 2;
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 4;
       c->m_AMVRspeed                 = 5;
       c->m_LFNST                     = 1;
       c->m_LMChroma                  = 1;
@@ -2801,6 +2807,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 2;
       c->m_Geo                       = 3;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 3;
       c->m_AMVRspeed                 = 5;
       c->m_ISP                       = 3;
       c->m_JointCbCrMode             = 1;
@@ -2843,6 +2851,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 2;
       c->m_Geo                       = 1;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 1;
       c->m_AMVRspeed                 = 1;
       c->m_ISP                       = 3;
       c->m_JointCbCrMode             = 1;
@@ -2889,6 +2899,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 2;
       c->m_Geo                       = 1;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 1;
       c->m_AMVRspeed                 = 1;
       c->m_ISP                       = 1;
       c->m_JointCbCrMode             = 1;
@@ -2939,6 +2951,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_DMVR                      = 1;
       c->m_EDO                       = 1;
       c->m_Geo                       = 2;
+      c->m_IBCMode                   = 2;
+      c->m_IBCFastMethod             = 5;
       c->m_AMVRspeed                 = 3;
       c->m_ISP                       = 2;
       c->m_JointCbCrMode             = 1;
