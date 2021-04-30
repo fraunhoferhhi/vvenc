@@ -279,6 +279,12 @@ void EncRCSeq::setAllBitRatio( double basicLambda, double* equaCoeffA, double* e
   delete[] bitsRatio;
 }
 
+void EncRCSeq::clipRcAlpha( double& alpha )
+{
+  const int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
+  alpha = Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
+}
+
 //GOP level
 EncRCGOP::EncRCGOP()
 {
@@ -1237,7 +1243,7 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
     rcPara.beta = -updatedK - 1.0;
     if ( validPixelsInPic > 0 )
     {
-      clipRcAlpha( encRCSeq->bitDepth, rcPara.alpha );
+      encRCSeq->clipRcAlpha( rcPara.alpha );
       clipRcBeta( rcPara.beta );
       encRCSeq->picParam[ frameLevel ] = rcPara;
     }
@@ -1255,12 +1261,6 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-12, 12, (int) encRCSeq->qpCorrection[frameLevel]);
   }
 #endif
-}
-
-void EncRCPic::clipRcAlpha( const int bitdepth, double& alpha )
-{
-  int bitdepthLumaScale = 2 * ( bitdepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
-  alpha = Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
 }
 
 void EncRCPic::clipRcBeta( double& beta)
@@ -1990,7 +1990,7 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
     {
       double bpp = ( double( bitsData[ i ] ) / counter[ i ] ) / ( encRCSeq->picWidth * encRCSeq->picHeight );
       alphaEstimate[ i ] = exp( ( qpData[ i ] - 13.7122 ) / 4.2005 ) / pow( bpp, -1.367 );
-      encRCPic->clipRcAlpha( encRCSeq->bitDepth, alphaEstimate[ i ] );
+      encRCSeq->clipRcAlpha( alphaEstimate[ i ] );
     }
     else
     {
