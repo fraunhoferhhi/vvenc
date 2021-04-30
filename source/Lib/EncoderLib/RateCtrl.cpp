@@ -1729,7 +1729,7 @@ void RateCtrl::detectNewScene()
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
   {
-    it->isNewScene = ((it->visActY * 4 > visActPrev * 11) || (it->isIntra && it->visActY > visActPrev && abs(it->yPsnr - yPsnrPrev) > 4.5));
+    it->isNewScene = ((it->visActY * 4 > visActPrev * 11) || (it->isIntra && it->visActY > visActPrev && std::abs(it->yPsnr - yPsnrPrev) > 4.5));
     visActPrev = it->visActY;
     if (it->isIntra) yPsnrPrev = it->yPsnr;
   }
