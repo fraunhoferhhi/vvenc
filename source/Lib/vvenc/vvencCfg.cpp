@@ -3088,7 +3088,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   if( c->m_Affine )
   {
     css << "(PROF:" << c->m_PROF << ", ";
-    css << "Type:" << c->m_AffineType << ")";
+    css << "Type:" << c->m_AffineType << ") ";
   }
   css << "MMVD:" << c->m_MMVD << " ";
   if( c->m_MMVD )
@@ -3099,7 +3099,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "MTS:" << c->m_MTS << " ";
   if( c->m_MTS )
   {
-    css << "(IntraCand:" << c->m_MTSIntraMaxCand << ")";
+    css << "(IntraCand:" << c->m_MTSIntraMaxCand << ") ";
   }
   css << "ISP:" << c->m_ISP << " ";
   css << "TS:" << c->m_TS << " ";
