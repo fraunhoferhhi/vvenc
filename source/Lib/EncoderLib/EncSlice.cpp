@@ -87,6 +87,7 @@ struct LineEncRsrc
   ReuseUniMv              m_ReuseUniMv;
   BlkUniMvInfoBuffer      m_BlkUniMvInfoBuffer;
   AffineProfList          m_AffineProfList;
+  IbcBvCand               m_CachedBvs;
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
@@ -531,6 +532,7 @@ void EncSlice::compressSlice( Picture* pic )
     lnRsrc->m_AffineProfList.resetAffineMVList();
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
     lnRsrc->m_encCu.initSlice( slice );
+    lnRsrc->m_CachedBvs.resetIbcBvCand();
     if( slice->sps->saoEnabled )
     {
       lnRsrc->m_encSao.initSlice( slice );
@@ -842,7 +844,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         PerThreadRsrc* taskRsrc  = encSlice->m_CtuTaskRsrc[ threadIdx ];
         EncCu& encCu             = lineEncRsrc->m_encCu;
 
-        encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList );
+        encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList, &lineEncRsrc->m_CachedBvs );
         encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
 
         // cleanup line memory when last ctu in line done to reduce overall memory consumption
@@ -851,6 +853,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           lineEncRsrc->m_AffineProfList.resetAffineMVList();
           lineEncRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
           lineEncRsrc->m_ReuseUniMv.resetReusedUniMvs();
+          lineEncRsrc->m_CachedBvs.resetIbcBvCand();
           pic->cs->motionLutBuf[ ctuPosY ].lut.resize(0);
           pic->cs->motionLutBuf[ctuPosY].lutIbc.resize(0);
         }
@@ -864,6 +867,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
     // reshape + vertical loopfilter
     case RESHAPE_LF_VER:
+      // TODO (jb): fix IBC race condition
+      //            is IBC enabled ? => pic.useScIBC
+      //            how long is the IBC delay? => localSearchRangeX, localSearchRangeY
       {
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual)
         // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked

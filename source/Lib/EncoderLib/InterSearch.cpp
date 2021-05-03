@@ -191,6 +191,7 @@ static const bool s_doInterpQ[ 42 ][ 14 ] =
 
 InterSearch::InterSearch()
   : m_modeCtrl                    (nullptr)
+  , m_defaultCachedBvs            (nullptr)
   , m_pcEncCfg                    (nullptr)
   , m_pcTrQuant                   (nullptr)
   , m_iSearchRange                (0)
@@ -219,12 +220,7 @@ InterSearch::~InterSearch()
 void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
   InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
-  m_numBVs = 0;
-  for (int i = 0; i < IBC_NUM_CANDIDATES; i++)
-  {
-    m_defaultCachedBvs.m_bvCands[i].setZero();
-  }
-  m_defaultCachedBvs.currCnt     = 0;
+  m_numBVs                       = 0;
   m_pcEncCfg                     = &encCfg;
   m_pcTrQuant                    = pTrQuant;
   m_pcRdCost                     = pRdCost;
@@ -305,13 +301,14 @@ void InterSearch::destroy()
   m_pSaveCS  = nullptr;
 }
 
-void InterSearch::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList)
+void InterSearch::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs )
 {
   m_CABACEstimator     = cabacEstimator;
   m_CtxCache           = ctxCache;
   m_ReuseUniMv         = pReuseUniMv;
   m_BlkUniMvInfoBuffer = pBlkUniMvInfoBuffer;
   m_AffineProfList     = pAffineProfList;
+  m_defaultCachedBvs   = pCachedBvs;
 }
 
 ReuseUniMv::ReuseUniMv()
@@ -6036,7 +6033,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
     int srLeft = srchRngHorLeft, srRight = srchRngHorRight, srTop = srchRngVerTop, srBottom = srchRngVerBottom;
     m_numBVs = 0;
-    m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt);
+    m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt);
 
     Mv cMvPredEncOnly[IBC_NUM_CANDIDATES];
     int nbPreds = 0;
@@ -6268,11 +6265,11 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
 end:
   m_numBVs = 0;
-  m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt);
+  m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt);
 
-  m_defaultCachedBvs.currCnt = 0;
-  m_defaultCachedBvs.currCnt = xMergeCandLists(m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt, IBC_NUM_CANDIDATES, cMVCand, CHROMA_REFINEMENT_CANDIDATES);
-  m_defaultCachedBvs.currCnt = xMergeCandLists(m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt, IBC_NUM_CANDIDATES, m_acBVs, m_numBVs);
+  m_defaultCachedBvs->currCnt = 0;
+  m_defaultCachedBvs->currCnt = xMergeCandLists(m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt, IBC_NUM_CANDIDATES, cMVCand, CHROMA_REFINEMENT_CANDIDATES);
+  m_defaultCachedBvs->currCnt = xMergeCandLists(m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt, IBC_NUM_CANDIDATES, m_acBVs, m_numBVs);
 
   for (unsigned int cand = 0; cand < CHROMA_REFINEMENT_CANDIDATES; cand++)
   {
