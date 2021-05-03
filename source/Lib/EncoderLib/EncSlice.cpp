@@ -126,6 +126,7 @@ EncSlice::EncSlice()
   : m_pcEncCfg           ( nullptr)
   , m_threadPool         ( nullptr )
   , m_ctuTasksDoneCounter( nullptr )
+  , m_ctuEncDelay        ( 1 )
   , m_pLoopFilter        ( nullptr )
   , m_pALF               ( nullptr )
   , m_pcRateCtrl         ( nullptr )
@@ -250,6 +251,16 @@ void EncSlice::initPic( Picture* pic, int gopId )
     lnRsc->m_encCu.initPic( pic );
   }
 
+  m_ctuEncDelay = 1;
+  if( pic->useScIBC )
+  {
+    // IBC needs unfiltered samples up to max IBC search range
+    // therefore ensure that numCtuDelayLUT CTU's have been enocded first
+    // assuming IBC localSearchRangeX / Y = 128
+    const int numCtuDelayLUT[ 3 ] = { 15, 3, 1 };
+    CHECK( pic->cs->pcv->maxCUSizeLog2 < 5 || pic->cs->pcv->maxCUSizeLog2 > 7, "invalid max CTUSize" );
+    m_ctuEncDelay = numCtuDelayLUT[ pic->cs->pcv->maxCUSizeLog2 - 5 ];
+  }
 }
 
 
@@ -867,17 +878,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
     // reshape + vertical loopfilter
     case RESHAPE_LF_VER:
-      // TODO (jb): fix IBC race condition
-      //            is IBC enabled ? => pic.useScIBC
-      //            how long is the IBC delay? => localSearchRangeX, localSearchRangeY
       {
-        // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual)
-        // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= CTU_ENCODE )
+        // clip check to right picture border
+        const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
+
+        // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
+        // check top right, right and bottom right ctu (this implies all ctu's left of the right one are already encoded)
+        if( ctuPosY > 0                                && processStates[ ctuRsAddr + checkRight - ctuStride ] <= CTU_ENCODE )
           return false;
-        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= CTU_ENCODE )
+        if(                                               processStates[ ctuRsAddr + checkRight             ] <= CTU_ENCODE )
           return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= CTU_ENCODE )
+        if(             ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + checkRight + ctuStride ] <= CTU_ENCODE )
           return false;
 
         if( checkReadyState )
