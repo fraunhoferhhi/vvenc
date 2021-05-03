@@ -866,7 +866,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           lineEncRsrc->m_ReuseUniMv.resetReusedUniMvs();
           lineEncRsrc->m_CachedBvs.resetIbcBvCand();
           pic->cs->motionLutBuf[ ctuPosY ].lut.resize(0);
-          pic->cs->motionLutBuf[ctuPosY].lutIbc.resize(0);
+          pic->cs->motionLutBuf[ ctuPosY ].lutIbc.resize(0);
         }
 
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );
@@ -883,12 +883,13 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
 
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
-        // check top right, right and bottom right ctu (this implies all ctu's left of the right one are already encoded)
-        if( ctuPosY > 0                                && processStates[ ctuRsAddr + checkRight - ctuStride ] <= CTU_ENCODE )
+        // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
+        if(                                   processStates[ ctuRsAddr + checkRight                   ] <= CTU_ENCODE )
           return false;
-        if(                                               processStates[ ctuRsAddr + checkRight             ] <= CTU_ENCODE )
-          return false;
-        if(             ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + checkRight + ctuStride ] <= CTU_ENCODE )
+        // check bottom right with 1 CTU delay (this is only required for intra pred)
+        // at the right picture border this will check the bottom CTU
+        const int checkBottomRight = std::min<int>( 1, checkRight );
+        if( ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + checkBottomRight + ctuStride ] <= CTU_ENCODE )
           return false;
 
         if( checkReadyState )
