@@ -344,7 +344,7 @@ private:
   ClpRng            m_lumaClpRng;
   Mv                m_acBVs[2 * IBC_NUM_CANDIDATES];
   unsigned int      m_numBVs;
-  PatentBvCand      m_defaultCachedBvs;
+  IbcBvCand*        m_defaultCachedBvs;
   std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
 
 protected:
@@ -393,7 +393,7 @@ public:
   virtual ~InterSearch();
 
   void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
-  void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
+  void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
 
   void destroy                      ();
 
@@ -415,17 +415,10 @@ public:
   void       initSbtRdoOrder        ( uint8_t sbtMode )                 { m_sbtRdoOrder[0] = sbtMode; m_estMinDistSbt[0] = m_estMinDistSbt[sbtMode]; }
 
   void       getBestSbt             ( CodingStructure* tempCS, CodingUnit* cu, uint8_t& histBestSbt, Distortion& curPuSse, uint8_t sbtAllowed, bool doPreAnalyzeResi, bool mtsAllowed );
-  void       resetCtuRecordIBC(){ m_ctuRecord.clear(); }
-  bool       predIBCSearch(CodingUnit& cu, Partitioner& partitioner);
-  void       resetIbcSearch()
-  {
-    for (int i = 0; i < IBC_NUM_CANDIDATES; i++)
-    {
-      m_defaultCachedBvs.m_bvCands[i].setZero();
-    }
-    m_defaultCachedBvs.currCnt = 0;
-  }
- bool searchBvIBC(const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
+  bool       predIBCSearch          (CodingUnit& cu, Partitioner& partitioner);
+  bool       searchBvIBC            (const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
+
+  void       resetCtuRecordIBC      () { m_ctuRecord.clear(); }
 
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );

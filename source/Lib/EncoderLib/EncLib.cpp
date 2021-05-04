@@ -364,8 +364,9 @@ void EncLib::xSetRCEncCfg( int pass )
 #if RC_INTRA_MODEL_OPT
     const double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
 #endif
-    // preserve MCTF settings
-    const int mctf = m_cBckCfg.m_vvencMCTF.MCTF;
+    // preserve MCTF and IBC settings
+    const int mctf    = m_cBckCfg.m_vvencMCTF.MCTF;
+    const int ibcMode = m_cBckCfg.m_IBCMode;
 
     vvenc_init_preset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
@@ -377,8 +378,9 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_QP              = 32;
 #endif
 
-    // restore MCTF
+    // restore MCTF and IBC
     m_cBckCfg.m_vvencMCTF.MCTF  = mctf;
+    m_cBckCfg.m_IBCMode         = ibcMode;
 
     // clear MaxCuDQPSubdiv
     if( m_cBckCfg.m_CTUSize < 128 )

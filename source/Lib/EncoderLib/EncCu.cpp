@@ -100,12 +100,12 @@ void EncCu::initSlice( const Slice* slice )
   m_cRdCost.setLambda( slice->getLambdas()[0], slice->sps->bitDepths );
 }
 
-void EncCu::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList)
+void EncCu::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs )
 {
   m_CABACEstimator = cabacEstimator;
   m_CtxCache       = ctxCache;
   m_cIntraSearch.setCtuEncRsrc( cabacEstimator, ctxCache );
-  m_cInterSearch.setCtuEncRsrc( cabacEstimator, ctxCache, pReuseUniMv, pBlkUniMvInfoBuffer, pAffineProfList );
+  m_cInterSearch.setCtuEncRsrc( cabacEstimator, ctxCache, pReuseUniMv, pBlkUniMvInfoBuffer, pAffineProfList, pCachedBvs );
 }
 
 void EncCu::setUpLambda (Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted, const bool useRC)
@@ -371,12 +371,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
 
-  if (m_pcEncCfg->m_IBCMode)
+  if( m_pcEncCfg->m_IBCMode )
   {
-    if (area.lx() == 0 && area.ly() == 0)
-    {
-      m_cInterSearch.resetIbcSearch();
-    }
     m_cInterSearch.resetCtuRecordIBC();
   }
 

@@ -233,10 +233,18 @@ struct LutMotionCand
   static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lutIbc;
 };
 
-struct PatentBvCand
+struct IbcBvCand
 {
   Mv m_bvCands[IBC_NUM_CANDIDATES];
   int currCnt;
+  void resetIbcBvCand()
+  {
+    for( int i = 0; i < IBC_NUM_CANDIDATES; i++ )
+    {
+      m_bvCands[ i ].setZero();
+    }
+    currCnt = 0;
+  }
 };
 } // namespace vvenc
 
