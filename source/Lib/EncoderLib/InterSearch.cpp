@@ -6314,11 +6314,7 @@ end:
 
 
 // based on xMotionEstimation
-void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf,
-  Mv* pcMvPred,
-  Mv& rcMv,
-  Distortion& ruiCost, const int localSearchRangeX, const int localSearchRangeY
-)
+void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost )
 {
   const int iPicWidth = cu.cs->slice->pps->picWidthInLumaSamples;
   const int iPicHeight = cu.cs->slice->pps->picHeightInLumaSamples;
@@ -6436,14 +6432,14 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf,
     Mv        cMvSrchRngRB;
 
     // assume that intra BV is integer-pel precision
-    xSetIntraSearchRangeIBC(cu, cu.lwidth(), cu.lheight(), localSearchRangeX, localSearchRangeY, cMvSrchRngLT, cMvSrchRngRB);
+    xSetIntraSearchRangeIBC(cu, cu.lwidth(), cu.lheight(), cMvSrchRngLT, cMvSrchRngRB);
 
     //  Do integer search
     xIntraPatternSearchIBC(cu, cStruct, rcMv, ruiCost, &cMvSrchRngLT, &cMvSrchRngRB, pcMvPred);
   }
 }
 // based on xSetSearchRange
-void InterSearch::xSetIntraSearchRangeIBC(CodingUnit& cu, int iRoiWidth, int iRoiHeight, const int localSearchRangeX, const int localSearchRangeY, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB)
+void InterSearch::xSetIntraSearchRangeIBC(CodingUnit& cu, int iRoiWidth, int iRoiHeight, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB)
 {
  // const SPS& sps = *cu.cs->sps;
 
@@ -6480,8 +6476,6 @@ void InterSearch::xSetIntraSearchRangeIBC(CodingUnit& cu, int iRoiWidth, int iRo
 
 bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
 {
-  const int localSearchRangeX = 128;
-  const int localSearchRangeY = 128;
   Mv           cMvSrchRngLT;
   Mv           cMvSrchRngRB;
   cu.imv = 2;
@@ -6512,7 +6506,7 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
   {
     // if hash search does not work or is not enabled
     PelUnitBuf origBuf = cu.cs->getOrgBuf(cu);
-    xIBCEstimation(cu, origBuf, cMvPred, cMv, cost, localSearchRangeX, localSearchRangeY);
+    xIBCEstimation(cu, origBuf, cMvPred, cMv, cost );
   }
 
   if (cMv.hor == 0 && cMv.ver == 0)
