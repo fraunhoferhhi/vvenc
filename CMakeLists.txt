@@ -342,7 +342,7 @@ add_test( NAME Test_compare_output-medium_noqpa_0thr COMMAND ${CMAKE_COMMAND} -E
 add_test( NAME Test_vvencFFapp-lowdelay_medium_enc COMMAND vvencFFapp -c ../../cfg/experimental/lowdelay_medium.cfg -c ../../test/data/RTn23.cfg --IntraPeriod=-1 -dph 1 -f 8 -b outf.vvc )
 add_test( NAME Test_vvencFFapp-lowdelay_medium_dec COMMAND vvencFFapp --decode -b outf.vvc )
 
-add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc  )
+add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc )
  
 
 if( VVENC_ENABLE_INSTALL )

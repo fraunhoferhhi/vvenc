@@ -127,6 +127,7 @@ namespace vvenc {
     void setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB );
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
     void getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters, double alpha[] );
+    void clipRcAlpha( double& alpha );
 
   public:
     bool            twoPass;
@@ -152,7 +153,7 @@ namespace vvenc {
     double          bitUsageRatio;
     double          lastLambda;
 #if RC_INTRA_MODEL_OPT
-    int8_t          qpCorrection[4];
+    int8_t          qpCorrection[8];
 #endif
     TRCParameter*   picParam;
     int*            bitsRatio;
@@ -218,7 +219,6 @@ namespace vvenc {
     void   updateAlphaBetaIntra( double& alpha, double& beta );
     void   updateAfterCTU( int LCUIdx, int bits, double lambda );
     void   updateAfterPicture( int actualHeaderBits, int actualTotalBits, double averageQP, double averageLambda, bool isIRAP );
-    void   clipRcAlpha( const int bitdepth, double& alpha );
     void   clipRcBeta( double& beta );
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
     void   calPicMSE();

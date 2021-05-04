@@ -100,12 +100,12 @@ void EncCu::initSlice( const Slice* slice )
   m_cRdCost.setLambda( slice->getLambdas()[0], slice->sps->bitDepths );
 }
 
-void EncCu::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList)
+void EncCu::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs )
 {
   m_CABACEstimator = cabacEstimator;
   m_CtxCache       = ctxCache;
   m_cIntraSearch.setCtuEncRsrc( cabacEstimator, ctxCache );
-  m_cInterSearch.setCtuEncRsrc( cabacEstimator, ctxCache, pReuseUniMv, pBlkUniMvInfoBuffer, pAffineProfList );
+  m_cInterSearch.setCtuEncRsrc( cabacEstimator, ctxCache, pReuseUniMv, pBlkUniMvInfoBuffer, pAffineProfList, pCachedBvs );
 }
 
 void EncCu::setUpLambda (Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted, const bool useRC)
@@ -308,10 +308,8 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   {
     cs.motionLut.lut.resize(0);
     cs.motionLutBuf[ctuYPosInCtus].lut.resize(0);
-#if IBC_VTM
     cs.motionLutBuf[ctuYPosInCtus].lutIbc.resize(0);
     cs.motionLut.lutIbc.resize(0);
-#endif
   }
 
   if( m_pcEncCfg->m_ensureWppBitEqual && ctuXPosInCtus == 0 )
@@ -373,16 +371,10 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
 
-#if IBC_VTM
-  if (m_pcEncCfg->m_IBCMode)
+  if( m_pcEncCfg->m_IBCMode )
   {
-    if (area.lx() == 0 && area.ly() == 0)
-    {
-      m_cInterSearch.resetIbcSearch();
-    }
     m_cInterSearch.resetCtuRecordIBC();
   }
-#endif
 
   // init current context pointer
   m_CurrCtx = m_CtxBuffer.data();
@@ -621,13 +613,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
       bool isReuseCU = m_modeCtrl.isReusingCuValid( cs, partitioner, qp );
 
-#if IBC_VTM
       bool checkIbc = m_pcEncCfg->m_IBCMode && bestCS->picture->useScIBC && (partitioner.chType == CH_L);
       if ((m_pcEncCfg->m_IBCFastMethod>3) && (cs.area.lwidth() * cs.area.lheight()) > (16 * 16))
       {
         checkIbc = false;
       }
-#endif
       if( isReuseCU )
       {
         xReuseCachedResult( tempCS, bestCS, partitioner );
@@ -732,7 +722,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           xCalDebCost(*bestCS, partitioner);
         }
 
-#if IBC_VTM
         if (checkIbc && !partitioner.isConsInter())
         {
           EncTestMode encTestModeIBCMerge = { ETM_IBC_MERGE, ETO_STANDARD, qp, lossless };
@@ -747,7 +736,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             xCheckRDCostIBCMode(tempCS, bestCS, partitioner, encTestModeIBC);
           }
         }
-#endif
 
         // add intra modes
         EncTestMode encTestMode( {ETM_INTRA, ETO_STANDARD, qp, lossless} );
@@ -864,21 +852,12 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     )
   {
     const CodingUnit& cu = *bestCS->cus.front();
-#if IBC_VTM
     bool isIbcSmallBlk = CU::isIBC(cu) && (cu.lwidth() * cu.lheight() <= 16);
     if (!cu.affine && !cu.geo && !isIbcSmallBlk)
-#else
-
-    if (!cu.affine && !cu.geo)
-#endif
     {
       const MotionInfo &mi = cu.getMotionInfo();
       HPMVInfo hMi( mi, (mi.interDir == 3) ? cu.BcwIdx : BCW_DEFAULT, cu.imv == IMV_HPEL );
-#if IBC_VTM
       cu.cs->addMiToLut( CU::isIBC(cu) ? cu.cs->motionLut.lutIbc : cu.cs->motionLut.lut, hMi);
-#else
-      cu.cs->addMiToLut( /*CU::isIBC(cu) ? cu.cs->motionLut.lutIbc :*/ cu.cs->motionLut.lut, hMi );
-#endif
     }
   }
 
@@ -1620,15 +1599,16 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   if( m_pcEncCfg->m_useFastMrg || testCIIP )
   {
     uiNumMrgSATDCand = NUM_MRG_SATD_CAND + (testCIIP ? numCiiPExtraTests : 0);
-#if IBC_VTM
     if (slice.sps->IBC)
     {
       ComprCUCtx cuECtx = *m_modeCtrl.comprCUCtx;
       bestIsSkip = m_modeCtrl.getBlkInfo(tempCS->area).isSkip && cuECtx.bestCU;
     }
     else
-#endif
-    bestIsSkip = !testCIIP && m_modeCtrl.getBlkInfo( tempCS->area ).isSkip;
+    {
+      bestIsSkip = !testCIIP && m_modeCtrl.getBlkInfo( tempCS->area ).isSkip;
+    }
+
     bestIsMMVDSkip = m_modeCtrl.getBlkInfo(tempCS->area).isMMVDSkip;
 
     static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM> candCostList;
@@ -2565,7 +2545,6 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   }
 }
 
-#if IBC_VTM
 //////////////////////////////////////////////////////////////////////////////////////////////
 // ibc merge/skip mode check
 void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner, const EncTestMode& encTestMode)
@@ -2861,7 +2840,6 @@ void EncCu::xCheckRDCostIBCMode(CodingStructure*& tempCS, CodingStructure*& best
     tempCS->costDbOffset = 0;
   }
 }
-#endif
 
 void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode )
 {
@@ -3913,9 +3891,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
         tempCS->getPredBuf().Y().copyFrom( sortedListBuf->Y() );   // Copy Luma Only
         cu.mcControl = 4;
         m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf(), REF_PIC_LIST_X);
-#if IBC_VTM
         cu.mcControl = 0;
-#endif
       }
       else
       {

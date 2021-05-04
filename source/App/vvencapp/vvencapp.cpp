@@ -148,6 +148,12 @@ int main( int argc, char* argv[] )
   }
   // assign verbosity used for encoder output
   g_verbosity = vvencappCfg.m_verbosity;
+
+  if( vvencappCfg.m_showVersion )
+  {
+    std::cout << cAppname  << " version " << vvenc_get_version()<< std::endl;
+    return 0;
+  }
   
   if( !strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
   {

@@ -175,7 +175,7 @@ void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = 
 
 void defaultSDKInit( vvenc_config& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32,  vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32, vvencPresetMode::VVENC_MEDIUM );
 
   if( callInitCfgParameter )
   {

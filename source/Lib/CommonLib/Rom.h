@@ -198,9 +198,7 @@ extern const uint32_t g_scalingListSizeX[SCALING_LIST_SIZE_NUM];
 
 class CodingStructure;
 
-#if IBC_VTM
 const int g_IBCBufferSize = 256 * 128;
-#endif
 
 constexpr uint8_t g_tbMax[257] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,

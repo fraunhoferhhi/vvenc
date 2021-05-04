@@ -1945,7 +1945,6 @@ Distortion RdCost::xGetSADwMask(const DistParam &rcDtParam)
   return (sum >> distortionShift);
 }
 
-#if IBC_VTM
 Distortion RdCost::getBvCostMultiplePredsIBC(int x, int y, bool useIMV)
 {
   return Distortion(m_dCostIBC * getBitsMultiplePredsIBC(x, y, useIMV));
@@ -2031,7 +2030,7 @@ unsigned int RdCost::getBitsMultiplePredsIBC(int x, int y, bool useIMV)
     }
   }
 }
-#endif
+
 } // namespace vvenc
 
 //! \}

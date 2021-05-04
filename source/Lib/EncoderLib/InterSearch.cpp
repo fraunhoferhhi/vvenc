@@ -191,6 +191,7 @@ static const bool s_doInterpQ[ 42 ][ 14 ] =
 
 InterSearch::InterSearch()
   : m_modeCtrl                    (nullptr)
+  , m_defaultCachedBvs            (nullptr)
   , m_pcEncCfg                    (nullptr)
   , m_pcTrQuant                   (nullptr)
   , m_iSearchRange                (0)
@@ -219,14 +220,7 @@ InterSearch::~InterSearch()
 void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
   InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
-#if IBC_VTM
-  m_numBVs = 0;
-  for (int i = 0; i < IBC_NUM_CANDIDATES; i++)
-  {
-    m_defaultCachedBvs.m_bvCands[i].setZero();
-  }
-  m_defaultCachedBvs.currCnt = 0;
-#endif
+  m_numBVs                       = 0;
   m_pcEncCfg                     = &encCfg;
   m_pcTrQuant                    = pTrQuant;
   m_pcRdCost                     = pRdCost;
@@ -307,13 +301,14 @@ void InterSearch::destroy()
   m_pSaveCS  = nullptr;
 }
 
-void InterSearch::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList)
+void InterSearch::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs )
 {
   m_CABACEstimator     = cabacEstimator;
   m_CtxCache           = ctxCache;
   m_ReuseUniMv         = pReuseUniMv;
   m_BlkUniMvInfoBuffer = pBlkUniMvInfoBuffer;
   m_AffineProfList     = pAffineProfList;
+  m_defaultCachedBvs   = pCachedBvs;
 }
 
 ReuseUniMv::ReuseUniMv()
@@ -3622,11 +3617,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
     tu.depth          = currDepth;
     tu.mtsIdx[COMP_Y] = MTS_DCT2_DCT2;
     tu.checkTuNoResidual( partitioner.currPartIdx() );
-#if IBC_VTM
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && cs.picHeader->lmcsChromaResidualScale && !(CS::isDualITree(cs) && cs.slice->isIntra() && tu.cu->predMode == MODE_IBC))
-#else
-    if( cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag() && cs.picHeader->lmcsChromaResidualScale )
-#endif
     {
       tu.chromaAdj = reshapeData.calculateChromaAdjVpduNei(tu, tu.blocks[COMP_Y], tu.cu->treeType);
     }
@@ -4197,15 +4188,13 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
 void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &partitioner, const bool skipResidual )
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
-#if IBC_VTM
-  bool luma = true;
-  bool chroma = true;
+  bool luma      = true;
+  bool chroma    = true;
   if (cu.predMode == MODE_IBC)
   {
-    luma = cu.mcControl <= 3;
+    luma   = cu.mcControl <= 3;
     chroma = (cu.mcControl >> 1) != 1;
   }
-#endif
   if( cu.predMode == MODE_INTER )
     CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );
 
@@ -4233,12 +4222,10 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
     for (int comp = 0; comp < numValidComponents; comp++)
     {
       const ComponentID compID = ComponentID(comp);
-#if IBC_VTM
       if (compID == COMP_Y && !luma)
         continue;
       if (compID != COMP_Y && !chroma)
         continue;
-#endif
       CPelBuf reco = cs.getRecoBuf (compID);
       CPelBuf org  = cs.getOrgBuf  (compID);
       if ((cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag()) || m_pcEncCfg->m_lumaLevelToDeltaQPEnabled )
@@ -4272,9 +4259,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   }
 
   //  Residual coding.
-#if IBC_VTM
   if (luma)
-#endif
   {
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
@@ -4295,14 +4280,12 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
       cs.getResiBuf(COMP_Y).subtract(cs.getOrgBuf(COMP_Y), cs.getPredBuf(COMP_Y));
     }
   }
-#if IBC_VTM
   if (chroma)
-#endif
   {
     cs.getResiBuf(COMP_Cb).subtract(cs.getOrgBuf(COMP_Cb), cs.getPredBuf(COMP_Cb));
     cs.getResiBuf(COMP_Cr).subtract(cs.getOrgBuf(COMP_Cr), cs.getPredBuf(COMP_Cr));
   }
-  
+
   Distortion zeroDistortion = 0;
 
   const TempCtx ctxStart( m_CtxCache, m_CABACEstimator->getCtx() );
@@ -4344,7 +4327,6 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   // we've now encoded the CU, and so have a valid bit cost
   if (!cu.rootCbf)
   {
-#if IBC_VTM
     if (luma)
     {
       cs.getResiBuf().bufs[0].fill(0); // Clear the residual image, if we didn't code it.
@@ -4354,13 +4336,8 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
       cs.getResiBuf().bufs[1].fill(0); // Clear the residual image, if we didn't code it.
       cs.getResiBuf().bufs[2].fill(0); // Clear the residual image, if we didn't code it.
     }
-#else
-    cs.getResiBuf().fill(0); // Clear the residual image, if we didn't code it.
-#endif
   }
-#if IBC_VTM
   if (luma)
-#endif
   {
     if (cu.rootCbf && cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
@@ -4384,9 +4361,7 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
       }
     }
   }
-#if IBC_VTM
   if (chroma)
-#endif
   {
     cs.getRecoBuf().bufs[1].reconstruct(cs.getPredBuf().bufs[1], cs.getResiBuf().bufs[1], cs.slice->clpRngs[COMP_Cb]);
     cs.getRecoBuf().bufs[2].reconstruct(cs.getPredBuf().bufs[2], cs.getResiBuf().bufs[2], cs.slice->clpRngs[COMP_Cr]);
@@ -4397,12 +4372,10 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
   for (int comp = 0; comp < numValidComponents; comp++)
   {
     const ComponentID compID = ComponentID(comp);
-#if IBC_VTM
     if (compID == COMP_Y && !luma)
       continue;
     if (compID != COMP_Y && !chroma)
       continue;
-#endif
     CPelBuf reco = cs.getRecoBuf (compID);
     CPelBuf org  = cs.getOrgBuf  (compID);
 
@@ -5863,7 +5836,6 @@ void InterSearch::setSearchRange( const Slice* slice, const VVEncCfg& encCfg )
   }
 }
 
-#if IBC_VTM
 void InterSearch::xIBCSearchMVCandUpdate(Distortion  sad, int x, int y, Distortion* sadBestCand, Mv* cMVCand)
 {
   int j = CHROMA_REFINEMENT_CANDIDATES - 1;
@@ -6061,7 +6033,7 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
     int srLeft = srchRngHorLeft, srRight = srchRngHorRight, srTop = srchRngVerTop, srBottom = srchRngVerBottom;
     m_numBVs = 0;
-    m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt);
+    m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt);
 
     Mv cMvPredEncOnly[IBC_NUM_CANDIDATES];
     int nbPreds = 0;
@@ -6293,11 +6265,11 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
 
 end:
   m_numBVs = 0;
-  m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt);
+  m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt);
 
-  m_defaultCachedBvs.currCnt = 0;
-  m_defaultCachedBvs.currCnt = xMergeCandLists(m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt, IBC_NUM_CANDIDATES, cMVCand, CHROMA_REFINEMENT_CANDIDATES);
-  m_defaultCachedBvs.currCnt = xMergeCandLists(m_defaultCachedBvs.m_bvCands, m_defaultCachedBvs.currCnt, IBC_NUM_CANDIDATES, m_acBVs, m_numBVs);
+  m_defaultCachedBvs->currCnt = 0;
+  m_defaultCachedBvs->currCnt = xMergeCandLists(m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt, IBC_NUM_CANDIDATES, cMVCand, CHROMA_REFINEMENT_CANDIDATES);
+  m_defaultCachedBvs->currCnt = xMergeCandLists(m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt, IBC_NUM_CANDIDATES, m_acBVs, m_numBVs);
 
   for (unsigned int cand = 0; cand < CHROMA_REFINEMENT_CANDIDATES; cand++)
   {
@@ -6759,7 +6731,6 @@ bool InterSearch::searchBvIBC(const CodingUnit& cu, int xPos, int yPos, int widt
 
   return isDecomp;
 }
-#endif
 
 } // namespace vvenc
 

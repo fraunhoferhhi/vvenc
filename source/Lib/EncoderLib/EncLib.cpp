@@ -364,8 +364,9 @@ void EncLib::xSetRCEncCfg( int pass )
 #if RC_INTRA_MODEL_OPT
     const double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
 #endif
-    // preserve MCTF settings
-    const int mctf = m_cBckCfg.m_vvencMCTF.MCTF;
+    // preserve MCTF and IBC settings
+    const int mctf    = m_cBckCfg.m_vvencMCTF.MCTF;
+    const int ibcMode = m_cBckCfg.m_IBCMode;
 
     vvenc_init_preset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
@@ -377,8 +378,9 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_QP              = 32;
 #endif
 
-    // restore MCTF
+    // restore MCTF and IBC
     m_cBckCfg.m_vvencMCTF.MCTF  = mctf;
+    m_cBckCfg.m_IBCMode         = ibcMode;
 
     // clear MaxCuDQPSubdiv
     if( m_cBckCfg.m_CTUSize < 128 )
@@ -860,11 +862,7 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noSbtConstraintFlag                          = m_cEncCfg.m_SBT == 0;
   ci.noAffineMotionConstraintFlag                 = ! m_cEncCfg.m_Affine;
   ci.noBcwConstraintFlag                          = true;
-#if IBC_VTM
   ci.noIbcConstraintFlag                          = m_cEncCfg.m_IBCMode == 0;
-#else
-  ci.noIbcConstraintFlag                          = true;
-#endif
   ci.noCiipConstraintFlag                         = m_cEncCfg.m_CIIP == 0;
   ci.noGeoConstraintFlag                          = m_cEncCfg.m_Geo == 0;
   ci.noLadfConstraintFlag                         = true;
@@ -926,12 +924,8 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.maxNumMergeCand               = m_cEncCfg.m_maxNumMergeCand;
   sps.maxNumAffineMergeCand         = m_cEncCfg.m_Affine ? m_cEncCfg.m_maxNumAffineMergeCand : 0;
   sps.maxNumGeoCand                 = m_cEncCfg.m_maxNumGeoCand;
-#if IBC_VTM
   sps.IBC                           = m_cEncCfg.m_IBCMode != 0;
-  sps.maxNumIBCMergeCand            = 6;//maxNumIBCMergeCand
-#else
-  sps.maxNumIBCMergeCand            = 0; 
-#endif
+  sps.maxNumIBCMergeCand            = 6;
 
   sps.idrRefParamList               = m_cEncCfg.m_idrRefParamList;
   sps.dualITree                     = m_cEncCfg.m_dualITree;
@@ -1299,6 +1293,7 @@ void EncLib::xOutputRecYuv()
     {
       const PPS& pps = *(picItr->cs->pps);
       vvencYUVBuffer yuvBuffer;
+      vvenc_YUVBuffer_default( &yuvBuffer );
       setupYuvBuffer( picItr->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
 
       m_RecYUVBufferCallback( m_RecYUVBufferCallbackCtx, &yuvBuffer );
@@ -1330,11 +1325,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
   bool useScMCTF = false;
   bool useScTools = false;
 
-#if IBC_VTM
   if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_vvencMCTF.MCTF == 2 || m_cEncCfg.m_IBCMode==2)
-#else
-  if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_vvencMCTF.MCTF == 2)
-#endif
   {
     int SIZE_BL = 4;
     int K_SC = 25;
@@ -1423,9 +1414,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
   pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1 || (m_cEncCfg.m_useBDPCM == 2 && useScTools);
   pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1 || (m_cEncCfg.m_vvencMCTF.MCTF == 2 && useScMCTF);
 
-#if IBC_VTM
   pic.useScIBC   = m_cEncCfg.m_IBCMode == 1 || (m_cEncCfg.m_IBCMode == 2 && !useScMCTF);
-#endif
 
 }
 

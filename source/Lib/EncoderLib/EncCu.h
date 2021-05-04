@@ -214,7 +214,7 @@ public:
   virtual ~EncCu();
 
   void  init                  ( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl );
-  void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
+  void  setCtuEncRsrc         ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
   void  destroy               ();
 
   std::vector<int>* getQpPtr  () const { return m_globalCtuQpVector; }
@@ -256,10 +256,8 @@ private:
   uint64_t xCalcPuMeBits      ( const CodingUnit& cu);
   double   xCalcDistortion    ( CodingStructure *&cur_CS, ChannelType chType, int BitDepth, int imv);
   int      xCheckMMVDCand     ( uint32_t& mmvdMergeCand, int& bestDir, int tempNum, double& bestCostOffset, double& bestCostMerge, double bestCostList );
-#if IBC_VTM
   void     xCheckRDCostIBCMode           ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void     xCheckRDCostIBCModeMerge2Nx2N ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner, const EncTestMode& encTestMode );
-#endif
 };
 
 } // namespace vvenc

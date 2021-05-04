@@ -247,9 +247,7 @@ public:
   bool                          useScMCTF;
   bool                          useScTS;
   bool                          useScBDPCM;
-#if IBC_VTM
   bool                          useScIBC;
-#endif
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;

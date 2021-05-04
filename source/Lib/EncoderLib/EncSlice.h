@@ -102,6 +102,7 @@ private:
   NoMallocThreadPool*          m_threadPool;
   WaitCounter*                 m_ctuTasksDoneCounter;
   std::vector<ProcessCtuState> m_processStates;
+  int                          m_ctuEncDelay;
 
   LoopFilter*                  m_pLoopFilter;
   EncAdaptiveLoopFilter*       m_pALF;
