@@ -878,7 +878,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case RESHAPE_LF_VER:
       {
         // clip check to right picture border
-        const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int) pcv.widthInCtus - 1 - ctuPosX );
+        const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
