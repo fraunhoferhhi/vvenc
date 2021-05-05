@@ -245,6 +245,7 @@ struct IbcBvCand
     }
     currCnt = 0;
   }
+  IbcBvCand() { resetIbcBvCand(); }
 };
 } // namespace vvenc
 
