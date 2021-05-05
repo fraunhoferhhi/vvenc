@@ -306,8 +306,6 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
   if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
   {
-    cs.motionLut.lut.resize(0);
-    cs.motionLut.lutIbc.resize( 0 );
     cs.motionLutBuf[ctuYPosInCtus].lut.resize(0);
     cs.motionLutBuf[ctuYPosInCtus].lutIbc.resize(0);
   }
@@ -373,8 +371,6 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if( m_pcEncCfg->m_IBCMode )
   {
-    if( area.lx() == 0 && area.ly() == 0 )
-      m_cInterSearch.m_defaultCachedBvs->resetIbcBvCand();
     m_cInterSearch.resetCtuRecordIBC();
   }
 

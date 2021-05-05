@@ -281,7 +281,6 @@ void EncRCSeq::setAllBitRatio( double basicLambda, double* equaCoeffA, double* e
 
 void EncRCSeq::clipRcAlpha( double& alpha )
 {
-  THROW( "Problem!" );
   const int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
   alpha = Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
 }

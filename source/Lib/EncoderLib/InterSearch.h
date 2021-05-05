@@ -344,9 +344,7 @@ private:
   ClpRng            m_lumaClpRng;
   Mv                m_acBVs[2 * IBC_NUM_CANDIDATES];
   unsigned int      m_numBVs;
-public:
   IbcBvCand*        m_defaultCachedBvs;
-private:
   std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
 
 protected:
