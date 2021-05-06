@@ -51,7 +51,7 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --passes,-p <int>      | 2                                | Number of rate control passes (1: single-pass rate control, 2: two-pass rate control)                |
 | --qpa <int>            | 1                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
-| --threads,-t <int>     | size > 832x480: <br> 8, else: 4  | Number of threads (1-N)                                                                              |
+| --threads,-t <int>     | size >= 1280x720: <br> 8, else: 4  | Number of threads (1-N)                                                                              |
 | --hdr <str>            | off                              | HDR mode (+ SEI messages) + BT.709 or BT.2020 color space (off, pq, pq_2020, hlg, hlg_2020)          |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels, the following call will encode the input file with the medium speedup preset:
