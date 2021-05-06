@@ -620,12 +620,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_picPartitionFlag                        = false;
 
-  c->m_summaryOutFilename[0]                   = '\0';
-  c->m_summaryPicFilenameBase[0]               = '\0';
+  memset( c->m_summaryOutFilename, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
+  memset( c->m_summaryPicFilenameBase, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
   c->m_summaryVerboseness                      = 0;
 
-  c->m_decodeBitstreams[0][0]                  = '\0';
-  c->m_decodeBitstreams[1][0]                  = '\0';
+  memset( c->m_decodeBitstreams[0], '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
+  memset( c->m_decodeBitstreams[1], '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
 
   c->m_switchPOC                               = -1;
   c->m_switchDQP                               = 0;
@@ -635,8 +635,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_forceDecodeBitstream1                   = false;
 
   c->m_listTracingChannels                     = false;
-  c->m_traceRule[0]                            = '\0';
-  c->m_traceFile[0]                            = '\0';
+  memset( c->m_traceRule, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
+  memset( c->m_traceFile, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
@@ -800,7 +800,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_numThreads < 0 )
   {
     const int numCores = std::thread::hardware_concurrency();
-    c->m_numThreads = c->m_SourceWidth > 832 && c->m_SourceHeight > 480 ? 8 : 4;
+    c->m_numThreads = c->m_SourceWidth >= 1280 && c->m_SourceHeight >= 720 ? 8 : 4;
     c->m_numThreads = std::min( c->m_numThreads, numCores );
   }
   if( c->m_ensureWppBitEqual < 0 )       c->m_ensureWppBitEqual     = c->m_numThreads ? 1   : 0   ;
