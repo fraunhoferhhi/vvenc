@@ -620,12 +620,12 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_picPartitionFlag                        = false;
 
-  memset( c->m_summaryOutFilename, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
-  memset( c->m_summaryPicFilenameBase, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
+  memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
+  memset( c->m_summaryPicFilenameBase, '\0', sizeof(c->m_summaryPicFilenameBase) );
   c->m_summaryVerboseness                      = 0;
 
-  memset( c->m_decodeBitstreams[0], '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
-  memset( c->m_decodeBitstreams[1], '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
+  memset( c->m_decodeBitstreams[0], '\0', sizeof(c->m_decodeBitstreams[0]) );
+  memset( c->m_decodeBitstreams[1], '\0', sizeof(c->m_decodeBitstreams[1]) );
 
   c->m_switchPOC                               = -1;
   c->m_switchDQP                               = 0;
@@ -635,8 +635,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_forceDecodeBitstream1                   = false;
 
   c->m_listTracingChannels                     = false;
-  memset( c->m_traceRule, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
-  memset( c->m_traceFile, '\0', sizeof(char)*VVENC_MAX_STRING_LEN );
+  memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
+  memset( c->m_traceFile, '\0', sizeof(c->m_traceFile) );
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
