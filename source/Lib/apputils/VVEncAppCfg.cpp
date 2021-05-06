@@ -446,7 +446,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
   ("qpa",               toQPA,                    "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
 
-  ("threads,-t",        m_numThreads,             "Number of threads default: [size <= HD: 4, UHD: 6]")
+  ("threads,-t",        m_numThreads,             "Number of threads default: [size < 720p: 4, >= 720p: 8]")
 
   ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
   ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
