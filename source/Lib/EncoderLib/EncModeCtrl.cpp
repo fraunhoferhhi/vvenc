@@ -361,6 +361,9 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
             m_bestEncInfo[wIdx][hIdx][x][y]->tu.UnitArea::operator=( area );
 
             m_bestEncInfo[wIdx][hIdx][x][y]->cu.chType = CH_L;
+            m_bestEncInfo[wIdx][hIdx][x][y]->cu.treeType = TREE_D;
+            m_bestEncInfo[wIdx][hIdx][x][y]->cu.modeType = MODE_TYPE_ALL;
+            m_bestEncInfo[wIdx][hIdx][x][y]->cu.qp = MAX_SCHAR;
             m_bestEncInfo[wIdx][hIdx][x][y]->tu.chType = CH_L;
 
             if( dmvrSize )
