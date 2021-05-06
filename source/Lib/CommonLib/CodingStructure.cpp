@@ -105,6 +105,8 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   }
 
   m_motionBuf = nullptr;
+
+  m_numTUs = m_numCUs = 0;
 }
 
 void CodingStructure::destroy()
