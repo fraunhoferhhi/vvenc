@@ -97,10 +97,17 @@ void  EncReshape::init( const VVEncCfg& encCfg )
     m_initCWAnalyze = m_reshapeLUTSize / PIC_ANALYZE_CW_BINS;
     m_initCW = m_reshapeLUTSize / PIC_CODE_CW_BINS;
 
-    if (m_fwdLUT.empty())
-      m_fwdLUT.resize(m_reshapeLUTSize, 0);
-    if (m_invLUT.empty())
-      m_invLUT.resize(m_reshapeLUTSize,0);
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_BUFFER
+    if( m_fwdLUT.empty() )
+      m_fwdLUT.resize( m_reshapeLUTSize + 2, 0 );
+    if( m_invLUT.empty() )
+      m_invLUT.resize( m_reshapeLUTSize + 2, 0 );
+#else
+    if( m_fwdLUT.empty() )
+      m_fwdLUT.resize( m_reshapeLUTSize, 0 );
+    if( m_invLUT.empty() )
+      m_invLUT.resize( m_reshapeLUTSize, 0 );
+#endif
     if (m_binCW.empty())
       m_binCW.resize(PIC_ANALYZE_CW_BINS);
     if (m_binImportance.empty())
