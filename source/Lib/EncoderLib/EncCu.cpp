@@ -306,10 +306,8 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
   if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
   {
-    cs.motionLut.lut.resize(0);
     cs.motionLutBuf[ctuYPosInCtus].lut.resize(0);
     cs.motionLutBuf[ctuYPosInCtus].lutIbc.resize(0);
-    cs.motionLut.lutIbc.resize(0);
   }
 
   if( m_pcEncCfg->m_ensureWppBitEqual && ctuXPosInCtus == 0 )

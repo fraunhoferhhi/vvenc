@@ -865,8 +865,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           lineEncRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
           lineEncRsrc->m_ReuseUniMv.resetReusedUniMvs();
           lineEncRsrc->m_CachedBvs.resetIbcBvCand();
-          pic->cs->motionLutBuf[ ctuPosY ].lut.resize(0);
-          pic->cs->motionLutBuf[ ctuPosY ].lutIbc.resize(0);
         }
 
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );
@@ -881,7 +879,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // clip check to right picture border
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
-
+        
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
         if(                                   processStates[ ctuRsAddr + checkRight                   ] <= CTU_ENCODE )
