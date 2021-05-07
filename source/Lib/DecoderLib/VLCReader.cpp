@@ -800,17 +800,20 @@ void HLSyntaxReader::parseLmcsAps( APS* aps )
 
 void  HLSyntaxReader::parseVUI(VUI* pcVUI, SPS *pcSPS)
 {
-  assert(0); //to be checked
 #if ENABLE_TRACING
   DTRACE( g_trace_ctx, D_HEADER, "----------- vui_parameters -----------\n");
 #endif
-  READ_FLAG(pcVUI->progressiveSourceFlag,  "vui_progressive_source_flag" ); 
-  READ_FLAG(pcVUI->interlacedSourceFlag,  "vui_interlaced_source_flag" ); 
+  InputBitstream *bs = getBitstream();
+  setBitstream( bs->extractSubstream( pcSPS->vuiPayloadSize * 8 ) );
+
+  READ_FLAG(pcVUI->progressiveSourceFlag,  "vui_general_progressive_source_flag" );
+  READ_FLAG(pcVUI->interlacedSourceFlag,  "vui_general_interlaced_source_flag" );
   READ_FLAG(pcVUI->nonPackedFlag, "vui_non_packed_constraint_flag");
   READ_FLAG(pcVUI->nonProjectedFlag, "vui_non_projected_constraint_flag");
   READ_FLAG( pcVUI->aspectRatioInfoPresent, "vui_aspect_ratio_info_present_flag");
   if (pcVUI->aspectRatioInfoPresent)
   {
+    READ_FLAG( pcVUI->aspectRatioConstantFlag, "vui_aspect_ratio_constant_flag");
     READ_CODE(8, pcVUI->aspectRatioIdc, "vui_aspect_ratio_idc");
     if (pcVUI->aspectRatioIdc == 255)
     {
@@ -846,6 +849,40 @@ void  HLSyntaxReader::parseVUI(VUI* pcVUI, SPS *pcSPS)
       READ_UVLC( pcVUI->chromaSampleLocTypeBottomField, "vui_chroma_sample_loc_type_bottom_field" );
     }
   }
+
+  int payloadBitsRem = getBitstream()->getNumBitsLeft();
+  if( payloadBitsRem )      //Corresponds to more_data_in_payload()
+  {
+    uint32_t  symbol;
+    while( payloadBitsRem > 9 )    //payload_extension_present()
+    {
+      READ_CODE( 1, symbol, "vui_reserved_payload_extension_data" );
+      payloadBitsRem--;
+    }
+    int finalBits = getBitstream()->peekBits( payloadBitsRem );
+    int numFinalZeroBits = 0;
+    int mask = 0xff;
+    while( finalBits & (mask >> numFinalZeroBits) )
+    {
+      numFinalZeroBits++;
+    }
+    while( payloadBitsRem > 9-numFinalZeroBits )     //payload_extension_present()
+    {
+      READ_CODE( 1, symbol, "vui_reserved_payload_extension_data" );
+      payloadBitsRem--;
+    }
+    READ_FLAG( symbol, "vui_payload_bit_equal_to_one" );
+    CHECK( symbol != 1, "vui_payload_bit_equal_to_one not equal to 1" );
+    payloadBitsRem--;
+    while( payloadBitsRem )
+    {
+      READ_FLAG( symbol, "vui_payload_bit_equal_to_zero" );
+      CHECK( symbol != 0, "vui_payload_bit_equal_to_zero not equal to 0" );
+      payloadBitsRem--;
+    }
+  }
+  delete getBitstream();
+  setBitstream(bs);
 }
 
 void HLSyntaxReader::parseGeneralHrdParameters(GeneralHrdParams *hrd)
@@ -1411,6 +1448,8 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
   if (pcSPS->vuiParametersPresent)
   {
     READ_UVLC(uiCode, "sps_vui_payload_size_minus1");
+    pcSPS->vuiPayloadSize = uiCode+1;
+
     while (!isByteAligned())
     {
       READ_FLAG(uiCode, "sps_vui_alignment_zero_bit");

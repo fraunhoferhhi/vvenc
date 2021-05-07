@@ -771,6 +771,7 @@ struct SPS
   OlsHrdParams      olsHrdParams[VVENC_MAX_TLAYER];
   bool              fieldSeqFlag;
   bool              vuiParametersPresent;
+  unsigned          vuiPayloadSize;
   VUI               vuiParameters;
 
   SPSRExt           spsRExt;
