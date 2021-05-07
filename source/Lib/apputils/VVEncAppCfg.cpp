@@ -1074,7 +1074,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   std::vector<int> signalledSliceId;
   IStreamToVec<int> toRectSliceBoundary( &rectSliceBoundary );
   IStreamToVec<int> toSignalledSliceId ( &signalledSliceId  );
-  bool sdr = 0;
+  bool sdr = false;
 
   opts.setSubSection("Unused options (only for compatiblity to VTM)");
   opts.addOptions()
