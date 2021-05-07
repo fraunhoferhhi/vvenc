@@ -1062,20 +1062,20 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     ;
 
 
-  int  cropOffsetLeft;
-  int  cropOffsetTop;
-  int  cropOffsetRight;
-  int  cropOffsetBottom;
-  bool calculateHdrMetrics;
-  bool signalledSliceIdFlag;
-  int  signalledSliceIdLengthMinus1;
-  std::vector<int>    rectSliceBoundary;                                       // unused, only for conmpatiblity
-  std::vector<int>    signalledSliceId;                                        // unused, only for conmpatiblity
+  // following options are unused, only for compatiblity
+  int  cropOffsetLeft               = 0;
+  int  cropOffsetTop                = 0;
+  int  cropOffsetRight              = 0;
+  int  cropOffsetBottom             = 0;
+  bool calculateHdrMetrics          = false;
+  bool signalledSliceIdFlag         = false;
+  int  signalledSliceIdLengthMinus1 = 0;
+  std::vector<int> rectSliceBoundary;
+  std::vector<int> signalledSliceId;
+  IStreamToVec<int> toRectSliceBoundary( &rectSliceBoundary );
+  IStreamToVec<int> toSignalledSliceId ( &signalledSliceId  );
+  bool sdr = 0;
 
-  IStreamToVec<int>            toRectSliceBoundary          ( &rectSliceBoundary     );
-  IStreamToVec<int>            toSignalledSliceId           ( &signalledSliceId      );
-
-  bool sdr; // unused
   opts.setSubSection("Unused options (only for compatiblity to VTM)");
   opts.addOptions()
   ("EnablePictureHeaderInSliceHeader",                m_enablePictureHeaderInSliceHeader,               "Enable Picture Header in Slice Header")
@@ -1093,8 +1093,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("isSDR",                                           sdr,                                              "compatibility")
   ;
-  
-  
+
+
   po::setDefaults( opts );
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
