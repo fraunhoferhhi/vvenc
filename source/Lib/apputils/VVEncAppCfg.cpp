@@ -402,8 +402,9 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<int>                toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>                toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
   IStreamToEnum<bool>               toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
-
-
+  IStreamToArr<char>                toTraceRule                  ( &m_traceRule[0], VVENC_MAX_STRING_LEN  );
+  IStreamToArr<char>                toTraceFile                  ( &m_traceFile[0], VVENC_MAX_STRING_LEN  );
+  IStreamToEnum<vvencHashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
   //
   // setup configuration parameters
   //
@@ -417,6 +418,18 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("verbosity,v",       toMsgLevel,               "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug) ")
   ("version",           m_showVersion,            "show version ")
   ;
+
+  if ( vvenc_is_tracing_enabled() )
+  {
+    opts.setSubSection("Tracing");
+    opts.addOptions()
+    ("TraceChannelsList",             m_listTracingChannels,  "List all available tracing channels")
+    ("TraceRule",                     toTraceRule,            "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("TraceFile",                     toTraceFile,            "Tracing file")
+    ("SEIDecodedPictureHash,-dph",    toHashType,             "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
+    ;
+  }
+
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("input,i",           m_inputFileName,          "original YUV input file name or '-' for reading from stdin")
@@ -911,6 +924,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("VUI and SEI options");
   opts.addOptions()
+
   ("SEIDecodedPictureHash,-dph",                      toHashType,                                       "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
   ("SEIBufferingPeriod",                              m_bufferingPeriodSEIEnabled,                      "Control generation of buffering period SEI messages")
   ("SEIPictureTiming",                                m_pictureTimingSEIEnabled,                        "Control generation of picture timing SEI messages")
