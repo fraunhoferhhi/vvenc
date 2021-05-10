@@ -478,18 +478,20 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("internal-bitdepth",         m_internalBitDepth[0], "internal bitdepth (8,10)")
   ("accessunitdelimiter,-aud",  toAud,                 "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
   ("vuiparameterspresent,-vui", toVui,                 "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
-  ("hrdParameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
+  ("hrdparameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
   ;
   
-  opts.setSubSection( "Tracing" );
   if ( vvenc_is_tracing_enabled() )
   {
+    opts.setSubSection( "Tracing" );
     opts.addOptions()
     ("tracechannellist",              m_listTracingChannels,  "List all available tracing channels")
     ("tracerule",                     toTraceRule,            "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
     ("tracefile",                     toTraceFile,            "Tracing file")
     ;
   }
+
+  opts.setSubSection( "Encoder Options" );
   opts.addOptions()
   ("decodedpicturehash,-dph",         toHashType,             "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
   ;
