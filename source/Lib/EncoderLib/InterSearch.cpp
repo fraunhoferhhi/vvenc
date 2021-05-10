@@ -6036,9 +6036,6 @@ void InterSearch::xIntraPatternSearchIBC(CodingUnit& cu, TZSearchStruct& cStruct
     m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), m_defaultCachedBvs->m_bvCands, m_defaultCachedBvs->currCnt);
 
     Mv cMvPredEncOnly[IBC_NUM_CANDIDATES];
-    GCC_WARNING_DISABLE_class_memaccess
-    memset( cMvPredEncOnly, 0, sizeof( cMvPredEncOnly ) );
-    GCC_WARNING_RESET
     int nbPreds = 0;
     CU::getIbcMVPsEncOnly(cu, cMvPredEncOnly, nbPreds);
     m_numBVs = xMergeCandLists(m_acBVs, m_numBVs, (2 * IBC_NUM_CANDIDATES), cMvPredEncOnly, nbPreds);
@@ -6367,9 +6364,6 @@ void InterSearch::xIBCEstimation(CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPr
     if (buffered)
     {
       Mv cMvPredEncOnly[IBC_NUM_CANDIDATES];
-      GCC_WARNING_DISABLE_class_memaccess
-      memset( cMvPredEncOnly, 0, sizeof( cMvPredEncOnly ) );
-      GCC_WARNING_RESET
       int nbPreds = 0;
       CU::getIbcMVPsEncOnly(cu, cMvPredEncOnly, nbPreds);
 
