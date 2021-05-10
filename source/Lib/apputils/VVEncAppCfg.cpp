@@ -419,17 +419,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("version",           m_showVersion,            "show version ")
   ;
 
-  if ( vvenc_is_tracing_enabled() )
-  {
-    opts.setSubSection("Tracing");
-    opts.addOptions()
-    ("TraceChannelsList",             m_listTracingChannels,  "List all available tracing channels")
-    ("TraceRule",                     toTraceRule,            "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("TraceFile",                     toTraceFile,            "Tracing file")
-    ("SEIDecodedPictureHash,-dph",    toHashType,             "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
-    ;
-  }
-
   opts.setSubSection("Input Options");
   opts.addOptions()
   ("input,i",           m_inputFileName,          "original YUV input file name or '-' for reading from stdin")
@@ -437,7 +426,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
 
   ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
-  ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, (1..27000000)")
 
   ("frames,f",          m_framesToBeEncoded,      "max. frames to encode [all]")
   ("frameskip",         m_FrameSkip,              "Number of frames to skip at start of input YUV [off]")
@@ -470,7 +459,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.setSubSection("Profile, Level, Tier");
   opts.addOptions()
   ("profile",           toProfile,                "select profile (main10, main10_stillpic)")
-  ("level",             toLevel,                  "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3 15.5)")
+  ("level",             toLevel,                  "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
   ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
   ;
 
@@ -489,8 +478,19 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("internal-bitdepth",         m_internalBitDepth[0], "internal bitdepth (8,10)")
   ("accessunitdelimiter,-aud",  toAud,                 "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
   ("vuiparameterspresent,-vui", toVui,                 "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
-  ("hrdParameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
+  ("hrdparameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
+  ("decodedpicturehash,-dph",   toHashType,            "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
   ;
+  
+  if ( vvenc_is_tracing_enabled() )
+  {
+    opts.setSubSection( "Tracing" );
+    opts.addOptions()
+    ("tracechannellist",              m_listTracingChannels,  "List all available tracing channels")
+    ("tracerule",                     toTraceRule,            "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("tracefile",                     toTraceFile,            "Tracing file")
+    ;
+  }
 
   po::setDefaults( opts );
   std::ostringstream fullOpts;
