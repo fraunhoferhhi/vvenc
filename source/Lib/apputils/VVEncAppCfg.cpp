@@ -479,6 +479,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("accessunitdelimiter,-aud",  toAud,                 "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
   ("vuiparameterspresent,-vui", toVui,                 "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
   ("hrdparameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
+  ("decodedpicturehash,-dph",   toHashType,            "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
   ;
   
   if ( vvenc_is_tracing_enabled() )
@@ -490,11 +491,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     ("tracefile",                     toTraceFile,            "Tracing file")
     ;
   }
-
-  opts.setSubSection( "Encoder Options" );
-  opts.addOptions()
-  ("decodedpicturehash,-dph",         toHashType,             "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
-  ;
 
   po::setDefaults( opts );
   std::ostringstream fullOpts;
