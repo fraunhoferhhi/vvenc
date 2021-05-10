@@ -405,8 +405,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToArr<char>                toTraceRule                  ( &m_traceRule[0], VVENC_MAX_STRING_LEN  );
   IStreamToArr<char>                toTraceFile                  ( &m_traceFile[0], VVENC_MAX_STRING_LEN  );
   IStreamToEnum<vvencHashType>      toHashType                   ( &m_decodedPictureHashSEIType,   &HashTypeToEnumMap     );
-  std::string                       writeCfg;
-//
+  //
   // setup configuration parameters
   //
 
@@ -424,11 +423,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   {
     opts.setSubSection("Tracing");
     opts.addOptions()
-    ("TraceChannelsList",                             m_listTracingChannels,                            "List all available tracing channels")
-    ("TraceRule",                                     toTraceRule,                                      "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
-    ("TraceFile",                                     toTraceFile,                                      "Tracing file")
-    ("SEIDecodedPictureHash,-dph",                      toHashType,                                       "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
-    ("WriteConfig",                                     writeCfg,                                         "write the encoder config into configuration file")
+    ("TraceChannelsList",             m_listTracingChannels,  "List all available tracing channels")
+    ("TraceRule",                     toTraceRule,            "Tracing rule (ex: \"D_CABAC:poc==8\" or \"D_REC_CB_LUMA:poc==8\")")
+    ("TraceFile",                     toTraceFile,            "Tracing file")
+    ("SEIDecodedPictureHash,-dph",    toHashType,             "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)" )
     ;
   }
 
@@ -542,41 +540,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     return false;
   }
 
-  if( !writeCfg.empty() )
-  {
-    std::ofstream cfgFile;
-    cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
-    if( !cfgFile.is_open() )
-    {
-      std::cout << " [error]: failed to open output config file " << writeCfg << std::endl;
-      return false;
-    }
-    else
-    {
-      std::list<std::string> ignoreParamsLst;
-      ignoreParamsLst.push_back( "help" );
-      ignoreParamsLst.push_back( "fullhelp" );
-
-      ignoreParamsLst.push_back( "WriteConfig" );
-      ignoreParamsLst.push_back( "SIMD" );
-      ignoreParamsLst.push_back( "c" );
-      ignoreParamsLst.push_back( "WarnUnknowParameter,w" );
-      
-      ignoreParamsLst.push_back( "decode" );
-      for ( int i = 0; i < VVENC_MAX_GOP; i++ )
-      {
-        std::ostringstream cOSS;
-        cOSS << "Frame" << i+1;
-        ignoreParamsLst.push_back( cOSS.str() );
-      }
-      
-      std::ostringstream cfgStream;
-      po::saveConfig( cfgStream, opts, ignoreParamsLst );
-      cfgFile << cfgStream.str() << std::endl;
-      cfgFile.close();
-    }
-  }
-      
   // this has to be set outside
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
