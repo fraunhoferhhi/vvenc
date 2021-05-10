@@ -426,7 +426,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
 
   ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
-  ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, ( 1..27000000)")
+  ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, (1..27000000)")
 
   ("frames,f",          m_framesToBeEncoded,      "max. frames to encode [all]")
   ("frameskip",         m_FrameSkip,              "Number of frames to skip at start of input YUV [off]")
@@ -459,7 +459,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.setSubSection("Profile, Level, Tier");
   opts.addOptions()
   ("profile",           toProfile,                "select profile (main10, main10_stillpic)")
-  ("level",             toLevel,                  "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3 15.5)")
+  ("level",             toLevel,                  "Level limit (1.0, 2.0,2.1, 3.0,3.1, 4.0,4.1, 5.0,5.1,5.2, 6.0,6.1,6.2,6.3, 15.5)")
   ("tier",              toLevelTier,              "Tier to use for interpretation of level (main or high)")
   ;
 
