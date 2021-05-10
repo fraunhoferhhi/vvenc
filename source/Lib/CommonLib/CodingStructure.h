@@ -144,8 +144,8 @@ public:
   const CodingUnit*    getCURestricted(const Position& pos, const CodingUnit& curCu,    const ChannelType _chType) const;
   const TransformUnit* getTURestricted(const Position& pos, const TransformUnit& curTu, const ChannelType _chType) const;
 
-  CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType);
-  TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu);
+  CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cuInit = nullptr);
+  TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu, TransformUnit* tuInit = nullptr);
   void addEmptyTUs( Partitioner &partitioner, CodingUnit* cu );
 
   CUTraverser     traverseCUs(const UnitArea& _unit, const ChannelType _chType);
@@ -169,7 +169,7 @@ public:
   void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
-  void useSubStructure (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
+  void useSubStructure (      CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
 
   void clearTUs( bool force = false );
   void clearCUs( bool force = false );

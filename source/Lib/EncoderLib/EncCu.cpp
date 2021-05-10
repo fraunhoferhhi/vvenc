@@ -401,6 +401,12 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   xCompressCU( tempCS, bestCS, *partitioner );
   // all signals were already copied during compression if the CTU was split - at this point only the structures are copied to the top level CS
+  
+  // Ensure that a coding was found
+  // Selected mode's RD-cost must be not MAX_DOUBLE.
+  CHECK( bestCS->cus.empty()                                   , "No possible encoding found" );
+  CHECK( bestCS->cus[0]->predMode == NUMBER_OF_PREDICTION_MODES, "No possible encoding found" );
+  CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 
   if ( m_wppMutex ) m_wppMutex->lock();
 
@@ -408,7 +414,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_wppMutex ) m_wppMutex->unlock();
 
-  if (CS::isDualITree (cs) && isChromaEnabled (cs.pcv->chrFormat))
+  if( CS::isDualITree( cs ) && isChromaEnabled( cs.pcv->chrFormat ) )
   {
     m_CABACEstimator->getCtx() = m_CurrCtx->start;
 
@@ -422,6 +428,12 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     tempCS->prevQP[CH_C] = bestCS->prevQP[CH_C] = prevQP[CH_C];
 
     xCompressCU( tempCS, bestCS, *partitioner );
+    
+    // Ensure that a coding was found
+    // Selected mode's RD-cost must be not MAX_DOUBLE.
+    CHECK( bestCS->cus.empty()                                   , "No possible encoding found" );
+    CHECK( bestCS->cus[0]->predMode == NUMBER_OF_PREDICTION_MODES, "No possible encoding found" );
+    CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 
     if ( m_wppMutex ) m_wppMutex->lock();
 
@@ -438,12 +450,6 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   // reset context states and uninit context pointer
   m_CABACEstimator->getCtx() = m_CurrCtx->start;
   m_CurrCtx                  = 0;
-
-  // Ensure that a coding was found
-  // Selected mode's RD-cost must be not MAX_DOUBLE.
-  CHECK( bestCS->cus.empty()                                   , "No possible encoding found" );
-  CHECK( bestCS->cus[0]->predMode == NUMBER_OF_PREDICTION_MODES, "No possible encoding found" );
-  CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 }
 
 

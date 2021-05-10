@@ -437,6 +437,7 @@ struct TransformUnit : public UnitArea
 const CCoeffBuf getCoeffs                 ( ComponentID id) const { return CCoeffBuf(m_coeffs[id], blocks[id]); }
 
 private:
+  friend CodingStructure;
   TCoeff* m_coeffs[ MAX_NUM_TBLOCKS ];
 };
 
