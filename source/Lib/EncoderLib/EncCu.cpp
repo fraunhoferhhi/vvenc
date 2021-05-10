@@ -2631,7 +2631,7 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
     if (cu.cs->slice->lmcsEnabled && reshapeData.getCTUFlag())
     {
       PelBuf tmpLmcs = m_aTmpStorageLCU[0].getCompactBuf(cu.Y());
-      tmpLmcs.rspSignal(tempCS->getOrgBuf().Y(), reshapeData.getInvLUT());
+      tmpLmcs.rspSignal(tempCS->getOrgBuf().Y(), reshapeData.getFwdLUT());
       distParam = m_cRdCost.setDistParam( tmpLmcs, refBuf, sps.bitDepths[CH_L], DF_HAD);
     }
     else
