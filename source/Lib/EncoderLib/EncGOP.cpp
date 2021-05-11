@@ -1861,11 +1861,22 @@ void EncGOP::xUpdateAfterPicRC( const Picture* pic )
     return;
   }
 
+#if RC_INTRA_MODEL_OPT
+  if (!m_pcRateCtrl->encRCSeq->twoPass)
+  {
+#endif
   encRCPic->calPicMSE();
+#if RC_INTRA_MODEL_OPT
+  }
+#endif
   encRCPic->updateAfterPicture( pic->actualHeadBits, pic->actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->slices[ 0 ]->lambdas[ COMP_Y ], pic->slices[ 0 ]->isIRAP() );
   encRCPic->addToPictureList( m_pcRateCtrl->getPicList() );
 
   m_pcRateCtrl->encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
+#if RC_INTRA_MODEL_OPT
+  if (!m_pcRateCtrl->encRCSeq->twoPass)
+  {
+#endif
   if ( !pic->slices[ 0 ]->isIRAP() )
   {
     m_pcRateCtrl->encRCGOP->updateAfterPicture( pic->actualTotalBits );
@@ -1874,6 +1885,9 @@ void EncGOP::xUpdateAfterPicRC( const Picture* pic )
   {
     m_pcRateCtrl->encRCGOP->updateAfterPicture( encRCPic->estimatedBits );
   }
+#if RC_INTRA_MODEL_OPT
+  }
+#endif
 
   return;
 }
