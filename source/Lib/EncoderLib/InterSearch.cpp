@@ -6552,7 +6552,7 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
   if (cu.imv == 2)
     assert((cMv.hor % 16 == 0) && (cMv.ver % 16 == 0));
   if (cu.cs->sps->AMVR)
-    assert(cu.imv > 0 || cu.mvd[REF_PIC_LIST_0] == Mv());
+    assert(cu.imv > 0 || cu.mvd[REF_PIC_LIST_0][0] == Mv());
 
   cu.refIdx[REF_PIC_LIST_0] = MAX_NUM_REF;
 
