@@ -119,26 +119,30 @@ struct MotionInfo
   uint16_t sliceIdx = 0;
   bool     isInter  = false;
   char     interDir = 0;
+  bool     isIBCmot = false;
+  Mv       bv;
 
   bool operator==( const MotionInfo& mi ) const
   {
     if( isInter  != mi.isInter  ) return false;
-
-    if( sliceIdx != mi.sliceIdx ) return false;
-    if( interDir != mi.interDir ) return false;
-
-    if( interDir != 2 )
+    if( isIBCmot != mi.isIBCmot ) return false;
+    if (isInter)
     {
-      if( refIdx[0] != mi.refIdx[0] ) return false;
-      if( mv[0]     != mi.mv[0]     ) return false;
-    }
+      if (sliceIdx != mi.sliceIdx) return false;
+      if (interDir != mi.interDir) return false;
 
-    if( interDir != 1 )
-    {
-      if( refIdx[1] != mi.refIdx[1] ) return false;
-      if( mv[1]     != mi.mv[1]     ) return false;
-    }
+      if (interDir != 2)
+      {
+        if (refIdx[0] != mi.refIdx[0]) return false;
+        if (mv[0] != mi.mv[0]) return false;
+      }
 
+      if (interDir != 1)
+      {
+        if (refIdx[1] != mi.refIdx[1]) return false;
+        if (mv[1] != mi.mv[1]) return false;
+      }
+    }
     return true;
   }
 
@@ -156,6 +160,7 @@ struct HPMVInfo
   char     interDir = 0;
   uint8_t  BcwIdx   = 0;
   bool     useAltHpelIf = false;
+  Mv       bv;
 
   HPMVInfo() = default;
   HPMVInfo( const MotionInfo& mi, uint8_t _bcwIdx, bool _useAltHpelIf )
@@ -170,6 +175,7 @@ struct HPMVInfo
 
     BcwIdx       = _bcwIdx;
     useAltHpelIf = _useAltHpelIf;
+    bv           = mi.bv;
   }
 
   bool operator==( const HPMVInfo& mi ) const
@@ -224,8 +230,22 @@ struct HPMVInfo
 struct LutMotionCand
 {
   static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lut;
+  static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lutIbc;
 };
 
+struct IbcBvCand
+{
+  Mv m_bvCands[IBC_NUM_CANDIDATES];
+  int currCnt;
+  void resetIbcBvCand()
+  {
+    for( int i = 0; i < IBC_NUM_CANDIDATES; i++ )
+    {
+      m_bvCands[ i ].setZero();
+    }
+    currCnt = 0;
+  }
+};
 } // namespace vvenc
 
 //! \}

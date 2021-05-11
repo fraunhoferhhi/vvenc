@@ -1,4 +1,37 @@
 /////////////////////////////////////////
+tag 1.0.0-rc1
+
+* libvvenc:
+  - add pkgconfig
+  - rewriting the vvenc interface in c
+    - restructuring vvenc.h and vvencCfg.h to pure C syntax
+    - removing namespace vvenc and replacing all struct and enumx to typedefs with prefix 'vvenc'
+    - removing file vvencCfgExpert.h and integrating all expert options into single struct vvenc_config
+    - vvencCfg replacing existing lists/vector by fixed size arrays, std::strings are fixed size char arrays now
+  - added IBC
+    - added parameters m_IBCMode (0 - off, 1 - always on, 2 - on with SCC auto detection) and m_IBCFastMethod (1 - slowest with biggest gain to 6 - fastest with lowest gain)
+  - improvements to rate control based on the XPSNR model
+  - supports for generation of main10stillpicture profile bitstreams
+    
+* vvencapp:
+  - adding parameter --version to show current version
+  - changed parameter: -i/--input accepts "-" to indicate reading input from stdin
+   
+* vvencFFapp:
+  - adding parameter --version/-v to show current version
+  - vvenc::YUVWriterIf is replaced by callback function vvencRecYUVBufferCallback
+  - changed parameter: -i/--InputFile accepts "-" to indicate reading input from stdin
+  - added parameters IBC and IBCFastMethod as described in the libvvenc
+
+* bugfixes
+  - fixes #51, #47, #46, #37, #33 and many more
+  - fixed AVX2 CCALF for non-multiple of 8 picture width
+  - fixed PQ content encoding with LMCS
+  - fixed C++17 compatibility
+  - fixed level/tier auto-settings
+  - fixed FastForwardToPOC and DebugBitstram options
+
+/////////////////////////////////////////
 tag 0.3.1.0
 
 * libvvenc:

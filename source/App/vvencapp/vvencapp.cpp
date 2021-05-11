@@ -67,9 +67,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/YuvFileIO.h"
 #include "apputils/VVEncAppCfg.h"
 
-vvenc::MsgLevel g_verbosity = vvenc::VERBOSE;
+vvencMsgLevel g_verbosity = VVENC_VERBOSE;
 
-void msgFnc( int level, const char* fmt, va_list args )
+void msgFnc( void*, int level, const char* fmt, va_list args )
 {
   if ( g_verbosity >= level )
   {
@@ -77,11 +77,11 @@ void msgFnc( int level, const char* fmt, va_list args )
   }
 }
 
-void msgApp( int level, const char* fmt, ... )
+void msgApp( void* ctx, int level, const char* fmt, ... )
 {
     va_list args;
     va_start( args, fmt );
-    msgFnc( level, fmt, args );
+    msgFnc( ctx, level, fmt, args );
     va_end( args );
 }
 
@@ -90,10 +90,10 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
   std::cout << cAppname  << " [error]: " << cMessage << ", ";
   switch( code )
   {
-    case vvenc::VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required."; break;
-    case vvenc::VVENC_ERR_PARAMETER :     std::cout << "invalid parameter."; break;
-    case vvenc::VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request."; break;
-    default :                             std::cout << "error " << code; break;
+    case VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required."; break;
+    case VVENC_ERR_PARAMETER :     std::cout << "invalid parameter."; break;
+    case VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request."; break;
+    default :                      std::cout << "error " << code; break;
   };
   if( !cErr.empty() )
   {
@@ -114,7 +114,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
-    msgApp( vvenc::ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
+    msgApp( nullptr, VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
   g_verbosity = rcVVEncAppCfg.m_verbosity;
@@ -133,13 +133,13 @@ int main( int argc, char* argv[] )
 
   int iRet = 0;
 
-  vvenc::VVEnc::registerMsgCbf( msgFnc );
+  vvenc_set_logging_callback( nullptr, msgFnc );
 
   std::string cInputFile;
   std::string cOutputfile = "";
 
   apputils::VVEncAppCfg vvencappCfg;                           ///< encoder configuration
-  vvencappCfg.initDefault( 1920, 1080, 60 );
+  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
@@ -147,7 +147,13 @@ int main( int argc, char* argv[] )
     return 1;
   }
   // assign verbosity used for encoder output
-  g_verbosity = vvencappCfg.m_verbosity; 
+  g_verbosity = vvencappCfg.m_verbosity;
+
+  if( vvencappCfg.m_showVersion )
+  {
+    std::cout << cAppname  << " version " << vvenc_get_version()<< std::endl;
+    return 0;
+  }
   
   if( !strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
   {
@@ -171,30 +177,35 @@ int main( int argc, char* argv[] )
   cInputFile  = vvencappCfg.m_inputFileName;
   cOutputfile = vvencappCfg.m_bitstreamFileName;
 
-  if( vvencappCfg.m_verbosity > vvenc::SILENT && vvencappCfg.m_verbosity < vvenc::NOTICE )
+  if( vvencappCfg.m_verbosity > VVENC_SILENT && vvencappCfg.m_verbosity < VVENC_NOTICE )
   {
     std::cout << "-------------------" << std::endl;
-    std::cout << cAppname  << " version " << vvenc::VVEnc::getVersionNumber() << std::endl;
+    std::cout << cAppname  << " version " << vvenc_get_version() << std::endl;
   }
 
-  vvenc::VVEnc cVVEnc;
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
+  {
+    return -1;
+  }
 
   // initialize the encoder
-  iRet = cVVEnc.init( vvencappCfg );
+  iRet = vvenc_encoder_open( enc, &vvencappCfg );
   if( 0 != iRet )
   {
-    printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, cVVEnc.getLastError() );
+    printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, vvenc_get_last_error( enc ) );
+    vvenc_encoder_close( enc );
     return iRet;
   }
 
-  if( vvencappCfg.m_verbosity > vvenc::WARNING )
+  if( vvencappCfg.m_verbosity > VVENC_WARNING )
   {
-    std::cout << cAppname << ": " << cVVEnc.getEncoderInfo() << std::endl;
+    std::cout << cAppname << ": " << vvenc_get_enc_information( enc ) << std::endl;
   }
 
-  cVVEnc.getConfig( vvencappCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
+  vvenc_get_config( enc, &vvencappCfg ); // get the adapted config, because changes are needed for the yuv reader (m_MSBExtendedBitDepth)
 
-  if( vvencappCfg.m_verbosity >= vvenc::INFO )
+  if( vvencappCfg.m_verbosity >= VVENC_INFO )
   {
     std::cout << vvencappCfg.getConfigAsString( vvencappCfg.m_verbosity ) << std::endl;
   }
@@ -212,11 +223,18 @@ int main( int argc, char* argv[] )
   }
 
   // --- allocate memory for output packets
-  vvenc::AccessUnit cAccessUnit;
+  vvencAccessUnit AU;
+  vvenc_accessUnit_default( &AU );
+  vvenc_accessUnit_alloc_payload( &AU, vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight );
+
+  // --- allocate memory for YUV input picture
+  vvencYUVBuffer cYUVInputBuffer;
+  vvenc_YUVBuffer_default( &cYUVInputBuffer );
+  vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun = std::chrono::steady_clock::now();
-  if( vvencappCfg.m_verbosity > vvenc::WARNING )
+  if( vvencappCfg.m_verbosity > VVENC_WARNING )
   {
     std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
@@ -238,10 +256,10 @@ int main( int argc, char* argv[] )
   for( int pass = 0; pass < vvencappCfg.m_RCNumPasses; pass++ )
   {
     // initialize the encoder pass
-    iRet = cVVEnc.initPass( pass );
+    iRet = vvenc_init_pass( enc, pass );
     if( 0 != iRet )
     {
-      printVVEncErrorMsg( cAppname, "cannot init encoder", iRet, cVVEnc.getLastError() );
+      printVVEncErrorMsg( cAppname, "cannot init encoder", iRet, vvenc_get_last_error( enc ) );
       return iRet;
     }
 
@@ -254,10 +272,8 @@ int main( int argc, char* argv[] )
       return -1;
     }
 
-    vvenc::YUVBufferStorage cYUVInputBuffer( vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
-
-    const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - cVVEnc.getNumLeadFrames(), 0 );
-    const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + cVVEnc.getNumLeadFrames() + cVVEnc.getNumTrailFrames();
+    const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - vvenc_get_num_lead_frames(enc), 0 );
+    const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     bool          bEncodeDone = false;
@@ -272,10 +288,15 @@ int main( int argc, char* argv[] )
 
     while( !bEof || !bEncodeDone )
     {
-      vvenc::YUVBuffer* ptrYUVInputBuffer = nullptr;
+      vvencYUVBuffer* ptrYUVInputBuffer = nullptr;
       if( !bEof )
       {
-        if( cYuvFileInput.readYuvBuf( cYUVInputBuffer ) )
+        if( 0 != cYuvFileInput.readYuvBuf( cYUVInputBuffer, bEof ) )
+        {
+          std::cout << " [error]: read file failed: " << cYuvFileInput.getLastError() << std::endl;
+          return -1;
+        }
+        if( ! bEof )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
@@ -285,30 +306,26 @@ int main( int argc, char* argv[] )
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.m_uiSequenceNumber << " cts " << cYUVInputBuffer.m_uiCts << std::endl;
         }
-        else
+        else if( vvencappCfg.m_verbosity > VVENC_ERROR && vvencappCfg.m_verbosity < VVENC_NOTICE )
         {
-          if( vvencappCfg.m_verbosity > vvenc::ERROR && vvencappCfg.m_verbosity < vvenc::NOTICE )
-          {
-            std::cout << "EOF reached" << std::endl;
-          }
-          bEof = true;
+          std::cout << "EOF reached" << std::endl;
         }
       }
 
       // call encode
-      iRet = cVVEnc.encode( ptrYUVInputBuffer, cAccessUnit, bEncodeDone );
+      iRet = vvenc_encode( enc, ptrYUVInputBuffer, &AU, &bEncodeDone );
       if( 0 != iRet )
       {
-        printVVEncErrorMsg( cAppname, "encoding failed", iRet, cVVEnc.getLastError() );
+        printVVEncErrorMsg( cAppname, "encoding failed", iRet, vvenc_get_last_error( enc ) );
         return iRet;
       }
 
-      if( ! cAccessUnit.payload.empty()  )
+      if( AU.payloadUsedSize > 0 )
       {
         if( cOutBitstream.is_open() )
         {
           // write output
-          cOutBitstream.write( (const char*)cAccessUnit.payload.data(), cAccessUnit.payload.size() );
+          cOutBitstream.write( (const char*)AU.payload, AU.payloadUsedSize );
         }
         uiFrames++;
       }
@@ -330,24 +347,27 @@ int main( int argc, char* argv[] )
     cOutBitstream.close();
   }
 
-  cVVEnc.printSummary();
+  vvenc_print_summary(enc);
 
   // un-initialize the encoder
-  iRet = cVVEnc.uninit();
+  iRet = vvenc_encoder_close( enc );
   if( 0 != iRet )
   {
-    printVVEncErrorMsg( cAppname, "destroy encoder failed", iRet, cVVEnc.getLastError() );
+    printVVEncErrorMsg( cAppname, "destroy encoder failed", iRet, vvenc_get_last_error( enc ) );
     return iRet;
   }
+
+  vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+  vvenc_accessUnit_free_payload( &AU );
 
   if( 0 == uiFrames )
   {
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && vvencappCfg.m_verbosity > vvenc::SILENT )
+  if( uiFrames && vvencappCfg.m_verbosity > VVENC_SILENT )
   {
-    if( vvencappCfg.m_verbosity > vvenc::WARNING )
+    if( vvencappCfg.m_verbosity > VVENC_WARNING )
     {
       std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;

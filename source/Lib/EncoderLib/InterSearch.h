@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/AffineGradientSearch.h"
 
+#include <unordered_map>
 #include <vector>
 
 //! \ingroup EncoderLib
@@ -78,6 +79,11 @@ struct BlkUniMvInfo
 {
   Mv uniMvs[2][MAX_REF_PICS];
   int x, y, w, h;
+};
+
+struct BlkRecord
+{
+  std::unordered_map<Mv, Distortion> bvRecord;
 };
 
 struct BlkUniMvInfoBuffer
@@ -190,7 +196,6 @@ struct BlkUniMvInfoBuffer
 };
 
 class EncPicture;
-class VVEncCfg;
 class EncModeCtrl;
 class EncReshape;
 class EncCu;
@@ -337,6 +342,10 @@ private:
   CodingStructure** m_pSaveCS;
 
   ClpRng            m_lumaClpRng;
+  Mv                m_acBVs[2 * IBC_NUM_CANDIDATES];
+  unsigned int      m_numBVs;
+  IbcBvCand*        m_defaultCachedBvs;
+  std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
 
 protected:
   // interface to option
@@ -349,7 +358,7 @@ protected:
   // ME parameters
   int               m_iSearchRange;
   int               m_bipredSearchRange; // Search range for bi-prediction
-  MESearchMethod    m_motionEstimationSearchMethod;
+  vvencMESearchMethod m_motionEstimationSearchMethod;
   int               m_aaiAdaptSR[MAX_NUM_REF_LIST_ADAPT_SR][MAX_IDX_ADAPT_SR];
 
   // RD computation
@@ -377,13 +386,14 @@ public:
   ReuseUniMv*         m_ReuseUniMv;
   BlkUniMvInfoBuffer* m_BlkUniMvInfoBuffer;
   AffineProfList*     m_AffineProfList;
+  bool                m_clipMvInSubPic;
 
 public:
   InterSearch();
   virtual ~InterSearch();
 
   void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
-  void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
+  void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
 
   void destroy                      ();
 
@@ -405,6 +415,10 @@ public:
   void       initSbtRdoOrder        ( uint8_t sbtMode )                 { m_sbtRdoOrder[0] = sbtMode; m_estMinDistSbt[0] = m_estMinDistSbt[sbtMode]; }
 
   void       getBestSbt             ( CodingStructure* tempCS, CodingUnit* cu, uint8_t& histBestSbt, Distortion& curPuSse, uint8_t sbtAllowed, bool doPreAnalyzeResi, bool mtsAllowed );
+  bool       predIBCSearch          (CodingUnit& cu, Partitioner& partitioner);
+  bool       searchBvIBC            (const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
+
+  void       resetCtuRecordIBC      () { m_ctuRecord.clear(); }
 
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
@@ -583,7 +597,11 @@ private:
   void xEncodeInterResidualQT         ( CodingStructure &cs, Partitioner &partitioner, const ComponentID compID );
   void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist = NULL );
   uint64_t xGetSymbolFracBitsInter    ( CodingStructure &cs, Partitioner &partitioner );
-
+  void  xSetIntraSearchRangeIBC       ( CodingUnit& pu, int iRoiWidth, int iRoiHeight, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
+  void  xIBCEstimation                ( CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost );
+  void  xIBCSearchMVCandUpdate        ( Distortion  uiSad, int x, int y, Distortion* uiSadBestCand, Mv* cMVCand);
+  int   xIBCSearchMVChromaRefine      ( CodingUnit& cu, int iRoiWidth, int iRoiHeight, int cuPelX, int cuPelY, Distortion* uiSadBestCand, Mv* cMVCand);
+  void  xIntraPatternSearchIBC        ( CodingUnit& pu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* cMvSrchRngLT, Mv* cMvSrchRngRB, Mv* pcMvPred);
 };// END CLASS DEFINITION EncSearch
 
 } // namespace vvenc

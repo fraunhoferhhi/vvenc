@@ -333,6 +333,7 @@ void CodingUnit::initData()
   treeType          = TREE_D;
   modeType          = MODE_TYPE_ALL;
   modeTypeSeries    = 0;
+  mcControl         = 0;
 }
 
 
@@ -360,6 +361,8 @@ void CodingUnit::initPuData()
   geoSplitDir       = MAX_UCHAR;
   geoMergeIdx0      = MAX_UCHAR;
   geoMergeIdx1      = MAX_UCHAR;
+  bv.setZero();
+  bvd.setZero();
 
   mcControl         = 0;
 
@@ -418,11 +421,13 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
   interDir          = other.interDir;
   mergeType         = other.mergeType;
   mvRefine          = other.mvRefine;
+  bv                = other.bv;
+  bvd               = other.bvd;
 
   if( other.mergeFlag && mvdL0SubPu )
   {
     const int maxDmvrMvds = std::max<int>( 1, lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, lheight() >> DMVR_SUBCU_SIZE_LOG2 );
-    
+
     memcpy( mvdL0SubPu, other.mvdL0SubPu, sizeof( Mv ) * maxDmvrMvds );
   }
 

@@ -66,6 +66,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
+struct vvencYUVBuffer;
+
 namespace vvenc {
 
 // ---------------------------------------------------------------------------
@@ -98,10 +100,8 @@ struct PelBufferOps
   void ( *linTf8 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *copyBuffer )    ( const char* src, int srcStride, char* dst, int dstStride, int width, int height );
   void ( *padding )       ( Pel* dst, int stride, int width, int height, int padSize);
-#if ENABLE_SIMD_OPT_BCW
   void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
-#endif
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *transpose8x8 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *roundIntVector) ( int* v, int size, unsigned int nShift, const int dmvLimit);
@@ -1065,12 +1065,11 @@ private:
   static_vector<PelStorage, NumEntries+1> m_acStorage;
 };
 
-struct YUVBuffer;
 struct Window;
 
-void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
 //void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
-void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow );
+void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, vvencYUVBuffer& yuvBuffer, const Window* confWindow );
 
 } // namespace vvenc
 

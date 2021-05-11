@@ -59,7 +59,7 @@ namespace vvenc
 {
 
 template<X86_VEXT vext>
-void simdDeriveClassificationBlk(AlfClassifier *classifier, int **laplacian[NUM_DIRECTIONS], const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight, int vbPos)
+void simdDeriveClassificationBlk(AlfClassifier *classifier, const CPelBuf& srcLuma, const Area& blkDst, const Area& blk, const int shift, const int vbCTUHeight, int vbPos)
 {
   CHECK((blk.height & 7) != 0, "Block height must be a multiple of 8");
   CHECK((blk.width & 7) != 0, "Block width must be a multiple of 8");

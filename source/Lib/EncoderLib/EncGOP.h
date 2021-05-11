@@ -132,7 +132,7 @@ private:
   int                       m_lastRasPoc;
   int                       m_pocCRA;
   int                       m_associatedIRAPPOC;
-  NalUnitType               m_associatedIRAPType;
+  vvencNalUnitType          m_associatedIRAPType;
 
   const VVEncCfg*           m_pcEncCfg;
   HLSWriter                 m_HLSWriter;
@@ -173,7 +173,7 @@ public:
 private:
   void xUpdateRasInit                 ( Slice* slice );
 
-  NalUnitType xGetNalUnitType         ( int pocCurr, int lastIdr ) const;
+  vvencNalUnitType xGetNalUnitType         ( int pocCurr, int lastIdr ) const;
   int  xGetSliceDepth                 ( int poc ) const;
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, PicList& picList, int gopId ) const;
 
@@ -197,10 +197,10 @@ private:
   int  xWriteDCI                      ( AccessUnitList &accessUnit, const DCI *dci, HLSWriter& hlsWriter );
   int  xWriteSPS                      ( AccessUnitList &accessUnit, const SPS *sps, HLSWriter& hlsWriter );
   int  xWritePPS                      ( AccessUnitList &accessUnit, const PPS *pps, const SPS *sps, HLSWriter& hlsWriter );
-  int  xWriteAPS                      ( AccessUnitList &accessUnit, const APS *aps, HLSWriter& hlsWriter, NalUnitType eNalUnitType );
+  int  xWriteAPS                      ( AccessUnitList &accessUnit, const APS *aps, HLSWriter& hlsWriter, vvencNalUnitType eNalUnitType );
   void xWriteAccessUnitDelimiter      ( AccessUnitList &accessUnit, Slice* slice, bool IrapOrGdr, HLSWriter& hlsWriter );
-  void xWriteSEI                      ( NalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps );
-  void xWriteSEISeparately            ( NalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps );
+  void xWriteSEI                      ( vvencNalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps );
+  void xWriteSEISeparately            ( vvencNalUnitType naluType, SEIMessages& seiMessages, AccessUnitList &accessUnit, AccessUnitList::iterator &auPos, int temporalId, const SPS *sps );
   void xAttachSliceDataToNalUnit      ( OutputNALUnit& rNalu, const OutputBitstream* pcBitstreamRedirect );
   void xCabacZeroWordPadding          ( const Picture& pic, const Slice* slice, uint32_t binCountsInNalUnits, uint32_t numBytesInVclNalUnits, std::ostringstream &nalUnitData );
 

@@ -80,6 +80,8 @@ enum EncTestModeType
   ETM_SPLIT_TT_H,
   ETM_SPLIT_TT_V,
   ETM_RECO_CACHED,
+  ETM_IBC,
+  ETM_IBC_MERGE,
   ETM_INVALID
 };
 

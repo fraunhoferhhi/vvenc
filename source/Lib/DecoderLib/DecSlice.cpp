@@ -192,9 +192,11 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
       pic->cs->prevQP[0] = pic->cs->prevQP[1] = slice->sliceQp;
     }
 
-    if ((cs.slice->sliceType != I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
+    if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
     {
       cs.motionLut.lut.resize(0);
+      cs.motionLut.lutIbc.resize(0);
+      cs.resetIBCBuffer = true;
     }
 
     cabacReader.coding_tree_unit( cs, ctuArea, pic->cs->prevQP, ctuRsAddr );

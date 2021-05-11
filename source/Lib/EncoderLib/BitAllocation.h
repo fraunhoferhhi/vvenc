@@ -49,12 +49,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/vvencCfg.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/Unit.h"
 
 //! \ingroup EncoderLib
 //! \{
+
+//struct VVEncCfg;
 
 namespace vvenc {
 
@@ -70,7 +71,7 @@ namespace vvenc {
     int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea);
     int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
                                  std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
-    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const PelBuf* origBuf = nullptr);
+    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const bool lowFrameRate = false);
   }
 
 } // namespace vvenc

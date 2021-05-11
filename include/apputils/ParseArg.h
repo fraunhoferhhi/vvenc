@@ -194,6 +194,11 @@ namespace df
         if( arg.empty() ) { param = "1"; }
       }
 
+      if( arg == "" )
+      {
+        param = "''";
+      }
+
       std::istringstream arg_ss (param,std::istringstream::in);
       arg_ss.exceptions(std::ios::failbit);
       try

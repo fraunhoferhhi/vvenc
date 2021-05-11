@@ -262,9 +262,9 @@ public:
   SEIDecodedPictureHash() {}
   virtual ~SEIDecodedPictureHash() {}
 
-  HashType    method;
-  bool        singleCompFlag;
-  PictureHash pictureHash;
+  vvencHashType  method;
+  bool           singleCompFlag;
+  PictureHash    pictureHash;
 };
 
 class SEIDependentRAPIndication : public SEI
@@ -319,8 +319,8 @@ public:
   int       bpCpbCnt;
   uint32_t  duCpbRemovalDelayIncrementLength;
   uint32_t  dpbOutputDelayDuLength;
-  uint32_t  initialCpbRemovalDelay         [MAX_TLAYER][MAX_CPB_CNT][2];
-  uint32_t  initialCpbRemovalOffset        [MAX_TLAYER][MAX_CPB_CNT][2];
+  uint32_t  initialCpbRemovalDelay         [VVENC_MAX_TLAYER][MAX_CPB_CNT][2];
+  uint32_t  initialCpbRemovalOffset        [VVENC_MAX_TLAYER][MAX_CPB_CNT][2];
   bool      concatenationFlag;
   uint32_t  auCpbRemovalDelayDelta;
   bool      cpbRemovalDelayDeltasPresent;
@@ -334,7 +334,7 @@ public:
   bool      additionalConcatenationInfoPresent;
   uint32_t  maxInitialRemovalDelayForConcatenation;
   bool      sublayerDpbOutputOffsetsPresent;
-  uint32_t  dpbOutputTidOffset      [MAX_TLAYER];
+  uint32_t  dpbOutputTidOffset      [VVENC_MAX_TLAYER];
   bool      altCpbParamsPresent;
   bool      useAltCpbParamsFlag;
 };
@@ -353,7 +353,7 @@ public:
   , ptDisplayElementalPeriodsMinus1(0)
   , delayForConcatenationEnsureFlag(false)
   {
-    ::memset(ptSubLayerDelaysPresent,     0, sizeof(ptSubLayerDelaysPresent));
+    ::memset(ptSubLayerDelaysPresent,         0, sizeof(ptSubLayerDelaysPresent));
     ::memset(duCommonCpbRemovalDelayMinus1,   0, sizeof(duCommonCpbRemovalDelayMinus1));
     ::memset(cpbRemovalDelayDeltaEnabledFlag, 0, sizeof(cpbRemovalDelayDeltaEnabledFlag));
     ::memset(cpbRemovalDelayDeltaIdx,         0, sizeof(cpbRemovalDelayDeltaIdx));
@@ -361,15 +361,15 @@ public:
   }
   virtual ~SEIPictureTiming() {}
 
-  bool                                ptSubLayerDelaysPresent[MAX_TLAYER];
-  bool                                cpbRemovalDelayDeltaEnabledFlag[MAX_TLAYER];
-  uint32_t                            cpbRemovalDelayDeltaIdx[MAX_TLAYER];
-  uint32_t                            auCpbRemovalDelay[MAX_TLAYER];
+  bool                                ptSubLayerDelaysPresent[VVENC_MAX_TLAYER];
+  bool                                cpbRemovalDelayDeltaEnabledFlag[VVENC_MAX_TLAYER];
+  uint32_t                            cpbRemovalDelayDeltaIdx[VVENC_MAX_TLAYER];
+  uint32_t                            auCpbRemovalDelay[VVENC_MAX_TLAYER];
   uint32_t                            picDpbOutputDelay;
   uint32_t                            picDpbOutputDuDelay;
   uint32_t                            numDecodingUnitsMinus1;
   bool                                duCommonCpbRemovalDelayFlag;
-  uint32_t                            duCommonCpbRemovalDelayMinus1[MAX_TLAYER];
+  uint32_t                            duCommonCpbRemovalDelayMinus1[VVENC_MAX_TLAYER];
   std::vector<uint32_t>               numNalusInDuMinus1;
   std::vector<uint32_t>               duCpbRemovalDelayMinus1;
   bool                                cpbAltTimingInfoPresent;
@@ -398,8 +398,8 @@ public:
   virtual ~SEIDecodingUnitInfo() {}
 
   int   decodingUnitIdx;
-  int   duSptCpbRemovalDelayIncrement[MAX_TLAYER];
-  bool  duiSubLayerDelaysPresent[MAX_TLAYER];
+  int   duSptCpbRemovalDelayIncrement[VVENC_MAX_TLAYER];
+  bool  duiSubLayerDelaysPresent[VVENC_MAX_TLAYER];
   bool  dpbOutputDuDelayPresent;
   int   picSptDpbOutputDuDelay;
 };
@@ -660,7 +660,7 @@ public:
   int                                         sliMaxSublayers;
   bool                                        sliSublayerInfoPresent;
   std::vector<std::vector<int>>               nonSubpicLayersFraction;
-  std::vector<std::vector<Level>>             refLevelIdc;
+  std::vector<std::vector<vvencLevel>>             refLevelIdc;
   std::vector<std::vector<std::vector<int>>>  refLevelFraction;
 };
 

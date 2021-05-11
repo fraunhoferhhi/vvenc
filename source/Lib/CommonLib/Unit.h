@@ -328,6 +328,8 @@ struct InterPredictionData
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
   Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
   Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
+  Mv          bv;     // block vector for IBC
+  Mv          bvd;    // block vector difference for IBC
 };
 
 
