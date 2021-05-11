@@ -607,6 +607,7 @@ EncRCPic::EncRCPic()
   picQP               = 0;
   picLambda           = 0.0;
   picMSE              = 0.0;
+  totalCostIntra      = 0.0;
   validPixelsInPic    = 0;
   isNewScene          = false;
   refreshParams       = false;
@@ -763,6 +764,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int
   picQP               = 0;
   picQPOffsetQPA      = 0;
   validPixelsInPic    = 0;
+  totalCostIntra      = 0.0;
   picLambda           = 0.0;
   picLambdaOffsetQPA  = 0.0;
   picMSE              = 0.0;
