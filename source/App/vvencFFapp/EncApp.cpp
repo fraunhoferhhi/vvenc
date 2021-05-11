@@ -328,7 +328,8 @@ bool EncApp::openFileIO()
 void EncApp::closeFileIO()
 {
   m_yuvInputFile.close();
-  m_yuvReconFile.close();
+  if ( ! m_cEncAppCfg.m_reconFileName.empty() )
+    m_yuvReconFile.close();
   m_bitstream.close();
 }
 

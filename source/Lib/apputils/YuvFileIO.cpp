@@ -61,10 +61,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fcntl.h>
 #endif
 
-#if defined (_WIN32) || defined (WIN32) || defined (_WIN64) || defined (WIN64)
-#include <io.h>
-#include <fcntl.h>
-#endif
 
 //! \ingroup Interface
 //! \{
