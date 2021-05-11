@@ -67,16 +67,16 @@ namespace apputils {
 class APPUTILS_DECL YuvFileIO
 {
 private:
-  std::fstream        m_cHandle;              ///< file handle
-  int                 m_fileBitdepth;         ///< bitdepth of input/output video file
-  int                 m_MSBExtendedBitDepth;  ///< bitdepth after addition of MSBs (with value 0)
-  int                 m_bitdepthShift;        ///< number of bits to increase or decrease image by before/after write/read
-  vvencChromaFormat   m_fileChrFmt;           ///< chroma format of the file
-  vvencChromaFormat   m_bufferChrFmt;         ///< chroma format of the buffer
-  bool                m_clipToRec709;         ///< clip data according to Recom.709
-  bool                m_packedYUVMode;        ///< used packed buffer file format
-  std::string         m_lastError;            ///< temporal storage for last occured error 
-  bool                m_readStdin;
+  std::string         m_lastError;                              ///< temporal storage for last occured error 
+  std::fstream        m_cHandle;                                ///< file handle
+  int                 m_fileBitdepth        = 0;                ///< bitdepth of input/output video file
+  int                 m_MSBExtendedBitDepth = 0;                ///< bitdepth after addition of MSBs (with value 0)
+  int                 m_bitdepthShift       = 0;                ///< number of bits to increase or decrease image by before/after write/read
+  vvencChromaFormat   m_fileChrFmt          = VVENC_CHROMA_420; ///< chroma format of the file
+  vvencChromaFormat   m_bufferChrFmt        = VVENC_CHROMA_420; ///< chroma format of the buffer
+  bool                m_clipToRec709        = false;            ///< clip data according to Recom.709
+  bool                m_packedYUVMode       = false;            ///< used packed buffer file format
+  bool                m_readStdin           = false;            ///< read input from stdin
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
