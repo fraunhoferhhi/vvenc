@@ -1408,7 +1408,7 @@ void CABACWriter::prediction_unit( const CodingUnit& cu )
   else if (CU::isIBC(cu))
   {
     ref_idx(cu, REF_PIC_LIST_0);
-    Mv mvd = cu.mvd[REF_PIC_LIST_0];
+    Mv mvd = cu.mvd[REF_PIC_LIST_0][0];
     mvd.changeIbcPrecInternal2Amvr(cu.imv);
     mvd_coding(mvd, 0); // already changed to signaling precision
     if ( cu.slice->sps->maxNumIBCMergeCand == 1 )
@@ -1428,22 +1428,22 @@ void CABACWriter::prediction_unit( const CodingUnit& cu )
       ref_idx     ( cu, REF_PIC_LIST_0 );
       if ( cu.affine )
       {
-        Mv mvd = cu.mvdAffi[REF_PIC_LIST_0][0];
+        Mv mvd = cu.mvd[REF_PIC_LIST_0][0];
         mvd.changeAffinePrecInternal2Amvr(cu.imv);
         mvd_coding(mvd, 0); // already changed to signaling precision
-        mvd = cu.mvdAffi[REF_PIC_LIST_0][1];
+        mvd = cu.mvd[REF_PIC_LIST_0][1];
         mvd.changeAffinePrecInternal2Amvr(cu.imv);
         mvd_coding(mvd, 0); // already changed to signaling precision
         if ( cu.affineType == AFFINEMODEL_6PARAM )
         {
-          mvd = cu.mvdAffi[REF_PIC_LIST_0][2];
+          mvd = cu.mvd[REF_PIC_LIST_0][2];
           mvd.changeAffinePrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
         }
       }
       else
       {
-        Mv mvd = cu.mvd[REF_PIC_LIST_0];
+        Mv mvd = cu.mvd[REF_PIC_LIST_0][0];
         mvd.changeTransPrecInternal2Amvr(cu.imv);
         mvd_coding(mvd, 0); // already changed to signaling precision
       }
@@ -1458,22 +1458,22 @@ void CABACWriter::prediction_unit( const CodingUnit& cu )
       {
         if ( cu.affine )
         {
-          Mv mvd = cu.mvdAffi[REF_PIC_LIST_1][0];
+          Mv mvd = cu.mvd[REF_PIC_LIST_1][0];
           mvd.changeAffinePrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
-          mvd = cu.mvdAffi[REF_PIC_LIST_1][1];
+          mvd = cu.mvd[REF_PIC_LIST_1][1];
           mvd.changeAffinePrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
           if ( cu.affineType == AFFINEMODEL_6PARAM )
           {
-            mvd = cu.mvdAffi[REF_PIC_LIST_1][2];
+            mvd = cu.mvd[REF_PIC_LIST_1][2];
             mvd.changeAffinePrecInternal2Amvr(cu.imv);
             mvd_coding(mvd, 0); // already changed to signaling precision
           }
         }
         else
         {
-          Mv mvd = cu.mvd[REF_PIC_LIST_1];
+          Mv mvd = cu.mvd[REF_PIC_LIST_1][0];
           mvd.changeTransPrecInternal2Amvr(cu.imv);
           mvd_coding(mvd, 0); // already changed to signaling precision
         }

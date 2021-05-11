@@ -1200,9 +1200,9 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
           cMvBi    [1] = cMvPredBi[1][bestBiPRefIdxL1];
           iRefIdxBi[1] = bestBiPRefIdxL1;
-          cu.mv    [REF_PIC_LIST_1] = cMvBi[1];
-          cu.refIdx[REF_PIC_LIST_1] = iRefIdxBi[1];
-          cu.mvpIdx[REF_PIC_LIST_1] = bestBiPMvpL1;
+          cu.mv    [REF_PIC_LIST_1][0] = cMvBi[1];
+          cu.refIdx[REF_PIC_LIST_1]    = iRefIdxBi[1];
+          cu.mvpIdx[REF_PIC_LIST_1]    = bestBiPMvpL1;
 
           PelUnitBuf predBufTmp = m_tmpPredStorage[REF_PIC_LIST_1].getCompactBuf( cu );
           motionCompensation( cu, predBufTmp, REF_PIC_LIST_1 );
@@ -1264,8 +1264,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
             }
             if ( iIter == 0 && !cs.picHeader->mvdL1Zero)
             {
-              cu.mv    [1 - iRefList] = cMv    [1 - iRefList];
-              cu.refIdx[1 - iRefList] = iRefIdx[1 - iRefList];
+              cu.mv    [1 - iRefList][0] = cMv    [1 - iRefList];
+              cu.refIdx[1 - iRefList]    = iRefIdx[1 - iRefList];
 
               PelUnitBuf predBufTmp = m_tmpPredStorage[1 - iRefList].getCompactBuf( cu );
               motionCompensation( cu, predBufTmp, RefPicList(1 - iRefList) );
@@ -1317,8 +1317,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
                 if(iNumIter!=1)
                 {
                   //  Set motion
-                  cu.mv    [refPicList] = cMvBi    [iRefList];
-                  cu.refIdx[refPicList] = iRefIdxBi[iRefList];
+                  cu.mv    [refPicList][0] = cMvBi    [iRefList];
+                  cu.refIdx[refPicList]    = iRefIdxBi[iRefList];
 
                   PelUnitBuf predBufTmp = m_tmpPredStorage[iRefList].getCompactBuf( cu );
                   motionCompensation( cu, predBufTmp, refPicList );
@@ -1506,10 +1506,10 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       } // if (B_SLICE)
 
         //  Clear Motion Field
-      cu.mv    [REF_PIC_LIST_0] = Mv();
-      cu.mv    [REF_PIC_LIST_1] = Mv();
-      cu.mvd   [REF_PIC_LIST_0] = cMvZero;
-      cu.mvd   [REF_PIC_LIST_1] = cMvZero;
+      cu.mv [REF_PIC_LIST_0][0] = Mv();
+      cu.mv [REF_PIC_LIST_1][0] = Mv();
+      cu.mvd[REF_PIC_LIST_0][0] = cMvZero;
+      cu.mvd[REF_PIC_LIST_1][0] = cMvZero;
       cu.refIdx[REF_PIC_LIST_0] = NOT_VALID;
       cu.refIdx[REF_PIC_LIST_1] = NOT_VALID;
       cu.mvpIdx[REF_PIC_LIST_0] = NOT_VALID;
@@ -1531,10 +1531,10 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       if ( uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1])
       {
         uiLastMode = 2;
-        cu.mv    [REF_PIC_LIST_0] = cMvBi[0];
-        cu.mv    [REF_PIC_LIST_1] = cMvBi[1];
-        cu.mvd   [REF_PIC_LIST_0] = cMvBi[0] - cMvPredBi[0][iRefIdxBi[0]];
-        cu.mvd   [REF_PIC_LIST_1] = cMvBi[1] - cMvPredBi[1][iRefIdxBi[1]];
+        cu.mv [REF_PIC_LIST_0][0] = cMvBi[0];
+        cu.mv [REF_PIC_LIST_1][0] = cMvBi[1];
+        cu.mvd[REF_PIC_LIST_0][0] = cMvBi[0] - cMvPredBi[0][iRefIdxBi[0]];
+        cu.mvd[REF_PIC_LIST_1][0] = cMvBi[1] - cMvPredBi[1][iRefIdxBi[1]];
         cu.refIdx[REF_PIC_LIST_0] = iRefIdxBi[0];
         cu.refIdx[REF_PIC_LIST_1] = iRefIdxBi[1];
         cu.mvpIdx[REF_PIC_LIST_0] = aaiMvpIdxBi[0][iRefIdxBi[0]];
@@ -1548,8 +1548,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       else if ( uiCost[0] <= uiCost[1] )
       {
         uiLastMode = 0;
-        cu.mv    [REF_PIC_LIST_0] = cMv[0];
-        cu.mvd   [REF_PIC_LIST_0] = cMv[0] - cMvPred[0][iRefIdx[0]];
+        cu.mv [REF_PIC_LIST_0][0] = cMv[0];
+        cu.mvd[REF_PIC_LIST_0][0] = cMv[0] - cMvPred[0][iRefIdx[0]];
         cu.refIdx[REF_PIC_LIST_0] = iRefIdx[0];
         cu.mvpIdx[REF_PIC_LIST_0] = aaiMvpIdx[0][iRefIdx[0]];
         cu.mvpNum[REF_PIC_LIST_0] = aaiMvpNum[0][iRefIdx[0]];
@@ -1558,8 +1558,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       else
       {
         uiLastMode = 1;
-        cu.mv    [REF_PIC_LIST_1] = cMv[1];
-        cu.mvd   [REF_PIC_LIST_1] = cMv[1] - cMvPred[1][iRefIdx[1]];
+        cu.mv [REF_PIC_LIST_1][0] = cMv[1];
+        cu.mvd[REF_PIC_LIST_1][0] = cMv[1] - cMvPred[1][iRefIdx[1]];
         cu.refIdx[REF_PIC_LIST_1] = iRefIdx[1];
         cu.mvpIdx[REF_PIC_LIST_1] = aaiMvpIdx[1][iRefIdx[1]];
         cu.mvpNum[REF_PIC_LIST_1] = aaiMvpNum[1][iRefIdx[1]];
@@ -1604,12 +1604,12 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       uiMvpIdx[1] = cu.mvpIdx[REF_PIC_LIST_1];
       uiMvpNum[0] = cu.mvpNum[REF_PIC_LIST_0];
       uiMvpNum[1] = cu.mvpNum[REF_PIC_LIST_1];
-      cMvd[0] = cu.mvd[REF_PIC_LIST_0];
-      cMvd[1] = cu.mvd[REF_PIC_LIST_1];
+      cMvd[0] = cu.mvd[REF_PIC_LIST_0][0];
+      cMvd[1] = cu.mvd[REF_PIC_LIST_1][0];
 
       MvField cHevcMvField[2];
-      cHevcMvField[0].setMvField(cu.mv[REF_PIC_LIST_0], cu.refIdx[REF_PIC_LIST_0]);
-      cHevcMvField[1].setMvField(cu.mv[REF_PIC_LIST_1], cu.refIdx[REF_PIC_LIST_1]);
+      cHevcMvField[0].setMvField(cu.mv[REF_PIC_LIST_0][0], cu.refIdx[REF_PIC_LIST_0]);
+      cHevcMvField[1].setMvField(cu.mv[REF_PIC_LIST_1][0], cu.refIdx[REF_PIC_LIST_1]);
 
       // do affine ME & Merge
       cu.affineType = AFFINEMODEL_4PARAM;
@@ -1620,7 +1620,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
       if (cu.imv == 0)
       {
-        storeAffineMotion(cu.mvAffi, cu.refIdx, AFFINEMODEL_4PARAM, BcwIdx);
+        storeAffineMotion(cu.mv, cu.refIdx, AFFINEMODEL_4PARAM, BcwIdx);
       }
       if (cu.slice->sps->AffineType)
       {
@@ -1641,12 +1641,12 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
           for (int refList = 0; refList < 2; refList++)
           {
-            bestMv[refList][0] = cu.mvAffi[refList][0];
-            bestMv[refList][1] = cu.mvAffi[refList][1];
-            bestMv[refList][2] = cu.mvAffi[refList][2];
-            bestMvd[refList][0] = cu.mvdAffi[refList][0];
-            bestMvd[refList][1] = cu.mvdAffi[refList][1];
-            bestMvd[refList][2] = cu.mvdAffi[refList][2];
+            bestMv[refList][0] = cu.mv[refList][0];
+            bestMv[refList][1] = cu.mv[refList][1];
+            bestMv[refList][2] = cu.mv[refList][2];
+            bestMvd[refList][0] = cu.mvd[refList][0];
+            bestMvd[refList][1] = cu.mvd[refList][1];
+            bestMvd[refList][2] = cu.mvd[refList][2];
           }
 
           refIdx4Para[0] = bestRefIdx[0];
@@ -1658,7 +1658,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
           if (cu.imv == 0)
           {
-            storeAffineMotion(cu.mvAffi, cu.refIdx, AFFINEMODEL_6PARAM, BcwIdx);
+            storeAffineMotion(cu.mv, cu.refIdx, AFFINEMODEL_6PARAM, BcwIdx);
           }
 
           // reset to 4 parameter affine inter mode
@@ -1675,8 +1675,8 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
             for (int verIdx = 0; verIdx < 3; verIdx++)
             {
-              cu.mvdAffi[REF_PIC_LIST_0][verIdx] = bestMvd[0][verIdx];
-              cu.mvdAffi[REF_PIC_LIST_1][verIdx] = bestMvd[1][verIdx];
+              cu.mvd[REF_PIC_LIST_0][verIdx] = bestMvd[0][verIdx];
+              cu.mvd[REF_PIC_LIST_1][verIdx] = bestMvd[1][verIdx];
             }
 
             CU::setAllAffineMv(cu, bestMv[0][0], bestMv[0][1], bestMv[0][2], REF_PIC_LIST_0);
@@ -1700,16 +1700,16 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         cu.mergeIdx = uiMRGIndex;
         cu.interDir = uiInterDir;
         cu.smvdMode = iSymMode;
-        cu.mv[REF_PIC_LIST_0] = cHevcMvField[0].mv;
+        cu.mv[REF_PIC_LIST_0][0]  = cHevcMvField[0].mv;
         cu.refIdx[REF_PIC_LIST_0] = cHevcMvField[0].refIdx;
-        cu.mv[REF_PIC_LIST_1] = cHevcMvField[1].mv;
+        cu.mv[REF_PIC_LIST_1][0]  = cHevcMvField[1].mv;
         cu.refIdx[REF_PIC_LIST_1] = cHevcMvField[1].refIdx;
         cu.mvpIdx[REF_PIC_LIST_0] = uiMvpIdx[0];
         cu.mvpIdx[REF_PIC_LIST_1] = uiMvpIdx[1];
         cu.mvpNum[REF_PIC_LIST_0] = uiMvpNum[0];
         cu.mvpNum[REF_PIC_LIST_1] = uiMvpNum[1];
-        cu.mvd[REF_PIC_LIST_0] = cMvd[0];
-        cu.mvd[REF_PIC_LIST_1] = cMvd[1];
+        cu.mvd[REF_PIC_LIST_0][0] = cMvd[0];
+        cu.mvd[REF_PIC_LIST_1][0] = cMvd[1];
       }
       else
       {
@@ -5090,10 +5090,10 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
     m_isBi = false;
   } // if (B_SLICE)
 
-  cu.mv[REF_PIC_LIST_0] = Mv();
-  cu.mv[REF_PIC_LIST_1] = Mv();
-  cu.mvd[REF_PIC_LIST_0] = cMvZero;
-  cu.mvd[REF_PIC_LIST_1] = cMvZero;
+  cu.mv [REF_PIC_LIST_0][0] = Mv();
+  cu.mv [REF_PIC_LIST_1][0] = Mv();
+  cu.mvd[REF_PIC_LIST_0][0] = cMvZero;
+  cu.mvd[REF_PIC_LIST_1][0] = cMvZero;
   cu.refIdx[REF_PIC_LIST_0] = NOT_VALID;
   cu.refIdx[REF_PIC_LIST_1] = NOT_VALID;
   cu.mvpIdx[REF_PIC_LIST_0] = NOT_VALID;
@@ -5103,8 +5103,8 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 
   for (int verIdx = 0; verIdx < 3; verIdx++)
   {
-    cu.mvdAffi[REF_PIC_LIST_0][verIdx] = cMvZero;
-    cu.mvdAffi[REF_PIC_LIST_1][verIdx] = cMvZero;
+    cu.mvd[REF_PIC_LIST_0][verIdx] = cMvZero;
+    cu.mvd[REF_PIC_LIST_1][verIdx] = cMvZero;
   }
 
   // Set Motion Field
@@ -5131,12 +5131,12 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 
     for (int verIdx = 0; verIdx < mvNum; verIdx++)
     {
-      cu.mvdAffi[REF_PIC_LIST_0][verIdx] = cMvBi[0][verIdx] - cMvPredBi[0][iRefIdxBi[0]][verIdx];
-      cu.mvdAffi[REF_PIC_LIST_1][verIdx] = cMvBi[1][verIdx] - cMvPredBi[1][iRefIdxBi[1]][verIdx];
+      cu.mvd[REF_PIC_LIST_0][verIdx] = cMvBi[0][verIdx] - cMvPredBi[0][iRefIdxBi[0]][verIdx];
+      cu.mvd[REF_PIC_LIST_1][verIdx] = cMvBi[1][verIdx] - cMvPredBi[1][iRefIdxBi[1]][verIdx];
       if (verIdx != 0)
       {
-        cu.mvdAffi[0][verIdx] = cu.mvdAffi[0][verIdx] - cu.mvdAffi[0][0];
-        cu.mvdAffi[1][verIdx] = cu.mvdAffi[1][verIdx] - cu.mvdAffi[1][0];
+        cu.mvd[0][verIdx] = cu.mvd[0][verIdx] - cu.mvd[0][0];
+        cu.mvd[1][verIdx] = cu.mvd[1][verIdx] - cu.mvd[1][0];
       }
     }
 
@@ -5156,10 +5156,10 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 
     for (int verIdx = 0; verIdx < mvNum; verIdx++)
     {
-      cu.mvdAffi[REF_PIC_LIST_0][verIdx] = aacMv[0][verIdx] - cMvPred[0][iRefIdx[0]][verIdx];
+      cu.mvd[REF_PIC_LIST_0][verIdx] = aacMv[0][verIdx] - cMvPred[0][iRefIdx[0]][verIdx];
       if (verIdx != 0)
       {
-        cu.mvdAffi[0][verIdx] = cu.mvdAffi[0][verIdx] - cu.mvdAffi[0][0];
+        cu.mvd[0][verIdx] = cu.mvd[0][verIdx] - cu.mvd[0][0];
       }
     }
 
@@ -5176,10 +5176,10 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 
     for (int verIdx = 0; verIdx < mvNum; verIdx++)
     {
-      cu.mvdAffi[REF_PIC_LIST_1][verIdx] = aacMv[1][verIdx] - cMvPred[1][iRefIdx[1]][verIdx];
+      cu.mvd[REF_PIC_LIST_1][verIdx] = aacMv[1][verIdx] - cMvPred[1][iRefIdx[1]][verIdx];
       if (verIdx != 0)
       {
-        cu.mvdAffi[1][verIdx] = cu.mvdAffi[1][verIdx] - cu.mvdAffi[1][0];
+        cu.mvd[1][verIdx] = cu.mvd[1][verIdx] - cu.mvd[1][0];
       }
     }
 
@@ -5905,8 +5905,8 @@ int InterSearch::xIBCSearchMVChromaRefine(CodingUnit& cu,
 
     tempSad = sadBestCand[cand];
 
-    cu.mv[0] = cMVCand[cand];
-    cu.mv[0].changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
+    cu.mv[0][0] = cMVCand[cand];
+    cu.mv[0][0].changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
     cu.interDir = 1;
     cu.refIdx[0] = cu.cs->slice->numRefIdx[REF_PIC_LIST_0]; // last idx in the list
 
@@ -6538,16 +6538,16 @@ bool InterSearch::predIBCSearch(CodingUnit& cu, Partitioner& partitioner)
 
   cu.bv = cMv; // bv is always at integer accuracy
   cMv.changePrecision(MV_PRECISION_INT, MV_PRECISION_INTERNAL);
-  cu.mv[REF_PIC_LIST_0] = cMv; // store in fractional pel accuracy
+  cu.mv[REF_PIC_LIST_0][0] = cMv; // store in fractional pel accuracy
 
   cu.mvpIdx[REF_PIC_LIST_0] = bvpIdxBest;
 
   if (cu.imv == 2 && cMv != amvpInfo4Pel.mvCand[bvpIdxBest])
-    cu.mvd[REF_PIC_LIST_0] = cMv - amvpInfo4Pel.mvCand[bvpIdxBest];
+    cu.mvd[REF_PIC_LIST_0][0] = cMv - amvpInfo4Pel.mvCand[bvpIdxBest];
   else
-    cu.mvd[REF_PIC_LIST_0] = cMv - amvpInfo.mvCand[bvpIdxBest];
+    cu.mvd[REF_PIC_LIST_0][0] = cMv - amvpInfo.mvCand[bvpIdxBest];
 
-  if (cu.mvd[REF_PIC_LIST_0] == Mv(0, 0))
+  if (cu.mvd[REF_PIC_LIST_0][0] == Mv(0, 0))
     cu.imv = 0;
   if (cu.imv == 2)
     assert((cMv.hor % 16 == 0) && (cMv.ver % 16 == 0));
