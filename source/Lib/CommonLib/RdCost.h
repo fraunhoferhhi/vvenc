@@ -111,7 +111,7 @@ private:
   // for distortion
 
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
-  CostMode                m_costMode;
+  vvencCostMode           m_costMode;
   double                  m_distortionWeight[MAX_NUM_COMP]; // only chroma values are used.
   double                  m_dLambda;
   double                  m_dLambda_unadjusted; // TODO: check is necessary
@@ -131,7 +131,7 @@ private:
   Mv                      m_bvPredictors[2];
   double                  m_motionLambda;
   int                     m_iCostScale;
-  
+  double                  m_dCostIBC;
 public:
   RdCost();
   virtual ~RdCost();
@@ -146,7 +146,7 @@ public:
   void          setReshapeParams    ( const uint32_t* pPLUT, double chrWght)    { m_reshapeLumaLevelToWeightPLUT = pPLUT; m_chromaWeight = chrWght; }
   void          setDistortionWeight ( const ComponentID compID, const double distortionWeight ) { m_distortionWeight[compID] = distortionWeight; }
   void          setLambda           ( double dLambda, const BitDepths &bitDepths );
-  void          setCostMode         ( CostMode m )                      { m_costMode = m; }
+  void          setCostMode         ( vvencCostMode m )                      { m_costMode = m; }
 
   double        getLambda           ( bool unadj = false )              { return unadj ? m_dLambda_unadjusted : m_dLambda; }
   double        getChromaWeight     ()                                  { return ((m_distortionWeight[COMP_Cb] + m_distortionWeight[COMP_Cr]) / 2.0); }
@@ -166,11 +166,15 @@ public:
   void          setPredictor        ( const Mv& rcMv )            { m_mvPredictor = rcMv; }
   void          setCostScale        ( int iCostScale )            { m_iCostScale = iCostScale; }
   Distortion    getCost             ( uint32_t b )          const { return Distortion( m_motionLambda * b ); }
-
   // for motion cost
   static uint32_t    xGetExpGolombNumberOfBits( int iVal )
   {
     CHECKD( iVal == std::numeric_limits<int>::min(), "Wrong value" );
+
+#if ENABLE_SIMD_OPT && defined( TARGET_SIMD_X86 )
+    // the proper Log2 is not restricted to 0...MAX_CU_SIZE
+    return 1 + ( Log2( iVal <= 0 ? ( unsigned( -iVal ) << 1 ) + 1 : unsigned( iVal << 1 ) ) << 1 );
+#else
     unsigned uiLength2 = 1, uiTemp2 = ( iVal <= 0 ) ? ( unsigned( -iVal ) << 1 ) + 1 : unsigned( iVal << 1 );
 
     while( uiTemp2 > MAX_CU_SIZE )
@@ -180,13 +184,22 @@ public:
     }
 
     return uiLength2 + ( Log2(uiTemp2) << 1 );
+#endif
   }
   Distortion     getCostOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return Distortion( m_motionLambda * getBitsOfVectorWithPredictor(x, y, imvShift )); }
   uint32_t       getBitsOfVectorWithPredictor( const int x, const int y, const unsigned imvShift )  { return xGetExpGolombNumberOfBits(((x << m_iCostScale) - m_mvPredictor.hor)>>imvShift) + xGetExpGolombNumberOfBits(((y << m_iCostScale) - m_mvPredictor.ver)>>imvShift); }
 
   void           saveUnadjustedLambda ();
   void           setReshapeInfo       ( uint32_t type, int lumaBD, ChromaFormat cf )   { m_signalType = type; m_lumaBD = lumaBD; m_cf = cf; }
-
+  void           setPredictorsIBC     (Mv* pcMv)
+  {
+    for (int i = 0; i < 2; i++)
+    {
+      m_bvPredictors[i] = pcMv[i];
+    }
+  }
+  void           getMotionCostIBC(int add) { m_dCostIBC = m_dLambdaMotionSAD + add; }
+  Distortion     getBvCostMultiplePredsIBC(int x, int y, bool useIMV);
 private:
          Distortion xGetSSE_WTD       ( const DistParam& pcDtParam ) const;
 
@@ -232,6 +245,7 @@ private:
   static Distortion xGetSADwMask_SIMD( const DistParam &pcDtParam );
 #endif
 
+  unsigned int   getBitsMultiplePredsIBC(int x, int y, bool useIMV);
 public:
 
   Distortion   getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma = NULL );

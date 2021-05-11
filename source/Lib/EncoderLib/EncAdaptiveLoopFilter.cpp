@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CodingStructure.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/TimeProfiler.h"
+
 #include <algorithm>
 
 #include "vvenc/vvencCfg.h"
@@ -584,7 +585,7 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
   for( int channelIdx = 0; channelIdx < MAX_NUM_CH; channelIdx++ )
   {
     ChannelType chType = (ChannelType)channelIdx;
-    int numClasses = channelIdx ? MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
+    int numClasses = channelIdx ? VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
     m_alfCovarianceFrame[chType] = new AlfCovariance*[m_filterShapes[chType].size()];
     for( int i = 0; i != m_filterShapes[chType].size(); i++ )
     {
@@ -636,8 +637,8 @@ void EncAdaptiveLoopFilter::init( const VVEncCfg& encCfg, CABACWriter& cabacEsti
     }
   }
 
-  m_filterCoeffSet = new int*[std::max(MAX_NUM_ALF_CLASSES, MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
-  m_filterClippSet = new int*[std::max(MAX_NUM_ALF_CLASSES, MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
+  m_filterCoeffSet = new int*[std::max(MAX_NUM_ALF_CLASSES, VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
+  m_filterClippSet = new int*[std::max(MAX_NUM_ALF_CLASSES, VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA)];
   m_diffFilterCoeff = new int*[MAX_NUM_ALF_CLASSES];
 
   for( int i = 0; i < MAX_NUM_ALF_CLASSES; i++ )
@@ -710,7 +711,7 @@ void EncAdaptiveLoopFilter::destroy()
     if( m_alfCovarianceFrame[channelIdx] )
     {
       ChannelType chType = (ChannelType)channelIdx;
-      int numClasses = channelIdx ? MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
+      int numClasses = channelIdx ? VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA : MAX_NUM_ALF_CLASSES;
       for( int i = 0; i != m_filterShapes[chType].size(); i++ )
       {
         for( int k = 0; k < numClasses; k++ )
@@ -1218,7 +1219,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
   // On TL0 and pending RAS: reset APS
   int layerIdx = cs.vps == nullptr ? 0 : cs.vps->generalLayerIdx[ cs.slice->pic->layerId ];
-  if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA() || ( cs.slice->nalUnitType == NAL_UNIT_CODED_SLICE_CRA && m_encCfg->m_craAPSreset ) ) )
+  if ( !layerIdx && ( cs.slice->pendingRasInit || cs.slice->isIDRorBLA() || ( cs.slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA && m_encCfg->m_craAPSreset ) ) )
   {
     memset(cs.slice->alfAps, 0, sizeof(*cs.slice->alfAps)*ALF_CTB_MAX_NUM_APS);
     m_apsIdStart = ALF_CTB_MAX_NUM_APS;
@@ -1572,7 +1573,7 @@ void EncAdaptiveLoopFilter::resetFrameStats()
   for( int channelIdx = 0; channelIdx < numberOfChannels; channelIdx++ )
   {
     const ChannelType channelID = ChannelType( channelIdx );
-    const int numAlts = channelID == CH_L ? 1 : MAX_NUM_ALF_ALTERNATIVES_CHROMA;
+    const int numAlts = channelID == CH_L ? 1 : VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
     const int numClasses = isLuma( channelID ) ? MAX_NUM_ALF_CLASSES : 1;
 
     for( int altIdx = 0; altIdx < numAlts; ++altIdx )
@@ -1606,7 +1607,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
   setEnableFlag(m_alfParamTemp, channel, true);
 
   reconstructCoeff(m_alfParamTemp, channel, true, isLuma(channel));
-  for( int altIdx = 0; altIdx < (isLuma(channel) ? 1 : MAX_NUM_ALF_ALTERNATIVES_CHROMA); altIdx++)
+  for( int altIdx = 0; altIdx < (isLuma(channel) ? 1 : VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA); altIdx++)
   {
     for (int classIdx = 0; classIdx < (isLuma(channel) ? MAX_NUM_ALF_CLASSES : 1); classIdx++)
     {
@@ -3729,7 +3730,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
       newAPS->alfParam.nonLinearFlag[CH_C] = alfParamNewFilters.nonLinearFlag[CH_C];
       newAPS->temporalId = cs.slice->TLayer;
       newAPS->poc = cs.slice->poc;
-      for (int altIdx = 0; altIdx  < MAX_NUM_ALF_ALTERNATIVES_CHROMA; ++altIdx )
+      for (int altIdx = 0; altIdx  < VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA; ++altIdx )
       for (int i = 0; i < MAX_NUM_ALF_CHROMA_COEFF; i++)
       {
         newAPS->alfParam.chromaCoeff[altIdx][i] = alfParamNewFilters.chromaCoeff[altIdx][i];

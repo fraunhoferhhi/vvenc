@@ -663,8 +663,6 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   int subSetId = iScanPos >> log2CGSize;
   for( ; subSetId >= 0; subSetId-- )
   {
-    cctx.initSubblock( subSetId );
-
     int    iNZbeforePos0  = 0;
     int    uiAbsSumCG     = 0;
     cost_t iCodedCostCG   = 0;
@@ -706,6 +704,9 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
     //////////////////////////////////////////////////////////////////////////
     //  Loop over coefficients
     //////////////////////////////////////////////////////////////////////////
+
+    cctx.initSubblock( subSetId );
+
     for( ; iScanPosinCG >= 0; iScanPosinCG--, iScanPos-- )
     {
       const uint32_t uiBlkPos = cctx.blockPos( iScanPos );

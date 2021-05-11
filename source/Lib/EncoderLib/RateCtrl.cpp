@@ -101,8 +101,12 @@ EncRCSeq::EncRCSeq()
   bitsLeft            = 0;
   estimatedBitUsage   = 0;
   adaptiveBits        = 0;
-  bitUsageRatio       = 0.0;
   lastLambda          = 0.0;
+#if !RC_INTRA_MODEL_OPT
+  bitUsageRatio       = 0.0;
+#else
+  std::memset (qpCorrection, 0, sizeof (qpCorrection));
+#endif
   bitDepth            = 0;
 }
 
@@ -157,9 +161,13 @@ void EncRCSeq::create( bool twoPassRC, int totFrames, int targetBitrate, int frR
   framesLeft = totalFrames;
   bitsLeft   = targetBits;
   estimatedBitUsage = 0;
-  bitUsageRatio = 0.0;
   adaptiveBits = adaptiveBit;
   lastLambda = 0.0;
+#if !RC_INTRA_MODEL_OPT
+  bitUsageRatio = 0.0;
+#else
+  std::memset (qpCorrection, 0, sizeof (qpCorrection));
+#endif
 }
 
 void EncRCSeq::destroy()
@@ -239,10 +247,15 @@ void EncRCSeq::updateAfterPic ( int bits, int tgtBits )
   framesLeft--;
 }
 
-void EncRCSeq::getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, double alpha[] )
+#if RC_INTRA_MODEL_OPT
+void EncRCSeq::getTargetBitsFromFirstPass (const int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters)
+#else
+void EncRCSeq::getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters, double alpha[] )
+#endif
 {
+#if !RC_INTRA_MODEL_OPT
   int numOfLevels = int( log( gopSize ) / log( 2 ) + 0.5 ) + 2;
-
+#endif
   std::list<TRCPassStats>::iterator it;
   for ( it = firstPassData.begin(); it != firstPassData.end(); it++ )
   {
@@ -252,10 +265,13 @@ void EncRCSeq::getTargetBitsFromFirstPass( int poc, int &targetBits, double &gop
       gopVsBitrateRatio = it->gopBitsVsBitrate;
       frameVsGopRatio = it->frameInGopRatio;
       isNewScene = it->isNewScene;
+      refreshParameters = it->refreshParameters;
+#if !RC_INTRA_MODEL_OPT
       for ( int i = 0; i < numOfLevels; i++ )
       {
         alpha[ i ] = it->estAlpha[ i ];
       }
+#endif
       break;
     }
   }
@@ -270,6 +286,12 @@ void EncRCSeq::setAllBitRatio( double basicLambda, double* equaCoeffA, double* e
   }
   initBitsRatio( bitsRatio );
   delete[] bitsRatio;
+}
+
+void EncRCSeq::clipRcAlpha( double& alpha )
+{
+  const int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
+  alpha = Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
 }
 
 //GOP level
@@ -587,7 +609,6 @@ EncRCPic::EncRCPic()
   estHeaderBits       = 0;
   picQPOffsetQPA      = 0;
   picLambdaOffsetQPA  = 0.0;
-  picEstLambda        = 0.0;
   bitsLeft            = 0;
   lcu                 = NULL;
   picActualHeaderBits = 0;
@@ -595,8 +616,10 @@ EncRCPic::EncRCPic()
   picQP               = 0;
   picLambda           = 0.0;
   picMSE              = 0.0;
+  totalCostIntra      = 0.0;
   validPixelsInPic    = 0;
   isNewScene          = false;
+  refreshParams       = false;
   finalLambda         = 0.0;
   estimatedBits       = 0;
 }
@@ -606,7 +629,7 @@ EncRCPic::~EncRCPic()
   destroy();
 }
 
-int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
+int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLevel )
 {
   int targetBits    = 0;
   int GOPbitsLeft   = encRcGOP->bitsLeft;
@@ -635,24 +658,32 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP )
   {
     double gopVsBitrateRatio = 1.0;
     double frameVsGopRatio = 1.0;
-    double alpha[ 7 ] = { 0.0 };
-    encRcSeq->getTargetBitsFromFirstPass( poc, tmpTargetBits, gopVsBitrateRatio, frameVsGopRatio, isNewScene, alpha );
+#if !RC_INTRA_MODEL_OPT
+    int numLevels = int( log( encRCSeq->gopSize ) / log( 2 ) + 0.5 ) + 2;
+    double* alpha = new double[ numLevels ];
+    for ( int i = 0; i < numLevels; i++ )
+    {
+      alpha[ i ] = 0.0;
+    }
+    encRcSeq->getTargetBitsFromFirstPass( poc, tmpTargetBits, gopVsBitrateRatio, frameVsGopRatio, isNewScene, refreshParams, alpha );
+#else
+    encRcSeq->getTargetBitsFromFirstPass( poc, tmpTargetBits, gopVsBitrateRatio, frameVsGopRatio, isNewScene, refreshParams );
+#endif
     targetBits = int( ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * gopVsBitrateRatio * frameVsGopRatio + tmpTargetBits ); // calculate the difference of under/overspent bits and adjust the current target bits based on the gop and frame ratio for every frame
-
+#if !RC_INTRA_MODEL_OPT
     if ( encRcSeq->bitsUsed > 0 )
     {
       encRcSeq->bitUsageRatio = double( encRcSeq->estimatedBitUsage ) / encRcSeq->bitsUsed;
     }
-    if ( isNewScene )
+
+    if ( refreshParams && frameLevel > 0 )
     {
       int bitdepthLumaScale = 2 * ( encRcSeq->bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRcSeq->bitDepth ) );
-      int numOfLevels = int( log( encRcSeq->gopSize ) / log( 2 ) + 0.5 ) + 2;
-      for ( int i = 1; i < numOfLevels; i++ )
-      {
-        encRcSeq->picParam[ i ].alpha = alpha[ i ] * pow( 2.0, bitdepthLumaScale );
-        encRcSeq->picParam[ i ].beta = -1.367;
-      }
+      encRcSeq->picParam[ frameLevel ].alpha = alpha[ frameLevel ] * pow( 2.0, bitdepthLumaScale );
+      encRcSeq->picParam[ frameLevel ].beta = -1.367;
     }
+    delete[] alpha;
+#endif
   }
 
   return targetBits;
@@ -703,7 +734,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int
   poc        = framePoc;
   rcIdxInGop = frameRcIdxInGop;
 
-  int tgtBits    = xEstPicTargetBits( encRcSeq, encRcGOP );
+  int tgtBits    = xEstPicTargetBits( encRcSeq, encRcGOP, frameLvl );
   int estHeadBits = xEstPicHeaderBits( listPreviousPictures, frameLvl );
 
   if ( tgtBits < estHeadBits + 100 )
@@ -714,7 +745,6 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int
   frameLevel       = frameLvl;
   numberOfPixel    = encRcSeq->numberOfPixel;
   numberOfLCU      = encRcSeq->numberOfLCU;
-  picEstLambda     = 100.0;
   targetBits       = tgtBits;
   estHeaderBits    = estHeadBits;
   bitsLeft         = targetBits;
@@ -748,6 +778,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, EncRCGOP* encRcGOP, int frameLvl, int
   picQP               = 0;
   picQPOffsetQPA      = 0;
   validPixelsInPic    = 0;
+  totalCostIntra      = 0.0;
   picLambda           = 0.0;
   picLambdaOffsetQPA  = 0.0;
   picMSE              = 0.0;
@@ -796,7 +827,11 @@ double EncRCPic::estimatePicLambda( std::list<EncRCPic*>& listPreviousPictures, 
 
   if ( encRCSeq->twoPass )
   {
-    clipLambdaTwoPass( listPreviousPictures, estLambda, bitdepthLumaScale );
+    clipLambdaTwoPass( listPreviousPictures, estLambda
+#if !RC_INTRA_MODEL_OPT
+                     , bitdepthLumaScale
+#endif
+                       );
   }
   else
   {
@@ -805,7 +840,6 @@ double EncRCPic::estimatePicLambda( std::list<EncRCPic*>& listPreviousPictures, 
 
   //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
   estLambda = double( int64_t( estLambda * (double)RC_LAMBDA_PREC + 0.5 ) ) / (double)RC_LAMBDA_PREC;
-  picEstLambda = estLambda;
 
   return estLambda;
 }
@@ -876,13 +910,19 @@ void EncRCPic::clipLambdaFrameRc( std::list<EncRCPic*>& listPreviousPictures, do
   }
 }
 
-void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, double &lambda, int bitdepthLumaScale )
+void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, double &lambda
+#if !RC_INTRA_MODEL_OPT
+                                , int bitdepthLumaScale
+#endif
+                                  )
 {
-  bool setLastLevelLambda = false;
   double lastPrevTLLambda = -1.0;
   double lastLevelLambda = -1.0;
+#if !RC_INTRA_MODEL_OPT
   double lastPicLambda = -1.0;
   double lastValidLambda = -1.0;
+  bool setLastLevelLambda = false;
+#endif
   std::list<EncRCPic*>::iterator it;
   for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
   {
@@ -895,8 +935,11 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
     if ( ( *it )->frameLevel == frameLevel && ( *it )->picLambda > 0.0 )
     {
       lastLevelLambda = ( *it )->picLambda;
+#if !RC_INTRA_MODEL_OPT
       setLastLevelLambda = true;
+#endif
     }
+#if !RC_INTRA_MODEL_OPT
     else if ( encRCSeq->framesCoded < encRCSeq->gopSize && ( *it )->frameLevel < frameLevel && ( *it )->picLambda > 0.0 && !setLastLevelLambda ) // at the beginning, treat frames from the lower TLs as if they are in the same TL
     {
       lastLevelLambda = ( *it )->picLambda;
@@ -907,30 +950,39 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
     {
       lastValidLambda = lastPicLambda;
     }
+#endif
   }
 
   // limit lambda among the frames from the same TL
   if ( lastLevelLambda > 0.0 )
   {
+#if RC_INTRA_MODEL_OPT
+    const double clipRange = refreshParams ? 6.0 : std::max( 3.0, 6.0 - frameLevel );
+#else
     lastLevelLambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lastLevelLambda );
-    double clipRange = isNewScene ? 6.0 : 3.0;
+    double clipRange = refreshParams ? 6.0 : 3.0;
+#endif
     lambda = Clip3( lastLevelLambda * pow( 2.0, -clipRange / 3.0 ), lastLevelLambda * pow( 2.0, clipRange / 3.0 ), lambda );
   }
 
   // prevent frames from higher TLs to have lower lambda values than frames at lower TLs
   if ( frameLevel > 2 )
   {
-    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
+#if RC_INTRA_MODEL_OPT
+    const int tlQpOffset = int (0.5 + sqrt (1.75 * encRCSeq->gopSize) / frameLevel);
+#else
+    const int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
     if ( encRCSeq->bitUsageRatio > 1.0 )
     {
       lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), lambda );
     }
     else
+#endif
     {
       lambda = Clip3( lastPrevTLLambda * pow( 2.0, (double)( tlQpOffset ) / 3.0 ), encRCGOP->maxEstLambda, lambda );
     }
   }
-
+#if !RC_INTRA_MODEL_OPT
   // clip lambda based on the previously encoded picture
   if ( lastPicLambda > 0.0 )
   {
@@ -962,8 +1014,8 @@ void EncRCPic::clipLambdaTwoPass( std::list<EncRCPic*>& listPreviousPictures, do
   {
     lambda = Clip3( encRCGOP->minEstLambda, encRCGOP->maxEstLambda, lambda );
   }
-
-  if ( lambda < encRCGOP->minEstLambda )
+#endif
+  if ( frameLevel > 0 && lambda < encRCGOP->minEstLambda )
   {
     lambda = encRCGOP->minEstLambda;
   }
@@ -1042,11 +1094,13 @@ void EncRCPic::clipQpFrameRc( std::list<EncRCPic*>& listPreviousPictures, int &Q
 
 void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &QP )
 {
-  bool setLastLevelQP = false;
   int lastPrevTLQP = RC_INVALID_QP_VALUE;
   int lastLevelQP = RC_INVALID_QP_VALUE;
+#if !RC_INTRA_MODEL_OPT
   int lastPicQP = RC_INVALID_QP_VALUE;
   int lastValidQP = RC_INVALID_QP_VALUE;
+  bool setLastLevelQP = false;
+#endif
   std::list<EncRCPic*>::iterator it;
   for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
   {
@@ -1057,8 +1111,11 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
     if ( ( *it )->frameLevel == frameLevel && ( *it )->picQP > RC_INVALID_QP_VALUE ) // use the QP value from the last available frame of that level
     {
       lastLevelQP = ( *it )->picQP;
+#if !RC_INTRA_MODEL_OPT
       setLastLevelQP = true;
+#endif
     }
+#if !RC_INTRA_MODEL_OPT
     else if ( encRCSeq->framesCoded < encRCSeq->gopSize && ( *it )->frameLevel < frameLevel && ( *it )->picQP > RC_INVALID_QP_VALUE && !setLastLevelQP )
     {
       lastLevelQP = ( *it )->picQP;
@@ -1068,27 +1125,36 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
     {
       lastValidQP = lastPicQP;
     }
+#endif
   }
 
   if ( lastLevelQP > RC_INVALID_QP_VALUE )
   {
-    int clipRange = isNewScene ? 6 : 3;
+#if RC_INTRA_MODEL_OPT
+    const int clipRange = refreshParams ? 6 : std::max( 3, 6 - frameLevel );
+#else
+    int clipRange = refreshParams ? 6 : 3;
+#endif
     QP = Clip3( lastLevelQP - clipRange, lastLevelQP + clipRange, QP );
   }
 
   if ( frameLevel > 2 ) // in any case frame level has to be GREATER than 1
   {
-    int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
+#if RC_INTRA_MODEL_OPT
+    const int tlQpOffset = int (0.5 + sqrt (1.75 * encRCSeq->gopSize) / frameLevel);
+#else
+    const int tlQpOffset = encRCSeq->gopSize == 32 ? RC_GOP_ID_QP_OFFSET_GOP32[ frameLevel ] : RC_GOP_ID_QP_OFFSET[ frameLevel ];
     if ( encRCSeq->bitUsageRatio > 1.0 )
     {
       QP = Clip3( lastPrevTLQP + tlQpOffset, lastPrevTLQP + tlQpOffset, QP );
     }
     else
+#endif
     {
       QP = Clip3( lastPrevTLQP + tlQpOffset, MAX_QP, QP );
     }
   }
-
+#if !RC_INTRA_MODEL_OPT
   if ( lastPicQP > RC_INVALID_QP_VALUE )
   {
     if ( frameLevel > 1 )
@@ -1112,6 +1178,11 @@ void EncRCPic::clipQpTwoPass( std::list<EncRCPic*>& listPreviousPictures, int &Q
       int lowClipBoundary = Clip3( 12, 15, int( 4.0 * encRCSeq->bitUsageRatio + 8.5 + 0.5 ) );
       QP = Clip3( lastValidQP - lowClipBoundary, lastValidQP + 12, QP );
     }
+  }
+#endif
+  if ( frameLevel > 0 && QP < 0 )
+  {
+    QP = 0;
   }
 }
 
@@ -1144,6 +1215,13 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
 {
   picActualHeaderBits = actualHeaderBits;
   picActualBits       = actualTotalBits;
+  picLambda           = averageLambda;
+#if RC_INTRA_MODEL_OPT
+  picQP               = int (averageQP + 0.5);
+
+  if (!encRCSeq->twoPass)
+  {
+#endif
   if ( averageQP > 0.0 )
   {
     picQP             = int( averageQP + 0.5 );
@@ -1152,7 +1230,7 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
   {
     picQP             = RC_INVALID_QP_VALUE;
   }
-  picLambda           = averageLambda;
+
   double alpha = encRCSeq->picParam[ frameLevel ].alpha;
   double beta  = encRCSeq->picParam[ frameLevel ].beta;
   double skipRatio = 0;
@@ -1188,7 +1266,7 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
     rcPara.beta = -updatedK - 1.0;
     if ( validPixelsInPic > 0 )
     {
-      clipRcAlpha( encRCSeq->bitDepth, rcPara.alpha );
+      encRCSeq->clipRcAlpha( rcPara.alpha );
       clipRcBeta( rcPara.beta );
       encRCSeq->picParam[ frameLevel ] = rcPara;
     }
@@ -1199,12 +1277,15 @@ void EncRCPic::updateAfterPicture( int actualHeaderBits, int actualTotalBits, do
       encRCSeq->lastLambda = updateLastLambda;
     }
   }
-}
+#if RC_INTRA_MODEL_OPT
+  } // if !twoPass
 
-void EncRCPic::clipRcAlpha( const int bitdepth, double& alpha )
-{
-  int bitdepthLumaScale = 2 * ( bitdepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( encRCSeq->bitDepth ) );
-  alpha = Clip3( RC_ALPHA_MIN_VALUE, RC_ALPHA_MAX_VALUE * pow( 2.0, bitdepthLumaScale ), alpha );
+  if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update qpCorrection for EncGOP::picInitRateControl()
+  {
+    encRCSeq->qpCorrection[frameLevel] += int8_t (floor (0.5 + log ((double) picActualBits / (double) targetBits) / log (2.0)));
+    encRCSeq->qpCorrection[frameLevel] = Clip3 (-12, 12, (int) encRCSeq->qpCorrection[frameLevel]);
+  }
+#endif
 }
 
 void EncRCPic::clipRcBeta( double& beta)
@@ -1274,7 +1355,9 @@ void RateCtrl::destroy()
   }
 }
 
-void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth, const GOPEntry  GOPList[ MAX_GOP ], int maxParallelFrames )
+void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize,
+                     int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth,
+                     const vvencGOPEntry GOPList[ VVENC_MAX_GOP ], int maxParallelFrames )
 {
   destroy();
 
@@ -1447,7 +1530,7 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
   }
   else
   {
-    msg( WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
+    msg( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
   }
 
   int* GOPID2Level = new int[ GOPSize ];
@@ -1599,16 +1682,21 @@ void RateCtrl::setRCPass( int pass, int maxPass )
 void RateCtrl::processFirstPassData( const unsigned sizeInCtus )
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
-
+#if RC_INTRA_MODEL_OPT
+  m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
+#else
   int numOfLevels = int( log( encRCSeq->gopSize ) / log( 2 ) + 0.5 ) + 2;
-
+#endif
   // run a simple scene change detection
   detectNewScene();
 
   // process and scale GOP and frame bits using the data from the first pass to account for different target bitrates
   processGops();
 
-  // loop though the first pass data and update alpha parameters when new scenes are detected
+  // loop though the first pass data and update RC parameters when new scenes are detected
+#if RC_INTRA_MODEL_OPT
+  adaptToSceneChanges();
+#else
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
   {
@@ -1641,6 +1729,7 @@ void RateCtrl::processFirstPassData( const unsigned sizeInCtus )
     rcPQPAOffset = Clip3 (0, 15, int (averageTempStat / p)); // delta-QP offset for stability
     rcPQPAOffset = (rcPQPAOffset > 8 && encRCSeq->targetRate < 25000000 ? 6 : 7);
   }
+#endif
 }
 
 int64_t RateCtrl::getTotalBitsInFirstPass()
@@ -1658,6 +1747,18 @@ int64_t RateCtrl::getTotalBitsInFirstPass()
 
 void RateCtrl::detectNewScene()
 {
+#if RC_INTRA_MODEL_OPT
+  uint16_t visActPrev = 0;
+  double  yPsnrPrev = 0.0;
+  std::list<TRCPassStats>::iterator it;
+
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+    it->isNewScene = ((it->visActY * 4 > visActPrev * 11) || (it->isIntra && it->visActY > visActPrev && std::abs(it->yPsnr - yPsnrPrev) > 4.5));
+    visActPrev = it->visActY;
+    if (it->isIntra) yPsnrPrev = it->yPsnr;
+  }
+#else
   double meanFeatureValueInter = 0.0;
   double meanFeatureValueIntra = 0.0;
   double newSceneDetectionTH = 0.1;
@@ -1727,13 +1828,22 @@ void RateCtrl::detectNewScene()
       }
     }
   }
+#endif
 }
 
 void RateCtrl::processGops()
 {
-  int iterationCounter = 0;
   double actualBitrateAfterScaling = -1.0;
-  int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
+#if RC_INTRA_MODEL_OPT
+  std::vector<int> gopBits (2 + (m_listRCFirstPassStats.size() - 1) / encRCSeq->gopSize); // +2 for the first I frame (GOP) and a potential last incomplete GOP
+  std::list<TRCPassStats>::iterator it;
+
+  // count total bits in every GOP
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+#else
+  int64_t iterationCounter = 0;
+  const int64_t pocOfLastCompleteGop = int64_t ( floor( double ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
   std::vector<int> gopBits( 2 + pocOfLastCompleteGop / encRCSeq->gopSize ); // +2 for the first I frame (GOP) and a potential last incomplete GOP
   std::vector<double> scaledBits( int( m_listRCFirstPassStats.size() ) );
 
@@ -1741,6 +1851,7 @@ void RateCtrl::processGops()
   std::list<TRCPassStats>::iterator it;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++, iterationCounter++ )
   {
+#endif
     if ( it->poc == 0 )
     {
       gopBits[ 0 ] = it->numBits;
@@ -1749,6 +1860,15 @@ void RateCtrl::processGops()
     {
       gopBits[ 1 + ( it->poc - 1 ) / encRCSeq->gopSize ] += it->numBits;
     }
+#if RC_INTRA_MODEL_OPT
+  }
+
+  // scale frame bits to account for different target bitrates besed on the first-pass data; sets it->scaledBits
+  scaleGops (actualBitrateAfterScaling);
+
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+#else
     scaledBits[ iterationCounter ] = double( it->numBits );
   }
 
@@ -1760,6 +1880,7 @@ void RateCtrl::processGops()
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++, iterationCounter++ )
   {
     it->scaledBits = scaledBits[ iterationCounter ];
+#endif
     if ( it->poc == 0 ) // distinguish between the first frame and the rest of the sequence
     {
       it->frameInGopRatio = it->scaledBits / gopBits[ 0 ];
@@ -1774,12 +1895,46 @@ void RateCtrl::processGops()
   }
 }
 
+#if RC_INTRA_MODEL_OPT
+void RateCtrl::scaleGops (double &actualBitrateAfterScaling)
+{
+  const double bpfPass1 = getTotalBitsInFirstPass() / (double) m_listRCFirstPassStats.size();
+  const double bpfPass2 = encRCSeq->targetRate/*/s*// (double) encRCSeq->frameRate;
+  const double bpfRatio = bpfPass2 / bpfPass1;
+  const double bpfFac34 = pow (bpfRatio, 0.75);
+  const double bpfFac78 = pow (bpfRatio, 0.875);
+  const double bpfFacFG = pow (bpfRatio, 0.9375);
+  const int tmpLayerThr = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0));
+  std::list<TRCPassStats>::iterator it;
+
+  actualBitrateAfterScaling = 0.0;
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+    if (!it->isIntra) // non-Intra frame: largest (1.0) or intermediate (0.9375, 0.875) exponent
+    {
+      const double facInter = (it->tempLayer < tmpLayerThr ? bpfFac78 : ((it->poc & 1) ? bpfRatio : bpfFacFG));
+
+      it->scaledBits = std::max (1.0, facInter * it->numBits + (bpfRatio - facInter) * bpfPass1);
+    }
+    else // Intra frame: smallest exponent (0.75)
+    {
+      it->scaledBits = std::max (1.0, bpfFac34 * it->numBits + (bpfRatio - bpfFac34) * bpfPass1);
+    }
+    actualBitrateAfterScaling += it->scaledBits;
+  }
+  actualBitrateAfterScaling *= encRCSeq->frameRate / (double) m_listRCFirstPassStats.size();
+}
+#else
 void RateCtrl::scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling )
 {
   int64_t totalBitsInFirstPass = getTotalBitsInFirstPass();
   double averageBitrateFirstPass = double( totalBitsInFirstPass ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
+#if RC_INTRA_MODEL_OPT
+  double gopScalingFactor = 1.0 - std::min( 0.75, 0.125 * log( encRCSeq->targetRate / averageBitrateFirstPass ) / log( 2.0 ) );
+#else
   double scalingParameter = 0.175; // tuning parameter
-  double gopScalingFactor = 1.0 - scalingParameter * log( encRCSeq->targetRate / averageBitrateFirstPass ) / log( 2 );
+  double gopScalingFactor = 1.0 - std::min( 0.75, scalingParameter * log( encRCSeq->targetRate / averageBitrateFirstPass ) / log( 2.0 ) );
+#endif
   double frameScalingFactor = 1.0;
   int pocOfLastCompleteGop = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->gopSize ) * encRCSeq->gopSize );
   int pocOfLastCompleteIp = int( floor( ( m_listRCFirstPassStats.size() - 1 ) / encRCSeq->intraPeriod ) * encRCSeq->intraPeriod );
@@ -1843,12 +1998,15 @@ void RateCtrl::scaleGops( std::vector<double> &scaledBits, std::vector<int> &gop
   }
   actualBitrateAfterScaling = double( totalScaledBits ) / m_listRCFirstPassStats.size() * encRCSeq->frameRate;
 }
+#endif // RC_INTRA_MODEL_OPT
 
+#if !RC_INTRA_MODEL_OPT
 void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocRange, double *alphaEstimate )
 {
   std::vector<int> bitsData( numTempLevels );
   std::vector<int> qpData( numTempLevels );
   std::vector<int> counter( numTempLevels );
+
   int iterationCounter = 0;
 
   // collect the first pass TL data for the specified POC range
@@ -1907,12 +2065,65 @@ void RateCtrl::estimateAlphaFirstPass( int numTempLevels, int startPoc, int pocR
     }
   }
 }
+#else
+void RateCtrl::adaptToSceneChanges()
+{
+  const int numOfLevels = int ( log( encRCSeq->gopSize ) / log( 2.0 ) + 0.5 ) + 2;
 
-void RateCtrl::addRCPassStats( int poc, int qp, uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer )
+  std::list<TRCPassStats>::iterator it;
+  int prevSceneChange = -100;
+  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
+  {
+    if ( it->isNewScene ) // filter out scene cuts which happen too close to the previous detected scene cut
+    {
+      if ( it->poc >= prevSceneChange + (encRCSeq->gopSize >> 1) )
+      {
+        prevSceneChange = it->poc;
+      }
+      else
+      {
+        it->isNewScene = false;
+      }
+    }
+  }
+
+  // assumption: scene cut detection data cleaned and alpha parameters updated; first pass data sorted by POC
+  // mark frames where parameter refresh is needed after a scene cut
+  bool* refreshNeeded = new bool[ numOfLevels ];
+  for ( int i = 0; i < numOfLevels; i++ )
+  {
+    refreshNeeded[ i ] = false;
+  }
+  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ )
+  {
+    if ( it->isNewScene )
+    {
+      for ( int i = 0; i < numOfLevels; i++ )
+      {
+        refreshNeeded[ i ] = true;
+      }
+    }
+    it->refreshParameters = refreshNeeded[ it->tempLayer ];
+    refreshNeeded[ it->tempLayer ] = false;
+  }
+
+  delete[] refreshNeeded;
+}
+#endif // RC_INTRA_MODEL_OPT
+
+void RateCtrl::addRCPassStats( const int poc, const int qp,
+#if RC_INTRA_MODEL_OPT
+                               const double lambda, const uint16_t visActY,
+#endif
+                               uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer )
 {
   if( rcPass < rcMaxPass )
   {
-    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, numBits, yPsnr, uPsnr, vPsnr, isIntra, tempLayer ) );
+    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp,
+#if RC_INTRA_MODEL_OPT
+                                                    lambda, visActY,
+#endif
+                                                    numBits, yPsnr, uPsnr, vPsnr, isIntra, tempLayer ) );
   }
 }
 

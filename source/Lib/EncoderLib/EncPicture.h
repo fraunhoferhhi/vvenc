@@ -60,7 +60,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class VVEncCfg;
 class EncGOP;
 
 // ---------------------------------------------------------------------------------------------------------------------

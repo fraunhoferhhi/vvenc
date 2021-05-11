@@ -152,7 +152,7 @@ struct HRD
   {};
 
   GeneralHrdParams      generalHrdParams;
-  OlsHrdParams          olsHrdParams[MAX_TLAYER];
+  OlsHrdParams          olsHrdParams[VVENC_MAX_TLAYER];
   bool                  bufferingPeriodInitialized;
   bool                  pictureTimingAvailable;
   SEIBufferingPeriod    bufferingPeriodSEI;

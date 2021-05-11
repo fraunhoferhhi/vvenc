@@ -68,7 +68,7 @@ void CABACWriter::initCtxModels( const Slice& slice )
   int       qp                = slice.sliceQp;
   SliceType sliceType         = slice.sliceType;
   SliceType encCABACTableIdx  = slice.encCABACTableIdx;
-  if( !slice.isIntra() && (encCABACTableIdx==B_SLICE || encCABACTableIdx==P_SLICE) && slice.pps->cabacInitPresent )
+  if( !slice.isIntra() && (encCABACTableIdx==VVENC_B_SLICE || encCABACTableIdx==VVENC_P_SLICE) && slice.pps->cabacInitPresent )
   {
     sliceType = encCABACTableIdx;
   }
@@ -84,13 +84,13 @@ SliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ct
   int qp = slice.sliceQp;
   if( !slice.isIntra() )
   {
-    SliceType aSliceTypeChoices[] = { B_SLICE, P_SLICE };
-    uint64_t  bestCost            = std::numeric_limits<uint64_t>::max();
+    SliceType aSliceTypeChoices[] = { VVENC_B_SLICE, VVENC_P_SLICE };
+    uint64_t  bestCost                 = std::numeric_limits<uint64_t>::max();
     SliceType bestSliceType       = aSliceTypeChoices[0];
     for (uint32_t idx=0; idx<2; idx++)
     {
       uint64_t  curCost           = 0;
-      SliceType curSliceType      = aSliceTypeChoices[idx];
+      SliceType curSliceType = aSliceTypeChoices[idx];
       ctxTest.init( qp, (int)curSliceType );
       for( int k = 0; k < Ctx::NumberOfContexts; k++ )
       {
@@ -109,7 +109,7 @@ SliceType xGetCtxInitId( const Slice& slice, const BinEncIf& binEncoder, Ctx& ct
   }
   else
   {
-    return I_SLICE;
+    return VVENC_I_SLICE;
   }
 }
 
@@ -1941,7 +1941,6 @@ void CABACWriter::transform_tree( const CodingStructure& cs, Partitioner& partit
   {
     // split_transform_flag
     CHECK( partitioner.canSplit( TU_MAX_TR_SPLIT, cs ) || (cu.sbtInfo && partitioner.canSplit( CU::getSbtTuSplit( cu.sbtInfo ), cs)),  "transform split implied" );
-
     DTRACE( g_trace_ctx, D_SYNTAX, "transform_unit() pos=(%d,%d) size=%dx%d depth=%d trDepth=%d\n", tu.blocks[tu.chType].x, tu.blocks[tu.chType].y, tu.blocks[tu.chType].width, tu.blocks[tu.chType].height, cu.depth, partitioner.currTrDepth );
 
     transform_unit( tu, cuCtx, partitioner, subTuCounter);

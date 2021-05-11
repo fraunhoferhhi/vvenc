@@ -85,6 +85,7 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   , m_tuCache       ( unitCache.tuCache )
   , m_unitCacheMutex( mutex )
   , bestParent      ( nullptr )
+  , resetIBCBuffer  ( false )
 {
   for( uint32_t i = 0; i < MAX_NUM_COMP; i++ )
   {
@@ -104,6 +105,8 @@ CodingStructure::CodingStructure( XUCache& unitCache, std::mutex* mutex )
   }
 
   m_motionBuf = nullptr;
+
+  m_numTUs = m_numCUs = 0;
 }
 
 void CodingStructure::destroy()
@@ -120,7 +123,6 @@ void CodingStructure::destroy()
   m_rsporg = nullptr;
 
   destroyCoeffs();
-
   delete[] m_motionBuf;
   m_motionBuf = nullptr;
 
@@ -157,7 +159,6 @@ const int CodingStructure::signalModeCons( const PartSplit split, Partitioner &p
   bool is2xNChroma = (partitioner.currArea().chromaSize().width == 4 && split == CU_VERT_SPLIT) || (partitioner.currArea().chromaSize().width == 8 && split == CU_TRIV_SPLIT);
   return minChromaBlock >= 16 && !is2xNChroma ? LDT_MODE_TYPE_INHERIT : ((minLumaArea < 32) || slice->isIntra()) ? LDT_MODE_TYPE_INFER : LDT_MODE_TYPE_SIGNAL;
 }
-
 
 CodingUnit* CodingStructure::getLumaCU( const Position& pos )
 {
@@ -461,7 +462,7 @@ void CodingStructure::addEmptyTUs( Partitioner &partitioner, CodingUnit* cu )
   }
   else
   {
-    TransformUnit &tu = addTU( CS::getArea( *this, area, partitioner.chType, TREE_D ), partitioner.chType, cu );
+    TransformUnit& tu = addTU(CS::getArea(*this, area, partitioner.chType, TreeType(partitioner.treeType)), partitioner.chType, cu);
     tu.depth = trDepth;
   }
 }
@@ -614,7 +615,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
   {
     createCoeffs();
     createTempBuffers( false );
-    initStructData();
+    initStructData( MAX_INT, false, nullptr, true );
   }
 }
 
@@ -798,6 +799,7 @@ void CodingStructure::useSubStructure( const CodingStructure& subStruct, const C
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
 
+
   if( cpyReco )
   {
     CPelUnitBuf subRecoBuf = subStruct.getRecoBuf( clippedArea );
@@ -960,10 +962,10 @@ void CodingStructure::compactResize( const UnitArea& _area )
   area = _area;
 }
 
-void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area )
+void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const UnitArea* _area, bool force )
 {
-  clearTUs();
-  clearCUs();
+  clearTUs( force );
+  clearCUs( force );
 
   if( _area ) compactResize( *_area );
 
@@ -988,14 +990,17 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 }
 
 
-void CodingStructure::clearTUs()
+void CodingStructure::clearTUs( bool force )
 {
+  if( !m_numTUs && !force ) return;
+
   int numCh = getNumberValidChannels( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
     size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
 
     memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
+
   }
 
   numCh = getNumberValidComponents( area.chromaFormat );
@@ -1016,8 +1021,10 @@ void CodingStructure::clearTUs()
   m_numTUs = 0;
 }
 
-void CodingStructure::clearCUs()
+void CodingStructure::clearCUs( bool force )
 {
+  if( !m_numCUs && !force ) return;
+
   int numCh = getNumberValidChannels( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {

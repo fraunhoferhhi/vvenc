@@ -55,7 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 // forward declarations
-class VVEncCfg;
 class EncHRD;
 
 struct DUData
@@ -94,8 +93,8 @@ private:
   EncHRD*         m_pcEncHRD;
   bool            m_isInitialized;
   bool            m_rapWithLeading;
-  uint32_t        m_lastBPSEI[MAX_TLAYER];
-  uint32_t        m_totalCoded[MAX_TLAYER];
+  uint32_t        m_lastBPSEI[VVENC_MAX_TLAYER];
+  uint32_t        m_totalCoded[VVENC_MAX_TLAYER];
 };
 
 } // namespace vvenc

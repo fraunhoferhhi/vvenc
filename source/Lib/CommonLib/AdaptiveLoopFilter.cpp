@@ -66,11 +66,6 @@ namespace vvenc {
 AdaptiveLoopFilter::AdaptiveLoopFilter()
   : m_classifier( nullptr )
 {
-  for( int i = 0; i < NUM_DIRECTIONS; i++ )
-  {
-    m_laplacian[i] = nullptr;
-  }
-
   for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
   {
     m_ctuEnableFlag[compIdx] = nullptr;
@@ -773,20 +768,6 @@ void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const 
   m_tempBuf2.destroy();
   m_tempBuf2.create( format, Area( 0, 0, maxCUWidth + (MAX_ALF_PADDING_SIZE << 1), maxCUHeight + (MAX_ALF_PADDING_SIZE << 1) ), maxCUWidth, MAX_ALF_PADDING_SIZE, 0, false );
 
-  // Laplacian based activity
-  for( int i = 0; i < NUM_DIRECTIONS; i++ )
-  {
-    if ( m_laplacian[i] == nullptr )
-    {
-      m_laplacian[i] = new int*[m_CLASSIFICATION_BLK_SIZE + 5];
-
-      for( int y = 0; y < m_CLASSIFICATION_BLK_SIZE + 5; y++ )
-      {
-        m_laplacian[i][y] = new int[m_CLASSIFICATION_BLK_SIZE + 5];
-      }
-    }
-  }
-
   // Classification
   if ( m_classifier == nullptr )
   {
@@ -823,20 +804,6 @@ void AdaptiveLoopFilter::destroy()
   if (!m_created)
   {
     return;
-  }
-  for( int i = 0; i < NUM_DIRECTIONS; i++ )
-  {
-    if( m_laplacian[i] )
-    {
-      for( int y = 0; y < m_CLASSIFICATION_BLK_SIZE + 5; y++ )
-      {
-        delete[] m_laplacian[i][y];
-        m_laplacian[i][y] = nullptr;
-      }
-
-      delete[] m_laplacian[i];
-      m_laplacian[i] = nullptr;
-    }
   }
 
   if( m_classifier )
@@ -881,13 +848,13 @@ void AdaptiveLoopFilter::deriveClassification( AlfClassifier* classifier, const 
     for( int j = blk.pos().x; j < width; j += m_CLASSIFICATION_BLK_SIZE )
     {
       int nWidth = std::min( j + m_CLASSIFICATION_BLK_SIZE, width ) - j;
-      m_deriveClassificationBlk( classifier, m_laplacian, srcLuma, Area( j - blk.pos().x + blkDst.pos().x, i - blk.pos().y + blkDst.pos().y, nWidth, nHeight ),
+      m_deriveClassificationBlk( classifier, srcLuma, Area( j - blk.pos().x + blkDst.pos().x, i - blk.pos().y + blkDst.pos().y, nWidth, nHeight ),
                                  Area( j, i, nWidth, nHeight ), m_inputBitDepth[CH_L] + 4, m_alfVBLumaCTUHeight, m_alfVBLumaPos);
     }
   }
 }
 
-void AdaptiveLoopFilter::deriveClassificationBlk( AlfClassifier *classifier, int **laplacian[NUM_DIRECTIONS],
+void AdaptiveLoopFilter::deriveClassificationBlk( AlfClassifier *classifier,
                                                  const CPelBuf &srcLuma, const Area &blkDst, const Area &blk,
                                                  const int shift, const int vbCTUHeight, int vbPos )
 {
@@ -910,6 +877,8 @@ void AdaptiveLoopFilter::deriveClassificationBlk( AlfClassifier *classifier, int
   int posX        = blk.pos().x;
   int posY        = blk.pos().y;
   int startHeight = posY - flP1;
+
+  int laplacian[NUM_DIRECTIONS][MAX_CU_SIZE + 5][MAX_CU_SIZE + 5];
 
   for( int i = 0; i < height; i += 2 )
   {

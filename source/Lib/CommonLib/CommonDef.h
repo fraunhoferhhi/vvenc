@@ -537,7 +537,7 @@ static const int PLT_ENCBITDEPTH = 8;
 static const int PLT_FAST_RATIO = 100;
 
 static const int MCTF_PADDING         = 128;
-static const int MCTF_ADD_QUEUE_DELAY = 2 * MCTF_RANGE + 1;
+static const int MCTF_ADD_QUEUE_DELAY = 2 * VVENC_MCTF_RANGE + 1;
 
 static const int ENC_PPS_ID_RPR =                                 3;
 static const int SCALE_RATIO_BITS =                              14;
@@ -589,7 +589,8 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
-extern std::function<void( int, const char*, va_list )> g_msgFnc;
+extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
+extern void * m_msgFncCtx;
 
 inline void msg( int level, const char* fmt, ... )
 {
@@ -599,7 +600,7 @@ inline void msg( int level, const char* fmt, ... )
     std::unique_lock<std::mutex> _lock( _msgMutex );
     va_list args;
     va_start( args, fmt );
-    g_msgFnc( level, fmt, args );
+    g_msgFnc( m_msgFncCtx, level, fmt, args );
     va_end( args );
   }
 }
@@ -778,13 +779,13 @@ static inline bool        isLuma                    (const ComponentID id)      
 static inline bool        isLuma                    (const ChannelType id)                         { return (id==CH_L);                                    }
 static inline bool        isChroma                  (const ComponentID id)                         { return (id!=COMP_Y);                                  }
 static inline bool        isChroma                  (const ChannelType id)                         { return (id!=CH_L);                                    }
-//static inline ChannelType toChannelType             (const ComponentID id)                         { return (id==COMP_Y)? CH_L : CH_C;                     }
-//static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt==CHROMA_444)) ? 0 : 1;     }
-//static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt!=CHROMA_420)) ? 0 : 1;     }
-//static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
-//static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
-//static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
-//static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
+static inline ChannelType toChannelType             (const ComponentID id)                         { return (id==COMP_Y)? CH_L : CH_C;                     }
+static inline uint32_t    getChannelTypeScaleX      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt==CHROMA_444)) ? 0 : 1;     }
+static inline uint32_t    getChannelTypeScaleY      (const ChannelType id, const ChromaFormat fmt) { return (isLuma(id) || (fmt!=CHROMA_420)) ? 0 : 1;     }
+static inline uint32_t    getComponentScaleX        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleX(toChannelType(id), fmt);  }
+static inline uint32_t    getComponentScaleY        (const ComponentID id, const ChromaFormat fmt) { return getChannelTypeScaleY(toChannelType(id), fmt);  }
+static inline uint32_t    getNumberValidComponents  (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_COMP;          }
+static inline uint32_t    getNumberValidChannels    (const ChromaFormat fmt)                       { return (fmt==CHROMA_400) ? 1 : MAX_NUM_CH;            }
 static inline bool        isChromaEnabled           (const ChromaFormat fmt)                       { return !(fmt==CHROMA_400);                            }
 static inline ComponentID getFirstComponentOfChannel(const ChannelType id)                         { return (isLuma(id) ? COMP_Y : COMP_Cb);               }
 

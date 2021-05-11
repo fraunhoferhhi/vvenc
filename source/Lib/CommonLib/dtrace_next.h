@@ -123,6 +123,7 @@ namespace vvenc {
 enum DTRACE_CHANNEL
 {
   D_COMMON,
+  D_BITSTREAM,
   D_HEADER,               // header file infos
   D_NALUNITHEADER,        // NAL unit header infos
   D_RPSINFO,              // bits used to send the RPS
@@ -219,6 +220,7 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
   dtrace_channel next_channels[] =
   {
     _CNL_DEF( D_COMMON ),
+    _CNL_DEF( D_BITSTREAM ),
     _CNL_DEF( D_HEADER ),
     _CNL_DEF( D_NALUNITHEADER ),
     _CNL_DEF( D_RPSINFO ),
@@ -260,13 +262,13 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
 
   if( !sTracingFile.empty() || !sTracingRule.empty() )
   {
-    msg( VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
+    msg( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
   }
 
   CDTrace *pDtrace = new CDTrace( sTracingFile, sTracingRule, channels );
   if( pDtrace->getLastError() )
   {
-    msg( WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
+    msg( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
     //return NULL;
   }
 

@@ -904,7 +904,6 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
         if( lineLfpPtrV->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_VER>( *lineLfpPtrV, cu, Position{ area.x + x, area.y + y }, x ? cu : *cuP );
 
         lineLfpPtrV->bs &= ~BsSet( 3, MAX_NUM_COMP );
-
         INCX( lineLfpPtrV, lfpStride );
       }
 
@@ -930,7 +929,6 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
         if( lineLfpPtrH->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_HOR>( *lineLfpPtrH, cu, Position{ area.x + x, area.y + y }, y ? cu : *cuP );
 
         lineLfpPtrH->bs &= ~BsSet( 3, MAX_NUM_COMP );
-
         INCX( lineLfpPtrH, lfpStride );
       }
 
@@ -1274,9 +1272,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( MODE_INTRA == cuP.predMode || MODE_INTRA == cuQ.predMode )
   {
     const int edgeIdx = ( perpPos<edgeDir>( localPos ) - perpPos<edgeDir>( cuPos ) ) / 4;
-
     int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmM[CH_L] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_L] ) ? 0 : 2;
-
     if( cuQ.ispMode && edgeIdx )
     {
       lfp.bs |= BsSet( bsY, COMP_Y ) & bsMask;
@@ -1285,7 +1281,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     {
       lfp.bs |= ( BsSet( bsY, COMP_Y ) + BsSet( chrmBS, COMP_Cb ) + BsSet( chrmBS, COMP_Cr ) ) & bsMask;
     }
-
     return;
   }
   else if( cuPcIsIntra )
@@ -1296,7 +1291,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( ( lfp.bs & bsMask ) && ( cuP.ciip || cuQ.ciip ) )
   {
     lfp.bs |= ( BsSet( 2, COMP_Y ) + BsSet( 2, COMP_Cb ) + BsSet( 2, COMP_Cr ) ) & bsMask;
-
     return;
   }
 
@@ -1306,21 +1300,22 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( lfp.bs & bsMask )
   {
     tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Y  ) || TU::getCbf( tuP, COMP_Y  )                                   ) ? 1 : 0, COMP_Y  );
-    tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Cb ) || TU::getCbf( tuP, COMP_Cb ) || tuQ.jointCbCr || tuP.jointCbCr ) ? 1 : 0, COMP_Cb );
-    tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Cr ) || TU::getCbf( tuP, COMP_Cr ) || tuQ.jointCbCr || tuP.jointCbCr ) ? 1 : 0, COMP_Cr );
+    if (!(MODE_INTRA != cuP.predMode && MODE_INTRA != cuQ.predMode && cuPcIsIntra))
+    {
+      tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cb) || TU::getCbf(tuP, COMP_Cb) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cb);
+      tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cr) || TU::getCbf(tuP, COMP_Cr) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cr);
+    }
   }
 
   if( BsGet( tmpBs, COMP_Y ) == 1 )
   {
     lfp.bs |= tmpBs & bsMask;
-
     return;
   }
 
   if( cuP.ciip || cuQ.ciip )
   {
     lfp.bs |= 1 & bsMask;
-
     return;
   }
 
@@ -1442,7 +1437,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     }
 
     lfp.bs |= ( uiBs + tmpBs ) & bsMask;
-
     return;
   }
 
@@ -1456,7 +1450,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( piRefP0 != piRefQ0 )
   {
     lfp.bs |= ( tmpBs + 1 ) & bsMask;
-
     return;
   }
 

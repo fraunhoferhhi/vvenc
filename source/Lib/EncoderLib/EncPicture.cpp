@@ -97,7 +97,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   pic.createTempBuffers( pic.cs->pcv->maxCUSize );
   pic.cs->createCoeffs();
   pic.cs->createTempBuffers( true );
-  pic.cs->initStructData();
+  pic.cs->initStructData( MAX_INT, false, nullptr, true );
 
   if( m_pcEncCfg->m_lumaReshapeEnable && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
   {
@@ -162,7 +162,9 @@ void EncPicture::finalizePicture( Picture& pic )
   if( pic.writePic )
   {
     // write picture
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 1 ) );
     xWriteSliceData( pic );
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
   }
 
   // finalize
@@ -172,7 +174,10 @@ void EncPicture::finalizePicture( Picture& pic )
     pic.picBlkStat.storeBlkSize( pic );
   }
   // cleanup
-  pic.cs->releaseIntermediateData();
+  if( pic.encPic )
+  {
+    pic.cs->releaseIntermediateData();
+  }
   pic.cs->destroyTempBuffers();
   pic.cs->destroyCoeffs();
   pic.destroyTempBuffers();
@@ -206,7 +211,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
     return;
   }
   
-  if ( slice->sliceType == B_SLICE )
+  if ( slice->sliceType == VVENC_B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed
     const Picture* refPicL0 = slice->getRefPic( REF_PIC_LIST_0, refIdx );
@@ -218,7 +223,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
 
 void EncPicture::xInitSliceCheckLDC( Slice* slice ) const
 {
-  if ( slice->sliceType == B_SLICE )
+  if ( slice->sliceType == VVENC_B_SLICE )
   {
     bool bLowDelay = true;
     int  iCurrPOC  = slice->poc;
@@ -252,6 +257,8 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
 {
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[ 0 ];
+
+  pic.getFilteredOrigBuffer().destroy();
 
   if( slice->sps->saoEnabled )
   {

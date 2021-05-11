@@ -245,7 +245,7 @@ std::string hashToString(const PictureHash &digest, int numChar)
   return result;
 }
 
-int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const MsgLevel msgl)
+int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl)
 {
   /* calculate MD5sum for entire reconstructed picture */
   PictureHash recon_digest;
@@ -256,19 +256,19 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
   {
     switch (pictureHashSEI->method)
     {
-      case HASHTYPE_MD5:
+      case VVENC_HASHTYPE_MD5:
         {
           hashType = "MD5";
           numChar = calcMD5(pic, recon_digest, bitDepths);
           break;
         }
-      case HASHTYPE_CRC:
+      case VVENC_HASHTYPE_CRC:
         {
           hashType = "CRC";
           numChar = calcCRC(pic, recon_digest, bitDepths);
           break;
         }
-      case HASHTYPE_CHECKSUM:
+      case VVENC_HASHTYPE_CHECKSUM:
         {
           hashType = "Checksum";
           numChar = calcChecksum(pic, recon_digest, bitDepths);

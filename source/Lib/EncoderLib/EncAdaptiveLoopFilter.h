@@ -60,7 +60,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class VVEncCfg;
 class NoMallocThreadPool;
 
 struct AlfCovariance
@@ -348,7 +347,7 @@ public:
 private:
   std::vector<double>    m_lumaLevelToWeightPLUT;
   int                    m_alfWSSD;
-  const VVEncCfg*        m_encCfg;
+  const VVEncCfg*    m_encCfg;
   AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
   AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];

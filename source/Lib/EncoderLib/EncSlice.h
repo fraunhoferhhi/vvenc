@@ -61,7 +61,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class VVEncCfg;
 struct SAOStatData;
 class EncSampleAdaptiveOffset;
 class EncAdaptiveLoopFilter;
@@ -103,6 +102,7 @@ private:
   NoMallocThreadPool*          m_threadPool;
   WaitCounter*                 m_ctuTasksDoneCounter;
   std::vector<ProcessCtuState> m_processStates;
+  int                          m_ctuEncDelay;
 
   LoopFilter*                  m_pLoopFilter;
   EncAdaptiveLoopFilter*       m_pALF;
@@ -115,7 +115,7 @@ private:
   SliceType                    m_encCABACTableIdx;
   int                          m_appliedSwitchDQQ;
 
-  double                       m_saoDisabledRate[ MAX_NUM_COMP ][ MAX_TLAYER ];
+  double                       m_saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ];
   bool                         m_saoEnabled[ MAX_NUM_COMP ];
   bool                         m_saoAllDisabled;
   std::vector<SAOBlkParam>     m_saoReconParams;

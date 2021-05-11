@@ -87,6 +87,7 @@ struct LineEncRsrc
   ReuseUniMv              m_ReuseUniMv;
   BlkUniMvInfoBuffer      m_BlkUniMvInfoBuffer;
   AffineProfList          m_AffineProfList;
+  IbcBvCand               m_CachedBvs;
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
@@ -125,11 +126,12 @@ EncSlice::EncSlice()
   : m_pcEncCfg           ( nullptr)
   , m_threadPool         ( nullptr )
   , m_ctuTasksDoneCounter( nullptr )
+  , m_ctuEncDelay        ( 1 )
   , m_pLoopFilter        ( nullptr )
   , m_pALF               ( nullptr )
   , m_pcRateCtrl         ( nullptr )
   , m_CABACWriter        ( m_BinEncoder )
-  , m_encCABACTableIdx   ( I_SLICE )
+  , m_encCABACTableIdx   ( VVENC_I_SLICE )
   , m_appliedSwitchDQQ   ( 0 )
 {
 }
@@ -248,13 +250,24 @@ void EncSlice::initPic( Picture* pic, int gopId )
     lnRsc->m_ReuseUniMv.resetReusedUniMvs();
     lnRsc->m_encCu.initPic( pic );
   }
+
+  m_ctuEncDelay = 1;
+  if( pic->useScIBC )
+  {
+    // IBC needs unfiltered samples up to max IBC search range
+    // therefore ensure that numCtuDelayLUT CTU's have been enocded first
+    // assuming IBC localSearchRangeX / Y = 128
+    const int numCtuDelayLUT[ 3 ] = { 15, 3, 1 };
+    CHECK( pic->cs->pcv->maxCUSizeLog2 < 5 || pic->cs->pcv->maxCUSizeLog2 > 7, "invalid max CTUSize" );
+    m_ctuEncDelay = numCtuDelayLUT[ pic->cs->pcv->maxCUSizeLog2 - 5 ];
+  }
 }
 
 
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
-  const GOPEntry* gopList = m_pcEncCfg->m_GOPList;
+  const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
 
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
@@ -378,7 +391,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
   const int lumaQpBDOffset = slice->sps->qpBDOffset[ CH_L ];
   int qp;
 
-  if ( m_pcEncCfg->m_costMode == COST_LOSSLESS_CODING )
+  if ( m_pcEncCfg->m_costMode == VVENC_COST_LOSSLESS_CODING )
   {
     qp = LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP;
   }
@@ -394,7 +407,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     }
     qp += m_appliedSwitchDQQ;
 
-    if( sliceType == I_SLICE )
+    if( sliceType == VVENC_I_SLICE )
     {
       qp += m_pcEncCfg->m_intraQPOffset;
     }
@@ -402,7 +415,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     {
       if ( ! ( qp == -lumaQpBDOffset ) )
       {
-        const GOPEntry &gopEntry = m_pcEncCfg->m_GOPList[ gopId ];
+        const vvencGOPEntry &gopEntry = m_pcEncCfg->m_GOPList[ gopId ];
         // adjust QP according to the QP offset for the GOP entry.
         qp += gopEntry.m_QPOffset;
 
@@ -425,11 +438,16 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
                                   const double     dQP,   // initial double-precision QP
                                           int&     iQP )  // returned integer QP.
 {
-  const  GOPEntry* gopList       = m_pcEncCfg->m_GOPList;
+  const  vvencGOPEntry* gopList  = m_pcEncCfg->m_GOPList;
   const  int       NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
   const  int       SHIFT_QP      = 12;
   const int temporalId           = gopList[ GOPid ].m_temporalId;
-  const std::vector<double> &intraLambdaModifiers = m_pcEncCfg->m_adIntraLambdaModifier;
+  std::vector<double> intraLambdaModifiers;
+  for ( int i = 0; i < VVENC_MAX_TLAYER; i++ )
+  {
+    if( m_pcEncCfg->m_adIntraLambdaModifier[i] != 0.0 ) intraLambdaModifiers.push_back( m_pcEncCfg->m_adIntraLambdaModifier[i] );
+    else break;
+  }
 
   int bitdepth_luma_qp_scale = 6
                                * (slice->sps->bitDepths[ CH_L ] - 8
@@ -437,9 +455,9 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   double qp_temp = dQP + bitdepth_luma_qp_scale - SHIFT_QP;
   // Case #1: I or P-slices (key-frame)
   double dQPFactor = gopList[ GOPid ].m_QPFactor;
-  if( slice->sliceType == I_SLICE )
+  if( slice->sliceType == VVENC_I_SLICE )
   {
-    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopList[ GOPid ].m_sliceType != I_SLICE)
+    if (m_pcEncCfg->m_dIntraQpFactor>=0.0 && gopList[ GOPid ].m_sliceType != VVENC_I_SLICE)
     {
       dQPFactor = m_pcEncCfg->m_dIntraQpFactor;
     }
@@ -467,13 +485,13 @@ double EncSlice::xCalculateLambda( const Slice*     slice,
   }
 
   // if hadamard is used in ME process
-  if ( !m_pcEncCfg->m_bUseHADME && slice->sliceType != I_SLICE )
+  if ( !m_pcEncCfg->m_bUseHADME && slice->sliceType != VVENC_I_SLICE )
   {
     dLambda *= 0.95;
   }
 
   double lambdaModifier;
-  if( slice->sliceType != I_SLICE || intraLambdaModifiers.empty())
+  if( slice->sliceType != VVENC_I_SLICE || intraLambdaModifiers.empty())
   {
     lambdaModifier = m_pcEncCfg->m_adLambdaModifier[ temporalId ];
   }
@@ -525,6 +543,7 @@ void EncSlice::compressSlice( Picture* pic )
     lnRsrc->m_AffineProfList.resetAffineMVList();
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
     lnRsrc->m_encCu.initSlice( slice );
+    lnRsrc->m_CachedBvs.resetIbcBvCand();
     if( slice->sps->saoEnabled )
     {
       lnRsrc->m_encSao.initSlice( slice );
@@ -836,7 +855,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         PerThreadRsrc* taskRsrc  = encSlice->m_CtuTaskRsrc[ threadIdx ];
         EncCu& encCu             = lineEncRsrc->m_encCu;
 
-        encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList );
+        encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList, &lineEncRsrc->m_CachedBvs );
         encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
 
         // cleanup line memory when last ctu in line done to reduce overall memory consumption
@@ -845,7 +864,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           lineEncRsrc->m_AffineProfList.resetAffineMVList();
           lineEncRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
           lineEncRsrc->m_ReuseUniMv.resetReusedUniMvs();
-          pic->cs->motionLutBuf[ ctuPosY ].lut.resize(0);
+          lineEncRsrc->m_CachedBvs.resetIbcBvCand();
         }
 
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );
@@ -858,13 +877,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     // reshape + vertical loopfilter
     case RESHAPE_LF_VER:
       {
-        // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual)
-        // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= CTU_ENCODE )
+        // clip check to right picture border
+        const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
+        
+        // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
+        // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
+        if(                                   processStates[ ctuRsAddr + checkRight                   ] <= CTU_ENCODE )
           return false;
-        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= CTU_ENCODE )
-          return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= CTU_ENCODE )
+        // check bottom right with 1 CTU delay (this is only required for intra pred)
+        // at the right picture border this will check the bottom CTU
+        const int checkBottomRight = std::min<int>( 1, checkRight );
+        if( ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + checkBottomRight + ctuStride ] <= CTU_ENCODE )
           return false;
 
         if( checkReadyState )

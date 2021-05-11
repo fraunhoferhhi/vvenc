@@ -98,7 +98,7 @@ private:
   int                     m_rateAdpMode;
   bool                    m_useAdpCW;
   uint16_t                m_initCWAnalyze;
-  ReshapeCW               m_reshapeCW;
+  vvencReshapeCW          m_reshapeCW;
   Pel                     m_cwLumaWeight[PIC_CODE_CW_BINS];
   double                  m_chromaWeight;
   int                     m_chromaAdj;
@@ -114,17 +114,17 @@ public:
   void destroy();
 
   void calcSeqStats     ( Picture& pic, SeqInfo &stats);
-  void preAnalyzerLMCS  ( Picture& pic, const uint32_t signalType, const SliceType sliceType, const ReshapeCW& reshapeCW);
-  void preAnalyzerHDR   ( Picture& pic, const SliceType sliceType, const ReshapeCW& reshapeCW, bool isDualT);
+  void preAnalyzerLMCS  ( Picture& pic, const uint32_t signalType, const SliceType sliceType, const vvencReshapeCW& reshapeCW);
+  void preAnalyzerHDR   ( Picture& pic, const SliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT);
   void bubbleSortDsd    ( double *array, int * idx, int n);
   void cwPerturbation   ( int startBinIdx, int endBinIdx, uint16_t maxCW);
   void cwReduction      ( int startBinIdx, int endBinIdx);
   void deriveReshapeParametersSDR ( bool *intraAdp, bool *interAdp);
-  void deriveReshapeParameters    ( double *array, int start, int end, ReshapeCW respCW, double &alpha, double &beta);
+  void deriveReshapeParameters    ( double *array, int start, int end, vvencReshapeCW respCW, double &alpha, double &beta);
   void initLUTfromdQPModel  ();
   void constructReshaperLMCS();
   void adjustLmcsPivot      ();
-  ReshapeCW * getReshapeCW  () { return &m_reshapeCW; }
+  vvencReshapeCW * getReshapeCW  () { return &m_reshapeCW; }
   Pel*        getWeightTable() { return m_cwLumaWeight; }
   double      getCWeight    () { return m_chromaWeight; }
 
