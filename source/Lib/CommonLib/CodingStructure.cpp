@@ -878,25 +878,60 @@ void CodingStructure::useSubStructure( CodingStructure& subStruct, const Channel
   }
   else
   {
-    for( const auto &pcu : subStruct.cus )
+    if( &m_cuCache == &subStruct.m_cuCache )
     {
-      // add an analogue CU into own CU store
-      const UnitArea& cuPatch = *pcu;
-      addCU( cuPatch, pcu->chType, pcu );
+      // copy the CUs over with taking ownership
+      for( const auto& pcu : subStruct.cus )
+      {
+        // add an analogue CU into own CU store
+        const UnitArea& cuPatch = *pcu;
+        addCU( cuPatch, pcu->chType, pcu );
+      }
+
+      subStruct.cus.resize( 0 );
+    }
+    else
+    {
+      // copy the CUs over
+      for( const auto& pcu : subStruct.cus )
+      {
+        // add an analogue CU into own CU store
+        const UnitArea& cuPatch = *pcu;
+
+        CodingUnit& cu = addCU( cuPatch, pcu->chType );
+
+        // copy the CU info from subPatch
+        cu = *pcu;
+      }
+    }
+  }
+
+  if( &m_tuCache == &subStruct.m_tuCache )
+  {
+    // copy the TUs over with taking ownership
+    for( const auto& ptu : subStruct.tus )
+    {
+      // add an analogue TU into own TU store
+      const UnitArea& tuPatch = *ptu;
+      addTU( tuPatch, ptu->chType, getCU( tuPatch.blocks[ptu->chType].pos(), ptu->chType, _treeType ), ptu );
     }
 
-    subStruct.cus.resize( 0 );
+    subStruct.tus.resize( 0 );
   }
-
-  // copy the TUs over
-  for( const auto &ptu : subStruct.tus )
+  else
   {
-    // add an analogue TU into own TU store
-    const UnitArea& tuPatch = *ptu;
-    addTU( tuPatch, ptu->chType, getCU( tuPatch.blocks[ptu->chType].pos(), ptu->chType, _treeType ), ptu );
-  }
+    // copy the TUs over
+    for( const auto& ptu : subStruct.tus )
+    {
+      // add an analogue TU into own TU store
+      const UnitArea& tuPatch = *ptu;
 
-  subStruct.tus.resize( 0 );
+      TransformUnit& tu = addTU( tuPatch, ptu->chType, getCU( tuPatch.blocks[ptu->chType], ptu->chType, _treeType ) );
+
+      // copy the TU info from subPatch
+      tu = *ptu;
+    }
+  }
 }
 
 void CodingStructure::copyStructure( const CodingStructure& other, const ChannelType chType, const TreeType _treeType, const bool copyTUs, const bool copyRecoBuf )
