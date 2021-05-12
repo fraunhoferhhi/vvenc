@@ -661,7 +661,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   //////////////////////////////////////////////////////////////////////////
 
 #if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
-  const bool scanFirstSimd = !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && read_x86_extension_flags() > SCALAR;
+  const bool scanFirstSimd = !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 && read_x86_extension_flags() > SCALAR;
 #endif
 
   int subSetId = iScanPos >> log2CGSize;
