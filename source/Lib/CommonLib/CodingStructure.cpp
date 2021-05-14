@@ -1190,26 +1190,25 @@ const CPelUnitBuf CodingStructure::getBuf( const UnitArea& unit, const PictureTy
 
 const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const CodingUnit& curCu, const ChannelType _chType ) const
 {
-  if( sps->entropyCodingSyncEnabled )
-  {
-    const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, curCu.chromaFormat );
-    const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, curCu.chromaFormat );
-    if( (pos.x >> xshift) > (curCu.blocks[_chType].x >> xshift) || (pos.y >> yshift) > (curCu.blocks[_chType].y >> yshift) )
-      return nullptr;
-  }
+  const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, curCu.chromaFormat );
+  const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, curCu.chromaFormat );
+
+  if( (pos.x >> xshift) > ((curCu.blocks[_chType].x >> xshift) + (sps->entropyCodingSyncEnabled?0:1)) || (pos.y >> yshift) > (curCu.blocks[_chType].y >> yshift) )
+    return nullptr;
+
   const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
+
   return ( cu && CU::isSameSliceAndTile( *cu, curCu ) && ( cu->cs != curCu.cs || cu->idx <= curCu.idx ) ) ? cu : nullptr;
 }
 
 const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
 {
-  if( sps->entropyCodingSyncEnabled )
-  {
-    const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, area.chromaFormat );
-    const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, area.chromaFormat );
-    if( (pos.x >> xshift) > (curPos.x >> xshift) || (pos.y >> yshift) > (curPos.y >> yshift) )
-      return nullptr;
-  }
+  const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, area.chromaFormat );
+  const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, area.chromaFormat );
+
+  if( (pos.x >> xshift) > ((curPos.x >> xshift) + (sps->entropyCodingSyncEnabled ? 0 : 1)) || (pos.y >> yshift) > (curPos.y >> yshift) )
+    return nullptr;
+
   const CodingUnit* cu = getCU( pos, _chType, _treeType );
 
   return ( cu && cu->slice->independentSliceIdx == curSliceIdx && cu->tileIdx == curTileIdx ) ? cu : nullptr;
