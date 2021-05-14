@@ -1192,8 +1192,10 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const C
 {
   const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, curCu.chromaFormat );
   const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, curCu.chromaFormat );
+  const int ydiff  = ( pos.y >> yshift ) - ( curCu.blocks[_chType].y >> yshift );
+  const int xdiff  = ( pos.x >> xshift ) - ( curCu.blocks[_chType].x >> xshift );
 
-  if( (pos.x >> xshift) > ((curCu.blocks[_chType].x >> xshift) + (sps->entropyCodingSyncEnabled?0:1)) || (pos.y >> yshift) > (curCu.blocks[_chType].y >> yshift) )
+  if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff < 0 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
@@ -1205,8 +1207,10 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const P
 {
   const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, area.chromaFormat );
   const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int ydiff  = ( pos.y >> yshift ) - ( curPos.y >> yshift );
+  const int xdiff  = ( pos.x >> xshift ) - ( curPos.x >> xshift );
 
-  if( (pos.x >> xshift) > ((curPos.x >> xshift) + (sps->entropyCodingSyncEnabled ? 0 : 1)) || (pos.y >> yshift) > (curPos.y >> yshift) )
+  if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff < 0 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, _treeType );
