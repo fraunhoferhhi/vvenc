@@ -1195,7 +1195,7 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const C
   const int ydiff  = ( pos.y >> yshift ) - ( curCu.blocks[_chType].y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curCu.blocks[_chType].x >> xshift );
 
-  if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff < 0 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
+  if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
@@ -1210,7 +1210,7 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const P
   const int ydiff  = ( pos.y >> yshift ) - ( curPos.y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curPos.x >> xshift );
 
-  if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff < 0 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
+  if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, _treeType );
