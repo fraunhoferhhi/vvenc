@@ -1582,7 +1582,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
 
     if (m_pcEncCfg->m_Affine > 1)
     {
-      checkAffine &= m_modeCtrl->comprCUCtx->bestCU->affine;
+      checkAffine = m_modeCtrl->comprCUCtx->bestCU ? (checkAffine & m_modeCtrl->comprCUCtx->bestCU->affine) : checkAffine;
       if (cu.slice->TLayer > 3)
       {
         checkAffine = false;
