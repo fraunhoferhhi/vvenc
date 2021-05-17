@@ -2145,6 +2145,7 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter( c, c->m_loopFilterBetaOffsetDiv2[comp] < -12 || c->m_loopFilterBetaOffsetDiv2[comp] > 12,          "Loop Filter Beta Offset div. 2 exceeds supported range (-12 to 12)" );
     vvenc_confirmParameter( c, c->m_loopFilterTcOffsetDiv2[comp] < -12 || c->m_loopFilterTcOffsetDiv2[comp] > 12,              "Loop Filter Tc Offset div. 2 exceeds supported range (-12 to 12)" );
   }
+  vvenc_confirmParameter( c, c->m_deblockingFilterMetric==3 && c->m_loopFilterOffsetInPPS,                  "DeblockingFilterMetric=3 requires LoopFilterOffsetInPPS to be 0" );
   vvenc_confirmParameter( c, c->m_SearchRange < 0 ,                                                         "Search Range must be more than 0" );
   vvenc_confirmParameter( c, c->m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );

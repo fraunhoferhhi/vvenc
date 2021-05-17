@@ -834,6 +834,20 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   slice->picHeader->picInterSliceAllowed = sliceType != VVENC_I_SLICE;
   slice->picHeader->picIntraSliceAllowed = sliceType == VVENC_I_SLICE;
 
+  if( m_pcEncCfg->m_deblockingFilterMetric == 3 )
+  {
+    slice->deblockingFilterOverrideFlag =  slice->picHeader->deblockingFilterOverride = true;
+    slice->deblockingFilterDisable      = slice->picHeader->deblockingFilterDisable = false;
+
+    slice->deblockingFilterTcOffsetDiv2[COMP_Y] = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Y] = slice->TLayer-5;
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Y] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Y] = -2;
+
+    slice->deblockingFilterTcOffsetDiv2[COMP_Cb]   = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Cb]   = 
+    slice->deblockingFilterTcOffsetDiv2[COMP_Cr]   = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Cr] = -3;  
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Cb] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cb] = 
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Cr] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cr] = -3; 
+  }
+
   if (slice->pps->useDQP)
   {
     const uint32_t cuLumaQpSubdiv = (m_pcEncCfg->m_cuQpDeltaSubdiv > 0 ? (uint32_t) m_pcEncCfg->m_cuQpDeltaSubdiv : 0);
