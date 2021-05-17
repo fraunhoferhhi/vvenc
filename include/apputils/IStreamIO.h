@@ -487,7 +487,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
     }
   }
 
-  if ( fail || ( 0 == pos ) || (pos >= toArr._maxSize) )
+  if ( fail || ( 0 == pos ) || (pos > toArr._maxSize) )
   {
     in.setstate( std::ios::failbit );
   }
