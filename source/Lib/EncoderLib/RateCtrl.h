@@ -89,7 +89,11 @@ namespace vvenc {
 #if RC_INTRA_MODEL_OPT
                   lambda( _lambda ), visActY( _visActY ),
 #endif
-                  numBits( _numBits ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ), isIntra( _isIntra ), tempLayer( _tempLayer + int( !_isIntra ) ), isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), gopBitsVsBitrate( -1.0 ), scaledBits( double( numBits ) ), targetBits( 0 ), estAlpha() {}
+                  numBits( _numBits ), yPsnr( _yPsnr ), uPsnr( _uPsnr ), vPsnr( _vPsnr ), isIntra( _isIntra ), tempLayer( _tempLayer + int( !_isIntra ) ), isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), gopBitsVsBitrate( -1.0 ), scaledBits( double( numBits ) ), targetBits( 0 )
+#if !RC_INTRA_MODEL_OPT
+                , estAlpha()
+#endif
+                  {}
     int       poc;
     int       qp;
 #if RC_INTRA_MODEL_OPT
@@ -109,7 +113,9 @@ namespace vvenc {
     double    gopBitsVsBitrate;
     double    scaledBits;
     int       targetBits;
+#if !RC_INTRA_MODEL_OPT
     double    estAlpha[ 7 ];
+#endif
   };
 
   class EncRCSeq
@@ -126,7 +132,11 @@ namespace vvenc {
     void updateAfterPic( int bits, int tgtBits );
     void setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB );
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
+#if RC_INTRA_MODEL_OPT
+    void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
+#else
     void getTargetBitsFromFirstPass( int poc, int &targetBits, double &gopVsBitrateRatio, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters, double alpha[] );
+#endif
     void clipRcAlpha( double& alpha );
 
   public:
@@ -150,9 +160,10 @@ namespace vvenc {
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         estimatedBitUsage;
-    double          bitUsageRatio;
     double          lastLambda;
-#if RC_INTRA_MODEL_OPT
+#if !RC_INTRA_MODEL_OPT
+    double          bitUsageRatio;
+#else
     int8_t          qpCorrection[8];
 #endif
     TRCParameter*   picParam;
@@ -277,13 +288,19 @@ namespace vvenc {
 #endif
                          uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
     void processFirstPassData( const unsigned sizeInCtus );
+#if !RC_INTRA_MODEL_OPT
     void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
+#endif
     void processGops();
+#if RC_INTRA_MODEL_OPT
+    void scaleGops (double &actualBitrateAfterScaling);
+#else
     void scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling );
+#endif
     int64_t getTotalBitsInFirstPass();
     void detectNewScene();
 #if RC_INTRA_MODEL_OPT
-    void updateAlpha();
+    void adaptToSceneChanges();
 #endif
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
