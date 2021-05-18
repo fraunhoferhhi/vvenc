@@ -847,6 +847,16 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
     slice->deblockingFilterBetaOffsetDiv2[COMP_Cb] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cb] = 
     slice->deblockingFilterBetaOffsetDiv2[COMP_Cr] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cr] = -3; 
   }
+  else
+  {
+    slice->deblockingFilterTcOffsetDiv2[COMP_Y]   = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Y];
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Y] = slice->pps->deblockingFilterBetaOffsetDiv2[COMP_Y];
+
+    slice->deblockingFilterTcOffsetDiv2[COMP_Cb]   = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Cb]; 
+    slice->deblockingFilterTcOffsetDiv2[COMP_Cr]   = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Cr];  
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Cb] = slice->pps->deblockingFilterBetaOffsetDiv2[COMP_Cb];
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Cr] = slice->pps->deblockingFilterBetaOffsetDiv2[COMP_Cr]; 
+  }
 
   if (slice->pps->useDQP)
   {
