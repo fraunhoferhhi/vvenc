@@ -836,11 +836,12 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   if( m_pcEncCfg->m_deblockingFilterMetric == 3 )
   {
-    slice->deblockingFilterOverrideFlag =  slice->picHeader->deblockingFilterOverride = true;
+    int lumaQpOffset = std::min (0, (int)slice->TLayer-5 );
+    slice->deblockingFilterOverrideFlag =  slice->picHeader->deblockingFilterOverride = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Y] != lumaQpOffset;
     slice->deblockingFilterDisable      = slice->picHeader->deblockingFilterDisable = false;
 
-    slice->deblockingFilterTcOffsetDiv2[COMP_Y] = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Y] = slice->TLayer-5;
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Y] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Y] = -2;
+    slice->deblockingFilterTcOffsetDiv2[COMP_Y]    = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Y] = lumaQpOffset;
+    slice->deblockingFilterBetaOffsetDiv2[COMP_Y]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Y] = -2;
 
     slice->deblockingFilterTcOffsetDiv2[COMP_Cb]   = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Cb]   = 
     slice->deblockingFilterTcOffsetDiv2[COMP_Cr]   = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Cr] = -3;  
