@@ -76,15 +76,8 @@ public:
 public:
   virtual void setFlatScalingList      ( const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths );
   virtual void quant                   ( TransformUnit &tu, const ComponentID compID, const CCoeffBuf &pSrc, TCoeff &uiAbsSum, const QpParam &cQP, const Ctx& ctx );
-#ifdef TARGET_SIMD_X86
-  void initQuantX86();
-  template <X86_VEXT vext>
-  void _initQuantX86();
-#endif
 
 private:
-  int  (*m_pQuantToNearestInt[4])      ( short* piQCoef, short* piCbf, const short* piCoef, const int* piQuantCoeff, const int iAdd, const int iShift, const int iSize );
-
   int* xGetErrScaleCoeffSL             ( unsigned list, unsigned sizeX, unsigned sizeY, int qp ) { return m_errScale[sizeX][sizeY][list][qp]; };  //!< get Error Scale Coefficent
   int  xGetErrScaleCoeff               ( const bool needsSqrt2, SizeType width, SizeType height, int qp, const int maxLog2TrDynamicRange, const int channelBitDepth);
   int& xGetErrScaleCoeffNoScalingList  ( unsigned list, unsigned sizeX, unsigned sizeY, int qp ) { return m_errScaleNoScalingList[sizeX][sizeY][list][qp]; };  //!< get Error Scale Coefficent

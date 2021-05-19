@@ -133,7 +133,7 @@ QpParam::QpParam(const TransformUnit& tu, const ComponentID &compID, const bool 
 // ====================================================================================================================
 // Quant class member functions
 // ====================================================================================================================
-static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoeff*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
+static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoeffSig* const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum)
 {
   const int inputMinimum = -(inputMaximum+1);
   const TCoeff transformMinimum = -(transformMaximum+1);
@@ -180,19 +180,20 @@ Quant::~Quant()
   xDestroyScalingList();
 }
 
-void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffBuf& dstBuf )
+void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffSigBuf& dstBuf )
 {
-  const CompArea& rect = tu.blocks[compID];
-  const int      wdt = rect.width;
-  const int      hgt = rect.height;
-  const CCoeffBuf coeffs = tu.getCoeffs(compID);
+  const CompArea&    rect   = tu.blocks[compID];
+  const int          wdt    = rect.width;
+  const int          hgt    = rect.height;
+  const CCoeffSigBuf coeffs = tu.getCoeffs(compID);
 
   const int      maxLog2TrDynamicRange = tu.cs->sps->getMaxLog2TrDynamicRange(toChannelType(compID));
-  const TCoeff   inputMinimum   = -(1 << maxLog2TrDynamicRange);
-  const TCoeff   inputMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
+  const TCoeff   inputMinimum          = -(1 << maxLog2TrDynamicRange);
+  const TCoeff   inputMaximum          =  (1 << maxLog2TrDynamicRange) - 1;
 
-  const TCoeff* coef = &coeffs.buf[0];
-  TCoeff* dst = &dstBuf.buf[0];
+  const TCoeffSig* coef = &coeffs.buf[0];
+        TCoeffSig* dst  = &dstBuf.buf[0];
+
   if ( tu.cu->bdpcmM[toChannelType(compID)] == 1)
   {
     for( int y = 0; y < hgt; y++ )
@@ -200,7 +201,7 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffBuf& ds
       dst[0] = coef[0];
       for( int x = 1; x < wdt; x++ )
       {
-        dst[x] = Clip3(inputMinimum, inputMaximum, dst[x - 1] + coef[x]);
+        dst[x] = Clip3(inputMinimum, inputMaximum, TCoeff( dst[x - 1] ) + TCoeff( coef[x] ));
       }
       coef += coeffs.stride;
       dst += dstBuf.stride;
@@ -216,7 +217,7 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffBuf& ds
     {
       for( int x = 0; x < wdt; x++ )
       {
-        dst[dstBuf.stride + x] = Clip3(inputMinimum, inputMaximum, dst[x] + coef[coeffs.stride + x]);
+        dst[dstBuf.stride + x] = Clip3(inputMinimum, inputMaximum, TCoeff( dst[x] ) + TCoeff( coef[coeffs.stride + x] ));
       }
       coef += coeffs.stride;
       dst += dstBuf.stride;
@@ -226,12 +227,12 @@ void invResDPCM( const TransformUnit& tu, const ComponentID compID, CoeffBuf& ds
 
 void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
 {
-  const CompArea& rect = tu.blocks[compID];
-  const int      wdt = rect.width;
-  const int      hgt = rect.height;
-  CoeffBuf       coeffs = tu.getCoeffs(compID);
+  const CompArea& rect   = tu.blocks[compID];
+  const int       wdt    = rect.width;
+  const int       hgt    = rect.height;
+  CoeffSigBuf     coeffs = tu.getCoeffs(compID);
 
-  TCoeff* coef = &coeffs.buf[0];
+  TCoeffSig* coef = &coeffs.buf[0];
   if (tu.cu->bdpcmM[toChannelType(compID)] == 1)
   {
     for( int y = 0; y < hgt; y++ )
@@ -258,7 +259,7 @@ void fwdResDPCM( TransformUnit& tu, const ComponentID compID )
 }
 
 // To minimize the distortion only. No rate is considered.
-void Quant::xSignBitHidingHDQ( TCoeff* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange )
+void Quant::xSignBitHidingHDQ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange )
 {
   const uint32_t width     = cctx.width();
   const uint32_t height    = cctx.height();
@@ -393,16 +394,15 @@ void Quant::xSignBitHidingHDQ( TCoeff* pQCoef, const TCoeff* pCoef, TCoeff* delt
 }
 
 void Quant::dequant(const TransformUnit& tu,
-                             CoeffBuf&   dstCoeff,
-                       const ComponentID compID,
-                       const QpParam&    cQP)
+                          CoeffBuf&      dstCoeff,
+                    const ComponentID    compID,
+                    const QpParam&       cQP)
 {
   const SPS       *sps                  = tu.cs->sps;
   const CompArea  &area                 = tu.blocks[compID];
   const uint32_t  uiWidth               = area.width;
   const uint32_t  uiHeight              = area.height;
   TCoeff *const   piCoef                = dstCoeff.buf;
-  size_t          piStride;
   const uint32_t  numSamplesInBlock     = uiWidth * uiHeight;
   const int       maxLog2TrDynamicRange = sps->getMaxLog2TrDynamicRange(toChannelType(compID));
   const TCoeff    transformMinimum      = -(1 << maxLog2TrDynamicRange);
@@ -413,19 +413,17 @@ void Quant::dequant(const TransformUnit& tu,
   const int       scalingListType       = getScalingListType(tu.cu->predMode, compID);
   const int       channelBitDepth       = sps->bitDepths[toChannelType(compID)];
 
-  const TCoeff          *coef;
-  if (tu.cu->bdpcmM[toChannelType(compID)])
+  const TCoeffSig *coef     = tu.getCoeffs( compID ).buf;
+  const ptrdiff_t  piStride = tu.getCoeffs( compID ).stride;
+
+  if( tu.cu->bdpcmM[toChannelType( compID )] )
   {
-    invResDPCM( tu, compID, dstCoeff );
-    coef = piCoef;
-    piStride=dstCoeff.stride;
+    CoeffSigBuf coefBuf( m_tmpBdpcm, uiWidth, uiHeight );
+    invResDPCM( tu, compID, coefBuf );
+    coef      = m_tmpBdpcm;
   }
-  else
-  {
-    coef = tu.getCoeffs(compID).buf;
-    piStride=tu.getCoeffs(compID).stride;
-  }
-  const TCoeff          *const piQCoef = coef;
+
+  const TCoeffSig  *const piQCoef = coef;
   CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
 
   // Represents scaling through forward transform
@@ -615,12 +613,12 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 {
   const SPS &sps            = *tu.cs->sps;
   const CompArea& rect      = tu.blocks[compID];
-  const uint32_t uiWidth        = rect.width;
-  const uint32_t uiHeight       = rect.height;
+  const uint32_t uiWidth    = rect.width;
+  const uint32_t uiHeight   = rect.height;
   const int channelBitDepth = sps.bitDepths[toChannelType(compID)];
 
-  const CCoeffBuf& piCoef   = pSrc;
-        CoeffBuf   piQCoef  = tu.getCoeffs(compID);
+  const CCoeffBuf&  piCoef  = pSrc;
+        CoeffSigBuf piQCoef = tu.getCoeffs(compID);
 
   const bool useTransformSkip = tu.mtsIdx[compID] == MTS_SKIP;
   const int  maxLog2TrDynamicRange = sps.getMaxLog2TrDynamicRange(toChannelType(compID));
@@ -661,7 +659,7 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
 
     const uint32_t lfnstIdx = tu.cu->lfnstIdx;
     const int maxNumberOfCoeffs = lfnstIdx > 0 ? ((( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8) ) ? 8 : 16) : piQCoef.area();
-    memset( piQCoef.buf, 0, sizeof(TCoeff) * piQCoef.area() );
+    piQCoef.memset( 0 );
     for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
     {
       const TCoeff iLevel   = piCoef.buf[uiBlockPos];

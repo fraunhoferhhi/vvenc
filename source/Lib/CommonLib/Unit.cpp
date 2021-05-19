@@ -512,7 +512,7 @@ void TransformUnit::initData()
   chromaAdj   = 0;
 }
 
-void TransformUnit::init(TCoeff** coeffs)
+void TransformUnit::init(TCoeffSig** coeffs)
 {
   uint32_t numBlocks = getNumberValidComponents( chromaFormat );
 
@@ -535,7 +535,7 @@ TransformUnit& TransformUnit::operator=(const TransformUnit& other)
 
     if (m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i])
     {
-      memcpy(m_coeffs[i], other.m_coeffs[i], sizeof(TCoeff) * area);
+      memcpy(m_coeffs[i], other.m_coeffs[i], sizeof(TCoeffSig) * area);
     }
     cbf[i]      = other.cbf[i];
     mtsIdx[i]   = other.mtsIdx[i];
@@ -557,7 +557,7 @@ void TransformUnit::copyComponentFrom(const TransformUnit& other, const Componen
 
   if (m_coeffs[i] && other.m_coeffs[i] && m_coeffs[i] != other.m_coeffs[i])
   {
-    memcpy(m_coeffs[i], other.m_coeffs[i], sizeof(TCoeff) * area);
+    memcpy(m_coeffs[i], other.m_coeffs[i], sizeof(TCoeffSig) * area);
   }
 
   cbf[i]      = other.cbf[i];
