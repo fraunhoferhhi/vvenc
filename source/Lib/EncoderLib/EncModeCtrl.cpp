@@ -326,8 +326,8 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   m_dmvrMvBuf = new Mv[numDmvrMv];
   Mv* dmvrMv = m_dmvrMvBuf;
 
-  m_pCoeff = new TCoeff[numCoeff];
-  TCoeff* coeffPtr = m_pCoeff;
+  m_pCoeff = new TCoeffSig[numCoeff];
+  TCoeffSig* coeffPtr = m_pCoeff;
 
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
@@ -372,7 +372,7 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
               dmvrMv += dmvrSize;
             }
 
-            TCoeff* coeff[MAX_NUM_TBLOCKS] = { 0, };
+            TCoeffSig* coeff[MAX_NUM_TBLOCKS] = { 0, };
 
             const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
 

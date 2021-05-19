@@ -214,8 +214,8 @@ private:
   PelStorage* m_org;
   PelStorage* m_rsporg;
 
-  TCoeff* m_coeffs [MAX_NUM_COMP];
-  int     m_offsets[MAX_NUM_COMP];
+  TCoeffSig*  m_coeffs [MAX_NUM_COMP];
+  int         m_offsets[MAX_NUM_COMP];
 
   std::vector<Mv>   m_dmvrMvCache;
   int               m_dmvrMvCacheOffset;

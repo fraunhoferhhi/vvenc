@@ -2270,7 +2270,7 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
 
   // init coeff coding context
   CoeffCodingContext  cctx    ( tu, compID, signHiding );
-  const TCoeff*       coeff   = tu.getCoeffs( compID ).buf;
+  const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
 
   // determine and set last coeff position and sig group flags
   int                      scanPosLast = tu.lastPos[compID];
@@ -2526,7 +2526,7 @@ void CABACWriter::last_sig_coeff( CoeffCodingContext& cctx, const TransformUnit&
 }
 
 
-void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoeff* coeff, const int stateTransTable, int& state )
+void CABACWriter::residual_coding_subblock( CoeffCodingContext& cctx, const TCoeffSig* coeff, const int stateTransTable, int& state )
 {
   //===== init =====
   const int   minSubPos   = cctx.minSubPos();
@@ -2668,7 +2668,7 @@ void CABACWriter::residual_codingTS( const TransformUnit& tu, ComponentID compID
 
   // init coeff coding context
   CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)]);
-  const TCoeff*       coeff   = tu.getCoeffs( compID ).buf;
+  const TCoeffSig*    coeff   = tu.getCoeffs( compID ).buf;
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
   cctx.setNumCtxBins(maxCtxBins);
 
@@ -2692,7 +2692,7 @@ void CABACWriter::residual_codingTS( const TransformUnit& tu, ComponentID compID
 }
 
 
-void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TCoeff* coeff )
+void CABACWriter::residual_coding_subblockTS( CoeffCodingContext& cctx, const TCoeffSig* coeff )
 {
   //===== init =====
   const int   minSubPos   = cctx.maxSubPos();

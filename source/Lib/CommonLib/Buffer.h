@@ -186,6 +186,9 @@ typedef AreaBuf<const Pel> CPelBuf;
 typedef AreaBuf<      TCoeff>  CoeffBuf;
 typedef AreaBuf<const TCoeff> CCoeffBuf;
 
+typedef AreaBuf<      TCoeffSig>  CoeffSigBuf;
+typedef AreaBuf<const TCoeffSig> CCoeffSigBuf;
+
 typedef AreaBuf<      MotionInfo>  MotionBuf;
 typedef AreaBuf<const MotionInfo> CMotionBuf;
 

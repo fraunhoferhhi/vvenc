@@ -422,7 +422,7 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
   uint32_t idx = ++m_numTUs;
   tu->idx = idx;
 
-  TCoeff *coeffs[3] = { nullptr, nullptr, nullptr };
+  TCoeffSig *coeffs[3] = { nullptr, nullptr, nullptr };
 
   uint32_t numCh = getNumberValidComponents( area.chromaFormat );
 
@@ -465,7 +465,7 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
     m_offsets[i] += areaSize;
 
     if( tuInit )
-      memcpy( coeffs[i], tu->m_coeffs[i], areaSize * sizeof( TCoeff ) );
+      memcpy( coeffs[i], tu->m_coeffs[i], areaSize * sizeof( TCoeffSig ) );
   }
 
   tu->init( coeffs );
@@ -736,8 +736,7 @@ void CodingStructure::createCoeffs()
   for( unsigned i = 0; i < numComp; i++ )
   {
     unsigned _area = area.blocks[i].area();
-
-    m_coeffs[i] = _area > 0 ? ( TCoeff* ) xMalloc( TCoeff, _area ) : nullptr;
+    m_coeffs[i] = _area > 0 ? ( TCoeffSig* ) xMalloc( TCoeffSig, _area ) : nullptr;
   }
 
   for( unsigned i = 0; i < numComp; i++ )

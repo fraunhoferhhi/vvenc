@@ -85,7 +85,7 @@ private:
   void    xInitScalingList               ( const QuantRDOQ* other );
   void    xDestroyScalingList            ();
   void    xSetErrScaleCoeff              ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp, const int maxLog2TrDynamicRange[MAX_NUM_CH], const BitDepths &bitDepths );
-  void    xDequantSample                 ( TCoeff& pRes, TCoeff& coeff, const TrQuantParams& trQuantParams );
+  void    xDequantSample                 ( TCoeff& pRes, TCoeffSig& coeff, const TrQuantParams& trQuantParams );
   // RDOQ functions
   void    xRateDistOptQuant              ( TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx &ctx);
 

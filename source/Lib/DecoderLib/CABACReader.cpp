@@ -2393,7 +2393,7 @@ void CABACReader::residual_coding( TransformUnit& tu, ComponentID compID, CUCtx&
 
   // init coeff coding context
   CoeffCodingContext  cctx    ( tu, compID, signHiding );
-  TCoeff*             coeff   = tu.getCoeffs( compID ).buf;
+  TCoeffSig*          coeff   = tu.getCoeffs( compID ).buf;
 
   // parse last coeff position
   cctx.setScanPosLast( last_sig_coeff( cctx, tu, compID ) );
@@ -2620,7 +2620,7 @@ int CABACReader::last_sig_coeff( CoeffCodingContext& cctx, TransformUnit& tu, Co
 
 
 
-void CABACReader::residual_coding_subblock( CoeffCodingContext& cctx, TCoeff* coeff, const int stateTransTable, int& state )
+void CABACReader::residual_coding_subblock( CoeffCodingContext& cctx, TCoeffSig* coeff, const int stateTransTable, int& state )
 {
   // NOTE: All coefficients of the subblock must be set to zero before calling this function
 
@@ -2711,7 +2711,7 @@ void CABACReader::residual_coding_subblock( CoeffCodingContext& cctx, TCoeff* co
   {
     int       sumAll = cctx.templateAbsSum(scanPos, coeff, 4);
     ricePar = g_auiGoRiceParsCoeff[sumAll];
-    TCoeff& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
+    TCoeffSig& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
     if( tcoeff >= 4 )
     {
       int       rem     = m_BinDecoder.decodeRemAbsEP( ricePar, COEF_REMAIN_BIN_REDUCTION, cctx.maxLog2TrDRange() );
@@ -2768,7 +2768,7 @@ void CABACReader::residual_codingTS( TransformUnit& tu, ComponentID compID )
 
   // init coeff coding context
   CoeffCodingContext  cctx    ( tu, compID, false, tu.cu->bdpcmM[toChannelType(compID)]);
-  TCoeff*             coeff   = tu.getCoeffs( compID ).buf;
+  TCoeffSig*          coeff   = tu.getCoeffs( compID ).buf;
 
   int maxCtxBins = (cctx.maxNumCoeff() * 7) >> 2;
   cctx.setNumCtxBins(maxCtxBins);
@@ -2780,7 +2780,7 @@ void CABACReader::residual_codingTS( TransformUnit& tu, ComponentID compID )
   }
 }
 
-void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeff* coeff )
+void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeffSig* coeff )
 {
   // NOTE: All coefficients of the subblock must be set to zero before calling this function
 
@@ -2861,7 +2861,7 @@ void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeff* 
   //===== 2nd PASS: gt2 =====
   for (int scanPos = firstSigPos; scanPos <= minSubPos && cctx.numCtxBins() >= 4; scanPos++)
   {
-    TCoeff& tcoeff = coeff[cctx.blockPos(scanPos)];
+    TCoeffSig& tcoeff = coeff[cctx.blockPos(scanPos)];
     cutoffVal = 2;
     for (int i = 0; i < numGtBins; i++)
     {
@@ -2884,7 +2884,7 @@ void CABACReader::residual_coding_subblockTS( CoeffCodingContext& cctx, TCoeff* 
   //===== 3rd PASS: Go-rice codes =====
   for( int scanPos = firstSigPos; scanPos <= minSubPos; scanPos++ )
   {
-    TCoeff& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
+    TCoeffSig& tcoeff = coeff[ cctx.blockPos( scanPos ) ];
     cutoffVal = (scanPos <= lastScanPosPass2 ? 10 : (scanPos <= lastScanPosPass1 ? 2 : 0));
     if (tcoeff < 0)
     {

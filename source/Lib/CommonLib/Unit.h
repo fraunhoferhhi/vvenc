@@ -420,22 +420,22 @@ struct TransformUnit : public UnitArea
   TransformUnit*   prev;
 
   TransformUnit                           () = default;
-  TransformUnit                           ( const UnitArea& unit);
-  TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area);
+  TransformUnit                           ( const UnitArea& unit );
+  TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area );
   void          initData                  ();
-  void          init                      ( TCoeff **coeffs);
+  void          init                      ( TCoeffSig **coeffs );
 
-  TransformUnit& operator=                ( const TransformUnit& other);
-  void          copyComponentFrom         ( const TransformUnit& other, const ComponentID compID);
+  TransformUnit& operator=                ( const TransformUnit& other );
+  void          copyComponentFrom         ( const TransformUnit& other, const ComponentID compID );
   void          checkTuNoResidual         ( unsigned idx );
-  int           getTbAreaAfterCoefZeroOut ( ComponentID compID) const;
+  int           getTbAreaAfterCoefZeroOut ( ComponentID compID ) const;
 
-       CoeffBuf getCoeffs                 ( ComponentID id)       { return  CoeffBuf(m_coeffs[id], blocks[id]); }
-const CCoeffBuf getCoeffs                 ( ComponentID id) const { return CCoeffBuf(m_coeffs[id], blocks[id]); }
+       CoeffSigBuf getCoeffs              ( ComponentID id )       { return  CoeffSigBuf(m_coeffs[id], blocks[id]); }
+const CCoeffSigBuf getCoeffs              ( ComponentID id ) const { return CCoeffSigBuf(m_coeffs[id], blocks[id]); }
 
 private:
   friend CodingStructure;
-  TCoeff* m_coeffs[ MAX_NUM_TBLOCKS ];
+  TCoeffSig* m_coeffs[ MAX_NUM_TBLOCKS ];
 };
 
 // ---------------------------------------------------------------------------
