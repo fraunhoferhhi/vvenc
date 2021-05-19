@@ -2662,6 +2662,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_maxMTTDepth                   = 3;
   c->m_maxMTTDepthI                  = 3;
   c->m_maxMTTDepthIChroma            = 3;
+  c->m_log2MinCodingBlockSize        = 2;
 
   // disable tools
 
