@@ -274,8 +274,8 @@ bool InterPrediction::xCheckIdenticalMotion( const CodingUnit& cu ) const
         }
         else
         {
-          if ( (cu.affineType == AFFINEMODEL_4PARAM && (cu.mvAffi[0][0] == cu.mvAffi[1][0]) && (cu.mvAffi[0][1] == cu.mvAffi[1][1]))
-            || (cu.affineType == AFFINEMODEL_6PARAM && (cu.mvAffi[0][0] == cu.mvAffi[1][0]) && (cu.mvAffi[0][1] == cu.mvAffi[1][1]) && (cu.mvAffi[0][2] == cu.mvAffi[1][2])) )
+          if ( (cu.affineType == AFFINEMODEL_4PARAM && (cu.mv[0][0] == cu.mv[1][0]) && (cu.mv[0][1] == cu.mv[1][1]))
+            || (cu.affineType == AFFINEMODEL_6PARAM && (cu.mv[0][0] == cu.mv[1][0]) && (cu.mv[0][1] == cu.mv[1][1]) && (cu.mv[0][2] == cu.mv[1][2])) )
           {
             return true;
           }
@@ -335,13 +335,13 @@ void InterPrediction::xPredInterUni(const CodingUnit& cu, const RefPicList& refP
   {
     CHECK(iRefIdx < 0, "iRefIdx incorrect.");
 
-    mv[0] = cu.mvAffi[refPicList][0];
-    mv[1] = cu.mvAffi[refPicList][1];
-    mv[2] = cu.mvAffi[refPicList][2];
+    mv[0] = cu.mv[refPicList][0];
+    mv[1] = cu.mv[refPicList][1];
+    mv[2] = cu.mv[refPicList][2];
   }
   else
   {
-    mv[0] = cu.mv[refPicList];
+    mv[0] = cu.mv[refPicList][0];
     if (!isIBC )
       clipMv(mv[0], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
   }
@@ -1074,7 +1074,7 @@ void DMVR::xCopyAndPad( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refI
   for (int compID = start; compID < end; compID++)
   {
     int filtersize = compID == COMP_Y ? NTAPS_LUMA : NTAPS_CHROMA;
-    cMv            = cu.mv[refId];
+    cMv            = cu.mv[refId][0];
     width          = pcPad.bufs[compID].width;
     height         = pcPad.bufs[compID].height;
 
@@ -1238,7 +1238,7 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
   const int mvShiftC = mvShift + getChannelTypeScaleX(CH_C, cu.chromaFormat);
 
   /*use merge MV as starting MV*/
-  const Mv mergeMv[] = { cu.mv[REF_PIC_LIST_0] , cu.mv[REF_PIC_LIST_1] };
+  const Mv mergeMv[] = { cu.mv[REF_PIC_LIST_0][0], cu.mv[REF_PIC_LIST_1][0] };
 
 
   const int dy = std::min<int>(cu.lumaSize().height, DMVR_SUBCU_SIZE);
@@ -1255,8 +1255,8 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
     const int dstOffset = -( DMVR_NUM_ITERATION * bilinearBufStride + DMVR_NUM_ITERATION );
 
     /*use merge MV as starting MV*/
-    Mv mergeMVL0 = cu.mv[L0];
-    Mv mergeMVL1 = cu.mv[L1];
+    Mv mergeMVL0 = cu.mv[L0][0];
+    Mv mergeMVL1 = cu.mv[L1][0];
 
     /*Clip the starting MVs*/
     clipMv(mergeMVL0, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
@@ -1877,7 +1877,7 @@ void InterPrediction::xIntraBlockCopyIBC(CodingUnit& cu, PelUnitBuf& predBuf, co
   const int shiftSampleHor = getComponentScaleX(compID, cu.chromaFormat);
   const int shiftSampleVer = getComponentScaleY(compID, cu.chromaFormat);
   const int ctuSizeLog2Ver = floorLog2(lcuWidth) - shiftSampleVer;
-  cu.bv = cu.mv[REF_PIC_LIST_0];
+  cu.bv = cu.mv[REF_PIC_LIST_0][0];
   cu.bv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
   int refx, refy;
   if (compID == COMP_Y)

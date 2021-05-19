@@ -1574,7 +1574,7 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
     cu.interDir = 1;
     cu.affine = false;
     cu.refIdx[REF_PIC_LIST_0] = MAX_NUM_REF;
-    mvd_coding(cu.mvd[REF_PIC_LIST_0]);
+    mvd_coding( cu.mvd[REF_PIC_LIST_0][0] );
     if ( cu.cs->sps->maxNumIBCMergeCand == 1 )
     {
       cu.mvpIdx[REF_PIC_LIST_0] = 0;
@@ -1595,16 +1595,16 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
       ref_idx     ( cu, REF_PIC_LIST_0 );
       if( cu.affine )
       {
-        mvd_coding( cu.mvdAffi[REF_PIC_LIST_0][0] );
-        mvd_coding( cu.mvdAffi[REF_PIC_LIST_0][1] );
+        mvd_coding( cu.mvd[REF_PIC_LIST_0][0] );
+        mvd_coding( cu.mvd[REF_PIC_LIST_0][1] );
         if ( cu.affineType == AFFINEMODEL_6PARAM )
         {
-          mvd_coding( cu.mvdAffi[REF_PIC_LIST_0][2] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_0][2] );
         }
       }
       else
       {
-        mvd_coding( cu.mvd[REF_PIC_LIST_0] );
+        mvd_coding( cu.mvd[REF_PIC_LIST_0][0] );
       }
       mvp_flag    ( cu, REF_PIC_LIST_0 );
     }
@@ -1616,23 +1616,22 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
         ref_idx     ( cu, REF_PIC_LIST_1 );
         if( cu.cs->slice->picHeader->mvdL1Zero && cu.interDir == 3 /* PRED_BI */ )
         {
-          cu.mvd[ REF_PIC_LIST_1 ] = Mv();
-          cu.mvdAffi[REF_PIC_LIST_1][0] = Mv();
-          cu.mvdAffi[REF_PIC_LIST_1][1] = Mv();
-          cu.mvdAffi[REF_PIC_LIST_1][2] = Mv();
+          cu.mvd[REF_PIC_LIST_1][0] = Mv();
+          cu.mvd[REF_PIC_LIST_1][1] = Mv();
+          cu.mvd[REF_PIC_LIST_1][2] = Mv();
         }
         else if( cu.affine )
         {
-          mvd_coding( cu.mvdAffi[REF_PIC_LIST_1][0] );
-          mvd_coding( cu.mvdAffi[REF_PIC_LIST_1][1] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_1][0] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_1][1] );
           if ( cu.affineType == AFFINEMODEL_6PARAM )
           {
-            mvd_coding( cu.mvdAffi[REF_PIC_LIST_1][2] );
+            mvd_coding( cu.mvd[REF_PIC_LIST_1][2] );
           }
         }
         else
         {
-          mvd_coding( cu.mvd[REF_PIC_LIST_1] );
+          mvd_coding( cu.mvd[REF_PIC_LIST_1][0] );
         }
       }
       mvp_flag    ( cu, REF_PIC_LIST_1 );
@@ -1640,7 +1639,7 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
   }
   if( cu.interDir == 3 /* PRED_BI */ && CU::isBipredRestriction(cu) )
   {
-    cu.mv    [REF_PIC_LIST_1] = Mv(0, 0);
+    cu.mv [REF_PIC_LIST_1][0] = Mv(0, 0);
     cu.refIdx[REF_PIC_LIST_1] = -1;
     cu.interDir               =  1;
     cu.BcwIdx = BCW_DEFAULT;
@@ -1649,8 +1648,8 @@ void CABACReader::prediction_unit( CodingUnit& cu, MergeCtx& mrgCtx )
   if ( cu.smvdMode )
   {
     RefPicList eCurRefList = (RefPicList)(cu.smvdMode - 1);
-    cu.mvd[1 - eCurRefList].set( -cu.mvd[eCurRefList].hor, -cu.mvd[eCurRefList].ver );
-    CHECK(!((cu.mvd[1 - eCurRefList].hor >= MVD_MIN) && (cu.mvd[1 - eCurRefList].hor <= MVD_MAX)) || !((cu.mvd[1 - eCurRefList].ver >= MVD_MIN) && (cu.mvd[1 - eCurRefList].ver <= MVD_MAX)), "Illegal MVD value");
+    cu.mvd[1 - eCurRefList][0].set( -cu.mvd[eCurRefList][0].hor, -cu.mvd[eCurRefList][0].ver );
+    CHECK(!((cu.mvd[1 - eCurRefList][0].hor >= MVD_MIN) && (cu.mvd[1 - eCurRefList][0].hor <= MVD_MAX)) || !((cu.mvd[1 - eCurRefList][0].ver >= MVD_MIN) && (cu.mvd[1 - eCurRefList][0].ver <= MVD_MAX)), "Illegal MVD value");
     cu.refIdx[1 - eCurRefList] = cu.cs->slice->symRefIdx[ 1 - eCurRefList ];
   }
 

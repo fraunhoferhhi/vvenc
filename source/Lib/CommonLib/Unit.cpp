@@ -361,8 +361,7 @@ void CodingUnit::initPuData()
   geoSplitDir       = MAX_UCHAR;
   geoMergeIdx0      = MAX_UCHAR;
   geoMergeIdx1      = MAX_UCHAR;
-  bv.setZero();
-  bvd.setZero();
+  bv                . setZero();
 
   mcControl         = 0;
 
@@ -384,15 +383,10 @@ void CodingUnit::initPuData()
     mvpIdx[i] = MAX_UCHAR;
     mvpNum[i] = MAX_UCHAR;
     refIdx[i] = -1;
-    mvd[i]    .setZero();
-    mv[i]     .setZero();
     for( uint32_t j = 0; j < 3; j++ )
     {
-      mvdAffi[i][j].setZero();
-    }
-    for ( uint32_t j = 0; j < 3; j++ )
-    {
-      mvAffi[i][j].setZero();
+      mvd[i][j].setZero();
+      mv [i][j].setZero();
     }
   }
 }
@@ -422,7 +416,6 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
   mergeType         = other.mergeType;
   mvRefine          = other.mvRefine;
   bv                = other.bv;
-  bvd               = other.bvd;
 
   if( other.mergeFlag && mvdL0SubPu )
   {
@@ -435,16 +428,11 @@ CodingUnit& CodingUnit::operator=( const InterPredictionData& other )
   {
     mvpIdx[i]   = other.mvpIdx[i];
     mvpNum[i]   = other.mvpNum[i];
-    mv[i]       = other.mv[i];
-    mvd[i]      = other.mvd[i];
     refIdx[i]   = other.refIdx[i];
     for( uint32_t j = 0; j < 3; j++ )
     {
-      mvdAffi[i][j] = other.mvdAffi[i][j];
-    }
-    for ( uint32_t j = 0; j < 3; j++ )
-    {
-      mvAffi[i][j] = other.mvAffi[i][j];
+      mvd[i][j] = other.mvd[i][j];
+      mv [i][j] = other.mv [i][j];
     }
   }
   ciip = other.ciip;
@@ -458,7 +446,7 @@ CodingUnit& CodingUnit::operator=( const MotionInfo& mi )
   for( uint32_t i = 0; i < NUM_REF_PIC_LIST_01; i++ )
   {
     refIdx[i] = mi.refIdx[i];
-    mv    [i] = mi.mv[i];
+    mv [i][0] = mi.mv[i];
   }
 
   return *this;
