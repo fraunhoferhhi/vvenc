@@ -289,22 +289,32 @@ const TransformUnit * CodingStructure::getTU( const Position& pos, const Channel
   }
 }
 
-CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chType )
+CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chType, CodingUnit* cuInit )
 {
-  if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
+  CodingUnit* cu;
 
-  CodingUnit *cu = m_cuCache.get();
+  if( cuInit )
+  {
+    cu = cuInit;
+  }
+  else
+  {
+    if( m_unitCacheMutex ) m_unitCacheMutex->lock();
 
-  if ( m_unitCacheMutex ) m_unitCacheMutex->unlock();
+    cu = m_cuCache.get();
 
-  cu->UnitArea::operator=( unit );
-  cu->initData();
-  cu->cs        = this;
-  cu->slice     = nullptr;
+    if( m_unitCacheMutex ) m_unitCacheMutex->unlock();
+
+    cu->UnitArea::operator=( unit );
+    cu->initData();
+    cu->slice   = nullptr;
+  }
+  
   cu->next      = nullptr;
   cu->firstTU   = nullptr;
   cu->lastTU    = nullptr;
   cu->chType    = chType;
+  cu->cs        = this;
 
   CodingUnit *prevCU = m_numCUs > 0 ? cus.back() : nullptr;
 
@@ -321,6 +331,8 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
 
   cus.push_back( cu );
 
+  Mv* prevCuMvd = cuInit ? cuInit->mvdL0SubPu : nullptr;
+
   uint32_t idx = ++m_numCUs;
   cu->idx  = idx;
   cu->mvdL0SubPu = nullptr;
@@ -329,8 +341,12 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   {
     CHECKD( m_dmvrMvCacheOffset >= m_dmvrMvCache.size(), "dmvr cache offset out of bounds" );
 
+    int mvdArrSize       = std::max<int>( 1, unit.lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, unit.lheight() >> DMVR_SUBCU_SIZE_LOG2 );
     cu->mvdL0SubPu       = &m_dmvrMvCache[m_dmvrMvCacheOffset];
-    m_dmvrMvCacheOffset += std::max<int>( 1, unit.lwidth() >> DMVR_SUBCU_SIZE_LOG2 ) * std::max<int>( 1, unit.lheight() >> DMVR_SUBCU_SIZE_LOG2 );
+    m_dmvrMvCacheOffset += mvdArrSize;
+
+    if( prevCuMvd )
+      memcpy( cu->mvdL0SubPu, prevCuMvd, sizeof( Mv ) * mvdArrSize );
   }
 
   uint32_t numCh = getNumberValidChannels( area.chromaFormat );
@@ -358,16 +374,26 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
   return *cu;
 }
 
-TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType chType, CodingUnit* cu )
+TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType chType, CodingUnit* cu, TransformUnit* tuInit )
 {
-  if ( m_unitCacheMutex ) m_unitCacheMutex->lock();
+  TransformUnit* tu;
 
-  TransformUnit *tu = m_tuCache.get();
+  if( tuInit )
+  {
+    tu = tuInit;
+  }
+  else
+  {
+    if( m_unitCacheMutex ) m_unitCacheMutex->lock();
 
-  if ( m_unitCacheMutex ) m_unitCacheMutex->unlock();
+    tu = m_tuCache.get();
 
-  tu->UnitArea::operator=( unit );
-  tu->initData();
+    if( m_unitCacheMutex ) m_unitCacheMutex->unlock();
+
+    tu->UnitArea::operator=( unit );
+    tu->initData();
+  }
+
   tu->next   = nullptr;
   tu->prev   = nullptr;
   tu->cs     = this;
@@ -437,6 +463,9 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
 
     unsigned areaSize = tu->blocks[i].area();
     m_offsets[i] += areaSize;
+
+    if( tuInit )
+      memcpy( coeffs[i], tu->m_coeffs[i], areaSize * sizeof( TCoeff ) );
   }
 
   tu->init( coeffs );
@@ -795,10 +824,9 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   }
 }
 
-void CodingStructure::useSubStructure( const CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyReco )
+void CodingStructure::useSubStructure( CodingStructure& subStruct, const ChannelType chType, const TreeType _treeType, const UnitArea& subArea, const bool cpyReco )
 {
   UnitArea clippedArea = clipArea( subArea, *picture );
-
 
   if( cpyReco )
   {
@@ -850,26 +878,59 @@ void CodingStructure::useSubStructure( const CodingStructure& subStruct, const C
   }
   else
   {
-    for( const auto &pcu : subStruct.cus )
+    if( &m_cuCache == &subStruct.m_cuCache )
     {
-      // add an analogue CU into own CU store
-      const UnitArea& cuPatch = *pcu;
-      CodingUnit &cu = addCU( cuPatch, pcu->chType );
+      // copy the CUs over with taking ownership
+      for( const auto& pcu : subStruct.cus )
+      {
+        // add an analogue CU into own CU store
+        const UnitArea& cuPatch = *pcu;
+        addCU( cuPatch, pcu->chType, pcu );
+      }
 
-      // copy the CU info from subPatch
-      cu = *pcu;
+      subStruct.cus.resize( 0 );
+    }
+    else
+    {
+      // copy the CUs over
+      for( const auto& pcu : subStruct.cus )
+      {
+        // add an analogue CU into own CU store
+        const UnitArea& cuPatch = *pcu;
+
+        CodingUnit& cu = addCU( cuPatch, pcu->chType );
+
+        // copy the CU info from subPatch
+        cu = *pcu;
+      }
     }
   }
 
-  // copy the TUs over
-  for( const auto &ptu : subStruct.tus )
+  if( &m_tuCache == &subStruct.m_tuCache )
   {
-    // add an analogue TU into own TU store
-    const UnitArea& tuPatch = *ptu;
-    TransformUnit& tu = addTU( tuPatch, ptu->chType, getCU( tuPatch.blocks[ptu->chType].pos(), ptu->chType, _treeType ) );
+    // copy the TUs over with taking ownership
+    for( const auto& ptu : subStruct.tus )
+    {
+      // add an analogue TU into own TU store
+      const UnitArea& tuPatch = *ptu;
+      addTU( tuPatch, ptu->chType, getCU( tuPatch.blocks[ptu->chType].pos(), ptu->chType, _treeType ), ptu );
+    }
 
-    // copy the TU info from subPatch
-    tu = *ptu;
+    subStruct.tus.resize( 0 );
+  }
+  else
+  {
+    // copy the TUs over
+    for( const auto& ptu : subStruct.tus )
+    {
+      // add an analogue TU into own TU store
+      const UnitArea& tuPatch = *ptu;
+
+      TransformUnit& tu = addTU( tuPatch, ptu->chType, getCU( tuPatch.blocks[ptu->chType], ptu->chType, _treeType ) );
+
+      // copy the TU info from subPatch
+      tu = *ptu;
+    }
   }
 }
 
