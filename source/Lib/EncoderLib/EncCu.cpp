@@ -628,9 +628,25 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
       else
       {
+#if MIN_SKIPPAR
+        bool checkModes = true;
+#endif
         // add first pass modes
         if ( !slice.isIRAP() && !( cs.area.lwidth() == 4 && cs.area.lheight() == 4 ) && !partitioner.isConsIntra() )
         {
+#if MIN_SKIPPAR
+          if (m_pcEncCfg->m_SpeedModes)
+          {
+            if (m_pcEncCfg->m_SpeedModes > 1)
+            {
+              checkModes = (bestCS->slice->TLayer >= m_pcEncCfg->m_SpeedModes);
+            }
+            if (checkModes && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->getCU(partitioner.chType, partitioner.treeType)->skip))
+            {
+              checkModes = false;
+            }
+          }
+#endif
           // add inter modes
           if( m_pcEncCfg->m_useEarlySkipDetection )
           {
@@ -699,7 +715,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
               }
             }
             EncTestMode encTestMode = {ETM_INTER_ME, ETO_STANDARD, qp, lossless};
+#if MIN_SKIPPAR
+            if (checkModes && m_modeCtrl.tryMode(encTestMode, cs, partitioner))
+#else
             if( m_modeCtrl.tryMode( encTestMode, cs, partitioner ) )
+#endif
             {
               xCheckRDCostInter( tempCS, bestCS, partitioner, encTestMode );
             }
@@ -743,7 +763,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
         // add intra modes
         EncTestMode encTestMode( {ETM_INTRA, ETO_STANDARD, qp, lossless} );
+#if MIN_SKIPPAR
+        if (checkModes && !partitioner.isConsInter() && m_modeCtrl.tryMode(encTestMode, cs, partitioner))
+#else
         if( !partitioner.isConsInter() && m_modeCtrl.tryMode( encTestMode, cs, partitioner ) )
+#endif
         {
           xCheckRDCostIntra( tempCS, bestCS, partitioner, encTestMode );
         }
