@@ -178,6 +178,10 @@ private:
 
   bool                      m_trySkipOrDecodePicture;
 
+#if GDR_ENABLED
+  int                       m_lastGdrIntervalPoc;
+#endif
+
 public:
   EncGOP( MsgLog& msglog );
   virtual ~EncGOP();

@@ -1047,6 +1047,9 @@ struct PicHeader
   bool                        nonRefPic;                                              //!< non-reference picture flag
   bool                        gdrOrIrapPic;                                           //!< gdr or irap picture flag
   bool                        gdrPic;                                                 //!< gradual decoding refresh picture flag
+#if GDR_ENABLED
+  bool                        inGdrInterval;                                          //!< is current picture in within GDR interval
+#endif
   bool                        noOutputOfPriorPics;                                    //!< no output of prior pictures flag
   uint32_t                    recoveryPocCnt;                                         //!< recovery POC count
   bool                        noOutputBeforeRecovery;                             //!< NoOutputBeforeRecoveryFlag
@@ -1122,6 +1125,9 @@ struct PicHeader
     pic                                           = nullptr;
     nonRefPic                                     = false;
     gdrPic                                        = 0;
+#if GDR_ENABLED
+    inGdrInterval                                 = false;
+#endif
     noOutputOfPriorPics                           = 0;
     recoveryPocCnt                                = -1;
     noOutputBeforeRecovery                        = false;

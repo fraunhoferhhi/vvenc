@@ -710,6 +710,73 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                            "IDR period (in frames) must be >= -1");
   vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
 
+#if GDR_ENABLED
+  if ( c->m_gdrEnabled )
+  {
+    c->m_DecodingRefreshType = VVENC_DRT_RECOVERY_POINT_SEI;
+    c->m_intraQPOffset = 0;
+    c->m_GOPSize = 1;
+
+    c->m_GOPList[0].m_POC = 1;
+    c->m_GOPList[0].m_sliceType = 'B';
+    c->m_GOPList[0].m_QPOffset = 0;
+    c->m_GOPList[0].m_QPOffsetModelOffset = 0;
+    c->m_GOPList[0].m_QPOffsetModelScale = 0;
+    c->m_GOPList[0].m_CbQPoffset = 0;
+    c->m_GOPList[0].m_CrQPoffset = 0;
+    c->m_GOPList[0].m_QPFactor = 1.0;
+    c->m_GOPList[0].m_tcOffsetDiv2 = 0;
+    c->m_GOPList[0].m_betaOffsetDiv2 = 0;
+    c->m_GOPList[0].m_CbTcOffsetDiv2 = 0;
+    c->m_GOPList[0].m_CbBetaOffsetDiv2 = 0;
+    c->m_GOPList[0].m_CrTcOffsetDiv2 = 0;
+    c->m_GOPList[0].m_CrBetaOffsetDiv2 = 0;
+    c->m_GOPList[0].m_temporalId = 0;
+
+    c->m_GOPList[0].m_numRefPicsActive[0] = 4;
+    c->m_GOPList[0].m_numRefPics[0] = 4;
+    c->m_GOPList[0].m_deltaRefPics[0][0] = 1;
+    c->m_GOPList[0].m_deltaRefPics[0][1] = 2;
+    c->m_GOPList[0].m_deltaRefPics[0][2] = 3;
+    c->m_GOPList[0].m_deltaRefPics[0][3] = 4;
+
+    c->m_GOPList[0].m_numRefPicsActive[1] = 4;
+    c->m_GOPList[0].m_numRefPics[1] = 4;
+    c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
+    c->m_GOPList[0].m_deltaRefPics[1][1] = 2;
+    c->m_GOPList[0].m_deltaRefPics[1][2] = 3;
+    c->m_GOPList[0].m_deltaRefPics[1][3] = 4;
+
+    c->m_BDOF  = false;
+    c->m_DMVR = false;
+    c->m_SMVD = false;
+
+    if (c->m_gdrPeriod < 0)
+    {
+      c->m_gdrPeriod = c->m_FrameRate * 2;
+    }
+
+    if (c->m_gdrInterval < 0)
+    {
+      c->m_gdrInterval = c->m_FrameRate;
+    }
+
+    if (c->m_gdrPocStart < 0)
+    {
+      c->m_gdrPocStart = c->m_gdrPeriod;
+    }
+
+    if (c->m_IntraPeriod == -1)
+    {
+      c->m_FrameRate = (c->m_FrameRate == 0) ? 30 : c->m_FrameRate;
+      if (c->m_gdrPocStart % c->m_FrameRate != 0)
+        c-> m_IntraPeriod = -1;
+      else
+        c->m_IntraPeriod = c->m_gdrPeriod;
+    }
+  }
+#endif
+
   vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                           "GOP Size must be between 1 and 64" );
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
@@ -2868,6 +2935,18 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
     css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
     css << "\n";
+
+#if GDR_ENABLED
+    css << "\nGDR CFG: ";
+    css << "GdrEnabled:" << m_gdrEnabled << " ";
+
+    if (m_gdrEnabled)
+    {
+      css << "GdrPocStart:" << m_gdrPocStart << " ";
+      css << "GdrInterval:" << m_gdrInterval << " ";
+      css << "GdrPeriod:" << m_gdrPeriod << " ";
+    }
+#endif
   }
 
   vvenc_cfgString = css.str();

@@ -146,6 +146,215 @@ void IntraSearch::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache *ctxCache
 //////////////////////////////////////////////////////////////////////////
 static constexpr double COST_UNKNOWN = -65536.0;
 
+#if GDR_ENABLED
+
+int IntraSearch::getModifiedWideAngle( int width, int height, int predMode )
+{
+  //The function returns a 'modified' wide angle index, given that it is not necessary 
+  //in this software implementation to reserve the values 0 and 1 for Planar and DC to generate the prediction signal.
+  //It should only be used to obtain the intraPredAngle parameter.
+  //To simply obtain the wide angle index, the function PU::getWideAngle should be used instead.
+  if ( predMode > DC_IDX && predMode <= VDIA_IDX )
+  {
+    int modeShift[] = { 0, 6, 10, 12, 14, 15 };
+    int deltaSize = abs(floorLog2(width) - floorLog2(height));
+    if (width > height && predMode < 2 + modeShift[deltaSize])
+    {
+      predMode += (VDIA_IDX - 1);
+    }
+    else if (height > width && predMode > VDIA_IDX - modeShift[deltaSize])
+    {
+      predMode -= (VDIA_IDX - 1); 
+    }
+  }
+  return predMode;
+}
+
+int IntraSearch::getNumTopRecons(CodingUnit &cu, int luma_dirMode, bool isChroma)
+{
+  int w = isChroma ? cu.chromaSize().width  : cu.lumaSize().width;
+  int h = isChroma ? cu.chromaSize().height : cu.lumaSize().height;
+
+  int numOfTopRecons = w; 
+
+  static const int angTable[32] = { 0,    1,    2,    3,    4,    6,     8,   10,   12,   14,   16,   18,   20,   23,   26,   29,   32,   35,   39,  45,  51,  57,  64,  73,  86, 102, 128, 171, 256, 341, 512, 1024 };
+  static const int invAngTable[32] = {
+    0,   16384, 8192, 5461, 4096, 2731, 2048, 1638, 1365, 1170, 1024, 910, 819, 712, 630, 565,
+    512, 468,   420,  364,  321,  287,  256,  224,  191,  161,  128,  96,  64,  48,  32,  16
+  };   // (512 * 32) / Angle
+
+  const int refIdx             = cu.multiRefIdx;
+  const int predModeIntra      = getModifiedWideAngle(w, h, luma_dirMode);
+  const int isModeVer          = predModeIntra >= DIA_IDX;
+  const int intraPredAngleMode = (isModeVer) ? predModeIntra - VER_IDX : -(predModeIntra - HOR_IDX);
+
+  const int absAngMode         = abs(intraPredAngleMode);
+  const int signAng            = intraPredAngleMode < 0 ? -1 : 1;
+  const int absAng             = (luma_dirMode > DC_IDX && luma_dirMode < NUM_LUMA_MODE) ? angTable[absAngMode] : 0;
+
+  const int invAngle           = invAngTable[absAngMode];
+  const int intraPredAngle     = signAng * absAng;
+
+  const int sideSize = isModeVer ? h : w;
+  const int maxScale = 2;
+
+  const int angularScale = std::min(maxScale, floorLog2(sideSize) - (floorLog2(3 * invAngle - 2) - 8));  
+
+  bool applyPDPC;
+
+
+  // 1.0 derive PDPC  
+  applyPDPC  = (refIdx == 0) ? true : false;  
+  if (luma_dirMode > DC_IDX && luma_dirMode < NUM_LUMA_MODE) 
+  {
+    if (intraPredAngleMode < 0)
+    {
+      applyPDPC &= false;
+    }
+    else if (intraPredAngleMode > 0)
+    {
+      applyPDPC &= (angularScale >= 0);
+    }        
+  }
+
+  // 2.0 calculate number of recons
+  switch (luma_dirMode) 
+  {
+  case PLANAR_IDX:
+    numOfTopRecons = applyPDPC ? (w + 1) : (w + 1);
+    break;
+
+  case DC_IDX:
+    numOfTopRecons = applyPDPC ? (w) : (w);
+    break;
+
+  case HOR_IDX:
+    numOfTopRecons = applyPDPC ? (w) : (w);
+    break;
+
+  case VER_IDX:
+    numOfTopRecons = applyPDPC ? (w) : (w);
+    break;
+
+  default:
+    // 2..66
+    // note: There should be a way to reduce the number of top recons, in case of non PDPC
+    applyPDPC |= isChroma;
+
+    if (predModeIntra >= DIA_IDX) 
+    {
+      if (intraPredAngle < 0) 
+      {
+        numOfTopRecons = (applyPDPC) ? (w + w) : (w + 1);
+      }
+      else 
+      {
+        numOfTopRecons = (applyPDPC) ? (w + w) : (w + w);
+      }
+    }
+    else 
+    {
+      if (intraPredAngle < 0) 
+      {
+        numOfTopRecons = (applyPDPC) ? (w + w) : (w);
+      }
+      else 
+      {
+        numOfTopRecons = (applyPDPC) ? (w + w) : (w);
+      }
+    }
+    break;
+  }
+
+  return numOfTopRecons;
+}
+
+bool IntraSearch::isValidIntraPredLuma(CodingUnit &cu, int luma_dirMode)
+{
+  bool isValid  = true;  
+  PicHeader *ph = cu.cs->picHeader;
+
+  if (ph->inGdrInterval) 
+  {
+    int x = pu.Y().x;
+
+    // count num of recons on the top
+    int virX           = ph->virtualBoundariesPosX[0];   
+    int numOfTopRecons = getNumTopRecons(pu, luma_dirMode, false);    
+
+    // check if recon is out of boundary
+    if (x < virX && virX < (x + numOfTopRecons)) 
+    {
+      isValid = false;
+    }    
+  }
+
+  return isValid;
+}
+
+bool IntraSearch::isValidIntraPredChroma(CodingUnit &cu, int luma_dirMode, int chroma_dirMode)
+{
+  bool isValid = true;
+  CodingStructure *cs = cu.cs;
+  PicHeader       *ph = cs->picHeader;
+
+  if (ph->inGdrInterval) 
+  {
+    // note: chroma cordinate
+    int cbX = cu.chromaPos().x;
+    //int cbY = pu.Cb().y;
+    int cbW = cu.chromaSize().width;
+    int cbH = cu.chromaSize().height;
+
+    int chromaScaleX = getComponentScaleX(COMP_Cb, cs->area.chromaFormat);
+    int chromaScaleY = getComponentScaleY(COMP_Cb, cs->area.chromaFormat);
+
+    int lumaX = cbX << chromaScaleX;
+    // int lumaY = cbY << chromaScaleY;
+    int lumaW = cbW << chromaScaleX;
+    int lumaH = cbH << chromaScaleY;
+
+    int numOfTopRecons = lumaW;
+    int virX           = ph->virtualBoundariesPosX[0];
+
+    // count num of recons on the top
+    switch (chroma_dirMode) 
+    {
+
+    case LM_CHROMA_IDX :
+      numOfTopRecons = lumaW;
+      break;
+
+    case MDLM_L_IDX :
+      numOfTopRecons = lumaW;
+      break;
+
+      // note: could reduce the actual #of 
+    case MDLM_T_IDX:
+      numOfTopRecons = (lumaW + lumaH);
+      break;
+
+    case DM_CHROMA_IDX :
+      numOfTopRecons = getNumTopRecons(cu, luma_dirMode, true) << chromaScaleX;
+      break;
+
+    default :
+      numOfTopRecons = getNumTopRecons(cu, chroma_dirMode, true) << chromaScaleX;
+      break;
+    }
+
+    // check if recon is out of boundary
+    if (lumaX < virX && virX < (lumaX + numOfTopRecons)) 
+    {
+      isValid = false;
+    }       
+  }
+
+  return isValid;
+}
+
+#endif  // GDR_ENABLED
+
 double IntraSearch::xFindInterCUCost( CodingUnit &cu )
 {
   if( CU::isConsIntra(cu) && !cu.slice->isIntra() )
@@ -225,6 +434,10 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   std::vector<ModeInfo> parentCandList;
   parentCandList.reserve( ( numModesAvailable >> m_pcEncCfg->m_IntraEstDecBit ) + 2 );
 
+#if GDR_ENABLED  
+  const bool isEncodeGdrClean = cu.cs->sps->GDR && cu.cs->pcv->isEncoder && ((cu.cs->picHeader->inGdrInterval && cu.cs->isClean(cu.Y().topRight(), ChannelType::CH_L)) || (cu.cs->picHeader->numVerVirtualBoundaries == 0));
+#endif
+
   for( unsigned mode = 0; mode < numModesAvailable; mode++ )
   {
     // Skip checking extended Angular modes in the first round of SATD
@@ -277,10 +490,30 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         double cost = ( double ) minSadHad + ( double ) fracModeBits * sqrtLambdaForFirstPass;
         DTRACE( g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode );
 
+#if GDR_ENABLED
+        if (isEncodeGdrClean) 
+        {
+          if (isValidIntraPredLuma(cu, mode)) 
+          {
+            int insertPos = -1;
+            updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
+            updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+            m_SortedPelUnitBufs->insert( insertPos, ( int ) RdModeList.size() );
+          }
+        }
+        else
+        {
+          int insertPos = -1;
+          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
+          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+          m_SortedPelUnitBufs->insert( insertPos, ( int ) RdModeList.size() );
+        }
+#else
         int insertPos = -1;
         updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
         updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
         m_SortedPelUnitBufs->insert( insertPos, ( int ) RdModeList.size() );
+#endif
 
         satdChecked[mode] = true;
       }
@@ -322,12 +555,32 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
         m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
 
         double cost = (double) minSadHad + (double) fracModeBits * sqrtLambdaForFirstPass;
-//        DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMRL: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, cu.intraDir[0]);
+        //        DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMRL: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, cu.intraDir[0]);
 
+#if GDR_ENABLED
+        if (isEncodeGdrClean) 
+        {
+          if (isValidIntraPredLuma(cu, cu.intraDir[0]))
+          {
+            int insertPos = -1;
+            updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD, &insertPos );
+            updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
+            m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
+          }
+        }
+        else
+        {
+          int insertPos = -1;
+          updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD, &insertPos );
+          updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
+          m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
+        }
+#else
         int insertPos = -1;
         updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD, &insertPos );
         updateCandList( ModeInfo( false, false, multiRefIdx, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
         m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
+#endif
       }
     }
     cu.multiRefIdx = 0;
@@ -368,10 +621,30 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       mipHadCost[uiModeFull] = cost;
       DTRACE(g_trace_ctx, D_INTRA_COST, "IntraMIP: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, uiModeFull);
 
+#if GDR_ENABLED
+      if (isEncodeGdrClean) 
+      {
+        if (isValidIntraPredLuma(cu, uiMode)) 
+        {
+          int insertPos = -1;
+          updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD+1, &insertPos );
+          updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), 0.8*(double)minSadHad, HadModeList, CandHadList,  numHadCand );
+          m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
+        }
+      }
+      else
+      {
+        int insertPos = -1;
+        updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD+1, &insertPos );
+        updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), 0.8*(double)minSadHad, HadModeList, CandHadList,  numHadCand );
+        m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
+      }
+#else
       int insertPos = -1;
       updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), cost, RdModeList,  CandCostList, numModesForFullRD+1, &insertPos );
       updateCandList( ModeInfo( true, isTransposed, 0, NOT_INTRA_SUBPARTITIONS, cu.intraDir[0] ), 0.8*(double)minSadHad, HadModeList, CandHadList,  numHadCand );
       m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
+#endif
     }
 
     const double thresholdHadCost = 1.0 + 1.4 / sqrt((double)(cu.lwidth()*cu.lheight()));
@@ -393,16 +666,38 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
       bool mostProbableModeIncluded = false;
       mostProbableMode.modeId = intraMpms[j];
 
+#if GDR_ENABLED
+      int nn = numModesForFullRD;
+      if (isEncodeGdrClean) 
+      {
+        nn = std::min((int)numModesForFullRD, (int)RdModeList.size());
+      }
+
+      for (int i = 0; i < nn; i++)
+#else
       for( int i = 0; i < numModesForFullRD; i++ )
+#endif
       {
         mostProbableModeIncluded |= ( mostProbableMode == RdModeList[i] );
       }
+#if GDR_ENABLED
+      if ( !isEncodeGdrClean )
+      {
+        if( !mostProbableModeIncluded )
+        {
+          numModesForFullRD++;
+          RdModeList.push_back( mostProbableMode );
+          CandCostList.push_back(0);
+        }
+      }
+#else
       if( !mostProbableModeIncluded )
       {
         numModesForFullRD++;
         RdModeList.push_back( mostProbableMode );
         CandCostList.push_back(0);
       }
+#endif
     }
   }
 }
@@ -463,7 +758,18 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
 
   xEstimateLumaRdModeList(numModesForFullRD, RdModeList, HadModeList, CandCostList, CandHadList, cu, testMip);
 
+#if GDR_ENABLED  
+  const bool isEncodeGdrClean = cu.cs->sps->GDR && cu.cs->pcv->isEncoder && ((cu.cs->picHeader->inGdrInterval && cu.cs->isClean(cu.Y().topRight(), ChannelType::CH_L)) || (cu.cs->picHeader->numVerVirtualBoundaries == 0));
+#endif
+
+#if GDR_ENABLED
+  if (!isEncodeGdrClean) 
+  {
+    CHECK( (size_t)numModesForFullRD != RdModeList.size(), "Inconsistent state!" );
+  }
+#else
   CHECK( (size_t)numModesForFullRD != RdModeList.size(), "Inconsistent state!" );
+#endif
 
   // after this point, don't use numModesForFullRD
   if( m_pcEncCfg->m_usePbIntraFast && !cs.slice->isIntra() && RdModeList.size() < numModesAvailable && !cs.slice->disableSATDForRd )

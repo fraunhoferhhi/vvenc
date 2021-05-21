@@ -175,6 +175,13 @@ public:
   bool estIntraPredLumaQT         ( CodingUnit &cu, Partitioner &pm, double bestCost = MAX_DOUBLE);
   void estIntraPredChromaQT       ( CodingUnit& cu, Partitioner& partitioner, const double maxCostAllowed );
 
+#if GDR_ENABLED
+  int  getModifiedWideAngle( int width, int height, int predMode );
+  int  getNumTopRecons(CodingUnit &cu, int luma_dirMode, bool isChroma);
+  bool isValidIntraPredLuma(CodingUnit &cu, int luma_dirMode);
+  bool isValidIntraPredChroma(CodingUnit &cu, int luma_dirMode, int chroma_dirMode);
+#endif
+
 private:
   double    xFindInterCUCost          ( CodingUnit &cu );
   void      xPreCheckMTS              ( TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *pPred, const ComponentID& compID = COMP_Y);
