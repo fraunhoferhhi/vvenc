@@ -894,7 +894,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     if (m_pcEncCfg->m_FastModesTL && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
     {
       if ( ((m_pcEncCfg->m_FastModesTL == 1) || (bestCS->slice->TLayer >= m_pcEncCfg->m_FastModesTL))
-        && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->getCU(partitioner.chType, partitioner.treeType)->skip))
+        && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
       {
         return false;
       }
@@ -983,7 +983,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
         if (m_pcEncCfg->m_FastModesTL)
         {
           if (((m_pcEncCfg->m_FastModesTL == 1) || (bestCS->slice->TLayer >= m_pcEncCfg->m_FastModesTL))
-            && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->getCU(partitioner.chType, partitioner.treeType)->skip))
+            && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
           {
             return false;
           }
