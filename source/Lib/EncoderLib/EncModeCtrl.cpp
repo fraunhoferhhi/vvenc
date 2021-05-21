@@ -890,6 +890,17 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   {
     // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
+#if MIN_SKIPPAR
+    if (m_pcEncCfg->m_FastModesTL && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+    {
+      if ( ((m_pcEncCfg->m_FastModesTL == 1) || (bestCS->slice->TLayer >= m_pcEncCfg->m_FastModesTL))
+        && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->getCU(partitioner.chType, partitioner.treeType)->skip))
+      {
+        return false;
+      }
+    }
+#endif
+
     if( lumaArea.width > cs.sps->getMaxTbSize() || lumaArea.height > cs.sps->getMaxTbSize() )
     {
       return false;
@@ -968,6 +979,16 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     {
       if( encTestmode.opts == ETO_STANDARD )
       {
+#if MIN_SKIPPAR
+        if (m_pcEncCfg->m_FastModesTL)
+        {
+          if (((m_pcEncCfg->m_FastModesTL == 1) || (bestCS->slice->TLayer >= m_pcEncCfg->m_FastModesTL))
+            && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->getCU(partitioner.chType, partitioner.treeType)->skip))
+          {
+            return false;
+          }
+        }
+#endif
         // NOTE: ETO_STANDARD is always done when early SKIP mode detection is enabled
         if( !m_pcEncCfg->m_useEarlySkipDetection )
         {

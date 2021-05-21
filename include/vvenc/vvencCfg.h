@@ -631,7 +631,7 @@ typedef struct vvenc_config
   int                 m_IBCMode;
   int                 m_IBCFastMethod;
 #if 1//MIN_SKIPPAR
-  int                 m_SpeedModes;
+  int                 m_FastModesTL;
 #endif
 
   bool                m_bLoopFilterDisable;                                              // flag for using deblocking filter

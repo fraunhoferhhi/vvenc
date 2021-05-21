@@ -559,7 +559,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IBCFastMethod                           = 1;
 
 #if 1//MIN_SKIPPAR
-  c->m_SpeedModes                              = 0;
+  c->m_FastModesTL = 0;
 #endif
 
   c->m_bLoopFilterDisable                      = false;
@@ -2195,7 +2195,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
 #if 1//MIN_SKIPPAR
-  vvenc_confirmParameter( c, c->m_SpeedModes < 0 ||  c->m_SpeedModes > 5,      "SpeedModes out of range [0..5]");
+  vvenc_confirmParameter( c, c->m_FastModesTL < 0 ||  c->m_FastModesTL > 5,      "SpeedModes out of range [0..5]");
 #endif
 
   if( c->m_alf )
@@ -3159,7 +3159,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
   }
 #if 1//MIN_SKIPPAR
-  css << "SpeedModes:" << c->m_SpeedModes << " ";
+  css << "SpeedModes:" << c->m_FastModesTL << " ";
 #endif
 
   css << "\nRATE CONTROL CFG: ";
