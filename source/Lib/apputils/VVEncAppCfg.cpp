@@ -1058,6 +1058,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
   ("IBC",                                             m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
+#if 1//MIN_SKIPPAR 
+  ("FastInferMerge",                                  m_FastInferMerge,                                 "Fast method to skip Inter/Intra modes by TL.0:off, [1..log2(GopSize)] from deepest TL")
+#endif
   ;
 
   opts.setSubSection("Input options");

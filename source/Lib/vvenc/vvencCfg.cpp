@@ -558,6 +558,10 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IBCMode                                 = 0;
   c->m_IBCFastMethod                           = 1;
 
+#if 1//MIN_SKIPPAR
+  c->m_FastInferMerge = 0;
+#endif
+
   c->m_bLoopFilterDisable                      = false;
   c->m_loopFilterOffsetInPPS                   = true;
 
@@ -2190,6 +2194,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FastIntraTools <0 || c->m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
+#if 1//MIN_SKIPPAR
+  vvenc_confirmParameter( c, c->m_FastInferMerge < 0 ||  c->m_FastInferMerge > log2(c->m_GOPSize), "FastInferMerge out of range [0..log2(GopSize)]");
+#endif
 
   if( c->m_alf )
   {
@@ -3151,6 +3158,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
   }
+#if 1//MIN_SKIPPAR
+  css << "FastInferMerge:" << c->m_FastInferMerge << " ";
+#endif
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
