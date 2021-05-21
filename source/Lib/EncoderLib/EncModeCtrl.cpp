@@ -891,9 +891,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
 #if MIN_SKIPPAR
-    if (m_pcEncCfg->m_FastModesTL && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+    if (m_pcEncCfg->m_FastInferMerge && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
     {
-      if ( ((m_pcEncCfg->m_FastModesTL == 1) || (bestCS->slice->TLayer >= m_pcEncCfg->m_FastModesTL))
+      if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - m_pcEncCfg->m_FastInferMerge))
         && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
       {
         return false;
@@ -980,9 +980,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       if( encTestmode.opts == ETO_STANDARD )
       {
 #if MIN_SKIPPAR
-        if (m_pcEncCfg->m_FastModesTL)
+        if (m_pcEncCfg->m_FastInferMerge)
         {
-          if (((m_pcEncCfg->m_FastModesTL == 1) || (bestCS->slice->TLayer >= m_pcEncCfg->m_FastModesTL))
+          if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - m_pcEncCfg->m_FastInferMerge))
             && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
           {
             return false;
