@@ -73,6 +73,8 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
+#define MIN_SKIPPAR  1
+
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
@@ -189,10 +191,11 @@ typedef       int64_t           Intermediate_Int;  ///< used as intermediate val
 typedef       uint64_t          Intermediate_UInt; ///< used as intermediate value in calculations
 #else
 typedef       int16_t           Pel;               ///< pixel type
-typedef       int               TCoeff;            ///< transform coefficient
+typedef       int32_t           TCoeff;            ///< transform coefficient
+typedef       int16_t           TCoeffSig;         ///< transform coefficient as signalled
 typedef       int16_t           TMatrixCoeff;      ///< transform matrix coefficient
 typedef       int16_t           TFilterCoeff;      ///< filter coefficient
-typedef       int               Intermediate_Int;  ///< used as intermediate value in calculations
+typedef       int32_t           Intermediate_Int;  ///< used as intermediate value in calculations
 typedef       uint32_t          Intermediate_UInt; ///< used as intermediate value in calculations
 #endif
 

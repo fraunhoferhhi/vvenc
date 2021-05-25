@@ -90,12 +90,13 @@ inline unsigned calcCheckSum( const CPelBuf& buf, int bitdepth )
 // Specialized helper functions
 //
 //////////////////////////////////////////////////////////////////////////
-inline void dtraceCoeffBuf( DTRACE_CHANNEL channnel, const CCoeffBuf& coefBuf, const UnitArea& ua, PredMode predMode, const ComponentID compId, uint32_t zIdx = 0 )
+template<typename T>
+inline void dtraceCoeffBuf( DTRACE_CHANNEL channnel, const AreaBuf<T>& coefBuf, const UnitArea& ua, PredMode predMode, const ComponentID compId, uint32_t zIdx = 0 )
 {
   int x0 = ua.blocks[compId].x;
   int y0 = ua.blocks[compId].y;
   const uint32_t    uiStride = coefBuf.stride;
-  const TCoeff* piReco   = coefBuf.buf;
+  const T*          piReco   = coefBuf.buf;
   const uint32_t    uiWidth  = ua.blocks[compId].width;
   const uint32_t    uiHeight = ua.blocks[compId].height;
   DTRACE(g_trace_ctx, channnel, "@(%4d,%4d) [%2dx%2d] comp=%d predmode=%d \n", x0, y0, uiWidth, uiHeight, compId, predMode);

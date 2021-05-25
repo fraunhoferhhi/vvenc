@@ -77,47 +77,6 @@ struct coeffGroupRDStats
 //! \ingroup CommonLib
 //! \{
 
-int xQuantCG( short* piQCoef, const short* piCoef, const int* piQuantCoeff, const int iAdd, const int iShift, const int iSize, const int iStride )
-{
-  int iAcSum = 0;
-  short *piCoefPtr = (short*) piCoef;
-  int *piQuantCoeffPtr = (int*) piQuantCoeff;
-
-  for( int j = 0; j < iSize; j++, piCoefPtr += iStride, piQCoef += iStride, piQuantCoeffPtr += iStride )
-  {
-    for( int n = 0; n < iSize; n++ )
-    {
-
-      int iLevel  = piCoefPtr[n];
-      iLevel = ((int64_t)abs(iLevel) * piQuantCoeffPtr[n] + iAdd ) >> iShift;
-      iAcSum += iLevel;
-      piQCoef[n] = Clip3( -32768, 32767, iLevel );
-    }
-  } // for n
-  return iAcSum;
-}
-
-template <int iLog2TrSize>
-int quantCGWise( short* piQCoef, short* piCbf, const short* piCoef, const int* piQuantCoeff, const int iAdd, const int iShift, const int iNumSamples )
-{
-  int iTotalAbsSum = 0;
-  short *piCoefPtr = (short*) piCoef;
-  int *piQuantCoeffPtr = (int*) piQuantCoeff;
-  int iSize   = 1 << iLog2TrSize;
-  int iStride = iSize;
-
-  for( int j = 0, n = 0; j < iSize; j += 4, piQCoef += iStride*4, piCoefPtr += iStride*4, piQuantCoeffPtr += iStride*4 )
-  {
-    for( int i = 0; i < iSize; i += 4 )
-    {
-      int iAbsSum = xQuantCG( &piQCoef[i], &piCoefPtr[i], &piQuantCoeffPtr[i], iAdd, iShift, 4, iStride );
-      piCbf[n++] = (short)iAbsSum;
-      iTotalAbsSum += iAbsSum;
-    }
-  }
-  return iTotalAbsSum;
-}
-
 // ====================================================================================================================
 // Constants
 // ====================================================================================================================
@@ -130,15 +89,6 @@ QuantRDOQ2::QuantRDOQ2( const Quant* other, bool useScalingLists ) : QuantRDOQ( 
   const QuantRDOQ2 *rdoq2 = dynamic_cast<const QuantRDOQ2*>( other );
   CHECK( other && !rdoq2, "The RDOQ cast must be successfull!" );
   xInitScalingList( rdoq2 );
-  m_pQuantToNearestInt[0] = quantCGWise<2>;
-  m_pQuantToNearestInt[1] = quantCGWise<3>;
-  m_pQuantToNearestInt[2] = quantCGWise<4>;
-  m_pQuantToNearestInt[3] = quantCGWise<5>;
-#if ENABLE_SIMD_OPT_QUANT
-#ifdef TARGET_SIMD_X86
-  initQuantX86();
-#endif
-#endif
 }
 
 QuantRDOQ2::~QuantRDOQ2()
@@ -305,8 +255,8 @@ void QuantRDOQ2::quant( TransformUnit &tu, const ComponentID compID, const CCoef
   const uint32_t uiWidth    = rect.width;
   const uint32_t uiHeight   = rect.height;
 
-  const CCoeffBuf& piCoef   = pSrc;
-        CoeffBuf   piQCoef  = tu.getCoeffs(compID);
+  const CCoeffBuf&  piCoef   = pSrc;
+        CoeffSigBuf piQCoef  = tu.getCoeffs(compID);
 
   const bool useTransformSkip = tu.mtsIdx[compID]==MTS_SKIP;
 
@@ -597,10 +547,10 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   int scalingListType = getScalingListType( tu.cu->predMode, compID );
   CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
 
-  const TCoeff *plSrcCoeff      = pSrc.buf;
-        TCoeff *piDstCoeff      = tu.getCoeffs( compID ).buf;
+  const TCoeff    *plSrcCoeff   = pSrc.buf;
+        TCoeffSig *piDstCoeff   = tu.getCoeffs( compID ).buf;
 
-  memset( piDstCoeff, 0, sizeof(*piDstCoeff) * uiMaxNumCoeff );
+  memset( piDstCoeff, 0, sizeof( *piDstCoeff ) * uiMaxNumCoeff );
 
   const bool needSqrtAdjustment = TU::needsSqrt2Scale( tu, compID );
   const bool isTransformSkip    = tu.mtsIdx[compID] == MTS_SKIP;
@@ -660,6 +610,10 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   //  Loop over sub-sets (coefficient groups)
   //////////////////////////////////////////////////////////////////////////
 
+#if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
+  const bool scanFirstSimd = !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 && read_x86_extension_flags() > SCALAR;
+#endif
+
   int subSetId = iScanPos >> log2CGSize;
   for( ; subSetId >= 0; subSetId-- )
   {
@@ -671,6 +625,59 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
     int iScanPosinCG = iScanPos & ( iCGSize - 1 );
     if( iLastScanPos < 0 )
     {
+#if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
+      // if more than one 4x4 coding subblock is available, use SIMD to find first subblock with coefficient larger than threshold
+      if( scanFirstSimd )
+      {
+        // move the pointer to the beginning of the current subblock
+        const int firstTestPos  = iScanPos - iScanPosinCG;
+        uint32_t  uiBlkPos      = cctx.blockPos( firstTestPos );
+
+        const __m128i xquant = _mm_set1_epi32( defaultQuantScale );
+        const __m128i xadd   = _mm_set1_epi32( iQOffset );
+
+        // read first line of the subblock and check for quantized non-zero coefficients
+        // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of uiwidth
+        __m128i xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
+                xl0 = _mm_mullo_epi32( xl0, xquant );
+                xl0 = _mm_add_epi32  ( xl0, xadd );
+                xl0 = _mm_srai_epi32 ( xl0, iQBits );
+        __m128i xdf = xl0;
+
+        // same for the next line in the subblock
+        uiBlkPos += uiWidth;
+        xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
+        xl0 = _mm_mullo_epi32( xl0, xquant );
+        xl0 = _mm_add_epi32  ( xl0, xadd );
+        xl0 = _mm_srai_epi32 ( xl0, iQBits );
+        xdf = _mm_or_si128   ( xdf, xl0 );
+
+        // and the third line
+        uiBlkPos += uiWidth;
+        xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
+        xl0 = _mm_mullo_epi32( xl0, xquant );
+        xl0 = _mm_add_epi32  ( xl0, xadd );
+        xl0 = _mm_srai_epi32 ( xl0, iQBits );
+        xdf = _mm_or_si128   ( xdf, xl0 );
+
+        // and the last line
+        uiBlkPos += uiWidth;
+        xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
+        xl0 = _mm_mullo_epi32( xl0, xquant );
+        xl0 = _mm_add_epi32  ( xl0, xadd );
+        xl0 = _mm_srai_epi32 ( xl0, iQBits );
+        xdf = _mm_or_si128   ( xdf, xl0 );
+
+        // if none of the coeffcients were non-zero, skip the subblock
+        if( _mm_testz_si128( xdf, xdf ) )
+        {
+          iScanPos    -= iScanPosinCG + 1;
+          iScanPosinCG = -1;
+          continue;
+        }
+      }
+
+#endif
     findlast2:
       // Fast loop to find last-pos.
       // No need to add distortion to cost as it would be added to both the coded and uncoded cost
@@ -1220,7 +1227,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   {
     iCodedCostBlock = iUncodedCostBlock;
     uiAbsSum = 0;
-    ::memset( piDstCoeff, 0, uiMaxNumCoeff*sizeof( TCoeff ) );
+    ::memset( piDstCoeff, 0, uiMaxNumCoeff*sizeof( TCoeffSig ) );
   }
   else
   {

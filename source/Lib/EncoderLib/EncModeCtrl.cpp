@@ -326,8 +326,8 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   m_dmvrMvBuf = new Mv[numDmvrMv];
   Mv* dmvrMv = m_dmvrMvBuf;
 
-  m_pCoeff = new TCoeff[numCoeff];
-  TCoeff* coeffPtr = m_pCoeff;
+  m_pCoeff = new TCoeffSig[numCoeff];
+  TCoeffSig* coeffPtr = m_pCoeff;
 
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
@@ -372,7 +372,7 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
               dmvrMv += dmvrSize;
             }
 
-            TCoeff* coeff[MAX_NUM_TBLOCKS] = { 0, };
+            TCoeffSig* coeff[MAX_NUM_TBLOCKS] = { 0, };
 
             const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
 
@@ -890,6 +890,17 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   {
     // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
+#if MIN_SKIPPAR
+    if (m_pcEncCfg->m_FastInferMerge && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+    {
+      if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - m_pcEncCfg->m_FastInferMerge))
+        && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
+      {
+        return false;
+      }
+    }
+#endif
+
     if( lumaArea.width > cs.sps->getMaxTbSize() || lumaArea.height > cs.sps->getMaxTbSize() )
     {
       return false;
@@ -968,6 +979,16 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     {
       if( encTestmode.opts == ETO_STANDARD )
       {
+#if MIN_SKIPPAR
+        if (m_pcEncCfg->m_FastInferMerge)
+        {
+          if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - m_pcEncCfg->m_FastInferMerge))
+            && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
+          {
+            return false;
+          }
+        }
+#endif
         // NOTE: ETO_STANDARD is always done when early SKIP mode detection is enabled
         if( !m_pcEncCfg->m_useEarlySkipDetection )
         {

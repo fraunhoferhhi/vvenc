@@ -323,13 +323,10 @@ struct InterPredictionData
 
   uint8_t     mvpIdx  [NUM_REF_PIC_LIST_01];
   uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
-  Mv          mvd     [NUM_REF_PIC_LIST_01];
-  Mv          mv      [NUM_REF_PIC_LIST_01];
+  Mv          mvd     [NUM_REF_PIC_LIST_01][3];
+  Mv          mv      [NUM_REF_PIC_LIST_01][3];
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
-  Mv          mvdAffi [NUM_REF_PIC_LIST_01][3];
-  Mv          mvAffi  [NUM_REF_PIC_LIST_01][3];
   Mv          bv;     // block vector for IBC
-  Mv          bvd;    // block vector difference for IBC
 };
 
 
@@ -423,21 +420,22 @@ struct TransformUnit : public UnitArea
   TransformUnit*   prev;
 
   TransformUnit                           () = default;
-  TransformUnit                           ( const UnitArea& unit);
-  TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area);
+  TransformUnit                           ( const UnitArea& unit );
+  TransformUnit                           ( const ChromaFormat _chromaFormat, const Area& area );
   void          initData                  ();
-  void          init                      ( TCoeff **coeffs);
+  void          init                      ( TCoeffSig **coeffs );
 
-  TransformUnit& operator=                ( const TransformUnit& other);
-  void          copyComponentFrom         ( const TransformUnit& other, const ComponentID compID);
+  TransformUnit& operator=                ( const TransformUnit& other );
+  void          copyComponentFrom         ( const TransformUnit& other, const ComponentID compID );
   void          checkTuNoResidual         ( unsigned idx );
-  int           getTbAreaAfterCoefZeroOut ( ComponentID compID) const;
+  int           getTbAreaAfterCoefZeroOut ( ComponentID compID ) const;
 
-       CoeffBuf getCoeffs                 ( ComponentID id)       { return  CoeffBuf(m_coeffs[id], blocks[id]); }
-const CCoeffBuf getCoeffs                 ( ComponentID id) const { return CCoeffBuf(m_coeffs[id], blocks[id]); }
+       CoeffSigBuf getCoeffs              ( ComponentID id )       { return  CoeffSigBuf(m_coeffs[id], blocks[id]); }
+const CCoeffSigBuf getCoeffs              ( ComponentID id ) const { return CCoeffSigBuf(m_coeffs[id], blocks[id]); }
 
 private:
-  TCoeff* m_coeffs[ MAX_NUM_TBLOCKS ];
+  friend CodingStructure;
+  TCoeffSig* m_coeffs[ MAX_NUM_TBLOCKS ];
 };
 
 // ---------------------------------------------------------------------------

@@ -401,6 +401,12 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   xCompressCU( tempCS, bestCS, *partitioner );
   // all signals were already copied during compression if the CTU was split - at this point only the structures are copied to the top level CS
+  
+  // Ensure that a coding was found
+  // Selected mode's RD-cost must be not MAX_DOUBLE.
+  CHECK( bestCS->cus.empty()                                   , "No possible encoding found" );
+  CHECK( bestCS->cus[0]->predMode == NUMBER_OF_PREDICTION_MODES, "No possible encoding found" );
+  CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 
   if ( m_wppMutex ) m_wppMutex->lock();
 
@@ -408,7 +414,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_wppMutex ) m_wppMutex->unlock();
 
-  if (CS::isDualITree (cs) && isChromaEnabled (cs.pcv->chrFormat))
+  if( CS::isDualITree( cs ) && isChromaEnabled( cs.pcv->chrFormat ) )
   {
     m_CABACEstimator->getCtx() = m_CurrCtx->start;
 
@@ -422,6 +428,12 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     tempCS->prevQP[CH_C] = bestCS->prevQP[CH_C] = prevQP[CH_C];
 
     xCompressCU( tempCS, bestCS, *partitioner );
+    
+    // Ensure that a coding was found
+    // Selected mode's RD-cost must be not MAX_DOUBLE.
+    CHECK( bestCS->cus.empty()                                   , "No possible encoding found" );
+    CHECK( bestCS->cus[0]->predMode == NUMBER_OF_PREDICTION_MODES, "No possible encoding found" );
+    CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 
     if ( m_wppMutex ) m_wppMutex->lock();
 
@@ -438,12 +450,6 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   // reset context states and uninit context pointer
   m_CABACEstimator->getCtx() = m_CurrCtx->start;
   m_CurrCtx                  = 0;
-
-  // Ensure that a coding was found
-  // Selected mode's RD-cost must be not MAX_DOUBLE.
-  CHECK( bestCS->cus.empty()                                   , "No possible encoding found" );
-  CHECK( bestCS->cus[0]->predMode == NUMBER_OF_PREDICTION_MODES, "No possible encoding found" );
-  CHECK( bestCS->cost             == MAX_DOUBLE                , "No possible encoding found" );
 }
 
 
@@ -1675,8 +1681,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
         if( mergeCtx.interDirNeighbours[uiMergeCand] == 3 && mergeCtx.mrgTypeNeighbours[uiMergeCand] == MRG_TYPE_DEFAULT_N )
         {
-          mergeCtx.mvFieldNeighbours[2*uiMergeCand].mv   = cu.mv[0];
-          mergeCtx.mvFieldNeighbours[2*uiMergeCand+1].mv = cu.mv[1];
+          mergeCtx.mvFieldNeighbours[2*uiMergeCand].mv   = cu.mv[0][0];
+          mergeCtx.mvFieldNeighbours[2*uiMergeCand+1].mv = cu.mv[1][0];
         }
         distParam.cur.buf = m_SortedPelUnitBufs.getTestBuf().Y().buf;
 
@@ -2133,7 +2139,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           {
             if( slice.numRefIdx[ uiRefListIdx ] > 0 )
             {
-              absolute_MV += bestCU.mvd[uiRefListIdx].getAbsHor() + bestCU.mvd[uiRefListIdx].getAbsVer();
+              absolute_MV += bestCU.mvd[uiRefListIdx][0].getAbsHor() + bestCU.mvd[uiRefListIdx][0].getAbsVer();
             }
           }
 
@@ -3302,7 +3308,7 @@ bool checkValidMvs( const CodingUnit& cu)
       if (!cu.affine)
       {
         mvShift = normalShiftTab[cu.imv];
-        Mv signaledmvd(cu.mvd[refList].hor >> mvShift, cu.mvd[refList].ver >> mvShift);
+        Mv signaledmvd(cu.mvd[refList][0].hor >> mvShift, cu.mvd[refList][0].ver >> mvShift);
         if (!((signaledmvd.hor >= MVD_MIN) && (signaledmvd.hor <= MVD_MAX)) || !((signaledmvd.ver >= MVD_MIN) && (signaledmvd.ver <= MVD_MAX)))
           return false;
       }
@@ -3311,7 +3317,7 @@ bool checkValidMvs( const CodingUnit& cu)
         for (int ctrlP = 1 + (cu.affineType == AFFINEMODEL_6PARAM); ctrlP >= 0; ctrlP--)
         {
           mvShift = affineShiftTab[cu.imv];
-          Mv signaledmvd(cu.mvdAffi[refList][ctrlP].hor >> mvShift, cu.mvdAffi[refList][ctrlP].ver >> mvShift);
+          Mv signaledmvd(cu.mvd[refList][ctrlP].hor >> mvShift, cu.mvd[refList][ctrlP].ver >> mvShift);
           if (!((signaledmvd.hor >= MVD_MIN) && (signaledmvd.hor <= MVD_MAX)) || !((signaledmvd.ver >= MVD_MIN) && (signaledmvd.ver <= MVD_MAX)))
             return false;;
         }
@@ -3322,8 +3328,8 @@ bool checkValidMvs( const CodingUnit& cu)
   const int maxMv = 1 << 17;
   if (!cu.affine && !cu.mergeFlag)
   {
-    if ((cu.refIdx[0] >= 0 && (cu.mv[0].getAbsHor() >= maxMv || cu.mv[0].getAbsVer() >= maxMv))
-      || (cu.refIdx[1] >= 0 && (cu.mv[1].getAbsHor() >= maxMv || cu.mv[1].getAbsVer() >= maxMv)))
+    if ((cu.refIdx[0] >= 0 && (cu.mv[0][0].getAbsHor() >= maxMv || cu.mv[0][0].getAbsVer() >= maxMv))
+      || (cu.refIdx[1] >= 0 && (cu.mv[1][0].getAbsHor() >= maxMv || cu.mv[1][0].getAbsVer() >= maxMv)))
     {
       return false;
     }
@@ -3336,7 +3342,7 @@ bool checkValidMvs( const CodingUnit& cu)
       {
         for (int ctrlP = 1 + (cu.affineType == AFFINEMODEL_6PARAM); ctrlP >= 0; ctrlP--)
         {
-          if (cu.mvAffi[refList][ctrlP].getAbsHor() >= maxMv || cu.mvAffi[refList][ctrlP].getAbsVer() >= maxMv)
+          if (cu.mv[refList][ctrlP].getAbsHor() >= maxMv || cu.mv[refList][ctrlP].getAbsVer() >= maxMv)
           {
             return false;
           }
@@ -3923,7 +3929,7 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
           {
             if (slice.numRefIdx[uiRefListIdx] > 0)
             {
-              absolute_MV += bestCU.mvd[uiRefListIdx].getAbsHor() + bestCU.mvd[uiRefListIdx].getAbsVer();
+              absolute_MV += bestCU.mvd[uiRefListIdx][0].getAbsHor() + bestCU.mvd[uiRefListIdx][0].getAbsVer();
             }
           }
 
@@ -3960,11 +3966,11 @@ double EncCu::xCalcDistortion(CodingStructure *&cur_CS, ChannelType chType, int 
   const CodingUnit& cu = *cur_CS->getCU( chType, TREE_D);
   if (cu.interDir != 2)
   {
-    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cu.mvd[0].hor, cu.mvd[0].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
+    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cu.mvd[0][0].hor, cu.mvd[0][0].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
   }
   if (cu.interDir != 1)
   {
-    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cu.mvd[1].hor, cu.mvd[1].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
+    uiMvBits += m_cRdCost.getBitsOfVectorWithPredictor(cu.mvd[1][0].hor, cu.mvd[1][0].ver, imvShift + MV_FRACTIONAL_BITS_DIFF);
   }
   return (double(currDist1) + (double)m_cRdCost.getCost(uiMvBits));
 }

@@ -1570,8 +1570,6 @@ public:
     , lumaWidth           ( pps.picWidthInLumaSamples )
     , lumaHeight          ( pps.picHeightInLumaSamples )
     , fastDeltaQPCuMaxSize( Clip3<unsigned>( (1 << sps.log2MinCodingBlockSize), sps.CTUSize, 32u) )
-    , multiBlock422       ( false )
-    , noChroma2x2         ( false )
     , isEncoder           ( _isEncoder )
     , ISingleTree         ( !sps.dualITree )
     , wrapArround         ( sps.wrapAroundEnabled )
@@ -1597,8 +1595,6 @@ public:
   const unsigned     lumaWidth;
   const unsigned     lumaHeight;
   const unsigned     fastDeltaQPCuMaxSize;
-  const bool         multiBlock422;
-  const bool         noChroma2x2;
   const bool         isEncoder;
   const bool         ISingleTree;
   const bool         wrapArround;

@@ -316,7 +316,7 @@ class BestEncInfoCache
 private:
   const PreCalcValues* m_pcv;
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
-  TCoeff*              m_pCoeff;
+  TCoeffSig*           m_pCoeff;
   BestEncodingInfo*    m_encInfoBuf;
   Mv*                  m_dmvrMvBuf;
   CodingStructure      m_dummyCS;
