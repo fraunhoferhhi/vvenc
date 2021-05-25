@@ -834,29 +834,10 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   slice->picHeader->picInterSliceAllowed = sliceType != VVENC_I_SLICE;
   slice->picHeader->picIntraSliceAllowed = sliceType == VVENC_I_SLICE;
 
-  if( m_pcEncCfg->m_deblockingFilterMetric == 3 )
+  for( int comp = 0; comp < MAX_NUM_COMP; comp++)
   {
-    int lumaQpOffset = std::min (0, (int)slice->TLayer-5 );
-    slice->deblockingFilterOverrideFlag =  slice->picHeader->deblockingFilterOverride = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Y] != lumaQpOffset;
-    slice->deblockingFilterDisable      = slice->picHeader->deblockingFilterDisable = false;
-
-    slice->deblockingFilterTcOffsetDiv2[COMP_Y]    = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Y] = lumaQpOffset;
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Y]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Y] = -2;
-
-    slice->deblockingFilterTcOffsetDiv2[COMP_Cb]   = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Cb]   = 
-    slice->deblockingFilterTcOffsetDiv2[COMP_Cr]   = slice->picHeader->deblockingFilterTcOffsetDiv2[COMP_Cr] = -3;  
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Cb] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cb] = 
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Cr] = slice->picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cr] = -3; 
-  }
-  else
-  {
-    slice->deblockingFilterTcOffsetDiv2[COMP_Y]   = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Y];
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Y] = slice->pps->deblockingFilterBetaOffsetDiv2[COMP_Y];
-
-    slice->deblockingFilterTcOffsetDiv2[COMP_Cb]   = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Cb]; 
-    slice->deblockingFilterTcOffsetDiv2[COMP_Cr]   = slice->pps->deblockingFilterTcOffsetDiv2[COMP_Cr];  
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Cb] = slice->pps->deblockingFilterBetaOffsetDiv2[COMP_Cb];
-    slice->deblockingFilterBetaOffsetDiv2[COMP_Cr] = slice->pps->deblockingFilterBetaOffsetDiv2[COMP_Cr]; 
+    slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = slice->pps->deblockingFilterTcOffsetDiv2[comp];
+    slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = slice->pps->deblockingFilterBetaOffsetDiv2[comp];
   }
 
   if (slice->pps->useDQP)
