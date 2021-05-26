@@ -630,6 +630,9 @@ typedef struct vvenc_config
 
   int                 m_IBCMode;
   int                 m_IBCFastMethod;
+#if 1//MIN_SKIPPAR
+  int                 m_FastInferMerge;
+#endif
 
   bool                m_bLoopFilterDisable;                                              // flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS
