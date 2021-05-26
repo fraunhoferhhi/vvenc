@@ -1536,8 +1536,8 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
   MergeCtx mergeCtx;
 #if MERGE_ENC_OPT
-  bool Do_Affine = (m_pcEncCfg->m_Affine > 1) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP) ? false : true;
-  bool affineMrgAvail = Do_Affine && (m_pcEncCfg->m_Affine || sps.SbtMvp) && m_pcEncCfg->m_maxNumAffineMergeCand
+  bool affineMrgAvail =!((m_pcEncCfg->m_Affine > 1) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP))
+    && (m_pcEncCfg->m_Affine || sps.SbtMvp) && m_pcEncCfg->m_maxNumAffineMergeCand
     && !(bestCS->area.lumaSize().width < 8 || bestCS->area.lumaSize().height < 8);
 
   AffineMergeCtx affineMergeCtx;
@@ -3768,8 +3768,7 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 }
 
 #if MERGE_ENC_OPT
-template<int M>
-bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<M>& sortedPelBuffer
+bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
   , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size)
 {
   bool mmvdCandInserted = false;
