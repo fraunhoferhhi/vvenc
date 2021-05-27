@@ -769,7 +769,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
             return false;
           }
         }
-        if( m_pcEncCfg->m_bUseEarlyCU && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
+        if( m_pcEncCfg->m_bUseEarlyCU && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < 1024 )
         {
           return false;
         }
