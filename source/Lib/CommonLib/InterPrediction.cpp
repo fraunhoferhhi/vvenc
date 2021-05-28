@@ -486,8 +486,8 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
     DTRACE( g_trace_ctx, D_MOT_COMP, "BIDOF=%d, DMVR=%d\n", bdofApplied, dmvrApplied );
     ret = bdofApplied || dmvrApplied;
   }
-  DTRACE( g_trace_ctx, D_MOT_COMP, "MV=%d,%d\n", cu.mv[0].hor, cu.mv[0].ver );
-  DTRACE( g_trace_ctx, D_MOT_COMP, "MV=%d,%d\n", cu.mv[1].hor, cu.mv[1].ver );
+  DTRACE( g_trace_ctx, D_MOT_COMP, "MV=%d,%d\n", cu.mv[0][0].hor, cu.mv[0][0].ver );
+  DTRACE( g_trace_ctx, D_MOT_COMP, "MV=%d,%d\n", cu.mv[1][0].hor, cu.mv[1][0].ver );
   DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Y(), cu, cu.predMode, COMP_Y );
   DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Cb(), cu, cu.predMode, COMP_Cb );
   DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Cr(), cu, cu.predMode, COMP_Cr );
