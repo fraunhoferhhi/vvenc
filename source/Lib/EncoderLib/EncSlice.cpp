@@ -410,6 +410,10 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
     if( sliceType == VVENC_I_SLICE )
     {
       qp += m_pcEncCfg->m_intraQPOffset;
+      if( slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
+      {
+        qp += m_pcEncCfg->m_TestVal;
+      }
     }
     else
     {

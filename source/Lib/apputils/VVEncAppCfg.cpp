@@ -814,6 +814,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("WaveFrontSynchro",                                m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
   ("EntryPointsPresent",                              m_entryPointsPresent,                             "Enable entry points in slice header")
+
+  ("TestVal",                                         m_TestVal,                                        "dummy parameter for testing")
   ;
 
   opts.setSubSection("Quad-Tree size and depth");
