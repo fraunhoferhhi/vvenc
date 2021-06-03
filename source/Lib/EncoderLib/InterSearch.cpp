@@ -809,7 +809,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   const ChromaFormat chFmt = m_currChromaFormat;
 
   Distortion distH[ 9 ] = { uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest };
-  const int TH = 9, TL = 7, shift = 3;
+  const int TH = 17, TL = 15, shift = 4;
 
   const Mv* pcMvRefine = (iFrac == 2 ? s_acMvRefineH : s_acMvRefineQ);
   for (uint32_t i = 0; i < 9; i++)
@@ -821,7 +821,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
         continue;
       }
 
-      if( 2 == iFrac && 5 == i && 0 == uiDirecBest )
+      if( 2 == iFrac && ( ( 5 == i && 0 == uiDirecBest ) || ( 7 == i && 1 == uiDirecBest ) || ( 8 == i && ( 1 == uiDirecBest || 3 == uiDirecBest || 5 == uiDirecBest ) ) ) )
       {
         break;
       }
