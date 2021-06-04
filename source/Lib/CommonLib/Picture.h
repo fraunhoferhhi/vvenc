@@ -248,6 +248,7 @@ public:
   bool                          useScTS;
   bool                          useScBDPCM;
   bool                          useScIBC;
+  int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;

@@ -245,6 +245,7 @@ EncGOP::EncGOP()
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
   , m_pocCRA             ( 0 )
+  , m_appliedSwitchDQQ   ( 0 )
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
   , m_pcEncCfg           ( nullptr )
@@ -286,6 +287,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
   m_seiEncoder.init( encCfg, encHrd );
   m_Reshaper.init  ( encCfg );
 
+  m_appliedSwitchDQQ = 0;
   const int maxPicEncoder = ( encCfg.m_maxParallelFrames ) ? encCfg.m_maxParallelFrames : 1;
   for ( int i = 0; i < maxPicEncoder; i++ )
   {
@@ -421,7 +423,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
-
+    
     // compress next picture
     if( pic->encPic )
     {
@@ -950,6 +952,12 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   }
   CHECK( slice->enableDRAPSEI && m_pcEncCfg->m_maxParallelFrames, "Dependent Random Access Point is not supported by Frame Parallel Processing" );
 
+  if( pic.poc == m_pcEncCfg->m_switchPOC ) 
+  {
+    m_appliedSwitchDQQ = m_pcEncCfg->m_switchDQP;
+  }
+  pic.seqBaseQp = m_pcEncCfg->m_QP + m_appliedSwitchDQQ;
+   
   pic.isInitDone = true;
 
   m_bFirstInit = false;

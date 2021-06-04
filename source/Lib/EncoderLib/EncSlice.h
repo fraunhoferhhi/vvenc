@@ -113,7 +113,6 @@ private:
   Ctx                          m_entropyCodingSyncContextState;      ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for writing
   std::vector<Ctx>             m_syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   SliceType                    m_encCABACTableIdx;
-  int                          m_appliedSwitchDQQ;
 
   double                       m_saoDisabledRate[ MAX_NUM_COMP ][ VVENC_MAX_TLAYER ];
   bool                         m_saoEnabled[ MAX_NUM_COMP ];
