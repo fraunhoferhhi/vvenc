@@ -809,7 +809,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   const ChromaFormat chFmt = m_currChromaFormat;
 
   Distortion distH[ 9 ] = { uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest };
-  const int TH = 9, TL = 7, shift = 3;
+  const int TH = 17, TL = 15, shift = 4;
 
   const Mv* pcMvRefine = (iFrac == 2 ? s_acMvRefineH : s_acMvRefineQ);
   for (uint32_t i = 0; i < 9; i++)
@@ -821,13 +821,13 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
         continue;
       }
 
-      if( 2 == iFrac && 5 == i && 0 == uiDirecBest )
-      {
-        break;
-      }
-
       if( 2 == iFrac )
       {
+        if ( ( 5 == i && 0 == uiDirecBest ) || ( 7 == i && 1 == uiDirecBest ) || ( 8 == i && ( 1 == uiDirecBest || 3 == uiDirecBest || 5 == uiDirecBest ) ) )
+        {
+          break;
+        }
+
         if( 0 == i )
         {
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
@@ -873,11 +873,11 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
     int verVal = cMvTest.ver * iFrac;
     piRefPos = m_filteredBlock[verVal & 3][horVal & 3][0];
 
-    if (horVal == 2 && (verVal & 1) == 0)
+    if ( horVal == 2 && ( verVal & 1 ) == 0 )
     {
       piRefPos += 1;
     }
-    if ((horVal & 1) == 0 && verVal == 2)
+    if ( ( horVal & 1 ) == 0 && verVal == 2 )
     {
       piRefPos += iRefStride;
     }
@@ -900,91 +900,88 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
   rcMvFrac = pcMvRefine[uiDirecBest];
 
-  if( m_pcEncCfg->m_fastSubPel )
+  if( m_pcEncCfg->m_fastSubPel && 2 == iFrac )
   {
-    if( 2 == iFrac )
+    switch ( uiDirecBest )
     {
-      switch( uiDirecBest )
-      {
-      case 0:
-        // hor
-        distH[ 3 ] <<= shift;
-        patternId += ( distH[ 3 ] > TH * distH[ 4 ] ? 2 : ( distH[ 3 ] < TL * distH[ 4 ] ? 1 : 0 ) );
-        // ver
-        distH[ 1 ] <<= shift;
-        patternId += ( distH[ 1 ] > TH * distH[ 2 ] ? 6 : ( distH[ 1 ] < TL * distH[ 2 ] ? 3 : 0 ) );
-        break;
-      case 1:
-        // hor
-        distH[ 5 ] <<= shift;
-        patternId += ( distH[ 5 ] > TH * distH[ 6 ] ? 4 : ( distH[ 5 ] < TL * distH[ 6 ] ? 2 : 0 ) );
-        // ver
-        patternId += ( distH[ 2 ] - distH[ 0 ] > distH[ 0 ] - distH[ 1 ] ? 1 : 0 );
+    case 0:
+      // hor
+      distH[ 3 ] <<= shift;
+      patternId += ( distH[ 3 ] > TH * distH[ 4 ] ? 2 : ( distH[ 3 ] < TL * distH[ 4 ] ? 1 : 0 ) );
+      // ver
+      distH[ 1 ] <<= shift;
+      patternId += ( distH[ 1 ] > TH * distH[ 2 ] ? 6 : ( distH[ 1 ] < TL * distH[ 2 ] ? 3 : 0 ) );
+      break;
+    case 1:
+      // hor
+      distH[ 5 ] <<= shift;
+      patternId += ( distH[ 5 ] > TH * distH[ 6 ] ? 4 : ( distH[ 5 ] < TL * distH[ 6 ] ? 2 : 0 ) );
+      // ver
+      patternId += ( distH[ 2 ] - distH[ 0 ] > distH[ 0 ] - distH[ 1 ] ? 1 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 8 );
-        break;
-      case 2:
-        // hor
-        distH[ 7 ] <<= shift;
-        patternId += ( distH[ 7 ] > TH * distH[ 8 ] ? 4 : ( distH[ 7 ] < TL * distH[ 8 ] ? 2 : 0 ) );
-        // ver
-        patternId += ( distH[ 1 ] - distH[ 0 ] > distH[ 0 ] - distH[ 2 ] ? 1 : 0 );
+      patternId += ( 41 == patternId ? 0 : 8 );
+      break;
+    case 2:
+      // hor
+      distH[ 7 ] <<= shift;
+      patternId += ( distH[ 7 ] > TH * distH[ 8 ] ? 4 : ( distH[ 7 ] < TL * distH[ 8 ] ? 2 : 0 ) );
+      // ver
+      patternId += ( distH[ 1 ] - distH[ 0 ] > distH[ 0 ] - distH[ 2 ] ? 1 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 13 );
-        break;
-      case 3:
-        // hor
-        patternId += ( distH[ 4 ] - distH[ 0 ] > distH[ 0 ] - distH[ 3 ] ? 1 : 0 );
-        // ver
-        distH[ 5 ] <<= shift;
-        patternId += ( distH[ 5 ] > TH * distH[ 7 ] ? 4 : ( distH[ 5 ] < TL * distH[ 7 ] ? 2 : 0 ) );
+      patternId += ( 41 == patternId ? 0 : 13 );
+      break;
+    case 3:
+      // hor
+      patternId += ( distH[ 4 ] - distH[ 0 ] > distH[ 0 ] - distH[ 3 ] ? 1 : 0 );
+      // ver
+      distH[ 5 ] <<= shift;
+      patternId += ( distH[ 5 ] > TH * distH[ 7 ] ? 4 : ( distH[ 5 ] < TL * distH[ 7 ] ? 2 : 0 ) );
 
-        patternId += ( 41 == patternId ? 0 : 18 );
-        break;
-      case 4:
-        // hor
-        patternId += ( distH[ 3 ] - distH[ 0 ] > distH[ 0 ] - distH[ 4 ] ? 1 : 0 );
-        // ver
-        distH[ 6 ] <<= shift;
-        patternId += ( distH[ 6 ] > TH * distH[ 8 ] ? 4 : ( distH[ 6 ] < TL * distH[ 8 ] ? 2 : 0 ) );
+      patternId += ( 41 == patternId ? 0 : 18 );
+      break;
+    case 4:
+      // hor
+      patternId += ( distH[ 3 ] - distH[ 0 ] > distH[ 0 ] - distH[ 4 ] ? 1 : 0 );
+      // ver
+      distH[ 6 ] <<= shift;
+      patternId += ( distH[ 6 ] > TH * distH[ 8 ] ? 4 : ( distH[ 6 ] < TL * distH[ 8 ] ? 2 : 0 ) );
 
-        patternId += ( 41 == patternId ? 0 : 23 );
-        break;
-      case 5:
-        // hor
-        patternId += ( distH[ 6 ] - distH[ 1 ] > distH[ 1 ] - distH[ 5 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 7 ] - distH[ 3 ] > distH[ 3 ] - distH[ 5 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 23 );
+      break;
+    case 5:
+      // hor
+      patternId += ( distH[ 6 ] - distH[ 1 ] > distH[ 1 ] - distH[ 5 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 7 ] - distH[ 3 ] > distH[ 3 ] - distH[ 5 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 28 );
-        break;
-      case 6:
-        // hor
-        patternId += ( distH[ 5 ] - distH[ 1 ] > distH[ 1 ] - distH[ 6 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 8 ] - distH[ 4 ] > distH[ 4 ] - distH[ 6 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 28 );
+      break;
+    case 6:
+      // hor
+      patternId += ( distH[ 5 ] - distH[ 1 ] > distH[ 1 ] - distH[ 6 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 8 ] - distH[ 4 ] > distH[ 4 ] - distH[ 6 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 31 );
-        break;
-      case 7:
-        // hor
-        patternId += ( distH[ 8 ] - distH[ 2 ] > distH[ 2 ] - distH[ 7 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 5 ] - distH[ 3 ] > distH[ 3 ] - distH[ 7 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 31 );
+      break;
+    case 7:
+      // hor
+      patternId += ( distH[ 8 ] - distH[ 2 ] > distH[ 2 ] - distH[ 7 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 5 ] - distH[ 3 ] > distH[ 3 ] - distH[ 7 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 34 );
-        break;
-      case 8:
-        // hor
-        patternId += ( distH[ 7 ] - distH[ 2 ] > distH[ 2 ] - distH[ 8 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 6 ] - distH[ 4 ] > distH[ 4 ] - distH[ 8 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 34 );
+      break;
+    case 8:
+      // hor
+      patternId += ( distH[ 7 ] - distH[ 2 ] > distH[ 2 ] - distH[ 8 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 6 ] - distH[ 4 ] > distH[ 4 ] - distH[ 8 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 37 );
-        break;
-      default:
-        break;
-      }
+      patternId += ( 41 == patternId ? 0 : 37 );
+      break;
+    default:
+      break;
     }
   }
 
