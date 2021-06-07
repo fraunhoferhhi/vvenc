@@ -1059,7 +1059,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("IBC",                                             m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
 #if 1//MIN_SKIPPAR 
-  ("FastInferMerge",                                  m_FastInferMerge,                                 "Fast method to skip Inter/Intra modes. 0:off,[1..5]&[8..13]&[24..29] speedups")
+  ("FastInferMerge",                                  m_FastInferMerge,                                 "Fast method to skip Inter/Intra modes. 0:off,[1..log2(GopSize)]&[8..8+log2(GopSize)]&[24..24+log2(GopSize)] speedups")
 #endif
   ;
 
