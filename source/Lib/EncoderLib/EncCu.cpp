@@ -1951,7 +1951,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         mmvdCandInserted |=xCheckSATDCostAffineMerge(tempCS, cu, affineMergeCtx, mrgCtx, m_SortedPelUnitBufs, uiNumMrgSATDCand, RdModeList, candCostList, distParam, ctxStartIntraCtx, merge_ctx_size);
       }
 #endif
-
       // Try to limit number of candidates using SATD-costs
       uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg == 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
       for( uint32_t i = 1; i < uiNumMrgSATDCand; i++ )
@@ -2987,10 +2986,30 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
   cu.qp               = encTestMode.qp;
   cu.initPuData();
 
+#if USE_COST_BEFORE
+  bool StopInterRes = (m_pcEncCfg->m_FastInferMerge >> 3) & 1;
+  StopInterRes &= bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7));
+  double bestCostInter = StopInterRes ? m_mergeBestSATDCost : MAX_DOUBLE;
+
+  bool stopTest = m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
+
+  if (StopInterRes && (bestCostInter != m_mergeBestSATDCost))
+  {
+    int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
+    if ((bestCostInter > MRG_FAST_RATIOMYV[L] * m_mergeBestSATDCost))
+    {
+      stopTest = true;
+    }
+  }
+  if (!stopTest)
+  {
+#else
   m_cInterSearch.predInterSearch( cu, partitioner );
-
-  xEncodeInterResidual( tempCS, bestCS, partitioner, encTestMode, 0, 0, NULL );
-
+#endif
+    xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, NULL);
+#if USE_COST_BEFORE
+  }
+#endif
   tempCS->initStructData(encTestMode.qp);
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
@@ -3090,8 +3109,12 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
         cu.initPuData();
 
         cu.imv = i;
-
+#if USE_COST_BEFORE 
+        double bestCostInter = MAX_DOUBLE;
+        m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
+#else
         m_cInterSearch.predInterSearch(cu, partitioner);
+#endif
         if (!CU::hasSubCUNonZeroMVd(cu))
         {
           continue;

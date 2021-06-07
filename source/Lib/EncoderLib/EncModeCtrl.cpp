@@ -769,8 +769,14 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
             return false;
           }
         }
+#if USE_COST_BEFORE
+        int stopSplit = (m_pcEncCfg->m_FastInferMerge >> 4) && (bestCS->slice->TLayer > 4);
+        int limitBLsize = stopSplit ? 2048 : 1024;
+        if ((m_pcEncCfg->m_bUseEarlyCU || stopSplit)&& bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < limitBLsize )
+#else
         if( m_pcEncCfg->m_bUseEarlyCU && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < 1024 )
-        {
+#endif
+        {    
           return false;
         }
       }
@@ -893,7 +899,11 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 #if MIN_SKIPPAR
     if (m_pcEncCfg->m_FastInferMerge && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
     {
+#if USE_COST_BEFORE
+      if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+#else
       if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - m_pcEncCfg->m_FastInferMerge))
+#endif
         && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
       {
         return false;
@@ -982,9 +992,13 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 #if MIN_SKIPPAR
         if (m_pcEncCfg->m_FastInferMerge)
         {
+#if USE_COST_BEFORE
+          if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+#else
           if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - m_pcEncCfg->m_FastInferMerge))
+#endif
             && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
-          {
+          {            
             return false;
           }
         }

@@ -414,7 +414,11 @@ public:
   void destroy                      ();
 
   /// encoder estimation - inter prediction (non-skip)
+#if USE_COST_BEFORE
+  bool predInterSearch              ( CodingUnit& cu, Partitioner& partitioner, double& bestCostInter);
+#else
   void predInterSearch              ( CodingUnit& cu, Partitioner& partitioner );
+#endif
   /// set ME search range
   void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
 
