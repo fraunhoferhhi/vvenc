@@ -2196,6 +2196,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
 #if 1//MIN_SKIPPAR
   vvenc_confirmParameter(c, (c->m_FastInferMerge < 0 || c->m_FastInferMerge > 29)||(c->m_FastInferMerge < 8 && c->m_FastInferMerge > 5) || (c->m_FastInferMerge < 24 && c->m_FastInferMerge > 13), "FastInferMerge out of range [0..5]&[8..13]&[24..29]");
+  vvenc_confirmParameter(c, (c->m_FastInferMerge > 5 && c->m_GOPSize > 32),    "FastInferMerge parameter range overlap, disable FastInferMerge");
 #endif
 
   if( c->m_alf )
