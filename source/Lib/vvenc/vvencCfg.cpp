@@ -2195,7 +2195,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
 #if 1//MIN_SKIPPAR
-  vvenc_confirmParameter( c, c->m_FastInferMerge < 0 ||  c->m_FastInferMerge > log2(c->m_GOPSize), "FastInferMerge out of range [0..log2(GopSize)]");
+  //vvenc_confirmParameter( c, c->m_FastInferMerge < 0 ||  c->m_FastInferMerge > log2(c->m_GOPSize), "FastInferMerge out of range [0..log2(GopSize)]");
+  vvenc_confirmParameter(c, c->m_FastInferMerge < 0 || c->m_FastInferMerge > 29, "3<<3|FastInferMerge out of range [0..log2(GopSize)]");
 #endif
 
   if( c->m_alf )
