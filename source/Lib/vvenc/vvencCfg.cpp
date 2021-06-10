@@ -364,6 +364,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_confWinBottom                           = 0;
 
   c->m_temporalSubsampleRatio                  = 1;                                     ///< temporal subsample ratio, 2 means code every two frames
+  c->m_framesToBeEncodedAdjusted               = false;
 
   c->m_PadSourceWidth                          = 0;                                     ///< source width in pixel
   c->m_PadSourceHeight                         = 0;                                     ///< source height in pixel (when interlaced = field height)
@@ -755,13 +756,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  if( c->m_temporalSubsampleRatio )
+  if( c->m_temporalSubsampleRatio && !c->m_framesToBeEncodedAdjusted )
   {
     int framesSubsampled = (c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1) / c->m_temporalSubsampleRatio;
     if( c->m_framesToBeEncoded != framesSubsampled )
     {
       c->m_framesToBeEncoded = framesSubsampled;
     }
+    c->m_framesToBeEncodedAdjusted = true; // workaround for the potential bug caused by multiple re-initialization of cfg params
   }
 
   c->m_maxBT[0] = std::min( c->m_CTUSize, c->m_maxBT[0] );
@@ -2195,8 +2197,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
 #if 1//MIN_SKIPPAR
-  vvenc_confirmParameter(c, (c->m_FastInferMerge < 0 || c->m_FastInferMerge > 29 || ((c->m_FastInferMerge&7) > log2(c->m_GOPSize))), "FastInferMerge out of range [0..log2(GopSize)]&[8..8+log2(GopSize)]&[24..24+log2(GopSize)]");
-  vvenc_confirmParameter(c, (c->m_FastInferMerge > 5 && c->m_GOPSize > 32),    "FastInferMerge parameter range overlap, disable FastInferMerge");
+  vvenc_confirmParameter( c, c->m_FastInferMerge < 0 ||  c->m_FastInferMerge > log2(c->m_GOPSize), "FastInferMerge out of range [0..log2(GopSize)]");
 #endif
 
   if( c->m_alf )
