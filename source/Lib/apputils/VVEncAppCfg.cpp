@@ -895,6 +895,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MinSearchWindow",                                 m_minSearchWindow,                                "Minimum motion search window size for the adaptive window ME")
   ("ClipForBiPredMEEnabled",                          m_bClipForBiPredMeEnabled,                        "Enable clipping in the Bi-Pred ME.")
   ("FastMEAssumingSmootherMVEnabled",                 m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
+  ("IntegerET",                                       m_bIntegerET,                                     "Enable early termination for integer motion search")
   ("FastSubPel",                                      m_fastSubPel,                                     "Enable fast sub-pel ME")
   ;
 
