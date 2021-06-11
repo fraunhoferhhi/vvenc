@@ -287,8 +287,8 @@ void EncLib::initPass( int pass )
 
     if ( pass == 1 )
     {
-      m_cRateCtrl.processFirstPassData( pps0.pcv->sizeInCtus );
-      // update first pass data
+      m_cRateCtrl.processFirstPassData (m_cEncCfg.m_QP);
+      // update first-pass data
       m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
     }
   }
@@ -406,16 +406,13 @@ void EncLib::xSetRCEncCfg( int pass )
     if ((firstPassData.size() > 0) && (fps > 0))
     {
       double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
-      const double qpSizeOffset = (d < 2.0 ? 2.0 /*UHD*/ : 1.0 + log (d) / log (2.0) /*HD, SD*/);
-      const uint64_t frameCount = (uint64_t) firstPassData.size();
-      const int firstPassBaseQP = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
+      const int firstPassBaseQP  = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
+      const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_cEncCfg.m_SourceHeight)) / log (2.0)) - 7;
 
-      sumFrBits = (sumFrBits + (frameCount >> 1)) / frameCount; // average bits/frame
-      sumVisAct = (sumVisAct + (frameCount >> 1)) / frameCount; // luma vis. activity
-
-      d = ((35.0 + qpSizeOffset - sumVisAct * 0.015625) / 256.0) * firstPassBaseQP * log (m_cEncCfg.m_RCTargetBitrate / double (sumFrBits * fps)) / log (2.0);
-      const_cast<VVEncCfg&>(m_cEncCfg).m_QP = int (0.5 + firstPassBaseQP - d);
-      const_cast<VVEncCfg&>(m_cEncCfg).m_QP = Clip3 (17, firstPassBaseQP + 1, m_cEncCfg.m_QP - std::min (0, (firstPassBaseQP + 3 * (m_cEncCfg.m_QP - firstPassBaseQP) + 2) >> 2));
+      d = (double) m_cEncCfg.m_RCTargetBitrate * (double) firstPassData.size() / double (fps * sumFrBits);
+      d = firstPassBaseQP - (105.0 / 128.0) * sqrt ((double) std::max (1, firstPassBaseQP)) * log (d) / log (2.0);
+      const_cast<VVEncCfg&>(m_cEncCfg).m_QP = int (0.5 + d + 0.125 * log2HeightMinus7 * std::max (0.0, 24.0 + 0.001/*log2HeightMinus7*/ * (log ((double) sumVisAct / firstPassData.size()) / log (2.0) - 0.5 * m_cEncCfg.m_internalBitDepth[CH_L] - 3.0) - d));
+      const_cast<VVEncCfg&>(m_cEncCfg).m_QP = Clip3 (17, MAX_QP, m_cEncCfg.m_QP);
     }
   }
 #endif
@@ -508,6 +505,9 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     // update current poc
     m_pocEncode = ( m_pocEncode < 0 ) ? 0 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd );
+#if RC_INTRA_MODEL_OPT
+    if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.flushPOC < 0) && flush) m_cRateCtrl.flushPOC = m_pocEncode;
+#endif
     std::vector<Picture*> encList;
     xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList );
 
