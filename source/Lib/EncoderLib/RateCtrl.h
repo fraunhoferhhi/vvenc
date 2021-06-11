@@ -164,7 +164,11 @@ namespace vvenc {
 #if !RC_INTRA_MODEL_OPT
     double          bitUsageRatio;
 #else
-    int8_t          qpCorrection[8];
+    double          qpCorrection[8];
+    uint64_t        actualBitCnt[8];
+    uint64_t        targetBitCnt[8];
+    double          lastIntraLambda;
+    int             lastIntraQP;
 #endif
     TRCParameter*   picParam;
     int*            bitsRatio;
@@ -287,17 +291,17 @@ namespace vvenc {
                          const double lambda, const uint16_t visActY,
 #endif
                          uint32_t numBits, double yPsnr, double uPsnr, double vPsnr, bool isIntra, int tempLayer );
-    void processFirstPassData( const unsigned sizeInCtus );
+    void processFirstPassData (const int secondPassBaseQP);
 #if !RC_INTRA_MODEL_OPT
     void estimateAlphaFirstPass( int numOfLevels, int startPoc, int pocRange, double *alphaEstimate );
 #endif
-    void processGops();
+    void processGops (const int secondPassBaseQP);
 #if RC_INTRA_MODEL_OPT
     void scaleGops (double &actualBitrateAfterScaling);
 #else
     void scaleGops( std::vector<double> &scaledBits, std::vector<int> &gopBits, double &actualBitrateAfterScaling );
 #endif
-    int64_t getTotalBitsInFirstPass();
+    uint64_t getTotalBitsInFirstPass();
     void detectNewScene();
 #if RC_INTRA_MODEL_OPT
     void adaptToSceneChanges();
@@ -313,8 +317,9 @@ namespace vvenc {
     EncRCGOP*   encRCGOP;
     EncRCPic*   encRCPic;
     std::mutex  rcMutex;
-    int         rcQP;
-#if !RC_INTRA_MODEL_OPT
+#if RC_INTRA_MODEL_OPT
+    int         flushPOC;
+#else
     int         rcPQPAOffset;
 #endif
     int         rcPass;
