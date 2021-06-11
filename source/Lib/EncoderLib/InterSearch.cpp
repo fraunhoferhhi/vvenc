@@ -518,6 +518,42 @@ inline void InterSearch::xTZ2PointSearch( TZSearchStruct& rcStruct )
   }
 }
 
+inline void InterSearch::xTZ4PointSquareSearch( TZSearchStruct & rcStruct, const int iStartX, const int iStartY, const int iDist )
+{
+  const SearchRange& sr = rcStruct.searchRange;
+  CHECK( iDist == 0 || iDist > 2, "Invalid distance" );
+  // 4 point search,                   //     1 2 3
+  // search around the start point     //     4 0 5
+  // with the required  distance       //     6 7 8
+  const int iTop = iStartY - iDist;
+  const int iBottom = iStartY + iDist;
+  const int iLeft = iStartX - iDist;
+  const int iRight = iStartX + iDist;
+  rcStruct.uiBestRound += 1;
+
+  if ( iTop >= sr.top )
+  {
+    if ( iLeft >= sr.left ) // check top left
+    {
+      xTZSearchHelp( rcStruct, iLeft, iTop, 1, iDist );
+    }
+    if ( iRight <= sr.right ) // check top right
+    {
+      xTZSearchHelp( rcStruct, iRight, iTop, 3, iDist );
+    }
+  }
+  if ( iBottom <= sr.bottom )
+  {
+    if ( iLeft >= sr.left ) // check bottom left
+    {
+      xTZSearchHelp( rcStruct, iLeft, iBottom, 6, iDist );
+    }
+    if ( iRight <= sr.right ) // check bottom right
+    {
+      xTZSearchHelp( rcStruct, iRight, iBottom, 8, iDist );
+    }
+  }
+}
 
 inline void InterSearch::xTZ8PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist )
 {
@@ -569,9 +605,6 @@ inline void InterSearch::xTZ8PointSquareSearch( TZSearchStruct& rcStruct, const 
     }
   } // check bottom
 }
-
-
-
 
 inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
                                                  const int iStartX,
@@ -2313,10 +2346,43 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     xSetSearchRange(cu, currBestMv, m_iSearchRange >> (bFastSettings ? 1 : 0), sr );
   }
 
-  // start search
+  // starting point after initial examination
   int  iDist = 0;
   int  iStartX = cStruct.iBestX;
   int  iStartY = cStruct.iBestY;
+
+  // Early termination of motion search after selection of starting candidate
+  if ( m_pcEncCfg->m_bIntegerET )
+  {
+    bool isLargeBlock = cu.lumaSize().area() > 64;
+    xTZ8PointDiamondSearch( cStruct, iStartX, iStartY, 1, false ); // 4-point small diamond search
+    if ( cStruct.iBestX == iStartX && cStruct.iBestY == iStartY )
+    {
+      if ( isLargeBlock )
+      {
+        xTZ4PointSquareSearch( cStruct, iStartX, iStartY, 1 );
+        if ( cStruct.iBestX == iStartX && cStruct.iBestY == iStartY )
+        {
+          // write out best match
+          rcMv.set( cStruct.iBestX, cStruct.iBestY );
+          ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY, cStruct.imvShift );
+          return;
+        }
+      }
+      else
+      {
+        // write out best match
+        rcMv.set( cStruct.iBestX, cStruct.iBestY );
+        ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY, cStruct.imvShift );
+        return;
+      }
+    }
+  }
+
+  // start search
+  iDist = 0;
+  iStartX = cStruct.iBestX;
+  iStartY = cStruct.iBestY;
 
   const bool bBestCandidateZero = (cStruct.iBestX == 0) && (cStruct.iBestY == 0);
 

@@ -588,6 +588,7 @@ typedef struct vvenc_config
   int                 m_minSearchWindow;                                                 // ME minimum search window size for the Adaptive Window ME
   bool                m_bClipForBiPredMeEnabled;                                         // Enables clipping for Bi-Pred ME.
   bool                m_bFastMEAssumingSmootherMVEnabled;                                // Enables fast ME assuming a smoother MV.
+  bool                m_bIntegerET;                                                      // Enables early termination for integer motion search.
   int                 m_fastSubPel;
   int                 m_SMVD;
   int                 m_AMVRspeed;

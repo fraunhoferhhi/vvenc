@@ -515,6 +515,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_minSearchWindow                         = 8;
   c->m_bClipForBiPredMeEnabled                 = false;
   c->m_bFastMEAssumingSmootherMVEnabled        = true;
+  c->m_bIntegerET                              = false;
   c->m_fastSubPel                              = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
@@ -3153,6 +3154,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   }
   css << "FastIntraTools:" << c->m_FastIntraTools << " ";
   css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
+  css << "IntegerET:" << c->m_bIntegerET << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
   if( c->m_IBCMode )
