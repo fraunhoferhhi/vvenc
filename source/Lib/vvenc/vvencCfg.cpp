@@ -319,6 +319,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   int i = 0;
 
   //basic params
+  c->m_configDone                              = false;
   c->m_confirmFailed                           = false;         ///< state variable
 
   c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
@@ -364,7 +365,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_confWinBottom                           = 0;
 
   c->m_temporalSubsampleRatio                  = 1;                                     ///< temporal subsample ratio, 2 means code every two frames
-  c->m_framesToBeEncodedAdjusted               = false;
 
   c->m_PadSourceWidth                          = 0;                                     ///< source width in pixel
   c->m_PadSourceHeight                         = 0;                                     ///< source height in pixel (when interlaced = field height)
@@ -756,14 +756,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  if( c->m_temporalSubsampleRatio && !c->m_framesToBeEncodedAdjusted )
+  if( c->m_temporalSubsampleRatio && !c->m_configDone )
   {
     int framesSubsampled = (c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1) / c->m_temporalSubsampleRatio;
     if( c->m_framesToBeEncoded != framesSubsampled )
     {
       c->m_framesToBeEncoded = framesSubsampled;
     }
-    c->m_framesToBeEncodedAdjusted = true; // workaround for the potential bug caused by multiple re-initialization of cfg params
   }
 
   c->m_maxBT[0] = std::min( c->m_CTUSize, c->m_maxBT[0] );
@@ -1992,7 +1991,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
 
+  c->m_configDone = true;
+
   c->m_confirmFailed = checkCfgParameter(c);
+
   return( c->m_confirmFailed );
 }
 
