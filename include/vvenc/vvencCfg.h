@@ -411,6 +411,7 @@ typedef struct vvenc_config
 {
 
   // basic config params
+  bool                m_configDone;
   bool                m_confirmFailed;                                                   // state variable
 
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity

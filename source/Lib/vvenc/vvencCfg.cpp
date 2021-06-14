@@ -319,6 +319,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   int i = 0;
 
   //basic params
+  c->m_configDone                              = false;
   c->m_confirmFailed                           = false;         ///< state variable
 
   c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
@@ -756,12 +757,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  if( c->m_temporalSubsampleRatio )
+  if( !c->m_configDone )
   {
-    int framesSubsampled = (c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1) / c->m_temporalSubsampleRatio;
-    if( c->m_framesToBeEncoded != framesSubsampled )
+    if( c->m_temporalSubsampleRatio )
     {
-      c->m_framesToBeEncoded = framesSubsampled;
+      int framesSubsampled = ( c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1 ) / c->m_temporalSubsampleRatio;
+      if( c->m_framesToBeEncoded != framesSubsampled )
+      {
+        c->m_framesToBeEncoded = framesSubsampled;
+      }
     }
   }
 
@@ -1991,7 +1995,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
 
+  c->m_configDone = true;
+
   c->m_confirmFailed = checkCfgParameter(c);
+
   return( c->m_confirmFailed );
 }
 
