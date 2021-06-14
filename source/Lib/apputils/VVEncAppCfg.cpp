@@ -1268,8 +1268,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  const VVEncAppCfg configPtr = *this;
-  if ( vvenc_init_config_parameter((vvenc_config*)&configPtr) )
+  // check config parameter
+  VVEncAppCfg appCfg = *this;
+  if ( vvenc_init_config_parameter(&appCfg) )
   {
     return false;
   }

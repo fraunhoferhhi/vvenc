@@ -756,12 +756,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  if( c->m_temporalSubsampleRatio && !c->m_configDone )
+  if( !c->m_configDone )
   {
-    int framesSubsampled = (c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1) / c->m_temporalSubsampleRatio;
-    if( c->m_framesToBeEncoded != framesSubsampled )
+    if( c->m_temporalSubsampleRatio )
     {
-      c->m_framesToBeEncoded = framesSubsampled;
+      int framesSubsampled = ( c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1 ) / c->m_temporalSubsampleRatio;
+      if( c->m_framesToBeEncoded != framesSubsampled )
+      {
+        c->m_framesToBeEncoded = framesSubsampled;
+      }
     }
   }
 
