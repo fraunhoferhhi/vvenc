@@ -1220,6 +1220,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         if ((cu.slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7))) && bestCostInter > MRG_FAST_RATIOMYV[L] * besCostMerge)
         {
           m_skipPROF = false;
+		  m_encOnly = false;
           return true;
         }
       }
