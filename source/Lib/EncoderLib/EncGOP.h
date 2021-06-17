@@ -131,6 +131,7 @@ private:
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
+  int                       m_appliedSwitchDQQ;
   int                       m_associatedIRAPPOC;
   vvencNalUnitType          m_associatedIRAPType;
 

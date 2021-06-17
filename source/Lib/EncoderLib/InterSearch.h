@@ -414,7 +414,11 @@ public:
   void destroy                      ();
 
   /// encoder estimation - inter prediction (non-skip)
+#if USE_COST_BEFORE
+  bool predInterSearch              ( CodingUnit& cu, Partitioner& partitioner, double& bestCostInter);
+#else
   void predInterSearch              ( CodingUnit& cu, Partitioner& partitioner );
+#endif
   /// set ME search range
   void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
 
@@ -471,6 +475,7 @@ private:
   // sub-functions for ME
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZ2PointSearch       ( TZSearchStruct& rcStruct );
+  inline void xTZ4PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointDiamondSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist, const bool bCheckCornersAtDist1 );
 

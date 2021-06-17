@@ -319,6 +319,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   int i = 0;
 
   //basic params
+  c->m_configDone                              = false;
   c->m_confirmFailed                           = false;         ///< state variable
 
   c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
@@ -515,6 +516,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_minSearchWindow                         = 8;
   c->m_bClipForBiPredMeEnabled                 = false;
   c->m_bFastMEAssumingSmootherMVEnabled        = true;
+  c->m_bIntegerET                              = false;
   c->m_fastSubPel                              = 0;
   c->m_SMVD                                    = 0;
   c->m_AMVRspeed                               = 0;
@@ -756,12 +758,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
-  if( c->m_temporalSubsampleRatio )
+  if( !c->m_configDone )
   {
-    int framesSubsampled = (c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1) / c->m_temporalSubsampleRatio;
-    if( c->m_framesToBeEncoded != framesSubsampled )
+    if( c->m_temporalSubsampleRatio )
     {
-      c->m_framesToBeEncoded = framesSubsampled;
+      int framesSubsampled = ( c->m_framesToBeEncoded + c->m_temporalSubsampleRatio - 1 ) / c->m_temporalSubsampleRatio;
+      if( c->m_framesToBeEncoded != framesSubsampled )
+      {
+        c->m_framesToBeEncoded = framesSubsampled;
+      }
     }
   }
 
@@ -1991,7 +1996,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
 
+  c->m_configDone = true;
+
   c->m_confirmFailed = checkCfgParameter(c);
+
   return( c->m_confirmFailed );
 }
 
@@ -2196,7 +2204,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
 #if 1//MIN_SKIPPAR
-  vvenc_confirmParameter( c, c->m_FastInferMerge < 0 ||  c->m_FastInferMerge > log2(c->m_GOPSize), "FastInferMerge out of range [0..log2(GopSize)]");
+  vvenc_confirmParameter(c, (c->m_FastInferMerge < 0 || c->m_FastInferMerge > 29 || ((c->m_FastInferMerge&7) > log2(c->m_GOPSize))), "FastInferMerge out of range [0..log2(GopSize)]&[8..8+log2(GopSize)]&[24..24+log2(GopSize)]");
+  vvenc_confirmParameter(c, (c->m_FastInferMerge > 5 && c->m_GOPSize > 32),    "FastInferMerge parameter range overlap, disable FastInferMerge");
 #endif
 
   if( c->m_alf )
@@ -3153,6 +3162,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   }
   css << "FastIntraTools:" << c->m_FastIntraTools << " ";
   css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
+  css << "IntegerET:" << c->m_bIntegerET << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
   if( c->m_IBCMode )

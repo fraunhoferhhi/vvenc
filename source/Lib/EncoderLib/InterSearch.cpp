@@ -518,6 +518,42 @@ inline void InterSearch::xTZ2PointSearch( TZSearchStruct& rcStruct )
   }
 }
 
+inline void InterSearch::xTZ4PointSquareSearch( TZSearchStruct & rcStruct, const int iStartX, const int iStartY, const int iDist )
+{
+  const SearchRange& sr = rcStruct.searchRange;
+  CHECK( iDist == 0 || iDist > 2, "Invalid distance" );
+  // 4 point search,                   //     1 2 3
+  // search around the start point     //     4 0 5
+  // with the required  distance       //     6 7 8
+  const int iTop = iStartY - iDist;
+  const int iBottom = iStartY + iDist;
+  const int iLeft = iStartX - iDist;
+  const int iRight = iStartX + iDist;
+  rcStruct.uiBestRound += 1;
+
+  if ( iTop >= sr.top )
+  {
+    if ( iLeft >= sr.left ) // check top left
+    {
+      xTZSearchHelp( rcStruct, iLeft, iTop, 1, iDist );
+    }
+    if ( iRight <= sr.right ) // check top right
+    {
+      xTZSearchHelp( rcStruct, iRight, iTop, 3, iDist );
+    }
+  }
+  if ( iBottom <= sr.bottom )
+  {
+    if ( iLeft >= sr.left ) // check bottom left
+    {
+      xTZSearchHelp( rcStruct, iLeft, iBottom, 6, iDist );
+    }
+    if ( iRight <= sr.right ) // check bottom right
+    {
+      xTZSearchHelp( rcStruct, iRight, iBottom, 8, iDist );
+    }
+  }
+}
 
 inline void InterSearch::xTZ8PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist )
 {
@@ -569,9 +605,6 @@ inline void InterSearch::xTZ8PointSquareSearch( TZSearchStruct& rcStruct, const 
     }
   } // check bottom
 }
-
-
-
 
 inline void InterSearch::xTZ8PointDiamondSearch( TZSearchStruct& rcStruct,
                                                  const int iStartX,
@@ -809,7 +842,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   const ChromaFormat chFmt = m_currChromaFormat;
 
   Distortion distH[ 9 ] = { uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest, uiDistBest };
-  const int TH = 9, TL = 7, shift = 3;
+  const int TH = 17, TL = 15, shift = 4;
 
   const Mv* pcMvRefine = (iFrac == 2 ? s_acMvRefineH : s_acMvRefineQ);
   for (uint32_t i = 0; i < 9; i++)
@@ -821,13 +854,13 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
         continue;
       }
 
-      if( 2 == iFrac && 5 == i && 0 == uiDirecBest )
-      {
-        break;
-      }
-
       if( 2 == iFrac )
       {
+        if ( ( 5 == i && 0 == uiDirecBest ) || ( 7 == i && 1 == uiDirecBest ) || ( 8 == i && ( 1 == uiDirecBest || 3 == uiDirecBest || 5 == uiDirecBest ) ) )
+        {
+          break;
+        }
+
         if( 0 == i )
         {
           // split the prediction with funny widths into power-of-2 and +1 parts for the sake of SIMD speed-up
@@ -873,11 +906,11 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
     int verVal = cMvTest.ver * iFrac;
     piRefPos = m_filteredBlock[verVal & 3][horVal & 3][0];
 
-    if (horVal == 2 && (verVal & 1) == 0)
+    if ( horVal == 2 && ( verVal & 1 ) == 0 )
     {
       piRefPos += 1;
     }
-    if ((horVal & 1) == 0 && verVal == 2)
+    if ( ( horVal & 1 ) == 0 && verVal == 2 )
     {
       piRefPos += iRefStride;
     }
@@ -900,91 +933,88 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
   rcMvFrac = pcMvRefine[uiDirecBest];
 
-  if( m_pcEncCfg->m_fastSubPel )
+  if( m_pcEncCfg->m_fastSubPel && 2 == iFrac )
   {
-    if( 2 == iFrac )
+    switch ( uiDirecBest )
     {
-      switch( uiDirecBest )
-      {
-      case 0:
-        // hor
-        distH[ 3 ] <<= shift;
-        patternId += ( distH[ 3 ] > TH * distH[ 4 ] ? 2 : ( distH[ 3 ] < TL * distH[ 4 ] ? 1 : 0 ) );
-        // ver
-        distH[ 1 ] <<= shift;
-        patternId += ( distH[ 1 ] > TH * distH[ 2 ] ? 6 : ( distH[ 1 ] < TL * distH[ 2 ] ? 3 : 0 ) );
-        break;
-      case 1:
-        // hor
-        distH[ 5 ] <<= shift;
-        patternId += ( distH[ 5 ] > TH * distH[ 6 ] ? 4 : ( distH[ 5 ] < TL * distH[ 6 ] ? 2 : 0 ) );
-        // ver
-        patternId += ( distH[ 2 ] - distH[ 0 ] > distH[ 0 ] - distH[ 1 ] ? 1 : 0 );
+    case 0:
+      // hor
+      distH[ 3 ] <<= shift;
+      patternId += ( distH[ 3 ] > TH * distH[ 4 ] ? 2 : ( distH[ 3 ] < TL * distH[ 4 ] ? 1 : 0 ) );
+      // ver
+      distH[ 1 ] <<= shift;
+      patternId += ( distH[ 1 ] > TH * distH[ 2 ] ? 6 : ( distH[ 1 ] < TL * distH[ 2 ] ? 3 : 0 ) );
+      break;
+    case 1:
+      // hor
+      distH[ 5 ] <<= shift;
+      patternId += ( distH[ 5 ] > TH * distH[ 6 ] ? 4 : ( distH[ 5 ] < TL * distH[ 6 ] ? 2 : 0 ) );
+      // ver
+      patternId += ( distH[ 2 ] - distH[ 0 ] > distH[ 0 ] - distH[ 1 ] ? 1 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 8 );
-        break;
-      case 2:
-        // hor
-        distH[ 7 ] <<= shift;
-        patternId += ( distH[ 7 ] > TH * distH[ 8 ] ? 4 : ( distH[ 7 ] < TL * distH[ 8 ] ? 2 : 0 ) );
-        // ver
-        patternId += ( distH[ 1 ] - distH[ 0 ] > distH[ 0 ] - distH[ 2 ] ? 1 : 0 );
+      patternId += ( 41 == patternId ? 0 : 8 );
+      break;
+    case 2:
+      // hor
+      distH[ 7 ] <<= shift;
+      patternId += ( distH[ 7 ] > TH * distH[ 8 ] ? 4 : ( distH[ 7 ] < TL * distH[ 8 ] ? 2 : 0 ) );
+      // ver
+      patternId += ( distH[ 1 ] - distH[ 0 ] > distH[ 0 ] - distH[ 2 ] ? 1 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 13 );
-        break;
-      case 3:
-        // hor
-        patternId += ( distH[ 4 ] - distH[ 0 ] > distH[ 0 ] - distH[ 3 ] ? 1 : 0 );
-        // ver
-        distH[ 5 ] <<= shift;
-        patternId += ( distH[ 5 ] > TH * distH[ 7 ] ? 4 : ( distH[ 5 ] < TL * distH[ 7 ] ? 2 : 0 ) );
+      patternId += ( 41 == patternId ? 0 : 13 );
+      break;
+    case 3:
+      // hor
+      patternId += ( distH[ 4 ] - distH[ 0 ] > distH[ 0 ] - distH[ 3 ] ? 1 : 0 );
+      // ver
+      distH[ 5 ] <<= shift;
+      patternId += ( distH[ 5 ] > TH * distH[ 7 ] ? 4 : ( distH[ 5 ] < TL * distH[ 7 ] ? 2 : 0 ) );
 
-        patternId += ( 41 == patternId ? 0 : 18 );
-        break;
-      case 4:
-        // hor
-        patternId += ( distH[ 3 ] - distH[ 0 ] > distH[ 0 ] - distH[ 4 ] ? 1 : 0 );
-        // ver
-        distH[ 6 ] <<= shift;
-        patternId += ( distH[ 6 ] > TH * distH[ 8 ] ? 4 : ( distH[ 6 ] < TL * distH[ 8 ] ? 2 : 0 ) );
+      patternId += ( 41 == patternId ? 0 : 18 );
+      break;
+    case 4:
+      // hor
+      patternId += ( distH[ 3 ] - distH[ 0 ] > distH[ 0 ] - distH[ 4 ] ? 1 : 0 );
+      // ver
+      distH[ 6 ] <<= shift;
+      patternId += ( distH[ 6 ] > TH * distH[ 8 ] ? 4 : ( distH[ 6 ] < TL * distH[ 8 ] ? 2 : 0 ) );
 
-        patternId += ( 41 == patternId ? 0 : 23 );
-        break;
-      case 5:
-        // hor
-        patternId += ( distH[ 6 ] - distH[ 1 ] > distH[ 1 ] - distH[ 5 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 7 ] - distH[ 3 ] > distH[ 3 ] - distH[ 5 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 23 );
+      break;
+    case 5:
+      // hor
+      patternId += ( distH[ 6 ] - distH[ 1 ] > distH[ 1 ] - distH[ 5 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 7 ] - distH[ 3 ] > distH[ 3 ] - distH[ 5 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 28 );
-        break;
-      case 6:
-        // hor
-        patternId += ( distH[ 5 ] - distH[ 1 ] > distH[ 1 ] - distH[ 6 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 8 ] - distH[ 4 ] > distH[ 4 ] - distH[ 6 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 28 );
+      break;
+    case 6:
+      // hor
+      patternId += ( distH[ 5 ] - distH[ 1 ] > distH[ 1 ] - distH[ 6 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 8 ] - distH[ 4 ] > distH[ 4 ] - distH[ 6 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 31 );
-        break;
-      case 7:
-        // hor
-        patternId += ( distH[ 8 ] - distH[ 2 ] > distH[ 2 ] - distH[ 7 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 5 ] - distH[ 3 ] > distH[ 3 ] - distH[ 7 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 31 );
+      break;
+    case 7:
+      // hor
+      patternId += ( distH[ 8 ] - distH[ 2 ] > distH[ 2 ] - distH[ 7 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 5 ] - distH[ 3 ] > distH[ 3 ] - distH[ 7 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 34 );
-        break;
-      case 8:
-        // hor
-        patternId += ( distH[ 7 ] - distH[ 2 ] > distH[ 2 ] - distH[ 8 ] ? 1 : 0 );
-        // ver
-        patternId += ( distH[ 6 ] - distH[ 4 ] > distH[ 4 ] - distH[ 8 ] ? 2 : 0 );
+      patternId += ( 41 == patternId ? 0 : 34 );
+      break;
+    case 8:
+      // hor
+      patternId += ( distH[ 7 ] - distH[ 2 ] > distH[ 2 ] - distH[ 8 ] ? 1 : 0 );
+      // ver
+      patternId += ( distH[ 6 ] - distH[ 4 ] > distH[ 4 ] - distH[ 8 ] ? 2 : 0 );
 
-        patternId += ( 41 == patternId ? 0 : 37 );
-        break;
-      default:
-        break;
-      }
+      patternId += ( 41 == patternId ? 0 : 37 );
+      break;
+    default:
+      break;
     }
   }
 
@@ -992,7 +1022,11 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 }
 
 //! search of the best candidate for inter prediction
+#if USE_COST_BEFORE
+bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, double& bestCostInter)
+#else
 void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
+#endif
 {
   CodingStructure& cs = *cu.cs;
 
@@ -1177,7 +1211,20 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         }
         ::memcpy(m_ReuseUniMv->m_reusedUniMVs[idx1][idx2][idx3][idx4], cMvTemp, 2 * MAX_REF_PICS * sizeof(Mv));
       }
-
+#if USE_COST_BEFORE  
+      if (bestCostInter != MAX_DOUBLE)
+      {
+        int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
+        double besCostMerge = bestCostInter;
+        bestCostInter = (uiCost[0] < uiCost[1]) ? uiCost[0] : uiCost[1];
+        if ((cu.slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7))) && bestCostInter > MRG_FAST_RATIOMYV[L] * besCostMerge)
+        {
+          m_skipPROF = false;
+          m_encOnly = false;
+          return true;
+        }
+      }
+#endif
       //  Bi-predictive Motion estimation
       if( cs.slice->isInterB() && !CU::isBipredRestriction( cu ) && (cu.slice->checkLDC || BcwIdx == BCW_DEFAULT) )
       {
@@ -1530,6 +1577,9 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       uiLastModeTemp = uiLastMode;
       if ( uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1])
       {
+#if USE_COST_BEFORE
+        bestCostInter = uiCostBi;
+#endif
         uiLastMode = 2;
         cu.mv [REF_PIC_LIST_0][0] = cMvBi[0];
         cu.mv [REF_PIC_LIST_1][0] = cMvBi[1];
@@ -1547,6 +1597,9 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       }
       else if ( uiCost[0] <= uiCost[1] )
       {
+#if USE_COST_BEFORE
+        bestCostInter = uiCost[0];
+#endif
         uiLastMode = 0;
         cu.mv [REF_PIC_LIST_0][0] = cMv[0];
         cu.mvd[REF_PIC_LIST_0][0] = cMv[0] - cMvPred[0][iRefIdx[0]];
@@ -1557,6 +1610,9 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       }
       else
       {
+#if USE_COST_BEFORE
+        bestCostInter = uiCost[1];
+#endif
         uiLastMode = 1;
         cu.mv [REF_PIC_LIST_1][0] = cMv[1];
         cu.mvd[REF_PIC_LIST_1][0] = cMv[1] - cMvPred[1][iRefIdx[1]];
@@ -1728,6 +1784,9 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
     PelUnitBuf predBuf = cu.cs->getPredBuf(cu);
     motionCompensation( cu, predBuf, REF_PIC_LIST_X );
     puIdx++;
+#if USE_COST_BEFORE
+    return false;
+#endif
   }
 }
 
@@ -2289,10 +2348,43 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     xSetSearchRange(cu, currBestMv, m_iSearchRange >> (bFastSettings ? 1 : 0), sr );
   }
 
-  // start search
+  // starting point after initial examination
   int  iDist = 0;
   int  iStartX = cStruct.iBestX;
   int  iStartY = cStruct.iBestY;
+
+  // Early termination of motion search after selection of starting candidate
+  if ( m_pcEncCfg->m_bIntegerET )
+  {
+    bool isLargeBlock = cu.lumaSize().area() > 64;
+    xTZ8PointDiamondSearch( cStruct, iStartX, iStartY, 1, false ); // 4-point small diamond search
+    if ( cStruct.iBestX == iStartX && cStruct.iBestY == iStartY )
+    {
+      if ( isLargeBlock )
+      {
+        xTZ4PointSquareSearch( cStruct, iStartX, iStartY, 1 );
+        if ( cStruct.iBestX == iStartX && cStruct.iBestY == iStartY )
+        {
+          // write out best match
+          rcMv.set( cStruct.iBestX, cStruct.iBestY );
+          ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY, cStruct.imvShift );
+          return;
+        }
+      }
+      else
+      {
+        // write out best match
+        rcMv.set( cStruct.iBestX, cStruct.iBestY );
+        ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY, cStruct.imvShift );
+        return;
+      }
+    }
+  }
+
+  // start search
+  iDist = 0;
+  iStartX = cStruct.iBestX;
+  iStartY = cStruct.iBestY;
 
   const bool bBestCandidateZero = (cStruct.iBestX == 0) && (cStruct.iBestY == 0);
 

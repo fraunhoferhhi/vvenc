@@ -73,6 +73,7 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
+#define USE_COST_BEFORE 1
 #define MERGE_ENC_OPT  1
 #define MIN_SKIPPAR  1
 

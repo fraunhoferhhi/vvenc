@@ -132,7 +132,6 @@ EncSlice::EncSlice()
   , m_pcRateCtrl         ( nullptr )
   , m_CABACWriter        ( m_BinEncoder )
   , m_encCABACTableIdx   ( VVENC_I_SLICE )
-  , m_appliedSwitchDQQ   ( 0 )
 {
 }
 
@@ -206,8 +205,6 @@ void EncSlice::init( const VVEncCfg& encCfg,
       lnRsc->m_encSao.init( encCfg );
     }
   }
-
-  m_appliedSwitchDQQ = 0;
 
   const int sizeInCtus = pps.pcv->sizeInCtus;
   m_processStates = std::vector<ProcessCtuState>( sizeInCtus );
@@ -398,14 +395,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
   else
   {
     const SliceType sliceType = slice->sliceType;
-
-    qp = m_pcEncCfg->m_QP;
-    // switch at specific qp and keep this qp offset
-    if( slice->poc == m_pcEncCfg->m_switchPOC )
-    {
-      m_appliedSwitchDQQ = m_pcEncCfg->m_switchDQP;
-    }
-    qp += m_appliedSwitchDQQ;
+    qp = slice->pic->seqBaseQp;
 
     if( sliceType == VVENC_I_SLICE )
     {

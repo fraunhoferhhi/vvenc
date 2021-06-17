@@ -449,7 +449,9 @@ static const double PBINTRA_RATIO     =                             1.1;
 static const int    NUM_MRG_SATD_CAND =                             4;
 static const double MRG_FAST_RATIO    =                             1.25;
 static const int    NUM_AFF_MRG_SATD_CAND =                         2;
-
+#if USE_COST_BEFORE
+static const double MRG_FAST_RATIOMYV[4] =                        { 1.15, 1.1, 1.1, 1.05 };
+#endif
 static const int    NUM_AMAXBT_LAYER =                             10;
 static const double AMAXBT_TH32 =                                  15.0;
 static const double AMAXBT_TH64 =                                  30.0;

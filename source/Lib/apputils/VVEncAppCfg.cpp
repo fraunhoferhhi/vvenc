@@ -897,6 +897,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MinSearchWindow",                                 m_minSearchWindow,                                "Minimum motion search window size for the adaptive window ME")
   ("ClipForBiPredMEEnabled",                          m_bClipForBiPredMeEnabled,                        "Enable clipping in the Bi-Pred ME.")
   ("FastMEAssumingSmootherMVEnabled",                 m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
+  ("IntegerET",                                       m_bIntegerET,                                     "Enable early termination for integer motion search")
   ("FastSubPel",                                      m_fastSubPel,                                     "Enable fast sub-pel ME")
   ;
 
@@ -1061,7 +1062,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("IBC",                                             m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
 #if 1//MIN_SKIPPAR 
-  ("FastInferMerge",                                  m_FastInferMerge,                                 "Fast method to skip Inter/Intra modes by TL.0:off, [1..log2(GopSize)] from deepest TL")
+  ("FastInferMerge",                                  m_FastInferMerge,                                 "Fast method to skip Inter/Intra modes. 0:off,[1..log2(GopSize)]&[8..8+log2(GopSize)]&[24..24+log2(GopSize)] speedups")
 #endif
   ;
 
@@ -1270,8 +1271,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  const VVEncAppCfg* configPtr = this;
-  if ( vvenc_init_config_parameter((vvenc_config*)configPtr) )
+  // check config parameter
+  VVEncAppCfg appCfg = *this;
+  if ( vvenc_init_config_parameter(&appCfg) )
   {
     return false;
   }
