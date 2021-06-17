@@ -232,6 +232,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
                  const int qp,
                  const vvencMCTF MCTFCfg,
                  const int framesToBeEncoded,
+                 const int TestVal,
                  NoMallocThreadPool* threadPool)
 {
   CHECK( MCTFCfg.numFrames != MCTFCfg.numStrength, "should have been checked before" );
@@ -245,7 +246,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_QP                    = qp;
   m_chromaFormatIDC       = inputChromaFormatIDC;
 
-  for( int i = 0; i < MCTFCfg.numFrames; i++ )
+  for( int i = (TestVal>>1); i < MCTFCfg.numFrames; i++ )
   {
     m_FilterFrames.push_back( MCTFCfg.MCTFFrames[i] );
     m_FilterStrengths.push_back( MCTFCfg.MCTFStrengths[i] );
@@ -258,6 +259,8 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_numTrailFrames        = MCTFCfg.MCTFNumTrailFrames;
   m_framesToBeEncoded     = framesToBeEncoded;
   m_threadPool            = threadPool;
+  m_DropExtraFrame        = TestVal&1;
+  CHECK( m_DropExtraFrame != 0 && m_DropExtraFrame != 1, "iDropFrame out of range");
 }
 
 // ====================================================================================================================
@@ -403,7 +406,7 @@ void MCTF::filter( Picture* pic )
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
-    for ( int idx = 0; idx < m_picFifo.size(); idx++ )
+    for ( int idx = m_DropExtraFrame; idx < m_picFifo.size()-m_DropExtraFrame; idx++ )
     {
       Picture* curPic = m_picFifo[ idx ];
       if ( curPic->poc == process_poc )

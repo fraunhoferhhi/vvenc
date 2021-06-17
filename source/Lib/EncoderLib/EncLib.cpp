@@ -256,7 +256,7 @@ void EncLib::initPass( int pass )
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
-               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_vvencMCTF, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
+               m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_vvencMCTF, m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_TestVal, m_threadPool );
 
   CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
   m_cGOPEncoder = new EncGOP;
