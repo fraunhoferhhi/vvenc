@@ -179,6 +179,7 @@ Picture::Picture()
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
     , picInitialQP      ( 0 )
+    , picVisActY        ( 0.0 )
     , useScMCTF         ( false )
     , useScTS           ( false )
     , useScBDPCM        ( false )

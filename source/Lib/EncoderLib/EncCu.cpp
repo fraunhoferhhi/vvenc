@@ -108,12 +108,8 @@ void EncCu::setCtuEncRsrc( CABACWriter* cabacEstimator, CtxCache* ctxCache, Reus
   m_cInterSearch.setCtuEncRsrc( cabacEstimator, ctxCache, pReuseUniMv, pBlkUniMvInfoBuffer, pAffineProfList, pCachedBvs );
 }
 
-void EncCu::setUpLambda (Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted, const bool useRC)
+void EncCu::setUpLambda (Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted)
 {
-  if ( useRC )
-  {
-    m_cRdCost.setDistortionWeight( COMP_Y, 1.0 );
-  }
   // store lambda
   m_cRdCost.setLambda( dLambda, slice.sps->bitDepths );
 

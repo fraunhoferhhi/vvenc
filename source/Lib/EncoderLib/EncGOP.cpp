@@ -59,9 +59,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
 #include "EncHRD.h"
-#if RC_INTRA_MODEL_OPT
-#include "BitAllocation.h"
-#endif
 
 #include <list>
 
@@ -925,11 +922,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   // reshaper
   xInitLMCS( pic );
 
-#if RC_INTRA_MODEL_OPT
   if ((m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_RCNumPasses == 2)) && (m_pcEncCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()))
-#else
-  if ((m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()))
-#endif
   {
     for (auto& picItr : picList) // find previous frames
     {
@@ -1727,17 +1720,12 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
     return;
   }
 
-  EncRCPic* encRCPic = pic.encRCPic;
-  int frameLevel = m_pcRateCtrl->encRCSeq->gopID2Level[gopId];
-  if( pic.slices[0]->isIRAP() )
-  {
-    frameLevel = 0;
-  }
+  const int frameLevel = (slice->isIntra() ? 0 : slice->TLayer + 1);
+  EncRCPic* encRCPic   = pic.encRCPic;
+  double lambda = (m_pcEncCfg->m_RCNumPasses != 2 ? encRCPic->finalLambda : m_pcRateCtrl->encRCGOP->maxEstLambda);
+  int   sliceQP = (m_pcEncCfg->m_RCNumPasses != 2 ? m_pcEncCfg->m_RCInitialQP : MAX_QP);
 
-  double lambda = encRCPic->finalLambda;
-  int sliceQP = m_pcEncCfg->m_RCInitialQP;
-
-  if( ( slice->poc == 0 && m_pcEncCfg->m_RCInitialQP > 0 ) || ( frameLevel == 0 && m_pcEncCfg->m_RCForceIntraQP ) ) // QP is specified
+  if ((m_pcEncCfg->m_RCNumPasses != 2) && ((slice->poc == 0 && m_pcEncCfg->m_RCInitialQP > 0) || (frameLevel == 0 && m_pcEncCfg->m_RCForceIntraQP))) // QP is specified
   {
     int    NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
     double dLambda_scale = 1.0 - Clip3( 0.0, 0.5, 0.05 * (double)NumberBFrames );
@@ -1750,7 +1738,6 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
   }
   else if (frameLevel <= 7)
   {
-#if RC_INTRA_MODEL_OPT
     if (m_pcEncCfg->m_RCNumPasses == 2)
     {
       EncRCSeq* encRCSeq = m_pcRateCtrl->encRCSeq;
@@ -1792,12 +1779,9 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
           d /= (double) it->numBits;
           d = firstPassSliceQP - (105.0 / 128.0) * sqrt ((double) std::max (1, firstPassSliceQP)) * log (d) / log (2.0);
           sliceQP = int (0.5 + d + 0.125 * log2HeightMinus7 * std::max (0.0, 24.0 + 0.001/*log2HeightMinus7*/ * (log ((double) visAct) / log (2.0) - 0.5 * encRCSeq->bitDepth - 3.0) - d) + encRCSeq->qpCorrection[frameLevel]);
-          sliceQP = Clip3 (0, MAX_QP, sliceQP);
+          encRCPic->clipTargetQP (m_pcRateCtrl->getPicList(), sliceQP);  // temp. level based
           lambda  = it->lambda * pow (2.0, double (sliceQP - firstPassSliceQP) / 3.0);
           lambda  = Clip3 (m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, lambda);
-
-          encRCPic->clipLambdaTwoPass (m_pcRateCtrl->getPicList(), lambda);
-          encRCPic->clipQpTwoPass (m_pcRateCtrl->getPicList(), sliceQP); // TODO: unify funcs
 
           if (it->isIntra) // update history, for parameter clipping in subsequent key frames
           {
@@ -1812,67 +1796,30 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
     {
       if (frameLevel == 0)
       {
-#endif // RC_INTRA_MODEL_OPT
-    encRCPic->calCostSliceI( &pic );
+        encRCPic->calCostSliceI( &pic );
 
-    if( m_pcEncCfg->m_IntraPeriod != 1 )   // do not refine allocated bits for all intra case
-    {
-      int bits = m_pcRateCtrl->encRCSeq->totalFrames > 0 ? m_pcRateCtrl->encRCSeq->getLeftAverageBits() : m_pcRateCtrl->encRCSeq->averageBits;
-      bits = encRCPic->getRefineBitsForIntra( bits );
+        if (m_pcEncCfg->m_IntraPeriod != 1) // don't refine allocated bits for All-Intra case
+        {
+          int bits = m_pcRateCtrl->encRCSeq->totalFrames > 0 ? m_pcRateCtrl->encRCSeq->getLeftAverageBits() : m_pcRateCtrl->encRCSeq->averageBits;
+          bits = encRCPic->getRefineBitsForIntra( bits );
 
-      if( bits < 200 )
-      {
-        bits = 200;
-      }
-#if !RC_INTRA_MODEL_OPT
-
-      if( m_pcEncCfg->m_RCNumPasses == 2 )
-      {
-        encRCPic->bitsLeft = encRCPic->targetBits;
-      }
-      else
-#endif
-      {
-        encRCPic->targetBits = bits;
-        encRCPic->bitsLeft = bits;
-      }
-    }
-#if RC_INTRA_MODEL_OPT
+          if( bits < 200 )
+          {
+            bits = 200;
+          }
+          encRCPic->targetBits = bits;
+          encRCPic->bitsLeft = bits;
+        }
       } // (frameLevel == 0)
-#endif
 
-    std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
-    lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
-    sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
-#if RC_INTRA_MODEL_OPT
+      std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
+      lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
+      sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
+      sliceQP = Clip3 (0, MAX_QP, sliceQP);
     } // 1-pass rate control
-#else
-    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_RCNumPasses == 2) &&
-        (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && slice->isIntra() && (sliceQP > 0) )
-    {
-      sliceQP += m_pcRateCtrl->rcPQPAOffset - 8; // this is a second-pass tuning to stabilize the rate control with QPA
-      lambda *= pow(2.0, double (m_pcRateCtrl->rcPQPAOffset - 8) / 3.0); // adjust lambda based on change of slice QP
-    }
-#endif
-  }
-  else    // normal case
-  {
-    std::list<EncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
-    lambda = encRCPic->estimatePicLambda( listPreviousPicture, slice->isIRAP() );
-    sliceQP = encRCPic->estimatePicQP( lambda, listPreviousPicture );
-#if !RC_INTRA_MODEL_OPT
-    if( (m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_RCTargetBitrate > 0) && (m_pcEncCfg->m_RCNumPasses == 2) &&
-        (slice->pps->useDQP && (m_pcEncCfg->m_usePerceptQPATempFiltISlice == 2)) && !slice->isIntra() && (slice->TLayer == 0) && (sliceQP < MAX_QP) )
-    {
-      sliceQP += 8 - m_pcRateCtrl->rcPQPAOffset; // this is a second-pass tuning to stabilize the rate control with QPA
-      lambda *= pow(2.0, double (8 - m_pcRateCtrl->rcPQPAOffset) / 3.0); // adjust lambda based on change of slice QP
-    }
-#endif
   }
 
-  sliceQP = Clip3( -slice->sps->qpBDOffset[CH_L], MAX_QP, sliceQP );
-
-  picEncoder->getEncSlice()->resetQP( &pic, sliceQP, lambda );
+  picEncoder->getEncSlice()->resetQP (&pic, sliceQP, lambda);
   encRCPic->finalLambda = lambda;
 }
 
@@ -1884,33 +1831,25 @@ void EncGOP::xUpdateAfterPicRC( const Picture* pic )
     return;
   }
 
-#if RC_INTRA_MODEL_OPT
   if (!m_pcRateCtrl->encRCSeq->twoPass)
   {
-#endif
-  encRCPic->calPicMSE();
-#if RC_INTRA_MODEL_OPT
+    encRCPic->calPicMSE();
   }
-#endif
   encRCPic->updateAfterPicture( pic->actualHeadBits, pic->actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->slices[ 0 ]->lambdas[ COMP_Y ], pic->slices[ 0 ]->isIRAP() );
   encRCPic->addToPictureList( m_pcRateCtrl->getPicList() );
 
   m_pcRateCtrl->encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
-#if RC_INTRA_MODEL_OPT
   if (!m_pcRateCtrl->encRCSeq->twoPass)
   {
-#endif
-  if ( !pic->slices[ 0 ]->isIRAP() )
-  {
-    m_pcRateCtrl->encRCGOP->updateAfterPicture( pic->actualTotalBits );
+    if ( !pic->slices[ 0 ]->isIRAP() )
+    {
+      m_pcRateCtrl->encRCGOP->updateAfterPicture( pic->actualTotalBits );
+    }
+    else    // for intra picture, the estimated bits are used to update the current status in the GOP
+    {
+      m_pcRateCtrl->encRCGOP->updateAfterPicture( encRCPic->estimatedBits );
+    }
   }
-  else    // for intra picture, the estimated bits are used to update the current status in the GOP
-  {
-    m_pcRateCtrl->encRCGOP->updateAfterPicture( encRCPic->estimatedBits );
-  }
-#if RC_INTRA_MODEL_OPT
-  }
-#endif
 
   return;
 }
@@ -1920,9 +1859,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   const SPS&         sps = *pic->cs->sps;
   const CPelUnitBuf& org = pic->getOrigBuf();
   double  dPSNR[MAX_NUM_COMP];
-#if RC_INTRA_MODEL_OPT
   double  visualActivity = 0.0;
-#endif
 
   for (int i = 0; i < MAX_NUM_COMP; i++)
   {
@@ -1985,19 +1922,14 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     }
   }
 
-#if RC_INTRA_MODEL_OPT
+  const uint32_t uibits = numRBSPBytes * 8;
+
   if ((m_pcEncCfg->m_RCNumPasses == 2) && (m_pcRateCtrl->rcPass < m_pcRateCtrl->rcMaxPass))
   {
-    visualActivity = BitAllocation::getPicVisualActivity (slice, m_pcEncCfg);
+    visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
   }
-#endif
-  m_pcRateCtrl->addRCPassStats( slice->poc, slice->sliceQp,
-#if RC_INTRA_MODEL_OPT
-                                slice->getLambdas()[0], ClipBD (uint16_t (0.5 + visualActivity), m_pcEncCfg->m_internalBitDepth[CH_L]),
-#endif
-                                numRBSPBytes * 8, dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr], slice->isIntra(), slice->TLayer );
-
-  const uint32_t uibits = numRBSPBytes * 8;
+  m_pcRateCtrl->addRCPassStats (slice->poc, slice->sliceQp, slice->getLambdas()[0], ClipBD (uint16_t (0.5 + visualActivity), m_pcEncCfg->m_internalBitDepth[CH_L]),
+                                uibits, dPSNR[COMP_Y], slice->isIntra(), slice->TLayer);
 
   //===== add PSNR =====
   m_AnalyzeAll.addResult(dPSNR, (double)uibits, MSEyuvframe
