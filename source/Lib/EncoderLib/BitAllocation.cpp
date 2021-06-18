@@ -313,8 +313,8 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
 
 // public functions
 
-int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP, std::vector<int>& ctuPumpRedQP,
-                                            int optChromaQPOffset[2])
+int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
+                                            std::vector<int>& ctuPumpRedQP, int optChromaQPOffset[2], double* picVisActY /*= nullptr*/)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEner[MAX_NUM_COMP] = {0.0, 0.0, 0.0};
@@ -371,6 +371,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       optChromaQPOffset[comp-1] = std::min (3 + lumaChromaMappingDQP, adaptChromaQPOffset + lumaChromaMappingDQP);
     } // isChroma (compID)
+    else if (picVisActY != nullptr) *picVisActY = hpEner[comp];
   }
 
   return savedLumaQP;
@@ -629,7 +630,7 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   return pumpingReducQP;
 }
 
-double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const bool lowFrameRate /*= false*/)
+double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg)
 {
   Picture* const pic    = (slice != nullptr ? slice->pic : nullptr);
 
@@ -641,7 +642,7 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
   const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, true );
 
   return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, lowFrameRate ? 24 : encCfg->m_FrameRate,
+                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate,
                                             slice->sps->bitDepths[CH_L], isHighRes);
 }
 

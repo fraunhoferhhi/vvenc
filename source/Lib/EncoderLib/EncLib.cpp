@@ -361,24 +361,24 @@ void EncLib::xSetRCEncCfg( int pass )
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
-#if RC_INTRA_MODEL_OPT
     const double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
-#endif
-    // preserve MCTF and IBC settings
+
+    // preserve the CTU size, MCTF and IBC settings
+    const unsigned cs = m_cBckCfg.m_CTUSize;
     const int mctf    = m_cBckCfg.m_vvencMCTF.MCTF;
     const int ibcMode = m_cBckCfg.m_IBCMode;
 
     vvenc_init_preset( &m_cBckCfg, vvencPresetMode::VVENC_FIRSTPASS );
 
-    // use fixQP encoding in first pass
+    // fixed-QP encoding in first rate control pass
     m_cBckCfg.m_RCTargetBitrate = 0;
-#if RC_INTRA_MODEL_OPT
-    m_cBckCfg.m_QP              = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
-#else
-    m_cBckCfg.m_QP              = 32;
-#endif
+    m_cBckCfg.m_QP /*base QP*/  = (m_cEncCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_cEncCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0))));
 
-    // restore MCTF and IBC
+    // restore the settings
+    if (m_cBckCfg.m_usePerceptQPA && (m_cBckCfg.m_QP <= MAX_QP_PERCEPT_QPA))
+    {
+      m_cBckCfg.m_CTUSize       = cs;
+    }
     m_cBckCfg.m_vvencMCTF.MCTF  = mctf;
     m_cBckCfg.m_IBCMode         = ibcMode;
 
@@ -390,7 +390,6 @@ void EncLib::xSetRCEncCfg( int pass )
 
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
-#if RC_INTRA_MODEL_OPT
   else // estimate near-optimal base QP for PPS in second RC pass
   {
     const unsigned fps = m_cEncCfg.m_FrameRate;
@@ -415,7 +414,6 @@ void EncLib::xSetRCEncCfg( int pass )
       const_cast<VVEncCfg&>(m_cEncCfg).m_QP = Clip3 (17, MAX_QP, m_cEncCfg.m_QP);
     }
   }
-#endif
 }
 
 // ====================================================================================================================
@@ -471,11 +469,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   }
 
   // MCTF process
-#if RC_INTRA_MODEL_OPT
   if (m_cEncCfg.m_usePerceptQPA || (m_cEncCfg.m_RCNumPasses == 2))
-#else
-  if ( m_cEncCfg.m_usePerceptQPA )
-#endif
   {
     m_MCTF.assignQpaBufs( pic );
   }
@@ -505,9 +499,8 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     // update current poc
     m_pocEncode = ( m_pocEncode < 0 ) ? 0 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd );
-#if RC_INTRA_MODEL_OPT
     if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.flushPOC < 0) && flush) m_cRateCtrl.flushPOC = m_pocEncode;
-#endif
+
     std::vector<Picture*> encList;
     xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList );
 

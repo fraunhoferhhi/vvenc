@@ -2731,10 +2731,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   switch( preset )
   {
     case vvencPresetMode::VVENC_FASTER:
-#if RC_INTRA_MODEL_OPT
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
-#endif
+
     case vvencPresetMode::VVENC_FIRSTPASS:
       // CTUSize64 QT44MTT00
       c->m_CTUSize                   = 64;
@@ -2749,10 +2748,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled     = 1;
 
       c->m_useBDPCM                  = 2;
-#if !RC_INTRA_MODEL_OPT
-      c->m_BDOF                      = 1;
-      c->m_DMVR                      = 1;
-#endif
       c->m_IBCMode                   = 2;
       c->m_IBCFastMethod             = 6;
       c->m_LMChroma                  = 1;
