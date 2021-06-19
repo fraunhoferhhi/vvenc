@@ -232,7 +232,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
                  const int qp,
                  const vvencMCTF MCTFCfg,
                  const int framesToBeEncoded,
-                 const int TestVal,
+                 const int MCTFSpeed,
                  NoMallocThreadPool* threadPool)
 {
   CHECK( MCTFCfg.numFrames != MCTFCfg.numStrength, "should have been checked before" );
@@ -246,7 +246,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_QP                    = qp;
   m_chromaFormatIDC       = inputChromaFormatIDC;
 
-  for( int i = (TestVal>>1); i < MCTFCfg.numFrames; i++ )
+  for( int i = 0; i < MCTFCfg.numFrames; i++ )
   {
     m_FilterFrames.push_back( MCTFCfg.MCTFFrames[i] );
     m_FilterStrengths.push_back( MCTFCfg.MCTFStrengths[i] );
@@ -259,8 +259,7 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_numTrailFrames        = MCTFCfg.MCTFNumTrailFrames;
   m_framesToBeEncoded     = framesToBeEncoded;
   m_threadPool            = threadPool;
-  m_DropExtraFrame        = TestVal&1;
-  CHECK( m_DropExtraFrame != 0 && m_DropExtraFrame != 1, "iDropFrame out of range");
+  m_MCTFSpeed             = MCTFSpeed;
 }
 
 // ====================================================================================================================
@@ -368,7 +367,8 @@ void MCTF::filter( Picture* pic )
 
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
-  for( int idx = (int)m_FilterFrames.size() - 1; idx >= 0; idx-- )
+  int idx = (int)m_FilterFrames.size() - 1;
+  for( ; idx >= 0; idx-- )
   {
     if ( process_poc % m_FilterFrames[ idx ] == 0 )
     {
@@ -376,6 +376,15 @@ void MCTF::filter( Picture* pic )
       isFilterThisFrame = true;
       break;
     }
+  }
+
+  int dropFrames = 0;
+  if(idx >= 0)
+  {
+    int threshold = (m_MCTFSpeed>>(idx*2))&3;
+    isFilterThisFrame = threshold < 2;
+    dropFrames        = threshold & 1;
+    printf("\n Frame %d drop %d Filter %d", m_FilterFrames[ idx ], dropFrames, (isFilterThisFrame?1:0));
   }
 
   Picture* fltrPic = nullptr;
@@ -406,7 +415,7 @@ void MCTF::filter( Picture* pic )
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
-    for ( int idx = m_DropExtraFrame; idx < m_picFifo.size()-m_DropExtraFrame; idx++ )
+    for ( int idx = dropFrames; idx < m_picFifo.size()-dropFrames; idx++ )
     {
       Picture* curPic = m_picFifo[ idx ];
       if ( curPic->poc == process_poc )

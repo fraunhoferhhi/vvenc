@@ -131,7 +131,7 @@ public:
              const int qp,
              const vvencMCTF MCTFCfg,
              const int framesToBeEncoded,
-             const int TestVal,
+             const int MCTFSpeed,
              NoMallocThreadPool* threadPool );
   void uninit();
 
@@ -185,7 +185,7 @@ private:
   int                   m_numLeadFrames;
   int                   m_numTrailFrames;
   int                   m_framesToBeEncoded;
-  int                   m_DropExtraFrame;
+  int                   m_MCTFSpeed;
   NoMallocThreadPool*   m_threadPool;
 
   std::deque<Picture*>  m_picFifo;
