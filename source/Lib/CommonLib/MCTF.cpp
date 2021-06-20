@@ -385,7 +385,6 @@ void MCTF::filter( Picture* pic )
     int threshold = (m_MCTFSpeedVal>>(idx*2))&3;
     isFilterThisFrame = threshold < 2;
     dropFrames        = threshold & 1;
-    printf("\n Frame %d drop %d Filter %d", m_FilterFrames[ idx ], dropFrames, (isFilterThisFrame?1:0));
   }
 
   Picture* fltrPic = nullptr;
