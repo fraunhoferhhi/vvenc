@@ -393,6 +393,7 @@ VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *ReshapeCW );
 typedef struct vvencMCTF
 {
   int                 MCTF;
+  int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFNumLeadFrames;
   int                 MCTFNumTrailFrames;
@@ -715,7 +716,6 @@ typedef struct vvenc_config
   char                m_summaryOutFilename[VVENC_MAX_STRING_LEN];                        // filename to use for producing summary output file.
   char                m_summaryPicFilenameBase[VVENC_MAX_STRING_LEN];                    // Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   unsigned            m_summaryVerboseness;                                              // Specifies the level of the verboseness of the text output.
-  int                 m_TestVal;
 }vvenc_config;
 
 VVENC_DECL void vvenc_config_default( vvenc_config *cfg );

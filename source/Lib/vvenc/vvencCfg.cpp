@@ -305,6 +305,7 @@ VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *reshapeCW )
 VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
 {
   vvencMCTF->MCTF = 0;
+  vvencMCTF->MCTFSpeed = 0;
   vvencMCTF->MCTFFutureReference = true;
   vvencMCTF->MCTFNumLeadFrames = 0;
   vvencMCTF->MCTFNumTrailFrames = 0;
@@ -644,7 +645,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
   memset( c->m_traceFile, '\0', sizeof(c->m_traceFile) );
 
-  c->m_TestVal                                 = 0;
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
@@ -2168,6 +2168,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
 
   if (c->m_lumaReshapeEnable)

@@ -232,7 +232,6 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
                  const int qp,
                  const vvencMCTF MCTFCfg,
                  const int framesToBeEncoded,
-                 const int MCTFSpeed,
                  NoMallocThreadPool* threadPool)
 {
   CHECK( MCTFCfg.numFrames != MCTFCfg.numStrength, "should have been checked before" );
@@ -259,7 +258,9 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_numTrailFrames        = MCTFCfg.MCTFNumTrailFrames;
   m_framesToBeEncoded     = framesToBeEncoded;
   m_threadPool            = threadPool;
-  m_MCTFSpeed             = MCTFSpeed;
+
+  const uint8_t             acMCTFSpeedVal[] = {0, 5, 6, 22, 26 }; 
+  m_MCTFSpeedVal          = acMCTFSpeedVal[MCTFCfg.MCTFSpeed];
 }
 
 // ====================================================================================================================
@@ -381,7 +382,7 @@ void MCTF::filter( Picture* pic )
   int dropFrames = 0;
   if(idx >= 0)
   {
-    int threshold = (m_MCTFSpeed>>(idx*2))&3;
+    int threshold = (m_MCTFSpeedVal>>(idx*2))&3;
     isFilterThisFrame = threshold < 2;
     dropFrames        = threshold & 1;
     printf("\n Frame %d drop %d Filter %d", m_FilterFrames[ idx ], dropFrames, (isFilterThisFrame?1:0));
