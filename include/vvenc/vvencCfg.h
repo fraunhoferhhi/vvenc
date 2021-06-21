@@ -393,6 +393,7 @@ VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *ReshapeCW );
 typedef struct vvencMCTF
 {
   int                 MCTF;
+  int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFNumLeadFrames;
   int                 MCTFNumTrailFrames;

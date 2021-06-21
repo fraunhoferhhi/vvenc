@@ -258,6 +258,9 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_numTrailFrames        = MCTFCfg.MCTFNumTrailFrames;
   m_framesToBeEncoded     = framesToBeEncoded;
   m_threadPool            = threadPool;
+
+  const uint8_t             acMCTFSpeedVal[] = {0, 5, 6, 22, 26 }; 
+  m_MCTFSpeedVal          = acMCTFSpeedVal[MCTFCfg.MCTFSpeed];
 }
 
 // ====================================================================================================================
@@ -365,7 +368,8 @@ void MCTF::filter( Picture* pic )
 
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
-  for( int idx = (int)m_FilterFrames.size() - 1; idx >= 0; idx-- )
+  int idx = (int)m_FilterFrames.size() - 1;
+  for( ; idx >= 0; idx-- )
   {
     if ( process_poc % m_FilterFrames[ idx ] == 0 )
     {
@@ -373,6 +377,14 @@ void MCTF::filter( Picture* pic )
       isFilterThisFrame = true;
       break;
     }
+  }
+
+  int dropFrames = 0;
+  if(idx >= 0)
+  {
+    int threshold = (m_MCTFSpeedVal>>(idx*2))&3;
+    isFilterThisFrame = threshold < 2;
+    dropFrames        = threshold & 1;
   }
 
   Picture* fltrPic = nullptr;
@@ -403,7 +415,7 @@ void MCTF::filter( Picture* pic )
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
-    for ( int idx = 0; idx < m_picFifo.size(); idx++ )
+    for ( int idx = dropFrames; idx < m_picFifo.size()-dropFrames; idx++ )
     {
       Picture* curPic = m_picFifo[ idx ];
       if ( curPic->poc == process_poc )
