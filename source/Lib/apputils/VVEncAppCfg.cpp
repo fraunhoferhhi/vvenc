@@ -752,7 +752,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
-  ("RCInitialQP",                                     m_RCInitialQP,                                    "Rate control: initial QP" )
+  ("RCInitialQP",                                     m_RCInitialQP,                                    "Rate control: initial QP. With two-pass encoding, this specifies the first-pass base QP (instead of using a default QP). Activated if value is greater than zero" )
   ("RCForceIntraQP",                                  m_RCForceIntraQP,                                 "Rate control: force intra QP to be equal to initial QP" )
 
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
@@ -1013,7 +1013,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
                                                                                                              "3: rsp inter(CW66 for QP<=22), 4: rsp inter(for all QP).")
   ("LMCSInitialCW",                                   m_initialCW,                                      "LMCS initial total codeword (0~1023) when LMCSAdpOption > 0")
   ("LMCSOffset",                                      m_LMCSOffset,                                     "LMCS chroma residual scaling offset")
-  ("ALF",                                             m_alf,                                            "Adpative Loop Filter\n" )
+  ("ALF",                                             m_alf,                                            "Adpative Loop Filter" )
+  ("ALFSpeed",                                        m_alfSpeed,                                       "ALF speed (skip filtering of non-referenced frames) [0-1]" )
   ("CCALF",                                           m_ccalf,                                          "Cross-component Adaptive Loop Filter" )
   ("CCALFQpTh",                                       m_ccalfQpThreshold,                               "QP threshold above which encoder reduces CCALF usage. Ignored in case of PerceptQPA.")
   ("UseNonLinearAlfLuma",                             m_useNonLinearAlfLuma,                            "Non-linear adaptive loop filters for Luma Channel")

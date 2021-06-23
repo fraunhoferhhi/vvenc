@@ -243,6 +243,7 @@ public:
   std::vector<Pel>              ctuAdaptedQP;
   std::mutex                    wppMutex;
   int                           picInitialQP;
+  double                        picVisActY;
   StopClock                     encTime;
   bool                          useScMCTF;
   bool                          useScTS;

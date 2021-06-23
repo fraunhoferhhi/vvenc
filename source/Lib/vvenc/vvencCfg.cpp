@@ -608,6 +608,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_preferredTransferCharacteristics        = -1;
 
   c->m_alf                                     = false;
+  c->m_alfSpeed                                = 0;
   c->m_useNonLinearAlfLuma                     = true;
   c->m_useNonLinearAlfChroma                   = true;
   c->m_maxNumAlfAlternativesChroma             = VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
@@ -2299,6 +2300,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_useAMaxBT < 0               || c->m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
   vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
+  vvenc_confirmParameter(c, c->m_alfSpeed < 0                || c->m_alfSpeed > 1,                "ALFSpeed out of range (0,1)");
   vvenc_confirmParameter(c, c->m_saoEncodingRate < 0.0       || c->m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_saoEncodingRateChroma < 0.0 || c->m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_maxParallelFrames < 0,                                        "MaxParallelFrames out of range" );
@@ -2733,10 +2735,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   switch( preset )
   {
     case vvencPresetMode::VVENC_FASTER:
-#if RC_INTRA_MODEL_OPT
       c->m_BDOF                      = 1;
       c->m_DMVR                      = 1;
-#endif
+
     case vvencPresetMode::VVENC_FIRSTPASS:
       // CTUSize64 QT44MTT00
       c->m_CTUSize                   = 64;
@@ -2751,10 +2752,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled     = 1;
 
       c->m_useBDPCM                  = 2;
-#if !RC_INTRA_MODEL_OPT
-      c->m_BDOF                      = 1;
-      c->m_DMVR                      = 1;
-#endif
       c->m_IBCMode                   = 2;
       c->m_IBCFastMethod             = 6;
       c->m_LMChroma                  = 1;
@@ -3173,6 +3170,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 #if 1//MIN_SKIPPAR
   css << "FastInferMerge:" << c->m_FastInferMerge << " ";
 #endif
+  if( c->m_alf )
+  {
+    css << "ALFSpeed:" << c->m_alfSpeed << " ";
+  }
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
