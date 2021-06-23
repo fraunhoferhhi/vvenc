@@ -686,6 +686,7 @@ typedef struct vvenc_config
   bool                m_ccalf;
   int                 m_ccalfQpThreshold;
   int                 m_alfTempPred;                                                     // Indicates using of temporal filter data prediction through APS
+  int                 m_alfSpeed;
 
   vvencMCTF           m_vvencMCTF;
 

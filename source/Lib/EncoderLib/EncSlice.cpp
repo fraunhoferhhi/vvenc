@@ -1054,7 +1054,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->alfEnabled )
         {
           encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas() );
-          encSlice->m_pALF->reconstructCoeffAPSs( cs, true, cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr], false );
+          encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->tileGroupAlfEnabled[COMP_Y], cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr], false );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_derive );
