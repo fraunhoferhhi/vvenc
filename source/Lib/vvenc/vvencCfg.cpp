@@ -608,6 +608,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_preferredTransferCharacteristics        = -1;
 
   c->m_alf                                     = false;
+  c->m_alfSpeed                                = 0;
   c->m_useNonLinearAlfLuma                     = true;
   c->m_useNonLinearAlfChroma                   = true;
   c->m_maxNumAlfAlternativesChroma             = VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA;
@@ -3168,6 +3169,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 #if 1//MIN_SKIPPAR
   css << "FastInferMerge:" << c->m_FastInferMerge << " ";
 #endif
+  if( c->m_alf )
+  {
+    css << "ALFSpeed:" << c->m_alfSpeed << " ";
+  }
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";
