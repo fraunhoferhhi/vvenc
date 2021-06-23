@@ -2300,6 +2300,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_useAMaxBT < 0               || c->m_useAMaxBT > 1,               "AMaxBT out of range (0,1)");
   vvenc_confirmParameter(c, c->m_cabacInitPresent < 0        || c->m_cabacInitPresent > 1,        "CabacInitPresent out of range (0,1)");
   vvenc_confirmParameter(c, c->m_alfTempPred < 0             || c->m_alfTempPred > 1,             "ALFTempPred out of range (0,1)");
+  vvenc_confirmParameter(c, c->m_alfSpeed < 0                || c->m_alfSpeed > 1,                "ALFSpeed out of range (0,1)");
   vvenc_confirmParameter(c, c->m_saoEncodingRate < 0.0       || c->m_saoEncodingRate > 1.0,       "SaoEncodingRate out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_saoEncodingRateChroma < 0.0 || c->m_saoEncodingRateChroma > 1.0, "SaoEncodingRateChroma out of range [0.0 .. 1.0]");
   vvenc_confirmParameter(c, c->m_maxParallelFrames < 0,                                        "MaxParallelFrames out of range" );
