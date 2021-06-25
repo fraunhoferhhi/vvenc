@@ -865,7 +865,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FEN",                                             m_fastInterSearchMode,                            "fast encoder setting")
   ("ECU",                                             m_bUseEarlyCU,                                    "Early CU setting")
   ("FDM",                                             m_useFastDecisionForMerge,                        "Fast decision for Merge RD Cost")
-  ("ESD",                                             m_useEarlySkipDetection,                          "Early SKIP detection setting")
 
   ("DisableIntraInInter",                             m_bDisableIntraCUsInInterSlices,                  "Flag to disable intra CUs in inter slices")
   ("ConstrainedIntraPred",                            m_bUseConstrainedIntraPred,                       "Constrained Intra Prediction")

@@ -486,7 +486,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
   c->m_bUseEarlyCU                             = false;
   c->m_useFastDecisionForMerge                 = true;
-  c->m_useEarlySkipDetection                   = false;
 
   c->m_bDisableIntraCUsInInterSlices           = false;
   c->m_bUseConstrainedIntraPred                = false;
@@ -3148,7 +3147,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "ECU:" << c->m_bUseEarlyCU << " ";
   css << "FEN:" << c->m_fastInterSearchMode << " ";
   css << "FDM:" << c->m_useFastDecisionForMerge << " ";
-  css << "ESD:" << c->m_useEarlySkipDetection << " ";
   css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
   css << "LCTUFast:" << c->m_useFastLCTU << " ";
   css << "FastMrg:" << c->m_useFastMrg << " ";

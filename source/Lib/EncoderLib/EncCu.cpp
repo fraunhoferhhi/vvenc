@@ -630,83 +630,49 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         if ( !slice.isIRAP() && !( cs.area.lwidth() == 4 && cs.area.lheight() == 4 ) && !partitioner.isConsIntra() )
         {
           // add inter modes
-          if( m_pcEncCfg->m_useEarlySkipDetection )
-          {
-            EncTestMode encTestMode = {ETM_INTER_ME, ETO_STANDARD, qp, lossless};
-            if( m_modeCtrl.tryMode( encTestMode, cs, partitioner ) )
-            {
-              xCheckRDCostInter( tempCS, bestCS, partitioner, encTestMode );
-            }
-            if (m_pcEncCfg->m_Geo && cs.slice->isInterB())
-            {
-              EncTestMode encTestModeGeo = { ETM_MERGE_GEO, ETO_STANDARD, qp, lossless };
-              if (m_modeCtrl.tryMode(encTestModeGeo, cs, partitioner))
-              {
-                xCheckRDCostMergeGeo(tempCS, bestCS, partitioner, encTestModeGeo);
-              }
-            }
 #if !MERGE_ENC_OPT
-            if (m_pcEncCfg->m_Affine || cs.sps->SbtMvp)
+          if ((m_pcEncCfg->m_Affine == 1) || (cs.sps->SbtMvp && m_pcEncCfg->m_Affine == 0))
+          {
+            EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
+            if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
             {
-              EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
-              if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
-              {
-                xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
-              }
-            }
-#endif
-
-            EncTestMode encTestModeSkip = {ETM_MERGE_SKIP, ETO_STANDARD, qp, lossless};
-            if( m_modeCtrl.tryMode( encTestModeSkip, cs, partitioner ) )
-            {
-              xCheckRDCostMerge( tempCS, bestCS, partitioner, encTestModeSkip );
+              xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
             }
           }
-          else
-          {
-#if !MERGE_ENC_OPT
-            if ((m_pcEncCfg->m_Affine == 1) || (cs.sps->SbtMvp && m_pcEncCfg->m_Affine == 0))
-            {
-              EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
-              if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
-              {
-                xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
-              }
-            }
 #endif
-            EncTestMode encTestModeSkip = {ETM_MERGE_SKIP, ETO_STANDARD, qp, lossless};
-            if( m_modeCtrl.tryMode( encTestModeSkip, cs, partitioner ) )
-            {
-              xCheckRDCostMerge( tempCS, bestCS, partitioner, encTestModeSkip );
+          EncTestMode encTestModeSkip = { ETM_MERGE_SKIP, ETO_STANDARD, qp, lossless };
+          if (m_modeCtrl.tryMode(encTestModeSkip, cs, partitioner))
+          {
+            xCheckRDCostMerge(tempCS, bestCS, partitioner, encTestModeSkip);
 
-              CodingUnit* cu = bestCS->getCU(partitioner.chType, partitioner.treeType);
-              if (cu)
+            CodingUnit* cu = bestCS->getCU(partitioner.chType, partitioner.treeType);
+            if (cu)
               cu->mmvdSkip = cu->skip == false ? false : cu->mmvdSkip;
-            }
+          }
 #if !MERGE_ENC_OPT
-            if (m_pcEncCfg->m_Affine > 1)
+          if (m_pcEncCfg->m_Affine > 1)
+          {
+            EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
+            if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
             {
-              EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
-              if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
-              {
-                xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
-              }
-            }
-#endif
-            if (m_pcEncCfg->m_Geo && cs.slice->isInterB())
-            {
-              EncTestMode encTestModeGeo = { ETM_MERGE_GEO, ETO_STANDARD, qp, lossless };
-              if (m_modeCtrl.tryMode(encTestModeGeo, cs, partitioner))
-              {
-                xCheckRDCostMergeGeo(tempCS, bestCS, partitioner, encTestModeGeo);
-              }
-            }
-            EncTestMode encTestMode = {ETM_INTER_ME, ETO_STANDARD, qp, lossless};
-            if( m_modeCtrl.tryMode( encTestMode, cs, partitioner ) )
-            {
-              xCheckRDCostInter( tempCS, bestCS, partitioner, encTestMode );
+              xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
             }
           }
+#endif
+          if (m_pcEncCfg->m_Geo && cs.slice->isInterB())
+          {
+            EncTestMode encTestModeGeo = { ETM_MERGE_GEO, ETO_STANDARD, qp, lossless };
+            if (m_modeCtrl.tryMode(encTestModeGeo, cs, partitioner))
+            {
+              xCheckRDCostMergeGeo(tempCS, bestCS, partitioner, encTestModeGeo);
+            }
+          }
+          EncTestMode encTestMode = { ETM_INTER_ME, ETO_STANDARD, qp, lossless };
+          if (m_modeCtrl.tryMode(encTestMode, cs, partitioner))
+          {
+            xCheckRDCostInter(tempCS, bestCS, partitioner, encTestMode);
+          }
+
           if (m_pcEncCfg->m_AMVRspeed)
           {
             double bestIntPelCost = MAX_DOUBLE;
@@ -2240,36 +2206,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       }
       tempCS->initStructData( encTestMode.qp );
     }// end loop uiMrgHADIdx
-
-    if( uiNoResidualPass == 0 && m_pcEncCfg->m_useEarlySkipDetection )
-    {
-      const CodingUnit     &bestCU = *bestCS->getCU( partitioner.chType, partitioner.treeType );
-
-      if( bestCU.rootCbf == 0 )
-      {
-        if( bestCU.mergeFlag )
-        {
-          m_modeCtrl.comprCUCtx->earlySkip = true;
-        }
-        else if( m_pcEncCfg->m_motionEstimationSearchMethod != VVENC_MESEARCH_SELECTIVE )
-        {
-          int absolute_MV = 0;
-
-          for( uint32_t uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
-          {
-            if( slice.numRefIdx[ uiRefListIdx ] > 0 )
-            {
-              absolute_MV += bestCU.mvd[uiRefListIdx][0].getAbsHor() + bestCU.mvd[uiRefListIdx][0].getAbsVer();
-            }
-          }
-
-          if( absolute_MV == 0 )
-          {
-            m_modeCtrl.comprCUCtx->earlySkip = true;
-          }
-        }
-      }
-    }
   }
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
@@ -4141,36 +4077,6 @@ void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&
       }
       tempCS->initStructData(encTestMode.qp);
     }// end loop uiMrgHADIdx
-
-    if (uiNoResidualPass == 0 && m_pcEncCfg->m_useEarlySkipDetection)
-    {
-      const CodingUnit     &bestCU = *bestCS->getCU(partitioner.chType, partitioner.treeType);
-
-      if( bestCU.rootCbf == 0)
-      {
-        if(bestCU.mergeFlag)
-        {
-          m_modeCtrl.comprCUCtx->earlySkip = true;
-        }
-        else if (m_pcEncCfg->m_motionEstimationSearchMethod != VVENC_MESEARCH_SELECTIVE)
-        {
-          int absolute_MV = 0;
-
-          for (uint32_t uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++)
-          {
-            if (slice.numRefIdx[uiRefListIdx] > 0)
-            {
-              absolute_MV += bestCU.mvd[uiRefListIdx][0].getAbsHor() + bestCU.mvd[uiRefListIdx][0].getAbsVer();
-            }
-          }
-
-          if (absolute_MV == 0)
-          {
-            m_modeCtrl.comprCUCtx->earlySkip = true;
-          }
-        }
-      }
-    }
   }
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );

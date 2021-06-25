@@ -559,7 +559,6 @@ typedef struct vvenc_config
   int                 m_fastInterSearchMode;                                             // Parameter that controls fast encoder settings
   bool                m_bUseEarlyCU;                                                     // flag for using Early CU setting
   bool                m_useFastDecisionForMerge;                                         // flag for using Fast Decision Merge RD-Cost
-  bool                m_useEarlySkipDetection;                                           // flag for using Early SKIP Detection
 
   bool                m_bDisableIntraCUsInInterSlices;                                   // Flag for disabling intra predicted CUs in inter slices.
   bool                m_bUseConstrainedIntraPred;                                        // flag for using constrained intra prediction

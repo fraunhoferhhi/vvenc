@@ -195,7 +195,6 @@ struct ComprCUCtx
     , grad_dowVal           (0)
     , interHad              (MAX_DISTORTION)
     , maxQtSubDepth         (0)
-    , earlySkip             (false)
     , isReusingCu           (false)
     , qtBeforeBt            (false)
     , doTriHorzSplit        (false)
@@ -231,7 +230,6 @@ struct ComprCUCtx
   double            grad_dowVal;
   Distortion        interHad;
   int               maxQtSubDepth;
-  bool              earlySkip;
   bool              isReusingCu;
   bool              qtBeforeBt;
   bool              doTriHorzSplit;
