@@ -163,14 +163,13 @@ void  EncReshape::destroy()
 \param   pcPic describe pointer of current coding picture
 \param   sliceType describe the slice type
 */
-void EncReshape::preAnalyzerHDR(Picture& pic, const SliceType sliceType, const vvencReshapeCW& reshapeCW, bool isDualT)
+void EncReshape::preAnalyzerHDR(Picture& pic, const SliceType sliceType, const vvencReshapeCW& reshapeCW)
 {
   if (m_lumaBD >= 10)
   {
     m_sliceReshapeInfo.sliceReshaperEnabled = true;
-      if (sliceType == VVENC_I_SLICE )                                              { m_sliceReshapeInfo.sliceReshaperModelPresent = true;  }
-      else                                                                    { m_sliceReshapeInfo.sliceReshaperModelPresent = false; }
-    { m_sliceReshapeInfo.enableChromaAdj = 1;                   }
+    m_sliceReshapeInfo.sliceReshaperModelPresent = (sliceType == VVENC_I_SLICE );
+    m_sliceReshapeInfo.enableChromaAdj = 1;
   }
   else
   {

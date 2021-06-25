@@ -1113,10 +1113,10 @@ void EncGOP::xInitLMCS( Picture& pic )
 {
   Slice* slice = pic.cs->slice;
 
-  if( ! slice->sps->lumaReshapeEnable )
+  if( ! slice->sps->lumaReshapeEnable || pic.isSCC )
   {
     pic.reshapeData.copyReshapeData( m_Reshaper );
-    m_Reshaper.setCTUFlag       ( false );
+    m_Reshaper.setCTUFlag     ( false );
     pic.reshapeData.setCTUFlag( false );
     return;
   }
@@ -1128,7 +1128,7 @@ void EncGOP::xInitLMCS( Picture& pic )
 
   if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ )
   {
-    m_Reshaper.preAnalyzerHDR( pic, sliceType, m_pcEncCfg->m_reshapeCW, m_pcEncCfg->m_dualITree );
+    m_Reshaper.preAnalyzerHDR( pic, sliceType, m_pcEncCfg->m_reshapeCW );
   }
   else if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_HLG )
   {

@@ -99,7 +99,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   pic.cs->createTempBuffers( true );
   pic.cs->initStructData( MAX_INT, false, nullptr, true );
 
-  if( m_pcEncCfg->m_lumaReshapeEnable && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
+  if( (m_pcEncCfg->m_lumaReshapeEnable && !pic.isSCC) && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
   {
     const double *weights = gopEncoder.getReshaper().getlumaLevelToWeightPLUT();
     auto& vec = m_ALF.getLumaLevelWeightTable();
@@ -109,6 +109,10 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
     std::copy( weights, weights + numEl, vec.begin() );
 
     m_ALF.setAlfWSSD( 1 );
+  }
+  else
+  {
+    m_ALF.setAlfWSSD( 0 );
   }
 
   // compress picture
