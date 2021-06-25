@@ -375,6 +375,7 @@ protected:
   int               m_iSearchRange;
   int               m_bipredSearchRange; // Search range for bi-prediction
   vvencMESearchMethod m_motionEstimationSearchMethod;
+  int               m_motionEstimationSearchMethodSCC;
   int               m_aaiAdaptSR[MAX_NUM_REF_LIST_ADAPT_SR][MAX_IDX_ADAPT_SR];
 
   // RD computation

@@ -511,6 +511,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_RCForceIntraQP                          = false;
 
   c->m_motionEstimationSearchMethod            = VVENC_MESEARCH_DIAMOND;
+  c->m_motionEstimationSearchMethodSCC         = 0;
   c->m_bRestrictMESampling                     = false;
   c->m_SearchRange                             = 96;
   c->m_bipredSearchRange                       = 4;
@@ -2022,6 +2023,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
   vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3, "Error: FastSearchSCC parameter out of range" );
   vvenc_confirmParameter( c, c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
 
   switch ( c->m_conformanceWindowMode)
@@ -2662,6 +2664,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_fastQtBtEnc                   = true;
   c->m_fastInterSearchMode           = VVENC_FASTINTERSEARCH_MODE1;
   c->m_motionEstimationSearchMethod  = VVENC_MESEARCH_DIAMOND_FAST;
+  c->m_motionEstimationSearchMethod  = 0;
   c->m_SearchRange                   = 384;
   c->m_minSearchWindow               = 96;
   c->m_maxNumMergeCand               = 6;
