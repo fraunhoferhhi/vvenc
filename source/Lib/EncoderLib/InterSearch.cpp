@@ -197,6 +197,7 @@ InterSearch::InterSearch()
   , m_iSearchRange                (0)
   , m_bipredSearchRange           (0)
   , m_motionEstimationSearchMethod(VVENC_MESEARCH_FULL)
+  , m_motionEstimationSearchMethodSCC( 0 )
   , m_CABACEstimator              (nullptr)
   , m_CtxCache                    (nullptr)
   , m_pTempPel                    (nullptr)
@@ -227,9 +228,10 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
   m_modeCtrl                     = pModeCtrl;
   m_pSaveCS                      = pSaveCS;
 
-  m_iSearchRange                 = encCfg.m_SearchRange;
-  m_bipredSearchRange            = encCfg.m_bipredSearchRange;
-  m_motionEstimationSearchMethod = vvencMESearchMethod( encCfg.m_motionEstimationSearchMethod );
+  m_iSearchRange                    = encCfg.m_SearchRange;
+  m_bipredSearchRange               = encCfg.m_bipredSearchRange;
+  m_motionEstimationSearchMethod    = vvencMESearchMethod( encCfg.m_motionEstimationSearchMethod );
+  m_motionEstimationSearchMethodSCC = encCfg.m_motionEstimationSearchMethodSCC;
 
   for( uint32_t iDir = 0; iDir < MAX_NUM_REF_LIST_ADAPT_SR; iDir++ )
   {
@@ -2198,11 +2200,30 @@ void InterSearch::xPatternSearch( TZSearchStruct&  cStruct,
 void InterSearch::xPatternSearchFast( const CodingUnit& cu,
                                       RefPicList            refPicList,
                                       int                   iRefIdxPred,
-                                      TZSearchStruct&    cStruct,
+                                      TZSearchStruct&       cStruct,
                                       Mv&                   rcMv,
                                       Distortion&           ruiSAD,
                                       const Mv* const       pIntegerMv2Nx2NPred )
 {
+  if( cu.cs->picture->isSCC && m_motionEstimationSearchMethodSCC )
+  {
+    switch ( m_motionEstimationSearchMethodSCC )
+    {
+    case 3: //VVENC_MESEARCH_DIAMOND_FAST:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true, true );
+      break;
+    case 2: //VVENC_MESEARCH_DIAMOND:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+      break;
+    case 1: //VVENC_MESEARCH_SELECTIVE:
+      xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
+      break;
+    default:
+      break;
+    }
+    return;
+  }
+
   switch ( m_motionEstimationSearchMethod )
   {
   case VVENC_MESEARCH_DIAMOND_FAST:

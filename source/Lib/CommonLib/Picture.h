@@ -245,6 +245,7 @@ public:
   int                           picInitialQP;
   double                        picVisActY;
   StopClock                     encTime;
+  bool                          isSCC;
   bool                          useScMCTF;
   bool                          useScTS;
   bool                          useScBDPCM;
