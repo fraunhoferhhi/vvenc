@@ -1403,7 +1403,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
     }
     useScTools = ((s * 100 / AmountBlock) > K_SC);
   }
-  pic.isSCC      = !useScMCTF  && ((pic.poc/3)&4); 
+  pic.isSCC      = !useScMCTF; 
   pic.useScTS    = m_cEncCfg.m_TS == 1       || (m_cEncCfg.m_TS == 2 && useScTools);
   pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1 || (m_cEncCfg.m_useBDPCM == 2 && useScTools);
   pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1 || (m_cEncCfg.m_vvencMCTF.MCTF == 2 && useScMCTF);
