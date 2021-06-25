@@ -2665,7 +2665,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_fastQtBtEnc                   = true;
   c->m_fastInterSearchMode           = VVENC_FASTINTERSEARCH_MODE1;
   c->m_motionEstimationSearchMethod  = VVENC_MESEARCH_DIAMOND_FAST;
-  c->m_motionEstimationSearchMethod  = 0;
+  c->m_motionEstimationSearchMethodSCC = 0;
   c->m_SearchRange                   = 384;
   c->m_minSearchWindow               = 96;
   c->m_maxNumMergeCand               = 6;
