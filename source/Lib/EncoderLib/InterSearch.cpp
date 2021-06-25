@@ -2207,7 +2207,7 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
   switch ( m_motionEstimationSearchMethod )
   {
   case VVENC_MESEARCH_DIAMOND_FAST:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, scc, !scc );
+    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, scc, true );
     break;
   case VVENC_MESEARCH_DIAMOND:
     xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, scc );
