@@ -873,12 +873,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
-  // if early skip detected, skip all modes checking but the splits
-  if( cuECtx.earlySkip && m_pcEncCfg->m_useEarlySkipDetection  && !( isModeInter( encTestmode ) ) )
-  {
-    return false;
-  }
-
   if( cuECtx.minDepth > partitioner.currQtDepth && partitioner.canSplit( CU_QUAD_SPLIT, cs ) )
   {
     // enforce QT
@@ -1003,13 +997,9 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
           }
         }
 #endif
-        // NOTE: ETO_STANDARD is always done when early SKIP mode detection is enabled
-        if( !m_pcEncCfg->m_useEarlySkipDetection )
+        if( relatedCU.isSkip || relatedCU.isIntra )
         {
-          if( relatedCU.isSkip || relatedCU.isIntra )
-          {
-            return false;
-          }
+          return false;
         }
       }
     }
