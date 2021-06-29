@@ -1113,7 +1113,7 @@ void EncGOP::xInitLMCS( Picture& pic )
 {
   Slice* slice = pic.cs->slice;
 
-  if( ! slice->sps->lumaReshapeEnable || pic.isSCC )
+  if( ! pic.useScLMCS )
   {
     pic.reshapeData.copyReshapeData( m_Reshaper );
     m_Reshaper.setCTUFlag     ( false );

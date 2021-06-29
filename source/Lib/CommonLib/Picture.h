@@ -250,6 +250,7 @@ public:
   bool                          useScTS;
   bool                          useScBDPCM;
   bool                          useScIBC;
+  bool                          useScLMCS;
   int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
