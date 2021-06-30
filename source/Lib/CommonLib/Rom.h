@@ -253,6 +253,7 @@ struct SearchSpaceAccumulator
   {
     memset( parts, 0, sizeof( parts ) );
     memset( quant, 0, sizeof( quant ) );
+    memset( preds, 0, sizeof( preds ) );
     memset( slices, 0, sizeof( slices ) );
   }
 
