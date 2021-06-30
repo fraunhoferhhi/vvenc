@@ -1315,8 +1315,8 @@ void EncLib::xInitHrdParameters(SPS &sps)
 
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
 {
-  bool useScMCTF  = false;
-  bool useScTools = false;
+  bool isSccWeak = false;
+  bool isSccStrg = false;
 
   if( m_cEncCfg.m_TS                   == 2
       || m_cEncCfg.m_useBDPCM          == 2
@@ -1396,24 +1396,24 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
       hh += SizeS;
     }
     int s = 0;
-    useScMCTF = false; // for SCC no MCTF
+    isSccStrg = true;
     for (int r = 0; r < 4; r++)
     {
       s += sR[r];
       if (((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC))
       {
-        useScMCTF = true; //NC
+        isSccStrg = false;
       }
     }
-    useScTools = ((s * 100 / AmountBlock) > K_SC);
+    isSccWeak = ((s * 100 / AmountBlock) > K_SC);
   }
-  pic.isSCC      = !useScMCTF;
-  pic.useScTS    = m_cEncCfg.m_TS == 1                || ( m_cEncCfg.m_TS == 2                && useScTools );
-  pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1          || ( m_cEncCfg.m_useBDPCM == 2          && useScTools );
-  pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1    || ( m_cEncCfg.m_vvencMCTF.MCTF == 2    && useScMCTF );
-  pic.useScLMCS  = m_cEncCfg.m_lumaReshapeEnable == 1 || ( m_cEncCfg.m_lumaReshapeEnable == 2 && ! useScMCTF );
 
-  pic.useScIBC   = m_cEncCfg.m_IBCMode == 1 || (m_cEncCfg.m_IBCMode == 2 && !useScMCTF);
+  pic.isSCC      = isSccStrg;
+  pic.useScTS    = m_cEncCfg.m_TS == 1                || ( m_cEncCfg.m_TS == 2                && isSccWeak );
+  pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1          || ( m_cEncCfg.m_useBDPCM == 2          && isSccWeak );
+  pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1    || ( m_cEncCfg.m_vvencMCTF.MCTF == 2    && ! isSccStrg );
+  pic.useScLMCS  = m_cEncCfg.m_lumaReshapeEnable == 1 || ( m_cEncCfg.m_lumaReshapeEnable == 2 && ! isSccStrg );
+  pic.useScIBC   = m_cEncCfg.m_IBCMode == 1           || ( m_cEncCfg.m_IBCMode == 2           && isSccStrg );
 
 }
 
