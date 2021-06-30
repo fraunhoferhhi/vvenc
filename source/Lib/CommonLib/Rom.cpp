@@ -1000,6 +1000,116 @@ const uint8_t g_aucChromaScale[NUM_CHROMA_FORMAT][chromaQPMappingTableSize] =
   { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,63,63,63,63,63,63 }
 };
 
+
+#if ENABLE_MEASURE_SEARCH_SPACE
+void SearchSpaceAccumulator::addQuant( const struct UnitArea& area, int chType )
+{
+  int wIdx = Log2( area.blocks[chType].width );
+  int hIdx = Log2( area.blocks[chType].height );
+
+  quant[currIsIntra][currTId][wIdx][hIdx][chType]++;
+}
+
+void SearchSpaceAccumulator::addPartition( const struct UnitArea& area, int chType )
+{
+  if( chType != CH_C )
+  {
+    int wIdx = Log2( area.Y().width );
+    int hIdx = Log2( area.Y().height );
+
+    parts[currIsIntra][currTId][wIdx][hIdx][0]++;
+  }
+
+  if( chType != CH_L )
+  {
+    int wIdx = Log2( area.Cb().width );
+    int hIdx = Log2( area.Cb().height );
+
+    // will only be called once per chType, i.e. once per two blocks
+    parts[currIsIntra][currTId][wIdx][hIdx][1]++;
+    parts[currIsIntra][currTId][wIdx][hIdx][1]++;
+  }
+}
+
+void SearchSpaceAccumulator::addPrediction( const int w, const int h, int chType )
+{
+  int wIdx = Log2( w );
+  int hIdx = Log2( h );
+
+  preds[currIsIntra][currTId][wIdx][hIdx][chType]++;
+}
+
+void SearchSpaceAccumulator::printQuantizationStats() const
+{
+  std::cout << std::endl << std::endl << "QUANTIZATION STATS" << std::endl;
+    
+  printStats( quant );
+}
+
+void SearchSpaceAccumulator::printPredictionsStats() const
+{
+  std::cout << std::endl << std::endl << "PREDICTION STATS" << std::endl;
+
+  printStats( preds );
+}
+
+void SearchSpaceAccumulator::printPartitioningStats() const
+{
+  std::cout << std::endl << std::endl << "PARTITIONING STATS" << std::endl;
+    
+  printStats( parts );
+}
+
+void SearchSpaceAccumulator::printStats( const size_t stat[2][6][8][8][2] ) const
+{
+  std::cout << " I-Slices" << std::endl;
+
+  size_t sumArea = 0;
+
+  for( int wIdx = 2; wIdx <= 7; wIdx++ )
+  {
+    for( int hIdx = 2; hIdx <= 7; hIdx++ )
+    {
+      sumArea += ( 1 <<   wIdx       ) * ( 1 <<   hIdx       ) * stat[1][0][wIdx    ][hIdx    ][0];
+      sumArea += ( 1 << ( wIdx - 1 ) ) * ( 1 << ( hIdx - 1 ) ) * stat[1][0][wIdx - 1][hIdx - 1][1];
+    }
+  }
+
+  std::cout << "  Intra: tested " << ( sumArea / 1000 ) << "k samples: " << ( 100.0 * sumArea / ( picW * picH * 1.5 * slices[1][0] ) ) << "%" << std::endl;
+
+  sumArea = 0;
+  size_t numSlices = 0;
+    
+  std::cout << std::endl << " P/B-Slices" << std::endl;
+
+  for( int t = 0; t < 6; t++ )
+  {
+    size_t sumAreaTId = 0;
+
+    for( int wIdx = 2; wIdx <= 7; wIdx++ )
+    {
+      for( int hIdx = 2; hIdx <= 7; hIdx++ )
+      {
+        sumAreaTId += ( 1 <<   wIdx       ) * ( 1 <<   hIdx       ) * stat[0][t][wIdx    ][hIdx    ][0];
+        sumAreaTId += ( 1 << ( wIdx - 1 ) ) * ( 1 << ( hIdx - 1 ) ) * stat[0][t][wIdx - 1][hIdx - 1][1];
+      }
+    }
+      
+    //if( sumAreaTId != 0 )
+    //{
+      std::cout << "  TID " << t << ": tested " << ( sumAreaTId / 1000 ) << "k samples: " << ( 100.0 * ( sumAreaTId ? sumAreaTId / ( picW * picH * 1.5 * slices[0][t] ) : 0 ) ) << "%" << std::endl;
+      sumArea += sumAreaTId;
+    //}
+    numSlices += slices[0][t];
+  }
+    
+  std::cout << "  TID *: tested " << ( sumArea / 1000 ) << "k samples: " << ( 100.0 * sumArea / ( picW * picH * 1.5 * numSlices ) ) << "%" << std::endl;
+}
+
+SearchSpaceAccumulator g_searchSpaceAcc;
+
+#endif
+
 const ScanElement g_coefTopLeftDiagScan8x8[MAX_TU_SIZE_IDX][64] =
 {
   {{0,0,0},{1,0,1},{1,1,0},{2,0,2},{2,1,1},{2,2,0},{3,0,3},{3,1,2},{3,2,1},{3,3,0},{4,1,3},{4,2,2},{4,3,1},{5,2,3},{5,3,2},{6,3,3},{4,0,4},{5,0,5},{5,1,4},{6,0,6},{6,1,5},{6,2,4},{7,0,7},{7,1,6},{7,2,5},{7,3,4},{8,1,7},{8,2,6},{8,3,5},{9,2,7},{9,3,6},{10,3,7},{4,4,0},{5,4,1},{5,5,0},{6,4,2},{6,5,1},{6,6,0},{7,4,3},{7,5,2},{7,6,1},{7,7,0},{8,5,3},{8,6,2},{8,7,1},{9,6,3},{9,7,2},{10,7,3},{8,4,4},{9,4,5},{9,5,4},{10,4,6},{10,5,5},{10,6,4},{11,4,7},{11,5,6},{11,6,5},{11,7,4},{12,5,7},{12,6,6},{12,7,5},{13,6,7},{13,7,6},{14,7,7},},

@@ -1292,7 +1292,7 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
     const int bioEnabledThres = 2 * dy * dx;
     const int bd = cu.cs->slice->clpRngs.comp[COMP_Y].bd;
 
-    DistParam distParam = m_pcRdCost->setDistParam( nullptr, nullptr, bilinearBufStride, bilinearBufStride, bd, COMP_Y, dx, dy, 1 );
+    DistParam distParam = m_pcRdCost->setDistParam( nullptr, nullptr, bilinearBufStride, bilinearBufStride, bd, COMP_Y, dx, dy, 1, true );
 
     int num = 0;
     int yStart = 0;

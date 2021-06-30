@@ -643,6 +643,10 @@ void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBu
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_QUANT, tu.cs, toChannelType(compID) );
   m_quant->quant( tu, compID, pSrc, uiAbsSum, cQP, ctx );
+#if ENABLE_MEASURE_SEARCH_SPACE
+
+  g_searchSpaceAcc.addQuant( tu, toChannelType( compID ) );
+#endif
 }
 
 
