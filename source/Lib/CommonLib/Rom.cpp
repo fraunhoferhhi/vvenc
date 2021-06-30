@@ -1062,7 +1062,7 @@ void SearchSpaceAccumulator::printPartitioningStats() const
 
 void SearchSpaceAccumulator::printStats( const size_t stat[2][6][8][8][2] ) const
 {
-  std::cout << std::fixed << std::setprecision( 3 ) << std::setw( 2 );
+  std::cout << std::fixed << std::setprecision( 2 ) << std::setw( 10 );
 
   std::cout << " I-Slices" << std::endl;
 
