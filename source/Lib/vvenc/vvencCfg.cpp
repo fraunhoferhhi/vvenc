@@ -528,7 +528,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_BDOF                                    = false;
   c->m_DMVR                                    = false;
   c->m_EDO                                     = 0;
-  c->m_lumaReshapeEnable                       = false;
+  c->m_lumaReshapeEnable                       = 0;
   c->m_reshapeSignalType                       = 0;
   c->m_updateCtrl                              = 0;
   c->m_adpOption                               = 0;
@@ -1159,9 +1159,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // do some check and set of parameters next
   //
 
-  if ( c->m_lumaReshapeEnable)
+  if ( c->m_lumaReshapeEnable )
   {
-    if ( c->m_updateCtrl > 0 && c->m_adpOption > 2) { c->m_adpOption -= 2; }
+    if ( c->m_updateCtrl > 0 && c->m_adpOption > 2 ) { c->m_adpOption -= 2; }
   }
 
   if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400) )

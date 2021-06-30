@@ -601,7 +601,7 @@ typedef struct vvenc_config
   bool                m_BDOF;
   bool                m_DMVR;
   int                 m_EDO;
-  bool                m_lumaReshapeEnable;
+  int                 m_lumaReshapeEnable;
   int                 m_reshapeSignalType;
   int                 m_updateCtrl;
   int                 m_adpOption;
