@@ -61,6 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/TimeProfiler.h"
+#include "CommonLib/SearchSpaceCounter.h"
 
 #include <mutex>
 #include <cmath>
@@ -292,6 +293,15 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   const PreCalcValues& pcv         = *cs.pcv;
   const uint32_t       widthInCtus = pcv.widthInCtus;
 
+#if ENABLE_MEASURE_SEARCH_SPACE
+  if( ctuXPosInCtus == 0 && ctuYPosInCtus == 0 )
+  {
+    g_searchSpaceAcc.picW = pic->lwidth();
+    g_searchSpaceAcc.picH = pic->lheight();
+    g_searchSpaceAcc.addSlice( slice->isIntra(), slice->depth );
+  }
+
+#endif
   const int ctuRsAddr                 = ctuYPosInCtus * pcv.widthInCtus + ctuXPosInCtus;
   const uint32_t firstCtuRsAddrOfTile = 0;
   const uint32_t tileXPosInCtus       = firstCtuRsAddrOfTile % widthInCtus;
@@ -599,6 +609,13 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     const bool lossless           = false;
     int qp                        = cs.baseQP;
 
+#if ENABLE_MEASURE_SEARCH_SPACE
+    if( !isBoundary )
+    {
+      g_searchSpaceAcc.addPartition( partitioner.currArea(), partitioner.isSepTree( *tempCS ) ? partitioner.chType : MAX_NUM_CH );
+    }
+
+#endif
     if( ! isBoundary )
     {
       if (pps.useDQP && partitioner.isSepTree (*tempCS) && isChroma (partitioner.chType))
