@@ -117,7 +117,7 @@ namespace vvenc {
 #define ENABLE_CU_MODE_COUNTERS                           0
 #endif
 
-#define ENABLE_MEASURE_SEARCH_SPACE                       0
+#define ENABLE_MEASURE_SEARCH_SPACE                       1
 
 // ====================================================================================================================
 // Debugging

@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "RdCost.h"
 #include "Rom.h"
 #include "UnitPartitioner.h"
+#include "SearchSpaceCounter.h"
 
 
 //! \ingroup CommonLib

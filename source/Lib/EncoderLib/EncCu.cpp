@@ -61,6 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/TimeProfiler.h"
+#include "CommonLib/SearchSpaceCounter.h"
 
 #include <mutex>
 #include <cmath>
@@ -611,36 +612,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 #if ENABLE_MEASURE_SEARCH_SPACE
     if( !isBoundary )
     {
-      uint32_t compBegin;
-      uint32_t numComp;
-
-      if( partitioner.isSepTree( *tempCS ) )
-      {
-        if( isLuma( partitioner.chType ) )
-        {
-          compBegin = COMP_Y;
-          numComp = 1;
-        }
-        else
-        {
-          compBegin = COMP_Cb;
-          numComp = 2;
-        }
-      }
-      else
-      {
-        compBegin = COMP_Y;
-        numComp = 3;
-      }
-
-      if( compBegin == COMP_Y )
-      {
-        g_searchSpaceAcc.addPartition( partitioner.currArea(), numComp == 3 ? MAX_NUM_CH : CH_L );
-      }
-      else
-      {
-        g_searchSpaceAcc.addPartition( partitioner.currArea(), CH_C );
-      }
+      g_searchSpaceAcc.addPartition( partitioner.currArea(), partitioner.isSepTree( *tempCS ) ? partitioner.chType : MAX_NUM_CH );
     }
 
 #endif

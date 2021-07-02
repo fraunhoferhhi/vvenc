@@ -58,6 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "dtrace_buffer.h"
 #include "TimeProfiler.h"
+#include "SearchSpaceCounter.h"
 
 #include <stdlib.h>
 #include <memory.h>

@@ -235,59 +235,6 @@ extern StatCounters::StatCounter2DSet<int64_t> g_cuCounters2D;
 #else
 #define STAT_COUNT_CU_MODES(cond,...)
 #endif
-
-#if ENABLE_MEASURE_SEARCH_SPACE
-struct SearchSpaceAccumulator
-{
-  // intra -> tId -> wIdx -> hIdx -> chType
-  size_t parts[2][6][8][8][2];
-  size_t quant[2][6][8][8][2];
-  size_t preds[2][6][8][8][2];
-  size_t picW;
-  size_t picH;
-  size_t slices[2][6];
-  int    currTId;
-  bool   currIsIntra;
-
-  SearchSpaceAccumulator()
-  {
-    memset( parts, 0, sizeof( parts ) );
-    memset( quant, 0, sizeof( quant ) );
-    memset( preds, 0, sizeof( preds ) );
-    memset( slices, 0, sizeof( slices ) );
-  }
-
-  ~SearchSpaceAccumulator()
-  {
-    printPredictionsStats();
-    printQuantizationStats();
-    printPartitioningStats();
-  }
-
-  void addSlice( bool intra, int tId )
-  {
-    slices[intra][tId]++;
-
-    currIsIntra = intra;
-    currTId     = tId;
-  }
-
-  void addQuant     ( const struct UnitArea& area, int chType );
-  void addPartition ( const struct UnitArea& area, int chType );
-  void addPrediction( const int w, const int h,    int chType );
-
-private:
-
-  void printQuantizationStats() const;
-  void printPartitioningStats() const;
-  void printPredictionsStats()  const;
-
-  void printStats( const size_t stat[2][6][8][8][2] ) const;
-};
-
-extern SearchSpaceAccumulator g_searchSpaceAcc;
-
-#endif
 } // namespace vvenc
 
 //! \}
