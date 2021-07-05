@@ -1322,7 +1322,8 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
       || m_cEncCfg.m_useBDPCM          == 2
       || m_cEncCfg.m_vvencMCTF.MCTF    == 2
       || m_cEncCfg.m_IBCMode           == 2
-      || m_cEncCfg.m_lumaReshapeEnable == 2 )
+      || m_cEncCfg.m_lumaReshapeEnable == 2
+      || m_cEncCfg.m_motionEstimationSearchMethodSCC > 0 )
   {
     int SIZE_BL = 4;
     int K_SC = 25;
@@ -1408,7 +1409,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
     isSccWeak = ((s * 100 / AmountBlock) > K_SC);
   }
 
-  pic.isSCC      = isSccStrg;
+  pic.useScME    = m_cEncCfg.m_motionEstimationSearchMethodSCC > 0                            && isSccStrg;
   pic.useScTS    = m_cEncCfg.m_TS == 1                || ( m_cEncCfg.m_TS == 2                && isSccWeak );
   pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1          || ( m_cEncCfg.m_useBDPCM == 2          && isSccWeak );
   pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1    || ( m_cEncCfg.m_vvencMCTF.MCTF == 2    && ! isSccStrg );

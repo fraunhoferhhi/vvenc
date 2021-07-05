@@ -2712,6 +2712,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_useNonLinearAlfLuma             = 0;
 
   // ssc tools
+  c->m_motionEstimationSearchMethodSCC = 2;
   c->m_useBDPCM                        = 2;
   c->m_IBCMode                         = 2;
   c->m_IBCFastMethod                   = 6;
@@ -2732,7 +2733,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
-      c->m_motionEstimationSearchMethodSCC = 0;
 
       // partitioning: CTUSize64 QT44MTT00
       c->m_CTUSize                         = 64;
@@ -2766,6 +2766,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
+      c->m_TSsize                          = 3;
 
       break;
 
@@ -2777,7 +2778,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
-      c->m_motionEstimationSearchMethodSCC = 0;
 
       // partitioning: CTUSize64 QT44MTT10
       c->m_CTUSize                         = 64;
@@ -2824,6 +2824,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SbTMVP                          = 1;
       // scc
       c->m_IBCFastMethod                   = 4;
+      c->m_TSsize                          = 4;
 
       break;
 
@@ -2835,7 +2836,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
-      c->m_motionEstimationSearchMethodSCC = 0;
 
       // partitioning: CTUSize128 QT44MTT21
       c->m_CTUSize                         = 128;
@@ -2889,6 +2889,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SMVD                            = 3;
       // scc
       c->m_IBCFastMethod                   = 3;
+      c->m_TSsize                          = 4;
 
       break;
 
@@ -2900,7 +2901,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
-      c->m_motionEstimationSearchMethodSCC = 0;
 
       // partitioning: CTUSize128 QT44MTT32
       c->m_CTUSize                         = 128;
@@ -2956,6 +2956,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SMVD                            = 3;
       // scc
       c->m_IBCFastMethod                   = 1;
+      c->m_TSsize                          = 5;
 
       break;
 
@@ -2967,7 +2968,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND;
-      c->m_motionEstimationSearchMethodSCC = 0;
 
       // partitioning: CTUSize128 QT44MTT33
       c->m_CTUSize                         = 128;
@@ -3025,6 +3025,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useNonLinearAlfLuma             = 1;
       // scc
       c->m_IBCFastMethod                   = 1;
+      c->m_TSsize                          = 5;
 
       break;
 
@@ -3036,7 +3037,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_minSearchWindow                 = 96;
       c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
       c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
-      c->m_motionEstimationSearchMethodSCC = 0;
 
       // partitioning: CTUSize128 QT44MTT21
       c->m_CTUSize                         = 128;
@@ -3093,10 +3093,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useNonLinearAlfChroma           = 1;
       c->m_useNonLinearAlfLuma             = 1;
       // scc
+      c->m_motionEstimationSearchMethodSCC = 3;
       c->m_useBDPCM                        = 1;
       c->m_IBCFastMethod                   = 5;
       c->m_TS                              = 1;
       c->m_useChromaTS                     = 1;
+      c->m_TSsize                          = 3;
 
       break;
 
@@ -3264,6 +3266,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "FEN:" << c->m_fastInterSearchMode << " ";
   css << "FDM:" << c->m_useFastDecisionForMerge << " ";
   css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
+  if( c->m_motionEstimationSearchMethodSCC )
+  {
+    css << " (SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
+  }
   css << "LCTUFast:" << c->m_useFastLCTU << " ";
   css << "FastMrg:" << c->m_useFastMrg << " ";
   css << "PBIntraFast:" << c->m_usePbIntraFast << " ";

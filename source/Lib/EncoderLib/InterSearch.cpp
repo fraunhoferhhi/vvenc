@@ -2192,45 +2192,47 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
                                       Distortion&           ruiSAD,
                                       const Mv* const       pIntegerMv2Nx2NPred )
 {
-  if( cu.cs->picture->isSCC && m_motionEstimationSearchMethodSCC )
+  if( cu.cs->picture->useScME )
   {
     switch ( m_motionEstimationSearchMethodSCC )
     {
-    case 3: //VVENC_MESEARCH_DIAMOND_FAST:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true, true );
-      break;
-    case 2: //VVENC_MESEARCH_DIAMOND:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
-      break;
-    case 1: //VVENC_MESEARCH_SELECTIVE:
-      xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
-      break;
-    default:
-      break;
+      case 3: //VVENC_MESEARCH_DIAMOND_FAST:
+        xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true, true );
+        break;
+      case 2: //VVENC_MESEARCH_DIAMOND:
+        xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+        break;
+      case 1: //VVENC_MESEARCH_SELECTIVE:
+        xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
+        break;
+      default:
+        THROW("shouldn't get here");
+        break;
     }
     return;
   }
 
   switch ( m_motionEstimationSearchMethod )
   {
-  case VVENC_MESEARCH_DIAMOND_FAST:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false, true );
-    break;
-  case VVENC_MESEARCH_DIAMOND:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
-    break;
+    case VVENC_MESEARCH_DIAMOND_FAST:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false, true );
+      break;
+    case VVENC_MESEARCH_DIAMOND:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
+      break;
 
-  case VVENC_MESEARCH_SELECTIVE:
-    xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
-    break;
+    case VVENC_MESEARCH_SELECTIVE:
+      xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
+      break;
 
-  case VVENC_MESEARCH_DIAMOND_ENHANCED:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
-    break;
+    case VVENC_MESEARCH_DIAMOND_ENHANCED:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+      break;
 
-  case VVENC_MESEARCH_FULL: // shouldn't get here.
-  default:
-    break;
+    case VVENC_MESEARCH_FULL:
+    default:
+      THROW("shouldn't get here");
+      break;
   }
 }
 

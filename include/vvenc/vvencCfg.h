@@ -583,7 +583,7 @@ typedef struct vvenc_config
   bool                m_RCForceIntraQP;
 
   int                 m_motionEstimationSearchMethod;
-  int                 m_motionEstimationSearchMethodSCC; 
+  int                 m_motionEstimationSearchMethodSCC;
   bool                m_bRestrictMESampling;                                             // Restrict sampling for the Selective ME
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
