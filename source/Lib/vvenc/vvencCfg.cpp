@@ -3268,7 +3268,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
   if( c->m_motionEstimationSearchMethodSCC )
   {
-    css << " (SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
+    css << "(SCC:" << c->m_motionEstimationSearchMethodSCC << ") ";
   }
   css << "LCTUFast:" << c->m_useFastLCTU << " ";
   css << "FastMrg:" << c->m_useFastMrg << " ";
