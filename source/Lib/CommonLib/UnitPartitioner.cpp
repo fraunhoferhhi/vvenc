@@ -871,28 +871,26 @@ int PartitionerImpl::getTUIntraSubPartitions( Partitioning& sub, const UnitArea 
 
 static const int g_rsScanToZ_w4[16] =
 {
-   0,  1,  4,  5,
-   2,  3,  6,  7,
+   0,  1,  4,  5, // wouldn't work for 128x32 blocks, but those are forbidden bcs of VPDU constraints
+   2,  3,  6,  7, // correct ordering for 128x64 (TU32)
    8,  9, 12, 13,
-  10, 11, 14, 15,
+  10, 11, 14, 15, // correct ordering for 128x128 (TU32)
 };
-
 
 static const int g_rsScanToZ_w2[8] =
 {
-   0,  1,
-   2,  3,
+   0,  1, // correct ordering for 64x32 (TU32) and 128x64 (TU64)
+   2,  3, // correct ordering for 64x64 (TU32) and 128x128 (TU64)
    4,  5,
-   6,  7,
+   6,  7, // correct ordering for 32x64 (TU32) and 64x128 (TU64)
 };
-
 
 static const int g_rsScanToZ_w1[4] =
 {
-   0,
-   1,
+   0, // no tiling, never used
+   1, // correct ordering for 64x32 (TU32) and 128x64 (TU64)
    2,
-   3
+   3, // correct ordering for 128x32 (TU32)
 };
 
 static const int* g_rsScanToZ[3] = { g_rsScanToZ_w1, g_rsScanToZ_w2, g_rsScanToZ_w4 };
@@ -913,11 +911,7 @@ int PartitionerImpl::getMaxTuTiling( Partitioning& dst, const UnitArea& cuArea, 
   {
     ret[i] = cuArea;
 
-    const int rsy = i / numTilesH;
-    const int rsx = i % numTilesH;
-
-    const int sid = ( rsy << numLog2H ) + rsx;
-    const int zid = rsScanToZ[sid];
+    const int zid = rsScanToZ[i];
 
     const int y = zid >> numLog2H;
     const int x = zid & ( ( 1 << numLog2H ) - 1 );
