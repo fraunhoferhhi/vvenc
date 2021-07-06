@@ -146,6 +146,7 @@ int EncApp::encode()
     if( m_cEncAppCfg.m_RCNumPasses > 1 )
     {
       msgApp( VVENC_ERROR, " 2 pass rate control and reading from stdin is not supported yet\n" );
+      vvenc_encoder_close( m_encCtx );
       return -1;
     }
     else
@@ -156,6 +157,7 @@ int EncApp::encode()
 
   if( ! openFileIO() )
   {
+    vvenc_encoder_close( m_encCtx );
     return -1;
   }
 
@@ -190,8 +192,13 @@ int EncApp::encode()
                              m_cEncAppCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false ))
     { 
       msgApp( VVENC_ERROR, "%s", m_yuvInputFile.getLastError().c_str() );
-      break;
+      vvenc_encoder_close( m_encCtx );
+      vvenc_YUVBuffer_free_buffer( &yuvInBuf );
+      vvenc_accessUnit_free_payload( &au );
+      closeFileIO();
+      return -1;
     }
+
     const int skipFrames = vvencCfg.m_FrameSkip - vvencCfg.m_vvencMCTF.MCTFNumLeadFrames;
     if( skipFrames > 0 )
     {
@@ -218,6 +225,10 @@ int EncApp::encode()
         if( 0 != m_yuvInputFile.readYuvBuf( yuvInBuf, inputDone ) )
         {
           msgApp( VVENC_ERROR, "read file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
+          vvenc_encoder_close( m_encCtx );
+          vvenc_YUVBuffer_free_buffer( &yuvInBuf );
+          vvenc_accessUnit_free_payload( &au );
+          closeFileIO();
           return -1;
         }
         if( !inputDone )

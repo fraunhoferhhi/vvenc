@@ -269,6 +269,9 @@ int main( int argc, char* argv[] )
                                  vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << cInputFile << std::endl;
+      vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+      vvenc_accessUnit_free_payload( &AU );
+      vvenc_encoder_close( enc );
       return -1;
     }
 
@@ -294,6 +297,9 @@ int main( int argc, char* argv[] )
         if( 0 != cYuvFileInput.readYuvBuf( cYUVInputBuffer, bEof ) )
         {
           std::cout << " [error]: read file failed: " << cYuvFileInput.getLastError() << std::endl;
+          vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+          vvenc_accessUnit_free_payload( &AU );
+          vvenc_encoder_close( enc );
           return -1;
         }
         if( ! bEof )
@@ -317,6 +323,9 @@ int main( int argc, char* argv[] )
       if( 0 != iRet )
       {
         printVVEncErrorMsg( cAppname, "encoding failed", iRet, vvenc_get_last_error( enc ) );
+        vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+        vvenc_accessUnit_free_payload( &AU );
+        vvenc_encoder_close( enc );
         return iRet;
       }
 
