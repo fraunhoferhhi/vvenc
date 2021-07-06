@@ -868,51 +868,44 @@ int PartitionerImpl::getTUIntraSubPartitions( Partitioning& sub, const UnitArea 
   return nPartitions;
 }
 
-static const int g_maxRtGridSize = 3;
 
-static const int g_zScanToX[1 << ( g_maxRtGridSize << 1 )] =
+static const int g_rsScanToZ_w4[16] =
 {
-   0,  1,  0,  1,  2,  3,  2,  3,
-   0,  1,  0,  1,  2,  3,  2,  3,
-   4,  5,  4,  5,  6,  7,  6,  7,
-   4,  5,  4,  5,  6,  7,  6,  7,
-   0,  1,  0,  1,  2,  3,  2,  3,
-   0,  1,  0,  1,  2,  3,  2,  3,
-   4,  5,  4,  5,  6,  7,  6,  7,
-   4,  5,  4,  5,  6,  7,  6,  7,
-};
-static const int g_zScanToY[1 << ( g_maxRtGridSize << 1 )] =
-{
-   0,  0,  1,  1,  0,  0,  1,  1,
-   2,  2,  3,  3,  2,  2,  3,  3,
-   0,  0,  1,  1,  0,  0,  1,  1,
-   2,  2,  3,  3,  2,  2,  3,  3,
-   4,  4,  5,  5,  4,  4,  5,  5,
-   6,  6,  7,  7,  6,  6,  7,  7,
-   4,  4,  5,  5,  4,  4,  5,  5,
-   6,  6,  7,  7,  6,  6,  7,  7,
-};
-static const int g_rsScanToZ[1 << ( g_maxRtGridSize << 1 )] =
-{
-   0,  1,  4,  5, 16, 17, 20, 21,
-   2,  3,  6,  7, 18, 19, 22, 23,
-   8,  9, 12, 13, 24, 25, 28, 29,
-  10, 11, 14, 15, 26, 27, 30, 31,
-  32, 33, 36, 37, 48, 49, 52, 53,
-  34, 35, 38, 39, 50, 51, 54, 55,
-  40, 41, 44, 45, 56, 57, 60, 61,
-  42, 43, 46, 47, 58, 59, 62, 63,
+   0,  1,  4,  5,
+   2,  3,  6,  7,
+   8,  9, 12, 13,
+  10, 11, 14, 15,
 };
 
-int PartitionerImpl::getMaxTuTiling( Partitioning& dst, const UnitArea &cuArea, const CodingStructure &cs )
-{
-  static_assert( MAX_LOG2_DIFF_CU_TR_SIZE <= g_maxRtGridSize, "Z-scan tables are only provided for MAX_LOG2_DIFF_CU_TR_SIZE for up to 3 (8x8 tiling)!" );
 
-  const Size area     = cuArea.lumaSize();
-  const int maxTrSize = ( area.width > 64 || area.height > 64 ) ? 64 : cs.sps->getMaxTbSize();
-  const int numTilesH = std::max<int>( 1, area.width  / maxTrSize );
+static const int g_rsScanToZ_w2[8] =
+{
+   0,  1,
+   2,  3,
+   4,  5,
+   6,  7,
+};
+
+
+static const int g_rsScanToZ_w1[4] =
+{
+   0,
+   1,
+   2,
+   3
+};
+
+static const int* g_rsScanToZ[3] = { g_rsScanToZ_w1, g_rsScanToZ_w2, g_rsScanToZ_w4 };
+
+int PartitionerImpl::getMaxTuTiling( Partitioning& dst, const UnitArea& cuArea, const CodingStructure& cs )
+{
+  const Size area = cuArea.lumaSize();
+  const int maxTrSize = cs.sps->getMaxTbSize();
+  const int numTilesH = std::max<int>( 1, area.width / maxTrSize );
   const int numTilesV = std::max<int>( 1, area.height / maxTrSize );
   const int numTiles  = numTilesH * numTilesV;
+  const int numLog2H  = Log2( numTilesH );
+  const int* rsScanToZ = g_rsScanToZ[numLog2H];
 
   Partitioning& ret = dst;
 
@@ -923,12 +916,15 @@ int PartitionerImpl::getMaxTuTiling( Partitioning& dst, const UnitArea &cuArea, 
     const int rsy = i / numTilesH;
     const int rsx = i % numTilesH;
 
-    const int x = g_zScanToX[g_rsScanToZ[( rsy << g_maxRtGridSize ) + rsx]];
-    const int y = g_zScanToY[g_rsScanToZ[( rsy << g_maxRtGridSize ) + rsx]];
+    const int sid = ( rsy << numLog2H ) + rsx;
+    const int zid = rsScanToZ[sid];
+
+    const int y = zid >> numLog2H;
+    const int x = zid & ( ( 1 << numLog2H ) - 1 );
 
     UnitArea& tile = ret[i];
 
-    for( CompArea &comp : tile.blocks )
+    for( CompArea& comp : tile.blocks )
     {
       if( !comp.valid() ) continue;
 

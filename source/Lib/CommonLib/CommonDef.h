@@ -369,8 +369,6 @@ static const int MAX_CU_SIZE =                                      1<<MAX_CU_DE
 static const int MIN_CU_LOG2 =                                      2;
 static const int MIN_PU_SIZE =                                      4;
 static const int MAX_NUM_PARTS_IN_CTU =                         ( ( MAX_CU_SIZE * MAX_CU_SIZE ) >> ( MIN_CU_LOG2 << 1 ) );
-static const int MAX_NUM_TUS =                                     16; ///< Maximum number of TUs within one CU. When max TB size is 32x32, up to 16 TUs within one CU (128x128) is supported
-static const int MAX_LOG2_DIFF_CU_TR_SIZE =                         3;
 
 static const int JVET_C0024_ZERO_OUT_TH =                          32;
 
