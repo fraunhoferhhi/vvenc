@@ -583,7 +583,7 @@ typedef struct vvenc_config
   bool                m_RCForceIntraQP;
 
   int                 m_motionEstimationSearchMethod;
-  int                 m_motionEstimationSearchMethodSCC; 
+  int                 m_motionEstimationSearchMethodSCC;
   bool                m_bRestrictMESampling;                                             // Restrict sampling for the Selective ME
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
@@ -633,9 +633,9 @@ typedef struct vvenc_config
 
   int                 m_IBCMode;
   int                 m_IBCFastMethod;
-#if 1//MIN_SKIPPAR
+
+  int                 m_FIMMode;
   int                 m_FastInferMerge;
-#endif
 
   bool                m_bLoopFilterDisable;                                              // flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS

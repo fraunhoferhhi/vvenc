@@ -1024,11 +1024,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 }
 
 //! search of the best candidate for inter prediction
-#if USE_COST_BEFORE
 bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, double& bestCostInter)
-#else
-void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
-#endif
 {
   CodingStructure& cs = *cu.cs;
 
@@ -1213,7 +1209,6 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
         }
         ::memcpy(m_ReuseUniMv->m_reusedUniMVs[idx1][idx2][idx3][idx4], cMvTemp, 2 * MAX_REF_PICS * sizeof(Mv));
       }
-#if USE_COST_BEFORE  
       if (bestCostInter != MAX_DOUBLE)
       {
         int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
@@ -1226,7 +1221,6 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
           return true;
         }
       }
-#endif
       //  Bi-predictive Motion estimation
       if( cs.slice->isInterB() && !CU::isBipredRestriction( cu ) && (cu.slice->checkLDC || BcwIdx == BCW_DEFAULT) )
       {
@@ -1579,9 +1573,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       uiLastModeTemp = uiLastMode;
       if ( uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1])
       {
-#if USE_COST_BEFORE
         bestCostInter = uiCostBi;
-#endif
         uiLastMode = 2;
         cu.mv [REF_PIC_LIST_0][0] = cMvBi[0];
         cu.mv [REF_PIC_LIST_1][0] = cMvBi[1];
@@ -1599,9 +1591,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       }
       else if ( uiCost[0] <= uiCost[1] )
       {
-#if USE_COST_BEFORE
         bestCostInter = uiCost[0];
-#endif
         uiLastMode = 0;
         cu.mv [REF_PIC_LIST_0][0] = cMv[0];
         cu.mvd[REF_PIC_LIST_0][0] = cMv[0] - cMvPred[0][iRefIdx[0]];
@@ -1612,9 +1602,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       }
       else
       {
-#if USE_COST_BEFORE
         bestCostInter = uiCost[1];
-#endif
         uiLastMode = 1;
         cu.mv [REF_PIC_LIST_1][0] = cMv[1];
         cu.mvd[REF_PIC_LIST_1][0] = cMv[1] - cMvPred[1][iRefIdx[1]];
@@ -1777,7 +1765,7 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
       }
     }
 
-    
+
     CU::spanMotionInfo( cu, mergeCtx );
 
     m_skipPROF = false;
@@ -1786,10 +1774,9 @@ void InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner)
     PelUnitBuf predBuf = cu.cs->getPredBuf(cu);
     motionCompensation( cu, predBuf, REF_PIC_LIST_X );
     puIdx++;
-#if USE_COST_BEFORE
-    return false;
-#endif
   }
+
+  return false;
 }
 
 // AMVP
@@ -2205,45 +2192,47 @@ void InterSearch::xPatternSearchFast( const CodingUnit& cu,
                                       Distortion&           ruiSAD,
                                       const Mv* const       pIntegerMv2Nx2NPred )
 {
-  if( cu.cs->picture->isSCC && m_motionEstimationSearchMethodSCC )
+  if( cu.cs->picture->useScME )
   {
     switch ( m_motionEstimationSearchMethodSCC )
     {
-    case 3: //VVENC_MESEARCH_DIAMOND_FAST:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true, true );
-      break;
-    case 2: //VVENC_MESEARCH_DIAMOND:
-      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
-      break;
-    case 1: //VVENC_MESEARCH_SELECTIVE:
-      xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
-      break;
-    default:
-      break;
+      case 3: //VVENC_MESEARCH_DIAMOND_FAST:
+        xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true, true );
+        break;
+      case 2: //VVENC_MESEARCH_DIAMOND:
+        xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+        break;
+      case 1: //VVENC_MESEARCH_SELECTIVE:
+        xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
+        break;
+      default:
+        THROW("shouldn't get here");
+        break;
     }
     return;
   }
 
   switch ( m_motionEstimationSearchMethod )
   {
-  case VVENC_MESEARCH_DIAMOND_FAST:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false, true );
-    break;
-  case VVENC_MESEARCH_DIAMOND:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
-    break;
+    case VVENC_MESEARCH_DIAMOND_FAST:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false, true );
+      break;
+    case VVENC_MESEARCH_DIAMOND:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
+      break;
 
-  case VVENC_MESEARCH_SELECTIVE:
-    xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
-    break;
+    case VVENC_MESEARCH_SELECTIVE:
+      xTZSearchSelective( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
+      break;
 
-  case VVENC_MESEARCH_DIAMOND_ENHANCED:
-    xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
-    break;
+    case VVENC_MESEARCH_DIAMOND_ENHANCED:
+      xTZSearch         ( cu, refPicList, iRefIdxPred, cStruct, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+      break;
 
-  case VVENC_MESEARCH_FULL: // shouldn't get here.
-  default:
-    break;
+    case VVENC_MESEARCH_FULL:
+    default:
+      THROW("shouldn't get here");
+      break;
   }
 }
 

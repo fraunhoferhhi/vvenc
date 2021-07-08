@@ -73,9 +73,7 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define USE_COST_BEFORE 1
-#define MERGE_ENC_OPT  1
-#define MIN_SKIPPAR  1
+#define MERGE_ENC_OPT   1
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 

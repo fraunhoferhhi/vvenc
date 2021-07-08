@@ -888,8 +888,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   // motion search options
   opts.setSubSection("Motion search options");
   opts.addOptions()
-  ("FastSearch",                                      m_motionEstimationSearchMethod,                   "Serach mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond 4: FastDiamond)")
-  ("FastSearchSCC",                                   m_motionEstimationSearchMethodSCC,                "Serach mode for SCC(0:use non SCC-search 1:Selective 2:DiamondSCC 3:FastDiamondSCC )")
+  ("FastSearch",                                      m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond 4: FastDiamond)")
+  ("FastSearchSCC",                                   m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Selective 2:DiamondSCC 3:FastDiamondSCC)")
   ("RestrictMESampling",                              m_bRestrictMESampling,                            "Enable restrict ME Sampling for selective inter motion search")
   ("SearchRange,-sr",                                 m_SearchRange,                                    "Motion search range")
   ("BipredSearchRange",                               m_bipredSearchRange,                              "Motion search range for bipred refinement")
@@ -1062,9 +1062,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
   ("IBC",                                             m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
-#if 1//MIN_SKIPPAR 
-  ("FastInferMerge",                                  m_FastInferMerge,                                 "Fast method to skip Inter/Intra modes. 0:off,[1..log2(GopSize)]&[8..8+log2(GopSize)]&[24..24+log2(GopSize)] speedups")
-#endif
+  ("FastInferMerge",                                  m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
   ;
 
   opts.setSubSection("Input options");
