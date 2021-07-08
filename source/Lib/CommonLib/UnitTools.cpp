@@ -3455,12 +3455,7 @@ bool CU::isBcwIdxCoded( const CodingUnit &cu )
     return false;
   }
 
-  if (cu.predMode == MODE_IBC)
-  {
-    return false;
-  }
-
-  if( cu.predMode == MODE_INTRA || cu.cs->slice->isInterP() )
+  if( cu.predMode == MODE_IBC || cu.predMode == MODE_INTRA || cu.slice->isInterP() || cu.interDir != 3 )
   {
     return false;
   }

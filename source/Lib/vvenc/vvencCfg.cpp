@@ -561,6 +561,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IBCMode                                 = 0;
   c->m_IBCFastMethod                           = 1;
 
+  c->m_BCW                                     = false;
+  c->m_BcwFast                                 = false;
+
   c->m_FIMMode                                 = 0;
   c->m_FastInferMerge                          = 0;
 
@@ -3245,6 +3248,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   }
   css << "BDPCM:" << c->m_useBDPCM << " ";
   css << "IBC:" << c->m_IBCMode << " ";
+  css << "BCW:" << c->m_BCW << " ";
+  css << "BcwFast:" << c->m_BcwFast << " ";
 
   css << "\nENC. ALG. CFG: ";
   css << "QPA:" << c->m_usePerceptQPA << " ";

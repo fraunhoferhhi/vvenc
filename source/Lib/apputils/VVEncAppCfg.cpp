@@ -1062,6 +1062,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
   ("IBC",                                             m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
+  ("BCW",                                             m_BCW,                                            "Enable Generalized Bi-prediction(Bcw)")
+  ("BcwFast",                                         m_BcwFast,                                        "Fast methods for Generalized Bi-prediction(Bcw)\n")
   ("FastInferMerge",                                  m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
   ;
 

@@ -399,6 +399,10 @@ protected:
   uint8_t           m_sbtRdoOrder[NUMBER_SBT_MODE];       // order of SBT mode in RDO
   bool              m_skipSbtAll;                         // to skip all SBT modes for the current PU
 
+  BcwMotionParam    m_uniMotions;
+  uint8_t           m_estWeightIdxBits[BCW_NUM] = { 4, 3, 1, 2, 4 };
+  bool              m_affineModeSelected;
+
 public:
   ReuseUniMv*         m_ReuseUniMv;
   BlkUniMvInfoBuffer* m_BlkUniMvInfoBuffer;
@@ -437,6 +441,10 @@ public:
   bool       searchBvIBC            (const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
 
   void       resetCtuRecordIBC      () { m_ctuRecord.clear(); }
+
+  void       resetBufferedUniMotions() { m_uniMotions.reset(); }
+  uint8_t    getWeightIdxBits       ( uint8_t bcwIdx ) { return m_estWeightIdxBits[bcwIdx]; }
+  void       setAffineModeSelected  ( bool flag ) { m_affineModeSelected = flag; }
 
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
@@ -609,6 +617,9 @@ private:
 
   void xSymMvdCheckBestMvp            ( CodingUnit& cu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
                                         int32_t BcwIdx, Mv cMvPredSym[2], int32_t mvpIdxSym[2], Distortion& bestCost, bool skip );
+
+  bool xReadBufferedAffineUniMv       ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv acMvPred[3], Mv acMv[3], uint32_t& ruiBits, Distortion& ruiCost, int& mvpIdx, const AffineAMVPInfo& aamvpi );
+  bool xReadBufferedUniMv             ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv& pcMvPred, Mv& rcMv, uint32_t& ruiBits, Distortion& ruiCost);
 
   void xExtDIFUpSamplingH             ( CPelBuf* pcPattern, bool useAltHpelIf);
   void xExtDIFUpSamplingQ             ( CPelBuf* pcPatternKey, Mv halfPelRef, int& patternId );

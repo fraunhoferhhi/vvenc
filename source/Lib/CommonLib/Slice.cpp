@@ -139,6 +139,8 @@ Slice::Slice()
     rpl[idx]                = nullptr;
     rplIdx[idx]             = -1;
   }
+  
+  resetWpScaling();
 }
 
 Slice::~Slice()
@@ -1287,7 +1289,7 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
 void  Slice::getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp ) const
 {
  CHECK(e>=NUM_REF_PIC_LIST_01, "Invalid picture reference list");
-// wp = (WPScalingParam*) m_weightPredTable[e][iRefIdx];
+  wp = (WPScalingParam*) weightPredTable[e][iRefIdx];
 }
 
 void PicHeader::getWpScaling(RefPicList e, int iRefIdx, WPScalingParam *&wp) const
@@ -1296,6 +1298,24 @@ void PicHeader::getWpScaling(RefPicList e, int iRefIdx, WPScalingParam *&wp) con
   wp = (WPScalingParam *) weightPredTable[e][iRefIdx];
 }
 
+//! reset Default WP tables settings : no weight.
+void  Slice::resetWpScaling()
+{
+  for ( int e=0 ; e<NUM_REF_PIC_LIST_01 ; e++ )
+  {
+    for ( int i=0 ; i<MAX_NUM_REF ; i++ )
+    {
+      for ( int yuv=0 ; yuv<MAX_NUM_COMP ; yuv++ )
+      {
+        WPScalingParam  *pwp = &(weightPredTable[e][i][yuv]);
+        pwp->presentFlag     = false;
+        pwp->log2WeightDenom = 0;
+        pwp->iWeight         = 1;
+        pwp->iOffset         = 0;
+      }
+    }
+  }
+}
 
 unsigned Slice::getMinPictureDistance() const
 {

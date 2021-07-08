@@ -1160,9 +1160,8 @@ void CABACReader::cu_bcw_flag(CodingUnit& cu)
     }
   }
 
-  THROW("no support");
-//   uint8_t BcwIdx = (uint8_t)g_BCWParsingOrder[idx];
-//   CU::setBcwIdx(cu, BcwIdx);
+  uint8_t BcwIdx = (uint8_t)g_BcwParsingOrder[idx];
+  CU::setBcwIdx( cu, BcwIdx );
 
   DTRACE(g_trace_ctx, D_SYNTAX, "cu_BCW_flag() BCW_idx=%d\n", cu.BcwIdx ? 1 : 0);
 }

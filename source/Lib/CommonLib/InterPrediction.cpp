@@ -373,7 +373,7 @@ void InterPrediction::xPredInterUni(const CodingUnit& cu, const RefPicList& refP
   }
 }
 
-void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, const bool bdofApplied )
+void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, const bool bdofApplied, PelUnitBuf *yuvPredTmp )
 {
   CHECK( !cu.affine && cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 && ( cu.lwidth() + cu.lheight() == 12 ), "invalid 4x8/8x4 bi-predicted blocks" );
 
@@ -403,7 +403,7 @@ void InterPrediction::xPredInterBi( const CodingUnit& cu, PelUnitBuf& yuvPred, c
     }
   }
 
-  xWeightedAverage( cu, puBuf[0], puBuf[1], yuvPred, bdofApplied );
+  xWeightedAverage( cu, puBuf[0], puBuf[1], yuvPred, bdofApplied, yuvPredTmp );
 }
 
 void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf )
@@ -428,7 +428,7 @@ void InterPrediction::motionCompensationIBC( CodingUnit& cu, PelUnitBuf& predBuf
   xPredInterUni(cu, REF_PIC_LIST_0, predBuf, false, false );
 }
 
-bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList refPicList)
+bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList refPicList, PelUnitBuf* predBufDfltWght )
 {
   bool ret = false;
   if( refPicList != REF_PIC_LIST_X )
@@ -474,6 +474,10 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
     else if( xCheckIdenticalMotion( cu ) )
     {
       xPredInterUni( cu, REF_PIC_LIST_0, predBuf, false, false );
+      if( predBufDfltWght )
+      {
+        predBufDfltWght->copyFrom( predBuf );
+      }
     }
     else if (dmvrApplied)
     {
@@ -481,7 +485,7 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
     }
     else
     {
-      xPredInterBi( cu, predBuf, bdofApplied );
+      xPredInterBi( cu, predBuf, bdofApplied, predBufDfltWght );
     }
     DTRACE( g_trace_ctx, D_MOT_COMP, "BIDOF=%d, DMVR=%d\n", bdofApplied, dmvrApplied );
     ret = bdofApplied || dmvrApplied;
@@ -924,7 +928,7 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
   }  // yu
 }
 
-void InterPredInterpolation::xWeightedAverage( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied )
+void InterPredInterpolation::xWeightedAverage( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied, PelUnitBuf *yuvPredTmp )
 {
   const bool lumaOnly = (cu.mcControl >> 1) == 1;
   const bool chromaOnly = cu.mcControl > 3;
@@ -936,6 +940,17 @@ void InterPredInterpolation::xWeightedAverage( const CodingUnit& cu, const CPelU
 
   if( iRefIdx0 >= 0 && iRefIdx1 >= 0 )
   {
+    if( cu.BcwIdx != BCW_DEFAULT && ( yuvPredTmp || !cu.ciip) )
+    {
+      CHECK( bdofApplied, "Bcw is disallowed with BIO" );
+      pcYuvDst.addWeightedAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, cu.BcwIdx, chromaOnly, lumaOnly );
+      if( yuvPredTmp )
+      {
+        yuvPredTmp->addAvg( pcYuvSrc0, pcYuvSrc1, clpRngs, chromaOnly, lumaOnly );
+      }
+      return;
+    }
+    
     if (bdofApplied)
     {
       xApplyBDOF( pcYuvDst.Y(), clpRngs[COMP_Y] );
