@@ -2982,86 +2982,85 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
       }
     }
   
-  CodingUnit &cu      = tempCS->addCU( tempCS->area, partitioner.chType );
+    CodingUnit &cu      = tempCS->addCU( tempCS->area, partitioner.chType );
 
-  partitioner.setCUData( cu );
-  cu.slice            = tempCS->slice;
-  cu.tileIdx          = 0;
-  cu.skip             = false;
-  cu.mmvdSkip         = false;
-  cu.predMode         = MODE_INTER;
-  cu.chromaQpAdj      = m_cuChromaQpOffsetIdxPlus1;
-  cu.qp               = encTestMode.qp;
-  cu.initPuData();
+    partitioner.setCUData( cu );
+    cu.slice            = tempCS->slice;
+    cu.tileIdx          = 0;
+    cu.skip             = false;
+    cu.mmvdSkip         = false;
+    cu.predMode         = MODE_INTER;
+    cu.chromaQpAdj      = m_cuChromaQpOffsetIdxPlus1;
+    cu.qp               = encTestMode.qp;
+    cu.initPuData();
 
-  cu.BcwIdx = g_BcwSearchOrder[bcwLoopIdx];
-  uint8_t bcwIdx = cu.BcwIdx;
-  bool testBcw = (bcwIdx != BCW_DEFAULT);
+    cu.BcwIdx = g_BcwSearchOrder[bcwLoopIdx];
+    uint8_t bcwIdx = cu.BcwIdx;
+    bool testBcw = (bcwIdx != BCW_DEFAULT);
 
-  bool StopInterRes = (m_pcEncCfg->m_FastInferMerge >> 3) & 1;
-  StopInterRes &= bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7));
-  double bestCostInter = StopInterRes ? m_mergeBestSATDCost : MAX_DOUBLE;
+    bool StopInterRes = (m_pcEncCfg->m_FastInferMerge >> 3) & 1;
+    StopInterRes &= bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7));
+    double bestCostInter = StopInterRes ? m_mergeBestSATDCost : MAX_DOUBLE;
 
-  bool stopTest = m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
+    bool stopTest = m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
 
-  bcwIdx = CU::getValidBcwIdx(cu);
-  if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
-  {
-    tempCS->initStructData(encTestMode.qp);
-    continue;
-  }
-  CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
+    bcwIdx = CU::getValidBcwIdx(cu);
+    if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
+    {
+      tempCS->initStructData(encTestMode.qp);
+      continue;
+    }
+    CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
+      
+    bool isEqualUni = false;
+    if( m_pcEncCfg->m_BcwFast )
+    {
+      if( cu.interDir != 3 && testBcw == 0 )
+      {
+        isEqualUni = true;
+      }
+    }
+
+    if (StopInterRes && (bestCostInter != m_mergeBestSATDCost))
+    {
+      int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
+      if ((bestCostInter > MRG_FAST_RATIOMYV[L] * m_mergeBestSATDCost))
+      {
+        stopTest = true;
+      }
+    }
+  
+    //TODO: check this
+    if (!stopTest)
+    {
+      xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
+    }
     
-  bool isEqualUni = false;
-  if( m_pcEncCfg->m_BcwFast )
-  {
-    if( cu.interDir != 3 && testBcw == 0 )
+    if( bcwIdx == BCW_DEFAULT )
     {
-      isEqualUni = true;
+      m_cInterSearch.setAffineModeSelected( bestCS->cus.front()->affine && !bestCS->cus.front()->mergeFlag );
     }
-  }
 
-  if (StopInterRes && (bestCostInter != m_mergeBestSATDCost))
-  {
-    int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
-    if ((bestCostInter > MRG_FAST_RATIOMYV[L] * m_mergeBestSATDCost))
-    {
-      stopTest = true;
-    }
-  }
-  
-  //TODO: check this
-  if (!stopTest)
-  {
-    xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
-  }
-  
-  if( bcwIdx == BCW_DEFAULT )
-  {
-    m_cInterSearch.setAffineModeSelected( bestCS->cus.front()->affine && !bestCS->cus.front()->mergeFlag );
-  }
-
-  tempCS->initStructData(encTestMode.qp);
+    tempCS->initStructData(encTestMode.qp);
   
     double skipTH = MAX_DOUBLE;
-  skipTH = (m_pcEncCfg->m_BcwFast ? 1.05 : MAX_DOUBLE);
-  if( equBcwCost > curBestCost * skipTH )
-  {
-    break;
-  }
-
-  if( m_pcEncCfg->m_BcwFast )
-  {
-    if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
+    skipTH = (m_pcEncCfg->m_BcwFast ? 1.05 : MAX_DOUBLE);
+    if( equBcwCost > curBestCost * skipTH )
     {
       break;
     }
-    if( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) )
-    {
-      break;
-    }
-  }
 
+    if( m_pcEncCfg->m_BcwFast )
+    {
+      if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
+      {
+        break;
+      }
+      if( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) )
+      {
+        break;
+      }
+    }
   }
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
@@ -3147,153 +3146,153 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
         uint8_t bcwIdx;
         bool isEqualUni = false;
 
-      if (i > IMV_FPEL)
-      {
-        bool nextimv = false;
-        double stopCost = i == IMV_HPEL ? 1.25 : 1.06;
-        if (Fpel_cost > stopCost * costCurStart)
+        if (i > IMV_FPEL)
         {
-          nextimv = true;
-        }
-        if ( m_pcEncCfg->m_AMVRspeed == 1 )
-        {
-          costCurStart = bestCS->cost;
-        }
-        if (nextimv)
-        {
-          continue;
-        }
-      }
-
-      bool Do_Search = Do_OnceRes ? false : true;
-
-      if (Do_Limit)
-      {
-        Do_Search = i == IMV_FPEL ? true : false;
-
-        if (i == IMV_HPEL)
-        {
-          if (bestCS->slice->TLayer > 3)
+          bool nextimv = false;
+          double stopCost = i == IMV_HPEL ? 1.25 : 1.06;
+          if (Fpel_cost > stopCost * costCurStart)
+          {
+            nextimv = true;
+          }
+          if ( m_pcEncCfg->m_AMVRspeed == 1 )
+          {
+            costCurStart = bestCS->cost;
+          }
+          if (nextimv)
           {
             continue;
           }
-          if (bestCS->getCU(partitioner.chType, partitioner.treeType)->imv != 0)
+        }
+
+        bool Do_Search = Do_OnceRes ? false : true;
+
+        if (Do_Limit)
+        {
+          Do_Search = i == IMV_FPEL ? true : false;
+
+          if (i == IMV_HPEL)
           {
-            Do_Search = true; //do_est
+            if (bestCS->slice->TLayer > 3)
+            {
+              continue;
+            }
+            if (bestCS->getCU(partitioner.chType, partitioner.treeType)->imv != 0)
+            {
+              Do_Search = true; //do_est
+            }
           }
         }
-      }
-      tempCS->initStructData(encTestMode.qp);
+        tempCS->initStructData(encTestMode.qp);
 
-      if (!Do_Search)
-      {
-        tempCS->copyStructure(*bestCS, partitioner.chType, TREE_D);
-      }
-      tempCS->dist = 0;
-      tempCS->fracBits = 0;
-      tempCS->cost = MAX_DOUBLE;
-      CodingUnit &cu = (Do_Search) ? tempCS->addCU(tempCS->area, partitioner.chType) : *tempCS->getCU(partitioner.chType, partitioner.treeType);
-      if (Do_Search)
-      {
-        partitioner.setCUData(cu);
-        cu.slice = tempCS->slice;
-        cu.tileIdx = 0;
-        cu.skip = false;
-        cu.mmvdSkip = false;
-        cu.predMode = MODE_INTER;
-        cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
-        cu.qp = encTestMode.qp;
-
-        cu.initPuData();
-
-        cu.imv = i;
-
-        cu.BcwIdx = g_BcwSearchOrder[bcwLoopIdx];
-        bcwIdx    = cu.BcwIdx;
-        testBcw   = (bcwIdx != BCW_DEFAULT);
-
-        cu.interDir = 10;
-        
-        double bestCostInter = MAX_DOUBLE;
-        m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
-        
-        if ( cu.interDir <= 3 )
+        if (!Do_Search)
         {
-          bcwIdx = CU::getValidBcwIdx(cu);
+          tempCS->copyStructure(*bestCS, partitioner.chType, TREE_D);
+        }
+        tempCS->dist = 0;
+        tempCS->fracBits = 0;
+        tempCS->cost = MAX_DOUBLE;
+        CodingUnit &cu = (Do_Search) ? tempCS->addCU(tempCS->area, partitioner.chType) : *tempCS->getCU(partitioner.chType, partitioner.treeType);
+        if (Do_Search)
+        {
+          partitioner.setCUData(cu);
+          cu.slice = tempCS->slice;
+          cu.tileIdx = 0;
+          cu.skip = false;
+          cu.mmvdSkip = false;
+          cu.predMode = MODE_INTER;
+          cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
+          cu.qp = encTestMode.qp;
+
+          cu.initPuData();
+
+          cu.imv = i;
+
+          cu.BcwIdx = g_BcwSearchOrder[bcwLoopIdx];
+          bcwIdx    = cu.BcwIdx;
+          testBcw   = (bcwIdx != BCW_DEFAULT);
+
+          cu.interDir = 10;
+          
+          double bestCostInter = MAX_DOUBLE;
+          m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
+          
+          if ( cu.interDir <= 3 )
+          {
+            bcwIdx = CU::getValidBcwIdx(cu);
+          }
+          else
+          {
+            continue;
+          }
+          
+          if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
+          {
+            continue;
+          }
+          CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
+
+          if( m_pcEncCfg->m_BcwFast )
+          {
+            if( cu.interDir != 3 && testBcw == 0 )
+            {
+              isEqualUni = true;
+            }
+          }
+
+          if (!CU::hasSubCUNonZeroMVd(cu))
+          {
+            continue;
+          }
         }
         else
         {
-          continue;
-        }
-        
-        if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
-        {
-          continue;
-        }
-        CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
-
-        if( m_pcEncCfg->m_BcwFast )
-        {
-          if( cu.interDir != 3 && testBcw == 0 )
+          cu.smvdMode = 0;
+          cu.affine = false;
+          cu.imv = i ;
+          CU::resetMVDandMV2Int(cu);
+          if (!CU::hasSubCUNonZeroMVd(cu))
           {
-            isEqualUni = true;
+            continue;
+          }
+
+          cu.BcwIdx = g_BcwSearchOrder[bcwLoopIdx];
+
+          cu.mvRefine = true;
+          m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf() );
+          cu.mvRefine = false;
+        }
+
+        if( Do_OnceRes )
+        {
+          costCur = xCalcDistortion(tempCS, partitioner.chType, tempCS->sps->bitDepths[CH_L], cu.imv );
+          if (costCur < bestCostIMV)
+          {
+            bestCostIMV = costCur;
+            tempCSbest->getPredBuf().copyFrom(tempCS->getPredBuf());
+            tempCSbest->clearCUs();
+            tempCSbest->clearTUs();
+            tempCSbest->copyStructure(*tempCS, partitioner.chType, TREE_D);
+          }
+          if (i > IMV_FPEL)
+          {
+            costCurStart = costCurStart > costCur ? costCur : costCurStart;
+          }
+        }
+        else
+        {
+          xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
+          costCur = tempCS->cost;
+
+          if (i > IMV_FPEL)
+          {
+            costCurStart = bestCS->cost;
           }
         }
 
-        if (!CU::hasSubCUNonZeroMVd(cu))
+        if (i == IMV_FPEL)
         {
-          continue;
+           Fpel_cost = costCur;
         }
-      }
-      else
-      {
-        cu.smvdMode = 0;
-        cu.affine = false;
-        cu.imv = i ;
-        CU::resetMVDandMV2Int(cu);
-        if (!CU::hasSubCUNonZeroMVd(cu))
-        {
-          continue;
-        }
-
-        cu.BcwIdx = g_BcwSearchOrder[bcwLoopIdx];
-
-        cu.mvRefine = true;
-        m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf() );
-        cu.mvRefine = false;
-      }
-
-      if( Do_OnceRes )
-      {
-        costCur = xCalcDistortion(tempCS, partitioner.chType, tempCS->sps->bitDepths[CH_L], cu.imv );
-        if (costCur < bestCostIMV)
-        {
-          bestCostIMV = costCur;
-          tempCSbest->getPredBuf().copyFrom(tempCS->getPredBuf());
-          tempCSbest->clearCUs();
-          tempCSbest->clearTUs();
-          tempCSbest->copyStructure(*tempCS, partitioner.chType, TREE_D);
-        }
-        if (i > IMV_FPEL)
-        {
-          costCurStart = costCurStart > costCur ? costCur : costCurStart;
-        }
-      }
-      else
-      {
-        xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
-        costCur = tempCS->cost;
-
-        if (i > IMV_FPEL)
-        {
-          costCurStart = bestCS->cost;
-        }
-      }
-
-      if (i == IMV_FPEL)
-      {
-         Fpel_cost = costCur;
-      }
         
         double skipTH = MAX_DOUBLE;
         skipTH = (m_pcEncCfg->m_BcwFast ? 1.05 : MAX_DOUBLE);
@@ -3313,7 +3312,6 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
             break;
           }
         }
-
       }
     }
 
