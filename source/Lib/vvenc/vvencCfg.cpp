@@ -2825,6 +2825,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MTSImplicit                     = 1;
       c->m_PROF                            = 1;
       c->m_SbTMVP                          = 1;
+      c->m_BCW                             = 0;
+      c->m_BcwFast                         = 0;
       // scc
       c->m_IBCFastMethod                   = 4;
       c->m_TSsize                          = 4;
@@ -2957,6 +2959,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 1;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 3;
+      c->m_BCW                             = 1;
+      c->m_BcwFast                         = 1;
       // scc
       c->m_IBCFastMethod                   = 1;
       c->m_TSsize                          = 5;
@@ -3024,6 +3028,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 1;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 1;
+      c->m_BCW                             = 1;
+      c->m_BcwFast                         = 1;
       c->m_useNonLinearAlfChroma           = 1;
       c->m_useNonLinearAlfLuma             = 1;
       // scc
