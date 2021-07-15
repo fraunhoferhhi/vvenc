@@ -882,6 +882,11 @@ void RateCtrl::destroy()
     m_listRCPictures.pop_front();
     delete p;
   }
+  
+  if( m_cHandle.is_open() )
+  {
+    m_cHandle.close();
+  }
 }
 
 void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize,
@@ -1091,6 +1096,19 @@ void RateCtrl::setRCPass (const int pass, const int maxPass)
   rcIsFinalPass = (pass >= maxPass);
 }
 
+void RateCtrl::printFirstpassStats()
+{
+  printf("\n\n");
+
+  std::list<TRCPassStats>::iterator it;
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+    printf("\npoc: %d  qp: %d  tempLayer: %d  refreshParameters: %d  targetBits: %d  lamda: %lf  isNewScene: %d  frameInGopRatio: %lf", it->poc, it->qp, it->tempLayer, it->refreshParameters, it->targetBits, it->lambda, it->isNewScene, it->frameInGopRatio );
+  }
+
+  printf("\n\n");
+}
+
 void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
@@ -1212,9 +1230,86 @@ void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda,
 {
   if (rcPass < rcMaxPass)
   {
-    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
-                                                    numBits, psnrY, isIntra, tempLayer ) );
+    if( m_cHandle.is_open() )
+    {
+      writeToStatFile( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer );
+    }
+    else
+    {
+      m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
+                                                      numBits, psnrY, isIntra, tempLayer ) );
+    }
   }
+}
+
+void RateCtrl::writeToStatFile( const int poc, const int qp, const double lambda, const uint16_t visActY,
+                                uint32_t numBits, double yPsnr, bool isIntra, int tempLayer )
+{
+  if( rcPass < rcMaxPass && m_cHandle.is_open() )
+  {
+    m_cHandle.write( (char*) &poc,       sizeof(int) );
+    m_cHandle.write( (char*) &qp,        sizeof(int) );
+    m_cHandle.write( (char*) &lambda,    sizeof(double) );
+    m_cHandle.write( (char*) &visActY,   sizeof(uint16_t) );
+    m_cHandle.write( (char*) &numBits,   sizeof(uint32_t) );
+    m_cHandle.write( (char*) &yPsnr,     sizeof(double) );
+    m_cHandle.write( (char*) &isIntra,   sizeof(bool) );
+    m_cHandle.write( (char*) &tempLayer, sizeof(int) );
+  }
+}
+
+void RateCtrl::readFirstPassDataFromFile( const std::string &fileName )
+{
+  m_cHandle.open( fileName.c_str(), std::ios::binary | std::ios::in );
+
+  CHECK( !rcIsFinalPass || m_cHandle.fail(), "something went wrong reading the first pass RC data!" );
+
+  m_listRCFirstPassStats.clear();
+  
+  bool eof = false;
+  while( !eof )
+  {
+    eof = xReadData( eof );
+  }
+  
+  m_cHandle.close();
+}
+
+bool RateCtrl::xReadData( bool &isEof )
+{
+  int poc, qp, tempLayer;
+  double lambda, yPsnr;
+  bool isIntra;
+  uint16_t visActY;
+  uint32_t numBits;
+
+  m_cHandle.read( (char*) &poc,       sizeof(int) );
+  m_cHandle.read( (char*) &qp,        sizeof(int) );
+  m_cHandle.read( (char*) &lambda,    sizeof(double) );
+  m_cHandle.read( (char*) &visActY,   sizeof(uint16_t) );
+  m_cHandle.read( (char*) &numBits,   sizeof(uint32_t) );
+  m_cHandle.read( (char*) &yPsnr,     sizeof(double) );
+  m_cHandle.read( (char*) &isIntra,   sizeof(bool) );
+  m_cHandle.read( (char*) &tempLayer, sizeof(int) );
+
+  if( !m_cHandle.eof() )
+  {
+    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
+                                                    numBits, yPsnr, isIntra, tempLayer ) );
+  }
+  
+  if( m_cHandle.eof() || m_cHandle.fail() )
+  {
+    isEof = true;
+  }
+  
+  return isEof;
+}
+  
+void RateCtrl::openRCstatFile( const std::string &fileName )
+{
+  CHECK( rcIsFinalPass, "trying to write 1st pass RC data in final pass!" );
+  m_cHandle.open( fileName.c_str(), std::ios::binary | std::ios::out );
 }
 
 static int xCalcHADs8x8_ISlice( const Pel *piOrg, const int iStrideOrg )

@@ -1931,6 +1931,9 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   m_pcRateCtrl->addRCPassStats (slice->poc, slice->sliceQp, slice->getLambdas()[0], ClipBD (uint16_t (0.5 + visualActivity), m_pcEncCfg->m_internalBitDepth[CH_L]),
                                 uibits, dPSNR[COMP_Y], slice->isIntra(), slice->TLayer);
 
+//  m_pcRateCtrl->writeToStatFile( slice->poc, slice->sliceQp, slice->getLambdas()[0], ClipBD (uint16_t (0.5 + visualActivity), m_pcEncCfg->m_internalBitDepth[CH_L]),
+//                                 numRBSPBytes * 8, dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr], slice->isIntra(), slice->TLayer );
+
   //===== add PSNR =====
   m_AnalyzeAll.addResult(dPSNR, (double)uibits, MSEyuvframe
     , isEncodeLtRef
