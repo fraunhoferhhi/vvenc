@@ -461,6 +461,8 @@ static void simdInterpolateHorM8( const int16_t* src, int srcStride, int16_t *ds
 template<X86_VEXT vext, bool shiftBack>
 static void simdInterpolateHorM8_singleCol(const int16_t* src, int srcStride, int16_t* dst, int dstStride, int width, int height, int shift, int offset, const ClpRng& clpRng, int16_t const* coeff)
 {
+  CHECKD( width != 1 || ( height & 3 ), "Windth needs to be '1'!" );
+
   cond_mm_prefetch((const char*)src, _MM_HINT_T0);
   cond_mm_prefetch((const char*)src + srcStride, _MM_HINT_T0);
 
