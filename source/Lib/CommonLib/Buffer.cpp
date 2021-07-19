@@ -376,9 +376,9 @@ PelBufferOps g_pelBufOP = PelBufferOps();
 template<>
 void AreaBuf<Pel>::addWeightedAvg(const AreaBuf<const Pel>& other1, const AreaBuf<const Pel>& other2, const ClpRng& clpRng, const int8_t BcwIdx)
 {
-  const int8_t w0 = 4;//getBcwWeight(BcwIdx, REF_PIC_LIST_0);
-  const int8_t w1 = 4; //getBcwWeight(BcwIdx, REF_PIC_LIST_1);
-  const int8_t log2WeightBase = 3; //g_BCWLog2WeightBase;
+  const int8_t w0 = getBcwWeight(BcwIdx, REF_PIC_LIST_0);
+  const int8_t w1 = getBcwWeight(BcwIdx, REF_PIC_LIST_1);
+  const int8_t log2WeightBase = g_BcwLog2WeightBase;
   //
   const Pel* src0 = other1.buf;
   const Pel* src2 = other2.buf;

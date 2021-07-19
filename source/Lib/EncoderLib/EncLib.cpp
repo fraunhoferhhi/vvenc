@@ -958,6 +958,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.transformSkip                 = m_cEncCfg.m_TS != 0;
   sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
   sps.BDPCM                         = m_cEncCfg.m_useBDPCM != 0;
+  sps.BCW                           = m_cEncCfg.m_BCW;
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {

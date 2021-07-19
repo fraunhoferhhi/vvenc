@@ -192,6 +192,8 @@ private:
   RateCtrl*             m_pcRateCtrl;
 
   PelStorage            m_aTmpStorageLCU[MAX_TMP_BUFS];     ///< used with CIIP, EDO, GEO
+  PelStorage            m_acMergeTmpBuffer[MRG_MAX_NUM_CANDS];
+
   SortedPelUnitBufs<SORTED_BUFS> m_SortedPelUnitBufs;
   FastGeoCostList       m_GeoCostList;
   double                m_AFFBestSATDCost;
@@ -208,6 +210,9 @@ private:
   PelStorage            m_dbBuffer;
   
   Partitioner           m_partitioner;
+
+  int                   m_bestBcwIdx[2];
+  double                m_bestBcwCost[2];
 
 public:
   EncCu();
@@ -257,6 +262,18 @@ private:
 
   void xEncodeInterResidual   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, 
                                 int residualPass = 0, bool* bestHasNonResi = NULL, double* equBcwCost = NULL );
+
+  bool xIsBcwSkip( const CodingUnit& cu )
+  {
+    if( cu.slice->sliceType != VVENC_B_SLICE )
+    {
+      return true;
+    }
+    return( (m_pcEncCfg->m_QP > 32) && ((cu.slice->TLayer >= 4)
+            || ((cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0)
+            && (abs(cu.slice->poc - cu.slice->getRefPOC(REF_PIC_LIST_0, cu.refIdx[0])) == 1
+            ||  abs(cu.slice->poc - cu.slice->getRefPOC(REF_PIC_LIST_1, cu.refIdx[1])) == 1))) );
+  }
 
   uint64_t xCalcPuMeBits      ( const CodingUnit& cu);
   double   xCalcDistortion    ( CodingStructure *&cur_CS, ChannelType chType, int BitDepth, int imv);
