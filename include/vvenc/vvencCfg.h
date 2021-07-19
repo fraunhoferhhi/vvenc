@@ -634,8 +634,7 @@ typedef struct vvenc_config
   int                 m_IBCMode;
   int                 m_IBCFastMethod;
 
-  bool                m_BCW;
-  bool                m_BcwFast;
+  int                 m_BCW;
 
   int                 m_FIMMode;
   int                 m_FastInferMerge;

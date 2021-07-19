@@ -2963,7 +2963,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
   for( int bcwLoopIdx = 0; bcwLoopIdx < bcwLoopNum; bcwLoopIdx++ )
   {
-    if( m_pcEncCfg->m_BcwFast )
+    if( m_pcEncCfg->m_BCW == 2 )
     {
       bool isBestInter   = m_modeCtrl.getBlkInfo( bestCS->area ).isInter;
       uint8_t bestBcwIdx = m_modeCtrl.getBlkInfo( bestCS->area).BcwIdx;
@@ -3013,7 +3013,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
     CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
       
     bool isEqualUni = false;
-    if( m_pcEncCfg->m_BcwFast )
+    if( m_pcEncCfg->m_BCW == 2 )
     {
       if( cu.interDir != 3 && testBcw == 0 )
       {
@@ -3044,13 +3044,13 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
     tempCS->initStructData(encTestMode.qp);
   
     double skipTH = MAX_DOUBLE;
-    skipTH = (m_pcEncCfg->m_BcwFast ? 1.05 : MAX_DOUBLE);
+    skipTH = (m_pcEncCfg->m_BCW == 2 ? 1.05 : MAX_DOUBLE);
     if( equBcwCost > curBestCost * skipTH )
     {
       break;
     }
 
-    if( m_pcEncCfg->m_BcwFast )
+    if( m_pcEncCfg->m_BCW == 2 )
     {
       if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
       {
@@ -3116,7 +3116,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
 
       for( int bcwLoopIdx = 0; bcwLoopIdx < bcwLoopNum; bcwLoopIdx++ )
       {
-        if( m_pcEncCfg->m_BcwFast )
+        if( m_pcEncCfg->m_BCW == 2 )
         {
           bool isBestInter   = m_modeCtrl.getBlkInfo( bestCS->area ).isInter;
           uint8_t bestBcwIdx = m_modeCtrl.getBlkInfo( bestCS->area).BcwIdx;
@@ -3231,7 +3231,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
           }
           CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
 
-          if( m_pcEncCfg->m_BcwFast )
+          if( m_pcEncCfg->m_BCW == 2 )
           {
             if( cu.interDir != 3 && testBcw == 0 )
             {
@@ -3295,13 +3295,13 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
         }
         
         double skipTH = MAX_DOUBLE;
-        skipTH = (m_pcEncCfg->m_BcwFast ? 1.05 : MAX_DOUBLE);
+        skipTH = (m_pcEncCfg->m_BCW == 2 ? 1.05 : MAX_DOUBLE);
         if( equBcwCost > curBestCost * skipTH )
         {
           break;
         }
 
-        if( m_pcEncCfg->m_BcwFast )
+        if( m_pcEncCfg->m_BCW == 2 )
         {
           if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
           {

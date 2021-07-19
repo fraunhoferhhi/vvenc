@@ -561,8 +561,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IBCMode                                 = 0;
   c->m_IBCFastMethod                           = 1;
 
-  c->m_BCW                                     = false;
-  c->m_BcwFast                                 = false;
+  c->m_BCW                                     = 0;
 
   c->m_FIMMode                                 = 0;
   c->m_FastInferMerge                          = 0;
@@ -2208,6 +2207,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FastIntraTools <0 || c->m_FastIntraTools >2, "SpeedIntraTools out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCMode < 0 ||  c->m_IBCMode > 2,            "IBC out of range [0..2]");
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
+  vvenc_confirmParameter( c, c->m_BCW < 0 || c->m_BCW > 2,                     "BCW out of range [0..2]");
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
@@ -2826,7 +2826,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_PROF                            = 1;
       c->m_SbTMVP                          = 1;
       c->m_BCW                             = 0;
-      c->m_BcwFast                         = 0;
       // scc
       c->m_IBCFastMethod                   = 4;
       c->m_TSsize                          = 4;
@@ -2959,8 +2958,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 1;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 3;
-      c->m_BCW                             = 1;
-      c->m_BcwFast                         = 1;
+      c->m_BCW                             = 2;
       // scc
       c->m_IBCFastMethod                   = 1;
       c->m_TSsize                          = 5;
@@ -3028,8 +3026,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 1;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 1;
-      c->m_BCW                             = 1;
-      c->m_BcwFast                         = 1;
+      c->m_BCW                             = 2;
       c->m_useNonLinearAlfChroma           = 1;
       c->m_useNonLinearAlfLuma             = 1;
       // scc
@@ -3099,6 +3096,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 2;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 3;
+      c->m_BCW                             = 2;
       c->m_useNonLinearAlfChroma           = 1;
       c->m_useNonLinearAlfLuma             = 1;
       // scc
@@ -3255,7 +3253,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "BDPCM:" << c->m_useBDPCM << " ";
   css << "IBC:" << c->m_IBCMode << " ";
   css << "BCW:" << c->m_BCW << " ";
-  css << "BcwFast:" << c->m_BcwFast << " ";
 
   css << "\nENC. ALG. CFG: ";
   css << "QPA:" << c->m_usePerceptQPA << " ";
