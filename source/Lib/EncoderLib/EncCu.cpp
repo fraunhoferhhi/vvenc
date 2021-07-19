@@ -3004,11 +3004,28 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     bool stopTest = m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
 
-    bcwIdx = CU::getValidBcwIdx(cu);
-    if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
+    if (StopInterRes && (bestCostInter != m_mergeBestSATDCost))
+    {
+      int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
+      if ((bestCostInter > MRG_FAST_RATIOMYV[L] * m_mergeBestSATDCost))
+      {
+        stopTest = true;
+      }
+    }
+
+    if( stopTest )
     {
       tempCS->initStructData(encTestMode.qp);
       continue;
+    }
+    else
+    {
+      bcwIdx = CU::getValidBcwIdx(cu);
+      if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
+      {
+        tempCS->initStructData(encTestMode.qp);
+        continue;
+      }
     }
     CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
       
@@ -3020,18 +3037,9 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
         isEqualUni = true;
       }
     }
-
-    if (StopInterRes && (bestCostInter != m_mergeBestSATDCost))
-    {
-      int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
-      if ((bestCostInter > MRG_FAST_RATIOMYV[L] * m_mergeBestSATDCost))
-      {
-        stopTest = true;
-      }
-    }
   
     //TODO: check this
-    if (!stopTest)
+//    if (!stopTest)
     {
       xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
     }
