@@ -223,80 +223,74 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   unsigned mpmLst[NUM_MOST_PROBABLE_MODES];
   CU::getIntraMPMs(cu, mpmLst);
 
+  const int decMsk = ( 1 << m_pcEncCfg->m_IntraEstDecBit ) - 1;
+
+  std::vector<ModeInfo> parentCandList;
+  parentCandList.reserve( ( numModesAvailable >> m_pcEncCfg->m_IntraEstDecBit ) + 2 );
+
   for( unsigned mode = 0; mode < numModesAvailable; mode++ )
   {
     // Skip checking extended Angular modes in the first round of SATD
-    if( mode > DC_IDX && ( mode & 1 ) )
+    if( mode > DC_IDX && ( mode & decMsk ) )
     {
       continue;
     }
 
-    cu.intraDir[0] = mode;
-
-    initPredIntraParams(cu, cu.Y(), sps);
-    distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-    predIntraAng( COMP_Y, piPred, cu);
-
-    // Use the min between SAD and HAD as the cost criterion
-    // SAD is scaled by 2 to align with the scaling of HAD
-    Distortion minSadHad = distParam.distFunc(distParam);
-
-    uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-
-    //restore ctx
-    m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
-
-    double cost = ( double ) minSadHad + (double)fracModeBits * sqrtLambdaForFirstPass;
-    DTRACE(g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode);
-
-    int insertPos = -1;
-    updateCandList( ModeInfo(false, false, 0, NOT_INTRA_SUBPARTITIONS, mode), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
-    updateCandList( ModeInfo(false, false, 0, NOT_INTRA_SUBPARTITIONS, mode), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
-    m_SortedPelUnitBufs->insert( insertPos, (int)RdModeList.size() );
-
-    satdChecked[mode] = true;
+    parentCandList.push_back( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ) );
   }
-
-  std::vector<ModeInfo> parentCandList( RdModeList.cbegin(), RdModeList.cend());
-
-  // Second round of SATD for extended Angular modes
-  for (unsigned modeIdx = 0; modeIdx < numModesForFullRD; modeIdx++)
+   
+  for( int decDst = 1 << m_pcEncCfg->m_IntraEstDecBit; decDst > 0; decDst >>= 1 )
   {
-    unsigned parentMode = parentCandList[modeIdx].modeId;
-    if (parentMode > (DC_IDX + 1) && parentMode < (NUM_LUMA_MODE - 1))
+    for( unsigned idx = 0; idx < parentCandList.size(); idx++ )
     {
-      for (int subModeIdx = -1; subModeIdx <= 1; subModeIdx += 2)
+      int modeParent = parentCandList[idx].modeId;
+
+      int off = decDst & decMsk;
+      int inc = decDst << 1;
+
+#if 1 // INTRA_AS_IN_VTM
+      if( off != 0 && ( modeParent <= ( DC_IDX + 1 ) || modeParent >= ( NUM_LUMA_MODE - 1 ) ) )
       {
-        unsigned mode = parentMode + subModeIdx;
+        continue;
+      }
 
-        if( ! satdChecked[mode])
+#endif
+      for( int mode = modeParent - off; mode < modeParent + off + 1; mode += inc )
+      {
+        if( satdChecked[mode] || mode < 0 || mode >= NUM_LUMA_MODE )
         {
-          cu.intraDir[0] = mode;
-
-          initPredIntraParams(cu, cu.Y(), sps);
-          distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-          predIntraAng(COMP_Y, piPred, cu );
-
-          // Use the min between SAD and SATD as the cost criterion
-          // SAD is scaled by 2 to align with the scaling of HAD
-          Distortion minSadHad = distParam.distFunc(distParam);
-
-          uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-          //restore ctx
-          m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
-
-          double cost = (double) minSadHad + (double) fracModeBits * sqrtLambdaForFirstPass;
-//          DTRACE(g_trace_ctx, D_INTRA_COST, "IntraHAD2: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode);
-
-          int insertPos = -1;
-          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
-          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
-          m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
-
-          satdChecked[mode] = true;
+          continue;
         }
+
+        cu.intraDir[0] = mode;
+
+        initPredIntraParams( cu, cu.Y(), sps );
+        distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
+        predIntraAng( COMP_Y, piPred, cu );
+
+        // Use the min between SAD and HAD as the cost criterion
+        // SAD is scaled by 2 to align with the scaling of HAD
+        Distortion minSadHad = distParam.distFunc( distParam );
+
+        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
+
+        //restore ctx
+        m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::IntraLumaMpmFlag(), intra_ctx_size ), ctxStartIntraCtx );
+
+        double cost = ( double ) minSadHad + ( double ) fracModeBits * sqrtLambdaForFirstPass;
+        DTRACE( g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode );
+
+        int insertPos = -1;
+        updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
+        updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+        m_SortedPelUnitBufs->insert( insertPos, ( int ) RdModeList.size() );
+
+        satdChecked[mode] = true;
       }
     }
+
+    parentCandList.resize( RdModeList.size() );
+    std::copy( RdModeList.cbegin(), RdModeList.cend(), parentCandList.begin() );
   }
 
   const bool isFirstLineOfCtu = (((cu.block(COMP_Y).y)&((cu.cs->sps)->CTUSize - 1)) == 0);
@@ -1300,7 +1294,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       else
         initIntraPatternChTypeISP(*tu.cu, area, piReco);
     }
-    else
+    else if( !predBuf )
     {
       initIntraPatternChType(*tu.cu, area);
     }

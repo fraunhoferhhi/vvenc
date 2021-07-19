@@ -760,7 +760,7 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
   subStruct.parent = this;
 
   if( pOrgBuffer ) pOrgBuffer->compactResize( subArea );
-  UnitArea subAreaLuma = subArea.singleChan( CH_L );
+  UnitArea subAreaLuma = subArea;
   subAreaLuma.blocks.resize( 1 );
   if( pRspBuffer ) pRspBuffer->compactResize( subAreaLuma );
 
@@ -1006,7 +1006,7 @@ void CodingStructure::copyStructure( const CodingStructure& other, const Channel
 
 void CodingStructure::compactResize( const UnitArea& _area )
 {
-  UnitArea areaLuma = _area.singleChan( CH_L );
+  UnitArea areaLuma = _area;
   areaLuma.blocks.resize( 1 );
 
   m_pred   .compactResize( _area );
