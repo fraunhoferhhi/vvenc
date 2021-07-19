@@ -1787,6 +1787,10 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
           lambda  = it->lambda * pow (2.0, double (sliceQP - firstPassSliceQP) / 3.0);
           lambda  = Clip3 (m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, lambda);
 
+          if( it->poc == 56 )
+          {
+            printf( "\nbase poc: %d  sliceQP: %d  log2xx: %d  visAct: %d  bitDepth: %d  qpCorr: %f  frameLevel: %d  d: %f", it->poc, sliceQP, log2HeightMinus7, visAct, encRCSeq->bitDepth, encRCSeq->qpCorrection[frameLevel], frameLevel, d );
+          }
           if (it->isIntra) // update history, for parameter clipping in subsequent key frames
           {
             encRCSeq->lastIntraLambda = lambda;
