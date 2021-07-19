@@ -505,6 +505,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_Geo                                     = 0;
   c->m_maxNumGeoCand                           = 5;
   c->m_FastIntraTools                          = 0;
+  c->m_IntraEstDecBit                          = 1;
 
   c->m_RCInitialQP                             = 0;
   c->m_RCForceIntraQP                          = false;
@@ -2756,6 +2757,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_FIMMode                         = 4;
       c->m_bUseEarlyCU                     = 1;
       c->m_bIntegerET                      = 1;
+      c->m_IntraEstDecBit                  = 3;
 
       // tools                             
       c->m_RDOQ                            = 2;
@@ -2801,6 +2803,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_FIMMode                         = 2;
       c->m_bUseEarlyCU                     = 1;
       c->m_bIntegerET                      = 0;
+      c->m_IntraEstDecBit                  = 3;
 
       // tools                             
       c->m_RDOQ                            = 2;
@@ -2859,6 +2862,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_FIMMode                         = 0;
       c->m_bUseEarlyCU                     = 0;
       c->m_bIntegerET                      = 0;
+      c->m_IntraEstDecBit                  = 2;
 
       // tools
       c->m_Affine                          = 2;
@@ -2924,6 +2928,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_FIMMode                         = 0;
       c->m_bUseEarlyCU                     = 0;
       c->m_bIntegerET                      = 0;
+      c->m_IntraEstDecBit                  = 1;
 
       // tools
       c->m_Affine                          = 2;
@@ -2991,6 +2996,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_FIMMode                         = 0;
       c->m_bUseEarlyCU                     = 0;
       c->m_bIntegerET                      = 0;
+      c->m_IntraEstDecBit                  = 1;
 
       // tools
       c->m_Affine                          = 1;
@@ -3281,6 +3287,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "FastMIP:" << c->m_useFastMIP << " ";
   }
   css << "FastIntraTools:" << c->m_FastIntraTools << " ";
+  css << "IntraEstDecBit:" << c->m_IntraEstDecBit << " ";
   css << "FastLocalDualTree:" << c->m_fastLocalDualTreeMode << " ";
   css << "IntegerET:" << c->m_bIntegerET << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
