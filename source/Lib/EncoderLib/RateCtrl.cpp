@@ -1096,19 +1096,6 @@ void RateCtrl::setRCPass (const int pass, const int maxPass)
   rcIsFinalPass = (pass >= maxPass);
 }
 
-void RateCtrl::printFirstpassStats()
-{
-  printf("\n\n");
-
-  std::list<TRCPassStats>::iterator it;
-  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
-  {
-    printf("\npoc: %d  qp: %d  tempLayer: %d  refreshParameters: %d  targetBits: %d  lamda: %lf  isNewScene: %d  frameInGopRatio: %lf", it->poc, it->qp, it->tempLayer, it->refreshParameters, it->targetBits, it->lambda, it->isNewScene, it->frameInGopRatio );
-  }
-
-  printf("\n\n");
-}
-
 void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
@@ -1255,6 +1242,7 @@ void RateCtrl::writeToStatFile( const int poc, const int qp, const double lambda
     m_cHandle.write( (char*) &yPsnr,     sizeof(double) );
     m_cHandle.write( (char*) &isIntra,   sizeof(bool) );
     m_cHandle.write( (char*) &tempLayer, sizeof(int) );
+    m_cHandle.write( (char*) &flushPOC,  sizeof(int) );
   }
 }
 
@@ -1277,7 +1265,7 @@ void RateCtrl::readFirstPassDataFromFile( const std::string &fileName )
 
 bool RateCtrl::xReadData( bool &isEof )
 {
-  int poc, qp, tempLayer;
+  int poc, qp, tempLayer, flshPoc;
   double lambda, yPsnr;
   bool isIntra;
   uint16_t visActY;
@@ -1291,11 +1279,16 @@ bool RateCtrl::xReadData( bool &isEof )
   m_cHandle.read( (char*) &yPsnr,     sizeof(double) );
   m_cHandle.read( (char*) &isIntra,   sizeof(bool) );
   m_cHandle.read( (char*) &tempLayer, sizeof(int) );
+  m_cHandle.read( (char*) &flshPoc,   sizeof(int) );
 
   if( !m_cHandle.eof() )
   {
     m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
                                                     numBits, yPsnr, isIntra, tempLayer ) );
+    if( flushPOC < 0 && flshPoc >= 0 )
+    {
+      flushPOC = flshPoc;
+    }
   }
   
   if( m_cHandle.eof() || m_cHandle.fail() )

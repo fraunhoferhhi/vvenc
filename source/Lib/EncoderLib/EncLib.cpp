@@ -290,8 +290,6 @@ void EncLib::initPass( int pass )
       m_cRateCtrl.processFirstPassData (m_cEncCfg.m_QP);
       // update first-pass data
       m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
-      
-      m_cRateCtrl.printFirstpassStats();
     }
   }
 
@@ -399,8 +397,7 @@ void EncLib::xSetRCEncCfg( int pass )
   }
   else // estimate near-optimal base QP for PPS in second RC pass
   {
-//    if( !m_cEncCfg.m_firstPassRCstats.empty() && m_cEncCfg.m_RCpass == pass )
-    if( !m_cEncCfg.m_firstPassRCstats.empty() )
+    if( !m_cEncCfg.m_firstPassRCstats.empty() && m_cEncCfg.m_RCpass == pass )
     {
       m_cRateCtrl.readFirstPassDataFromFile( m_cEncCfg.m_firstPassRCstats );
     }
@@ -415,8 +412,6 @@ void EncLib::xSetRCEncCfg( int pass )
       sumFrBits += it->numBits;
       sumVisAct += it->visActY;
     }
-    
-    printf( "\nbase bits: %lld  visact: %lld\n", sumFrBits, sumVisAct );
     
     if ((firstPassData.size() > 0) && (fps > 0))
     {

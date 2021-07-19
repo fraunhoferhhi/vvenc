@@ -1725,10 +1725,6 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
   double lambda = (m_pcEncCfg->m_RCNumPasses != 2 ? encRCPic->finalLambda : m_pcRateCtrl->encRCGOP->maxEstLambda);
   int   sliceQP = (m_pcEncCfg->m_RCNumPasses != 2 ? m_pcEncCfg->m_RCInitialQP : MAX_QP);
 
-  if( pic.poc == 56 )
-  {
-    printf("\nbase");
-  }
   if ((m_pcEncCfg->m_RCNumPasses != 2) && ((slice->poc == 0 && m_pcEncCfg->m_RCInitialQP > 0) || (frameLevel == 0 && m_pcEncCfg->m_RCForceIntraQP))) // QP is specified
   {
     int    NumberBFrames = ( m_pcEncCfg->m_GOPSize - 1 );
@@ -1787,10 +1783,6 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
           lambda  = it->lambda * pow (2.0, double (sliceQP - firstPassSliceQP) / 3.0);
           lambda  = Clip3 (m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, lambda);
 
-          if( it->poc == 56 )
-          {
-            printf( "\nbase poc: %d  sliceQP: %d  log2xx: %d  visAct: %d  bitDepth: %d  qpCorr: %f  frameLevel: %d  d: %f", it->poc, sliceQP, log2HeightMinus7, visAct, encRCSeq->bitDepth, encRCSeq->qpCorrection[frameLevel], frameLevel, d );
-          }
           if (it->isIntra) // update history, for parameter clipping in subsequent key frames
           {
             encRCSeq->lastIntraLambda = lambda;
