@@ -2684,6 +2684,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_alf                             = 0;
   c->m_alfSpeed                        = 0;
   c->m_allowDisFracMMVD                = 0;
+  c->m_BCW                             = 0;
   c->m_BDOF                            = 0;
   c->m_ccalf                           = 0;
   c->m_CIIP                            = 0;
@@ -2825,7 +2826,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_MTSImplicit                     = 1;
       c->m_PROF                            = 1;
       c->m_SbTMVP                          = 1;
-      c->m_BCW                             = 0;
       // scc
       c->m_IBCFastMethod                   = 4;
       c->m_TSsize                          = 4;
@@ -2934,6 +2934,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
+      c->m_BCW                             = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -2958,7 +2959,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 1;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 3;
-      c->m_BCW                             = 2;
       // scc
       c->m_IBCFastMethod                   = 1;
       c->m_TSsize                          = 5;
@@ -3002,6 +3002,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
+      c->m_BCW                             = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 1;
@@ -3026,7 +3027,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 1;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 1;
-      c->m_BCW                             = 2;
       c->m_useNonLinearAlfChroma           = 1;
       c->m_useNonLinearAlfLuma             = 1;
       // scc
@@ -3072,6 +3072,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 0;
       c->m_allowDisFracMMVD                = 1;
+      c->m_BCW                             = 2;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_CIIP                            = 3;
@@ -3096,7 +3097,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SBT                             = 2;
       c->m_SbTMVP                          = 1;
       c->m_SMVD                            = 3;
-      c->m_BCW                             = 2;
       c->m_useNonLinearAlfChroma           = 1;
       c->m_useNonLinearAlfLuma             = 1;
       // scc
