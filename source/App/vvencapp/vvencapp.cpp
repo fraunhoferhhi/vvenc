@@ -259,7 +259,7 @@ int main( int argc, char* argv[] )
     {
       if( vvencappCfg.m_RCpass != pass )
       {
-        std::cout << std::endl << " skipping rate control pass: " << pass << std::endl << std::endl;
+        msgApp( nullptr, VVENC_INFO, "\n skipping rate control pass: %d\n\n", pass );
         continue;
       }
     }

@@ -191,7 +191,7 @@ int EncApp::encode()
     {
       if( vvencCfg.m_RCpass != pass )
       {
-        std::cout << std::endl << " skipping rate control pass: " << pass << std::endl << std::endl;
+        msgApp( VVENC_INFO, "\n skipping rate control pass: %d\n\n", pass );
         continue;
       }
     }

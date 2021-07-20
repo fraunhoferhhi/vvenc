@@ -258,8 +258,9 @@ namespace vvenc {
     void setRCPass (const int pass, const int maxPass);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
-    void writeToStatFile( const int poc, const int qp, const double lambda, const uint16_t visActY,
-                          const uint32_t numBits, const double yPsnr, bool isIntra, int tempLayer );
+//    void writeToStatFile( const int poc, const int qp, const double lambda, const uint16_t visActY,
+//                          const uint32_t numBits, const double yPsnr, bool isIntra, int tempLayer );
+    void writeToStatFile( TRCPassStats passStats );
 
     void processFirstPassData (const int secondPassBaseQP);
     void processGops (const int secondPassBaseQP);

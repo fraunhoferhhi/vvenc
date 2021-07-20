@@ -1219,7 +1219,8 @@ void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda,
   {
     if( m_cHandle.is_open() )
     {
-      writeToStatFile( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer );
+      writeToStatFile( TRCPassStats( poc, qp, lambda, visActY,
+                                     numBits, psnrY, isIntra, tempLayer ) );
     }
     else
     {
@@ -1229,20 +1230,19 @@ void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda,
   }
 }
 
-void RateCtrl::writeToStatFile( const int poc, const int qp, const double lambda, const uint16_t visActY,
-                                uint32_t numBits, double yPsnr, bool isIntra, int tempLayer )
+void RateCtrl::writeToStatFile( TRCPassStats passStats )
 {
   if( rcPass < rcMaxPass && m_cHandle.is_open() )
   {
-    m_cHandle.write( (char*) &poc,       sizeof(int) );
-    m_cHandle.write( (char*) &qp,        sizeof(int) );
-    m_cHandle.write( (char*) &lambda,    sizeof(double) );
-    m_cHandle.write( (char*) &visActY,   sizeof(uint16_t) );
-    m_cHandle.write( (char*) &numBits,   sizeof(uint32_t) );
-    m_cHandle.write( (char*) &yPsnr,     sizeof(double) );
-    m_cHandle.write( (char*) &isIntra,   sizeof(bool) );
-    m_cHandle.write( (char*) &tempLayer, sizeof(int) );
-    m_cHandle.write( (char*) &flushPOC,  sizeof(int) );
+    m_cHandle.write( (char*) &passStats.poc,       sizeof(int) );
+    m_cHandle.write( (char*) &passStats.qp,        sizeof(int) );
+    m_cHandle.write( (char*) &passStats.lambda,    sizeof(double) );
+    m_cHandle.write( (char*) &passStats.visActY,   sizeof(uint16_t) );
+    m_cHandle.write( (char*) &passStats.numBits,   sizeof(uint32_t) );
+    m_cHandle.write( (char*) &passStats.psnrY,     sizeof(double) );
+    m_cHandle.write( (char*) &passStats.isIntra,   sizeof(bool) );
+    m_cHandle.write( (char*) &passStats.tempLayer, sizeof(int) );
+    m_cHandle.write( (char*) &flushPOC,            sizeof(int) );
   }
 }
 
