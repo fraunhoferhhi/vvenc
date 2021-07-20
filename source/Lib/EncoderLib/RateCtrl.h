@@ -111,8 +111,10 @@ namespace vvenc {
     void create( bool twoPass, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight, int LCUWidth, int LCUHeight, int numberOfLevel, int adaptiveBit, std::list<TRCPassStats> &firstPassData );
     void destroy();
     void initBitsRatio( int bitsRatio[] );
+    void initGOPID2Level( int GOPID2Level[] );
     void initPicPara( TRCParameter* picPara = NULL );    // NULL to initial with default value
     void updateAfterPic( int bits, int tgtBits );
+    void setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB );
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
     void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
     void clipRcAlpha( double& alpha );
@@ -138,6 +140,7 @@ namespace vvenc {
     int             bitDepth;
     int64_t         bitsUsed;
     int64_t         estimatedBitUsage;
+    double          lastLambda;
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
     uint64_t        targetBitCnt[8];
@@ -145,6 +148,7 @@ namespace vvenc {
     int             lastIntraQP;
     TRCParameter*   picParam;
     int*            bitsRatio;
+    int*            gopID2Level;
     std::list<TRCPassStats> firstPassData;
 
   private:
@@ -165,6 +169,8 @@ namespace vvenc {
 
   private:
     int    xEstGOPTargetBits( EncRCSeq* encRCSeq, int GOPSize );
+    void   xCalEquaCoeff( EncRCSeq* encRCSeq, double* lambdaRatio, double* equaCoeffA, double* equaCoeffB, int GOPSize );
+    double xSolveEqua( EncRCSeq* encRCSeq, double targetBpp, double* equaCoeffA, double* equaCoeffB, int GOPSize );
 
   public:
     int     numPics;
