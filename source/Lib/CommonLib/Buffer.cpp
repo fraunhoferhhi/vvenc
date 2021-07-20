@@ -144,6 +144,21 @@ void addAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T
 #undef ADD_AVG_CORE_INC
 }
 
+template<typename T>
+void addWeightedAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T* dest, int destStride, int width, int height, unsigned rshift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+#define ADD_WGHT_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src1[ADDR]*w0 + src2[ADDR]*w1 + offset ), rshift ), clpRng )
+#define ADD_WGHT_AVG_INC     \
+    src1 += src1Stride; \
+    src2 += src2Stride; \
+    dest += destStride; \
+
+  SIZE_AWARE_PER_EL_OP( ADD_WGHT_AVG_OP, ADD_WGHT_AVG_INC );
+
+#undef ADD_WGHT_AVG_OP
+#undef ADD_WGHT_AVG_INC
+}
+
 void removeHighFreq(int16_t* dst, int dstStride, const int16_t* src, int srcStride, int width, int height)
 {
 #define REM_HF_INC  \
@@ -343,6 +358,9 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  wghtAvg4          = addWeightedAvgCore<Pel>;
+  wghtAvg8          = addWeightedAvgCore<Pel>;
+
   copyClip4         = copyClipCore<Pel>;
   copyClip8         = copyClipCore<Pel>;
 
@@ -376,31 +394,41 @@ PelBufferOps g_pelBufOP = PelBufferOps();
 template<>
 void AreaBuf<Pel>::addWeightedAvg(const AreaBuf<const Pel>& other1, const AreaBuf<const Pel>& other2, const ClpRng& clpRng, const int8_t BcwIdx)
 {
-  const int8_t w0 = getBcwWeight(BcwIdx, REF_PIC_LIST_0);
-  const int8_t w1 = getBcwWeight(BcwIdx, REF_PIC_LIST_1);
+  const int8_t w0 = getBcwWeight( BcwIdx, REF_PIC_LIST_0 );
+  const int8_t w1 = getBcwWeight( BcwIdx, REF_PIC_LIST_1 );
   const int8_t log2WeightBase = g_BcwLog2WeightBase;
-  //
   const Pel* src0 = other1.buf;
   const Pel* src2 = other2.buf;
-  Pel* dest = buf;
+        Pel* dest =        buf;
 
-  const unsigned src1Stride = other1.stride;
-  const unsigned src2Stride = other2.stride;
-  const unsigned destStride = stride;
-  const int      clipbd     = clpRng.bd;
-  const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + log2WeightBase;
-  const int      offset     = (1 << (shiftNum - 1)) + (IF_INTERNAL_OFFS << log2WeightBase);
+  const int src1Stride = other1.stride;
+  const int src2Stride = other2.stride;
+  const int destStride =        stride;
+  const int clipbd     = clpRng.bd;
+  const int shiftNum   = std::max<int>( 2, ( IF_INTERNAL_PREC - clipbd ) ) + log2WeightBase;
+  const int offset     = ( 1 << ( shiftNum - 1 ) ) + ( IF_INTERNAL_OFFS << log2WeightBase );
 
-#define ADD_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src0[ADDR]*w0 + src2[ADDR]*w1 + offset ), shiftNum ), clpRng )
-#define ADD_AVG_INC     \
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.wghtAvg8( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, w0, w1, clpRng );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.wghtAvg4( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, w0, w1, clpRng );
+  }
+  else
+  {
+#define WGHT_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src0[ADDR]*w0 + src2[ADDR]*w1 + offset ), shiftNum ), clpRng )
+#define WGHT_AVG_INC    \
     src0 += src1Stride; \
     src2 += src2Stride; \
     dest += destStride; \
 
-  SIZE_AWARE_PER_EL_OP(ADD_AVG_OP, ADD_AVG_INC);
+    SIZE_AWARE_PER_EL_OP( WGHT_AVG_OP, WGHT_AVG_INC );
 
-#undef ADD_AVG_OP
-#undef ADD_AVG_INC
+#undef WGHT_AVG_OP
+#undef WGHT_AVG_INC
+  }
 }
 
 template<>
