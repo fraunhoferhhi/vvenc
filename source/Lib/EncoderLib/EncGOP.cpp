@@ -1115,7 +1115,7 @@ void EncGOP::xInitLMCS( Picture& pic )
   Slice* slice = pic.cs->slice;
   const SliceType sliceType = slice->sliceType;
 
-  if( ! pic.useScLMCS || (slice->isIntra() && m_disableLMCSIP) )
+  if( ! pic.useScLMCS || (!slice->isIntra() && m_disableLMCSIP) )
   {
     pic.reshapeData.copyReshapeData( m_Reshaper );
     m_Reshaper.setCTUFlag     ( false );
