@@ -127,6 +127,7 @@ private:
   bool                      m_bFirstInit;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
+  bool                      m_disableLMCSIP;
   int                       m_codingOrderIdx;
   int                       m_lastIDR;
   int                       m_lastRasPoc;
