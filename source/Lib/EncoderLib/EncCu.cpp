@@ -3004,23 +3004,6 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     bool stopTest = m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
 
-    bcwIdx = CU::getValidBcwIdx(cu);
-    if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
-    {
-      tempCS->initStructData(encTestMode.qp);
-      continue;
-    }
-    CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
-      
-    bool isEqualUni = false;
-    if( m_pcEncCfg->m_BCW == 2 )
-    {
-      if( cu.interDir != 3 && testBcw == 0 )
-      {
-        isEqualUni = true;
-      }
-    }
-
     if (StopInterRes && (bestCostInter != m_mergeBestSATDCost))
     {
       int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
@@ -3029,12 +3012,22 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
         stopTest = true;
       }
     }
-  
-    //TODO: check this
-    if (!stopTest)
+
+    if( !stopTest )
     {
-      xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
+      bcwIdx   = CU::getValidBcwIdx(cu);
+      stopTest = testBcw && bcwIdx == BCW_DEFAULT;
     }
+    
+    if( stopTest )
+    {
+      tempCS->initStructData(encTestMode.qp);
+      continue;
+    }
+
+    CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
+        
+    xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
     
     if( bcwIdx == BCW_DEFAULT )
     {
@@ -3052,11 +3045,8 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( m_pcEncCfg->m_BCW == 2 )
     {
-      if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
-      {
-        break;
-      }
-      if( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) )
+      if( ( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_IntraPeriod == -1 )
+         || ( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) ) )
       {
         break;
       }
