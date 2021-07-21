@@ -3015,11 +3015,8 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( !stopTest )
     {
-      bcwIdx = CU::getValidBcwIdx(cu);
-      if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
-      {
-        stopTest = true;
-      }
+      bcwIdx   = CU::getValidBcwIdx(cu);
+      stopTest = testBcw && bcwIdx == BCW_DEFAULT;
     }
     
     if( stopTest )
@@ -3048,11 +3045,8 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( m_pcEncCfg->m_BCW == 2 )
     {
-      if( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_IntraPeriod == -1 )
-      {
-        break;
-      }
-      if( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) )
+      if( ( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_IntraPeriod == -1 )
+         || ( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) ) )
       {
         break;
       }
