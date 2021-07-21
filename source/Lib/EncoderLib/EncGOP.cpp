@@ -238,6 +238,7 @@ EncGOP::EncGOP()
   : m_bFirstInit         ( true )
   , m_bFirstWrite        ( true )
   , m_bRefreshPending    ( false )
+  , m_disableLMCSIP      ( false )
   , m_codingOrderIdx     ( 0 )
   , m_lastIDR            ( 0 )
   , m_lastRasPoc         ( MAX_INT )
@@ -1112,16 +1113,17 @@ void EncGOP::xInitSliceMvdL1Zero( PicHeader* picHeader, const Slice* slice )
 void EncGOP::xInitLMCS( Picture& pic )
 {
   Slice* slice = pic.cs->slice;
+  const SliceType sliceType = slice->sliceType;
 
-  if( ! pic.useScLMCS )
+  if( ! pic.useScLMCS || (!slice->isIntra() && m_disableLMCSIP) )
   {
     pic.reshapeData.copyReshapeData( m_Reshaper );
     m_Reshaper.setCTUFlag     ( false );
     pic.reshapeData.setCTUFlag( false );
+    if( slice->isIntra() )  m_disableLMCSIP = true;
     return;
   }
-
-  const SliceType sliceType = slice->sliceType;
+  if( slice->isIntra() ) m_disableLMCSIP = false;
 
   m_Reshaper.getReshapeCW()->rspTid = slice->TLayer + (slice->isIntra() ? 0 : 1);
   m_Reshaper.getSliceReshaperInfo().chrResScalingOffset = m_pcEncCfg->m_LMCSOffset;
