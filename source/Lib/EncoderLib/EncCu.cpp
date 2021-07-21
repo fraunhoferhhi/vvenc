@@ -3013,36 +3013,24 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
       }
     }
 
+    if( !stopTest )
+    {
+      bcwIdx = CU::getValidBcwIdx(cu);
+      if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
+      {
+        stopTest = true;
+      }
+    }
+    
     if( stopTest )
     {
       tempCS->initStructData(encTestMode.qp);
       continue;
     }
-    else
-    {
-      bcwIdx = CU::getValidBcwIdx(cu);
-      if( testBcw && bcwIdx == BCW_DEFAULT ) // Enabled Bcw but the search results is uni.
-      {
-        tempCS->initStructData(encTestMode.qp);
-        continue;
-      }
-    }
+
     CHECK(!(testBcw || (!testBcw && bcwIdx == BCW_DEFAULT)), " !( bTestBcw || (!bTestBcw && bcwIdx == BCW_DEFAULT ) )");
-      
-    bool isEqualUni = false;
-    if( m_pcEncCfg->m_BCW == 2 )
-    {
-      if( cu.interDir != 3 && testBcw == 0 )
-      {
-        isEqualUni = true;
-      }
-    }
-  
-    //TODO: check this
-//    if (!stopTest)
-    {
-      xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
-    }
+        
+    xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, 0, 0, &equBcwCost);
     
     if( bcwIdx == BCW_DEFAULT )
     {
@@ -3060,6 +3048,12 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( m_pcEncCfg->m_BCW == 2 )
     {
+      bool isEqualUni = false;
+      if( cu.interDir != 3 && testBcw == 0 )
+      {
+        isEqualUni = true;
+      }
+
       if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
       {
         break;
