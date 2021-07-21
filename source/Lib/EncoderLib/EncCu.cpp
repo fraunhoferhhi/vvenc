@@ -3048,13 +3048,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( m_pcEncCfg->m_BCW == 2 )
     {
-      bool isEqualUni = false;
-      if( cu.interDir != 3 && testBcw == 0 )
-      {
-        isEqualUni = true;
-      }
-
-      if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
+      if( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_IntraPeriod == -1 )
       {
         break;
       }
