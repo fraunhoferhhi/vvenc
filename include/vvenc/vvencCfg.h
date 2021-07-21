@@ -393,6 +393,7 @@ VVENC_DECL void vvenc_ReshapeCW_default(vvencReshapeCW *ReshapeCW );
 typedef struct vvencMCTF
 {
   int                 MCTF;
+  int                 MCTFSpeed;
   bool                MCTFFutureReference;
   int                 MCTFNumLeadFrames;
   int                 MCTFNumTrailFrames;
@@ -558,7 +559,6 @@ typedef struct vvenc_config
   int                 m_fastInterSearchMode;                                             // Parameter that controls fast encoder settings
   bool                m_bUseEarlyCU;                                                     // flag for using Early CU setting
   bool                m_useFastDecisionForMerge;                                         // flag for using Fast Decision Merge RD-Cost
-  bool                m_useEarlySkipDetection;                                           // flag for using Early SKIP Detection
 
   bool                m_bDisableIntraCUsInInterSlices;                                   // Flag for disabling intra predicted CUs in inter slices.
   bool                m_bUseConstrainedIntraPred;                                        // flag for using constrained intra prediction
@@ -578,11 +578,13 @@ typedef struct vvenc_config
   int                 m_Geo;
   unsigned            m_maxNumGeoCand;
   int                 m_FastIntraTools;
+  int                 m_IntraEstDecBit;                                                  // Intra estimation decimation factor.
 
   int                 m_RCInitialQP;
   bool                m_RCForceIntraQP;
 
   int                 m_motionEstimationSearchMethod;
+  int                 m_motionEstimationSearchMethodSCC;
   bool                m_bRestrictMESampling;                                             // Restrict sampling for the Selective ME
   int                 m_SearchRange;                                                     // ME search range
   int                 m_bipredSearchRange;                                               // ME search range for bipred refinement
@@ -600,7 +602,7 @@ typedef struct vvenc_config
   bool                m_BDOF;
   bool                m_DMVR;
   int                 m_EDO;
-  bool                m_lumaReshapeEnable;
+  int                 m_lumaReshapeEnable;
   int                 m_reshapeSignalType;
   int                 m_updateCtrl;
   int                 m_adpOption;
@@ -632,9 +634,11 @@ typedef struct vvenc_config
 
   int                 m_IBCMode;
   int                 m_IBCFastMethod;
-#if 1//MIN_SKIPPAR
+
+  int                 m_BCW;
+
+  int                 m_FIMMode;
   int                 m_FastInferMerge;
-#endif
 
   bool                m_bLoopFilterDisable;                                              // flag for using deblocking filter
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS
@@ -685,6 +689,7 @@ typedef struct vvenc_config
   bool                m_ccalf;
   int                 m_ccalfQpThreshold;
   int                 m_alfTempPred;                                                     // Indicates using of temporal filter data prediction through APS
+  int                 m_alfSpeed;
 
   vvencMCTF           m_vvencMCTF;
 

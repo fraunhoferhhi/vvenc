@@ -875,7 +875,7 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noProfConstraintFlag                         = ! m_cEncCfg.m_PROF;
   ci.noPaletteConstraintFlag                      = true;
   ci.noActConstraintFlag                          = true;
-  ci.noLmcsConstraintFlag                         = ! m_cEncCfg.m_lumaReshapeEnable;
+  ci.noLmcsConstraintFlag                         = m_cEncCfg.m_lumaReshapeEnable == 0;
   ci.noTrailConstraintFlag                        = m_cEncCfg.m_IntraPeriod == 1;
   ci.noStsaConstraintFlag                         = m_cEncCfg.m_IntraPeriod == 1 || !hasNonZeroTemporalId;
   ci.noRaslConstraintFlag                         = m_cEncCfg.m_IntraPeriod == 1 || !hasLeadingPictures;
@@ -883,7 +883,7 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noIdrConstraintFlag                          = false;
   ci.noCraConstraintFlag                          = m_cEncCfg.m_DecodingRefreshType != 1;
   ci.noGdrConstraintFlag                          = false;
-  ci.noApsConstraintFlag                          = ( !m_cEncCfg.m_alf && !m_cEncCfg.m_lumaReshapeEnable /*&& m_useScalingListId == SCALING_LIST_OFF*/);
+  ci.noApsConstraintFlag                          = ( !m_cEncCfg.m_alf && m_cEncCfg.m_lumaReshapeEnable == 0 /*&& m_useScalingListId == SCALING_LIST_OFF*/);
 }
 
 void EncLib::xInitSPS(SPS &sps) const
@@ -930,7 +930,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.verCollocatedChroma           = m_cEncCfg.m_verCollocatedChromaFlag;
   sps.BDOF                          = m_cEncCfg.m_BDOF;
   sps.DMVR                          = m_cEncCfg.m_DMVR;
-  sps.lumaReshapeEnable             = m_cEncCfg.m_lumaReshapeEnable;
+  sps.lumaReshapeEnable             = m_cEncCfg.m_lumaReshapeEnable != 0;
   sps.Affine                        = m_cEncCfg.m_Affine;
   sps.PROF                          = m_cEncCfg.m_PROF;
   sps.ProfPresent                   = m_cEncCfg.m_PROF;
@@ -958,6 +958,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.transformSkip                 = m_cEncCfg.m_TS != 0;
   sps.log2MaxTransformSkipBlockSize = m_cEncCfg.m_TSsize;
   sps.BDPCM                         = m_cEncCfg.m_useBDPCM != 0;
+  sps.BCW                           = m_cEncCfg.m_BCW;
 
   for (uint32_t chType = 0; chType < MAX_NUM_CH; chType++)
   {
@@ -1315,10 +1316,15 @@ void EncLib::xInitHrdParameters(SPS &sps)
 
 void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
 {
-  bool useScMCTF = false;
-  bool useScTools = false;
+  bool isSccWeak = false;
+  bool isSccStrg = false;
 
-  if (m_cEncCfg.m_TS == 2 || m_cEncCfg.m_useBDPCM == 2 || m_cEncCfg.m_vvencMCTF.MCTF == 2 || m_cEncCfg.m_IBCMode==2)
+  if( m_cEncCfg.m_TS                   == 2
+      || m_cEncCfg.m_useBDPCM          == 2
+      || m_cEncCfg.m_vvencMCTF.MCTF    == 2
+      || m_cEncCfg.m_IBCMode           == 2
+      || m_cEncCfg.m_lumaReshapeEnable == 2
+      || m_cEncCfg.m_motionEstimationSearchMethodSCC > 0 )
   {
     int SIZE_BL = 4;
     int K_SC = 25;
@@ -1392,22 +1398,24 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
       hh += SizeS;
     }
     int s = 0;
-    useScMCTF = false; // for SCC no MCTF
+    isSccStrg = true;
     for (int r = 0; r < 4; r++)
     {
       s += sR[r];
       if (((sR[r] * 100 / (AmountBlock >> 2)) <= K_SC))
       {
-        useScMCTF = true; //NC
+        isSccStrg = false;
       }
     }
-    useScTools = ((s * 100 / AmountBlock) > K_SC);
+    isSccWeak = ((s * 100 / AmountBlock) > K_SC);
   }
-  pic.useScTS    = m_cEncCfg.m_TS == 1       || (m_cEncCfg.m_TS == 2 && useScTools);
-  pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1 || (m_cEncCfg.m_useBDPCM == 2 && useScTools);
-  pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1 || (m_cEncCfg.m_vvencMCTF.MCTF == 2 && useScMCTF);
 
-  pic.useScIBC   = m_cEncCfg.m_IBCMode == 1 || (m_cEncCfg.m_IBCMode == 2 && !useScMCTF);
+  pic.useScME    = m_cEncCfg.m_motionEstimationSearchMethodSCC > 0                            && isSccStrg;
+  pic.useScTS    = m_cEncCfg.m_TS == 1                || ( m_cEncCfg.m_TS == 2                && isSccWeak );
+  pic.useScBDPCM = m_cEncCfg.m_useBDPCM == 1          || ( m_cEncCfg.m_useBDPCM == 2          && isSccWeak );
+  pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1    || ( m_cEncCfg.m_vvencMCTF.MCTF == 2    && ! isSccStrg );
+  pic.useScLMCS  = m_cEncCfg.m_lumaReshapeEnable == 1 || ( m_cEncCfg.m_lumaReshapeEnable == 2 && ! isSccStrg );
+  pic.useScIBC   = m_cEncCfg.m_IBCMode == 1           || ( m_cEncCfg.m_IBCMode == 2           && isSccStrg );
 
 }
 

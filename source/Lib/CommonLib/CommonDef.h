@@ -369,8 +369,6 @@ static const int MAX_CU_SIZE =                                      1<<MAX_CU_DE
 static const int MIN_CU_LOG2 =                                      2;
 static const int MIN_PU_SIZE =                                      4;
 static const int MAX_NUM_PARTS_IN_CTU =                         ( ( MAX_CU_SIZE * MAX_CU_SIZE ) >> ( MIN_CU_LOG2 << 1 ) );
-static const int MAX_NUM_TUS =                                     16; ///< Maximum number of TUs within one CU. When max TB size is 32x32, up to 16 TUs within one CU (128x128) is supported
-static const int MAX_LOG2_DIFF_CU_TR_SIZE =                         3;
 
 static const int JVET_C0024_ZERO_OUT_TH =                          32;
 
@@ -449,9 +447,7 @@ static const double PBINTRA_RATIO     =                             1.1;
 static const int    NUM_MRG_SATD_CAND =                             4;
 static const double MRG_FAST_RATIO    =                             1.25;
 static const int    NUM_AFF_MRG_SATD_CAND =                         2;
-#if USE_COST_BEFORE
 static const double MRG_FAST_RATIOMYV[4] =                        { 1.15, 1.1, 1.1, 1.05 };
-#endif
 static const int    NUM_AMAXBT_LAYER =                             10;
 static const double AMAXBT_TH32 =                                  15.0;
 static const double AMAXBT_TH64 =                                  30.0;

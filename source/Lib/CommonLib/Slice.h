@@ -1306,6 +1306,7 @@ public:
   void                        createExplicitReferencePictureSetFromReference(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
+  void                        resetWpScaling();
 
   void                        clearSubstreamSizes( )                                 { return substreamSizes.clear();                              }
   uint32_t                    getNumberOfSubstreamSizes( )                           { return (uint32_t) substreamSizes.size();                    }

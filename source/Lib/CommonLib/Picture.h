@@ -245,10 +245,12 @@ public:
   int                           picInitialQP;
   double                        picVisActY;
   StopClock                     encTime;
+  bool                          useScME;
   bool                          useScMCTF;
   bool                          useScTS;
   bool                          useScBDPCM;
   bool                          useScIBC;
+  bool                          useScLMCS;
   int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;

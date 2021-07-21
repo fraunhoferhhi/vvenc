@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "RdCost.h"
 #include "Rom.h"
 #include "UnitPartitioner.h"
+#include "SearchSpaceCounter.h"
 
 
 //! \ingroup CommonLib
@@ -129,6 +130,14 @@ void RdCost::create()
   m_iCostScale    = 0;
 }
 
+#if ENABLE_MEASURE_SEARCH_SPACE
+static Distortion xMeasurePredSearchSpaceInterceptor( const DistParam& dp )
+{
+  g_searchSpaceAcc.addPrediction( dp.cur.width, dp.cur.height, toChannelType( dp.compID ) );
+  return dp.xDistFunc( dp );
+}
+
+#endif
 void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRefY, int iRefStride, int bitDepth, ComponentID compID, int subShiftMode, bool useHadamard )
 {
   rcDP.bitDepth   = bitDepth;
@@ -191,6 +200,11 @@ void RdCost::setDistParam( DistParam &rcDP, const CPelBuf& org, const Pel* piRef
       rcDP.subShift = 1;
     }
   }
+
+#if ENABLE_MEASURE_SEARCH_SPACE
+  rcDP.xDistFunc = rcDP.distFunc;
+  rcDP.distFunc  = xMeasurePredSearchSpaceInterceptor;
+#endif
 }
 
 
@@ -203,10 +217,17 @@ DistParam RdCost::setDistParam( const CPelBuf& org, const CPelBuf& cur, int bitD
   }
 
   const int base = bitDepth > 10 ? 1:0; //TBD: check does SDA ever overflow
-  return DistParam( org, cur, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y);
+#if ENABLE_MEASURE_SEARCH_SPACE
+  DistParam rcDP( org, cur, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y );
+  rcDP.xDistFunc = rcDP.distFunc;
+  rcDP.distFunc  = xMeasurePredSearchSpaceInterceptor;
+  return rcDP;
+#else
+  return DistParam( org, cur, m_afpDistortFunc[base][index], bitDepth, 0, COMP_Y );
+#endif
 }
 
-DistParam RdCost::setDistParam( const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShift )
+DistParam RdCost::setDistParam( const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShift, bool isDMVR )
 {
   DistParam rcDP;
   rcDP.bitDepth   = bitDepth;
@@ -227,13 +248,25 @@ DistParam RdCost::setDistParam( const Pel* pOrg, const Pel* piRefY, int iOrgStri
   const int base = (rcDP.bitDepth > 10) ? 1 : 0;
 
   rcDP.distFunc = m_afpDistortFunc[base][ DF_SAD + Log2( width ) ];
+
+#if ENABLE_MEASURE_SEARCH_SPACE
+  if( !isDMVR )
+  {
+    // DMVT is part of the decoder complexity
+    rcDP.xDistFunc = rcDP.distFunc;
+    rcDP.distFunc = xMeasurePredSearchSpaceInterceptor;
+  }
+
+#endif
   return rcDP;
 }
 
 Distortion RdCost::getDistPart( const CPelBuf& org, const CPelBuf& cur, int bitDepth, const ComponentID compId, DFunc eDFunc, const CPelBuf* orgLuma )
 {
   DistParam dp( org, cur, nullptr, bitDepth, 0, compId );
-
+# if ENABLE_MEASURE_SEARCH_SPACE
+  g_searchSpaceAcc.addPrediction( dp.cur.width, dp.cur.height, toChannelType( dp.compID ) );
+#endif
   Distortion dist;
   if( orgLuma )
   {

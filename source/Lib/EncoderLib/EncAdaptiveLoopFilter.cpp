@@ -994,6 +994,11 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
 
+  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  {
+    return;
+  }
+
   PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
 
@@ -1211,6 +1216,12 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
 
+  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  {
+    memset( cs.slice->tileGroupAlfEnabled, 0, sizeof( cs.slice->tileGroupAlfEnabled ) );
+    return;
+  }
+
   initCABACEstimator( cs.slice, &pic.picApsMap );
   if( m_encCfg->m_maxParallelFrames )
   {
@@ -1310,6 +1321,11 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, int ctuRsAddr )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+
+  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  {
+    return;
+  }
 
   const int nCtuX = ctuRsAddr % cs.pcv->widthInCtus;
   const int nCtuY = ctuRsAddr / cs.pcv->widthInCtus;

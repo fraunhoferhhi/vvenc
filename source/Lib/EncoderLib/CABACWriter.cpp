@@ -860,9 +860,7 @@ void CABACWriter::cu_bcw_flag(const CodingUnit& cu)
   }
 
   CHECK(!(BCW_NUM > 1 && (BCW_NUM == 2 || (BCW_NUM & 0x01) == 1)), " !( BCW_NUM > 1 && ( BCW_NUM == 2 || ( BCW_NUM & 0x01 ) == 1 ) ) ");
-  const uint8_t bcwCodingIdx = 0 /*(uint8_t)g_BCWCodingOrder[CU::getValidBcwIdx(cu)]*/;
-
-  THROW("no support");
+  const uint8_t bcwCodingIdx = (uint8_t)g_BcwCodingOrder[CU::getValidBcwIdx(cu)];
 
   const int32_t numBcw = (cu.slice->checkLDC) ? 5 : 3;
   m_BinEncoder.encodeBin((bcwCodingIdx == 0 ? 0 : 1), Ctx::BcwIdx(0));
