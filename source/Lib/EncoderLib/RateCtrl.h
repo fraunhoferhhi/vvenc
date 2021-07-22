@@ -288,7 +288,7 @@ namespace vvenc {
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
     
     std::fstream  m_cHandle;
-    bool xReadData( bool &isEof );
+    void xAddFrameData( std::vector<std::string> strVals );
   };
 }
 #endif
