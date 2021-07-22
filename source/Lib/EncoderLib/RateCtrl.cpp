@@ -1183,31 +1183,23 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
   {
     if ( bpp > 0.2 )
     {
-      bitsRatio[ 0 ] = 2;
-      bitsRatio[ 1 ] = 3;
-      bitsRatio[ 2 ] = 2;
-      bitsRatio[ 3 ] = 6;
+      static const int init[] = { 2, 3, 2, 6 };
+      std::copy_n( init, 4, bitsRatio );
     }
     else if ( bpp > 0.1 )
     {
-      bitsRatio[ 0 ] = 2;
-      bitsRatio[ 1 ] = 3;
-      bitsRatio[ 2 ] = 2;
-      bitsRatio[ 3 ] = 10;
+      static const int init[] = { 2, 3, 2, 10 };
+      std::copy_n( init, 4, bitsRatio );
     }
     else if ( bpp > 0.05 )
     {
-      bitsRatio[ 0 ] = 2;
-      bitsRatio[ 1 ] = 3;
-      bitsRatio[ 2 ] = 2;
-      bitsRatio[ 3 ] = 12;
+      static const int init[] = { 2, 3, 2, 12 };
+      std::copy_n( init, 4, bitsRatio );
     }
     else
     {
-      bitsRatio[ 0 ] = 2;
-      bitsRatio[ 1 ] = 3;
-      bitsRatio[ 2 ] = 2;
-      bitsRatio[ 3 ] = 14;
+      static const int init[] = { 2, 3, 2, 14 };
+      std::copy_n( init, 4, bitsRatio );
     }
 
     adaptiveBit = 1;
@@ -1216,79 +1208,55 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
   {
     if ( bpp > 0.2 )
     {
-      bitsRatio[ 0 ] = 15;
-      bitsRatio[ 1 ] = 5;
-      bitsRatio[ 2 ] = 4;
-      bitsRatio[ 3 ] = 1;
-      bitsRatio[ 4 ] = 1;
-      bitsRatio[ 5 ] = 4;
-      bitsRatio[ 6 ] = 1;
-      bitsRatio[ 7 ] = 1;
+      static const int init[] = { 15, 5, 4, 1, 1, 4, 1, 1 };
+      std::copy_n( init, 8, bitsRatio );
     }
     else if ( bpp > 0.1 )
     {
-      bitsRatio[ 0 ] = 20;
-      bitsRatio[ 1 ] = 6;
-      bitsRatio[ 2 ] = 4;
-      bitsRatio[ 3 ] = 1;
-      bitsRatio[ 4 ] = 1;
-      bitsRatio[ 5 ] = 4;
-      bitsRatio[ 6 ] = 1;
-      bitsRatio[ 7 ] = 1;
+      static const int init[] = { 20, 6, 4, 1, 1, 4, 1, 1 };
+      std::copy_n( init, 8, bitsRatio );
     }
     else if ( bpp > 0.05 )
     {
-      bitsRatio[ 0 ] = 25;
-      bitsRatio[ 1 ] = 7;
-      bitsRatio[ 2 ] = 4;
-      bitsRatio[ 3 ] = 1;
-      bitsRatio[ 4 ] = 1;
-      bitsRatio[ 5 ] = 4;
-      bitsRatio[ 6 ] = 1;
-      bitsRatio[ 7 ] = 1;
+      static const int init[] = { 25, 7, 4, 1, 1, 4, 1, 1 };
+      std::copy_n( init, 8, bitsRatio );
     }
     else
     {
-      bitsRatio[ 0 ] = 30;
-      bitsRatio[ 1 ] = 8;
-      bitsRatio[ 2 ] = 4;
-      bitsRatio[ 3 ] = 1;
-      bitsRatio[ 4 ] = 1;
-      bitsRatio[ 5 ] = 4;
-      bitsRatio[ 6 ] = 1;
-      bitsRatio[ 7 ] = 1;
+      static const int init[] = { 30, 8, 4, 1, 1, 4, 1, 1 };
+      std::copy_n( init, 8, bitsRatio );
     }
 
     adaptiveBit = 2;
   }
   else if ( GOPSize == 16 && !isLowdelay )
   {
-    bitsRatio[ 0 ] = (int)( ( -0.5691 * bpp + 0.3577 ) * 1000 + 0.5 );
-    bitsRatio[ 1 ] = (int)( ( -0.0332 * bpp + 0.1782 ) * 1000 + 0.5 );
-    bitsRatio[ 2 ] = (int)( ( 0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
-    bitsRatio[ 3 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-    bitsRatio[ 4 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 5 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 6 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-    bitsRatio[ 7 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 8 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 9 ] = (int)( ( 0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
-    bitsRatio[ 10 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-    bitsRatio[ 11 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 12 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 13 ] = (int)( ( 0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
-    bitsRatio[ 14 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
-    bitsRatio[ 15 ] = (int)( ( 0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[  0 ] = (int)( ( -0.5691 * bpp + 0.3577 ) * 1000 + 0.5 );
+    bitsRatio[  1 ] = (int)( ( -0.0332 * bpp + 0.1782 ) * 1000 + 0.5 );
+    bitsRatio[  2 ] = (int)( (  0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
+    bitsRatio[  3 ] = (int)( (  0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[  4 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[  5 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[  6 ] = (int)( (  0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[  7 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[  8 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[  9 ] = (int)( (  0.0595 * bpp + 0.0810 ) * 1000 + 0.5 );
+    bitsRatio[ 10 ] = (int)( (  0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[ 11 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 12 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 13 ] = (int)( (  0.0710 * bpp + 0.0392 ) * 1000 + 0.5 );
+    bitsRatio[ 14 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
+    bitsRatio[ 15 ] = (int)( (  0.0249 * bpp + 0.0181 ) * 1000 + 0.5 );
 
     adaptiveBit = 2;
   }
   else if ( GOPSize == 32 && !isLowdelay )
   {
-    int bitsRatioInit[ 4 ][ 6 ] = {
+    static const int bitsRatioInit[ 4 ][ 6 ] = {
       { 16, 10, 8, 4, 2, 1 },
       { 16, 10, 8, 4, 2, 1 },
       { 16, 10, 8, 4, 2, 1 },
-      { 10, 8, 6, 4, 2, 1 } };
+      { 10,  8, 6, 4, 2, 1 } };
     int cls;
     if ( bpp > 0.2 )
     {
@@ -1306,7 +1274,7 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
     {
       cls = 3;
     }
-    int index[ 32 ] = { 0, 1, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5 };
+    static const int index[ 32 ] = { 0, 1, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5 };
 
     for ( int i = 0; i < 32; i++ )
     {
@@ -1331,106 +1299,23 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
 
   if ( GOPSize == 4 && isLowdelay )
   {
-    GOPID2Level[ 0 ] = 3;
-    GOPID2Level[ 1 ] = 2;
-    GOPID2Level[ 2 ] = 3;
-    GOPID2Level[ 3 ] = 1;
+    static const int init[] = { 3, 2, 3, 1 };
+    std::copy_n( init, 4, GOPID2Level );
   }
   else if ( GOPSize == 8 && !isLowdelay )
   {
-    GOPID2Level[ 0 ] = 1;
-    GOPID2Level[ 1 ] = 2;
-    GOPID2Level[ 2 ] = 3;
-    GOPID2Level[ 3 ] = 4;
-    GOPID2Level[ 4 ] = 4;
-    GOPID2Level[ 5 ] = 3;
-    GOPID2Level[ 6 ] = 4;
-    GOPID2Level[ 7 ] = 4;
+    static const int init[] = { 1, 2, 3, 4, 4, 3, 4, 4 };
+    std::copy_n( init, 8, GOPID2Level );
   }
   else if ( GOPSize == 16 && !isLowdelay )
   {
-    GOPID2Level[ 0 ] = 1;
-    GOPID2Level[ 1 ] = 2;
-    GOPID2Level[ 2 ] = 3;
-    GOPID2Level[ 3 ] = 4;
-    GOPID2Level[ 4 ] = 5;
-    GOPID2Level[ 5 ] = 5;
-    GOPID2Level[ 6 ] = 4;
-    GOPID2Level[ 7 ] = 5;
-    GOPID2Level[ 8 ] = 5;
-    GOPID2Level[ 9 ] = 3;
-    GOPID2Level[ 10 ] = 4;
-    GOPID2Level[ 11 ] = 5;
-    GOPID2Level[ 12 ] = 5;
-    GOPID2Level[ 13 ] = 4;
-    GOPID2Level[ 14 ] = 5;
-    GOPID2Level[ 15 ] = 5;
-  }
-
-  if ( !isLowdelay && GOPSize == 8 )
-  {
-    GOPID2Level[ 0 ] = 1;
-    GOPID2Level[ 1 ] = 2;
-    GOPID2Level[ 2 ] = 3;
-    GOPID2Level[ 3 ] = 4;
-    GOPID2Level[ 4 ] = 4;
-    GOPID2Level[ 5 ] = 3;
-    GOPID2Level[ 6 ] = 4;
-    GOPID2Level[ 7 ] = 4;
-  }
-  else if ( GOPSize == 16 && !isLowdelay )
-  {
-    GOPID2Level[ 0 ] = 1;
-    GOPID2Level[ 1 ] = 2;
-    GOPID2Level[ 2 ] = 3;
-    GOPID2Level[ 3 ] = 4;
-    GOPID2Level[ 4 ] = 5;
-    GOPID2Level[ 5 ] = 5;
-    GOPID2Level[ 6 ] = 4;
-    GOPID2Level[ 7 ] = 5;
-    GOPID2Level[ 8 ] = 5;
-    GOPID2Level[ 9 ] = 3;
-    GOPID2Level[ 10 ] = 4;
-    GOPID2Level[ 11 ] = 5;
-    GOPID2Level[ 12 ] = 5;
-    GOPID2Level[ 13 ] = 4;
-    GOPID2Level[ 14 ] = 5;
-    GOPID2Level[ 15 ] = 5;
+    static const int init[] = { 1, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5 };
+    std::copy_n( init, 16, GOPID2Level );
   }
   else if ( GOPSize == 32 && !isLowdelay )
   {
-    GOPID2Level[ 0 ] = 1;
-    GOPID2Level[ 1 ] = 2;
-    GOPID2Level[ 2 ] = 3;
-    GOPID2Level[ 3 ] = 4;
-    GOPID2Level[ 4 ] = 5;
-    GOPID2Level[ 5 ] = 6;
-    GOPID2Level[ 6 ] = 6;
-    GOPID2Level[ 7 ] = 5;
-    GOPID2Level[ 8 ] = 6;
-    GOPID2Level[ 9 ] = 6;
-    GOPID2Level[ 10 ] = 4;
-    GOPID2Level[ 11 ] = 5;
-    GOPID2Level[ 12 ] = 6;
-    GOPID2Level[ 13 ] = 6;
-    GOPID2Level[ 14 ] = 5;
-    GOPID2Level[ 15 ] = 6;
-    GOPID2Level[ 16 ] = 6;
-    GOPID2Level[ 17 ] = 3;
-    GOPID2Level[ 18 ] = 4;
-    GOPID2Level[ 19 ] = 5;
-    GOPID2Level[ 20 ] = 6;
-    GOPID2Level[ 21 ] = 6;
-    GOPID2Level[ 22 ] = 5;
-    GOPID2Level[ 23 ] = 6;
-    GOPID2Level[ 24 ] = 6;
-    GOPID2Level[ 25 ] = 4;
-    GOPID2Level[ 26 ] = 5;
-    GOPID2Level[ 27 ] = 6;
-    GOPID2Level[ 28 ] = 6;
-    GOPID2Level[ 29 ] = 5;
-    GOPID2Level[ 30 ] = 6;
-    GOPID2Level[ 31 ] = 6;
+    static const int init[] = { 1, 2, 3, 4,  5, 6, 6, 6,  6, 6, 4, 5,  6, 6, 5, 6,  6, 3, 4, 5,  6, 6, 5, 6,  6, 4, 5, 6,  6, 5, 6, 6 };
+    std::copy_n( init, 32, GOPID2Level );
   }
 
   encRCSeq = new EncRCSeq;
