@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string>
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END
@@ -438,6 +439,9 @@ typedef struct vvenc_config
 
   int                 m_RCTargetBitrate;
   int                 m_RCNumPasses;
+
+  std::string         m_firstPassRCstats;                                                // first pass stats file name
+  int                 m_RCpass;
 
   vvencSegmentMode    m_SegmentMode;
 

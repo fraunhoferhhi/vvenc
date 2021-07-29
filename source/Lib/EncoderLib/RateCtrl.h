@@ -60,6 +60,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <algorithm>
 #include <list>
 
+#include <fstream>
+
 namespace vvenc {
   struct Picture;
 
@@ -256,9 +258,16 @@ namespace vvenc {
     void initRCGOP (const int numberOfPictures);
     void destroyRCGOP();
 
+    void openRCstatFile( const std::string &fileName );
+    void readFirstPassDataFromFile( const std::string &fileName );
+
     void setRCPass (const int pass, const int maxPass);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
+//    void writeToStatFile( const int poc, const int qp, const double lambda, const uint16_t visActY,
+//                          const uint32_t numBits, const double yPsnr, bool isIntra, int tempLayer );
+    void writeToStatFile( TRCPassStats passStats );
+
     void processFirstPassData (const int secondPassBaseQP);
     void processGops (const int secondPassBaseQP);
     uint64_t getTotalBitsInFirstPass();
@@ -283,6 +292,9 @@ namespace vvenc {
   private:
     std::list<TRCPassStats> m_listRCFirstPassStats;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
+    
+    std::fstream  m_cHandle;
+    void xAddFrameData( std::vector<std::string> strVals );
   };
 }
 #endif
