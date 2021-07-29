@@ -2271,10 +2271,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 0 && c->m_vvencMCTF.MCTF == 0,                        "PerceptQPATempFiltIPic must be turned off when MCTF is off" );
 
   vvenc_confirmParameter(c, c->m_usePerceptQPA && (c->m_cuQpDeltaSubdiv > 2),                                     "MaxCuDQPSubdiv must be 2 or smaller when PerceptQPA is on" );
-  if ( c->m_DecodingRefreshType == 2 )
-  {
-    vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && c->m_IntraPeriod <= c->m_GOPSize ,                                   "Intra period must be larger than GOP size for periodic IDR pictures");
-  }
+
   vvenc_confirmParameter(c, c->m_MaxCodingDepth > vvenc::MAX_CU_DEPTH,                                                      "MaxPartitionDepth exceeds predefined MAX_CU_DEPTH limit");
   vvenc_confirmParameter(c, c->m_MinQT[0] < 1<<vvenc::MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
   vvenc_confirmParameter(c, c->m_MinQT[1] < 1<<vvenc::MIN_CU_LOG2,                                                          "Minimum QT size should be larger than or equal to 4");
