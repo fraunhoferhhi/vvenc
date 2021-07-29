@@ -124,8 +124,8 @@ private:
   void     xSetRCEncCfg        ( int pass );
 
   int      xGetGopIdFromPoc    ( int poc ) const { return m_pocToGopId[ poc % m_cEncCfg.m_GOPSize ]; }
-  int      xGetNextPocICO      ( int poc, bool flush, int max ) const;
-  void     xCreateCodingOrder  ( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList );
+  int      xGetNextPocICO      ( int poc, bool flush, int max, bool altGOP = false ) const;
+  void     xCreateCodingOrder  ( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList, bool altGOP );
   void     xInitPicture        ( Picture& pic, int picNum, const PPS& pps, const SPS& sps, const VPS& vps, const DCI& dci );
   void     xDeletePicBuffer    ();
   Picture* xGetNewPicBuffer    ( const PPS& pps, const SPS& sps );            ///< get picture buffer which will be processed. If ppsId<0, then the ppsMap will be queried for the first match.

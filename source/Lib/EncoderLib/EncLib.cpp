@@ -264,16 +264,19 @@ void EncLib::initPass( int pass )
 
   m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
   m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
+  
+  int gopPOCadj = m_cEncCfg.m_DecodingRefreshType == 3 ? 1 : 0;
+  
   for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
   {
-    const int poc = m_cEncCfg.m_GOPList[ i ].m_POC % m_cEncCfg.m_GOPSize;
+    const int poc = (m_cEncCfg.m_GOPList[ i ].m_POC-gopPOCadj) % m_cEncCfg.m_GOPSize;
     CHECK( m_cEncCfg.m_GOPList[ i ].m_POC > m_cEncCfg.m_GOPSize, "error: poc greater than gop size" );
     CHECK( m_pocToGopId[ poc ] != -1, "error: multiple entries in gop list map to same poc modulo gop size" );
     m_pocToGopId[ poc ] = i;
     const int nextGopNum = ( i + 1 ) / m_cEncCfg.m_GOPSize;
     const int nextGopId  = ( i + 1 ) % m_cEncCfg.m_GOPSize;
-    const int nextPoc    = nextGopNum * m_cEncCfg.m_GOPSize + m_cEncCfg.m_GOPList[ nextGopId ].m_POC;
-    m_nextPocOffset[ poc ] = nextPoc - m_cEncCfg.m_GOPList[ i ].m_POC;
+    const int nextPoc    = nextGopNum * m_cEncCfg.m_GOPSize + m_cEncCfg.m_GOPList[ nextGopId ].m_POC-gopPOCadj;
+    m_nextPocOffset[ poc ] = nextPoc - (m_cEncCfg.m_GOPList[ i ].m_POC-gopPOCadj);
   }
   for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
   {
@@ -509,11 +512,18 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
 
     // update current poc
-    m_pocEncode = ( m_pocEncode < 0 ) ? 0 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd );
+    if( m_cEncCfg.m_DecodingRefreshType == 3 )
+    {
+      m_pocEncode = ( m_pocEncode < 0 ) ? m_cEncCfg.m_GOPSize-1 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, true );
+    }
+    else
+    {
+      m_pocEncode = ( m_pocEncode < 0 ) ? 0 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd );
+    }
     if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.flushPOC < 0) && flush) m_cRateCtrl.flushPOC = m_pocEncode;
 
     std::vector<Picture*> encList;
-    xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList );
+    xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList, m_cEncCfg.m_DecodingRefreshType == 3 );
 
     // create cts / dts
     if( !encList.empty() && encList[0]->ctsValid )
@@ -569,10 +579,10 @@ void  EncLib::printSummary()
 // ====================================================================================================================
 
 
-int EncLib::xGetNextPocICO( int poc, bool flush, int max ) const
+int EncLib::xGetNextPocICO( int poc, bool flush, int max, bool altGOP ) const
 {
   int chk  = 0;
-  int next = ( poc == 0 ) ? m_cEncCfg.m_GOPList[ 0 ].m_POC : poc + m_nextPocOffset[ poc % m_cEncCfg.m_GOPSize ];
+  int next = ( poc == 0 && !altGOP ) ? m_cEncCfg.m_GOPList[ 0 ].m_POC : poc + m_nextPocOffset[ poc % m_cEncCfg.m_GOPSize ];
   if ( flush )
   {
     while( next >= max )
@@ -733,7 +743,7 @@ Picture* EncLib::xGetPictureBuffer( int poc )
   return nullptr;
 }
 
-void EncLib::xCreateCodingOrder( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList )
+void EncLib::xCreateCodingOrder( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList, bool altGOP )
 {
   encList.clear();
   int poc = start;
@@ -751,7 +761,7 @@ void EncLib::xCreateCodingOrder( int start, int max, int numInQueue, bool flush,
     {
       break;
     }
-    poc = xGetNextPocICO( poc, flush, max );
+    poc = xGetNextPocICO( poc, flush, max, altGOP );
   }
   CHECK( encList.size() == 0, "error: no pictures to be encoded found" );
 }
