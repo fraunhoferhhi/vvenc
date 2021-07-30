@@ -566,7 +566,12 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
+#if QTBTT_ADD
+    bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
+    partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
+#else
     partitioner.setMaxMinDepth( minDepth, maxDepth, cs );
+#endif
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );

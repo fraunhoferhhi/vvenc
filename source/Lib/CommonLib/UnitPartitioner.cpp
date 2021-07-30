@@ -164,7 +164,11 @@ void Partitioner::copyState( const Partitioner& other )
 #endif
 }
 
+#if QTBTT_ADD
+void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const
+#else
 void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs ) const
+#endif
 {
   unsigned          stdMinDepth = 0;
   unsigned          stdMaxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, chType );
@@ -226,6 +230,32 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
 
   minDepth = ( minDepth >= 1 ? minDepth - 1 : 0 );
   maxDepth = std::min<unsigned>( stdMaxDepth, maxDepth + 1 );
+
+#if QTBTT_ADD
+  if( refineMinMax )
+  {
+    int minDepthCur = stdMaxDepth;
+    int maxDepthCur = stdMinDepth;
+    int amountN = 0;
+    for (int n = 0; n < 3; n++)
+    {
+      const CodingUnit* cuNeigh = (n==0)?cs.getCURestricted(pos.offset(-1, -1), pos, curSliceIdx, curTileIdx, chType, treeType): (n==1)? cuAbove : cuLeft;
+      if (cuNeigh)
+      {
+        amountN++;
+        minDepthCur = std::min<unsigned>(minDepthCur, cuNeigh->qtDepth);
+        maxDepthCur = std::max<unsigned>(maxDepthCur, cuNeigh->qtDepth);
+      }
+    }
+    if (amountN)
+    {
+      minDepthCur = (minDepthCur >= 1 ? minDepthCur - 1 : 0);
+      maxDepthCur = std::min<unsigned>(stdMaxDepth, maxDepthCur + 1);
+      maxDepth = std::min<unsigned>(maxDepthCur, maxDepth);
+      minDepth = std::max<unsigned>(minDepthCur, minDepth);
+    }
+  }
+#endif
 }
 
 void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, const Slice& slice )
