@@ -236,26 +236,15 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
   {
     int minDepthCur = stdMaxDepth;
     int maxDepthCur = stdMinDepth;
-    int posx = -1;
-    int posy = -1;
     int amountN = 0;
     for (int n = 0; n < 3; n++)
     {
-      const CodingUnit* cuNeigh = cs.getCURestricted(pos.offset(posx, posy), pos, curSliceIdx, curTileIdx, chType, treeType);
+      const CodingUnit* cuNeigh = (n==0)?cs.getCURestricted(pos.offset(-1, -1), pos, curSliceIdx, curTileIdx, chType, treeType): (n==1)? cuAbove : cuLeft;
       if (cuNeigh)
       {
         amountN++;
         minDepthCur = std::min<unsigned>(minDepthCur, cuNeigh->qtDepth);
         maxDepthCur = std::max<unsigned>(maxDepthCur, cuNeigh->qtDepth);
-      }
-      if (n == 0)
-      {
-        posx = 0;
-      }
-      else
-      {
-        posx = -1;
-        posy = 0;
       }
     }
     if (amountN)
