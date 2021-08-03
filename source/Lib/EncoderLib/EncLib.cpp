@@ -487,16 +487,17 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     m_MCTF.assignQpaBufs( pic );
   }
-  int mctfDelay = 0;
   if ( m_cEncCfg.m_vvencMCTF.MCTF )
   {
-    m_MCTF.filter( pic );
-    mctfDelay = m_MCTF.getCurDelay();
+    do
+    {
+      m_MCTF.filter( pic );
+    } while ( flush && m_MCTF.getCurDelay() > 0 );
   }
 
   // encode picture
   if ( m_numPicsInQueue >= m_cEncCfg.m_InputQueueSize
-      || ( m_numPicsInQueue - mctfDelay > 0 && flush ) )
+      || ( m_numPicsInQueue > 0 && flush ) )
   {
     if ( m_cEncCfg.m_RCTargetBitrate > 0 )
     {
