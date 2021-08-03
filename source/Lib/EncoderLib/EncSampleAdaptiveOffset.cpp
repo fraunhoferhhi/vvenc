@@ -276,7 +276,7 @@ void EncSampleAdaptiveOffset::getCtuStatistics( CodingStructure& cs, std::vector
   }
 }
 
-void EncSampleAdaptiveOffset::getStatistics(std::vector<SAOStatData**>& blkStats, PelUnitBuf& orgYuv, PelUnitBuf& srcYuv, CodingStructure& cs, bool isCalculatePreDeblockSamples)
+void EncSampleAdaptiveOffset::getStatistics(std::vector<SAOStatData**>& blkStats, PelUnitBuf& orgYuv, PelUnitBuf& srcYuv, CodingStructure& cs )
 {
   bool isLeftAvail, isRightAvail, isAboveAvail, isBelowAvail, isAboveLeftAvail, isAboveRightAvail;
 
@@ -321,8 +321,7 @@ void EncSampleAdaptiveOffset::getStatistics(std::vector<SAOStatData**>& blkStats
 
         getBlkStats(compID, cs.sps->bitDepths[toChannelType(compID)], blkStats[ctuRsAddr][compID]
                   , srcBlk, orgBlk, srcStride, orgStride, compArea.width, compArea.height
-                  , isLeftAvail,  isRightAvail, isAboveAvail, isBelowAvail, isAboveLeftAvail, isAboveRightAvail
-                  , isCalculatePreDeblockSamples );
+                  , isLeftAvail,  isRightAvail, isAboveAvail, isBelowAvail, isAboveLeftAvail, isAboveRightAvail );
       }
       ctuRsAddr++;
     }
@@ -790,8 +789,7 @@ void EncSampleAdaptiveOffset::deriveModeMergeRDO(const BitDepths &bitDepths, int
 
 void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int channelBitDepth, SAOStatData* statsDataTypes
                         , Pel* srcBlk, Pel* orgBlk, int srcStride, int orgStride, int width, int height
-                        , bool isLeftAvail,  bool isRightAvail, bool isAboveAvail, bool isBelowAvail, bool isAboveLeftAvail, bool isAboveRightAvail
-                        , bool isCalculatePreDeblockSamples )
+                        , bool isLeftAvail,  bool isRightAvail, bool isAboveAvail, bool isBelowAvail, bool isAboveLeftAvail, bool isAboveRightAvail )
 {
   int x,y, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
   int8_t signLeft, signRight, signDown;
@@ -815,13 +813,10 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
       {
         diff +=2;
         count+=2;
-        endY   = (isBelowAvail) ? (height - skipLinesB) : height;
-        startX = (!isCalculatePreDeblockSamples) ? (isLeftAvail  ? 0 : 1)
-                                                 : (isRightAvail ? (width - skipLinesR) : (width - 1))
-                                                 ;
-        endX   = (!isCalculatePreDeblockSamples) ? (isRightAvail ? (width - skipLinesR) : (width - 1))
-                                                 : (isRightAvail ? width : (width - 1))
-                                                 ;
+        endY   =  isBelowAvail ? (height - skipLinesB) : height;
+        startX = (isLeftAvail  ? 0 : 1);
+        endX   = (isRightAvail ? (width - skipLinesR) : (width - 1));
+
         for (y=0; y<endY; y++)
         {
           signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
@@ -837,30 +832,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine  += srcStride;
           orgLine  += orgStride;
         }
-        if(isCalculatePreDeblockSamples)
-        {
-          if(isBelowAvail)
-          {
-            startX = isLeftAvail  ? 0 : 1;
-            endX   = isRightAvail ? width : (width -1);
-
-            for(y=0; y<skipLinesB; y++)
-            {
-              signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
-              for (x=startX; x<endX; x++)
-              {
-                signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
-                edgeType  =  signRight + signLeft;
-                signLeft  = -signRight;
-
-                diff [edgeType] += (orgLine[x] - srcLine[x]);
-                count[edgeType] ++;
-              }
-              srcLine  += srcStride;
-              orgLine  += orgStride;
-            }
-          }
-        }
       }
       break;
     case SAO_TYPE_EO_90:
@@ -869,13 +840,9 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         count+=2;
         int8_t *signUpLine = &m_signLineBuf1[0];
 
-        startX = (!isCalculatePreDeblockSamples) ? 0
-                                                 : (isRightAvail ? (width - skipLinesR) : width)
-                                                 ;
+        startX = 0;
         startY = isAboveAvail ? 0 : 1;
-        endX   = (!isCalculatePreDeblockSamples) ? (isRightAvail ? (width - skipLinesR) : width)
-                                                 : width
-                                                 ;
+        endX   = (isRightAvail ? (width - skipLinesR) : width);
         endY   = isBelowAvail ? (height - skipLinesB) : (height - 1);
         if (!isAboveAvail)
         {
@@ -906,30 +873,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine += srcStride;
           orgLine += orgStride;
         }
-        if(isCalculatePreDeblockSamples)
-        {
-          if(isBelowAvail)
-          {
-            startX = 0;
-            endX   = width;
-
-            for(y=0; y<skipLinesB; y++)
-            {
-              srcLineBelow = srcLine + srcStride;
-              srcLineAbove = srcLine - srcStride;
-
-              for (x=startX; x<endX; x++)
-              {
-                edgeType = sgn(srcLine[x] - srcLineBelow[x]) + sgn(srcLine[x] - srcLineAbove[x]);
-                diff [edgeType] += (orgLine[x] - srcLine[x]);
-                count[edgeType] ++;
-              }
-              srcLine  += srcStride;
-              orgLine  += orgStride;
-            }
-          }
-        }
-
       }
       break;
     case SAO_TYPE_EO_135:
@@ -941,13 +884,9 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         signUpLine  = &m_signLineBuf1[0];
         signDownLine= &m_signLineBuf2[0];
 
-        startX = (!isCalculatePreDeblockSamples) ? (isLeftAvail  ? 0 : 1)
-                                                 : (isRightAvail ? (width - skipLinesR) : (width - 1))
-                                                 ;
+        startX = isLeftAvail  ? 0 : 1;
 
-        endX   = (!isCalculatePreDeblockSamples) ? (isRightAvail ? (width - skipLinesR): (width - 1))
-                                                 : (isRightAvail ? width : (width - 1))
-                                                 ;
+        endX   = isRightAvail ? (width - skipLinesR): (width - 1);
         endY   = isBelowAvail ? (height - skipLinesB) : (height - 1);
 
         //prepare 2nd line's upper sign
@@ -959,8 +898,8 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
 
         //1st line
         Pel* srcLineAbove = srcLine - srcStride;
-        firstLineStartX = (!isCalculatePreDeblockSamples) ? (isAboveLeftAvail ? 0    : 1) : startX;
-        firstLineEndX   = (!isCalculatePreDeblockSamples) ? (isAboveAvail     ? endX : 1) : endX;
+        firstLineStartX = isAboveLeftAvail ? 0    : 1;
+        firstLineEndX   = isAboveAvail     ? endX : 1;
         for(x=firstLineStartX; x<firstLineEndX; x++)
         {
           edgeType = sgn(srcLine[x] - srcLineAbove[x-1]) - signUpLine[x+1];
@@ -994,29 +933,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine += srcStride;
           orgLine += orgStride;
         }
-        if(isCalculatePreDeblockSamples)
-        {
-          if(isBelowAvail)
-          {
-            startX = isLeftAvail  ? 0     : 1 ;
-            endX   = isRightAvail ? width : (width -1);
-
-            for(y=0; y<skipLinesB; y++)
-            {
-              srcLineBelow = srcLine + srcStride;
-              srcLineAbove = srcLine - srcStride;
-
-              for (x=startX; x< endX; x++)
-              {
-                edgeType = sgn(srcLine[x] - srcLineBelow[x+1]) + sgn(srcLine[x] - srcLineAbove[x-1]);
-                diff [edgeType] += (orgLine[x] - srcLine[x]);
-                count[edgeType] ++;
-              }
-              srcLine  += srcStride;
-              orgLine  += orgStride;
-            }
-          }
-        }
       }
       break;
     case SAO_TYPE_EO_45:
@@ -1025,12 +941,8 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         count+=2;
         int8_t *signUpLine = &m_signLineBuf1[1];
 
-        startX = (!isCalculatePreDeblockSamples) ? (isLeftAvail  ? 0 : 1)
-                                                 : (isRightAvail ? (width - skipLinesR) : (width - 1))
-                                                 ;
-        endX   = (!isCalculatePreDeblockSamples) ? (isRightAvail ? (width - skipLinesR) : (width - 1))
-                                                 : (isRightAvail ? width : (width - 1))
-                                                 ;
+        startX = isLeftAvail  ? 0 : 1;
+        endX   = isRightAvail ? (width - skipLinesR) : (width - 1);
         endY   = isBelowAvail ? (height - skipLinesB) : (height - 1);
 
         //prepare 2nd line upper sign
@@ -1043,12 +955,8 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
 
         //first line
         Pel* srcLineAbove = srcLine - srcStride;
-        firstLineStartX = (!isCalculatePreDeblockSamples) ? (isAboveAvail ? startX : endX)
-                                                          : startX
-                                                          ;
-        firstLineEndX   = (!isCalculatePreDeblockSamples) ? ((!isRightAvail && isAboveRightAvail) ? width : endX)
-                                                          : endX
-                                                          ;
+        firstLineStartX = isAboveAvail ? startX : endX;
+        firstLineEndX   = (!isRightAvail && isAboveRightAvail) ? width : endX;
         for(x=firstLineStartX; x<firstLineEndX; x++)
         {
           edgeType = sgn(srcLine[x] - srcLineAbove[x+1]) - signUpLine[x-1];
@@ -1078,40 +986,13 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine  += srcStride;
           orgLine  += orgStride;
         }
-        if(isCalculatePreDeblockSamples)
-        {
-          if(isBelowAvail)
-          {
-            startX = isLeftAvail  ? 0     : 1 ;
-            endX   = isRightAvail ? width : (width -1);
-
-            for(y=0; y<skipLinesB; y++)
-            {
-              srcLineBelow = srcLine + srcStride;
-              srcLineAbove = srcLine - srcStride;
-
-              for (x=startX; x<endX; x++)
-              {
-                edgeType = sgn(srcLine[x] - srcLineBelow[x-1]) + sgn(srcLine[x] - srcLineAbove[x+1]);
-                diff [edgeType] += (orgLine[x] - srcLine[x]);
-                count[edgeType] ++;
-              }
-              srcLine  += srcStride;
-              orgLine  += orgStride;
-            }
-          }
-        }
       }
       break;
     case SAO_TYPE_BO:
       {
-        startX = (!isCalculatePreDeblockSamples)?0
-                                                :( isRightAvail?(width- skipLinesR):width)
-                                                ;
-        endX   = (!isCalculatePreDeblockSamples)?(isRightAvail ? (width - skipLinesR) : width )
-                                                :width
-                                                ;
-        endY = isBelowAvail ? (height- skipLinesB) : height;
+        startX = 0;
+        endX   = isRightAvail ? (width - skipLinesR) : width;
+        endY   = isBelowAvail ? (height- skipLinesB) : height;
         int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
         for (y=0; y< endY; y++)
         {
@@ -1124,28 +1005,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           }
           srcLine += srcStride;
           orgLine += orgStride;
-        }
-        if(isCalculatePreDeblockSamples)
-        {
-          if(isBelowAvail)
-          {
-            startX = 0;
-            endX   = width;
-
-            for(y= 0; y< skipLinesB; y++)
-            {
-              for (x=startX; x< endX; x++)
-              {
-                int bandIdx= srcLine[x] >> shiftBits;
-                diff [bandIdx] += (orgLine[x] - srcLine[x]);
-                count[bandIdx] ++;
-              }
-              srcLine  += srcStride;
-              orgLine  += orgStride;
-
-            }
-
-          }
         }
       }
       break;
