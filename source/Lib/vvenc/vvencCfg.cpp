@@ -2158,7 +2158,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==3), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && c->m_DecodingRefreshType==3 && c->m_GOPSize != c->m_IntraPeriod, "Decoding Refresh Typ Balanced IDR only allowed when gop size and intra period are equal" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
-  if( c->m_DecodingRefreshType == 3 && c->m_framesToBeEncoded < c->m_GOPSize )
+  if( c->m_DecodingRefreshType == 3 && c->m_framesToBeEncoded > 0 && c->m_framesToBeEncoded < c->m_GOPSize )
   {
     c->m_DecodingRefreshType = VVENC_DRT_IDR; //fallback to normal IDR
   }

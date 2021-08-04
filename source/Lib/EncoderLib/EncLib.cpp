@@ -513,14 +513,8 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
 
     // update current poc
-    if( m_cEncCfg.m_DecodingRefreshType == 3 )
-    {
-      m_pocEncode = ( m_pocEncode < 0 ) ? m_cEncCfg.m_GOPSize-1 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, true );
-    }
-    else
-    {
-      m_pocEncode = ( m_pocEncode < 0 ) ? 0 : xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd );
-    }
+    m_pocEncode = xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, m_cEncCfg.m_DecodingRefreshType == 3 );
+    
     if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.flushPOC < 0) && flush) m_cRateCtrl.flushPOC = m_pocEncode;
 
     std::vector<Picture*> encList;
@@ -582,6 +576,10 @@ void  EncLib::printSummary()
 
 int EncLib::xGetNextPocICO( int poc, bool flush, int max, bool altGOP ) const
 {
+  if( poc < 0 )
+  {
+    return altGOP? m_cEncCfg.m_GOPSize-1 : 0;
+  }
   int chk  = 0;
   int next = ( poc == 0 && !altGOP ) ? m_cEncCfg.m_GOPList[ 0 ].m_POC : poc + m_nextPocOffset[ poc % m_cEncCfg.m_GOPSize ];
   if ( flush )
