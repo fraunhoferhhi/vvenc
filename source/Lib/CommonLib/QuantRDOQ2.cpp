@@ -674,23 +674,14 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           continue;
         }
       }
-      else
 #endif
-      if( !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 )
+
+      for( ; iScanPosinCG >= 0; iScanPosinCG--, iScanPos-- )
       {
-        bool allSmaller = true;
-
-        for( int xScanPosinCG = iScanPosinCG, xScanPos = iScanPos; allSmaller && xScanPosinCG >= 0; xScanPosinCG--, xScanPos-- )
+        const uint32_t uiBlkPos = cctx.blockPos( iScanPos );
+        if( abs( plSrcCoeff[uiBlkPos] ) > useThres )
         {
-          const uint32_t uiBlkPos = cctx.blockPos( xScanPos );
-          allSmaller &= abs( plSrcCoeff[uiBlkPos] ) < useThres;
-        }
-
-        if( allSmaller )
-        {
-          iScanPos    -= iScanPosinCG + 1;
-          iScanPosinCG = -1;
-          continue;
+          break;
         }
       }
 
