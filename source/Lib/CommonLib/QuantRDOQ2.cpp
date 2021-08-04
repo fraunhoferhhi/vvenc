@@ -674,7 +674,25 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           continue;
         }
       }
+      else
+#else
+      if( !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 )
+      {
+        bool allSmaller = true;
 
+        for( int xScanPosinCG = iScanPosinCG, xScanPos = iScanPos; allSmaller && xScanPosinCG >= 0; xScanPosinCG--, xScanPos-- )
+        {
+          const uint32_t uiBlkPos = cctx.blockPos( xScanPos );
+          allSmaller &= abs( plSrcCoeff[uiBlkPos] ) < useThres;
+        }
+
+        if( allSmaller )
+        {
+          iScanPos    -= iScanPosinCG + 1;
+          iScanPosinCG = -1;
+          continue;
+        }
+      }
 #endif
     findlast2:
       // Fast loop to find last-pos.
@@ -684,13 +702,13 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         const uint32_t uiBlkPos = cctx.blockPos( iScanPos );
 
         //===== quantization =====
-        if( bUseScalingList )
-        {
-          int quantScale = quantScaleList[uiBlkPos];
-          useThres = thres / ( quantScale << 2 );
-        }
-     
-        if( abs( plSrcCoeff[uiBlkPos] ) > useThres )
+        int quantScale;
+        if( bUseScalingList ){ quantScale = quantScaleList[uiBlkPos]; }
+        else{                  quantScale = defaultQuantScale; }
+        
+        const uint32_t uiMaxAbsLevel = ( abs( plSrcCoeff[uiBlkPos] ) * quantScale + iQOffset ) >> iQBits;
+
+        if( uiMaxAbsLevel )
         {
           iLastScanPos = iScanPos;
           lastSubSetId = subSetId;
