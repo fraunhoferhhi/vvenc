@@ -445,9 +445,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 
   ("bitrate,b",         m_RCTargetBitrate,        "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
   ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2) " )
-  ("statsfile,-sf",     m_firstPassRCstats,       "first pass stats file name" )
-  ("processpass,-pp",   m_RCpass,                 "RC pass to process (-1,0,1)" )
-
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
   ("qpa",               toQPA,                    "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
 
@@ -679,8 +676,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("NumPasses",                                       m_RCNumPasses,                                    "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
-  ("FirstPassStats",                                  m_firstPassRCstats,                               "first pass stats file name" )
-  ("ProcessPass",                                     m_RCpass,                                         "process RC pass (only with two pass RC) -1: both; 0: first pass only; 1: second pass only" )
 
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
   ;

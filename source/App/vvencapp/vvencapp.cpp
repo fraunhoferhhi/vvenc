@@ -255,15 +255,6 @@ int main( int argc, char* argv[] )
   unsigned int uiFrames = 0;
   for( int pass = 0; pass < vvencappCfg.m_RCNumPasses; pass++ )
   {
-    if( vvencappCfg.m_RCNumPasses == 2 && vvencappCfg.m_RCpass != -1 )
-    {
-      if( vvencappCfg.m_RCpass != pass )
-      {
-        msgApp( nullptr, VVENC_INFO, "\n skipping rate control pass: %d\n\n", pass );
-        continue;
-      }
-    }
-    
     // initialize the encoder pass
     iRet = vvenc_init_pass( enc, pass );
     if( 0 != iRet )

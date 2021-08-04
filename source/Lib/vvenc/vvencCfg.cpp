@@ -346,7 +346,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_RCTargetBitrate                         = 0;
   c->m_RCNumPasses                             = -1;
-  c->m_RCpass                                  = -1;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
@@ -2236,10 +2235,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
-
-  vvenc_confirmParameter( c, c->m_RCNumPasses == 2 && (c->m_RCpass < -1 || c->m_RCpass > 1 ), "RCpass out of range [-1..1]" );
-  vvenc_confirmParameter( c, c->m_RCNumPasses == 1 && (c->m_RCpass != -1 ), "RCpass setting only allowed for two pass rate control" );
-  vvenc_confirmParameter( c, c->m_RCNumPasses == 2 && (c->m_RCpass == 0 || c->m_RCpass == 1 ) && c->m_firstPassRCstats.empty(), "RC stats file need to be specified for particular pass" );
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
