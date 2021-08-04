@@ -75,7 +75,6 @@ static const uint32_t MAX_NUM_REF_LIST_ADAPT_SR = 2;
 static const uint32_t MAX_IDX_ADAPT_SR          = MAX_REF_PICS;
 static const uint32_t NUM_MV_PREDICTORS         = 3;
 
-#if MERGE_ENC_OPT
 struct ModeInfo
 {
   uint32_t mergeCand;
@@ -89,7 +88,6 @@ struct ModeInfo
   ModeInfo(const uint32_t mergeCand, const bool isRegularMerge, const bool isMMVD, const bool isCIIP, const bool BioOrDmvr, const bool Affine) :
     mergeCand(mergeCand), isRegularMerge(isRegularMerge), isMMVD(isMMVD), isCIIP(isCIIP), isBioOrDmvr(BioOrDmvr), isAffine(Affine) {}
 };
-#endif
 
 struct BlkUniMvInfo
 {

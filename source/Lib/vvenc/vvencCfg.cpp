@@ -2210,9 +2210,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
   vvenc_confirmParameter( c, c->m_BCW < 0 || c->m_BCW > 2,                     "BCW out of range [0..2]");
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
-#if QTBTT_ADD
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 3,   "QtbttExtraFast out of range [0..3]");
-#endif
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
@@ -2752,11 +2750,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups                          
-#if QTBTT_ADD
       c->m_qtbttSpeedUp                    = 3;
-#else
-      c->m_qtbttSpeedUp                    = 2;
-#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
