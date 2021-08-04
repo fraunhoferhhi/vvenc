@@ -675,7 +675,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         }
       }
       else
-#else
+#endif
       if( !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 )
       {
         bool allSmaller = true;
@@ -693,7 +693,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           continue;
         }
       }
-#endif
+
     findlast2:
       // Fast loop to find last-pos.
       // No need to add distortion to cost as it would be added to both the coded and uncoded cost
