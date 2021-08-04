@@ -361,11 +361,6 @@ void EncLib::xSetRCEncCfg( int pass )
   // set encoder config for rate control first pass
   if( ! m_cRateCtrl.rcIsFinalPass )
   {
-    if( !m_cEncCfg.m_firstPassRCstats.empty() && m_cEncCfg.m_RCpass == pass )
-    {
-      m_cRateCtrl.openRCstatFile( m_cEncCfg.m_firstPassRCstats );
-    }
-
     const double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
 
     // preserve the CTU size, MCTF and IBC settings
@@ -397,11 +392,6 @@ void EncLib::xSetRCEncCfg( int pass )
   }
   else // estimate near-optimal base QP for PPS in second RC pass
   {
-    if( !m_cEncCfg.m_firstPassRCstats.empty() && m_cEncCfg.m_RCpass == pass )
-    {
-      m_cRateCtrl.readFirstPassDataFromFile( m_cEncCfg.m_firstPassRCstats );
-    }
-    
     const unsigned fps = m_cEncCfg.m_FrameRate;
     uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
     std::list<TRCPassStats>& firstPassData = m_cRateCtrl.getFirstPassStats();
@@ -412,7 +402,6 @@ void EncLib::xSetRCEncCfg( int pass )
       sumFrBits += it->numBits;
       sumVisAct += it->visActY;
     }
-    
     if ((firstPassData.size() > 0) && (fps > 0))
     {
       double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);

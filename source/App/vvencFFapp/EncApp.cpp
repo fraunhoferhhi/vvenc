@@ -187,15 +187,6 @@ int EncApp::encode()
   int framesRcvd = 0;
   for( int pass = 0; pass < vvencCfg.m_RCNumPasses; pass++ )
   {
-    if( vvencCfg.m_RCNumPasses == 2 && vvencCfg.m_RCpass != -1 )
-    {
-      if( vvencCfg.m_RCpass != pass )
-      {
-        msgApp( VVENC_INFO, "\n skipping rate control pass: %d\n\n", pass );
-        continue;
-      }
-    }
-
     // open input YUV
     if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
                              m_cEncAppCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false ))

@@ -1139,11 +1139,6 @@ void RateCtrl::destroy()
     m_listRCPictures.pop_front();
     delete p;
   }
-  
-  if( m_cHandle.is_open() )
-  {
-    m_cHandle.close();
-  }
 }
 
 void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize,
@@ -1475,89 +1470,9 @@ void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda,
 {
   if (rcPass < rcMaxPass)
   {
-    if( m_cHandle.is_open() )
-    {
-      writeToStatFile( TRCPassStats( poc, qp, lambda, visActY,
-                                     numBits, psnrY, isIntra, tempLayer ) );
-    }
-    else
-    {
-      m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
-                                                      numBits, psnrY, isIntra, tempLayer ) );
-    }
+    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
+                                                    numBits, psnrY, isIntra, tempLayer ) );
   }
-}
-
-void RateCtrl::writeToStatFile( TRCPassStats passStats )
-{
-  if( rcPass < rcMaxPass && m_cHandle.is_open() )
-  {
-    m_cHandle << passStats.poc << "," << passStats.qp << "," << passStats.lambda << "," << passStats.visActY << ","
-              << passStats.numBits << "," << passStats.psnrY << "," << passStats.isIntra << "," << passStats.tempLayer << "," << flushPOC << "\n";
-  }
-}
-
-void RateCtrl::readFirstPassDataFromFile( const std::string &fileName )
-{
-  m_cHandle.open( fileName.c_str(), std::ios::binary | std::ios::in );
-
-  CHECK( !rcIsFinalPass || m_cHandle.fail(), "something went wrong reading the first pass RC data!" );
-
-  m_listRCFirstPassStats.clear();
-  
-  std::string line, value;
-  std::vector<std::string> values;
-  while( std::getline( m_cHandle, line ) )
-  {
-    size_t start = line.find_first_not_of(" \t\n\r");
-    if( start == std::string::npos || line[start] == '#' )
-    {
-      continue;
-    }
-    
-    std::stringstream s( line );
-    values.clear();
-    while( std::getline(s, value, ',' ) )
-    {
-      values.push_back( value );
-    }
-    xAddFrameData( values );
-  }
-  m_cHandle.close();
-}
-
-void RateCtrl::xAddFrameData( std::vector<std::string> strVals )
-{
-  int poc, qp, tempLayer, flshPoc;
-  double lambda, yPsnr;
-  bool isIntra;
-  uint16_t visActY;
-  uint32_t numBits;
-
-  poc       = std::stoi( strVals[0] );
-  qp        = std::stoi( strVals[1] );
-  lambda    = std::stod( strVals[2] );
-  visActY   = std::stol( strVals[3] );
-  numBits   = std::stol( strVals[4] );
-  yPsnr     = std::stod( strVals[5] );
-  isIntra   = strVals[6] == "1";
-  tempLayer = std::stoi( strVals[7] );
-  flshPoc   = std::stoi( strVals[8] );
-
-  m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
-                                                  numBits, yPsnr, isIntra, tempLayer ) );
-  if( flushPOC < 0 && flshPoc >= 0 )
-  {
-    flushPOC = flshPoc;
-  }
-}
-  
-void RateCtrl::openRCstatFile( const std::string &fileName )
-{
-  CHECK( rcIsFinalPass, "trying to write 1st pass RC data in final pass!" );
-  m_cHandle.open( fileName.c_str(), std::ios::binary | std::ios::out );
-  
-  m_cHandle << "#poc,qp,lambda,visActY,numBits,psnrY,isIntra,tempLayer,flushPOC\n";
 }
 
 static int xCalcHADs8x8_ISlice( const Pel *piOrg, const int iStrideOrg )
