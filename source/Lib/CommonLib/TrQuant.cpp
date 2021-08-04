@@ -241,7 +241,7 @@ void TrQuant::init( const Quant* otherQuant,
                     const bool scalingListsEnabled,
                     const bool bEnc,
                     const bool useTransformSkipFast,
-                    const int  dqThrVal
+                    const int  thrVal
 )
 {
   m_bEnc = bEnc;
@@ -255,7 +255,7 @@ void TrQuant::init( const Quant* otherQuant,
 
   if( m_quant )
   {
-    m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, dqThrVal );
+    m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, thrVal );
   }
 }
 

@@ -697,7 +697,7 @@ typedef struct vvenc_config
 
   vvencMCTF           m_vvencMCTF;
 
-  int                 m_dqThresholdVal;
+  int                 m_quantThresholdVal;
   int                 m_qtbttSpeedUp;
 
   int                 m_fastLocalDualTreeMode;
