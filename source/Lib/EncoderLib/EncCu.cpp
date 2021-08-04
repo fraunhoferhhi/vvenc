@@ -614,9 +614,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   }
 
   m_cInterSearch.resetSavedAffineMotion();
-#if !MERGE_ENC_OPT
-  bool Do_Affine = (m_pcEncCfg->m_Affine > 1) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP) ? false : true;
-#endif
   {
     const ComprCUCtx &cuECtx      = *m_modeCtrl.comprCUCtx;
     const CodingStructure& cs     = *tempCS;
@@ -663,16 +660,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         if ( !slice.isIRAP() && !( cs.area.lwidth() == 4 && cs.area.lheight() == 4 ) && !partitioner.isConsIntra() )
         {
           // add inter modes
-#if !MERGE_ENC_OPT
-          if ((m_pcEncCfg->m_Affine == 1) || (cs.sps->SbtMvp && m_pcEncCfg->m_Affine == 0))
-          {
-            EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
-            if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
-            {
-              xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
-            }
-          }
-#endif
           EncTestMode encTestModeSkip = { ETM_MERGE_SKIP, ETO_STANDARD, qp, lossless };
           if (m_modeCtrl.tryMode(encTestModeSkip, cs, partitioner))
           {
@@ -682,16 +669,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             if (cu)
               cu->mmvdSkip = cu->skip == false ? false : cu->mmvdSkip;
           }
-#if !MERGE_ENC_OPT
-          if (m_pcEncCfg->m_Affine > 1)
-          {
-            EncTestMode encTestModeAffine = { ETM_AFFINE, ETO_STANDARD, qp, lossless };
-            if (m_modeCtrl.tryMode(encTestModeAffine, cs, partitioner) && Do_Affine)
-            {
-              xCheckRDCostAffineMerge(tempCS, bestCS, partitioner, encTestModeAffine);
-            }
-          }
-#endif
           if (m_pcEncCfg->m_Geo && cs.slice->isInterB())
           {
             EncTestMode encTestModeGeo = { ETM_MERGE_GEO, ETO_STANDARD, qp, lossless };
@@ -1530,23 +1507,19 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   tempCS->initStructData( encTestMode.qp );
 
   MergeCtx mergeCtx;
-#if MERGE_ENC_OPT
   bool affineMrgAvail =!((m_pcEncCfg->m_Affine > 1) && (bestCS->slice->TLayer > 3) && (!m_pcEncCfg->m_SbTMVP))
     && (m_pcEncCfg->m_Affine || sps.SbtMvp) && m_pcEncCfg->m_maxNumAffineMergeCand
     && !(bestCS->area.lumaSize().width < 8 || bestCS->area.lumaSize().height < 8);
 
   AffineMergeCtx affineMergeCtx;
   MergeCtx mrgCtx;
-#endif
 
   if (sps.SbtMvp)
   {
     Size bufSize = g_miScaling.scale(tempCS->area.lumaSize());
     mergeCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-#if MERGE_ENC_OPT
     mrgCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
     affineMergeCtx.mrgCtx = &mrgCtx;
-#endif
   }
 
   m_mergeBestSATDCost = MAX_DOUBLE;
@@ -1568,7 +1541,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
     CU::getInterMergeCandidates(cu, mergeCtx, 0 );
     CU::getInterMMVDMergeCandidates(cu, mergeCtx);
-#if MERGE_ENC_OPT
     if (affineMrgAvail)
     {
       cu.regularMergeFlag = false;
@@ -1580,7 +1552,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         affineMrgAvail = false;
       }
     }
-#endif
 
     cu.regularMergeFlag = true;
   }
@@ -1589,19 +1560,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   bool      bestIsSkip = false;
   bool      bestIsMMVDSkip = true;
   unsigned  uiNumMrgSATDCand = mergeCtx.numValidMergeCand + MMVD_ADD_NUM;
-#if !MERGE_ENC_OPT
-  struct ModeInfo
-  {
-    uint32_t mergeCand;
-    bool     isRegularMerge;
-    bool     isMMVD;
-    bool     isCIIP;
-    bool     isBioOrDmvr;
-    ModeInfo() {}
-    ModeInfo(const uint32_t mergeCand, const bool isRegularMerge, const bool isMMVD, const bool isCIIP, const bool BioOrDmvr) :
-      mergeCand(mergeCand), isRegularMerge(isRegularMerge), isMMVD(isMMVD), isCIIP(isCIIP), isBioOrDmvr(BioOrDmvr) {}
-  };
-#endif
 
   static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>  RdModeList;
   const int candNum = mergeCtx.numValidMergeCand + (sps.MMVD ? std::min<int>(MMVD_BASE_MV_NUM, mergeCtx.numValidMergeCand) * MMVD_MAX_REFINE_NUM : 0);
@@ -1610,19 +1568,11 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
   {
     if (i < mergeCtx.numValidMergeCand)
     {
-#if MERGE_ENC_OPT
       RdModeList.push_back(ModeInfo(i, true, false, false, false, false));
-#else
-      RdModeList.push_back(ModeInfo(i, true, false, false, false));
-#endif
     }
     else
     {
-#if MERGE_ENC_OPT
       RdModeList.push_back(ModeInfo(std::min(MMVD_ADD_NUM, i - mergeCtx.numValidMergeCand), false, true, false, false, false));
-#else
-      RdModeList.push_back(ModeInfo(std::min(MMVD_ADD_NUM, i - mergeCtx.numValidMergeCand), false, true, false, false));
-#endif
     }
   }
 
@@ -1653,12 +1603,10 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     }
 
     bestIsMMVDSkip = m_modeCtrl.getBlkInfo(tempCS->area).isMMVDSkip;
-#if MERGE_ENC_OPT
     if (affineMrgAvail)
     {
       bestIsSkip = false;
     }
-#endif
     static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM> candCostList;
     Distortion uiSadBestForQPA = MAX_DISTORTION;
     // 1. Pass: get SATD-cost for selected candidates and reduce their count
@@ -1682,9 +1630,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       cu.predMode     = MODE_INTER;
       cu.chromaQpAdj  = m_cuChromaQpOffsetIdxPlus1;
       cu.qp           = encTestMode.qp;
-#if MERGE_ENC_OPT
       cu.affine       = false;
-#endif
     //cu.emtFlag  is set below
 
       cu.initPuData();
@@ -1742,11 +1688,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         if (uiSadBestForQPA > uiSad) { uiSadBestForQPA = uiSad; }
         double cost = (double)uiSad + (double)fracBits * sqrtLambdaForFirstPassIntra;
         int insertPos = -1;
-#if MERGE_ENC_OPT
         updateCandList(ModeInfo(uiMergeCand, true, false, false, BioOrDmvr, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-#else
-        updateCandList(ModeInfo(uiMergeCand, true, false, false, BioOrDmvr), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-#endif
         m_SortedPelUnitBufs.insert( insertPos, (int)RdModeList.size() );
         if (m_pcEncCfg->m_useFastMrg != 2)
         {
@@ -1834,11 +1776,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
             if (uiSadBestForQPA > sadValue) { uiSadBestForQPA = sadValue; }
             double cost = (double)sadValue + (double)fracBits * sqrtLambdaForFirstPassIntra;
             int insertPos = -1;
-#if MERGE_ENC_OPT
             updateCandList(ModeInfo(mergeCand, false, false, true, false, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-#else
-            updateCandList(ModeInfo(mergeCand, false, false, true, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-#endif
             if( insertPos > -1 )
             {
               m_SortedPelUnitBufs.getTestBuf().copyFrom( testBuf );
@@ -1938,21 +1876,15 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
             }
           }
           int insertPos = -1;
-#if MERGE_ENC_OPT
           updateCandList(ModeInfo(mmvdMergeCand, false, true, false, false, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-#else
-          updateCandList(ModeInfo(mmvdMergeCand, false, true, false, false), cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-#endif
           mmvdCandInserted |= insertPos>-1;
           m_SortedPelUnitBufs.insert(insertPos, (int)RdModeList.size());
         }
       }
-#if MERGE_ENC_OPT
       if (affineMrgAvail)
       {
         mmvdCandInserted |=xCheckSATDCostAffineMerge(tempCS, cu, affineMergeCtx, mrgCtx, m_SortedPelUnitBufs, uiNumMrgSATDCand, RdModeList, candCostList, distParam, ctxStartIntraCtx, merge_ctx_size);
       }
-#endif
       // Try to limit number of candidates using SATD-costs
       uiNumMrgSATDCand = (m_pcEncCfg->m_useFastMrg == 2) ? (unsigned)candCostList.size() : uiNumMrgSATDCand;
       for( uint32_t i = 1; i < uiNumMrgSATDCand; i++ )
@@ -2060,9 +1992,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       cu.predMode     = MODE_INTER;
       cu.chromaQpAdj  = m_cuChromaQpOffsetIdxPlus1;
       cu.qp           = encTestMode.qp;
-#if MERGE_ENC_OPT
       cu.affine       = false;
-#endif
       cu.initPuData();
 
       if (uiNoResidualPass == 0 && RdModeList[uiMrgHADIdx].isCIIP)
@@ -2081,7 +2011,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         cu.ciip             = false;
         mergeCtx.setMmvdMergeCandiInfo(cu, uiMergeCand);
       }
-#if MERGE_ENC_OPT
       else if (RdModeList[uiMrgHADIdx].isAffine)
       {
         // continue;
@@ -2111,7 +2040,6 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
           CU::spanMotionInfo(cu);
         }
       }
-#endif
       else
       {
         cu.mmvdSkip         = false;
@@ -2119,101 +2047,95 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
         cu.ciip             = false;
         mergeCtx.setMergeInfo(cu, uiMergeCand);
       }
-#if MERGE_ENC_OPT
       if (!RdModeList[uiMrgHADIdx].isAffine)
-#endif
-      CU::spanMotionInfo( cu, mergeCtx );
       {
-        if (!cu.affine && cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 && (cu.lwidth() + cu.lheight() == 12)) 
-        { 
-          tempCS->initStructData(encTestMode.qp); 
-          continue; 
-        } 
+        CU::spanMotionInfo( cu, mergeCtx );
+      }
 
-        if( mrgTempBufSet )
+      if (!cu.affine && cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0 && (cu.lwidth() + cu.lheight() == 12))
+      {
+        tempCS->initStructData(encTestMode.qp);
+        continue;
+      }
+
+      if( mrgTempBufSet )
+      {
+        if( CU::checkDMVRCondition( cu ) )
         {
-          if( CU::checkDMVRCondition( cu ) )
+          int num = 0;
+          for( int i = 0; i < ( cu.lheight() ); i += DMVR_SUBCU_SIZE )
           {
-            int num = 0;
-            for( int i = 0; i < ( cu.lheight() ); i += DMVR_SUBCU_SIZE )
+            for( int j = 0; j < ( cu.lwidth() ); j += DMVR_SUBCU_SIZE )
             {
-              for( int j = 0; j < ( cu.lwidth() ); j += DMVR_SUBCU_SIZE )
-              {
-                cu.mvdL0SubPu[num] = m_refinedMvdL0[uiMergeCand][num];
-                num++;
-              }
+              cu.mvdL0SubPu[num] = m_refinedMvdL0[uiMergeCand][num];
+              num++;
             }
           }
-          if (cu.ciip)
-          {
-            PelUnitBuf predBuf = tempCS->getPredBuf();
-            predBuf.copyFrom( *m_SortedPelUnitBufs.getBufFromSortedList( uiMrgHADIdx ));
+        }
+        if (cu.ciip)
+        {
+          PelUnitBuf predBuf = tempCS->getPredBuf();
+          predBuf.copyFrom( *m_SortedPelUnitBufs.getBufFromSortedList( uiMrgHADIdx ));
 
-            if (isChromaEnabled(cu.chromaFormat) && cu.chromaSize().width > 2 )
-            {
-              predBuf.Cb().weightCiip( ciipBuf.Cb(), numCiipIntra);
-              predBuf.Cr().weightCiip( ciipBuf.Cr(), numCiipIntra);
-            }
-          }
-          else
+          if (isChromaEnabled(cu.chromaFormat) && cu.chromaSize().width > 2 )
           {
-            if (RdModeList[uiMrgHADIdx].isMMVD)
-            {
-              cu.mcControl = 0;
-              m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf() );
-            }
-            else if( RdModeList[uiMrgHADIdx].isCIIP )
-            {
-              if( mmvdCandInserted )
-              {
-                cu.mcControl = 0;
-                cu.mvRefine = true;
-                m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf() );
-                cu.mvRefine = false;
-              }
-              else
-              {
-                tempCS->getPredBuf().copyFrom( *globSortedPelBuf[uiMergeCand]);
-              }
-            }
-#if MERGE_ENC_OPT
-            else if (RdModeList[uiMrgHADIdx].isAffine)
-            {
-              PelUnitBuf* sortedListBuf = m_SortedPelUnitBufs.getBufFromSortedList(uiMrgHADIdx);
-
-              if (sortedListBuf)
-              {
-                tempCS->getPredBuf().Y().copyFrom(sortedListBuf->Y());   // Copy Luma Only
-                cu.mcControl = 4;
-                m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf(), REF_PIC_LIST_X);
-                cu.mcControl = 0;
-              }
-              else
-              {
-                m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf());
-              }
-            }
-#endif
-            else
-            {
-              PelUnitBuf* sortedListBuf = m_SortedPelUnitBufs.getBufFromSortedList(uiMrgHADIdx);
-              CHECK(!sortedListBuf, "Buffer failed");
-              tempCS->getPredBuf().copyFrom(*sortedListBuf);
-            }
+            predBuf.Cb().weightCiip( ciipBuf.Cb(), numCiipIntra);
+            predBuf.Cr().weightCiip( ciipBuf.Cr(), numCiipIntra);
           }
         }
         else
         {
-          cu.mvRefine = true;
-          m_cInterSearch.motionCompensation( cu, tempCS->getPredBuf() );
-          cu.mvRefine = false;
+          if (RdModeList[uiMrgHADIdx].isMMVD)
+          {
+            cu.mcControl = 0;
+            m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf() );
+          }
+          else if( RdModeList[uiMrgHADIdx].isCIIP )
+          {
+            if( mmvdCandInserted )
+            {
+              cu.mcControl = 0;
+              cu.mvRefine = true;
+              m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf() );
+              cu.mvRefine = false;
+            }
+            else
+            {
+              tempCS->getPredBuf().copyFrom( *globSortedPelBuf[uiMergeCand]);
+            }
+          }
+          else if (RdModeList[uiMrgHADIdx].isAffine)
+          {
+            PelUnitBuf* sortedListBuf = m_SortedPelUnitBufs.getBufFromSortedList(uiMrgHADIdx);
+
+            if (sortedListBuf)
+            {
+              tempCS->getPredBuf().Y().copyFrom(sortedListBuf->Y());   // Copy Luma Only
+              cu.mcControl = 4;
+              m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf(), REF_PIC_LIST_X);
+              cu.mcControl = 0;
+            }
+            else
+            {
+              m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf());
+            }
+          }
+          else
+          {
+            PelUnitBuf* sortedListBuf = m_SortedPelUnitBufs.getBufFromSortedList(uiMrgHADIdx);
+            CHECK(!sortedListBuf, "Buffer failed");
+            tempCS->getPredBuf().copyFrom(*sortedListBuf);
+          }
         }
       }
-#if MERGE_ENC_OPT
+      else
+      {
+        cu.mvRefine = true;
+        m_cInterSearch.motionCompensation( cu, tempCS->getPredBuf() );
+        cu.mvRefine = false;
+      }
+
       if (!cu.mmvdSkip && !cu.ciip && !cu.affine && uiNoResidualPass != 0)
-#else
-      if (!cu.mmvdSkip && !cu.ciip && uiNoResidualPass != 0)
-#endif
       {
         CHECK(uiMergeCand >= mergeCtx.numValidMergeCand, "out of normal merge");
         isTestSkipMerge[uiMergeCand] = true;
@@ -3957,7 +3879,6 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
   xCheckBestMode  (  tempCS, bestCS, partitioner, cachedMode, m_pcEncCfg->m_EDO );
 }
 
-#if MERGE_ENC_OPT
 bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
   , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size)
 {
@@ -4043,280 +3964,6 @@ bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, 
   cu.affine = false;
   return mmvdCandInserted;
 }
-#else
-void EncCu::xCheckRDCostAffineMerge(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode)
-{
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_INTER_MRG_AFFINE, tempCS, partitioner.chType );
-  if (bestCS->area.lumaSize().width < 8 || bestCS->area.lumaSize().height < 8 || bestCS->sps->maxNumAffineMergeCand == 0 )
-  {
-    return;
-  }
-
-  const Slice &slice = *tempCS->slice;
-
-  CHECK(slice.sliceType == VVENC_I_SLICE, "Affine Merge modes not available for I-slices");
-
-  tempCS->initStructData(encTestMode.qp);
-
-  AffineMergeCtx affineMergeCtx;
-  const SPS &sps = *tempCS->sps;
-
-  m_AFFBestSATDCost = MAX_DOUBLE;
-
-  MergeCtx mrgCtx;
-  if (sps.SbtMvp)
-  {
-    Size bufSize = g_miScaling.scale(tempCS->area.lumaSize());
-    mrgCtx.subPuMvpMiBuf = MotionBuf(m_subPuMiBuf, bufSize);
-    affineMergeCtx.mrgCtx = &mrgCtx;
-  }
-  m_SortedPelUnitBufs.reset();
-
-  {
-    // first get merge candidates
-    CodingUnit cu(tempCS->area);
-    cu.cs       = tempCS;
-    cu.predMode = MODE_INTER;
-    cu.slice    = tempCS->slice;
-    cu.tileIdx  = 0;
-    cu.mmvdSkip = false;
-
-    cu.regularMergeFlag = false;
-    CU::getAffineMergeCand(cu, affineMergeCtx);
-    cu.regularMergeFlag = true;
-
-    if (affineMergeCtx.numValidMergeCand <= 0)
-    {
-      return;
-    }
-  }
-
-  bool candHasNoResidual[AFFINE_MRG_MAX_NUM_CANDS];
-  for (uint32_t ui = 0; ui < affineMergeCtx.numValidMergeCand; ui++)
-  {
-    candHasNoResidual[ui] = false;
-  }
-
-  bool                                        bestIsSkip = false;
-  uint32_t                                    uiNumMrgSATDCand = affineMergeCtx.numValidMergeCand;
-  static_vector<uint32_t, AFFINE_MRG_MAX_NUM_CANDS>  RdModeList;
-
-  for (uint32_t i = 0; i < AFFINE_MRG_MAX_NUM_CANDS; i++)
-  {
-    RdModeList.push_back(i);
-  }
-
-  if (m_pcEncCfg->m_useFastMrg)
-  {
-    uiNumMrgSATDCand = std::min(NUM_AFF_MRG_SATD_CAND, affineMergeCtx.numValidMergeCand);
-    bestIsSkip = m_modeCtrl.getBlkInfo(tempCS->area).isSkip;
-
-    static_vector<double, AFFINE_MRG_MAX_NUM_CANDS> candCostList;
-
-    // 1. Pass: get SATD-cost for selected candidates and reduce their count
-    if (!bestIsSkip)
-    {
-      const UnitArea localUnitArea(tempCS->area.chromaFormat, Area(0, 0, tempCS->area.Y().width, tempCS->area.Y().height));
-      m_SortedPelUnitBufs.prepare(localUnitArea, uiNumMrgSATDCand);
-      RdModeList.clear();
-      const double sqrtLambdaForFirstPass = m_cRdCost.getMotionLambda();
-
-      CodingUnit &cu = tempCS->addCU(tempCS->area, partitioner.chType);
-
-      partitioner.setCUData(cu);
-      cu.slice = tempCS->slice;
-      cu.tileIdx = 0;
-      cu.skip = false;
-      cu.affine = true;
-      cu.predMode = MODE_INTER;
-      cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
-      cu.qp = encTestMode.qp;
-
-      cu.initPuData();
-
-      const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;
-      DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[CH_L], dfunc);
-
-      bool sameMV[MRG_MAX_NUM_CANDS+1] = { false, };
-      if (m_pcEncCfg->m_Affine > 1)
-      {
-        for (int m = 0; m < affineMergeCtx.numValidMergeCand; m++)
-        {
-          if((bestCS->slice->TLayer > 3) && (affineMergeCtx.mergeType[m] != MRG_TYPE_SUBPU_ATMVP))
-          {
-            sameMV[m] = m!=0;
-          }
-          else if (sameMV[m + 1] == false)
-          {
-            for (int n = m + 1; n < affineMergeCtx.numValidMergeCand; n++)
-            {
-              if( (affineMergeCtx.mvFieldNeighbours[(m << 1) + 0]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 0]->mv)
-                  && (affineMergeCtx.mvFieldNeighbours[(m << 1) + 1]->mv == affineMergeCtx.mvFieldNeighbours[(n << 1) + 1]->mv))
-              {
-                sameMV[n] = true;
-              }
-            }
-          }
-        }
-      }
-
-      for (uint32_t uiMergeCand = 0; uiMergeCand < affineMergeCtx.numValidMergeCand; uiMergeCand++)
-      {
-        if ((m_pcEncCfg->m_Affine > 1) && sameMV[uiMergeCand])
-        {
-          continue;
-        }
-
-        // set merge information
-        cu.interDir = affineMergeCtx.interDirNeighbours[uiMergeCand];
-        cu.mergeFlag = true;
-        cu.regularMergeFlag = false;
-        cu.mergeIdx = uiMergeCand;
-        cu.affineType = affineMergeCtx.affineType[uiMergeCand];
-        cu.BcwIdx = affineMergeCtx.BcwIdx[uiMergeCand];
-
-        cu.mergeType = affineMergeCtx.mergeType[uiMergeCand];
-        if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
-        {
-          cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0][0].refIdx;
-          cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1][0].refIdx;
-          CU::spanMotionInfo(cu, mrgCtx);
-        }
-        else
-        {
-          CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0], REF_PIC_LIST_0);
-          CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1], REF_PIC_LIST_1);
-          CU::spanMotionInfo(cu);
-        }
-
-        distParam.cur.buf = m_SortedPelUnitBufs.getTestBuf().Y().buf;
-        cu.mcControl = 2;
-        m_cInterSearch.motionCompensation(cu, m_SortedPelUnitBufs.getTestBuf(), REF_PIC_LIST_X);
-        cu.mcControl = 0;
-
-        Distortion uiSad = distParam.distFunc(distParam);
-        uint32_t   uiBitsCand = uiMergeCand + 1;
-        if (uiMergeCand == tempCS->picHeader->maxNumAffineMergeCand - 1)
-        {
-          uiBitsCand--;
-        }
-        double cost = (double)uiSad + (double)uiBitsCand * sqrtLambdaForFirstPass;
-        int insertPos = -1;
-        updateCandList(uiMergeCand, cost, RdModeList, candCostList, uiNumMrgSATDCand, &insertPos);
-        m_SortedPelUnitBufs.insert(insertPos, (int)RdModeList.size());
-
-        CHECK(std::min(uiMergeCand + 1, uiNumMrgSATDCand) != RdModeList.size(), "");
-      }
-      double ThesholdCost = candCostList.empty() ? 0.0 : (MRG_FAST_RATIO * candCostList[0]);
-      if (m_pcEncCfg->m_Affine > 1)
-      {
-        uiNumMrgSATDCand = int(uiNumMrgSATDCand) > int(candCostList.size()) ? int(candCostList.size()) : int(uiNumMrgSATDCand);
-        ThesholdCost = candCostList[0] + sqrtLambdaForFirstPass;
-      }
-
-      // Try to limit number of candidates using SATD-costs
-      for (uint32_t i = 1; i < uiNumMrgSATDCand; i++)
-      {
-        if(candCostList[i] > ThesholdCost)
-        {
-          uiNumMrgSATDCand = i;
-          break;
-        }
-      }
-
-      tempCS->initStructData(encTestMode.qp);
-      m_AFFBestSATDCost = candCostList.empty() ? 0.0 : candCostList[0];
-    }
-    else
-    {
-      uiNumMrgSATDCand = affineMergeCtx.numValidMergeCand;
-    }
-  }
-
-  uint32_t iteration;
-  uint32_t iterationBegin = 0;
-  if (encTestMode.lossless)
-  {
-    iteration = 1;
-  }
-  else
-  {
-    iteration = 2;
-  }
-  for (uint32_t uiNoResidualPass = iterationBegin; uiNoResidualPass < iteration; ++uiNoResidualPass)
-  {
-    for (uint32_t uiMrgHADIdx = 0; uiMrgHADIdx < uiNumMrgSATDCand; uiMrgHADIdx++)
-    {
-      uint32_t uiMergeCand = RdModeList[uiMrgHADIdx];
-
-      if (((uiNoResidualPass != 0) && candHasNoResidual[uiMergeCand])
-        || ((uiNoResidualPass == 0) && bestIsSkip))
-      {
-        continue;
-      }
-
-      // first get merge candidates
-      CodingUnit &cu = tempCS->addCU(tempCS->area, partitioner.chType);
-
-      partitioner.setCUData(cu);
-      cu.slice = tempCS->slice;
-      cu.tileIdx = 0;
-      cu.skip = false;
-      cu.affine = true;
-      cu.predMode = MODE_INTER;
-      cu.chromaQpAdj = m_cuChromaQpOffsetIdxPlus1;
-      cu.qp = encTestMode.qp;
-      cu.initPuData();
-
-      // set merge information
-      cu.mergeFlag = true;
-      cu.mergeIdx = uiMergeCand;
-      cu.interDir = affineMergeCtx.interDirNeighbours[uiMergeCand];
-      cu.affineType = affineMergeCtx.affineType[uiMergeCand];
-      cu.BcwIdx = affineMergeCtx.BcwIdx[uiMergeCand];
-
-      cu.mergeType = affineMergeCtx.mergeType[uiMergeCand];
-      if (cu.mergeType == MRG_TYPE_SUBPU_ATMVP)
-      {
-        cu.refIdx[0] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0][0].refIdx;
-        cu.refIdx[1] = affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1][0].refIdx;
-        CU::spanMotionInfo(cu, mrgCtx);
-      }
-      else
-      {
-        CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 0], REF_PIC_LIST_0);
-        CU::setAllAffineMvField(cu, affineMergeCtx.mvFieldNeighbours[(uiMergeCand << 1) + 1], REF_PIC_LIST_1);
-
-        CU::spanMotionInfo(cu);
-      }
-
-      PelUnitBuf* sortedListBuf = m_SortedPelUnitBufs.getBufFromSortedList(uiMrgHADIdx);
-
-      if (sortedListBuf)
-      {
-        tempCS->getPredBuf().Y().copyFrom( sortedListBuf->Y() );   // Copy Luma Only
-        cu.mcControl = 4;
-        m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf(), REF_PIC_LIST_X);
-        cu.mcControl = 0;
-      }
-      else
-      {
-        m_cInterSearch.motionCompensation(cu, tempCS->getPredBuf());
-      }
-
-      xEncodeInterResidual(tempCS, bestCS, partitioner, encTestMode, uiNoResidualPass, (uiNoResidualPass == 0 ? &candHasNoResidual[uiMergeCand] : NULL));
-
-      if (m_pcEncCfg->m_useFastDecisionForMerge && !bestIsSkip && !bestCS->cus.empty())
-      {
-        bestIsSkip = bestCS->getCU(partitioner.chType, partitioner.treeType)->rootCbf == 0;
-      }
-      tempCS->initStructData(encTestMode.qp);
-    }// end loop uiMrgHADIdx
-  }
-  STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
-  STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
-}
-#endif
 
 uint64_t EncCu::xCalcPuMeBits(const CodingUnit& cu)
 {

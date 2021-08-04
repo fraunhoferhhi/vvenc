@@ -164,11 +164,7 @@ void Partitioner::copyState( const Partitioner& other )
 #endif
 }
 
-#if QTBTT_ADD
 void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const
-#else
-void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs ) const
-#endif
 {
   unsigned          stdMinDepth = 0;
   unsigned          stdMaxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, chType );
@@ -231,7 +227,6 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
   minDepth = ( minDepth >= 1 ? minDepth - 1 : 0 );
   maxDepth = std::min<unsigned>( stdMaxDepth, maxDepth + 1 );
 
-#if QTBTT_ADD
   if( refineMinMax )
   {
     int minDepthCur = stdMaxDepth;
@@ -255,7 +250,6 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
       minDepth = std::max<unsigned>(minDepthCur, minDepth);
     }
   }
-#endif
 }
 
 void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, const Slice& slice )
