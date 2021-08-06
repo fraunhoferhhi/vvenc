@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.0.0
+tag 1.1.0
 
 * libvvenc:
   - mostly about faster/fast speedups, minor improvements to other presets
@@ -8,12 +8,11 @@ tag 1.0.0
   - added parameters: m_FIMMode, m_bIntegerET, (m_vvencMCTF.)MCTFSpeed, m_alfSpeed, m_IntraEstDecBit, m_BCW, m_motionEstimationSearchMethodSCC
   - removed parameters: m_useEarlySkipDetection
   - SCC coding: using alternative ME strategy, disabling LMCS
-  - memory reduction (storing coeffs as 16bit, single storage for displacement/affine motion models, move objects rather than copy during search)
+  - memory reduction (storing coeffs as 16bit, single storage for displacement/affine motion models, move objects rather than copy during search, garbage collection)
   - removed dynamic memory from partitioner
   - SIMD search for last coeff in DQ=0 RDOQ=2
   - combined regular and affine merge search into a single function
   - optimized motion search
-  - periodically cleaning-up small memory allocations on linux
   - RC cleanup
   - various cleanups
   
