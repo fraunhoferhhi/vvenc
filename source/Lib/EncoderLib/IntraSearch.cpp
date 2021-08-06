@@ -2678,15 +2678,15 @@ void IntraSearch::xReduceHadCandList(static_vector<T, N>& candModeList, static_v
 
 void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *predBuf, const ComponentID& compID)
 {
-  CodingStructure&   cs          = *tu.cs;
-  const CompArea& area = tu.blocks[compID];
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
-  PelBuf piPred = cs.getPredBuf(area);
-  PelBuf piResi = cs.getResiBuf(area);
-
-  const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
   if (compID == COMP_Y)
   {
+    CodingStructure&  cs = *tu.cs;
+    const CompArea& area = tu.blocks[compID];
+    const ReshapeData& reshapeData = cs.picture->reshapeData;
+    const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
+    PelBuf piPred = cs.getPredBuf(area);
+    PelBuf piResi = cs.getResiBuf(area);
+
     initIntraPatternChType(*tu.cu, area);
     if (predBuf)
     {
@@ -2701,11 +2701,8 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
     {
       predIntraAng(COMP_Y, piPred, cu);
     }
-  }
 
-  //===== get residual signal =====
-  if (isLuma(compID))
-  {
+    //===== get residual signal =====
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
       piResi.subtract(cs.getRspOrgBuf(), piPred);
@@ -2715,15 +2712,13 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
       CPelBuf piOrg = cs.getOrgBuf(COMP_Y);
       piResi.subtract(piOrg, piPred);
     }
+    m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, compID);
   }
-
-  if (isChroma(compID))
+  else
   {
     ComponentID codeCompId = (tu.jointCbCr ? (tu.jointCbCr >> 1 ? COMP_Cb : COMP_Cr) : compID);
     m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, codeCompId);
   }
-  else
-    m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, compID);
 }
 
 double IntraSearch::xTestISP(CodingStructure& cs, Partitioner& subTuPartitioner, double bestCostForISP, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx)
