@@ -683,7 +683,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         for( int xScanPosinCG = iScanPosinCG, xScanPos = iScanPos; allSmaller && xScanPosinCG >= 0; xScanPosinCG--, xScanPos-- )
         {
           const uint32_t uiBlkPos = cctx.blockPos( xScanPos );
-          allSmaller &= abs( plSrcCoeff[uiBlkPos] ) < useThres;
+          allSmaller &= abs( plSrcCoeff[uiBlkPos] ) <= useThres;
         }
 
         if( allSmaller )
