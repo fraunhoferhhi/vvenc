@@ -4,6 +4,7 @@ tag 1.1.0
 * libvvenc:
   - mostly about faster/fast speedups, minor improvements to other presets
   - redefined the presets
+  - improved RC rate accuracy
   - added tool: BCW
   - added parameters: m_FIMMode, m_bIntegerET, (m_vvencMCTF.)MCTFSpeed, m_alfSpeed, m_IntraEstDecBit, m_BCW, m_motionEstimationSearchMethodSCC
   - removed parameters: m_useEarlySkipDetection
