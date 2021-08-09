@@ -2693,16 +2693,22 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               *cov++ += sum;
             }
 
-            alfCovariance[classIdx].y[0][k] += Elocalk0 * yLocal0;
-            alfCovariance[classIdx].y[0][k] += Elocalk1 * yLocal1;
-            alfCovariance[classIdx].y[0][k] += Elocalk2 * yLocal2;
-            alfCovariance[classIdx].y[0][k] += Elocalk3 * yLocal3;
+            int
+            sum  = Elocalk0* yLocal0;
+            sum += Elocalk1* yLocal1;
+            sum += Elocalk2* yLocal2;
+            sum += Elocalk3* yLocal3;
+
+            alfCovariance[classIdx].y[0][k] += sum;
           }
 
-          alfCovariance[classIdx].pixAcc += yLocal0 * yLocal0;
-          alfCovariance[classIdx].pixAcc += yLocal1 * yLocal1;
-          alfCovariance[classIdx].pixAcc += yLocal2 * yLocal2;
-          alfCovariance[classIdx].pixAcc += yLocal3 * yLocal3;
+          int
+          sum  = yLocal0 * yLocal0;
+          sum += yLocal1 * yLocal1;
+          sum += yLocal2 * yLocal2;
+          sum += yLocal3 * yLocal3;
+
+          alfCovariance[classIdx].pixAcc += sum;
         }
 
         alfCovariance[classIdx].all0 = false;
