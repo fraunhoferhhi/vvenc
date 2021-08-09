@@ -2704,6 +2704,8 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
           alfCovariance[classIdx].pixAcc += yLocal2 * yLocal2;
           alfCovariance[classIdx].pixAcc += yLocal3 * yLocal3;
         }
+
+        alfCovariance[classIdx].all0 = false;
       }
     }
     else
@@ -2819,6 +2821,8 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
           alfCovariance[classIdx].pixAcc += yLocal * yLocal;
         }
+
+        alfCovariance[classIdx].all0 = 0;
       }
     }
     org += orgStride;
@@ -3408,7 +3412,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
               {
                 // fixed filter set
                 int filterIdx = m_classToFilterMapping[filterSetIdx][classIdx];
-                if( m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].pixAcc != 0.0 )
+
+                if( !m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].all0 )
                   dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
                                  : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
@@ -3439,7 +3444,8 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                   m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                   m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                 }
-                if( m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].pixAcc != 0.0 )
+
+                if( !m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].all0 )
                   dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
                                  : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
