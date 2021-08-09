@@ -2822,7 +2822,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
           alfCovariance[classIdx].pixAcc += yLocal * yLocal;
         }
 
-        alfCovariance[classIdx].all0 = 0;
+        alfCovariance[classIdx].all0 = false;
       }
     }
     org += orgStride;
