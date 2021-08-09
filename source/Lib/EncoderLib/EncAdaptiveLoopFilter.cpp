@@ -2694,10 +2694,10 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             }
 
             int
-            sum  = Elocalk0* yLocal0;
-            sum += Elocalk1* yLocal1;
-            sum += Elocalk2* yLocal2;
-            sum += Elocalk3* yLocal3;
+            sum  = Elocalk0 * yLocal0;
+            sum += Elocalk1 * yLocal1;
+            sum += Elocalk2 * yLocal2;
+            sum += Elocalk3 * yLocal3;
 
             alfCovariance[classIdx].y[0][k] += sum;
           }
