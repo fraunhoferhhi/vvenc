@@ -77,8 +77,6 @@ namespace vvenc {
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
 
-#define ALF_BITEQUAL_VTM                                  0 // for single threaded operation, ALF can run bitequal to VTM if this options is enabled (will be slower)
-
 // ====================================================================================================================
 // General settings
 // ====================================================================================================================
