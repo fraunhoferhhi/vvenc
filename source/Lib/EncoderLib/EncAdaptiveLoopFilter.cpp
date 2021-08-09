@@ -4625,7 +4625,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
             for( int l = k; l < ( shape.numCoeff - 1); l++ )
             {
-              int
+              double
               sum   = weight0 * Elocalk0 * *Elocall0++;
               sum  += weight1 * Elocalk1 * *Elocall1++;
               sum  += weight2 * Elocalk2 * *Elocall2++;
