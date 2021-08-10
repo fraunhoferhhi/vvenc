@@ -162,11 +162,6 @@ void addWeightedAvgCore( const T* src1, int src1Stride, const T* src2, int src2S
 template<typename T>
 void subsCore( const T* src0, int src0Stride, const T* src1, int src1Stride, T* dest, int destStride, int width, int height )
 {
-  CHECKD( width  != minuend.width,     "Incompatible size" );
-  CHECKD( height != minuend.height,    "Incompatible size" );
-  CHECKD( width  != subtrahend.width,  "Incompatible size");
-  CHECKD( height != subtrahend.height, "Incompatible size");
-
 #define SUBS_INC                \
   dest += destStride;  \
   src0 += src0Stride;  \
