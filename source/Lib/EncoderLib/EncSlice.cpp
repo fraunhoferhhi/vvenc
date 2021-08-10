@@ -132,7 +132,6 @@ EncSlice::EncSlice()
   , m_pcRateCtrl         ( nullptr )
   , m_CABACWriter        ( m_BinEncoder )
   , m_encCABACTableIdx   ( VVENC_I_SLICE )
-  , m_appliedSwitchDQQ   ( 0 )
 {
 }
 
@@ -207,8 +206,6 @@ void EncSlice::init( const VVEncCfg& encCfg,
     }
   }
 
-  m_appliedSwitchDQQ = 0;
-
   const int sizeInCtus = pps.pcv->sizeInCtus;
   m_processStates = std::vector<ProcessCtuState>( sizeInCtus );
   m_saoReconParams.resize( sizeInCtus );
@@ -275,11 +272,13 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   double dLambda = xCalculateLambda( slice, gopId, slice->depth, dQP, dQP, iQP );
   int sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] };
 
+  slice->pic->picVisActY = 0.0; // to allow reusing calculated luma visual activity for rate control
+
   if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA &&
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {
     adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
-                                                            sliceChromaQpOffsetIntraOrPeriodic ); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
+                                                            sliceChromaQpOffsetIntraOrPeriodic, &slice->pic->picVisActY); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
   }
   if (m_pcEncCfg->m_usePerceptQPA)
   {
@@ -382,7 +381,7 @@ void EncSlice::resetQP( Picture* pic, int sliceQP, double& lambda )
   slice->sliceQp = sliceQP;
   for( auto& lineRsc : m_LineEncRsrc )
   {
-    lineRsc->m_encCu.setUpLambda( *slice, lambda, sliceQP, true, true, true );
+    lineRsc->m_encCu.setUpLambda( *slice, lambda, sliceQP, true, true );
   }
 }
 
@@ -398,14 +397,7 @@ int EncSlice::xGetQPForPicture( const Slice* slice, unsigned gopId )
   else
   {
     const SliceType sliceType = slice->sliceType;
-
-    qp = m_pcEncCfg->m_QP;
-    // switch at specific qp and keep this qp offset
-    if( slice->poc == m_pcEncCfg->m_switchPOC )
-    {
-      m_appliedSwitchDQQ = m_pcEncCfg->m_switchDQP;
-    }
-    qp += m_appliedSwitchDQQ;
+    qp = slice->pic->seqBaseQp;
 
     if( sliceType == VVENC_I_SLICE )
     {
@@ -1062,7 +1054,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->alfEnabled )
         {
           encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas() );
-          encSlice->m_pALF->reconstructCoeffAPSs( cs, true, cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr], false );
+          encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->tileGroupAlfEnabled[COMP_Y], cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr], false );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_derive );

@@ -99,7 +99,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   pic.cs->createTempBuffers( true );
   pic.cs->initStructData( MAX_INT, false, nullptr, true );
 
-  if( m_pcEncCfg->m_lumaReshapeEnable && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
+  if( pic.useScLMCS && m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_PQ && m_pcEncCfg->m_alf )
   {
     const double *weights = gopEncoder.getReshaper().getlumaLevelToWeightPLUT();
     auto& vec = m_ALF.getLumaLevelWeightTable();
@@ -110,13 +110,17 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
 
     m_ALF.setAlfWSSD( 1 );
   }
+  else
+  {
+    m_ALF.setAlfWSSD( 0 );
+  }
 
   // compress picture
   xInitPicEncoder ( pic );
   if( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
     pic.encRCPic = new EncRCPic;
-    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, pic.slices[0]->isIRAP() ? 0 : m_pcRateCtrl->encRCSeq->gopID2Level[pic.gopId], pic.slices[0]->poc, pic.rcIdxInGop, m_pcRateCtrl->m_listRCPictures );
+    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, (pic.slices[0]->isIntra() ? 0 : pic.slices[0]->TLayer + 1), pic.slices[0]->poc, pic.rcIdxInGop, m_pcRateCtrl->m_listRCPictures );
     gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], this );
   }
 

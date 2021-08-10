@@ -57,7 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-typedef std::vector<UnitArea> Partitioning;
+typedef UnitArea* Partitioning;
 
 //////////////////////////////////////////////////////////////////////////
 // PartManager class - manages the partitioning tree
@@ -100,6 +100,7 @@ struct PartLevel
 {
   PartSplit    split;
   Partitioning parts;
+  unsigned     numParts;
   unsigned     idx;
   bool         checkdIfImplicit;
   bool         isImplicit;
@@ -111,8 +112,7 @@ struct PartLevel
   int          modeType;
 
   PartLevel();
-  PartLevel( const PartSplit _split, const Partitioning&  _parts );
-  PartLevel( const PartSplit _split,       Partitioning&& _parts );
+  PartLevel( const PartSplit _split, const Partitioning  _parts );
   void init();
 };
 
@@ -126,6 +126,9 @@ protected:
 #if _DEBUG
   UnitArea          m_currArea;
 #endif
+  static const size_t partBufSize = 128;
+  UnitArea          m_partBuf[partBufSize];
+  ptrdiff_t         m_partBufIdx;
 
 public:
   unsigned currDepth;
@@ -178,7 +181,7 @@ public:
   bool isConsInter                        () { return modeType == MODE_TYPE_INTER; }
   bool isConsIntra                        () { return modeType == MODE_TYPE_INTRA; }
 
-  void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs ) const;
+  void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -187,10 +190,10 @@ public:
 
 namespace PartitionerImpl
 {
-  void getCUSubPartitions     ( Partitioning &sub, const UnitArea& cuArea,  const CodingStructure &cs, const PartSplit splitType = CU_QUAD_SPLIT );
-  void getMaxTuTiling         ( Partitioning &sub, const UnitArea& curArea, const CodingStructure &cs );
-  void getTUIntraSubPartitions( Partitioning &sub, const UnitArea& tuArea,  const CodingStructure &cs, const PartSplit splitType, const TreeType treeType);
-  void getSbtTuTiling         ( Partitioning &sub, const UnitArea& curArea, const CodingStructure &cs, const PartSplit splitType );
+  int getCUSubPartitions     ( Partitioning &sub, const UnitArea& cuArea,  const CodingStructure &cs, const PartSplit splitType = CU_QUAD_SPLIT );
+  int getMaxTuTiling         ( Partitioning &sub, const UnitArea& curArea, const CodingStructure &cs );
+  int getTUIntraSubPartitions( Partitioning &sub, const UnitArea& tuArea,  const CodingStructure &cs, const PartSplit splitType, const TreeType treeType);
+  int getSbtTuTiling         ( Partitioning &sub, const UnitArea& curArea, const CodingStructure &cs, const PartSplit splitType );
 };
 
 } // namespace vvenc

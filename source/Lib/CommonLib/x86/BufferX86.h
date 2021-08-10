@@ -938,6 +938,119 @@ void addAvg_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, int s
   }
 }
 
+
+template< X86_VEXT vext, int W >
+void addWghtAvg_SSE( const int16_t* src0, int src0Stride, const int16_t* src1, int src1Stride, int16_t *dst, int dstStride, int width, int height, unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+  if( W == 8 )
+  {
+#if USE_AVX2
+    if( ( width & 15 ) == 0 && vext >= AVX2 )
+    {
+      __m256i voffset  = _mm256_set1_epi32( offset );
+      __m256i vibdimin = _mm256_set1_epi16( clpRng.min );
+      __m256i vibdimax = _mm256_set1_epi16( clpRng.max );
+      __m256i vw       = _mm256_unpacklo_epi16( _mm256_set1_epi16( w0 ), _mm256_set1_epi16( w1 ) );
+
+      for( int row = 0; row < height; row++ )
+      {
+        for( int col = 0; col < width; col += 16 )
+        {
+          __m256i vsrc0 = _mm256_loadu_si256( ( const __m256i * )&src0[col] );
+          __m256i vsrc1 = _mm256_loadu_si256( ( const __m256i * )&src1[col] );
+
+          __m256i vtmp, vsum;
+          vsum = _mm256_madd_epi16       ( vw, _mm256_unpacklo_epi16( vsrc0, vsrc1 ) );
+          vsum = _mm256_add_epi32        ( vsum, voffset );
+          vtmp = _mm256_srai_epi32       ( vsum, shift );
+        
+          vsum = _mm256_madd_epi16       ( vw, _mm256_unpackhi_epi16( vsrc0, vsrc1 ) );
+          vsum = _mm256_add_epi32        ( vsum, voffset );
+          vsum = _mm256_srai_epi32       ( vsum, shift );
+          vsum = _mm256_packs_epi32      ( vtmp, vsum );
+
+          vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsum ) );
+          _mm256_storeu_si256( ( __m256i * )&dst[col], vsum );
+        }
+
+        src0 += src0Stride;
+        src1 += src1Stride;
+        dst  +=  dstStride;
+      }
+    }
+    else
+#endif
+    {
+      __m128i voffset  = _mm_set1_epi32( offset );
+      __m128i vibdimin = _mm_set1_epi16( clpRng.min );
+      __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+      __m128i vw       = _mm_unpacklo_epi16( _mm_set1_epi16( w0 ), _mm_set1_epi16( w1 ) );
+
+      for( int row = 0; row < height; row++ )
+      {
+        for( int col = 0; col < width; col += 8 )
+        {
+          __m128i vsrc0 = _mm_loadu_si128( ( const __m128i * )&src0[col] );
+          __m128i vsrc1 = _mm_loadu_si128( ( const __m128i * )&src1[col] );
+
+          __m128i vtmp, vsum;
+          vsum = _mm_madd_epi16       ( vw, _mm_unpacklo_epi16( vsrc0, vsrc1 ) );
+          vsum = _mm_add_epi32        ( vsum, voffset );
+          vtmp = _mm_srai_epi32       ( vsum, shift );
+        
+          vsum = _mm_madd_epi16       ( vw, _mm_unpackhi_epi16( vsrc0, vsrc1 ) );
+          vsum = _mm_add_epi32        ( vsum, voffset );
+          vsum = _mm_srai_epi32       ( vsum, shift );
+          vsum = _mm_packs_epi32      ( vtmp, vsum );
+
+          vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
+          _mm_storeu_si128( ( __m128i * )&dst[col], vsum );
+        }
+
+        src0 += src0Stride;
+        src1 += src1Stride;
+        dst  +=  dstStride;
+      }
+    }
+  }
+  else if( W == 4 )
+  {
+    __m128i vzero     = _mm_setzero_si128();
+    __m128i voffset   = _mm_set1_epi32( offset );
+    __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
+    __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+    __m128i vw        = _mm_unpacklo_epi16( _mm_set1_epi16( w0 ), _mm_set1_epi16( w1 ) );
+
+    for( int row = 0; row < height; row++ )
+    {
+      for( int col = 0; col < width; col += 4 )
+      {
+        __m128i vsum = _mm_loadl_epi64  ( ( const __m128i * )&src0[col] );
+        __m128i vdst = _mm_loadl_epi64  ( ( const __m128i * )&src1[col] );
+        vsum = _mm_madd_epi16           ( vw, _mm_unpacklo_epi16( vsum, vdst ) );
+        vsum = _mm_add_epi32            ( vsum, voffset );
+        vsum = _mm_srai_epi32           ( vsum, shift );
+        vsum = _mm_packs_epi32          ( vsum, vzero );
+
+        vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
+        _mm_storel_epi64( ( __m128i * )&dst[col], vsum );
+      }
+
+      src0 += src0Stride;
+      src1 += src1Stride;
+      dst  +=  dstStride;
+    }
+  }
+  else
+  {
+    THROW( "Unsupported size" );
+  }
+#if USE_AVX2
+
+  _mm256_zeroupper();
+#endif
+}
+
 template< X86_VEXT vext >
 void roundIntVector_SIMD(int* v, int size, unsigned int nShift, const int dmvLimit)
 {
@@ -1681,8 +1794,11 @@ void PelBufferOps::_initPelBufOpsX86()
 #if ENABLE_SIMD_OPT_BCW
   removeHighFreq8 = removeHighFreq_SSE<vext, 8>;
   removeHighFreq4 = removeHighFreq_SSE<vext, 4>;
-#endif
 
+  wghtAvg4 = addWghtAvg_SSE<vext, 4>;
+  wghtAvg8 = addWghtAvg_SSE<vext, 8>;
+
+#endif
   transpose4x4   = transposeNxN_SSE<vext, 4>;
   transpose8x8   = transposeNxN_SSE<vext, 8>;
   roundIntVector = roundIntVector_SIMD<vext>;

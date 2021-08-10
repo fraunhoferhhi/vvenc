@@ -454,12 +454,15 @@ int callingOrderRegular()
     return -1;
   }
 
-  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
-  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
+  while( ! encodeDone )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+    if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
   }
 
   if( !encodeDone )
@@ -640,11 +643,14 @@ int callingOrderRegularInit2Pass()
     return -1;
   }
 
-  if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+  while( ! encodeDone )
   {
-    vvenc_YUVBuffer_free( pcYuvPicture, true );
-    vvenc_accessUnit_free( AU, true );
-    return -1;
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
   }
 
   if( 0 != vvenc_init_pass( enc, 1 ) )
@@ -660,6 +666,17 @@ int callingOrderRegularInit2Pass()
     vvenc_accessUnit_free( AU, true );
     return -1;
   }
+
+  while( ! encodeDone )
+  {
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+  }
+
   if( 0 != vvenc_encoder_close( enc ))
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );

@@ -115,14 +115,14 @@ public:
   void            decimateNumCtxBins(int n) { m_remainingContextBins -= n; }
   void            increaseNumCtxBins(int n) { m_remainingContextBins += n; }
 
-  unsigned sigCtxIdAbs( int scanPos, const TCoeff* coeff, const int state )
+  unsigned sigCtxIdAbs( int scanPos, const TCoeffSig* coeff, const int state )
   {
-    const uint32_t posY      = m_scan[scanPos].y;
-    const uint32_t posX      = m_scan[scanPos].x;
-    const TCoeff* pData     = coeff + posX + posY * m_width;
-    const int     diag      = posX + posY;
-    int           numPos    = 0;
-    int           sumAbs    = 0;
+    const uint32_t   posY      = m_scan[scanPos].y;
+    const uint32_t   posX      = m_scan[scanPos].x;
+    const TCoeffSig* pData     = coeff + posX + posY * m_width;
+    const int        diag      = posX + posY;
+    int              numPos    = 0;
+    int              sumAbs    = 0;
 #define UPDATE(x) {int a=abs(x);sumAbs+=std::min(4+(a&1),a);numPos+=!!a;}
     if( posX < m_width-1 )
     {
@@ -173,12 +173,13 @@ public:
   unsigned parityCtxIdAbs   ( uint8_t offset )  const { return m_parFlagCtxSet   ( offset ); }
   unsigned greater1CtxIdAbs ( uint8_t offset )  const { return m_gtxFlagCtxSet[1]( offset ); }
   unsigned greater2CtxIdAbs ( uint8_t offset )  const { return m_gtxFlagCtxSet[0]( offset ); }
-  unsigned templateAbsSum( int scanPos, const TCoeff* coeff, int baseLevel )
+
+  unsigned templateAbsSum( int scanPos, const TCoeffSig* coeff, int baseLevel )
   {
-    const uint32_t  posY  = m_scan[scanPos].y;
-    const uint32_t  posX  = m_scan[scanPos].x;
-    const TCoeff*   pData = coeff + posX + posY * m_width;
-    int             sum   = 0;
+    const uint32_t   posY = m_scan[scanPos].y;
+    const uint32_t   posX = m_scan[scanPos].x;
+    const TCoeffSig* pData = coeff + posX + posY * m_width;
+    int              sum   = 0;
     if (posX < m_width - 1)
     {
       sum += abs(pData[1]);
@@ -202,12 +203,12 @@ public:
     return std::max(std::min(sum - 5 * baseLevel, 31), 0);
   }
 
-  unsigned sigCtxIdAbsTS( int scanPos, const TCoeff* coeff )
+  unsigned sigCtxIdAbsTS( int scanPos, const TCoeffSig* coeff )
   {
-    const uint32_t  posY   = m_scan[scanPos].y;
-    const uint32_t  posX   = m_scan[scanPos].x;
-    const TCoeff*   posC   = coeff + posX + posY * m_width;
-    int             numPos = 0;
+    const uint32_t   posY   = m_scan[scanPos].y;
+    const uint32_t   posX   = m_scan[scanPos].x;
+    const TCoeffSig* posC   = coeff + posX + posY * m_width;
+    int              numPos = 0;
 #define UPDATE(x) {int a=abs(x);numPos+=!!a;}
     if( posX > 0 )
     {
@@ -225,11 +226,11 @@ public:
   unsigned parityCtxIdAbsTS   ()                  const { return m_tsParFlagCtxSet(      0 ); }
   unsigned greaterXCtxIdAbsTS ( uint8_t offset )  const { return m_tsGtxFlagCtxSet( offset ); }
 
-  unsigned lrg1CtxIdAbsTS(int scanPos, const TCoeff* coeff, int bdpcm)
+  unsigned lrg1CtxIdAbsTS(int scanPos, const TCoeffSig* coeff, int bdpcm)
   {
-    const uint32_t  posY = m_scan[scanPos].y;
-    const uint32_t  posX = m_scan[scanPos].x;
-    const TCoeff*   posC = coeff + posX + posY * m_width;
+    const uint32_t   posY = m_scan[scanPos].y;
+    const uint32_t   posX = m_scan[scanPos].x;
+    const TCoeffSig* posC = coeff + posX + posY * m_width;
 
     int             numPos = 0;
 #define UPDATE(x) {int a=abs(x);numPos+=!!a;}
@@ -254,11 +255,11 @@ public:
     return m_tsLrg1FlagCtxSet(numPos);
   }
 
-  unsigned signCtxIdAbsTS(int scanPos, const TCoeff* coeff, int bdpcm)
+  unsigned signCtxIdAbsTS(int scanPos, const TCoeffSig* coeff, int bdpcm)
   {
-    const uint32_t  posY = m_scan[scanPos].y;
-    const uint32_t  posX = m_scan[scanPos].x;
-    const TCoeff*   pData = coeff + posX + posY * m_width;
+    const uint32_t   posY  = m_scan[scanPos].y;
+    const uint32_t   posX  = m_scan[scanPos].x;
+    const TCoeffSig* pData = coeff + posX + posY * m_width;
 
     int rightSign = 0, belowSign = 0;
     unsigned signCtx = 0;
@@ -291,11 +292,11 @@ public:
     return m_tsSignFlagCtxSet(signCtx);
   }
 
-  void neighTS(int& rightPixel, int& belowPixel, int scanPos, const TCoeff* coeff)
+  void neighTS(int& rightPixel, int& belowPixel, int scanPos, const TCoeffSig* coeff)
   {
-    const uint32_t  posY = m_scan[scanPos].y;
-    const uint32_t  posX = m_scan[scanPos].x;
-    const TCoeff*   data = coeff + posX + posY * m_width;
+    const uint32_t   posY = m_scan[scanPos].y;
+    const uint32_t   posX = m_scan[scanPos].x;
+    const TCoeffSig* data = coeff + posX + posY * m_width;
 
     rightPixel = belowPixel = 0;
 
@@ -356,7 +357,7 @@ public:
     return(absCoeffMod);
   }
 
-  unsigned templateAbsSumTS( int scanPos, const TCoeff* coeff )
+  unsigned templateAbsSumTS( int scanPos, const TCoeffSig* coeff )
   {
     return 1;
   }
