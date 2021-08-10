@@ -366,7 +366,7 @@ CodingUnit& CodingStructure::addCU( const UnitArea& unit, const ChannelType chTy
     const Area scaledBlk   = scale.scale(     _blk );
     CodingUnit **cuPtr     = m_cuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
 
-    CHECK( *cuPtr, "Overwriting a pre-existing value, should be '0'!" );
+    CHECKD( *cuPtr, "Overwriting a pre-existing value, should be '0'!" );
 
     g_pelBufOP.fillPtrMap( ( void** ) cuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) cu );
   }
@@ -453,7 +453,7 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
 
-        CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
+        CHECKD( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
 
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
       }
