@@ -1073,7 +1073,8 @@ const CPelUnitBuf PelStorage::getBufPart(const UnitArea& unit) const
 
 const CPelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit) const
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
   PelUnitBuf ret;
   ret.chromaFormat = chromaFormat;
   ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
@@ -1090,7 +1091,8 @@ const CPelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit) const
 
 PelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit)
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
   PelUnitBuf ret;
   ret.chromaFormat = chromaFormat;
   ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
