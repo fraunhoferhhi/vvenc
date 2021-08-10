@@ -1012,13 +1012,35 @@ const CPelUnitBuf PelStorage::getBufPart(const UnitArea& unit) const
 const CPelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit) const
 {
   CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), CPelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), CPelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+  
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 PelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit)
 {
   CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), PelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), PelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 const CPelBuf PelStorage::getCompactBuf(const CompArea& carea) const
