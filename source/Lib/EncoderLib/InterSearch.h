@@ -102,7 +102,8 @@ struct BlkRecord
 
 struct BlkUniMvInfoBuffer
 {
-  BlkUniMvInfo* getBlkUniMvInfo( int i ) const { return m_uniMvList + ((m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)); }
+  const BlkUniMvInfo* getBlkUniMvInfo(int i) const { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
+        BlkUniMvInfo* getBlkUniMvInfo(int i)       { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
 
   void insertUniMvCands( const Area& blkArea, const Mv* cMvTemp)
   {
@@ -138,7 +139,7 @@ struct BlkUniMvInfoBuffer
   void savePrevUniMvInfo(const CompArea& blkArea, BlkUniMvInfo &tmpUniMvInfo, bool& isUniMvInfoSaved)
   {
     int j = 0;
-    BlkUniMvInfo* curMvInfo = nullptr;
+    const BlkUniMvInfo* curMvInfo = nullptr;
     for (; j < m_uniMvListSize; j++)
     {
       curMvInfo = getBlkUniMvInfo( j );
@@ -186,27 +187,20 @@ struct BlkUniMvInfoBuffer
 
   BlkUniMvInfoBuffer()
   {
-    m_uniMvListMaxSize = 15;
-    m_uniMvList = new BlkUniMvInfo[m_uniMvListMaxSize];
     m_uniMvListIdx = 0;
     m_uniMvListSize = 0;
   }
 
   ~BlkUniMvInfoBuffer()
   {
-    if ( m_uniMvList )
-    {
-      delete[] m_uniMvList;
-      m_uniMvList = nullptr;
-    }
     m_uniMvListIdx = 0;
     m_uniMvListSize = 0;
   }
 
-  BlkUniMvInfo*   m_uniMvList;
-  int             m_uniMvListIdx;
-  int             m_uniMvListSize;
-  int             m_uniMvListMaxSize;
+  static const int m_uniMvListMaxSize = 15;
+  BlkUniMvInfo     m_uniMvList[m_uniMvListMaxSize];
+  int              m_uniMvListIdx;
+  int              m_uniMvListSize;
 };
 
 class EncPicture;
