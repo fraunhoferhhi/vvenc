@@ -92,6 +92,8 @@ struct PelBufferOps
   void ( *addAvg4 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg8 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg16 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
+  void ( *wghtAvg4 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
+  void ( *wghtAvg8 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
   void ( *copyClip4 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *copyClip8 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *reco4 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
@@ -144,7 +146,7 @@ struct AreaBuf : public Size
   void addAvg               ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng );
   T    getAvg               () const;
   void padBorderPel         ( unsigned marginX, unsigned marginY, int dir );
-  void addWeightedAvg(const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng, const int8_t BcwIdx);
+  void addWeightedAvg       ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng, const int8_t BcwIdx );
   void removeHighFreq       ( const AreaBuf<const T>& other, const bool bClip, const ClpRng& clpRng);
   void extendBorderPelTop   ( int x, int size, int margin );
   void extendBorderPelBot   ( int x, int size, int margin );
@@ -185,6 +187,9 @@ typedef AreaBuf<const Pel> CPelBuf;
 
 typedef AreaBuf<      TCoeff>  CoeffBuf;
 typedef AreaBuf<const TCoeff> CCoeffBuf;
+
+typedef AreaBuf<      TCoeffSig>  CoeffSigBuf;
+typedef AreaBuf<const TCoeffSig> CCoeffSigBuf;
 
 typedef AreaBuf<      MotionInfo>  MotionBuf;
 typedef AreaBuf<const MotionInfo> CMotionBuf;

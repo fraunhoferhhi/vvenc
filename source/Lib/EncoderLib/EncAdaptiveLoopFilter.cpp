@@ -994,6 +994,11 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
 
+  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  {
+    return;
+  }
+
   PelUnitBuf orgYuv = cs.picture->getOrigBuf();
   const int numClassBlocksInCTU = ( MAX_CU_SIZE * MAX_CU_SIZE ) >> 4;
 
@@ -1211,6 +1216,12 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
 
+  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  {
+    memset( cs.slice->tileGroupAlfEnabled, 0, sizeof( cs.slice->tileGroupAlfEnabled ) );
+    return;
+  }
+
   initCABACEstimator( cs.slice, &pic.picApsMap );
   if( m_encCfg->m_maxParallelFrames )
   {
@@ -1310,6 +1321,11 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, int ctuRsAddr )
 {
   PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+
+  if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
+  {
+    return;
+  }
 
   const int nCtuX = ctuRsAddr % cs.pcv->widthInCtus;
   const int nCtuY = ctuRsAddr / cs.pcv->widthInCtus;
@@ -2548,6 +2564,14 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
   int transposeIdx = 0;
   int classIdx = 0;
 
+  const int halfFilterLength = shape.filterLength >> 1;
+  int filterPattern[25]; // max entries in shape.pattern
+
+  if( !m_encCfg->m_useNonLinearAlfLuma && !m_encCfg->m_useNonLinearAlfChroma && ( area.width & 3 ) == 0 )
+  {
+    for( int i = 0; i < shape.filterSize; i++ ) filterPattern[i] = shape.pattern[i] << 2;
+  }
+
   for( int i = 0; i < area.height; i++ )
   {
     int vbDistance = ((areaDst.y + i) % vbCTUHeight) - vbPos;
@@ -2587,24 +2611,25 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         int yLocal3 = org[j+3] - rec[j+3];
 
         //      std::memset( ELocal, 0, sizeof( ELocal ) );
-        int ELocal0[MAX_NUM_ALF_LUMA_COEFF];
-        int ELocal1[MAX_NUM_ALF_LUMA_COEFF];
-        int ELocal2[MAX_NUM_ALF_LUMA_COEFF];
-        int ELocal3[MAX_NUM_ALF_LUMA_COEFF];
+        int ELocal[MAX_NUM_ALF_LUMA_COEFF << 2];
+        int* ELocal0 = ELocal + 0;
+        int *ELocal1 = ELocal + 1;
+        int *ELocal2 = ELocal + 2;
+        int *ELocal3 = ELocal + 3;
 
         if( clipBotRow == 4 )
         {
-          calcLinCovariance<false>( ELocal0, rec + j + 0, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<false>( ELocal1, rec + j + 1, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<false>( ELocal2, rec + j + 2, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<false>( ELocal3, rec + j + 3, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<false>( ELocal0, rec + j + 0, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<false>( ELocal1, rec + j + 1, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<false>( ELocal2, rec + j + 2, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<false>( ELocal3, rec + j + 3, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
         }
         else
         {
-          calcLinCovariance<true>( ELocal0, rec + j + 0, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<true>( ELocal1, rec + j + 1, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<true>( ELocal2, rec + j + 2, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
-          calcLinCovariance<true>( ELocal3, rec + j + 3, recStride, shape, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<true>( ELocal0, rec + j + 0, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<true>( ELocal1, rec + j + 1, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<true>( ELocal2, rec + j + 2, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
+          calcLinCovariance<true>( ELocal3, rec + j + 3, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow, clipBotRow );
         }
 
         if( m_alfWSSD )
@@ -2617,23 +2642,20 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
           for( int k = 0; k < shape.numCoeff; k++ )
           {
-            int Elocalk0  = ELocal0[k];
-            int* Elocall0 = &ELocal0[k];
-            int Elocalk1  = ELocal1[k];
-            int* Elocall1 = &ELocal1[k];
-            int Elocalk2  = ELocal2[k];
-            int* Elocall2 = &ELocal2[k];
-            int Elocalk3  = ELocal3[k];
-            int* Elocall3 = &ELocal3[k];
+            int* Elocall  = &ELocal0[k << 2];
+            int Elocalk0  = Elocall[0];
+            int Elocalk1  = Elocall[1];
+            int Elocalk2  = Elocall[2];
+            int Elocalk3  = Elocall[3];
             double* cov   = &alfCovariance[classIdx].E[0][0][k][k];
 
             for( int l = k; l < shape.numCoeff; l++ )
             {
-              int
-              sum   = weight0 * Elocalk0 * *Elocall0++;
-              sum  += weight1 * Elocalk1 * *Elocall1++;
-              sum  += weight2 * Elocalk2 * *Elocall2++;
-              sum  += weight3 * Elocalk3 * *Elocall3++;
+              double
+              sum   = weight0 * Elocalk0 * *Elocall++;
+              sum  += weight1 * Elocalk1 * *Elocall++;
+              sum  += weight2 * Elocalk2 * *Elocall++;
+              sum  += weight3 * Elocalk3 * *Elocall++;
 
               *cov++ += sum;
             }
@@ -2653,23 +2675,20 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         {
           for( int k = 0; k < shape.numCoeff; k++ )
           {
-            int Elocalk0  = ELocal0[k];
-            int* Elocall0 = &ELocal0[k];
-            int Elocalk1  = ELocal1[k];
-            int* Elocall1 = &ELocal1[k];
-            int Elocalk2  = ELocal2[k];
-            int* Elocall2 = &ELocal2[k];
-            int Elocalk3  = ELocal3[k];
-            int* Elocall3 = &ELocal3[k];
+            int* Elocall = &ELocal0[k << 2];
+            int Elocalk0 = Elocall[0];
+            int Elocalk1 = Elocall[1];
+            int Elocalk2 = Elocall[2];
+            int Elocalk3 = Elocall[3];
             double* cov   = &alfCovariance[classIdx].E[0][0][k][k];
 
             for( int l = k; l < shape.numCoeff; l++ )
             {
               int
-              sum   = Elocalk0 * *Elocall0++;
-              sum  += Elocalk1 * *Elocall1++;
-              sum  += Elocalk2 * *Elocall2++;
-              sum  += Elocalk3 * *Elocall3++;
+              sum   = Elocalk0 * *Elocall++;
+              sum  += Elocalk1 * *Elocall++;
+              sum  += Elocalk2 * *Elocall++;
+              sum  += Elocalk3 * *Elocall++;
 
               *cov++ += sum;
             }
@@ -2859,11 +2878,8 @@ inline int clipIdx( int i, int clip )
 }
 
 template < bool clipToBdry >
-void EncAdaptiveLoopFilter::calcLinCovariance( int* ELocal, const Pel *rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow )
+void EncAdaptiveLoopFilter::calcLinCovariance( int* ELocal, const Pel *rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow )
 {
-  const int *filterPattern = shape.pattern.data();
-  const int halfFilterLength = shape.filterLength >> 1;
-
   int k = 0;
 
   const short curr = rec[0];
@@ -2960,8 +2976,8 @@ void EncAdaptiveLoopFilter::calcLinCovariance( int* ELocal, const Pel *rec, cons
 
   ELocal[filterPattern[k]] = curr;
 }
-template void EncAdaptiveLoopFilter::calcLinCovariance<true> ( int* ELocal, const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow );
-template void EncAdaptiveLoopFilter::calcLinCovariance<false>( int* ELocal, const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance<true> ( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance<false>( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 
 void EncAdaptiveLoopFilter::calcCovariance( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel *rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance )
 {
@@ -4609,7 +4625,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
             for( int l = k; l < ( shape.numCoeff - 1); l++ )
             {
-              int
+              double
               sum   = weight0 * Elocalk0 * *Elocall0++;
               sum  += weight1 * Elocalk1 * *Elocall1++;
               sum  += weight2 * Elocalk2 * *Elocall2++;

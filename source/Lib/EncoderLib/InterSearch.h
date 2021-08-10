@@ -75,6 +75,20 @@ static const uint32_t MAX_NUM_REF_LIST_ADAPT_SR = 2;
 static const uint32_t MAX_IDX_ADAPT_SR          = MAX_REF_PICS;
 static const uint32_t NUM_MV_PREDICTORS         = 3;
 
+struct ModeInfo
+{
+  uint32_t mergeCand;
+  bool     isRegularMerge;
+  bool     isMMVD;
+  bool     isCIIP;
+  bool     isBioOrDmvr;
+  bool     isAffine;
+  ModeInfo() {}
+
+  ModeInfo(const uint32_t mergeCand, const bool isRegularMerge, const bool isMMVD, const bool isCIIP, const bool BioOrDmvr, const bool Affine) :
+    mergeCand(mergeCand), isRegularMerge(isRegularMerge), isMMVD(isMMVD), isCIIP(isCIIP), isBioOrDmvr(BioOrDmvr), isAffine(Affine) {}
+};
+
 struct BlkUniMvInfo
 {
   Mv uniMvs[2][MAX_REF_PICS];
@@ -359,6 +373,7 @@ protected:
   int               m_iSearchRange;
   int               m_bipredSearchRange; // Search range for bi-prediction
   vvencMESearchMethod m_motionEstimationSearchMethod;
+  int               m_motionEstimationSearchMethodSCC;
   int               m_aaiAdaptSR[MAX_NUM_REF_LIST_ADAPT_SR][MAX_IDX_ADAPT_SR];
 
   // RD computation
@@ -382,6 +397,10 @@ protected:
   uint8_t           m_sbtRdoOrder[NUMBER_SBT_MODE];       // order of SBT mode in RDO
   bool              m_skipSbtAll;                         // to skip all SBT modes for the current PU
 
+  BcwMotionParam    m_uniMotions;
+  uint8_t           m_estWeightIdxBits[BCW_NUM] = { 4, 3, 1, 2, 4 };
+  bool              m_affineModeSelected;
+
 public:
   ReuseUniMv*         m_ReuseUniMv;
   BlkUniMvInfoBuffer* m_BlkUniMvInfoBuffer;
@@ -398,7 +417,8 @@ public:
   void destroy                      ();
 
   /// encoder estimation - inter prediction (non-skip)
-  void predInterSearch              ( CodingUnit& cu, Partitioner& partitioner );
+  bool predInterSearch              ( CodingUnit& cu, Partitioner& partitioner, double& bestCostInter);
+
   /// set ME search range
   void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
 
@@ -419,6 +439,10 @@ public:
   bool       searchBvIBC            (const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
 
   void       resetCtuRecordIBC      () { m_ctuRecord.clear(); }
+
+  void       resetBufferedUniMotions() { m_uniMotions.reset(); }
+  uint8_t    getWeightIdxBits       ( uint8_t bcwIdx ) { return m_estWeightIdxBits[bcwIdx]; }
+  void       setAffineModeSelected  ( bool flag ) { m_affineModeSelected = flag; }
 
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
@@ -455,6 +479,7 @@ private:
   // sub-functions for ME
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZ2PointSearch       ( TZSearchStruct& rcStruct );
+  inline void xTZ4PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointDiamondSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist, const bool bCheckCornersAtDist1 );
 
@@ -590,6 +615,9 @@ private:
 
   void xSymMvdCheckBestMvp            ( CodingUnit& cu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
                                         int32_t BcwIdx, Mv cMvPredSym[2], int32_t mvpIdxSym[2], Distortion& bestCost, bool skip );
+
+  bool xReadBufferedAffineUniMv       ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv acMvPred[3], Mv acMv[3], uint32_t& ruiBits, Distortion& ruiCost, int& mvpIdx, const AffineAMVPInfo& aamvpi );
+  bool xReadBufferedUniMv             ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv& pcMvPred, Mv& rcMv, uint32_t& ruiBits, Distortion& ruiCost);
 
   void xExtDIFUpSamplingH             ( CPelBuf* pcPattern, bool useAltHpelIf);
   void xExtDIFUpSamplingQ             ( CPelBuf* pcPatternKey, Mv halfPelRef, int& patternId );

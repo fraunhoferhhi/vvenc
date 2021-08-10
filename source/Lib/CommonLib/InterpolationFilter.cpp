@@ -145,26 +145,6 @@ const TFilterCoeff InterpolationFilter::m_chromaFilter[CHROMA_INTERPOLATION_FILT
   {  0,  0, 64,  0 },
 };
 
-const TFilterCoeff InterpolationFilter::m_bilinearFilter[LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS][NTAPS_BILINEAR] =
-{
-  { 64,  0, },
-  { 60,  4, },
-  { 56,  8, },
-  { 52, 12, },
-  { 48, 16, },
-  { 44, 20, },
-  { 40, 24, },
-  { 36, 28, },
-  { 32, 32, },
-  { 28, 36, },
-  { 24, 40, },
-  { 20, 44, },
-  { 16, 48, },
-  { 12, 52, },
-  { 8, 56, },
-  { 4, 60, },
-};
-
 const TFilterCoeff InterpolationFilter::m_bilinearFilterPrec4[LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS][NTAPS_BILINEAR] =
 {
   { 16,  0, },

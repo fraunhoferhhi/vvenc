@@ -81,6 +81,9 @@ public:
   CPelBuf               org;
   CPelBuf               cur;
   FpDistFunc            distFunc;
+#if ENABLE_MEASURE_SEARCH_SPACE
+  FpDistFunc            xDistFunc;
+#endif
   int                   bitDepth;
   int                   subShift;
   ComponentID           compID;
@@ -150,7 +153,6 @@ public:
 
   double        getLambda           ( bool unadj = false )              { return unadj ? m_dLambda_unadjusted : m_dLambda; }
   double        getChromaWeight     ()                                  { return ((m_distortionWeight[COMP_Cb] + m_distortionWeight[COMP_Cr]) / 2.0); }
-  double        getDistortionWeight ( const ComponentID compID )  const { return m_distortionWeight[ compID % MAX_NUM_COMP ]; }
   double        calcRdCost          ( uint64_t fracBits, Distortion distortion, bool useUnadjustedLambda = true ) const
   {
     return ( useUnadjustedLambda ? m_DistScaleUnadjusted : m_DistScale ) * double( distortion ) + double( fracBits );
@@ -158,7 +160,7 @@ public:
 
   void          setDistParam        ( DistParam &rcDP, const CPelBuf& org, const Pel* piRefY , int iRefStride, int bitDepth, ComponentID compID, int subShiftMode = 0, bool useHadamard = false );
   DistParam     setDistParam        ( const CPelBuf& org, const CPelBuf& cur, int bitDepth, DFunc dfunc );
-  DistParam     setDistParam        ( const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShift );
+  DistParam     setDistParam        ( const Pel* pOrg, const Pel* piRefY, int iOrgStride, int iRefStride, int bitDepth, ComponentID compID, int width, int height, int subShift, bool isDMVR = false );
   void          setDistParamGeo     ( DistParam &rcDP, const CPelBuf& org, const Pel *piRefY, int iRefStride, const Pel *mask, int iMaskStride, int stepX, int iMaskStride2, int bitDepth, ComponentID compID );
 
   double        getMotionLambda     ()                      const { return m_dLambdaMotionSAD; }

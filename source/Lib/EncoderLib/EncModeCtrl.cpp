@@ -326,8 +326,8 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
   m_dmvrMvBuf = new Mv[numDmvrMv];
   Mv* dmvrMv = m_dmvrMvBuf;
 
-  m_pCoeff = new TCoeff[numCoeff];
-  TCoeff* coeffPtr = m_pCoeff;
+  m_pCoeff = new TCoeffSig[numCoeff];
+  TCoeffSig* coeffPtr = m_pCoeff;
 
   for( int wIdx = 0; wIdx < maxSizeIdx; wIdx++ )
   {
@@ -372,7 +372,7 @@ void BestEncInfoCache::create( const ChromaFormat chFmt )
               dmvrMv += dmvrSize;
             }
 
-            TCoeff* coeff[MAX_NUM_TBLOCKS] = { 0, };
+            TCoeffSig* coeff[MAX_NUM_TBLOCKS] = { 0, };
 
             const UnitArea& area = m_bestEncInfo[wIdx][hIdx][x][y]->tu;
 
@@ -566,7 +566,8 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
-    partitioner.setMaxMinDepth( minDepth, maxDepth, cs );
+    bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
+    partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
@@ -769,7 +770,9 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
             return false;
           }
         }
-        if( m_pcEncCfg->m_bUseEarlyCU && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
+        int stopSplit = (m_pcEncCfg->m_FastInferMerge >> 4) && (bestCS->slice->TLayer > 4);
+        int limitBLsize = stopSplit ? 2048 : 1024;
+        if ((m_pcEncCfg->m_bUseEarlyCU || stopSplit)&& bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < limitBLsize )
         {
           return false;
         }
@@ -867,12 +870,6 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
-  // if early skip detected, skip all modes checking but the splits
-  if( cuECtx.earlySkip && m_pcEncCfg->m_useEarlySkipDetection  && !( isModeInter( encTestmode ) ) )
-  {
-    return false;
-  }
-
   if( cuECtx.minDepth > partitioner.currQtDepth && partitioner.canSplit( CU_QUAD_SPLIT, cs ) )
   {
     // enforce QT
@@ -890,6 +887,15 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   {
     // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
+    if (m_pcEncCfg->m_FastInferMerge && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+    {
+      if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+        && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
+      {
+        return false;
+      }
+    }
+
     if( lumaArea.width > cs.sps->getMaxTbSize() || lumaArea.height > cs.sps->getMaxTbSize() )
     {
       return false;
@@ -968,13 +974,17 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     {
       if( encTestmode.opts == ETO_STANDARD )
       {
-        // NOTE: ETO_STANDARD is always done when early SKIP mode detection is enabled
-        if( !m_pcEncCfg->m_useEarlySkipDetection )
+        if (m_pcEncCfg->m_FastInferMerge)
         {
-          if( relatedCU.isSkip || relatedCU.isIntra )
+          if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+            && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
           {
             return false;
           }
+        }
+        if( relatedCU.isSkip || relatedCU.isIntra )
+        {
+          return false;
         }
       }
     }

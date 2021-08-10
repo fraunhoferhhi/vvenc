@@ -192,6 +192,8 @@ private:
   RateCtrl*             m_pcRateCtrl;
 
   PelStorage            m_aTmpStorageLCU[MAX_TMP_BUFS];     ///< used with CIIP, EDO, GEO
+  PelStorage            m_acMergeTmpBuffer[MRG_MAX_NUM_CANDS];
+
   SortedPelUnitBufs<SORTED_BUFS> m_SortedPelUnitBufs;
   FastGeoCostList       m_GeoCostList;
   double                m_AFFBestSATDCost;
@@ -209,6 +211,9 @@ private:
   
   Partitioner           m_partitioner;
 
+  int                   m_bestBcwIdx[2];
+  double                m_bestBcwCost[2];
+
 public:
   EncCu();
   virtual ~EncCu();
@@ -221,7 +226,7 @@ public:
 
   void  initPic               ( Picture* pic );
   void  initSlice             ( const Slice* slice );
-  void  setUpLambda           ( Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted, const bool useRC = false);
+  void  setUpLambda           ( Slice& slice, const double dLambda, const int iQP, const bool setSliceLambda, const bool saveUnadjusted);
   void  updateLambda          ( const Slice& slice, const double ctuLambda, const int ctuQP, const int newQP, const bool saveUnadjusted);
 
   void encodeCtu              ( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus );
@@ -238,7 +243,8 @@ private:
   void xCheckRDCostIntra      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostInter      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckRDCostInterIMV   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
-  void xCheckRDCostAffineMerge( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
+  bool xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
+    , unsigned& uiNumMrgSATDCand, static_vector<ModeInfo, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& RdModeList, static_vector<double, MRG_MAX_NUM_CANDS + MMVD_ADD_NUM>& candCostList, DistParam distParam, const TempCtx& ctxStart, uint16_t merge_ctx_size);
   void xCheckRDCostMerge      ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm,       EncTestMode& encTestMode );
   void xCheckRDCostMergeGeo   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckModeSplit        ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
@@ -252,6 +258,18 @@ private:
 
   void xEncodeInterResidual   ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, 
                                 int residualPass = 0, bool* bestHasNonResi = NULL, double* equBcwCost = NULL );
+
+  bool xIsBcwSkip( const CodingUnit& cu )
+  {
+    if( cu.slice->sliceType != VVENC_B_SLICE )
+    {
+      return true;
+    }
+    return( (m_pcEncCfg->m_QP > 32) && ((cu.slice->TLayer >= 4)
+            || ((cu.refIdx[0] >= 0 && cu.refIdx[1] >= 0)
+            && (abs(cu.slice->poc - cu.slice->getRefPOC(REF_PIC_LIST_0, cu.refIdx[0])) == 1
+            ||  abs(cu.slice->poc - cu.slice->getRefPOC(REF_PIC_LIST_1, cu.refIdx[1])) == 1))) );
+  }
 
   uint64_t xCalcPuMeBits      ( const CodingUnit& cu);
   double   xCalcDistortion    ( CodingStructure *&cur_CS, ChannelType chType, int BitDepth, int imv);

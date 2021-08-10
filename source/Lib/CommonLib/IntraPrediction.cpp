@@ -352,7 +352,6 @@ void IntraPrediction::predIntraAng( const ComponentID compId, PelBuf& piPred, co
   const ChannelType    channelType  = toChannelType( compID );
   const uint32_t       uiDirMode = cu.bdpcmM[channelType] ? BDPCM_IDX : CU::getFinalIntraMode(cu, channelType);
 
-  CHECK( Log2(piPred.width) < 2 && cu.cs->pcv->noChroma2x2, "Size not allowed" );
   CHECK( Log2(piPred.width) > 7, "Size not allowed" );
 
 //  const int multiRefIdx = m_ipaParam.multiRefIndex;
@@ -761,9 +760,8 @@ void IntraPrediction::xFillReferenceSamples( const CPelBuf& recoBuf, Pel* refBuf
   const int predStride = predSize + 1 + multiRefIdx;
   m_refBufferStride[area.compID] = predStride;
 
-  const bool noShift            = pcv.noChroma2x2 && area.width == 4; // don't shift on the lowest level (chroma not-split)
-  const int  unitWidth          = tuWidth  <= 2 && cu.ispMode && isLuma(area.compID) ? tuWidth  : pcv.minCUSize >> (noShift ? 0 : getComponentScaleX(area.compID, sps.chromaFormatIdc));
-  const int  unitHeight         = tuHeight <= 2 && cu.ispMode && isLuma(area.compID) ? tuHeight : pcv.minCUSize >> (noShift ? 0 : getComponentScaleY(area.compID, sps.chromaFormatIdc));
+  const int  unitWidth          = tuWidth  <= 2 && cu.ispMode && isLuma(area.compID) ? tuWidth  : pcv.minCUSize >> getComponentScaleX(area.compID, sps.chromaFormatIdc);
+  const int  unitHeight         = tuHeight <= 2 && cu.ispMode && isLuma(area.compID) ? tuHeight : pcv.minCUSize >> getComponentScaleY(area.compID, sps.chromaFormatIdc);
 
   const int  totalAboveUnits    = (predSize + (unitWidth - 1)) / unitWidth;
   const int  totalLeftUnits     = (predHSize + (unitHeight - 1)) / unitHeight;

@@ -1,4 +1,39 @@
 /////////////////////////////////////////
+tag 1.1.0
+
+* libvvenc:
+  - mostly about faster/fast speedups, minor improvements to other presets
+  - redefined the presets
+  - improved RC rate accuracy
+  - added tool: BCW
+  - added parameters: m_FIMMode, m_bIntegerET, (m_vvencMCTF.)MCTFSpeed, m_alfSpeed, m_IntraEstDecBit, m_BCW, m_motionEstimationSearchMethodSCC
+  - removed parameters: m_useEarlySkipDetection
+  - SCC coding: using alternative ME strategy, disabling LMCS
+  - memory reduction (storing coeffs as 16bit, single storage for displacement/affine motion models, move objects rather than copy during search, garbage collection)
+  - removed dynamic memory from partitioner
+  - SIMD search for last coeff in DQ=0 RDOQ=2
+  - combined regular and affine merge search into a single function
+  - optimized motion search
+  - RC cleanup
+  - various cleanups
+  
+* vvencapp:
+
+* vvencFFapp:
+  - added options: IntegerET, FastInferMerge, MCTFSpeed, ALFSpeed, IntraEstDecBit, BCW, FastSearchSCC
+  - removed options: ESD
+
+* bugfixes:
+  - fixed the TU-split z-partitioning
+  - fixed the ECU option
+  - fixed picture/sequence-level deblocking parameter management
+  - fixed SwitchDQP option when used with multi-threading
+  - fixed TemporalSubsampling (used in JVET AI test conditions)
+  - fixed ALF covariance accumulation domain to double when required (LMCS+ALF+Hdr=pq)
+  - fixed IDR coding with GOPSize==IntraPeriod
+  - fixed short sequence coding (<3 frames) with MCTF
+
+/////////////////////////////////////////
 tag 1.0.0
 
 * libvvenc:

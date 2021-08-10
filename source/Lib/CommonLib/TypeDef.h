@@ -113,14 +113,14 @@ namespace vvenc {
 #define ENABLE_CU_MODE_COUNTERS                           0
 #endif
 
+#define ENABLE_MEASURE_SEARCH_SPACE                       0
+
 // ====================================================================================================================
 // Debugging
 // ====================================================================================================================
 
 #define INTRA_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 #define INTER_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
-
-#define RC_INTRA_MODEL_OPT                                1 ///< enables new model to derive QP/lambda from target bits
 
 // This can be enabled by the makefile
 #ifndef RExt__HIGH_BIT_DEPTH_SUPPORT
@@ -189,10 +189,11 @@ typedef       int64_t           Intermediate_Int;  ///< used as intermediate val
 typedef       uint64_t          Intermediate_UInt; ///< used as intermediate value in calculations
 #else
 typedef       int16_t           Pel;               ///< pixel type
-typedef       int               TCoeff;            ///< transform coefficient
+typedef       int32_t           TCoeff;            ///< transform coefficient
+typedef       int16_t           TCoeffSig;         ///< transform coefficient as signalled
 typedef       int16_t           TMatrixCoeff;      ///< transform matrix coefficient
 typedef       int16_t           TFilterCoeff;      ///< filter coefficient
-typedef       int               Intermediate_Int;  ///< used as intermediate value in calculations
+typedef       int32_t           Intermediate_Int;  ///< used as intermediate value in calculations
 typedef       uint32_t          Intermediate_UInt; ///< used as intermediate value in calculations
 #endif
 

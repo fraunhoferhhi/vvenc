@@ -752,7 +752,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
-  ("RCInitialQP",                                     m_RCInitialQP,                                    "Rate control: initial QP" )
+  ("RCInitialQP",                                     m_RCInitialQP,                                    "Rate control: initial QP. With two-pass encoding, this specifies the first-pass base QP (instead of using a default QP). Activated if value is greater than zero" )
   ("RCForceIntraQP",                                  m_RCForceIntraQP,                                 "Rate control: force intra QP to be equal to initial QP" )
 
   ("PerceptQPATempFiltIPic",                          m_usePerceptQPATempFiltISlice,                    "Temporal high-pass filter in QPA activity calculation for key pictures (0:off, 1:on, 2:on incl. temporal pumping reduction, -1:auto)")
@@ -814,6 +814,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("WaveFrontSynchro",                                m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
   ("EntryPointsPresent",                              m_entryPointsPresent,                             "Enable entry points in slice header")
+
   ;
 
   opts.setSubSection("Quad-Tree size and depth");
@@ -864,7 +865,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FEN",                                             m_fastInterSearchMode,                            "fast encoder setting")
   ("ECU",                                             m_bUseEarlyCU,                                    "Early CU setting")
   ("FDM",                                             m_useFastDecisionForMerge,                        "Fast decision for Merge RD Cost")
-  ("ESD",                                             m_useEarlySkipDetection,                          "Early SKIP detection setting")
 
   ("DisableIntraInInter",                             m_bDisableIntraCUsInInterSlices,                  "Flag to disable intra CUs in inter slices")
   ("ConstrainedIntraPred",                            m_bUseConstrainedIntraPred,                       "Constrained Intra Prediction")
@@ -883,18 +883,21 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("Geo",                                             m_Geo,                                            "Enable geometric partitioning mode (0:off, 1:on)")
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                  "Maximum number of geometric partitioning mode candidates")
   ("FastIntraTools",                                  m_FastIntraTools,                                 "SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)")
+  ("IntraEstDecBit",                                  m_IntraEstDecBit,                                 "Intra estimation decimation binary exponent for first pass directional modes screening (only test each (2^N)-th mode in the first estimation pass)")
   ;
 
   // motion search options
   opts.setSubSection("Motion search options");
   opts.addOptions()
-  ("FastSearch",                                      m_motionEstimationSearchMethod,                   "Serach mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond)")
+  ("FastSearch",                                      m_motionEstimationSearchMethod,                   "Search mode (0:Full search 1:Diamond 2:Selective 3:Enhanced Diamond 4: FastDiamond)")
+  ("FastSearchSCC",                                   m_motionEstimationSearchMethodSCC,                "Search mode for SCC (0:use non SCC-search 1:Selective 2:DiamondSCC 3:FastDiamondSCC)")
   ("RestrictMESampling",                              m_bRestrictMESampling,                            "Enable restrict ME Sampling for selective inter motion search")
   ("SearchRange,-sr",                                 m_SearchRange,                                    "Motion search range")
   ("BipredSearchRange",                               m_bipredSearchRange,                              "Motion search range for bipred refinement")
   ("MinSearchWindow",                                 m_minSearchWindow,                                "Minimum motion search window size for the adaptive window ME")
   ("ClipForBiPredMEEnabled",                          m_bClipForBiPredMeEnabled,                        "Enable clipping in the Bi-Pred ME.")
   ("FastMEAssumingSmootherMVEnabled",                 m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
+  ("IntegerET",                                       m_bIntegerET,                                     "Enable early termination for integer motion search")
   ("FastSubPel",                                      m_fastSubPel,                                     "Enable fast sub-pel ME")
   ;
 
@@ -1002,8 +1005,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("DMVR",                                            m_DMVR,                                           "Decoder-side Motion Vector Refinement")
   ("EncDbOpt",                                        m_EDO,                                            "Encoder optimization with deblocking filter 0:off 1:vtm 2:fast")
   ("EDO",                                             m_EDO,                                            "Encoder optimization with deblocking filter 0:off 1:vtm 2:fast")
-  ("LMCSEnable",                                      m_lumaReshapeEnable,                              "Enable LMCS (luma mapping with chroma scaling")
-  ("LMCS",                                            m_lumaReshapeEnable,                              "Enable LMCS (luma mapping with chroma scaling")
+  ("LMCSEnable",                                      m_lumaReshapeEnable,                              "Enable LMCS luma mapping with chroma scaling (0:off 1:on 2:use SCC detection to disable for screen coded content)")
+  ("LMCS",                                            m_lumaReshapeEnable,                              "Enable LMCS luma mapping with chroma scaling (0:off 1:on 2:use SCC detection to disable for screen coded content)")
   ("LMCSSignalType",                                  m_reshapeSignalType,                              "Input signal type (0:SDR, 1:HDR-PQ, 2:HDR-HLG)")
   ("LMCSUpdateCtrl",                                  m_updateCtrl,                                     "LMCS model update control (0:RA, 1:AI, 2:LDB/LDP)")
   ("LMCSAdpOption",                                   m_adpOption,                                      "LMCS adaptation options: 0:automatic,"
@@ -1011,7 +1014,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
                                                                                                              "3: rsp inter(CW66 for QP<=22), 4: rsp inter(for all QP).")
   ("LMCSInitialCW",                                   m_initialCW,                                      "LMCS initial total codeword (0~1023) when LMCSAdpOption > 0")
   ("LMCSOffset",                                      m_LMCSOffset,                                     "LMCS chroma residual scaling offset")
-  ("ALF",                                             m_alf,                                            "Adpative Loop Filter\n" )
+  ("ALF",                                             m_alf,                                            "Adpative Loop Filter" )
+  ("ALFSpeed",                                        m_alfSpeed,                                       "ALF speed (skip filtering of non-referenced frames) [0-1]" )
   ("CCALF",                                           m_ccalf,                                          "Cross-component Adaptive Loop Filter" )
   ("CCALFQpTh",                                       m_ccalfQpThreshold,                               "QP threshold above which encoder reduces CCALF usage. Ignored in case of PerceptQPA.")
   ("UseNonLinearAlfLuma",                             m_useNonLinearAlfLuma,                            "Non-linear adaptive loop filters for Luma Channel")
@@ -1025,6 +1029,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MmvdDisNum",                                      m_MmvdDisNum,                                     "Number of MMVD Distance Entries")
   ("AllowDisFracMMVD",                                m_allowDisFracMMVD,                               "Disable fractional MVD in MMVD mode adaptively")
   ("MCTF",                                            m_vvencMCTF.MCTF,                                 "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
+  ("MCTFSpeed",                                       m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality .. 4:fast)")
   ("MCTFFutureReference",                             m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
   ("MCTFNumLeadFrames",                               m_vvencMCTF.MCTFNumLeadFrames,                    "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
   ("MCTFNumTrailFrames",                              m_vvencMCTF.MCTFNumTrailFrames,                   "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
@@ -1058,6 +1063,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("RPR",                                             m_rprEnabledFlag,                                 "Reference Sample Resolution (0: disable, 1: eneabled, 2: RPR ready")
   ("IBC",                                             m_IBCMode,                                        "IBC (0:off, 1:IBC, 2: IBC with SCC detection)")
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
+  ("BCW",                                             m_BCW,                                            "Enable Generalized Bi-prediction(Bcw) 0: disabled, 1: enabled, 2: fast")
+  ("FastInferMerge",                                  m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
   ;
 
   opts.setSubSection("Input options");
@@ -1265,8 +1272,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  const VVEncAppCfg* configPtr = this;
-  if ( vvenc_init_config_parameter((vvenc_config*)configPtr) )
+  // check config parameter
+  VVEncAppCfg appCfg = *this;
+  if ( vvenc_init_config_parameter(&appCfg) )
   {
     return false;
   }

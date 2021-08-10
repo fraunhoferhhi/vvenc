@@ -184,6 +184,7 @@ private:
   int                   m_numLeadFrames;
   int                   m_numTrailFrames;
   int                   m_framesToBeEncoded;
+  int                   m_MCTFSpeedVal;
   NoMallocThreadPool*   m_threadPool;
 
   std::deque<Picture*>  m_picFifo;

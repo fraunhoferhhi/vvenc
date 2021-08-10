@@ -100,7 +100,7 @@ private:
 #endif
 
 protected:
-  void xWeightedAverage       ( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied );
+  void xWeightedAverage       ( const CodingUnit& cu, const CPelUnitBuf& pcYuvSrc0, const CPelUnitBuf& pcYuvSrc1, PelUnitBuf& pcYuvDst, const bool bdofApplied, PelUnitBuf *yuvPredTmp = NULL );
   void xPredAffineBlk         ( const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv* _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng, const RefPicList refPicList = REF_PIC_LIST_X);
   void xPredInterBlk          ( const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv& _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng
                               , const bool bdofApplied
@@ -163,7 +163,7 @@ private:
   void xIntraBlockCopyIBC       ( CodingUnit& cu, PelUnitBuf& predBuf, const ComponentID compID );
 
   void xPredInterUni            ( const CodingUnit& cu, const RefPicList& refPicList, PelUnitBuf& pcYuvPred, const bool bi, const bool bdofApplied );
-  void xPredInterBi             ( const CodingUnit& cu, PelUnitBuf& yuvPred, const bool bdofApplied = false );
+  void xPredInterBi             ( const CodingUnit& cu, PelUnitBuf& yuvPred, const bool bdofApplied = false, PelUnitBuf *yuvPredTmp = NULL );
   void xSubPuBDOF               ( const CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& refPicList = REF_PIC_LIST_X );
   bool xCheckIdenticalMotion    ( const CodingUnit& cu ) const;
 
@@ -175,7 +175,7 @@ public:
   void    destroy               ();
 
   // inter
-  bool    motionCompensation    ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList refPicList = REF_PIC_LIST_X );
+  bool    motionCompensation    ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList refPicList = REF_PIC_LIST_X, PelUnitBuf* predBufDfltWght = NULL );
   void    motionCompensationIBC ( CodingUnit& cu, PelUnitBuf& predBuf );
   void    xSubPuMC              ( CodingUnit& cu, PelUnitBuf& predBuf, const RefPicList& eRefPicList = REF_PIC_LIST_X );
   void    motionCompensationGeo ( CodingUnit& cu, PelUnitBuf& predBuf, const MergeCtx& geoMrgCtx );

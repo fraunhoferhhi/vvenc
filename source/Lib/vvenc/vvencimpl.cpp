@@ -66,6 +66,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TrQuant_EMT.h"
 #endif
 
+#if defined( __linux__ )
+#include <malloc.h>
+#endif
+
+
 #if _DEBUG
 #define HANDLE_EXCEPTION 0
 #else
@@ -230,6 +235,10 @@ int VVEncImpl::uninit()
 #endif
   }
 
+#if defined( __linux__ )
+  malloc_trim(0);   // free unused heap memory
+#endif
+
   m_bInitialized = false;
   m_eState       = INTERNAL_STATE_UNINITIALIZED;
   return VVENC_OK;
@@ -393,6 +402,10 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 
     iRet = xCopyAu( *pcAccessUnit, cAu  );
   }
+
+#if defined( __linux__ )
+  malloc_trim(0);   // free unused heap memory
+#endif
 
   return iRet;
 }

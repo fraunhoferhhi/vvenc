@@ -43,36 +43,62 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     BitAllocation.h
-\brief    Bit allocation class for QP adaptation and, possibly, rate control (header)
-*/
-
 #pragma once
 
-#include "CommonLib/Slice.h"
-#include "CommonLib/Unit.h"
-
-//! \ingroup EncoderLib
-//! \{
-
-//struct VVEncCfg;
+#if ENABLE_MEASURE_SEARCH_SPACE
 
 namespace vvenc {
 
-  // BitAllocation functions
-  namespace BitAllocation
+struct SearchSpaceAccumulator
+{
+  // intra -> tId -> wIdx -> hIdx -> chType
+  size_t parts[2][6][8][8][2];
+  size_t quant[2][6][8][8][2];
+  size_t preds[2][6][8][8][2];
+  size_t picW;
+  size_t picH;
+  size_t slices[2][6];
+  int    currTId;
+  bool   currIsIntra;
+
+  SearchSpaceAccumulator()
   {
-    int applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
-                                 std::vector<int>& ctuPumpRedQP, int optChromaQPOffset[2], double* picVisActY = nullptr);
-    int applyQPAdaptationLuma   (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
-                                 std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
-                                 const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr);
-    int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea);
-    int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
-                                 std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
-    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg);
+    memset( parts,  0, sizeof( parts ) );
+    memset( quant,  0, sizeof( quant ) );
+    memset( preds,  0, sizeof( preds ) );
+    memset( slices, 0, sizeof( slices ) );
   }
+
+  ~SearchSpaceAccumulator()
+  {
+    printPredictionsStats();
+    printQuantizationStats();
+    printPartitioningStats();
+  }
+
+  void addSlice( bool intra, int tId )
+  {
+    slices[intra][tId]++;
+
+    currIsIntra = intra;
+    currTId     = tId;
+  }
+
+  void addQuant     ( const struct UnitArea& area, int chType );
+  void addPartition ( const struct UnitArea& area, int chType );
+  void addPrediction( const int w, const int h, int chType );
+
+private:
+
+  void printQuantizationStats() const;
+  void printPartitioningStats() const;
+  void printPredictionsStats()  const;
+
+  void printStats( const size_t stat[2][6][8][8][2] ) const;
+};
+
+extern SearchSpaceAccumulator g_searchSpaceAcc;
 
 } // namespace vvenc
 
-//! \}
+#endif

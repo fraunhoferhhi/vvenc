@@ -96,8 +96,8 @@ void CS::setRefinedMotionField(CodingStructure &cs)
       static const unsigned mask  = scale - 1;
 
       const Position puPos = cu.lumaPos();
-      const Mv mv0 = cu.mv[0];
-      const Mv mv1 = cu.mv[1];
+      const Mv mv0 = cu.mv[0][0];
+      const Mv mv1 = cu.mv[1][0];
 
       for( int y = puPos.y, num = 0; y < ( puPos.y + cu.lumaSize().height ); y = y + dy )
       {
@@ -1879,9 +1879,9 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
   int curH = cu.Y().height;
 
   Mv mvLT, mvRT, mvLB;
-  mvLT = cuNeighbour->mvAffi[refPicList][0];
-  mvRT = cuNeighbour->mvAffi[refPicList][1];
-  mvLB = cuNeighbour->mvAffi[refPicList][2];
+  mvLT = cuNeighbour->mv[refPicList][0];
+  mvRT = cuNeighbour->mv[refPicList][1];
+  mvLB = cuNeighbour->mv[refPicList][2];
 
   bool isTopCtuBoundary = false;
   if ((posNeiY + neiH) % cu.cs->sps->CTUSize == 0 && (posNeiY + neiH) == posCurY)
@@ -2983,9 +2983,9 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
     }
   }
 
-  cu.mvAffi[eRefList][0] = affLT;
-  cu.mvAffi[eRefList][1] = affRT;
-  cu.mvAffi[eRefList][2] = affLB;
+  cu.mv[eRefList][0] = affLT;
+  cu.mv[eRefList][1] = affRT;
+  cu.mv[eRefList][2] = affLB;
 }
 
 void clipColPos(int& posX, int& posY, const CodingUnit& cu)
@@ -3030,7 +3030,7 @@ void CU::spanMotionInfo( CodingUnit& cu, const MergeCtx &mrgCtx )
 
       for( int i = 0; i < NUM_REF_PIC_LIST_01; i++ )
       {
-        mi.mv[i]     = cu.mv[i];
+        mi.mv[i]     = cu.mv[i][0];
         mi.refIdx[i] = cu.refIdx[i];
       }
       if (mi.isIBCmot)
@@ -3100,10 +3100,10 @@ void CU::restrictBiPredMergeCandsOne(CodingUnit& cu)
   {
     if (cu.interDir == 3)
     {
-      cu.interDir = 1;
+      cu.interDir  = 1;
       cu.refIdx[1] = -1;
-      cu.mv[1] = Mv(0, 0);
-      cu.BcwIdx = BCW_DEFAULT;
+      cu.mv[1][0]  = Mv(0, 0);
+      cu.BcwIdx    = BCW_DEFAULT;
     }
   }
 }
@@ -3281,7 +3281,7 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
   {
     if( cu.interDir != 2 /* PRED_L1 */ )
     {
-      Mv mv        = cu.mv[0];
+      Mv mv        = cu.mv[0][0];
       Mv mvPred;
       AMVPInfo amvpInfo;
       CU::fillMvpCand(cu, REF_PIC_LIST_0, cu.refIdx[0], amvpInfo);
@@ -3289,13 +3289,13 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
 
       mvPred       = amvpInfo.mvCand[cu.mvpIdx[0]];
       mv.roundTransPrecInternal2Amvr(cu.imv);
-      cu.mv[0]     = mv;
+      cu.mv[0][0]  = mv;
       Mv mvDiff    = mv - mvPred;
-      cu.mvd[0]    = mvDiff;
+      cu.mvd[0][0] = mvDiff;
     }
     if( cu.interDir != 1 /* PRED_L0 */ )
     {
-      Mv mv        = cu.mv[1];
+      Mv mv        = cu.mv[1][0];
       Mv mvPred;
       AMVPInfo amvpInfo;
       CU::fillMvpCand(cu, REF_PIC_LIST_1, cu.refIdx[1], amvpInfo);
@@ -3307,14 +3307,14 @@ void CU::resetMVDandMV2Int( CodingUnit& cu )
 
       if( cu.cs->slice->picHeader->mvdL1Zero && cu.interDir == 3 /* PRED_BI */ )
       {
-        cu.mvd[1] = Mv();
+        cu.mvd[1][0] = Mv();
         mv = mvPred;
       }
       else
       {
-        cu.mvd[1] = mvDiff;
+        cu.mvd[1][0] = mvDiff;
       }
-      cu.mv[1] = mv;
+      cu.mv[1][0] = mv;
     }
 
   }
@@ -3335,15 +3335,15 @@ bool CU::hasSubCUNonZeroMVd( const CodingUnit& cu )
   {
     if( cu.interDir != 2 /* PRED_L1 */ )
     {
-      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0].hor != 0;
-      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0].ver != 0;
+      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0][0].hor != 0;
+      bNonZeroMvd |= cu.mvd[REF_PIC_LIST_0][0].ver != 0;
     }
     if( cu.interDir != 1 /* PRED_L0 */ )
     {
       if( !cu.cs->slice->picHeader->mvdL1Zero || cu.interDir != 3 /* PRED_BI */ )
       {
-        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1].hor != 0;
-        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1].ver != 0;
+        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1][0].hor != 0;
+        bNonZeroMvd |= cu.mvd[REF_PIC_LIST_1][0].ver != 0;
       }
     }
   }
@@ -3366,8 +3366,8 @@ bool CU::hasSubCUNonZeroAffineMVd( const CodingUnit& cu )
     {
       for ( int i = 0; i < ( cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2 ); i++ )
       {
-        nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_0][i].hor != 0;
-        nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_0][i].ver != 0;
+        nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_0][i].hor != 0;
+        nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_0][i].ver != 0;
       }
     }
 
@@ -3377,8 +3377,8 @@ bool CU::hasSubCUNonZeroAffineMVd( const CodingUnit& cu )
       {
         for ( int i = 0; i < ( cu.affineType == AFFINEMODEL_6PARAM ? 3 : 2 ); i++ )
         {
-          nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_1][i].hor != 0;
-          nonZeroAffineMvd |= cu.mvdAffi[REF_PIC_LIST_1][i].ver != 0;
+          nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_1][i].hor != 0;
+          nonZeroAffineMvd |= cu.mvd[REF_PIC_LIST_1][i].ver != 0;
         }
       }
     }
@@ -3455,12 +3455,7 @@ bool CU::isBcwIdxCoded( const CodingUnit &cu )
     return false;
   }
 
-  if (cu.predMode == MODE_IBC)
-  {
-    return false;
-  }
-
-  if( cu.predMode == MODE_INTRA || cu.cs->slice->isInterP() )
+  if( cu.predMode == MODE_IBC || cu.predMode == MODE_INTRA || cu.slice->isInterP() || cu.interDir != 3 )
   {
     return false;
   }
