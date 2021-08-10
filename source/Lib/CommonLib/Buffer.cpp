@@ -159,6 +159,27 @@ void addWeightedAvgCore( const T* src1, int src1Stride, const T* src2, int src2S
 #undef ADD_WGHT_AVG_INC
 }
 
+template<typename T>
+void subsCore( const T* src0, int src0Stride, const T* src1, int src1Stride, T* dest, int destStride, int width, int height )
+{
+  CHECKD( width  != minuend.width,     "Incompatible size" );
+  CHECKD( height != minuend.height,    "Incompatible size" );
+  CHECKD( width  != subtrahend.width,  "Incompatible size");
+  CHECKD( height != subtrahend.height, "Incompatible size");
+
+#define SUBS_INC                \
+  dest += destStride;  \
+  src0 += src0Stride;  \
+  src1 += src1Stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = src0[ADDR] - src1[ADDR]
+
+  SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
+}
+
 void removeHighFreq(int16_t* dst, int dstStride, const int16_t* src, int srcStride, int width, int height)
 {
 #define REM_HF_INC  \
@@ -358,6 +379,9 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  sub4              = subsCore<Pel>;
+  sub8              = subsCore<Pel>;
+
   wghtAvg4          = addWeightedAvgCore<Pel>;
   wghtAvg8          = addWeightedAvgCore<Pel>;
 
@@ -542,6 +566,49 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
 
 #undef ADD_AVG_OP
 #undef ADD_AVG_INC
+  }
+}
+
+template<>
+void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend )
+{
+  CHECKD( width  != minuend.width,     "Incompatible size" );
+  CHECKD( height != minuend.height,    "Incompatible size" );
+  CHECKD( width  != subtrahend.width,  "Incompatible size");
+  CHECKD( height != subtrahend.height, "Incompatible size");
+  
+        Pel* dest =            buf;
+  const Pel* mins = minuend   .buf;
+  const Pel* subs = subtrahend.buf;
+
+
+  const unsigned destStride =            stride;
+  const unsigned minsStride = minuend.   stride;
+  const unsigned subsStride = subtrahend.stride;
+
+#if ENABLE_SIMD_OPT_BUFFER
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.sub8( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.sub4( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else
+#endif
+  {
+#define SUBS_INC                \
+    dest +=            stride;  \
+    mins += minuend   .stride;  \
+    subs += subtrahend.stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = mins[ADDR] - subs[ADDR]
+
+    SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
   }
 }
 
