@@ -2693,17 +2693,25 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               *cov++ += sum;
             }
 
-            alfCovariance[classIdx].y[0][k] += Elocalk0 * yLocal0;
-            alfCovariance[classIdx].y[0][k] += Elocalk1 * yLocal1;
-            alfCovariance[classIdx].y[0][k] += Elocalk2 * yLocal2;
-            alfCovariance[classIdx].y[0][k] += Elocalk3 * yLocal3;
+            int
+            sum  = Elocalk0 * yLocal0;
+            sum += Elocalk1 * yLocal1;
+            sum += Elocalk2 * yLocal2;
+            sum += Elocalk3 * yLocal3;
+
+            alfCovariance[classIdx].y[0][k] += sum;
           }
 
-          alfCovariance[classIdx].pixAcc += yLocal0 * yLocal0;
-          alfCovariance[classIdx].pixAcc += yLocal1 * yLocal1;
-          alfCovariance[classIdx].pixAcc += yLocal2 * yLocal2;
-          alfCovariance[classIdx].pixAcc += yLocal3 * yLocal3;
+          int
+          sum  = yLocal0 * yLocal0;
+          sum += yLocal1 * yLocal1;
+          sum += yLocal2 * yLocal2;
+          sum += yLocal3 * yLocal3;
+
+          alfCovariance[classIdx].pixAcc += sum;
         }
+
+        alfCovariance[classIdx].all0 = false;
       }
     }
     else
@@ -2819,6 +2827,8 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
           alfCovariance[classIdx].pixAcc += yLocal * yLocal;
         }
+
+        alfCovariance[classIdx].all0 = false;
       }
     }
     org += orgStride;
@@ -3383,7 +3393,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
         {
           DTRACE( g_trace_ctx, D_MISC, "\t\t\t ctbIdx=%d\n", ctbIdx );
           const double ctuLambda = lambdaChromaWeight > 0.0 ? cs.picture->ctuQpaLambda[ctbIdx] : m_lambda[COMP_Y];
-          double distUnfilterCtb = m_ctbDistortionUnfilter[COMP_Y][ctbIdx];
+          const double distUnfilterCtb = m_ctbDistortionUnfilter[COMP_Y][ctbIdx];
           //ctb on
           m_ctuEnableFlag[COMP_Y][ctbIdx] = 1;
           double         costOn = MAX_DOUBLE;
@@ -3401,14 +3411,17 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             double rateOn = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
             //distortion
             double dist = distUnfilterCtb;
+
             for (int classIdx = 0; classIdx < MAX_NUM_ALF_CLASSES; classIdx++)
             {
               if (filterSetIdx < NUM_FIXED_FILTER_SETS)
               {
                 // fixed filter set
                 int filterIdx = m_classToFilterMapping[filterSetIdx][classIdx];
-                dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                               : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
+
+                if( !m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].all0 )
+                  dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                 : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipDefaultEnc, m_fixedFilterSetCoeff[filterIdx], MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
               else
               {
@@ -3437,8 +3450,10 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
                   m_filterTmp[i] = pCoeff[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                   m_clipTmp[i]   = pClipp[classIdx * MAX_NUM_ALF_LUMA_COEFF + i];
                 }
-                dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
-                               : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
+
+                if( !m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].all0 )
+                  dist += doClip ? m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<true >(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor)
+                                 : m_alfCovariance[COMP_Y][0][ctbIdx][classIdx].calcErrorForCoeffs<false>(m_clipTmp, m_filterTmp, MAX_NUM_ALF_LUMA_COEFF, invFactor);
               }
             } //for(classIdx)
             //cost

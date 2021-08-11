@@ -79,8 +79,9 @@ public:
   TKy y;
   TKE E;
   double pixAcc;
+  bool all0;
 
-  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ) {}
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true ) {}
   ~AlfCovariance() { }
 
   void create( int size, int num_bins )
@@ -124,6 +125,7 @@ public:
   void reset()
   {
     pixAcc = 0;
+    all0   = true;
 
     for( int i = 0; i < _numBinsAlloc; i++ )
     {
@@ -158,6 +160,7 @@ public:
     }
 
     pixAcc = src.pixAcc;
+    all0   = src.all0;
 
     return *this;
   }
@@ -205,6 +208,7 @@ public:
 
     numCoeff = lhs.numCoeff;
     numBins  = lhs.numBins;
+    all0     = lhs.all0 & rhs.all0;
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
@@ -229,6 +233,7 @@ public:
     }
 
     pixAcc = lhs.pixAcc + rhs.pixAcc;
+    all0   = lhs.all0 && rhs.all0;
   }
 
   const AlfCovariance& operator+= ( const AlfCovariance& src )
@@ -256,6 +261,7 @@ public:
     }
 
     pixAcc += src.pixAcc;
+    all0   &= src.all0;
 
     return *this;
   }
@@ -285,6 +291,7 @@ public:
     }
 
     pixAcc -= src.pixAcc;
+    all0   &= src.all0;
 
     return *this;
   }
