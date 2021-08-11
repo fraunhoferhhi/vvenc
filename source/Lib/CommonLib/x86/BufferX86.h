@@ -1349,6 +1349,51 @@ void removeHighFreq_SSE(int16_t* src0, int src0Stride, const int16_t* src1, int 
 }
 #endif
 
+template<X86_VEXT vext, int W>
+void sub_SSE( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dest, int destStride, int width, int height )
+{
+  if( W == 8 )
+  {
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &src0[x] );
+        __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &src1[x] );
+        __m128i vdest = _mm_sub_epi16 ( vsrc0, vsrc1 );
+
+        _mm_store_si128( ( __m128i* ) &dest[x], vdest );
+      }
+
+      src0 += src0Stride;
+      src1 += src1Stride;
+      dest += destStride;
+    }
+  }
+  else if( W == 4 )
+  {
+    while( height-- )
+    {
+      for( int x = 0; x < width; x += 8 )
+      {
+        __m128i vsrc0 = _mm_loadl_epi64( ( const __m128i* ) &src0[x] );
+        __m128i vsrc1 = _mm_loadl_epi64( ( const __m128i* ) &src1[x] );
+        __m128i vdest = _mm_sub_epi16  ( vsrc0, vsrc1 );
+
+        _mm_storel_epi64( ( __m128i* ) &dest[x], vdest );
+      }
+
+      src0 += src0Stride;
+      src1 += src1Stride;
+      dest += destStride;
+    }
+  }
+  else
+  {
+    THROW("Unsupported size");
+  }
+}
+
 template<bool doShift, bool shiftR, typename T> static inline void do_shift( T &vreg, int num );
 #if USE_AVX2
 template<> inline void do_shift<true,  true , __m256i>( __m256i &vreg, int num ) { vreg = _mm256_srai_epi32( vreg, num ); }
@@ -1778,6 +1823,9 @@ void PelBufferOps::_initPelBufOpsX86()
   addAvg4  = addAvg_SSE<vext, 4>;
   addAvg8  = addAvg_SSE<vext, 8>;
   addAvg16 = addAvg_SSE<vext, 16>;
+
+  sub4 = sub_SSE<vext, 4>;
+  sub8 = sub_SSE<vext, 8>;
 
   copyClip4 = copyClip_SSE<vext, 4>;
   copyClip8 = copyClip_SSE<vext, 8>;

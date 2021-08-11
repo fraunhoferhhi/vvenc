@@ -188,6 +188,7 @@ static const bool s_doInterpQ[ 42 ][ 14 ] =
   { true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true  },
 };
 
+const int BlkUniMvInfoBuffer::m_uniMvListMaxSize;
 
 InterSearch::InterSearch()
   : m_modeCtrl                    (nullptr)
@@ -2044,15 +2045,18 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     Distortion uiBestSad = m_cDistParam.distFunc(m_cDistParam);
     uiBestSad += m_pcRdCost->getCostOfVectorWithPredictor(cTmpMv.hor, cTmpMv.ver, cStruct.imvShift);
 
+    Mv prevMv[m_BlkUniMvInfoBuffer->m_uniMvListMaxSize];
+
     for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
     {
       const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i );
+      cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
+      prevMv[i] = cTmpMv;
 
       int j = 0;
       for (; j < i; j++)
       {
-        const BlkUniMvInfo *prevMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( j );
-        if (curMvInfo->uniMvs[refPicList][iRefIdxPred] == prevMvInfo->uniMvs[refPicList][iRefIdxPred])
+        if (cTmpMv == prevMv[j])
         {
           break;
         }
@@ -2060,7 +2064,6 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
       if (j < i)
         continue;
 
-      cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
       clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
       cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
       m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
@@ -2339,19 +2342,9 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
 
   for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
   {
-    const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i );
-
-    int j = i;
-    for (; j < i; j++)
-    {
-      const BlkUniMvInfo *prevMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( j );
-      if (curMvInfo->uniMvs[refPicList][iRefIdxPred] == prevMvInfo->uniMvs[refPicList][iRefIdxPred])
-      {
-        break;
-      }
-    }
-
+    const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i);
     Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
+
     clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
     m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
@@ -2652,15 +2645,18 @@ void InterSearch::xTZSearchSelective( const CodingUnit& cu,
 
   }
 
+  Mv prevMv[m_BlkUniMvInfoBuffer->m_uniMvListMaxSize];
+
   for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
   {
-    const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( i );
+    const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i);
+    Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
+    prevMv[i] = cTmpMv;
 
     int j = 0;
     for (; j < i; j++)
     {
-      const BlkUniMvInfo *prevMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo( j );
-      if (curMvInfo->uniMvs[refPicList][iRefIdxPred] == prevMvInfo->uniMvs[refPicList][iRefIdxPred])
+      if (cTmpMv == prevMv[j])
       {
         break;
       }
@@ -2668,7 +2664,6 @@ void InterSearch::xTZSearchSelective( const CodingUnit& cu,
     if (j < i)
       continue;
 
-    Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
     clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);
     m_cDistParam.cur.buf = cStruct.piRefY + (cTmpMv.ver * cStruct.iRefStride) + cTmpMv.hor;
