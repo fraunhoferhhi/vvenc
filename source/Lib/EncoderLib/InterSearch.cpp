@@ -2339,24 +2339,10 @@ void InterSearch::xTZSearch( const CodingUnit& cu,
     }
   }
 
-  //Mv prevMv[m_BlkUniMvInfoBuffer->m_uniMvListMaxSize];
-
   for (int i = 0; i < m_BlkUniMvInfoBuffer->m_uniMvListSize; i++)
   {
     const BlkUniMvInfo* curMvInfo = m_BlkUniMvInfoBuffer->getBlkUniMvInfo(i);
     Mv cTmpMv = curMvInfo->uniMvs[refPicList][iRefIdxPred];
-    //prevMv[i] = cTmpMv;
-    //
-    //int j = 0;
-    //for (; j < i; j++)
-    //{
-    //  if (cTmpMv == prevMv[j])
-    //  {
-    //    break;
-    //  }
-    //}
-    //if (j < i)
-    //  continue;
 
     clipMv(cTmpMv, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
     cTmpMv.changePrecision(MV_PRECISION_INTERNAL, MV_PRECISION_INT);

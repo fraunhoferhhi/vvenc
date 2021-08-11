@@ -102,6 +102,8 @@ struct BlkRecord
 
 struct BlkUniMvInfoBuffer
 {
+  static const int m_uniMvListMaxSize = 15;
+
   const BlkUniMvInfo* getBlkUniMvInfo(int i) const { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
         BlkUniMvInfo* getBlkUniMvInfo(int i)       { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
 
@@ -197,7 +199,6 @@ struct BlkUniMvInfoBuffer
     m_uniMvListSize = 0;
   }
 
-  static const int m_uniMvListMaxSize = 15;
   BlkUniMvInfo     m_uniMvList[m_uniMvListMaxSize];
   int              m_uniMvListIdx;
   int              m_uniMvListSize;
