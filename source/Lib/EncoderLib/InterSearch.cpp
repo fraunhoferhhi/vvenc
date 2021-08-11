@@ -188,6 +188,7 @@ static const bool s_doInterpQ[ 42 ][ 14 ] =
   { true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true  },
 };
 
+const int BlkUniMvInfoBuffer::m_uniMvListMaxSize;
 
 InterSearch::InterSearch()
   : m_modeCtrl                    (nullptr)
