@@ -426,7 +426,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_wppMutex ) m_wppMutex->lock();
 
-  cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), false );
+  cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), true );
 
   if ( m_wppMutex ) m_wppMutex->unlock();
 
@@ -453,7 +453,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
     if ( m_wppMutex ) m_wppMutex->lock();
 
-    cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), false );
+    cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), true );
 
     if ( m_wppMutex ) m_wppMutex->unlock();
   }
@@ -511,8 +511,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
-
-  const UnitArea currCsArea = clipArea (CS::getArea (*bestCS, bestCS->area, partitioner.chType, partitioner.treeType), *bestCS->picture);
 
   if (m_pcEncCfg->m_usePerceptQPA && pps.useDQP && isLuma (partitioner.chType) && partitioner.currQgEnable())
   {
@@ -844,7 +842,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
   }
 
-  bestCS->picture->getRecoBuf( currCsArea ).copyFrom( bestCS->getRecoBuf( currCsArea ) );
   m_modeCtrl.finishCULevel( partitioner );
   if( m_cIntraSearch.getSaveCuCostInSCIPU() && bestCS->cus.size() == 1 )
   {
