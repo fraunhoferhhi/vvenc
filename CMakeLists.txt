@@ -280,6 +280,8 @@ add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
 
+add_subdirectory( "source/App/vvencsample" )
+
 # enable testing with ctest
 enable_testing()
 
