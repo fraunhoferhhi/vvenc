@@ -50,7 +50,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <stdio.h>
-//#include <stdint.h>
 #include <stdarg.h>
 
 #include "vvenc/vvenc.h"

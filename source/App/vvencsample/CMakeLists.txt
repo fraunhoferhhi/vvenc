@@ -21,7 +21,7 @@ set_target_properties( ${EXE_NAME} PROPERTIES MINSIZEREL_POSTFIX     "${CMAKE_MI
 
 target_compile_options( ${EXE_NAME} PRIVATE $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wall -Werror>
                                             $<$<CXX_COMPILER_ID:GNU>:-Wall -Werror -fdiagnostics-show-option>
-                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4244 /wd4251 /wd4996>)
+                                            $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /wd4100 /wd4244 /wd4251 /wd4996>)
 
 target_link_libraries( ${EXE_NAME} vvenc )
 
