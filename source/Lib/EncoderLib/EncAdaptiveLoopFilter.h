@@ -434,6 +434,8 @@ private:
   void   getPreBlkStats          ( AlfCovariance* alfCovariace, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos);
   void   calcCovariance          ( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance);
   template < bool clipToBdry >
+  void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+  template < bool clipToBdry >
   void   calcLinCovariance       ( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
   void   deriveStatsForCcAlfFiltering(const PelUnitBuf &orgYuv, const PelUnitBuf &recYuv, const int compIdx,
                                       const int maskStride, const uint8_t filterIdc, CodingStructure &cs);
