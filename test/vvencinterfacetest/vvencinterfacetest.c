@@ -63,7 +63,7 @@ void msgFnc( void* ctx, int level, const char* fmt, va_list args )
 
 int main( int argc, char* argv[] )
 {
-  int iRet,iRet2 = 0;
+  int iRet = 0;
   vvencEncoder *enc = NULL;        // encoder handler
 
   vvencYUVBuffer  cYUVInputBuffer;  // input picture storage
@@ -116,8 +116,7 @@ int main( int argc, char* argv[] )
     if( 0 != iRet )
     {
       printf("encoding failed. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-      encodeDone = true;
-      break;
+      goto fail;
     }
 
     if( AU.payloadUsedSize > 0 )
@@ -134,8 +133,7 @@ int main( int argc, char* argv[] )
     if( 0 != iRet )
     {
       printf("encoding failed. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-      encodeDone = true;
-      break;
+      goto fail;
     }
 
     if( AU.payloadUsedSize > 0 )
@@ -147,16 +145,30 @@ int main( int argc, char* argv[] )
   vvenc_print_summary(enc);
 
   // un-initialize the encoder
-  iRet2 = vvenc_encoder_close( enc );
-  if( 0 != iRet2 )
+  iRet = vvenc_encoder_close( enc );
+  if( 0 != iRet )
   {
-    printf("close encoder failed. ret: %d, %s", iRet2, vvenc_get_last_error( enc ) );
+    printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
   }
 
   // free allocated memory
   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
   vvenc_accessUnit_free_payload( &AU );
 
-  return iRet ? iRet : iRet2;
+  return iRet;
+
+fail:
+
+  iRet = vvenc_encoder_close( enc );
+  if( 0 != iRet )
+  {
+    printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
+  }
+
+  // free allocated memory
+  vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+  vvenc_accessUnit_free_payload( &AU );
+
+  return -1;
 }
 
