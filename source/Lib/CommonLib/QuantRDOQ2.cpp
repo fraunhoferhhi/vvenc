@@ -609,6 +609,18 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
   //////////////////////////////////////////////////////////////////////////
   //  Loop over sub-sets (coefficient groups)
   //////////////////////////////////////////////////////////////////////////
+  
+  TCoeff thres = 0, useThres = 0;
+  
+  if( iQBits )
+    thres = TCoeff( ( int64_t( m_thrVal ) << ( iQBits - 1 ) ) );
+  else
+    thres = TCoeff( ( int64_t( m_thrVal >> 1 ) << iQBits ) );
+
+  if( !bUseScalingList )
+  {
+    useThres = thres / ( defaultQuantScale << 2 );
+  }
 
 #if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
   const bool scanFirstSimd = !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 && read_x86_extension_flags() > SCALAR;
@@ -624,7 +636,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
     int iScanPosinCG = iScanPos & ( iCGSize - 1 );
     if( iLastScanPos < 0 )
-    {
+    { 
 #if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
       // if more than one 4x4 coding subblock is available, use SIMD to find first subblock with coefficient larger than threshold
       if( scanFirstSimd )
@@ -633,42 +645,28 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         const int firstTestPos  = iScanPos - iScanPosinCG;
         uint32_t  uiBlkPos      = cctx.blockPos( firstTestPos );
 
-        const __m128i xquant = _mm_set1_epi32( defaultQuantScale );
-        const __m128i xadd   = _mm_set1_epi32( iQOffset );
+        const __m128i xdfTh = _mm_set1_epi32( useThres );
 
-        // read first line of the subblock and check for quantized non-zero coefficients
-        // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of uiwidth
-        __m128i xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
-                xl0 = _mm_mullo_epi32( xl0, xquant );
-                xl0 = _mm_add_epi32  ( xl0, xadd );
-                xl0 = _mm_srai_epi32 ( xl0, iQBits );
-        __m128i xdf = xl0;
+        // read first line of the subblock and check for coefficients larger than the threshold
+        // assumming the subblocks are dense 4x4 blocks in raster scan order with the stride of tuPars.m_width
+        __m128i xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &plSrcCoeff[uiBlkPos] ) );
+        __m128i xdf = _mm_cmpgt_epi32( xl0, xdfTh );
 
         // same for the next line in the subblock
         uiBlkPos += uiWidth;
-        xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
-        xl0 = _mm_mullo_epi32( xl0, xquant );
-        xl0 = _mm_add_epi32  ( xl0, xadd );
-        xl0 = _mm_srai_epi32 ( xl0, iQBits );
-        xdf = _mm_or_si128   ( xdf, xl0 );
+        xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &plSrcCoeff[uiBlkPos] ) );
+        xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
 
         // and the third line
         uiBlkPos += uiWidth;
-        xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
-        xl0 = _mm_mullo_epi32( xl0, xquant );
-        xl0 = _mm_add_epi32  ( xl0, xadd );
-        xl0 = _mm_srai_epi32 ( xl0, iQBits );
-        xdf = _mm_or_si128   ( xdf, xl0 );
+        xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &plSrcCoeff[uiBlkPos] ) );
+        xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
 
         // and the last line
         uiBlkPos += uiWidth;
-        xl0 = _mm_abs_epi32  ( _mm_loadu_si128( (const __m128i*) & plSrcCoeff[uiBlkPos] ) );
-        xl0 = _mm_mullo_epi32( xl0, xquant );
-        xl0 = _mm_add_epi32  ( xl0, xadd );
-        xl0 = _mm_srai_epi32 ( xl0, iQBits );
-        xdf = _mm_or_si128   ( xdf, xl0 );
+        xl0 = _mm_abs_epi32( _mm_loadu_si128( ( const __m128i* ) &plSrcCoeff[uiBlkPos] ) );
+        xdf = _mm_or_si128( xdf, _mm_cmpgt_epi32( xl0, xdfTh ) );
 
-        // if none of the coeffcients were non-zero, skip the subblock
         if( _mm_testz_si128( xdf, xdf ) )
         {
           iScanPos    -= iScanPosinCG + 1;
@@ -676,8 +674,26 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
           continue;
         }
       }
-
+      else
 #endif
+      if( !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 )
+      {
+        bool allSmaller = true;
+
+        for( int xScanPosinCG = iScanPosinCG, xScanPos = iScanPos; allSmaller && xScanPosinCG >= 0; xScanPosinCG--, xScanPos-- )
+        {
+          const uint32_t uiBlkPos = cctx.blockPos( xScanPos );
+          allSmaller &= abs( plSrcCoeff[uiBlkPos] ) <= useThres;
+        }
+
+        if( allSmaller )
+        {
+          iScanPos    -= iScanPosinCG + 1;
+          iScanPosinCG = -1;
+          continue;
+        }
+      }
+
     findlast2:
       // Fast loop to find last-pos.
       // No need to add distortion to cost as it would be added to both the coded and uncoded cost
@@ -692,7 +708,8 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
         
         const uint32_t uiMaxAbsLevel = ( abs( plSrcCoeff[uiBlkPos] ) * quantScale + iQOffset ) >> iQBits;
 
-        if( uiMaxAbsLevel ){
+        if( uiMaxAbsLevel )
+        {
           iLastScanPos = iScanPos;
           lastSubSetId = subSetId;
           break;

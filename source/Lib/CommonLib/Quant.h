@@ -109,7 +109,7 @@ public:
   virtual ~Quant();
 
   // initialize class
-  virtual void init( int rdoq = 0, bool useRDOQTS = false, bool useSelectiveRDOQ = false, int dqThrVal = 8 );
+  virtual void init( int rdoq = 0, bool useRDOQTS = false, bool useSelectiveRDOQ = false, int thrVal = 8 );
 
 public:
 
@@ -154,6 +154,7 @@ protected:
   bool     m_useSelectiveRDOQ;
   double   m_dLambda;
   TCoeffSig m_tmpBdpcm[1 << ( MAX_TB_LOG2_SIZEY << 1 )];
+  int      m_thrVal;
 
 private:
   double   m_lambdas[MAX_NUM_COMP];

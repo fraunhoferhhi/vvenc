@@ -486,7 +486,7 @@ void Quant::dequant(const TransformUnit& tu,
   }
 }
 
-void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrDqVal )
+void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrVal )
 {
 
   // TODO: pass to init() a single variable containing (quantization) flags,
@@ -495,6 +495,7 @@ void Quant::init( int rdoq, bool bUseRDOQTS, bool useSelectiveRDOQ, int thrDqVal
   m_RDOQ             = rdoq;
   m_useRDOQTS        = bUseRDOQTS;
   m_useSelectiveRDOQ = useSelectiveRDOQ;
+  m_thrVal           = thrVal;
 }
 
 /** set flat matrix value to quantized coefficient

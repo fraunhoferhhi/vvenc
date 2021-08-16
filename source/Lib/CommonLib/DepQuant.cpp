@@ -1717,11 +1717,11 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int dqThrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int thrVal )
 {
-  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, dqThrVal );
+  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, thrVal );
 
-  static_cast<DQIntern::DepQuant*>(p)->init( dqThrVal );
+  static_cast<DQIntern::DepQuant*>(p)->init( thrVal );
 }
 
 } // namespace vvenc

@@ -87,7 +87,7 @@ public:
              const bool scalingListsEnabled  = false,
              const bool bEnc                 = false,
              const bool useTransformSkipFast = false,
-             const int  dqThrValue           = 8
+             const int  thrValue             = 8
            );
 
 public:
