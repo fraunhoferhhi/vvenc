@@ -125,6 +125,7 @@ private:
 
   int      xGetGopIdFromPoc    ( int poc ) const { return m_pocToGopId[ poc % m_cEncCfg.m_GOPSize ]; }
   int      xGetNextPocICO      ( int poc, bool flush, int max, bool altGOP ) const;
+  int      xGetFirstEncPOC     ( int max ) const;
   void     xCreateCodingOrder  ( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList, bool altGOP );
   void     xInitPicture        ( Picture& pic, int picNum, const PPS& pps, const SPS& sps, const VPS& vps, const DCI& dci );
   void     xDeletePicBuffer    ();

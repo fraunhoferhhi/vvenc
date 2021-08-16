@@ -573,12 +573,23 @@ void  EncLib::printSummary()
 // Protected member functions
 // ====================================================================================================================
 
+int EncLib::xGetFirstEncPOC( int max ) const
+{
+  int poc = m_cEncCfg.m_GOPSize >> 1;
+  
+  while( max < poc )
+  {
+    poc >>= 1;
+  }
+  
+  return poc-1;
+}
 
 int EncLib::xGetNextPocICO( int poc, bool flush, int max, bool altGOP ) const
 {
   if( poc < 0 )
   {
-    return altGOP? m_cEncCfg.m_GOPSize-1 : 0;
+    return altGOP? max < m_cEncCfg.m_GOPSize ? xGetFirstEncPOC( max ) : m_cEncCfg.m_GOPSize-1 : 0;
   }
   int chk  = 0;
   int next = ( poc == 0 && !altGOP ) ? m_cEncCfg.m_GOPList[ 0 ].m_POC : poc + m_nextPocOffset[ poc % m_cEncCfg.m_GOPSize ];
