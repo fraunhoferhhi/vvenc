@@ -159,6 +159,22 @@ void addWeightedAvgCore( const T* src1, int src1Stride, const T* src2, int src2S
 #undef ADD_WGHT_AVG_INC
 }
 
+template<typename T>
+void subsCore( const T* src0, int src0Stride, const T* src1, int src1Stride, T* dest, int destStride, int width, int height )
+{
+#define SUBS_INC                \
+  dest += destStride;  \
+  src0 += src0Stride;  \
+  src1 += src1Stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = src0[ADDR] - src1[ADDR]
+
+  SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
+}
+
 void removeHighFreq(int16_t* dst, int dstStride, const int16_t* src, int srcStride, int width, int height)
 {
 #define REM_HF_INC  \
@@ -358,6 +374,9 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  sub4              = subsCore<Pel>;
+  sub8              = subsCore<Pel>;
+
   wghtAvg4          = addWeightedAvgCore<Pel>;
   wghtAvg8          = addWeightedAvgCore<Pel>;
 
@@ -542,6 +561,49 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
 
 #undef ADD_AVG_OP
 #undef ADD_AVG_INC
+  }
+}
+
+template<>
+void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend )
+{
+  CHECKD( width  != minuend.width,     "Incompatible size" );
+  CHECKD( height != minuend.height,    "Incompatible size" );
+  CHECKD( width  != subtrahend.width,  "Incompatible size");
+  CHECKD( height != subtrahend.height, "Incompatible size");
+  
+        Pel* dest =            buf;
+  const Pel* mins = minuend   .buf;
+  const Pel* subs = subtrahend.buf;
+
+
+  const unsigned destStride =            stride;
+  const unsigned minsStride = minuend.   stride;
+  const unsigned subsStride = subtrahend.stride;
+
+#if ENABLE_SIMD_OPT_BUFFER
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.sub8( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.sub4( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else
+#endif
+  {
+#define SUBS_INC                \
+    dest +=            stride;  \
+    mins += minuend   .stride;  \
+    subs += subtrahend.stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = mins[ADDR] - subs[ADDR]
+
+    SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
   }
 }
 
@@ -1011,14 +1073,38 @@ const CPelUnitBuf PelStorage::getBufPart(const UnitArea& unit) const
 
 const CPelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit) const
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), CPelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), CPelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+  
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 PelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit)
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), PelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), PelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 const CPelBuf PelStorage::getCompactBuf(const CompArea& carea) const

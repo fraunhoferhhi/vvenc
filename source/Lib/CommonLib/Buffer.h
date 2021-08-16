@@ -92,6 +92,8 @@ struct PelBufferOps
   void ( *addAvg4 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg8 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg16 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
+  void ( *sub4 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
+  void ( *sub8 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
   void ( *wghtAvg4 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
   void ( *wghtAvg8 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
   void ( *copyClip4 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
@@ -359,28 +361,11 @@ void AreaBuf<T>::copyFrom( const AreaBuf<const T>& other )
 template<typename T>
 void AreaBuf<T>::subtract( const AreaBuf<const T>& minuend, const AreaBuf<const T>& subtrahend )
 {
-  CHECK( width  != minuend.width,  "Incompatible size" );
-  CHECK( height != minuend.height, "Incompatible size" );
-  CHECK( width  != subtrahend.width, "Incompatible size");
-  CHECK( height != subtrahend.height, "Incompatible size");
-
-        T* dest =       buf;
-  const T* mins = minuend.buf;
-  const T* subs = subtrahend.buf;
-
-#define SUBS_INC          \
-  dest +=       stride;    \
-  mins += minuend.stride;   \
-  subs += subtrahend.stride; \
-
-#define SUBS_OP( ADDR ) dest[ADDR] = mins[ADDR] - subs[ADDR]
-
-  SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
-
-#undef SUBS_OP
-#undef SUBS_INC
+  THROW( "Type not supported" );
 }
 
+template<>
+void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend );
 
 template<typename T>
 void AreaBuf<T>::copyClip( const AreaBuf<const T>& src, const ClpRng& clpRng )

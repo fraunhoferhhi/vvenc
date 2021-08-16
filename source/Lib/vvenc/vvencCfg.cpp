@@ -620,8 +620,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   vvenc_vvencMCTF_default( &c->m_vvencMCTF );
 
-  c->m_dqThresholdVal                          = 8;
-  c->m_qtbttSpeedUp                            = 0;
+  c->m_quantThresholdVal                       = -1;
+  c->m_qtbttSpeedUp                            = 1;
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -831,6 +831,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       c->m_maxParallelFrames = 2;
     }
+  }
+
+  // quantization threshold
+  if( c->m_quantThresholdVal < 0 )
+  {
+    c->m_quantThresholdVal = c->m_DepQuantEnabled ? 8 : 6;
   }
 
   // MCTF
@@ -3201,13 +3207,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "TMVP:" << c->m_TMVPModeId << " ";
 
   css << "DQ:" << c->m_DepQuantEnabled << " ";
-  if( c->m_DepQuantEnabled )
-  {
-    if( c->m_dqThresholdVal & 1 )
-      css << "(Thr: " << (c->m_dqThresholdVal >> 1) << ".5) ";
-    else
-      css << "(Thr: " << (c->m_dqThresholdVal >> 1) << ") ";
-  }
   css << "SDH:" << c->m_SignDataHidingEnabled << " ";
   css << "CST:" << c->m_dualITree << " ";
   css << "BDOF:" << c->m_BDOF << " ";
@@ -3313,6 +3312,10 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     css << "ALFSpeed:" << c->m_alfSpeed << " ";
   }
+  if( c->m_quantThresholdVal & 1 )
+    css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << ".5 ";
+  else
+    css << "QuantThr: " << (c->m_quantThresholdVal >> 1) << " ";
 
   css << "\nRATE CONTROL CFG: ";
   css << "RateControl:" << ( c->m_RCTargetBitrate > 0 ) << " ";

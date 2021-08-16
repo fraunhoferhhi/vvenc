@@ -79,8 +79,9 @@ public:
   TKy y;
   TKE E;
   double pixAcc;
+  bool all0;
 
-  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ) {}
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true ) {}
   ~AlfCovariance() { }
 
   void create( int size, int num_bins )
@@ -124,6 +125,7 @@ public:
   void reset()
   {
     pixAcc = 0;
+    all0   = true;
 
     for( int i = 0; i < _numBinsAlloc; i++ )
     {
@@ -158,6 +160,7 @@ public:
     }
 
     pixAcc = src.pixAcc;
+    all0   = src.all0;
 
     return *this;
   }
@@ -205,6 +208,7 @@ public:
 
     numCoeff = lhs.numCoeff;
     numBins  = lhs.numBins;
+    all0     = lhs.all0 & rhs.all0;
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
@@ -229,6 +233,7 @@ public:
     }
 
     pixAcc = lhs.pixAcc + rhs.pixAcc;
+    all0   = lhs.all0 && rhs.all0;
   }
 
   const AlfCovariance& operator+= ( const AlfCovariance& src )
@@ -256,6 +261,7 @@ public:
     }
 
     pixAcc += src.pixAcc;
+    all0   &= src.all0;
 
     return *this;
   }
@@ -285,6 +291,7 @@ public:
     }
 
     pixAcc -= src.pixAcc;
+    all0   &= src.all0;
 
     return *this;
   }
@@ -426,6 +433,8 @@ private:
   void   getFrameStat            ( AlfCovariance* frameCov, AlfCovariance** ctbCov, uint8_t* ctbEnableFlags, uint8_t* ctbAltIdx, const int numClasses, int altIdx );
   void   getPreBlkStats          ( AlfCovariance* alfCovariace, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos);
   void   calcCovariance          ( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance);
+  template < bool clipToBdry >
+  void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
   template < bool clipToBdry >
   void   calcLinCovariance       ( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
   void   deriveStatsForCcAlfFiltering(const PelUnitBuf &orgYuv, const PelUnitBuf &recYuv, const int compIdx,
