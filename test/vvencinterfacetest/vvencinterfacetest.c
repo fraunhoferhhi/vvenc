@@ -157,11 +157,6 @@ int main( int argc, char* argv[] )
   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
   vvenc_accessUnit_free_payload( &AU );
 
-  if( iRet != 0 )
-  {
-    return iRet;
-  }
-
-  return iRet2;
+  return iRet ? iRet : iRet2;
 }
 
