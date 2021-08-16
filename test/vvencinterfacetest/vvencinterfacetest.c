@@ -63,7 +63,7 @@ void msgFnc( void* ctx, int level, const char* fmt, va_list args )
 
 int main( int argc, char* argv[] )
 {
-  int iRet = 0;
+  int iRet,iRet2 = 0;
   vvencEncoder *enc = NULL;        // encoder handler
 
   vvencYUVBuffer  cYUVInputBuffer;  // input picture storage
@@ -147,16 +147,21 @@ int main( int argc, char* argv[] )
   vvenc_print_summary(enc);
 
   // un-initialize the encoder
-  iRet = vvenc_encoder_close( enc );
-  if( 0 != iRet )
+  iRet2 = vvenc_encoder_close( enc );
+  if( 0 != iRet2 )
   {
-    printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
+    printf("close encoder failed. ret: %d, %s", iRet2, vvenc_get_last_error( enc ) );
   }
 
   // free allocated memory
   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
   vvenc_accessUnit_free_payload( &AU );
 
-  return 0;
+  if( iRet != 0 )
+  {
+    return iRet;
+  }
+
+  return iRet2;
 }
 
