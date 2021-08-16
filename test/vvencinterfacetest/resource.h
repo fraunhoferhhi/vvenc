@@ -45,13 +45,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 /**
-  \ingroup vvencsample
-  \file    /vvencsample/resource.h
+  \ingroup vvencinterfacetest
+  \file    /vvencinterfacetest/resource.h
 */
 
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by vvencapp.rc
+// Used by vvencinterfacetest.rc
 
 // Next default values for new objects
 //

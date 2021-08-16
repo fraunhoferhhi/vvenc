@@ -1,5 +1,5 @@
 # executable
-set( EXE_NAME vvencsample )
+set( EXE_NAME vvencinterfacetest )
 
 # get source files
 file( GLOB SRC_FILES "*.c" )
@@ -31,4 +31,4 @@ source_group( "Resource Files" FILES ${RESOURCE_FILE} )
 
 
 # set the folder where to place the projects
-set_target_properties( ${EXE_NAME}  PROPERTIES FOLDER app )
+set_target_properties( ${EXE_NAME}  PROPERTIES FOLDER test )

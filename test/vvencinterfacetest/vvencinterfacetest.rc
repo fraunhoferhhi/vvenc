@@ -90,12 +90,12 @@ BEGIN
         BLOCK "200004b0"
         BEGIN
             VALUE "CompanyName", "Fraunhofer Heinrich Hertz Institute"
-            VALUE "FileDescription", "vvencsample Application"
+            VALUE "FileDescription", "vvencinterfacetest Test"
             VALUE "FileVersion", VS_FILE_VERSION_STR
-            VALUE "InternalName", "vvencsample.exe"
+            VALUE "InternalName", "vvencinterfacetest.exe"
             VALUE "LegalCopyright", "(c) Copyright (2019-2021) Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V"
-            VALUE "OriginalFilename", "vvencsample.exe"
-            VALUE "ProductName", "vvencsample"
+            VALUE "OriginalFilename", "vvencinterfacetest.exe"
+            VALUE "ProductName", "vvencinterfacetest"
             VALUE "ProductVersion", VS_FILE_VERSION_STR
         END
     END
