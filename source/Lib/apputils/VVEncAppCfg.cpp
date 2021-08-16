@@ -988,7 +988,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FastForwardToPOC",                                m_fastForwardToPOC,                               "Get to encoding the specified POC as soon as possible by skipping temporal layers irrelevant for the specified POC." )
   ("StopAfterFFtoPOC",                                m_stopAfterFFtoPOC,                               "If using fast forward to POC, after the POC of interest has been hit, stop further encoding.")
   ("DecodeBitstream2ModPOCAndType",                   m_bs2ModPOCAndType,                               "Modify POC and NALU-type of second input bitstream, to use second BS as closing I-slice")
-  ("ForceDecodeBitstream1",                           m_forceDecodeBitstream1,                          "force decoding of bitstream 1 - use this only if you are realy sure about what you are doing ")
+  ("ForceDecodeBitstream1",                           m_forceDecodeBitstream1,                          "force decoding of bitstream 1 - use this only if you are really sure about what you are doing ")
   ;
 
   opts.setSubSection("Coding tools");
