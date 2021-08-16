@@ -92,7 +92,6 @@ int main( int argc, char* argv[] )
   if( 0 != iRet )
   {
     printf("cannot open encoder. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-    vvenc_encoder_close( enc );
     return iRet;
   }
 
@@ -117,10 +116,8 @@ int main( int argc, char* argv[] )
     if( 0 != iRet )
     {
       printf("encoding failed. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-      vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-      vvenc_accessUnit_free_payload( &AU );
-      vvenc_encoder_close( enc );
-      return iRet;
+      encodeDone = true;
+      break;
     }
 
     if( AU.payloadUsedSize > 0 )
@@ -137,10 +134,8 @@ int main( int argc, char* argv[] )
     if( 0 != iRet )
     {
       printf("encoding failed. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-      vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-      vvenc_accessUnit_free_payload( &AU );
-      vvenc_encoder_close( enc );
-      return iRet;
+      encodeDone = true;
+      break;
     }
 
     if( AU.payloadUsedSize > 0 )
@@ -156,7 +151,6 @@ int main( int argc, char* argv[] )
   if( 0 != iRet )
   {
     printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
-    return iRet;
   }
 
   // free allocated memory
