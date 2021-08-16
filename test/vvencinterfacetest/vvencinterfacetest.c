@@ -45,8 +45,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 ------------------------------------------------------------------------------------------- */
 
 /**
-  \file    vvencsample.c
-  \brief   This vvencsample.c file contains a simple sample that shows basic encoder interface functionality.
+  \file    vvencinterfacetest.c
+  \brief   This vvencinterfacetest.c file contains a simple sample that shows basic encoder interface functionality.
 */
 
 #include <stdio.h>
@@ -103,6 +103,12 @@ int main( int argc, char* argv[] )
   vvenc_YUVBuffer_default( &cYUVInputBuffer );
   vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencCfg.m_internChromaFormat, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
 
+  // inititialize yuv input buffer
+  for( int comp = 0; comp < 3; comp++ )
+  {
+    memset( cYUVInputBuffer.planes[ comp ].ptr, 512, cYUVInputBuffer.planes[comp].width*cYUVInputBuffer.planes[comp].height*sizeof(int16_t));
+  }
+
   // --- allocate memory for output packets
   vvenc_accessUnit_default( &AU );
   vvenc_accessUnit_alloc_payload( &AU, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
@@ -116,7 +122,7 @@ int main( int argc, char* argv[] )
     if( 0 != iRet )
     {
       printf("encoding failed. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-      goto fail;
+      goto cleanup;
     }
 
     if( AU.payloadUsedSize > 0 )
@@ -133,7 +139,7 @@ int main( int argc, char* argv[] )
     if( 0 != iRet )
     {
       printf("encoding failed. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
-      goto fail;
+      goto cleanup;
     }
 
     if( AU.payloadUsedSize > 0 )
@@ -144,31 +150,19 @@ int main( int argc, char* argv[] )
 
   vvenc_print_summary(enc);
 
-  // un-initialize the encoder
-  iRet = vvenc_encoder_close( enc );
-  if( 0 != iRet )
-  {
-    printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
-  }
+cleanup:
 
   // free allocated memory
   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
   vvenc_accessUnit_free_payload( &AU );
+
+  // un-initialize the encoder
+  if( 0 != vvenc_encoder_close( enc ) )
+  {
+    printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
+    return -1;
+  }
 
   return iRet;
-
-fail:
-
-  iRet = vvenc_encoder_close( enc );
-  if( 0 != iRet )
-  {
-    printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
-  }
-
-  // free allocated memory
-  vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-  vvenc_accessUnit_free_payload( &AU );
-
-  return -1;
 }
 
