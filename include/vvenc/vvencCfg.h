@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <vector>
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END
@@ -702,7 +703,17 @@ typedef struct vvenc_config
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 
   bool                m_picPartitionFlag;
-
+  bool                m_rasterSliceFlag;
+  std::vector<unsigned int> m_tileColumnWidth;
+  std::vector<unsigned int> m_tileRowHeight;
+  std::vector<unsigned int> m_rectSlicePos;
+  int                 m_rectSliceFixedWidth;
+  int                 m_rectSliceFixedHeight;
+  uint32_t            m_numTileCols;                                                     // derived number of tile columns
+  uint32_t            m_numTileRows;                                                     // derived number of tile rows
+  bool                m_tileIdxDeltaPresentFlag;                                         // derived tile index delta present flag
+  bool                m_singleSlicePerSubPicFlag;
+  
   // decode bitstream options
   int                 m_switchPOC;                                                       // dbg poc.
   int                 m_switchDQP;                                                       // switch DQP.

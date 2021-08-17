@@ -589,6 +589,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToArr<int>                 toQpOutCbCr                  ( &m_qpOutValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA         );
   IStreamToArr<double>              toIntraLambdaModifier        ( &m_adIntraLambdaModifier[0], VVENC_MAX_TLAYER );
 
+  IStreamToVec<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth );
+  IStreamToVec<unsigned int>        toTileRowHeight              ( &m_tileRowHeight );
+  IStreamToVec<unsigned int>        toRectSlicePos               ( &m_rectSlicePos );
+
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,            &SegmentToEnumMap );
@@ -1045,6 +1049,12 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MaxParallelFrames",                               m_maxParallelFrames,                              "Maximum number of frames to be processed in parallel(0:off, >=2: enable parallel frames)")
   ("WppBitEqual",                                     m_ensureWppBitEqual,                              "Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line above, 2:line wise reset)")
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
+  ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
+  ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
+  ("RasterScanSlices",                                m_rasterSliceFlag,                                "Indicates if using raster-scan or rectangular slices (0: rectangular, 1: raster-scan)")
+  ("RectSliceFixedWidth",                             m_rectSliceFixedWidth,                            "Fixed rectangular slice width in units of tiles (0: disable this feature and use RectSlicePositions instead)")
+  ("RectSliceFixedHeight",                            m_rectSliceFixedHeight,                           "Fixed rectangular slice height in units of tiles (0: disable this feature and use RectSlicePositions instead)")
+  ("RectSlicePositions",                              toRectSlicePos,                                   "Rectangular slice positions. List containing pairs of top-left CTU RS address followed by bottom-right CTU RS address")
   ;
 
   opts.setSubSection("Coding tools");
