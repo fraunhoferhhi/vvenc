@@ -327,8 +327,440 @@ double AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const int *
   return error * invFactor;
 }
 
-template<>
-double AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const double invFactor ) const
+
+
+template<int numCoeff>
+static double calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const double invFactor )
+{
+  double error = 0;
+
+  for( int i = 0; i < numCoeff; i++ )   //diagonal
+  {
+    double sum = 0;
+    for( int j = i + 1; j < numCoeff; j++ )
+    {
+      // E[j][i] = E[i][j], sum will be multiplied by 2 later
+      sum += E[0][0][i][j] * coeff[j];
+    }
+    error += ( ( E[0][0][i][i] * coeff[i] + sum * 2 ) * invFactor - 2 * y[0][i] ) * coeff[i];
+  }
+
+  return error * invFactor;
+}
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const double invFactor )
+{
+  double error = 0, sum0 = 0, sum1 = 0;
+
+  const __m128d mzero = _mm_setzero_pd();
+  const __m128d minvf = _mm_set1_pd( invFactor );
+  const __m128d mtwo  = _mm_set1_pd( 2.0 );
+
+  __m128d merror  = _mm_setzero_pd();
+  __m128d mcoef1  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [1] ) );
+  __m128d mcoef3  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [3] ) );
+  __m128d mcoef5  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [5] ) );
+  __m128d mcoef7  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [7] ) );
+  __m128d mcoef9  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [9] ) );
+  __m128d mcoef11 = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[11] ) );
+
+
+  __m128d mE1  = _mm_loadu_pd( &E[0][0][0][ 1] );
+  __m128d mE3  = _mm_loadu_pd( &E[0][0][0][ 3] );
+  __m128d mE5  = _mm_loadu_pd( &E[0][0][0][ 5] );
+  __m128d mE7  = _mm_loadu_pd( &E[0][0][0][ 7] );
+  __m128d mE9  = _mm_loadu_pd( &E[0][0][0][ 9] );
+  __m128d mE11 = _mm_loadu_pd( &E[0][0][0][11] );
+  
+  mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  __m128d msum = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum0 = _mm_cvtsd_f64( msum );
+
+  
+  
+  mcoef1 = _mm_blend_pd( mcoef1, mzero, 1 );
+
+  mE1  = _mm_loadu_pd( &E[0][0][1][ 1] );
+  mE3  = _mm_loadu_pd( &E[0][0][1][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][1][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][1][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][1][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][1][11] );
+  
+  mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum1 = _mm_cvtsd_f64( msum );
+  
+  __m128d mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[0] ) );
+  __m128d my      =                  _mm_loadu_pd(                       &y[0][0] );
+  __m128d mE      =                  _mm_setr_pd( E[0][0][0][0], E[0][0][1][1] );
+  
+  msum = _mm_setr_pd( sum0, sum1 ) ;
+
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+
+  //error += ( ( E[0][0][0][0] * coeff[0] + sum0 * 2 ) * invFactor - 2 * y[0][0] ) * coeff[0];
+  //error += ( ( E[0][0][1][1] * coeff[1] + sum1 * 2 ) * invFactor - 2 * y[0][1] ) * coeff[1];
+  
+  
+  
+  //mcoef1 = _mm_blend_pd( mcoef1, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][2][ 1] );
+  mE3  = _mm_loadu_pd( &E[0][0][2][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][2][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][2][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][2][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][2][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum0 = _mm_cvtsd_f64( msum );
+
+
+  
+  mcoef3 = _mm_blend_pd( mcoef3, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][3][ 1] );
+  mE3  = _mm_loadu_pd( &E[0][0][3][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][3][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][3][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][3][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][3][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum1 = _mm_cvtsd_f64( msum );
+  
+  
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[2] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][2] );
+  mE      =                  _mm_setr_pd( E[0][0][2][2], E[0][0][3][3] );
+  
+  msum = _mm_setr_pd( sum0, sum1 ) ;
+
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][2][2] * coeff[2] + sum0 * 2 ) * invFactor - 2 * y[0][2] ) * coeff[2];
+  //error += ( ( E[0][0][3][3] * coeff[3] + sum1 * 2 ) * invFactor - 2 * y[0][3] ) * coeff[3];
+
+
+  
+  //mcoef3 = _mm_blend_pd( mcoef3, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][4][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][4][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][4][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][4][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][4][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][4][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum0 = _mm_cvtsd_f64( msum );
+
+  
+  
+  mcoef5 = _mm_blend_pd( mcoef5, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][5][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][5][ 3] );
+  mE5  = _mm_loadu_pd( &E[0][0][5][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][5][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][5][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][5][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum1 = _mm_cvtsd_f64( msum );
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[4] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][4] );
+  mE      =                  _mm_setr_pd( E[0][0][4][4], E[0][0][5][5] );
+  
+  msum = _mm_setr_pd( sum0, sum1 ) ;
+
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][4][4] * coeff[4] + sum0 * 2 ) * invFactor - 2 * y[0][4] ) * coeff[4];
+  //error += ( ( E[0][0][5][5] * coeff[5] + sum1 * 2 ) * invFactor - 2 * y[0][5] ) * coeff[5];
+  
+
+  
+  //mcoef5 = _mm_blend_pd( mcoef5, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][6][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][6][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][6][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][6][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][6][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][6][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum0 = _mm_cvtsd_f64( msum );
+
+
+  
+  mcoef7 = _mm_blend_pd( mcoef7, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][7][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][7][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][7][ 5] );
+  mE7  = _mm_loadu_pd( &E[0][0][7][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][7][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][7][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum1 = _mm_cvtsd_f64( msum );
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[6] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][6] );
+  mE      =                  _mm_setr_pd( E[0][0][6][6], E[0][0][7][7] );
+  
+  msum = _mm_setr_pd( sum0, sum1 ) ;
+
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][6][6] * coeff[6] + sum0 * 2 ) * invFactor - 2 * y[0][6] ) * coeff[6];
+  //error += ( ( E[0][0][7][7] * coeff[7] + sum1 * 2 ) * invFactor - 2 * y[0][7] ) * coeff[7];
+  
+
+  
+  //mcoef7 = _mm_blend_pd( mcoef7, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][8][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][8][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][8][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][8][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][8][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][8][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( mE9, mE11 );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum0 = _mm_cvtsd_f64( msum );
+  
+
+  
+  mcoef9 = _mm_blend_pd( mcoef9, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][9][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][9][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][9][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][9][ 7] );
+  mE9  = _mm_loadu_pd( &E[0][0][9][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][9][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = _mm_add_pd( mE9, mE11 );
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum1 = _mm_cvtsd_f64( msum );
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[8] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][8] );
+  mE      =                  _mm_setr_pd( E[0][0][8][8], E[0][0][9][9] );
+  
+  msum = _mm_setr_pd( sum0, sum1 ) ;
+
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][8][8] * coeff[8] + sum0 * 2 ) * invFactor - 2 * y[0][8] ) * coeff[8];
+  //error += ( ( E[0][0][9][9] * coeff[9] + sum1 * 2 ) * invFactor - 2 * y[0][9] ) * coeff[9];
+  
+
+  
+  //mcoef9 = _mm_blend_pd( mcoef9, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][10][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][10][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][10][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][10][ 7] );
+  //mE9  = _mm_loadu_pd( &E[0][0][10][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][10][11] );
+  
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  //mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = mE11;
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum0 = _mm_cvtsd_f64( msum );
+
+
+
+
+  mcoef11 = _mm_blend_pd( mcoef11, mzero, 1 );
+
+  //mE1  = _mm_loadu_pd( &E[0][0][1][ 1] );
+  //mE3  = _mm_loadu_pd( &E[0][0][1][ 3] );
+  //mE5  = _mm_loadu_pd( &E[0][0][1][ 5] );
+  //mE7  = _mm_loadu_pd( &E[0][0][1][ 7] );
+  //mE9  = _mm_loadu_pd( &E[0][0][1][ 9] );
+  mE11 = _mm_loadu_pd( &E[0][0][11][11] );
+
+  //mE1  = _mm_mul_pd( mcoef1,  mE1 );
+  //mE3  = _mm_mul_pd( mcoef3,  mE3 );
+  //mE5  = _mm_mul_pd( mcoef5,  mE5 );
+  //mE7  = _mm_mul_pd( mcoef7,  mE7 );
+  //mE9  = _mm_mul_pd( mcoef9,  mE9 );
+  mE11 = _mm_mul_pd( mcoef11, mE11 );
+
+  msum = mE11;
+  msum = _mm_hadd_pd( msum, mzero );
+
+  sum1 = _mm_cvtsd_f64( msum );
+
+
+  mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[10] ) );
+  my      =                  _mm_loadu_pd(                       &y[0][10] );
+  mE      =                  _mm_setr_pd( E[0][0][10][10], E[0][0][11][11] );
+  
+  msum = _mm_setr_pd( sum0, sum1 ) ;
+
+  mE1 = _mm_mul_pd( mE, mcoef );
+  mE3 = _mm_mul_pd( msum, mtwo );
+  mE1 = _mm_add_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, minvf );
+  mE3 = _mm_mul_pd( mtwo, my );
+  mE1 = _mm_sub_pd( mE1, mE3 );
+  mE1 = _mm_mul_pd( mE1, mcoef );
+  merror = _mm_add_pd( merror, mE1 );
+  
+  //error += ( ( E[0][0][10][10] * coeff[10] + sum0 * 2 ) * invFactor - 2 * y[0][10] ) * coeff[10];
+  //error += ( ( E[0][0][11][11] * coeff[11] + sum1 * 2 ) * invFactor - 2 * y[0][11] ) * coeff[11];
+
+  error  = _mm_cvtsd_f64( _mm_hadd_pd( merror, mzero ) );
+  error += ( ( E[0][0][12][12] * coeff[12] ) * invFactor - 2 * y[0][12] ) * coeff[12];
+
+  return error * invFactor;
+}
+#endif
+
+template<int numCoeff>
+static double calcErrorForCoeffsNonLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* clip, const int* coeff, const double invFactor )
 {
   double error = 0;
 
@@ -347,22 +779,31 @@ double AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coef
 }
 
 template<>
+double AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const double invFactor ) const
+{
+  if( numCoeff ==  7 ) return calcErrorForCoeffsNonLin< 7>( E, y, clip, coeff, invFactor );
+  if( numCoeff == 13 ) return calcErrorForCoeffsNonLin<13>( E, y, clip, coeff, invFactor );
+
+  THROW( "Unexpected number of coefficients: " << numCoeff );
+  return 0.0;
+}
+
+template<>
 double AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const double invFactor ) const
 {
-  double error = 0;
-
-  for( int i = 0; i < numCoeff; i++ )   //diagonal
+  if( numCoeff ==  7 ) return calcErrorForCoeffsLin< 7>( E, y, coeff, invFactor );
+  if( numCoeff == 13 )
   {
-    double sum = 0;
-    for( int j = i + 1; j < numCoeff; j++ )
-    {
-      // E[j][i] = E[i][j], sum will be multiplied by 2 later
-      sum += E[0][0][i][j] * coeff[j];
-    }
-    error += ( ( E[0][0][i][i] * coeff[i] + sum * 2 ) * invFactor - 2 * y[0][i] ) * coeff[i];
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+    if( read_x86_extension_flags() > SCALAR )
+      return calcErrorForCoeffsLin_13_SSE( E, y, coeff, invFactor );
+    else
+#endif
+      return calcErrorForCoeffsLin<13>( E, y, coeff, invFactor );
   }
 
-  return error * invFactor;
+  THROW( "Unexpected number of coefficients: " << numCoeff );
+  return 0.0;
 }
 
 double AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const double invFactor) const
