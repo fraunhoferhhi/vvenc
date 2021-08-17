@@ -282,7 +282,7 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
   m_pcEncHRD   = &encHrd;
   m_threadPool = threadPool;
 
-  if( m_pcEncCfg->m_DecodingRefreshType == 3 )
+  if( m_pcEncCfg->m_DecodingRefreshType == 4 )
   {
     m_associatedIRAPType = VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
   }
@@ -578,7 +578,7 @@ vvencNalUnitType EncGOP::xGetNalUnitType( int pocCurr, int lastIDR ) const
 {
   if (pocCurr == 0)
   {
-    if( m_pcEncCfg->m_DecodingRefreshType == 3 )
+    if( m_pcEncCfg->m_DecodingRefreshType == 4 )
     {
       return m_bFirstInit ? VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL :  VVENC_NAL_UNIT_CODED_SLICE_RADL;
     }
@@ -588,7 +588,7 @@ vvencNalUnitType EncGOP::xGetNalUnitType( int pocCurr, int lastIDR ) const
     }
   }
 
-  if (m_pcEncCfg->m_DecodingRefreshType == 3 && ((pocCurr+1+(m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize)) % m_pcEncCfg->m_IntraPeriod == 0 || m_bFirstInit ) )
+  if (m_pcEncCfg->m_DecodingRefreshType == 4 && ((pocCurr+1+(m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize)) % m_pcEncCfg->m_IntraPeriod == 0 || m_bFirstInit ) )
   {
     return VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
   }
@@ -753,11 +753,11 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   Slice* slice          = pic.allocateNewSlice();
   pic.cs->picHeader     = new PicHeader;
   const SPS& sps        = *(slice->sps);
-  const int drtIPoffset = m_pcEncCfg->m_DecodingRefreshType == 3 ? 1 + (m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize) : 0;
-  SliceType sliceType   = ( (curPoc+drtIPoffset) % (unsigned)m_pcEncCfg->m_IntraPeriod == 0 || m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'I' || ( m_pcEncCfg->m_DecodingRefreshType == 3 && m_bFirstInit ) ) ? ( VVENC_I_SLICE ) : ( m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? VVENC_P_SLICE : VVENC_B_SLICE );
+  const int drtIPoffset = m_pcEncCfg->m_DecodingRefreshType == 4 ? 1 + (m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize) : 0;
+  SliceType sliceType   = ( (curPoc+drtIPoffset) % (unsigned)m_pcEncCfg->m_IntraPeriod == 0 || m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'I' || ( m_pcEncCfg->m_DecodingRefreshType == 4 && m_bFirstInit ) ) ? ( VVENC_I_SLICE ) : ( m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? VVENC_P_SLICE : VVENC_B_SLICE );
   vvencNalUnitType naluType  = xGetNalUnitType( curPoc, m_lastIDR );
 
-  if( curPoc == 0 && m_pcEncCfg->m_DecodingRefreshType == 3 && !m_bFirstInit )
+  if( curPoc == 0 && m_pcEncCfg->m_DecodingRefreshType == 4 && !m_bFirstInit )
   {
     sliceType = m_pcEncCfg->m_GOPList[ gopId ].m_sliceType== 'P' ? VVENC_P_SLICE : VVENC_B_SLICE;
   }
@@ -784,7 +784,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   slice->independentSliceIdx       = 0;
   slice->sliceType                 = sliceType;
   slice->poc                       = curPoc;
-  slice->TLayer                    = ( m_pcEncCfg->m_DecodingRefreshType == 3 && m_bFirstInit ) ? 0 : m_pcEncCfg->m_GOPList[ gopId ].m_temporalId;
+  slice->TLayer                    = ( m_pcEncCfg->m_DecodingRefreshType == 4 && m_bFirstInit ) ? 0 : m_pcEncCfg->m_GOPList[ gopId ].m_temporalId;
   slice->nalUnitType               = naluType;
   slice->depth                     = depth;
   slice->lastIDR                   = m_lastIDR;
@@ -1286,7 +1286,7 @@ void EncGOP::xSelectReferencePictureList( Slice* slice, int curPoc, int gopId, i
   {
     if ( m_pcEncCfg->m_IntraPeriod > 0 && m_pcEncCfg->m_DecodingRefreshType > 0 )
     {
-      int pocMod = m_pcEncCfg->m_DecodingRefreshType == 3 ? 1 : 0;
+      int pocMod = m_pcEncCfg->m_DecodingRefreshType == 4 ? 1 : 0;
       int POCIndex = (curPoc+pocMod)%m_pcEncCfg->m_IntraPeriod;
       if (POCIndex == 0)
         POCIndex = m_pcEncCfg->m_IntraPeriod;

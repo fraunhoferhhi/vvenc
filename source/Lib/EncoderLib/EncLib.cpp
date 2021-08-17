@@ -265,7 +265,7 @@ void EncLib::initPass( int pass )
   m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
   m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
   
-  int gopPOCadj = m_cEncCfg.m_DecodingRefreshType == 3 ? 1 : 0;
+  int gopPOCadj = m_cEncCfg.m_DecodingRefreshType == 4 ? 1 : 0;
   
   for ( int i = 0; i < m_cEncCfg.m_GOPSize; i++ )
   {
@@ -513,12 +513,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
 
     // update current poc
-    m_pocEncode = xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, m_cEncCfg.m_DecodingRefreshType == 3 );
+    m_pocEncode = xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, m_cEncCfg.m_DecodingRefreshType == 4 );
     
     if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.flushPOC < 0) && flush) m_cRateCtrl.flushPOC = m_pocEncode;
 
     std::vector<Picture*> encList;
-    xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList, m_cEncCfg.m_DecodingRefreshType == 3 );
+    xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList, m_cEncCfg.m_DecodingRefreshType == 4 );
 
     // create cts / dts
     if( !encList.empty() && encList[0]->ctsValid )
