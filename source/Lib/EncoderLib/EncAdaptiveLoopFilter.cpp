@@ -5332,31 +5332,31 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
 
+  Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
+  Pel yLocal[4][4];
+
   for (int i = 0; i < compArea.height; i += 4)
   {
-    int vbDistance = ((i << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance0 = (((i+0) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance1 = (((i+1) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance2 = (((i+2) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
+    int vbDistance3 = (((i+3) << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
 
     const Pel* recLine[4] = { &rec[0], &rec[effStride], &rec[2 * effStride], &rec[3 * effStride] };
     const Pel* orgLine[4] = { &org[0], &org[orgStride], &org[2 * orgStride], &org[3 * orgStride] };
     const Pel* slfLine[4] = { &slf[0], &slf[slfStride], &slf[2 * slfStride], &slf[3 * slfStride] };
 
-    Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
-
     for (int j = 0; j < compArea.width; j += 4)
     {
-      std::memset( ELocal, 0, sizeof( ELocal ) );
-      
-      Pel yLocal[4][4];
-        
       for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
       {
         yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
       }
 
-      calcCovariance4CcAlf(ELocal,  0, recLine[0] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
-      calcCovariance4CcAlf(ELocal,  4, recLine[1] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
-      calcCovariance4CcAlf(ELocal,  8, recLine[2] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
-      calcCovariance4CcAlf(ELocal, 12, recLine[3] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
+      calcCovariance4CcAlf(ELocal,  0, recLine[0] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance0);
+      calcCovariance4CcAlf(ELocal,  4, recLine[1] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance1);
+      calcCovariance4CcAlf(ELocal,  8, recLine[2] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance2);
+      calcCovariance4CcAlf(ELocal, 12, recLine[3] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance3);
 
 #if 0
       if( m_alfWSSD )
