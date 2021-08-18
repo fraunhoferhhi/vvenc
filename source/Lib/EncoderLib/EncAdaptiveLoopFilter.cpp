@@ -5328,6 +5328,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   CHECK( ( compArea.width  & 3 ) != 0, "Area width has to be a multiple of 4!" );
   CHECK( ( compArea.height & 3 ) != 0, "Area width has to be a multiple of 4!" );
+  CHECK( isLuma( compID ), "Only chroma can be analysed in CCALF!" );
 
   int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
 
@@ -5468,7 +5469,7 @@ void EncAdaptiveLoopFilter::calcCovariance4CcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROM
   }
 
   const int dx0 = 0;
-  const int dx1 = getChannelTypeScaleX( CH_C, m_chromaFormat );
+  const int dx1 = 1 << getChannelTypeScaleX( CH_C, m_chromaFormat );
   const int dx2 = dx1 << 1;
   const int dx3 = dx1 + dx2;
 
