@@ -720,7 +720,7 @@ typedef struct vvenc_config
   char                m_summaryOutFilename[VVENC_MAX_STRING_LEN];                        // filename to use for producing summary output file.
   char                m_summaryPicFilenameBase[VVENC_MAX_STRING_LEN];                    // Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   unsigned            m_summaryVerboseness;                                              // Specifies the level of the verboseness of the text output.
-  int                 m_numModesForFullRD;                                               // Number Modes for Full RD Intra Search
+  int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
 
 }vvenc_config;
 

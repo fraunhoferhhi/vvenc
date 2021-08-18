@@ -648,7 +648,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
   memset( c->m_traceFile, '\0', sizeof(c->m_traceFile) );
 
-  c->m_numModesForFullRD=0;
+  c->m_numIntraModesFullRD = -1;
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
