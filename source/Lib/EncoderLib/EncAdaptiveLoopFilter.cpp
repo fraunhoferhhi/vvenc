@@ -5396,33 +5396,87 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
       }
       else
       {
-        for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+        if (read_x86_extension_flags() > SCALAR)
         {
-          for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
+          const __m128i mylocal0 = _mm_loadu_si128((const __m128i*) & yLocal[0][0]);
+          const __m128i mylocal8 = _mm_loadu_si128((const __m128i*) & yLocal[2][0]);
+
+          for (int k = 0; k < shape.numCoeff; k++)
           {
+            const Pel* Elocalk = &ELocal[k][0];
+            double* cov = &alfCovariance.E[0][0][k][k];
+
+            const __m128i melocalk0 = _mm_loadu_si128((const __m128i*) & Elocalk[0]);
+            const __m128i melocalk8 = _mm_loadu_si128((const __m128i*) & Elocalk[8]);
+
+            for (int l = k; l < shape.numCoeff; l++)
+            {
+              const Pel* Elocall = &ELocal[l][0];
+
+              const __m128i melocall0 = _mm_loadu_si128((const __m128i*) & Elocall[0]);
+              const __m128i melocall8 = _mm_loadu_si128((const __m128i*) & Elocall[8]);
+
+              const __m128i mmacc0 = _mm_madd_epi16(melocalk0, melocall0);
+              const __m128i mmacc8 = _mm_madd_epi16(melocalk8, melocall8);
+
+              __m128i mmacc = _mm_add_epi32(mmacc0, mmacc8);
+              mmacc = _mm_hadd_epi32(mmacc, mmacc);
+              mmacc = _mm_hadd_epi32(mmacc, mmacc);
+
+              *cov++ += _mm_extract_epi32(mmacc, 0);
+            }
+
+            const __m128i mmacc0 = _mm_madd_epi16(melocalk0, mylocal0);
+            const __m128i mmacc8 = _mm_madd_epi16(melocalk8, mylocal8);
+
+            __m128i mmacc = _mm_add_epi32(mmacc0, mmacc8);
+            mmacc = _mm_hadd_epi32(mmacc, mmacc);
+            mmacc = _mm_hadd_epi32(mmacc, mmacc);
+
+            alfCovariance.y[0][k] += _mm_extract_epi32(mmacc, 0);
+          }
+
+          const __m128i mmacc0 = _mm_madd_epi16(mylocal0, mylocal0);
+          const __m128i mmacc8 = _mm_madd_epi16(mylocal8, mylocal8);
+
+          __m128i mmacc = _mm_add_epi32(mmacc0, mmacc8);
+          mmacc = _mm_hadd_epi32(mmacc, mmacc);
+          mmacc = _mm_hadd_epi32(mmacc, mmacc);
+
+          alfCovariance.pixAcc += _mm_extract_epi32(mmacc, 0);
+        }
+        else
+#endif
+        {
+          for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
+          {
+            for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
+            {
+              int sum = 0;
+              for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+              {
+                sum += int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+              }
+              alfCovariance.E[0][0][k][l] += sum;
+            }
+
             int sum = 0;
             for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
             {
-              sum += int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+              sum += int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
             }
-            alfCovariance.E[0][0][k][l] += sum;
-          }
+            alfCovariance.y[0][k] += sum;
+          } 
+
 
           int sum = 0;
           for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
           {
-            sum += int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+            sum += int( yLocal[ii][jj] ) * yLocal[ii][jj];
           }
-          alfCovariance.y[0][k] += sum;
-        } 
-
-
-        int sum = 0;
-        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
-        {
-          sum += int( yLocal[ii][jj] ) * yLocal[ii][jj];
+          alfCovariance.pixAcc += sum;
         }
-        alfCovariance.pixAcc += sum;
       }
     }
     
