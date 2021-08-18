@@ -5334,6 +5334,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
   Pel yLocal[4][4];
+  double weight[4][4];
 
   for (int i = 0; i < compArea.height; i += 4)
   {
@@ -5358,52 +5359,42 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
       calcCovariance4CcAlf(ELocal,  8, recLine[2] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance2);
       calcCovariance4CcAlf(ELocal, 12, recLine[3] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance3);
 
-#if 0
       if( m_alfWSSD )
       {
-        double weight0 = 1.0, weight1 = 1.0, weight2 = 1.0, weight3 = 1.0;
+        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+        {
+          weight[ii][jj] = m_lumaLevelToWeightPLUT[orgLine[ii][j + jj]];
+        }
 
-        weight0 = m_lumaLevelToWeightPLUT[org[j+0]];
-        weight1 = m_lumaLevelToWeightPLUT[org[j+1]];
-        weight2 = m_lumaLevelToWeightPLUT[org[j+2]];
-        weight3 = m_lumaLevelToWeightPLUT[org[j+3]];
-          
         for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
         {
-          int  Elocalk0  =  ELocal0[k];
-          int* Elocall0  = &ELocal0[k];
-          int  Elocalk1  =  ELocal1[k];
-          int* Elocall1  = &ELocal1[k];
-          int  Elocalk2  =  ELocal2[k];
-          int* Elocall2  = &ELocal2[k];
-          int  Elocalk3  =  ELocal3[k];
-          int* Elocall3  = &ELocal3[k];
-          double* cov    = &alfCovariance.E[0][0][k][k];
-
-          for( int l = k; l < ( shape.numCoeff - 1); l++ )
+          for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
           {
-            double
-            sum   = weight0 * Elocalk0 * *Elocall0++;
-            sum  += weight1 * Elocalk1 * *Elocall1++;
-            sum  += weight2 * Elocalk2 * *Elocall2++;
-            sum  += weight3 * Elocalk3 * *Elocall3++;
-
-            *cov++ += sum;
+            double sum = 0;
+            for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+            {
+              sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+            }
+            alfCovariance.E[0][0][k][l] += sum;
           }
 
-          alfCovariance.y[0][k] += weight0 * Elocalk0 * yLocal0;
-          alfCovariance.y[0][k] += weight1 * Elocalk1 * yLocal1;
-          alfCovariance.y[0][k] += weight2 * Elocalk2 * yLocal2;
-          alfCovariance.y[0][k] += weight3 * Elocalk3 * yLocal3;
+          double sum = 0;
+          for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+          {
+            sum += weight[ii][jj] * int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+          }
+          alfCovariance.y[0][k] += sum;
         } 
-          
-        alfCovariance.pixAcc += weight0 * (double) (yLocal0 * yLocal0);
-        alfCovariance.pixAcc += weight1 * (double) (yLocal1 * yLocal1);
-        alfCovariance.pixAcc += weight2 * (double) (yLocal2 * yLocal2);
-        alfCovariance.pixAcc += weight3 * (double) (yLocal3 * yLocal3);
+
+
+        double sum = 0;
+        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+        {
+          sum += weight[ii][jj] * int( yLocal[ii][jj] ) * yLocal[ii][jj];
+        }
+        alfCovariance.pixAcc += sum;
       }
       else
-#endif
       {
         for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
         {
