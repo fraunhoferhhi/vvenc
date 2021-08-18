@@ -3077,7 +3077,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
           double weight[4][4];
           for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
           {
-            weight[ii][jj] = m_lumaLevelToWeightPLUT[org[j + jj + ii * recStride]];
+            weight[ii][jj] = m_lumaLevelToWeightPLUT[org[j + jj + ii * orgStride]];
           }
           
           for( int k = 0; k < shape.numCoeff; k++ )
