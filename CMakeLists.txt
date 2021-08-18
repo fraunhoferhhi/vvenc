@@ -78,8 +78,15 @@ set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable 
                                                              
 # enable postfix                                             
 set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
-                                                             
-set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
+
+
+include(CheckIPOSupported)
+check_ipo_supported( RESULT result )
+if( result )
+  set( VVENC_ENABLE_LINK_TIME_OPT           ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
+else()
+  set( VVENC_ENABLE_LINK_TIME_OPT           OFF CACHE BOOL   "Enable link time optimization for release and profile builds" )
+endif()
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
