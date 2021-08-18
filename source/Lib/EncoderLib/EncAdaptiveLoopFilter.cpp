@@ -5319,185 +5319,126 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
 
   int        orgStride = orgYuv.get(compID).stride;
   const Pel *org       = orgYuv.get(compID).bufAt(compArea);
-  const int  numBins   = 1;
 
   int vbCTUHeight = m_alfVBLumaCTUHeight;
   int vbPos       = m_alfVBLumaPos;
+
   if ((yPos + m_maxCUHeight) >= m_picHeight)
   {
     vbPos = m_picHeight;
   }
 
+  CHECK( ( compArea.width & 3 ) != 0, "Area width has to be a multiple of 4!" );
+
   for (int i = 0; i < compArea.height; i++)
   {
     int vbDistance = ((i << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
 
-    if( !m_encCfg->m_useNonLinearAlfLuma && !m_encCfg->m_useNonLinearAlfChroma && ( compArea.width & 3 ) == 0 )
-    {
-      int ELocal0[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-      int ELocal1[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-      int ELocal2[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-      int ELocal3[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
+    int ELocal0[MAX_NUM_CC_ALF_CHROMA_COEFF];
+    int ELocal1[MAX_NUM_CC_ALF_CHROMA_COEFF];
+    int ELocal2[MAX_NUM_CC_ALF_CHROMA_COEFF];
+    int ELocal3[MAX_NUM_CC_ALF_CHROMA_COEFF];
 
-      for( int j = 0; j < compArea.width; j += 4 )
-      {
-        std::memset( ELocal0, 0, sizeof( ELocal0 ) );
-        std::memset( ELocal1, 0, sizeof( ELocal1 ) );
-        std::memset( ELocal2, 0, sizeof( ELocal2 ) );
-        std::memset( ELocal3, 0, sizeof( ELocal3 ) );
+    for( int j = 0; j < compArea.width; j += 4 )
+    {
+      std::memset( ELocal0, 0, sizeof( ELocal0 ) );
+      std::memset( ELocal1, 0, sizeof( ELocal1 ) );
+      std::memset( ELocal2, 0, sizeof( ELocal2 ) );
+      std::memset( ELocal3, 0, sizeof( ELocal3 ) );
         
-        int yLocal0 = org[j+0] - rec[compID][j+0];
-        int yLocal1 = org[j+1] - rec[compID][j+1];
-        int yLocal2 = org[j+2] - rec[compID][j+2];
-        int yLocal3 = org[j+3] - rec[compID][j+3];
+      int yLocal0 = org[j+0] - rec[compID][j+0];
+      int yLocal1 = org[j+1] - rec[compID][j+1];
+      int yLocal2 = org[j+2] - rec[compID][j+2];
+      int yLocal3 = org[j+3] - rec[compID][j+3];
 
-        calcCovarianceCcAlf( ELocal0, rec[COMP_Y] + ( (j+0) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-        calcCovarianceCcAlf( ELocal1, rec[COMP_Y] + ( (j+1) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-        calcCovarianceCcAlf( ELocal2, rec[COMP_Y] + ( (j+2) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-        calcCovarianceCcAlf( ELocal3, rec[COMP_Y] + ( (j+3) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+      calcCovarianceCcAlf( ELocal0, rec[COMP_Y] + ( (j+0) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+      calcCovarianceCcAlf( ELocal1, rec[COMP_Y] + ( (j+1) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+      calcCovarianceCcAlf( ELocal2, rec[COMP_Y] + ( (j+2) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+      calcCovarianceCcAlf( ELocal3, rec[COMP_Y] + ( (j+3) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
 
-        if( m_alfWSSD )
-        {
-          double weight0 = 1.0, weight1 = 1.0, weight2 = 1.0, weight3 = 1.0;
-
-          weight0 = m_lumaLevelToWeightPLUT[org[j+0]];
-          weight1 = m_lumaLevelToWeightPLUT[org[j+1]];
-          weight2 = m_lumaLevelToWeightPLUT[org[j+2]];
-          weight3 = m_lumaLevelToWeightPLUT[org[j+3]];
-          
-          for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
-          {
-            int  Elocalk0  =  ELocal0[k][0];
-            int* Elocall0  = &ELocal0[k][0];
-            int  Elocalk1  =  ELocal1[k][0];
-            int* Elocall1  = &ELocal1[k][0];
-            int  Elocalk2  =  ELocal2[k][0];
-            int* Elocall2  = &ELocal2[k][0];
-            int  Elocalk3  =  ELocal3[k][0];
-            int* Elocall3  = &ELocal3[k][0];
-            double* cov    = &alfCovariance.E[0][0][k][k];
-
-            for( int l = k; l < ( shape.numCoeff - 1); l++ )
-            {
-              double
-              sum   = weight0 * Elocalk0 * *Elocall0++;
-              sum  += weight1 * Elocalk1 * *Elocall1++;
-              sum  += weight2 * Elocalk2 * *Elocall2++;
-              sum  += weight3 * Elocalk3 * *Elocall3++;
-
-              *cov++ += sum;
-            }
-
-            alfCovariance.y[0][k] += weight0 * Elocalk0 * yLocal0;
-            alfCovariance.y[0][k] += weight1 * Elocalk1 * yLocal1;
-            alfCovariance.y[0][k] += weight2 * Elocalk2 * yLocal2;
-            alfCovariance.y[0][k] += weight3 * Elocalk3 * yLocal3;
-          } 
-          
-          alfCovariance.pixAcc += weight0 * (double) (yLocal0 * yLocal0);
-          alfCovariance.pixAcc += weight1 * (double) (yLocal1 * yLocal1);
-          alfCovariance.pixAcc += weight2 * (double) (yLocal2 * yLocal2);
-          alfCovariance.pixAcc += weight3 * (double) (yLocal3 * yLocal3);
-        }
-        else
-        {
-          for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
-          {
-            int  Elocalk0  =  ELocal0[k][0];
-            int* Elocall0  = &ELocal0[k][0];
-            int  Elocalk1  =  ELocal1[k][0];
-            int* Elocall1  = &ELocal1[k][0];
-            int  Elocalk2  =  ELocal2[k][0];
-            int* Elocall2  = &ELocal2[k][0];
-            int  Elocalk3  =  ELocal3[k][0];
-            int* Elocall3  = &ELocal3[k][0];
-            double* cov    = &alfCovariance.E[0][0][k][k];
-
-            for( int l = k; l < ( shape.numCoeff - 1); l++ )
-            {
-              int
-              sum   = Elocalk0 * *Elocall0++;
-              sum  += Elocalk1 * *Elocall1++;
-              sum  += Elocalk2 * *Elocall2++;
-              sum  += Elocalk3 * *Elocall3++;
-
-              *cov++ += sum;
-            }
-
-            alfCovariance.y[0][k] += Elocalk0 * yLocal0;
-            alfCovariance.y[0][k] += Elocalk1 * yLocal1;
-            alfCovariance.y[0][k] += Elocalk2 * yLocal2;
-            alfCovariance.y[0][k] += Elocalk3 * yLocal3;
-          } 
-
-          alfCovariance.pixAcc += yLocal0 * yLocal0;
-          alfCovariance.pixAcc += yLocal1 * yLocal1;
-          alfCovariance.pixAcc += yLocal2 * yLocal2;
-          alfCovariance.pixAcc += yLocal3 * yLocal3;
-        }
-      }
-    }
-    else
-    {
-      int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][1];
-
-      for( int j = 0; j < compArea.width; j++ )
+      if( m_alfWSSD )
       {
-        std::memset( ELocal, 0, sizeof( ELocal ) );
+        double weight0 = 1.0, weight1 = 1.0, weight2 = 1.0, weight3 = 1.0;
 
-        double weight = 1.0;
-        if( m_alfWSSD )
-        {
-          weight = m_lumaLevelToWeightPLUT[org[j]];
-        }
-
-        int yLocal = org[j] - rec[compID][j];
-
-        calcCovarianceCcAlf( ELocal, rec[COMP_Y] + ( j << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-
+        weight0 = m_lumaLevelToWeightPLUT[org[j+0]];
+        weight1 = m_lumaLevelToWeightPLUT[org[j+1]];
+        weight2 = m_lumaLevelToWeightPLUT[org[j+2]];
+        weight3 = m_lumaLevelToWeightPLUT[org[j+3]];
+          
         for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
         {
-          for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
-          {
-            for( int b0 = 0; b0 < numBins; b0++ )
-            {
-              for( int b1 = 0; b1 < numBins; b1++ )
-              {
-                if( m_alfWSSD )
-                {
-                  alfCovariance.E[b0][b1][k][l] += weight * ( double ) ( ELocal[k][b0] * ELocal[l][b1] );
-                }
-                else
-                {
-                  alfCovariance.E[b0][b1][k][l] += ELocal[k][b0] * ELocal[l][b1];
-                }
-              }
-            }
-          }
-          for( int b = 0; b < numBins; b++ )
-          {
-            if( m_alfWSSD )
-            {
-              alfCovariance.y[b][k] += weight * ( double ) ( ELocal[k][b] * yLocal );
-            }
-            else
-            {
-              alfCovariance.y[b][k] += ELocal[k][b] * yLocal;
-            }
-          }
-        }
+          int  Elocalk0  =  ELocal0[k];
+          int* Elocall0  = &ELocal0[k];
+          int  Elocalk1  =  ELocal1[k];
+          int* Elocall1  = &ELocal1[k];
+          int  Elocalk2  =  ELocal2[k];
+          int* Elocall2  = &ELocal2[k];
+          int  Elocalk3  =  ELocal3[k];
+          int* Elocall3  = &ELocal3[k];
+          double* cov    = &alfCovariance.E[0][0][k][k];
 
-        if (m_alfWSSD)
+          for( int l = k; l < ( shape.numCoeff - 1); l++ )
+          {
+            double
+            sum   = weight0 * Elocalk0 * *Elocall0++;
+            sum  += weight1 * Elocalk1 * *Elocall1++;
+            sum  += weight2 * Elocalk2 * *Elocall2++;
+            sum  += weight3 * Elocalk3 * *Elocall3++;
+
+            *cov++ += sum;
+          }
+
+          alfCovariance.y[0][k] += weight0 * Elocalk0 * yLocal0;
+          alfCovariance.y[0][k] += weight1 * Elocalk1 * yLocal1;
+          alfCovariance.y[0][k] += weight2 * Elocalk2 * yLocal2;
+          alfCovariance.y[0][k] += weight3 * Elocalk3 * yLocal3;
+        } 
+          
+        alfCovariance.pixAcc += weight0 * (double) (yLocal0 * yLocal0);
+        alfCovariance.pixAcc += weight1 * (double) (yLocal1 * yLocal1);
+        alfCovariance.pixAcc += weight2 * (double) (yLocal2 * yLocal2);
+        alfCovariance.pixAcc += weight3 * (double) (yLocal3 * yLocal3);
+      }
+      else
+      {
+        for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
         {
-          alfCovariance.pixAcc += weight * (double) (yLocal * yLocal);
-        }
-        else
-        {
-          alfCovariance.pixAcc += yLocal * yLocal;
-        }
+          int  Elocalk0  =  ELocal0[k];
+          int* Elocall0  = &ELocal0[k];
+          int  Elocalk1  =  ELocal1[k];
+          int* Elocall1  = &ELocal1[k];
+          int  Elocalk2  =  ELocal2[k];
+          int* Elocall2  = &ELocal2[k];
+          int  Elocalk3  =  ELocal3[k];
+          int* Elocall3  = &ELocal3[k];
+          double* cov    = &alfCovariance.E[0][0][k][k];
+
+          for( int l = k; l < ( shape.numCoeff - 1); l++ )
+          {
+            int
+            sum   = Elocalk0 * *Elocall0++;
+            sum  += Elocalk1 * *Elocall1++;
+            sum  += Elocalk2 * *Elocall2++;
+            sum  += Elocalk3 * *Elocall3++;
+
+            *cov++ += sum;
+          }
+
+          alfCovariance.y[0][k] += Elocalk0 * yLocal0;
+          alfCovariance.y[0][k] += Elocalk1 * yLocal1;
+          alfCovariance.y[0][k] += Elocalk2 * yLocal2;
+          alfCovariance.y[0][k] += Elocalk3 * yLocal3;
+        } 
+
+        alfCovariance.pixAcc += yLocal0 * yLocal0;
+        alfCovariance.pixAcc += yLocal1 * yLocal1;
+        alfCovariance.pixAcc += yLocal2 * yLocal2;
+        alfCovariance.pixAcc += yLocal3 * yLocal3;
       }
     }
+    
     org += orgStride;
+
     for (int srcCIdx = 0; srcCIdx < numberOfComponents; srcCIdx++)
     {
       ComponentID srcCompID = ComponentID(srcCIdx);
@@ -5523,18 +5464,12 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
   {
     for (int l = 0; l < k; l++)
     {
-      for (int b0 = 0; b0 < numBins; b0++)
-      {
-        for (int b1 = 0; b1 < numBins; b1++)
-        {
-          alfCovariance.E[b0][b1][k][l] = alfCovariance.E[b1][b0][l][k];
-        }
-      }
+      alfCovariance.E[0][0][k][l] = alfCovariance.E[0][0][l][k];
     }
   }
 }
 
-void EncAdaptiveLoopFilter::calcCovarianceCcAlf(int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][1], const Pel *rec, const int stride, const AlfFilterShape& shape, int vbDistance)
+void EncAdaptiveLoopFilter::calcCovarianceCcAlf(int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF], const Pel *rec, const int stride, const AlfFilterShape& shape, int vbDistance)
 {
   CHECK(shape.filterType != CC_ALF, "Bad CC ALF shape");
 
@@ -5553,17 +5488,15 @@ void EncAdaptiveLoopFilter::calcCovarianceCcAlf(int ELocal[MAX_NUM_CC_ALF_CHROMA
     recYP2 = recYP1 = recY0;
   }
 
-  for (int b = 0; b < 1; b++)
-  {
-    const Pel centerValue = recY0[+0];
-    ELocal[0][b] += recYM1[+0] - centerValue;
-    ELocal[1][b] += recY0[-1] - centerValue;
-    ELocal[2][b] += recY0[+1] - centerValue;
-    ELocal[3][b] += recYP1[-1] - centerValue;
-    ELocal[4][b] += recYP1[+0] - centerValue;
-    ELocal[5][b] += recYP1[+1] - centerValue;
-    ELocal[6][b] += recYP2[+0] - centerValue;
-  }
+  const Pel centerValue = recY0[+0];
+
+  ELocal[0] += recYM1[+0] - centerValue;
+  ELocal[1] += recY0 [-1] - centerValue;
+  ELocal[2] += recY0 [+1] - centerValue;
+  ELocal[3] += recYP1[-1] - centerValue;
+  ELocal[4] += recYP1[+0] - centerValue;
+  ELocal[5] += recYP1[+1] - centerValue;
+  ELocal[6] += recYP2[+0] - centerValue;
 }
 
 void EncAdaptiveLoopFilter::countLumaSwingGreaterThanThreshold(const Pel* luma, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* lumaSwingGreaterThanThresholdCount, int lumaCountStride)
