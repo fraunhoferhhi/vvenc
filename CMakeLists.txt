@@ -279,11 +279,14 @@ add_subdirectory( "source/Lib/apputils" )
 add_subdirectory( "source/App/vvencapp" )
 add_subdirectory( "source/App/vvencFFapp" )
 add_subdirectory( "test/vvenclibtest" )
+add_subdirectory( "test/vvencinterfacetest" )
 
 # enable testing with ctest
 enable_testing()
 
 # add test
+add_test( NAME Test_vvencinterfacetest COMMAND vvencinterfacetest )
+
 add_test( NAME Test_vvenclibtest-paramerter_range COMMAND vvenclibtest 1 )
 add_test( NAME Test_vvenclibtest-calling_order COMMAND vvenclibtest 2 )
 add_test( NAME Test_vvenclibtest-input_params COMMAND vvenclibtest 3 )
