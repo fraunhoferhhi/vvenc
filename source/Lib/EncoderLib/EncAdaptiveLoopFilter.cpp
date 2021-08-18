@@ -5307,15 +5307,13 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
                                              const UnitArea &areaDst, const UnitArea &area, const ComponentID compID,
                                              const int yPos)
 {
-  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
-  const CompArea &compArea           = areaDst.block(compID);
-  int  recStride[MAX_NUM_COMP];
-  const Pel* rec[MAX_NUM_COMP];
-  for ( int cIdx = 0; cIdx < numberOfComponents; cIdx++ )
-  {
-    recStride[cIdx] = recYuv.get(ComponentID(cIdx)).stride;
-    rec[cIdx] = recYuv.get(ComponentID(cIdx)).bufAt(isLuma(ComponentID(cIdx)) ? area.lumaPos() : area.chromaPos());
-  }
+  const CompArea &compArea = areaDst.block(compID);
+
+  int        recStride = recYuv.get(COMP_Y).stride;
+  const Pel* rec       = recYuv.get(COMP_Y).bufAt(area.lumaPos());
+  
+  int        slfStride = recYuv.get(compID).stride;
+  const Pel* slf       = recYuv.get(compID).bufAt(compArea);
 
   int        orgStride = orgYuv.get(compID).stride;
   const Pel *org       = orgYuv.get(compID).bufAt(compArea);
@@ -5328,34 +5326,38 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
     vbPos = m_picHeight;
   }
 
-  CHECK( ( compArea.width & 3 ) != 0, "Area width has to be a multiple of 4!" );
+  CHECK( ( compArea.width  & 3 ) != 0, "Area width has to be a multiple of 4!" );
+  CHECK( ( compArea.height & 3 ) != 0, "Area width has to be a multiple of 4!" );
 
-  for (int i = 0; i < compArea.height; i++)
+  int effStride = recStride << getComponentScaleY(compID, m_chromaFormat);
+
+  for (int i = 0; i < compArea.height; i += 4)
   {
     int vbDistance = ((i << getComponentScaleX(compID, m_chromaFormat)) % vbCTUHeight) - vbPos;
 
-    int ELocal0[MAX_NUM_CC_ALF_CHROMA_COEFF];
-    int ELocal1[MAX_NUM_CC_ALF_CHROMA_COEFF];
-    int ELocal2[MAX_NUM_CC_ALF_CHROMA_COEFF];
-    int ELocal3[MAX_NUM_CC_ALF_CHROMA_COEFF];
+    const Pel* recLine[4] = { &rec[0], &rec[effStride], &rec[2 * effStride], &rec[3 * effStride] };
+    const Pel* orgLine[4] = { &org[0], &org[orgStride], &org[2 * orgStride], &org[3 * orgStride] };
+    const Pel* slfLine[4] = { &slf[0], &slf[slfStride], &slf[2 * slfStride], &slf[3 * slfStride] };
 
-    for( int j = 0; j < compArea.width; j += 4 )
+    Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16];
+
+    for (int j = 0; j < compArea.width; j += 4)
     {
-      std::memset( ELocal0, 0, sizeof( ELocal0 ) );
-      std::memset( ELocal1, 0, sizeof( ELocal1 ) );
-      std::memset( ELocal2, 0, sizeof( ELocal2 ) );
-      std::memset( ELocal3, 0, sizeof( ELocal3 ) );
+      std::memset( ELocal, 0, sizeof( ELocal ) );
+      
+      Pel yLocal[4][4];
         
-      int yLocal0 = org[j+0] - rec[compID][j+0];
-      int yLocal1 = org[j+1] - rec[compID][j+1];
-      int yLocal2 = org[j+2] - rec[compID][j+2];
-      int yLocal3 = org[j+3] - rec[compID][j+3];
+      for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+      {
+        yLocal[ii][jj] = orgLine[ii][j + jj] - slfLine[ii][j + jj];
+      }
 
-      calcCovarianceCcAlf( ELocal0, rec[COMP_Y] + ( (j+0) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-      calcCovarianceCcAlf( ELocal1, rec[COMP_Y] + ( (j+1) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-      calcCovarianceCcAlf( ELocal2, rec[COMP_Y] + ( (j+2) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
-      calcCovarianceCcAlf( ELocal3, rec[COMP_Y] + ( (j+3) << getComponentScaleX( compID, m_chromaFormat ) ), recStride[COMP_Y], shape, vbDistance );
+      calcCovariance4CcAlf(ELocal,  0, recLine[0] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
+      calcCovariance4CcAlf(ELocal,  4, recLine[1] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
+      calcCovariance4CcAlf(ELocal,  8, recLine[2] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
+      calcCovariance4CcAlf(ELocal, 12, recLine[3] + (j << getChannelTypeScaleX(CH_C, m_chromaFormat)), recStride, shape, vbDistance);
 
+#if 0
       if( m_alfWSSD )
       {
         double weight0 = 1.0, weight1 = 1.0, weight2 = 1.0, weight3 = 1.0;
@@ -5400,64 +5402,41 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
         alfCovariance.pixAcc += weight3 * (double) (yLocal3 * yLocal3);
       }
       else
+#endif
       {
         for( int k = 0; k < ( shape.numCoeff - 1 ); k++ )
         {
-          int  Elocalk0  =  ELocal0[k];
-          int* Elocall0  = &ELocal0[k];
-          int  Elocalk1  =  ELocal1[k];
-          int* Elocall1  = &ELocal1[k];
-          int  Elocalk2  =  ELocal2[k];
-          int* Elocall2  = &ELocal2[k];
-          int  Elocalk3  =  ELocal3[k];
-          int* Elocall3  = &ELocal3[k];
-          double* cov    = &alfCovariance.E[0][0][k][k];
-
-          for( int l = k; l < ( shape.numCoeff - 1); l++ )
+          for( int l = k; l < ( shape.numCoeff - 1 ); l++ )
           {
-            int
-            sum   = Elocalk0 * *Elocall0++;
-            sum  += Elocalk1 * *Elocall1++;
-            sum  += Elocalk2 * *Elocall2++;
-            sum  += Elocalk3 * *Elocall3++;
-
-            *cov++ += sum;
+            int sum = 0;
+            for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+            {
+              sum += int( ELocal[k][(ii << 2) + jj] ) * ELocal[l][(ii << 2) + jj];
+            }
+            alfCovariance.E[0][0][k][l] += sum;
           }
 
-          alfCovariance.y[0][k] += Elocalk0 * yLocal0;
-          alfCovariance.y[0][k] += Elocalk1 * yLocal1;
-          alfCovariance.y[0][k] += Elocalk2 * yLocal2;
-          alfCovariance.y[0][k] += Elocalk3 * yLocal3;
+          int sum = 0;
+          for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+          {
+            sum += int( ELocal[k][(ii << 2) + jj] ) * yLocal[ii][jj];
+          }
+          alfCovariance.y[0][k] += sum;
         } 
 
-        alfCovariance.pixAcc += yLocal0 * yLocal0;
-        alfCovariance.pixAcc += yLocal1 * yLocal1;
-        alfCovariance.pixAcc += yLocal2 * yLocal2;
-        alfCovariance.pixAcc += yLocal3 * yLocal3;
+
+        int sum = 0;
+        for (int ii = 0; ii < 4; ii++) for (int jj = 0; jj < 4; jj++)
+        {
+          sum += int( yLocal[ii][jj] ) * yLocal[ii][jj];
+        }
+        alfCovariance.pixAcc += sum;
       }
     }
     
-    org += orgStride;
-
-    for (int srcCIdx = 0; srcCIdx < numberOfComponents; srcCIdx++)
-    {
-      ComponentID srcCompID = ComponentID(srcCIdx);
-      if (toChannelType(srcCompID) == toChannelType(compID))
-      {
-        rec[srcCIdx] += recStride[srcCIdx];
-      }
-      else
-      {
-        if (isLuma(compID))
-        {
-          rec[srcCIdx] += (recStride[srcCIdx] >> getComponentScaleY(srcCompID, m_chromaFormat));
-        }
-        else
-        {
-          rec[srcCIdx] += (recStride[srcCIdx] << getComponentScaleY(compID, m_chromaFormat));
-        }
-      }
-    }
+    slf += (slfStride << 2);
+    org += (orgStride << 2);
+    rec += (effStride << 2);
   }
 
   for (int k = 1; k < (MAX_NUM_CC_ALF_CHROMA_COEFF - 1); k++)
@@ -5469,7 +5448,72 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
   }
 }
 
-void EncAdaptiveLoopFilter::calcCovarianceCcAlf(int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF], const Pel *rec, const int stride, const AlfFilterShape& shape, int vbDistance)
+void EncAdaptiveLoopFilter::calcCovariance4CcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const int N, const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance)
+{
+  CHECK(shape.filterType != CC_ALF, "Bad CC ALF shape");
+
+  const Pel* recYM1 = rec - 1 * stride;
+  const Pel* recY0  = rec;
+  const Pel* recYP1 = rec + 1 * stride;
+  const Pel* recYP2 = rec + 2 * stride;
+
+  if (vbDistance == -2 || vbDistance == +1)
+  {
+    recYP2 = recYP1;
+  }
+  else if (vbDistance == -1 || vbDistance == 0)
+  {
+    recYM1 = recY0;
+    recYP2 = recYP1 = recY0;
+  }
+
+  const int dx0 = 0;
+  const int dx1 = getChannelTypeScaleX( CH_C, m_chromaFormat );
+  const int dx2 = dx1 << 1;
+  const int dx3 = dx1 + dx2;
+
+  const Pel centerValue0 = recY0[+dx0];
+  const Pel centerValue1 = recY0[+dx1];
+  const Pel centerValue2 = recY0[+dx2];
+  const Pel centerValue3 = recY0[+dx3];
+
+  ELocal[0][N+0] = recYM1[+0+dx0] - centerValue0;
+  ELocal[0][N+1] = recYM1[+0+dx1] - centerValue1;
+  ELocal[0][N+2] = recYM1[+0+dx2] - centerValue2;
+  ELocal[0][N+3] = recYM1[+0+dx3] - centerValue3;
+                 
+  ELocal[1][N+0] = recY0[ -1+dx0] - centerValue0;
+  ELocal[1][N+1] = recY0[ -1+dx1] - centerValue1;
+  ELocal[1][N+2] = recY0[ -1+dx2] - centerValue2;
+  ELocal[1][N+3] = recY0[ -1+dx3] - centerValue3;
+                 
+  ELocal[2][N+0] = recY0[ +1+dx0] - centerValue0;
+  ELocal[2][N+1] = recY0[ +1+dx1] - centerValue1;
+  ELocal[2][N+2] = recY0[ +1+dx2] - centerValue2;
+  ELocal[2][N+3] = recY0[ +1+dx3] - centerValue3;
+                 
+  ELocal[3][N+0] = recYP1[-1+dx0] - centerValue0;
+  ELocal[3][N+1] = recYP1[-1+dx1] - centerValue1;
+  ELocal[3][N+2] = recYP1[-1+dx2] - centerValue2;
+  ELocal[3][N+3] = recYP1[-1+dx3] - centerValue3;
+                 
+  ELocal[4][N+0] = recYP1[+0+dx0] - centerValue0;
+  ELocal[4][N+1] = recYP1[+0+dx1] - centerValue1;
+  ELocal[4][N+2] = recYP1[+0+dx2] - centerValue2;
+  ELocal[4][N+3] = recYP1[+0+dx3] - centerValue3;
+                 
+  ELocal[5][N+0] = recYP1[+1+dx0] - centerValue0;
+  ELocal[5][N+1] = recYP1[+1+dx1] - centerValue1;
+  ELocal[5][N+2] = recYP1[+1+dx2] - centerValue2;
+  ELocal[5][N+3] = recYP1[+1+dx3] - centerValue3;
+                 
+  ELocal[6][N+0] = recYP2[+0+dx0] - centerValue0;
+  ELocal[6][N+1] = recYP2[+0+dx1] - centerValue1;
+  ELocal[6][N+2] = recYP2[+0+dx2] - centerValue2;
+  ELocal[6][N+3] = recYP2[+0+dx3] - centerValue3;
+}
+
+void EncAdaptiveLoopFilter::calcCovarianceCcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF], const Pel *rec, const int stride, const AlfFilterShape& shape, int vbDistance)
 {
   CHECK(shape.filterType != CC_ALF, "Bad CC ALF shape");
 
