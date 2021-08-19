@@ -1838,6 +1838,62 @@ void PPS::initRectSlices()
   rectSlices.resize(numSlicesInPic);
 }
 
+void PPS::initRectSliceMap( const SPS* sps )
+{
+//  uint32_t  ctuY;
+  uint32_t  tileX, tileY;
+
+  if( sps )
+  {
+    CHECK( sps->numSubPics > 1, "SubPic encoding not yet supported" );
+  }
+  
+  if( singleSlicePerSubPic )
+  {
+    CHECK( true, "SubPic encoding not yet supported" );
+  }
+  else
+  {
+    CHECK( numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
+    sliceMap.resize( numSlicesInPic );
+
+    for( uint32_t i = 0; i < numSlicesInPic; i++ )
+    {
+      // get position of first tile in slice
+      tileX =  rectSlices[ i ].tileIdx % numTileCols;
+      tileY =  rectSlices[ i ].tileIdx / numTileCols;
+
+      // infer slice size for last slice in picture
+      if( i == numSlicesInPic-1 )
+      {
+        rectSlices[ i ].sliceWidthInTiles  = numTileCols - tileX;
+        rectSlices[ i ].sliceHeightInTiles = numTileRows - tileY;
+        rectSlices[ i ].numSlicesInTile    = 1;
+      }
+
+      // set slice index
+      sliceMap[ i ].sliceID = i;
+      
+      // complete tiles within a single slice case
+      if( rectSlices[ i ].sliceWidthInTiles > 1 || rectSlices[ i ].sliceHeightInTiles > 1 )
+      {
+        for( uint32_t j = 0; j < rectSlices[ i ].sliceHeightInTiles; j++ )
+        {
+          for( uint32_t k = 0; k < rectSlices[ i ].sliceWidthInTiles; k++ )
+          {
+            sliceMap[ i ].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
+                                          tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
+          }
+        }
+      }
+      // multiple slices within a single tile case
+      else
+      {
+        CHECK( true, "multiple slices not yet supported" );
+      }
+    }
+  }
+}
 
 int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
 {

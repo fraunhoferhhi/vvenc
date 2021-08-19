@@ -406,6 +406,15 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
 
+VVENC_DECL void vvenc_vvencRectSlice_default(vvencRectSlice *vvencRectSlice )
+{
+  vvencRectSlice->tileIdx = 0;
+  vvencRectSlice->sliceWidthInTiles = 0;
+  vvencRectSlice->sliceHeightInTiles = 0;
+  vvencRectSlice->numSlicesInTile = 0;
+  vvencRectSlice->sliceHeightInCtu = 0;
+}
+
 VVENC_DECL void vvenc_config_default(vvenc_config *c )
 {
   int i = 0;
@@ -728,7 +737,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_rectSlicePos.clear();
   c->m_numTileCols                             = 1;
   c->m_numTileRows                             = 1;
+  c->m_numSlicesInPic                          = 1;
   c->m_tileIdxDeltaPresentFlag                 = false;
+  c->m_rectSlices.clear();
   c->m_singleSlicePerSubPicFlag                = false;
   
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
@@ -2738,8 +2749,8 @@ static bool checkCfgParameter( vvenc_config *c )
     pps.picWidthInLumaSamples  = c->m_SourceWidth;
     pps.picHeightInLumaSamples = c->m_SourceHeight;
     pps.log2CtuSize            = vvenc::ceilLog2( c->m_CTUSize );
-    pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + ( c->m_CTUSize-1 ) ) / c->m_CTUSize;
-    pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + ( c->m_CTUSize-1 ) ) / c->m_CTUSize;
+    pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
+    pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
 
     // set default tile column if not provided
     if( c->m_tileColumnWidth.size() == 0 )
@@ -2780,7 +2791,7 @@ static bool checkCfgParameter( vvenc_config *c )
     {
       vvenc_confirmParameter( c, c->m_tileRowHeight[ rowIdx ] == 0, "Tile row heights cannot be equal to 0" );
       c->m_tileRowHeight[ rowIdx ] = std::min( remSize, c->m_tileRowHeight[ rowIdx ]);
-      pps.tileColWidth.push_back( c->m_tileRowHeight[ rowIdx ] );
+      pps.tileRowHeight.push_back( c->m_tileRowHeight[ rowIdx ] );
       remSize -= c->m_tileRowHeight[ rowIdx ];
     }
     c->m_tileRowHeight.resize( rowIdx );
@@ -2898,28 +2909,28 @@ static bool checkCfgParameter( vvenc_config *c )
               pps.rectSlices[sliceIdx].sliceWidthInTiles  = 1;
               pps.rectSlices[sliceIdx].sliceHeightInTiles = sliceHeight;
               pps.rectSlices[sliceIdx].tileIdx            = tileIdx;
-              pps.rectSlices[sliceIdx].sliceHeightInCtu = stopCtuY - startCtuY + 1;
+              pps.rectSlices[sliceIdx].sliceHeightInCtu   = stopCtuY - startCtuY + 1;
             }
             pps.rectSlices[firstSliceIdx].numSlicesInTile = numSlicesInTile;
           }
         }
-        pps.tileIdxDeltaPresent = needTileIdxDelta;
+        pps.tileIdxDeltaPresent      = needTileIdxDelta;
         c->m_tileIdxDeltaPresentFlag = needTileIdxDelta;
 
         // check rectangular slice mapping and full picture CTU coverage
-//        pps.initRectSliceMap(nullptr);
+        pps.initRectSliceMap( nullptr );
 
         // store rectangular slice parameters from temporary PPS structure
-//        c->m_numSlicesInPic = pps.getNumSlicesInPic();
-//        m_rectSlices.resize( pps.getNumSlicesInPic() );
-//        for( sliceIdx = 0; sliceIdx < pps.getNumSlicesInPic(); sliceIdx++ )
-//        {
-//          m_rectSlices[sliceIdx].setSliceWidthInTiles( pps.getSliceWidthInTiles(sliceIdx) );
-//          m_rectSlices[sliceIdx].setSliceHeightInTiles( pps.getSliceHeightInTiles(sliceIdx) );
-//          m_rectSlices[sliceIdx].setNumSlicesInTile( pps.getNumSlicesInTile(sliceIdx) );
-//          m_rectSlices[sliceIdx].setSliceHeightInCtu( pps.getSliceHeightInCtu(sliceIdx) );
-//          m_rectSlices[sliceIdx].setTileIdx( pps.getSliceTileIdx(sliceIdx) );
-//        }
+        c->m_numSlicesInPic = pps.numSlicesInPic;
+        c->m_rectSlices.resize( pps.numSlicesInPic );
+        for( sliceIdx = 0; sliceIdx < pps.numSlicesInPic; sliceIdx++ )
+        {
+          c->m_rectSlices[sliceIdx].sliceWidthInTiles  = pps.rectSlices[sliceIdx].sliceWidthInTiles;
+          c->m_rectSlices[sliceIdx].sliceHeightInTiles = pps.rectSlices[sliceIdx].sliceHeightInTiles;
+          c->m_rectSlices[sliceIdx].numSlicesInTile    = pps.rectSlices[sliceIdx].numSlicesInTile;
+          c->m_rectSlices[sliceIdx].sliceHeightInCtu   = pps.rectSlices[sliceIdx].sliceHeightInCtu;
+          c->m_rectSlices[sliceIdx].tileIdx            = pps.rectSlices[sliceIdx].tileIdx;
+        }
       }
     }
     // raster-scan slices
@@ -2930,8 +2941,9 @@ static bool checkCfgParameter( vvenc_config *c )
   }
   else
   {
-    c->m_numTileCols = 1;
-    c->m_numTileRows = 1;
+    c->m_numTileCols    = 1;
+    c->m_numTileRows    = 1;
+    c->m_numSlicesInPic = 1;
   }
 
   return( c->m_confirmFailed );
