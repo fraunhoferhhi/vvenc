@@ -1225,7 +1225,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   const TransformUnit &tuP = cuP.firstTU->next == nullptr ? *cuP.firstTU : *CU::getTU( cuP, posP, chType ); //TODO: check this: based on chType of the current cu, because cuQ.chType and cuP.chType are not the same when local dual-tree is applied
   
   const bool hasLuma   = cuQ.Y(). valid();
-  const bool hasChroma = cuQ.Cb().valid();
+  const bool hasChroma = cuQ.blocks.size()>1 && cuQ.Cb().valid();
 
   bool cuPcIsIntra = false;
   int  chrmBS      = 2;

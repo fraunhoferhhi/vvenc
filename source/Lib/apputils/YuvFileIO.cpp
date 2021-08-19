@@ -92,9 +92,6 @@ bool readYuvPlane( std::istream&       fd,
   const int fileStride = ( ( width  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
   const int fileHeight = ( ( height << csy_dest )                       ) >> csy_file;
 
-  std::vector<uint8_t> bufVec( fileStride );
-  uint8_t *buf = &( bufVec[0] );
-
   if ( compID != 0 && ( inputChFmt == VVENC_CHROMA_400 || internChFmt == VVENC_CHROMA_400 ) )
   {
     if ( internChFmt != VVENC_CHROMA_400 )
@@ -121,6 +118,8 @@ bool readYuvPlane( std::istream&       fd,
   }
   else
   {
+    std::vector<uint8_t> bufVec( fileStride );
+    uint8_t *buf = &( bufVec[0] );
     const unsigned mask_y_file = ( 1 << csy_file ) - 1;
     const unsigned mask_y_dest = ( 1 << csy_dest ) - 1;
     for( int y444 = 0; y444 < ( height << csy_dest ); y444++ )

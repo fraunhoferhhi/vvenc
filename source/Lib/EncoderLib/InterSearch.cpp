@@ -3957,7 +3957,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       }
     } // component loop
 
-    if ( tu.blocks[COMP_Cb].valid() )
+    if ( tu.blocks.size()>2 && tu.blocks[COMP_Cb].valid() )
     {
       const CompArea& cbArea = tu.blocks[COMP_Cb];
       const CompArea& crArea = tu.blocks[COMP_Cr];
@@ -4302,11 +4302,11 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   bool luma      = true;
-  bool chroma    = true;
+  bool chroma    = cs.pcv->chrFormat != VVENC_CHROMA_400;
   if (cu.predMode == MODE_IBC)
   {
-    luma   = cu.mcControl <= 3;
-    chroma = (cu.mcControl >> 1) != 1;
+    luma    = cu.mcControl <= 3;
+    chroma &= (cu.mcControl >> 1) != 1;
   }
   if( cu.predMode == MODE_INTER )
     CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );

@@ -1823,7 +1823,8 @@ void traceStreamBlock( std::stringstream& str, Tsrc *buf, unsigned stride, unsig
 void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recExtBufCTU, int ctuRsAddr )
 {
   bool ctuEnableFlag = m_ctuEnableFlag[COMP_Y][ctuRsAddr];
-  for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+  for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
     ctuEnableFlag |= m_ctuEnableFlag[compIdx][ctuRsAddr] > 0;
 
 #if ALF_CTU_PAR_TRACING
@@ -1930,7 +1931,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
               );
           }
 
-          for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+          for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
           {
             ComponentID compID = ComponentID( compIdx );
             const int chromaScaleX = getComponentScaleX( compID, recBuf.chromaFormat );
@@ -1979,7 +1980,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           );
       }
 
-      for( int compIdx = 1; compIdx < MAX_NUM_COMP; compIdx++ )
+      for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
       {
         ComponentID compID = ComponentID( compIdx );
         const int chromaScaleX = getComponentScaleX( compID, recBuf.chromaFormat );

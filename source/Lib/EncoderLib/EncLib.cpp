@@ -988,7 +988,7 @@ void EncLib::xInitSPS(SPS &sps) const
   }
 
   sps.alfEnabled                    = m_cEncCfg.m_alf;
-  sps.ccalfEnabled                  = m_cEncCfg.m_ccalf;
+  sps.ccalfEnabled                  = m_cEncCfg.m_ccalf && m_cEncCfg.m_internChromaFormat != VVENC_CHROMA_400;
 
   sps.saoEnabled                    = m_cEncCfg.m_bUseSAO;
   sps.jointCbCr                     = m_cEncCfg.m_JointCbCrMode;
