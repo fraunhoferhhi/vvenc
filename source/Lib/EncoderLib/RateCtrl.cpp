@@ -955,7 +955,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp
 
   if (lastCurrTLQP >= 0) // limit QP changes among prev. frames from same temporal level
   {
-    const int clipRange = (refreshParams ? 6 : std::max(3, 6 - (frameLevel >> 1)));
+    const int clipRange = (refreshParams ? 5 + encRCSeq->intraPeriod / encRCSeq->gopSize : std::max(3, 6 - (frameLevel >> 1)));
 
     qp = Clip3 (lastCurrTLQP - clipRange, std::min (MAX_QP, lastCurrTLQP + clipRange), qp);
   }
@@ -1386,7 +1386,7 @@ void RateCtrl::detectNewScene()
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
   {
-    it->isNewScene = ((it->visActY * 64 > visActPrev * 181) || (it->isIntra && it->visActY > visActPrev && std::abs(it->psnrY - psnrPrev) > 4.5));
+    it->isNewScene = ((it->visActY * 64 > visActPrev * 181) || (it->tempLayer <= 1 && it->visActY <= (1u << (encRCSeq->bitDepth - 6))) || (it->isIntra && it->visActY > visActPrev && std::abs(it->psnrY - psnrPrev) > 4.5));
     visActPrev = it->visActY;
     if (it->isIntra) psnrPrev = it->psnrY;
   }
