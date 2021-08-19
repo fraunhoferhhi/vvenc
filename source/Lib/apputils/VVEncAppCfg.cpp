@@ -214,10 +214,12 @@ const std::vector<SVPair<vvencDecodingRefreshType>> DecodingRefreshTypeToEnumMap
   { "cra",                   VVENC_DRT_CRA },
   { "idr",                   VVENC_DRT_IDR },
   { "rpsei",                 VVENC_DRT_RECOVERY_POINT_SEI },
+  { "idr2",                  VVENC_DRT_IDR2 },
   { "0",                     VVENC_DRT_NONE },
   { "1",                     VVENC_DRT_CRA },
   { "2",                     VVENC_DRT_IDR },
   { "3",                     VVENC_DRT_RECOVERY_POINT_SEI },
+  { "4",                     VVENC_DRT_IDR2 },
 };
 
 const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
@@ -451,7 +453,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("threads,-t",        m_numThreads,             "Number of threads default: [size < 720p: 4, >= 720p: 8]")
 
   ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
-  ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra)")
+  ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra,idr2)")
   ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
   ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
   ;
@@ -668,7 +670,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("IntraPeriod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
   ("RefreshSec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
-  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI)")
+  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:IDR2, 4:RecPointSEI)")
   ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
   ;
 

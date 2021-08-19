@@ -180,10 +180,11 @@ typedef enum
 /// supported IDR types
 typedef enum
 {
-  VVENC_DRT_NONE               = 0,
-  VVENC_DRT_CRA                = 1,
-  VVENC_DRT_IDR                = 2,
-  VVENC_DRT_RECOVERY_POINT_SEI = 3
+  VVENC_DRT_NONE = 0,
+  VVENC_DRT_CRA,
+  VVENC_DRT_IDR,
+  VVENC_DRT_RECOVERY_POINT_SEI,
+  VVENC_DRT_IDR2,
 }vvencDecodingRefreshType;
 
 typedef enum
