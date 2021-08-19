@@ -433,6 +433,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   static_vector<double, FAST_UDI_MAX_RDMODE_NUM> CandHadList;
 
   int numModesForFullRD = g_aucIntraModeNumFast_UseMPM_2D[Log2(width) - MIN_CU_LOG2][Log2(height) - MIN_CU_LOG2];
+  if (m_pcEncCfg->m_numIntraModesFullRD > 0)
+    numModesForFullRD=m_pcEncCfg->m_numIntraModesFullRD;
 
 #if INTRA_FULL_SEARCH
   numModesForFullRD = numModesAvailable;
