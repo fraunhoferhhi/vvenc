@@ -1020,7 +1020,7 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
     }
   }
 
-  if( start != end && !currTU.Cb().valid() )
+  if( start != end && (cu.chromaFormat == VVENC_CHROMA_400 || !currTU.Cb().valid() ))
   {
     end = CH_L;
   }
@@ -1300,7 +1300,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( lfp.bs & bsMask )
   {
     tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Y  ) || TU::getCbf( tuP, COMP_Y  )                                   ) ? 1 : 0, COMP_Y  );
-    if (!(MODE_INTRA != cuP.predMode && MODE_INTRA != cuQ.predMode && cuPcIsIntra))
+    if (!(MODE_INTRA != cuP.predMode && MODE_INTRA != cuQ.predMode && cuPcIsIntra) && cuQ.chromaFormat != VVENC_CHROMA_400)
     {
       tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cb) || TU::getCbf(tuP, COMP_Cb) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cb);
       tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cr) || TU::getCbf(tuP, COMP_Cr) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cr);

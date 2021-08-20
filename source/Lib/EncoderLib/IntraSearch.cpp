@@ -1451,12 +1451,13 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       }
     }
 
-    piReco.reconstruct(piPred, piResi, cs.slice->clpRngs[ compID ]);
     if( jointCbCr )
     {
       crReco.reconstruct(crPred, crResi, cs.slice->clpRngs[ COMP_Cr ]);
     }
   }
+  piReco.reconstruct(piPred, piResi, cs.slice->clpRngs[ compID ]);
+  
 
 
   //===== update distortion =====
