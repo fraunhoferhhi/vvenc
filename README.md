@@ -129,6 +129,8 @@ Feel free to contribute. To do so:
 # License
 
 Please see [LICENSE.txt](./LICENSE.txt) file for the terms of use of the contents of this repository.
+    
+In particular, note that the license does not include patent licensing that may be applicable to the use of the contents of this repository.
 
 For more information, please contact: vvc@hhi.fraunhofer.de
 
