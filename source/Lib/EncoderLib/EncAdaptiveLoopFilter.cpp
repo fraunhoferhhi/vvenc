@@ -351,13 +351,13 @@ static double calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfCovar
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
 static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const double invFactor )
 {
-  double error = 0, sum0 = 0, sum1 = 0;
+  double error = 0;
 
   const __m128d mzero = _mm_setzero_pd();
   const __m128d minvf = _mm_set1_pd( invFactor );
   const __m128d mtwo  = _mm_set1_pd( 2.0 );
 
-  __m128d merror  = _mm_setzero_pd();
+  __m128d merror  = _mm_setzero_pd(), msum0, msum1;
   __m128d mcoef1  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [1] ) );
   __m128d mcoef3  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [3] ) );
   __m128d mcoef5  = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff [5] ) );
@@ -380,11 +380,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  __m128d msum = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
-  msum = _mm_hadd_pd( msum, mzero );
-
-  sum0 = _mm_cvtsd_f64( msum );
-
+  msum0 = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
   
   
   mcoef1 = _mm_blend_pd( mcoef1, mzero, 1 );
@@ -403,19 +399,18 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
-  msum = _mm_hadd_pd( msum, mzero );
+  msum1 = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  
+  msum0 = _mm_hadd_pd( msum0, msum1 );
 
-  sum1 = _mm_cvtsd_f64( msum );
+
   
   __m128d mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[0] ) );
   __m128d my      =                  _mm_loadu_pd(                       &y[0][0] );
   __m128d mE      =                  _mm_setr_pd( E[0][0][0][0], E[0][0][1][1] );
-  
-  msum = _mm_setr_pd( sum0, sum1 ) ;
 
   mE1 = _mm_mul_pd( mE, mcoef );
-  mE3 = _mm_mul_pd( msum, mtwo );
+  mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
   mE1 = _mm_mul_pd( mE1, minvf );
   mE3 = _mm_mul_pd( mtwo, my );
@@ -444,11 +439,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
-  msum = _mm_hadd_pd( msum, mzero );
-
-  sum0 = _mm_cvtsd_f64( msum );
-
+  msum0 = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
 
   
   mcoef3 = _mm_blend_pd( mcoef3, mzero, 1 );
@@ -467,20 +458,17 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
-  msum = _mm_hadd_pd( msum, mzero );
+  msum1 = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
 
-  sum1 = _mm_cvtsd_f64( msum );
-  
+
   
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[2] ) );
   my      =                  _mm_loadu_pd(                       &y[0][2] );
   mE      =                  _mm_setr_pd( E[0][0][2][2], E[0][0][3][3] );
-  
-  msum = _mm_setr_pd( sum0, sum1 ) ;
 
   mE1 = _mm_mul_pd( mE, mcoef );
-  mE3 = _mm_mul_pd( msum, mtwo );
+  mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
   mE1 = _mm_mul_pd( mE1, minvf );
   mE3 = _mm_mul_pd( mtwo, my );
@@ -509,11 +497,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
-  msum = _mm_hadd_pd( msum, mzero );
-
-  sum0 = _mm_cvtsd_f64( msum );
-
+  msum0 = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
   
   
   mcoef5 = _mm_blend_pd( mcoef5, mzero, 1 );
@@ -532,20 +516,17 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
-  msum = _mm_hadd_pd( msum, mzero );
+  msum1 = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
 
-  sum1 = _mm_cvtsd_f64( msum );
 
 
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[4] ) );
   my      =                  _mm_loadu_pd(                       &y[0][4] );
   mE      =                  _mm_setr_pd( E[0][0][4][4], E[0][0][5][5] );
-  
-  msum = _mm_setr_pd( sum0, sum1 ) ;
 
   mE1 = _mm_mul_pd( mE, mcoef );
-  mE3 = _mm_mul_pd( msum, mtwo );
+  mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
   mE1 = _mm_mul_pd( mE1, minvf );
   mE3 = _mm_mul_pd( mtwo, my );
@@ -574,11 +555,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
-  msum = _mm_hadd_pd( msum, mzero );
-
-  sum0 = _mm_cvtsd_f64( msum );
-
+  msum0 = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
 
   
   mcoef7 = _mm_blend_pd( mcoef7, mzero, 1 );
@@ -597,20 +574,17 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
-  msum = _mm_hadd_pd( msum, mzero );
+  msum1 = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
 
-  sum1 = _mm_cvtsd_f64( msum );
 
 
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[6] ) );
   my      =                  _mm_loadu_pd(                       &y[0][6] );
   mE      =                  _mm_setr_pd( E[0][0][6][6], E[0][0][7][7] );
-  
-  msum = _mm_setr_pd( sum0, sum1 ) ;
 
   mE1 = _mm_mul_pd( mE, mcoef );
-  mE3 = _mm_mul_pd( msum, mtwo );
+  mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
   mE1 = _mm_mul_pd( mE1, minvf );
   mE3 = _mm_mul_pd( mtwo, my );
@@ -639,11 +613,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( mE9, mE11 );
-  msum = _mm_hadd_pd( msum, mzero );
-
-  sum0 = _mm_cvtsd_f64( msum );
-  
+  msum0 = _mm_add_pd( mE9, mE11 );
 
   
   mcoef9 = _mm_blend_pd( mcoef9, mzero, 1 );
@@ -662,20 +632,17 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = _mm_add_pd( mE9, mE11 );
-  msum = _mm_hadd_pd( msum, mzero );
+  msum1 = _mm_add_pd( mE9, mE11 );
+  msum0 = _mm_hadd_pd( msum0, msum1 );
 
-  sum1 = _mm_cvtsd_f64( msum );
 
 
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[8] ) );
   my      =                  _mm_loadu_pd(                       &y[0][8] );
   mE      =                  _mm_setr_pd( E[0][0][8][8], E[0][0][9][9] );
-  
-  msum = _mm_setr_pd( sum0, sum1 ) ;
 
   mE1 = _mm_mul_pd( mE, mcoef );
-  mE3 = _mm_mul_pd( msum, mtwo );
+  mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
   mE1 = _mm_mul_pd( mE1, minvf );
   mE3 = _mm_mul_pd( mtwo, my );
@@ -704,12 +671,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   //mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = mE11;
-  msum = _mm_hadd_pd( msum, mzero );
-
-  sum0 = _mm_cvtsd_f64( msum );
-
-
+  msum0 = mE11;
 
 
   mcoef11 = _mm_blend_pd( mcoef11, mzero, 1 );
@@ -728,20 +690,17 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   //mE9  = _mm_mul_pd( mcoef9,  mE9 );
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
-  msum = mE11;
-  msum = _mm_hadd_pd( msum, mzero );
+  msum1 = mE11;
+  msum0 = _mm_hadd_pd( msum0, msum1 );
 
-  sum1 = _mm_cvtsd_f64( msum );
 
 
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[10] ) );
   my      =                  _mm_loadu_pd(                       &y[0][10] );
   mE      =                  _mm_setr_pd( E[0][0][10][10], E[0][0][11][11] );
-  
-  msum = _mm_setr_pd( sum0, sum1 ) ;
 
   mE1 = _mm_mul_pd( mE, mcoef );
-  mE3 = _mm_mul_pd( msum, mtwo );
+  mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
   mE1 = _mm_mul_pd( mE1, minvf );
   mE3 = _mm_mul_pd( mtwo, my );
