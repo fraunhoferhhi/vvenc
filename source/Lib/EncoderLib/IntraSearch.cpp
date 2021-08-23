@@ -1395,7 +1395,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
   else // chroma
   {
-    CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
     PelBuf          crPred = cs.getPredBuf ( COMP_Cr );
     PelBuf          crResi = cs.getResiBuf ( COMP_Cr );
     PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
