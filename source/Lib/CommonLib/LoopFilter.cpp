@@ -411,22 +411,25 @@ void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) c
      }
   }
 
-  for (int y = 0; y < pcv.heightInCtus; y++)
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
   {
-    for (int x = 0; x < pcv.widthInCtus; x++)
+    for (int y = 0; y < pcv.heightInCtus; y++)
     {
-      const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
+      for (int x = 0; x < pcv.widthInCtus; x++)
+      {
+        const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
+        DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
+        DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
 
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-        if( currCU.Cb().valid() )
-        {
-          if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-        }
-     }
+        for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
+          if( currCU.Cb().valid() )
+          {
+            if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
+          }
+       }
+    }
   }
 
 #endif
@@ -475,28 +478,34 @@ void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) c
      }
   }
 
-  for (int y = 0; y < pcv.heightInCtus; y++)
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
   {
-    for (int x = 0; x < pcv.widthInCtus; x++)
+    for (int y = 0; y < pcv.heightInCtus; y++)
     {
-      const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
+      for (int x = 0; x < pcv.widthInCtus; x++)
+      {
+        const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
+        DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
+        DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
 
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-        if( currCU.Cb().valid() )
-        {
-          if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-        }
-     }
+        for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
+          if( currCU.Cb().valid() )
+          {
+            if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
+          }
+       }
+    }
   }
 #endif
 
   DTRACE_PIC_COMP(D_REC_CB_LUMA_LF,   cs, cs.getRecoBuf(), COMP_Y);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cr);
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
+  {
+    DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb);
+    DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cr);
+  }
 }
 
 void LoopFilter::loopFilterPicLine( CodingStructure &cs, const ChannelType chType, const int ctuLine, const int offset, const DeblockEdgeDir edgeDir ) const

@@ -682,14 +682,17 @@ const char* VVEncImpl::getCompileInfoString()
 }
 
 ///< decode bitstream with limited build in decoder
-int VVEncImpl::decodeBitstream( const char* FileName)
+int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule)
 {
   int ret = 0;
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( "", "" );
+  if( trcFile != NULL && trcRule != NULL)
+    g_trace_ctx = tracing_init( trcFile, trcRule );
+  else
+    g_trace_ctx = tracing_init( "", "" );
 #endif
 
   std::string filename(FileName );
