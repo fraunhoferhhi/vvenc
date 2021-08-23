@@ -1051,7 +1051,6 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.subPics.clear();
   pps.subPics.resize(1);
   pps.subPics[0].init( pps.picWidthInCtu, pps.picHeightInCtu, pps.picWidthInLumaSamples, pps.picHeightInLumaSamples);
-  pps.noPicPartition                = true;
   pps.useDQP                        = m_cEncCfg.m_RCTargetBitrate > 0 ? true : bUseDQP;
 
   if ( m_cEncCfg.m_cuChromaQpOffsetSubdiv >= 0 )
@@ -1176,7 +1175,39 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.numRefIdxL0DefaultActive = bestPos;
   pps.numRefIdxL1DefaultActive = bestPos;
 
-  xInitPPSforTiles(pps);
+  pps.noPicPartition = !m_cEncCfg.m_picPartitionFlag;
+  
+  if( pps.noPicPartition )
+  {
+    xInitPPSforTiles(pps);
+  }
+  else
+  {
+    pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
+    pps.picWidthInCtu  = ( pps.picWidthInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
+    pps.picHeightInCtu = ( pps.picHeightInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
+    pps.numExpTileCols = m_cEncCfg.m_tileColumnWidth.size();
+    pps.numExpTileRows = m_cEncCfg.m_tileRowHeight.size();
+    pps.tileColWidth   = m_cEncCfg.m_tileColumnWidth;
+    pps.tileRowHeight  = m_cEncCfg.m_tileRowHeight;
+    pps.initTiles();
+    pps.rectSlice      = !m_cEncCfg.m_rasterSliceFlag;
+
+    if( pps.rectSlice )
+    {
+      pps.singleSlicePerSubPic = m_cEncCfg.m_singleSlicePerSubPicFlag;
+      pps.numSlicesInPic       = m_cEncCfg.m_numSlicesInPic;
+      pps.tileIdxDeltaPresent  = m_cEncCfg.m_tileIdxDeltaPresentFlag;
+      pps.rectSlices           = m_cEncCfg.m_rectSlices;
+      pps.initRectSliceMap( &sps );
+    }
+    else
+    {
+      CHECK( true, "raster-scan slices not yet supported" );
+    }
+//    pps.loopFilterAcrossTilesEnabled  = m_cEncCfg.m_loopFilterAcrossTilesEnabled;
+//    pps.loopFilterAcrossSlicesEnabled = m_cEncCfg.m_loopFilterAcrossSlicesEnabled;
+  }
 
   pps.pcv            = new PreCalcValues( sps, pps, true );
 }

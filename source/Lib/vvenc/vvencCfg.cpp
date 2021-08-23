@@ -3518,6 +3518,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   }
   css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
 
+  css << "Tiles:" << c->m_numTileCols << "x" << c->m_numTileRows << " ";
+  css << "Slices:"<< c->m_numSlicesInPic << " ";
+
   const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
   css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
   css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";

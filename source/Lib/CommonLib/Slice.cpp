@@ -1893,24 +1893,59 @@ void PPS::initRectSliceMap( const SPS* sps )
       }
     }
   }
+  checkSliceMap();
+}
+
+void PPS::checkSliceMap()
+{
+  uint32_t i;
+  std::vector<uint32_t>  ctuList, sliceList;
+  uint32_t picSizeInCtu = picWidthInCtu * picHeightInCtu;
+  for( i = 0; i < numSlicesInPic; i++ )
+  {
+    sliceList = sliceMap[ i ].ctuAddrInSlice;
+    ctuList.insert( ctuList.end(), sliceList.begin(), sliceList.end() );
+  }
+  CHECK( ctuList.size() < picSizeInCtu, "Slice map contains too few CTUs");
+  CHECK( ctuList.size() > picSizeInCtu, "Slice map contains too many CTUs");
+  std::sort( ctuList.begin(), ctuList.end() );
+  for( i = 1; i < ctuList.size(); i++ )
+  {
+    CHECK( ctuList[i] > ctuList[i-1]+1, "CTU missing in slice map");
+    CHECK( ctuList[i] == ctuList[i-1],  "CTU duplicated in slice map");
+  }
 }
 
 int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
 {
+  if (!sps.entryPointsPresent )
+  {
+    return 0;
+  }
+
   uint32_t ctuAddr, ctuX, ctuY;
+//  uint32_t prevCtuAddr, prevCtuX, prevCtuY;
   int numEntryPoints = 0;
 
   // count the number of CTUs that align with either the start of a tile, or with an entropy coding sync point
   // ignore the first CTU since it doesn't count as an entry point
   for( uint32_t i = 1; i < sliceMap.numCtuInSlice; i++ )
   {
-    ctuAddr = sliceMap.ctuAddrInSlice[i];
+    ctuAddr = pps.sliceMap[0].ctuAddrInSlice[i];
     ctuX = ( ctuAddr % pps.picWidthInCtu );
     ctuY = ( ctuAddr / pps.picWidthInCtu );
     if( ctuX == pps.ctuToTileCol[ctuX] && (ctuY == pps.ctuToTileRow[ctuY] || sps.entropyCodingSyncEnabled ) )
     {
       numEntryPoints++;
     }
+//    prevCtuAddr = pps.sliceMap[0].ctuAddrInSlice[i-1];
+//    prevCtuX = ( prevCtuAddr % pps.picWidthInCtu );
+//    prevCtuY = ( prevCtuAddr / pps.picWidthInCtu );
+//
+//    if( pps.tileRowBd[pps.ctuToTileRow[ctuY]] != pps.tileRowBd[pps.ctuToTileRow[prevCtuY]] || pps.tileColBd[pps.ctuToTileCol[ctuX]] != pps.tileColBd[pps.ctuToTileCol[prevCtuX]] || ( ctuY != prevCtuY && sps.entropyCodingSyncEnabled ) )
+//    {
+//      numEntryPoints++;
+//    }
   }
   return numEntryPoints;
 }

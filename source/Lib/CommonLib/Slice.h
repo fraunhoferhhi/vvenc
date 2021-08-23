@@ -971,6 +971,7 @@ public:
   void initTiles();
   void initRectSlices();
   void initRectSliceMap( const SPS* sps );
+  void checkSliceMap();
 
 };
 
