@@ -464,7 +464,7 @@ void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn,
       for( int x = 0; x < width; x++)
       {
         LPel val = ( src[ x ] + rounding ) >> shiftbitsr;
-        dst[ x ] = std::min<LPel>( minVal, std::max<LPel>( maxVal, val ) );
+        dst[ x ] = std::max<LPel>( minVal, std::min<LPel>( maxVal, val ) );
       }
     }
   }
