@@ -610,15 +610,24 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
     return -1;
   }
 
+  const bool monochromFix    = ( m_bufferChrFmt==VVENC_CHROMA_400 && m_fileChrFmt!=VVENC_CHROMA_400 ); 
   const bool is16bit         = m_fileBitdepth > 8;
   const int desired_bitdepth = m_MSBExtendedBitDepth + m_bitdepthShift;
   const bool b709Compliance  = ( m_clipToRec709 ) && ( m_bitdepthShift < 0 && desired_bitdepth >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
   const LPel minVal           = b709Compliance ? ( (    1 << ( desired_bitdepth - 8 ) )    ) : 0;
   const LPel maxVal           = b709Compliance ? ( ( 0xff << ( desired_bitdepth - 8 ) ) -1 ) : ( 1 << desired_bitdepth ) - 1;
   const int numComp                = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
+
   for( int comp = 0; comp < numComp; comp++ )
   {
-    vvencYUVPlane& yuvPlane = yuvInBuf.planes[ comp ];
+    vvencYUVPlane yuvPlane = yuvInBuf.planes[ comp ];
+
+    if( monochromFix && comp )
+    {
+      yuvPlane.width  = yuvInBuf.planes[0].width  >> (m_fileChrFmt == VVENC_CHROMA_444 ? 0 : 1);
+      yuvPlane.height = 2*yuvInBuf.planes[0].height >> (m_fileChrFmt != VVENC_CHROMA_420 ? 0 : 1);
+      yuvPlane.stride = yuvPlane.width;
+    }
 
     if( m_readStdin )
     {
@@ -636,7 +645,7 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
         return 0;
       }
     }
-    if ( m_bufferChrFmt == VVENC_CHROMA_400 )
+    if ( m_bufferChrFmt == VVENC_CHROMA_400 && comp)
       continue;
 
     if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
