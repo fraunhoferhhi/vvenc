@@ -3090,7 +3090,42 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[0] );
               const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[8] );
 
-              for( int l = k; l < shape.numCoeff; l++ )
+              int l = k;
+              
+              for( ; l < ( shape.numCoeff - 1 ); l += 2 )
+              {
+                const Pel* Elocall = &ELocal[l << 4];
+                
+                __m128i melocall0 = _mm_loadu_si128( ( const __m128i* ) &Elocall[0] );
+                __m128i melocall8 = _mm_loadu_si128( ( const __m128i* ) &Elocall[8] );
+
+                __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+                
+                __m128i mmacca = _mm_add_epi32( mmacc0, mmacc8 );
+
+                Elocall = &ELocal[(l + 1) << 4];
+
+                melocall0 = _mm_loadu_si128( ( const __m128i* ) &Elocall[0] );
+                melocall8 = _mm_loadu_si128( ( const __m128i* ) &Elocall[8] );
+
+                mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+
+                __m128i mmaccb = _mm_add_epi32( mmacc0, mmacc8 );
+
+                __m128i mmacc = _mm_hadd_epi32( mmacca, mmaccb );
+                mmacc = _mm_hadd_epi32( mmacc, mmacc );
+
+                __m128d madd = _mm_cvtepi32_pd( mmacc );
+                __m128d mcov = _mm_loadu_pd( cov );
+                mcov = _mm_add_pd( mcov, madd );
+                _mm_storeu_pd( cov, mcov );
+
+                cov += 2;
+              }
+
+              if( l != shape.numCoeff )
               {
                 const Pel* Elocall = &ELocal[l << 4];
                 
@@ -3104,7 +3139,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-                *cov++ += _mm_extract_epi32( mmacc, 0 );
+                *cov += _mm_extract_epi32( mmacc, 0 );
               }
 
               const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
