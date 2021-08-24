@@ -3957,7 +3957,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       }
     } // component loop
 
-    if ( tu.blocks[COMP_Cb].valid() )
+    if ( tu.blocks.size()>2 && tu.blocks[COMP_Cb].valid() )
     {
       const CompArea& cbArea = tu.blocks[COMP_Cb];
       const CompArea& crArea = tu.blocks[COMP_Cr];
@@ -4174,7 +4174,7 @@ void InterSearch::xEstimateInterResidualQT(CodingStructure &cs, Partitioner &par
       static const ComponentID cbf_getComp[3] = { COMP_Cb, COMP_Cr, COMP_Y };
       for( unsigned c = 0; c < numTBlocks; c++)
       {
-        const ComponentID compID = cbf_getComp[c];
+        const ComponentID compID = numTBlocks>1 ? cbf_getComp[c] : COMP_Y;
         if( tu.blocks[compID].valid() )
         {
           const bool prevCbf = ( compID == COMP_Cr ? TU::getCbfAtDepth( tu, COMP_Cb, currDepth ) : false );
@@ -4302,11 +4302,11 @@ void InterSearch::encodeResAndCalcRdInterCU(CodingStructure &cs, Partitioner &pa
 {
   CodingUnit &cu = *cs.getCU( partitioner.chType, partitioner.treeType );
   bool luma      = true;
-  bool chroma    = true;
+  bool chroma    = cs.pcv->chrFormat != VVENC_CHROMA_400;
   if (cu.predMode == MODE_IBC)
   {
-    luma   = cu.mcControl <= 3;
-    chroma = (cu.mcControl >> 1) != 1;
+    luma    = cu.mcControl <= 3;
+    chroma &= (cu.mcControl >> 1) != 1;
   }
   if( cu.predMode == MODE_INTER )
     CHECK( CU::isSepTree(cu), "CU with Inter mode must be in single tree" );

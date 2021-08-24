@@ -941,7 +941,7 @@ void EncLib::xInitSPS(SPS &sps) const
   sps.maxNumIBCMergeCand            = 6;
 
   sps.idrRefParamList               = m_cEncCfg.m_idrRefParamList;
-  sps.dualITree                     = m_cEncCfg.m_dualITree;
+  sps.dualITree                     = m_cEncCfg.m_dualITree && m_cEncCfg.m_internChromaFormat != VVENC_CHROMA_400;
   sps.MTS                           = m_cEncCfg.m_MTS || m_cEncCfg.m_MTSImplicit;
   sps.SMVD                          = m_cEncCfg.m_SMVD;
   sps.AMVR                          = m_cEncCfg.m_AMVRspeed != IMV_OFF;
@@ -988,7 +988,7 @@ void EncLib::xInitSPS(SPS &sps) const
   }
 
   sps.alfEnabled                    = m_cEncCfg.m_alf;
-  sps.ccalfEnabled                  = m_cEncCfg.m_ccalf;
+  sps.ccalfEnabled                  = m_cEncCfg.m_ccalf && m_cEncCfg.m_internChromaFormat != VVENC_CHROMA_400;
 
   sps.saoEnabled                    = m_cEncCfg.m_bUseSAO;
   sps.jointCbCr                     = m_cEncCfg.m_JointCbCrMode;

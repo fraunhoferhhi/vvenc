@@ -128,7 +128,7 @@ inline void dtraceBlockRec( const CPelUnitBuf& pelUnitBuf, const UnitArea& ua, P
     DTRACE      ( g_trace_ctx, D_REC_CB_LUMA,   "%d, x=%d, y=%d, size=%dx%d, predmode=%d \n", zIdx, x0, y0, uiWidth, uiHeight, predMode );
     DTRACE_BLOCK( g_trace_ctx, D_REC_CB_LUMA,   piReco, uiStride, uiWidth, uiHeight );
   }
-  if( ua.blocks[COMP_Cb].valid() )
+  if( ua.blocks.size() > 2 && ua.blocks[COMP_Cb].valid() )
   {
     const int     x0           = ua.blocks[1].x;
     const int     y0           = ua.blocks[1].y;
@@ -161,13 +161,24 @@ inline void dtraceUnitComp( DTRACE_CHANNEL channel, CPelUnitBuf& pelUnitBuf, con
 inline void dtraceCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const CPelUnitBuf& pelUnitBuf, const Area* parea = NULL )
 {
   const Area& area = parea ? *parea : cs.area.Y();
-  DTRACE( trace_ctx, channel, " CRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,Checksum(%x %x %x)\n",
-      DTRACE_GET_COUNTER( g_trace_ctx, channel ),
-      cs.slice->poc,
-      area.x, area.y, area.width, area.height,
-      calcCheckSum( pelUnitBuf.bufs[COMP_Y],  cs.sps->bitDepths[CH_L]),
-      calcCheckSum( pelUnitBuf.bufs[COMP_Cb], cs.sps->bitDepths[CH_C]),
-      calcCheckSum( pelUnitBuf.bufs[COMP_Cr], cs.sps->bitDepths[CH_C]));
+  if( cs.pcv->chrFormat == VVENC_CHROMA_400)
+  {
+    DTRACE( trace_ctx, channel, " CRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,Checksum(%x)\n",
+        DTRACE_GET_COUNTER( g_trace_ctx, channel ),
+        cs.slice->poc,
+        area.x, area.y, area.width, area.height,
+        calcCheckSum( pelUnitBuf.bufs[COMP_Y],  cs.sps->bitDepths[CH_L]));
+  }
+  else
+  {
+    DTRACE( trace_ctx, channel, " CRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,Checksum(%x %x %x)\n",
+        DTRACE_GET_COUNTER( g_trace_ctx, channel ),
+        cs.slice->poc,
+        area.x, area.y, area.width, area.height,
+        calcCheckSum( pelUnitBuf.bufs[COMP_Y],  cs.sps->bitDepths[CH_L]),
+        calcCheckSum( pelUnitBuf.bufs[COMP_Cb], cs.sps->bitDepths[CH_C]),
+        calcCheckSum( pelUnitBuf.bufs[COMP_Cr], cs.sps->bitDepths[CH_C]));
+  }
 }
 
 inline void dtraceCCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const CPelBuf& pelBuf, ComponentID compId, const Area* parea = NULL )

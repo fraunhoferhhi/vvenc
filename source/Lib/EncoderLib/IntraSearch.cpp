@@ -1360,11 +1360,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     m_pcTrQuant->scaleLambda( 1.0/(cRescale*cRescale) );
   }
 
-  CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
-  PelBuf          crPred = cs.getPredBuf ( COMP_Cr );
-  PelBuf          crResi = cs.getResiBuf ( COMP_Cr );
-  PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
-
   if ( jointCbCr )
   {
     // Lambda is loosened for the joint mode with respect to single modes as the same residual is used for both chroma blocks
@@ -1400,6 +1395,10 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
   else // chroma
   {
+    PelBuf          crPred = cs.getPredBuf ( COMP_Cr );
+    PelBuf          crResi = cs.getResiBuf ( COMP_Cr );
+    PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
+
     int         codedCbfMask  = 0;
     ComponentID codeCompId    = (tu.jointCbCr ? (tu.jointCbCr >> 1 ? COMP_Cb : COMP_Cr) : compID);
     const QpParam qpCbCr(tu, codeCompId);
@@ -1439,24 +1438,25 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       m_pcTrQuant->invTransformICT( tu, piResi, crResi );
       uiAbsSum = codedCbfMask;
     }
-  }
 
-  //===== reconstruction =====
-  if ( flag && uiAbsSum > 0 && isChroma(compID) && cs.picHeader->lmcsChromaResidualScale )
-  {
-    piResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[compID]);
+    //===== reconstruction =====
+    if ( flag && uiAbsSum > 0 && cs.picHeader->lmcsChromaResidualScale )
+    {
+      piResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[compID]);
+
+      if( jointCbCr )
+      {
+        crResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cr]);
+      }
+    }
 
     if( jointCbCr )
     {
-      crResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cr]);
+      crReco.reconstruct(crPred, crResi, cs.slice->clpRngs[ COMP_Cr ]);
     }
   }
-
   piReco.reconstruct(piPred, piResi, cs.slice->clpRngs[ compID ]);
-  if( jointCbCr )
-  {
-    crReco.reconstruct(crPred, crResi, cs.slice->clpRngs[ COMP_Cr ]);
-  }
+  
 
 
   //===== update distortion =====
@@ -1475,6 +1475,8 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE_WTD, &orgLuma );
       if( jointCbCr )
       {
+        CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
+        PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
         ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE_WTD, &orgLuma );
       }
     }
@@ -1484,6 +1486,8 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE );
     if( jointCbCr )
     {
+      CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
+      PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
       ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE );
     }
   }

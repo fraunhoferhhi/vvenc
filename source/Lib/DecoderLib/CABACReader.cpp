@@ -2187,7 +2187,7 @@ void CABACReader::transform_unit( TransformUnit& tu, CUCtx& cuCtx, Partitioner& 
   ChromaCbfs        chromaCbfs;
   chromaCbfs.Cb = chromaCbfs.Cr = false;
 
-  const bool chromaCbfISP = area.blocks[COMP_Cb].valid() && cu.ispMode;
+  const bool chromaCbfISP = area.chromaFormat != CHROMA_400 && area.blocks[COMP_Cb].valid() && cu.ispMode;
 
   // cbf_cb & cbf_cr
   if (area.chromaFormat != CHROMA_400 && area.blocks[COMP_Cb].valid() && (!CU::isSepTree(cu) || partitioner.chType == CH_C) && (!cu.ispMode || chromaCbfISP))
