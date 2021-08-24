@@ -114,11 +114,7 @@ int EncApp::encode()
   vvenc_config& vvencCfg = m_cEncAppCfg;
   if( m_cEncAppCfg.m_decode )
   {
-#if ENABLE_TRACING
     return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str(), m_cEncAppCfg.m_traceFile, m_cEncAppCfg.m_traceRule );
-#else
-    return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str(), nullptr, nullptr );
-#endif
   }
 
   // initialize encoder lib
