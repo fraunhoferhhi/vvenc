@@ -865,7 +865,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("FastQtBtEnc",                                     m_fastQtBtEnc,                                    "Fast encoding setting for QTBT")
   ("ContentBasedFastQtbt",                            m_contentBasedFastQtbt,                           "Signal based QTBT speed-up")
   ("FEN",                                             m_fastInterSearchMode,                            "fast encoder setting")
-  ("ECU",                                             m_bUseEarlyCU,                                    "Early CU setting")
+  ("ECU",                                             m_useEarlyCU,                                     "Early CU setting (1: ECU limited to specific block size and TL, 2: unconstrained ECU)")
   ("FDM",                                             m_useFastDecisionForMerge,                        "Fast decision for Merge RD Cost")
 
   ("DisableIntraInInter",                             m_bDisableIntraCUsInInterSlices,                  "Flag to disable intra CUs in inter slices")
@@ -900,7 +900,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("ClipForBiPredMEEnabled",                          m_bClipForBiPredMeEnabled,                        "Enable clipping in the Bi-Pred ME.")
   ("FastMEAssumingSmootherMVEnabled",                 m_bFastMEAssumingSmootherMVEnabled,               "Enable fast ME assuming a smoother MV.")
   ("IntegerET",                                       m_bIntegerET,                                     "Enable early termination for integer motion search")
-  ("FastSubPel",                                      m_fastSubPel,                                     "Enable fast sub-pel ME")
+  ("FastSubPel",                                      m_fastSubPel,                                     "Enable fast sub-pel ME (1: enable fast sub-pel ME, 2: completely disable sub-pel ME)")
   ;
 
   // Deblocking filter parameters

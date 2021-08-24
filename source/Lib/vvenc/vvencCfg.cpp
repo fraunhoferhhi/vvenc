@@ -484,7 +484,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_fastQtBtEnc                             = true;
   c->m_contentBasedFastQtbt                    = false;
   c->m_fastInterSearchMode                     = VVENC_FASTINTERSEARCH_AUTO;
-  c->m_bUseEarlyCU                             = false;
+  c->m_useEarlyCU                              = 0;
   c->m_useFastDecisionForMerge                 = true;
 
   c->m_bDisableIntraCUsInInterSlices           = false;
@@ -2240,7 +2240,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_useFastMrg < 0 || c->m_useFastMrg > 2,   "FastMrg out of range [0..2]" );
   vvenc_confirmParameter( c, c->m_useFastMIP < 0 || c->m_useFastMIP > 4,   "FastMIP out of range [0..4]" );
-  vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 1,   "FastSubPel out of range [0..1]" );
+  vvenc_confirmParameter( c, c->m_fastSubPel < 0 || c->m_fastSubPel > 2,   "FastSubPel out of range [0..2]" );
+  vvenc_confirmParameter( c, c->m_useEarlyCU < 0 || c->m_useEarlyCU > 2,   "ECU out of range [0..2]" );
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
@@ -2738,10 +2739,55 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
   switch( preset )
   {
-    case vvencPresetMode::VVENC_FASTER:
-      c->m_DMVR                        = 1;
-
     case vvencPresetMode::VVENC_FIRSTPASS:
+      c->m_DMVR                            = 0;
+
+      // motion estimation
+      c->m_SearchRange                     = 128;
+      c->m_bipredSearchRange               = 1;
+      c->m_minSearchWindow                 = 96;
+      c->m_fastInterSearchMode             = VVENC_FASTINTERSEARCH_MODE1;
+      c->m_motionEstimationSearchMethod    = VVENC_MESEARCH_DIAMOND_FAST;
+
+      // partitioning: CTUSize64 QT44MTT00
+      c->m_CTUSize                         = 64;
+      c->m_dualITree                       = 1;
+      c->m_MinQT[ 0 ]                      = 32;
+      c->m_MinQT[ 1 ]                      = 32;
+      c->m_MinQT[ 2 ]                      = 16;
+      c->m_maxMTTDepth                     = 0;
+      c->m_maxMTTDepthI                    = 0;
+      c->m_maxMTTDepthIChroma              = 0;
+      c->m_log2MinCodingBlockSize          = 5;
+
+      // speedups
+      c->m_qtbttSpeedUp                    = 3;
+      c->m_contentBasedFastQtbt            = 0;
+      c->m_usePbIntraFast                  = 1;
+      c->m_useFastMrg                      = 2;
+      c->m_fastLocalDualTreeMode           = 1;
+      c->m_fastSubPel                      = 2;
+      c->m_FastIntraTools                  = 0;
+      c->m_FIMMode                         = 4;
+      c->m_useEarlyCU                      = 2;
+      c->m_bIntegerET                      = 1;
+      c->m_IntraEstDecBit                  = 3;
+
+      // tools
+      c->m_RDOQ                            = 2;
+      c->m_SignDataHidingEnabled           = 1;
+      c->m_LMChroma                        = 1;
+      c->m_vvencMCTF.MCTF                  = 2;
+      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_MTSImplicit                     = 1;
+      // scc
+      c->m_IBCFastMethod                   = 6;
+      c->m_TSsize                          = 3;
+
+      break;
+
+    case vvencPresetMode::VVENC_FASTER:
+      c->m_DMVR                            = 1;
 
       // motion estimation
       c->m_SearchRange                     = 128;
@@ -2761,7 +2807,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_maxMTTDepthIChroma              = 0;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 3;
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
@@ -2770,11 +2816,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
       c->m_FIMMode                         = 4;
-      c->m_bUseEarlyCU                     = 1;
+      c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 1;
       c->m_IntraEstDecBit                  = 3;
 
-      // tools                             
+      // tools
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
@@ -2816,7 +2862,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
       c->m_FIMMode                         = 2;
-      c->m_bUseEarlyCU                     = 1;
+      c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 3;
 
@@ -2875,7 +2921,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 1;
       c->m_FIMMode                         = 0;
-      c->m_bUseEarlyCU                     = 0;
+      c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
 
@@ -2941,7 +2987,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 0;
       c->m_FIMMode                         = 0;
-      c->m_bUseEarlyCU                     = 0;
+      c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 1;
 
@@ -3010,7 +3056,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_fastSubPel                      = 0;
       c->m_FastIntraTools                  = 0;
       c->m_FIMMode                         = 0;
-      c->m_bUseEarlyCU                     = 0;
+      c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 1;
 
@@ -3081,7 +3127,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_fastSubPel                      = 1;
       c->m_FastIntraTools                  = 1;
       c->m_FIMMode                         = 3;
-      c->m_bUseEarlyCU                     = 1;
+      c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 1;
       c->m_IntraEstDecBit                  = 3;
 
@@ -3281,7 +3327,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   }
 
   css << "\nFAST TOOL CFG: ";
-  css << "ECU:" << c->m_bUseEarlyCU << " ";
+  css << "ECU:" << c->m_useEarlyCU << " ";
   css << "FEN:" << c->m_fastInterSearchMode << " ";
   css << "FDM:" << c->m_useFastDecisionForMerge << " ";
   css << "FastSearch:" << c->m_motionEstimationSearchMethod << " ";
