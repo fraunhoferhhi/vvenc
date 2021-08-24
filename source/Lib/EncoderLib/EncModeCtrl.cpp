@@ -772,9 +772,14 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         }
         if( bestCS )
         {
+          if ( m_pcEncCfg->m_useEarlyCU == 2 && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
+          {
+            return false;
+          }
+
           int stopSplit = (m_pcEncCfg->m_FastInferMerge >> 4) && (bestCS->slice->TLayer > 4);
           int limitBLsize = stopSplit ? 2048 : 1024;
-          if((m_pcEncCfg->m_bUseEarlyCU || stopSplit) && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < limitBLsize )
+          if((m_pcEncCfg->m_useEarlyCU == 1 || stopSplit) && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < limitBLsize )
           {
             return false;
           }

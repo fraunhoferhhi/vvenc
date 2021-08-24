@@ -822,7 +822,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
                                             bool useAltHpelIf )
 {
   Distortion  uiDist;
-  uiDistBest = m_pcEncCfg->m_fastSubPel ? uiDistBest : MAX_DISTORTION;
+  uiDistBest = m_pcEncCfg->m_fastSubPel == 1 ? uiDistBest : MAX_DISTORTION;
   uint32_t        uiDirecBest = 0;
 
   Pel*  piRefPos;
@@ -850,7 +850,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
   const Mv* pcMvRefine = (iFrac == 2 ? s_acMvRefineH : s_acMvRefineQ);
   for (uint32_t i = 0; i < 9; i++)
   {
-    if( m_pcEncCfg->m_fastSubPel )
+    if( m_pcEncCfg->m_fastSubPel == 1 )
     {
       if( s_skipQpelPosition[ patternId ][ i ] )
       {
@@ -936,7 +936,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 
   rcMvFrac = pcMvRefine[uiDirecBest];
 
-  if( m_pcEncCfg->m_fastSubPel && 2 == iFrac )
+  if( m_pcEncCfg->m_fastSubPel == 1 && iFrac == 2 )
   {
     switch ( uiDirecBest )
     {
@@ -2105,7 +2105,10 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
   // sub-pel refinement for sub-pel resolution
   if ( cu.imv == 0 || cu.imv == IMV_HPEL )
   {
-    xPatternSearchFracDIF(cu, refPicList, iRefIdxPred, cStruct, rcMv, cMvHalf, cMvQter, ruiCost);
+    if ( m_pcEncCfg->m_fastSubPel != 2 )
+    {
+      xPatternSearchFracDIF( cu, refPicList, iRefIdxPred, cStruct, rcMv, cMvHalf, cMvQter, ruiCost );
+    }
     m_pcRdCost->setCostScale( 0 );
     rcMv <<= 2;
     rcMv  += ( cMvHalf <<= 1 );
@@ -2887,7 +2890,7 @@ void InterSearch::xPatternSearchFracDIF(
   Distortion  uiDistBest = MAX_DISTORTION;
   int patternId = 41;
   ruiCost = xPatternRefinement( cStruct.pcPatternKey, baseRefMv, 2, rcMvHalf, ( !cu.cs->slice->disableSATDForRd ), uiDistBest, patternId, &cPatternRoi, cStruct.useAltHpelIf );
-  patternId -= ( m_pcEncCfg->m_fastSubPel ? 41 : 0 );
+  patternId -= ( m_pcEncCfg->m_fastSubPel == 1 ? 41 : 0 );
 
 
   //  quarter-pel refinement
