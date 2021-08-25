@@ -233,7 +233,14 @@ void EncSlice::initPic( Picture* pic, int gopId )
 {
   Slice* slice = pic->cs->slice;
 
-  slice->sliceMap.addCtusToSlice( 0, pic->cs->pcv->widthInCtus, 0, pic->cs->pcv->heightInCtus, pic->cs->pcv->widthInCtus);
+  if( slice->pps->numTileCols * slice->pps->numTileRows > 1 )
+  {
+    slice->sliceMap = slice->pps->sliceMap[0];
+  }
+  else
+  {
+    slice->sliceMap.addCtusToSlice( 0, pic->cs->pcv->widthInCtus, 0, pic->cs->pcv->heightInCtus, pic->cs->pcv->widthInCtus);
+  }
 
   // this ensures that independently encoded bitstream chunks can be combined to bit-equal
   const SliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
@@ -641,6 +648,7 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
     }
 
   public:
+    CtuTsIterator( const CodingStructure& _cs, int _s, int _e,       std::vector<int>& _m         ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( _s ) {}
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, bool _wpp                          ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ),                     m_ctuTsAddr( _s ) { if( _wpp ) setWppPattern(); }
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>& _m         ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( _s ) {}
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>& _m, int _c ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( std::max( _s, _c ) ) {}
@@ -748,7 +756,8 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
 
   // fill encoder parameter list
   int idx = 0;
-  auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
+  const std::vector<int> base = slice.sliceMap.ctuAddrInSlice;
+  auto ctuIter = ( slice.pps->numTileCols * slice.pps->numTileRows > 1 ) ? CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, slice.sliceMap.ctuAddrInSlice ): CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
   for( auto ctuPos : ctuIter )
   {
     ctuEncParams[ idx ].pic       = pic;
@@ -817,6 +826,14 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
+  printf("\nbase ctuRsAddr: %d  %d\n", ctuRsAddr, processStates[ ctuRsAddr ].load() );
+  
+  const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
+  
+//  if( ctuRsAddr == 9 || ctuRsAddr == 10 || ctuRsAddr == 16 )
+//  {
+//    printf("\nbase  %d", tileBDcol );
+//  }
   // process ctu's line wise from left to right
   if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;
@@ -829,7 +846,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // general wpp conditions, top and top-right ctu have to be encoded
         if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
+        if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
           return false;
 
         if( checkReadyState )
@@ -921,7 +938,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // ensure vertical loop filter of neighbor ctu's will not modify current residual
         // check top, top-right and right ctu
         // (top, top-right checked implicitly due to ordering check above)
-        if( ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
+        if( ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
           return false;
 
         if( checkReadyState )
@@ -947,17 +964,17 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // general wpp conditions, top and top-right ctu have to be filtered
         if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
+        if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
           return false;
 
         // ensure loop filter of neighbor ctu's will not modify current residual
         // sao processing dependents on +1 pixel to each side
         // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
+        if( ctuPosX + 1 < tileBDcol                                   && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
           return false;
         if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
           return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
+        if( ctuPosX + 1 < tileBDcol && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
           return false;
 
         if( checkReadyState )
@@ -990,7 +1007,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           const int xR       = ( ctuPosX+1 == pcv.widthInCtus ) ? ( x+width+fltSize ) : ( x+width );
 
           if( ctuPosX == 0 )                  recoBuf.extendBorderPelLft( y, height, fltSize );
-          if( ctuPosX+1 == pcv.widthInCtus )  recoBuf.extendBorderPelRgt( y, height, fltSize );
+          if( ctuPosX+1 == tileBDcol )  recoBuf.extendBorderPelRgt( y, height, fltSize );
           if( ctuPosY == 0 )                  recoBuf.extendBorderPelTop( xL, xR-xL, fltSize );
           if( ctuPosY+1 == pcv.heightInCtus ) recoBuf.extendBorderPelBot( xL, xR-xL, fltSize );
         }
@@ -1005,11 +1022,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // ensure all surrounding ctu's are filtered (ALF will use pixels of adjacent CTU's)
         // due to wpp condition above in SAO_FILTER, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= SAO_FILTER )
+        if( ctuPosX + 1 < tileBDcol                                   && processStates[ ctuRsAddr + 1             ] <= SAO_FILTER )
           return false;
         if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= SAO_FILTER )
           return false;
-        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= SAO_FILTER )
+        if( ctuPosX + 1 < tileBDcol && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= SAO_FILTER )
           return false;
 
         if( checkReadyState )
@@ -1074,7 +1091,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // general wpp conditions, top and top-right ctu have to be encoded
         if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= ALF_RECONSTRUCT )
+        if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= ALF_RECONSTRUCT )
           return false;
 
         if( checkReadyState )
@@ -1154,8 +1171,8 @@ void EncSlice::encodeSliceData( Picture* pic )
   const PreCalcValues& pcv        = *cs.pcv;
   const uint32_t widthInCtus      = pcv.widthInCtus;
   uint32_t uiSubStrm              = 0;
-  const int numSubstreamsColumns  = slice->pps->numExpTileCols;
-  const int numSubstreamRows      = slice->sps->entropyCodingSyncEnabled ? pic->cs->pcv->heightInCtus : slice->pps->numExpTileRows;
+  const int numSubstreamsColumns  = slice->pps->numTileCols;
+  const int numSubstreamRows      = slice->sps->entropyCodingSyncEnabled ? pic->cs->pcv->heightInCtus : slice->pps->numTileRows;
   const int numSubstreams         = std::max<int>( numSubstreamRows * numSubstreamsColumns, 0/*(int)pic->brickMap->bricks.size()*/ );
   std::vector<OutputBitstream> substreamsOut( numSubstreams );
 
@@ -1163,7 +1180,7 @@ void EncSlice::encodeSliceData( Picture* pic )
 
   for( uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++ )
   {
-    const uint32_t ctuRsAddr = (ctuTsAddr);
+    const uint32_t ctuRsAddr = slice->sliceMap.ctuAddrInSlice[ctuTsAddr];
     const uint32_t firstCtuRsAddrOfTile = 0;
     const uint32_t tileXPosInCtus       = firstCtuRsAddrOfTile % widthInCtus;
     const uint32_t ctuXPosInCtus        = ctuRsAddr % widthInCtus;
@@ -1207,9 +1224,11 @@ void EncSlice::encodeSliceData( Picture* pic )
     }
 
     // terminate the sub-stream, if required (end of slice-segment, end of tile, end of wavefront-CTU-row):
-    bool isLastCTUinWPP = wavefrontsEnabled && (((ctuRsAddr + 1) % widthInCtus) == tileXPosInCtus);
     bool isMoreCTUsinSlice = ctuRsAddr != (boundingCtuTsAddr - 1);
-    if (isLastCTUinWPP || !isMoreCTUsinSlice)         // this the the last CTU of either tile/brick/WPP/slice
+    bool isLastCTUinTile   = isMoreCTUsinSlice && slice->pps->getTileIdx( ctuRsAddr ) != slice->pps->getTileIdx( slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] );
+    bool isLastCTUinWPP    = wavefrontsEnabled && isMoreCTUsinSlice && !isLastCTUinTile && (((ctuRsAddr + 1) % widthInCtus) == tileXPosInCtus); //TODO: adjust tile bound condition
+
+    if (isLastCTUinWPP || !isMoreCTUsinSlice || isLastCTUinTile )         // this the the last CTU of either tile/brick/WPP/slice
     {
       m_CABACWriter.end_of_slice();
 

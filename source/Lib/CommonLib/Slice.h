@@ -342,7 +342,7 @@ struct SliceMap
   uint32_t               sliceID;                           //!< slice identifier (slice index for rectangular slices, slice address for raser-scan slices)
   uint32_t               numTilesInSlice;                   //!< number of tiles in slice (raster-scan slices only)
   uint32_t               numCtuInSlice;                     //!< number of CTUs in the slice
-  std::vector<uint32_t>  ctuAddrInSlice;                    //!< raster-scan addresses of all the CTUs in the slice
+  std::vector<int>       ctuAddrInSlice;                    //!< raster-scan addresses of all the CTUs in the slice
 
   SliceMap()
    : sliceID            ( 0 )
@@ -962,8 +962,10 @@ public:
                                                                                                picHeightInLumaSamples != pps.picHeightInLumaSamples       ||
                                                                                                scalingWindow          != pps.scalingWindow; }
 
-
-  uint32_t               getTileIdx( const Position& pos ) const                          { return 0; } //tbd
+  uint32_t               getTileIdx( uint32_t ctuX, uint32_t ctuY ) const            { return (ctuToTileRow[ctuY] * numTileCols) + ctuToTileCol[ctuX]; }
+  uint32_t               getTileIdx( uint32_t ctuRsAddr ) const                      { return getTileIdx( ctuRsAddr % picWidthInCtu,  ctuRsAddr / picWidthInCtu ); }
+  uint32_t               getTileIdx( const Position& pos ) const                     { return getTileIdx( pos.x / ctuSize, pos.y / ctuSize ); }
+  
   const SubPic&          getSubPicFromPos(const Position& pos)  const;
   const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
 

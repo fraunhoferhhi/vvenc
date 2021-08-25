@@ -1899,7 +1899,7 @@ void PPS::initRectSliceMap( const SPS* sps )
 void PPS::checkSliceMap()
 {
   uint32_t i;
-  std::vector<uint32_t>  ctuList, sliceList;
+  std::vector<int>  ctuList, sliceList;
   uint32_t picSizeInCtu = picWidthInCtu * picHeightInCtu;
   for( i = 0; i < numSlicesInPic; i++ )
   {
