@@ -1353,6 +1353,8 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
+  optimizeQpHierarchy();
+
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
 
   // run a simple scene change detection
@@ -1376,6 +1378,56 @@ uint64_t RateCtrl::getTotalBitsInFirstPass()
   }
 
   return totalBitsFirstPass;
+}
+
+void RateCtrl::optimizeQpHierarchy()
+{
+  const int gopShift = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0));
+  std::list<TRCPassStats>::iterator it;
+  std::vector<float> optimRatio (2 + (m_listRCFirstPassStats.size() - 1) / encRCSeq->gopSize);
+  uint32_t bitsPrvL0 = 0, bitsSumL0 = 0;
+
+  if (encRCSeq->gopSize < 32) return; // group of picture (GOP) sizes lower than 32 aren't supported yet
+
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+    const int vecIdx = 1 + ((it->poc - 1) >> gopShift);
+
+    if (it->tempLayer < 2)
+    {
+      optimRatio[vecIdx] = 1.0f;
+      if (vecIdx > 0) // calculate bit count ratio between low and high temporal layers for previous GOP
+      {
+        optimRatio[vecIdx - 1] = (float) bitsSumL0 / optimRatio[vecIdx - 1];
+        if (optimRatio[vecIdx - 1] >= 2.0f) optimRatio[vecIdx - 1] = 0.0f;
+      }
+      bitsSumL0 = it->numBits + bitsPrvL0;
+      bitsPrvL0 = it->numBits;
+    }
+    else if (it->tempLayer > 3)
+    {
+      optimRatio[vecIdx] += (float) it->numBits; // accumulate 1st-pass bits in higher temporal layer(s)
+    }
+  }
+
+  for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++)
+  {
+    const int vecIdx = 1 + ((it->poc - 1) >> gopShift);
+
+    if (optimRatio[vecIdx] > 0.0f) // optimization: increase low-layer QP by 1, lower high-layer QP by 1
+    {
+      const int lThr = 3 - (int) optimRatio[vecIdx];
+
+      if (it->tempLayer < lThr && it->qp < MAX_QP)
+      {
+        it->qp++;   it->numBits = (it->numBits << 3) / 9;   it->lambda *= 1.2599;
+      }
+      else if (it->tempLayer > lThr && it->qp > 0)
+      {
+        it->qp--;   it->numBits = (it->numBits * 9) >> 3;   it->lambda *= 0.7937;
+      }
+    }
+  }
 }
 
 void RateCtrl::detectNewScene()

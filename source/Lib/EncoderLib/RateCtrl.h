@@ -262,6 +262,7 @@ namespace vvenc {
     void processFirstPassData (const int secondPassBaseQP);
     void processGops (const int secondPassBaseQP);
     uint64_t getTotalBitsInFirstPass();
+    void optimizeQpHierarchy();
     void detectNewScene();
     void adaptToSceneChanges();
 
