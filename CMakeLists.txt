@@ -73,16 +73,18 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   return()
 endif()
 
+include( CheckIPOSupported )
+
+# check LTO available ?
+check_ipo_supported( RESULT LTO_AVAILABLE )
+
 # enable install target
 set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable install target" )
                                                              
 # enable postfix                                             
 set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
 
-
-include(CheckIPOSupported)
-check_ipo_supported( RESULT result )
-if( result )
+if( LTO_AVAILABLE )
   set( VVENC_ENABLE_LINK_TIME_OPT           ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
 else()
   set( VVENC_ENABLE_LINK_TIME_OPT           OFF CACHE BOOL   "Enable link time optimization for release and profile builds" )
