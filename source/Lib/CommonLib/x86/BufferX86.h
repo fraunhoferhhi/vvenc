@@ -498,110 +498,83 @@ void addAvg_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, uns
 #if USE_AVX2
   if( numSamples >= 16 )
   {
-    __m256i voffset   = _mm256_set1_epi32( offset );
-    __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-    __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    const __m256i voffset   = _mm256_set1_epi32( offset );
+    const __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
+    const __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    const __m256i vone      = _mm256_set1_epi16( 1 );
 
     for( int col = 0; col < numSamples; col += 16 )
     {
       __m256i vsrc0 = _mm256_load_si256( ( const __m256i* )&src0[col] );
       __m256i vsrc1 = _mm256_load_si256( ( const __m256i* )&src1[col] );
 
-      __m256i vtmp, vsum, vdst;
-      vsum = _mm256_cvtepi16_epi32    ( _mm256_castsi256_si128( vsrc0 ) );
-      vdst = _mm256_cvtepi16_epi32    ( _mm256_castsi256_si128( vsrc1 ) );
-      vsum = _mm256_add_epi32         ( vsum, vdst );
+      __m256i vsum, vdst;
+      vsum = _mm256_unpacklo_epi16    ( vsrc0, vsrc1 );
+      vsum = _mm256_madd_epi16        ( vsum, vone );
       vsum = _mm256_add_epi32         ( vsum, voffset );
-      vtmp = _mm256_srai_epi32        ( vsum, shift );
-
-      vsum = _mm256_cvtepi16_epi32    ( _mm256_extracti128_si256( vsrc0, 1 ) );
-      vdst = _mm256_cvtepi16_epi32    ( _mm256_extracti128_si256( vsrc1, 1 ) );
-      vsum = _mm256_add_epi32         ( vsum, vdst );
+      vdst = _mm256_srai_epi32        ( vsum, shift );
+      
+      vsum = _mm256_unpackhi_epi16    ( vsrc0, vsrc1 );
+      vsum = _mm256_madd_epi16        ( vsum, vone );
       vsum = _mm256_add_epi32         ( vsum, voffset );
       vsum = _mm256_srai_epi32        ( vsum, shift );
-      vtmp = _mm256_packs_epi32       ( vtmp, vsum );
-      vsum = _mm256_permute4x64_epi64 ( vtmp, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
 
-      vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsum ) );
-      _mm256_store_si256( ( __m256i * )&dst[col], vsum );
+      vdst = _mm256_packs_epi32       ( vdst, vsum );
+
+      vdst = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vdst ) );
+      _mm256_store_si256( ( __m256i * )&dst[col], vdst );
     }
   }
-  else if( numSamples >= 8 )
-  {
-    __m256i voffset  = _mm256_set1_epi32( offset );
-    __m128i vibdimin = _mm_set1_epi16   ( clpRng.min );
-    __m128i vibdimax = _mm_set1_epi16   ( clpRng.max );
-
-    for( int col = 0; col < numSamples; col += 8 )
-    {
-      __m256i vsrc0 = _mm256_cvtepi16_epi32( _mm_load_si128 ( (const __m128i *)&src0[col] ) );
-      __m256i vsrc1 = _mm256_cvtepi16_epi32( _mm_load_si128 ( (const __m128i *)&src1[col] ) );
-
-      __m256i
-      vsum = _mm256_add_epi32        ( vsrc0, vsrc1 );
-      vsum = _mm256_add_epi32        ( vsum, voffset );
-      vsum = _mm256_srai_epi32       ( vsum, shift );
-
-      vsum = _mm256_packs_epi32      ( vsum, vsum );
-      vsum = _mm256_permute4x64_epi64( vsum, 0 + ( 2 << 2 ) + ( 2 << 4 ) + ( 3 << 6 ) );
-
-      __m128i
-      xsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, _mm256_castsi256_si128( vsum ) ) );
-      _mm_store_si128( ( __m128i * )&dst[col], xsum );
-    }
-  }
-#else
+  else
+#endif
   if( numSamples >= 8 )
   {
-    __m128i vzero    = _mm_setzero_si128();
-    __m128i voffset  = _mm_set1_epi32( offset );
-    __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vone     = _mm_set1_epi16( 1 );
+    const __m128i vzero    = _mm_setzero_si128();
+    const __m128i voffset  = _mm_set1_epi32( offset );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
 
     for( int col = 0; col < numSamples; col += 8 )
     {
       __m128i vsrc0 = _mm_load_si128 ( (const __m128i *)&src0[col] );
       __m128i vsrc1 = _mm_load_si128 ( (const __m128i *)&src1[col] );
 
-      __m128i vtmp, vsum, vdst;
-      vsum = _mm_cvtepi16_epi32   ( vsrc0 );
-      vdst = _mm_cvtepi16_epi32   ( vsrc1 );
-      vsum = _mm_add_epi32        ( vsum, vdst );
-      vsum = _mm_add_epi32        ( vsum, voffset );
-      vtmp = _mm_srai_epi32       ( vsum, shift );
+      __m128i vsum, vdst;
+      vsum = _mm_unpacklo_epi16    ( vsrc0, vsrc1 );
+      vsum = _mm_madd_epi16        ( vsum, vone );
+      vsum = _mm_add_epi32         ( vsum, voffset );
+      vdst = _mm_srai_epi32        ( vsum, shift );
+      
+      vsum = _mm_unpackhi_epi16    ( vsrc0, vsrc1 );
+      vsum = _mm_madd_epi16        ( vsum, vone );
+      vsum = _mm_add_epi32         ( vsum, voffset );
+      vsum = _mm_srai_epi32        ( vsum, shift );
 
-      vsrc0 = _mm_unpackhi_epi64  ( vsrc0, vzero );
-      vsrc1 = _mm_unpackhi_epi64  ( vsrc1, vzero );
-      vsum = _mm_cvtepi16_epi32   ( vsrc0 );
-      vdst = _mm_cvtepi16_epi32   ( vsrc1 );
-      vsum = _mm_add_epi32        ( vsum, vdst );
-      vsum = _mm_add_epi32        ( vsum, voffset );
-      vsum = _mm_srai_epi32       ( vsum, shift );
-      vsum = _mm_packs_epi32      ( vtmp, vsum );
+      vdst = _mm_packs_epi32       ( vdst, vsum );
 
       vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
       _mm_store_si128( ( __m128i * )&dst[col], vsum );
     }
   }
-#endif
   else if( numSamples == 4 )
   {
-    __m128i vzero     = _mm_setzero_si128();
-    __m128i voffset   = _mm_set1_epi32( offset );
-    __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
+    const __m128i vone      = _mm_set1_epi16( 1 );
+    const __m128i vzero     = _mm_setzero_si128();
+    const __m128i voffset   = _mm_set1_epi32( offset );
+    const __m128i vibdimin  = _mm_set1_epi16( clpRng.min );
+    const __m128i vibdimax  = _mm_set1_epi16( clpRng.max );
 
     __m128i vsum = _mm_loadl_epi64  ( ( const __m128i * )&src0[0] );
     __m128i vdst = _mm_loadl_epi64  ( ( const __m128i * )&src1[0] );
-    vsum = _mm_cvtepi16_epi32       ( vsum );
-    vdst = _mm_cvtepi16_epi32       ( vdst );
-    vsum = _mm_add_epi32            ( vsum, vdst );
-    vsum = _mm_add_epi32            ( vsum, voffset );
-    vsum = _mm_srai_epi32           ( vsum, shift );
-    vsum = _mm_packs_epi32          ( vsum, vzero );
+    vsum = _mm_unpacklo_epi16    ( vsum, vdst );
+    vsum = _mm_madd_epi16        ( vsum, vone );
+    vsum = _mm_add_epi32         ( vsum, voffset );
+    vsum = _mm_srai_epi32        ( vsum, shift );
+    vdst = _mm_packs_epi32       ( vsum, vzero );
 
-    vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
-    _mm_storel_epi64( ( __m128i * )&dst[0], vsum );
+    vdst = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vdst ) );
+    _mm_storel_epi64( ( __m128i * )&dst[0], vdst );
   }
   else
   {
@@ -774,9 +747,10 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
 #if USE_AVX2
   if( W == 16 )
   {
-    __m256i voffset   = _mm256_set1_epi32( offset );
-    __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
-    __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    const __m256i voffset   = _mm256_set1_epi32( offset );
+    const __m256i vibdimin  = _mm256_set1_epi16( clpRng.min );
+    const __m256i vibdimax  = _mm256_set1_epi16( clpRng.max );
+    const __m256i vone      = _mm256_set1_epi16( 1 );
 
     for( int row = 0; row < height; row++ )
     {
@@ -785,23 +759,21 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
         __m256i vsrc0 = load_aligned_avx2<srcAligned>( ( const void* )&src0[col] );
         __m256i vsrc1 = load_aligned_avx2<srcAligned>( ( const void* )&src1[col] );
 
-        __m256i vtmp, vsum, vdst;
-        vsum = _mm256_cvtepi16_epi32    ( _mm256_castsi256_si128( vsrc0 ) );
-        vdst = _mm256_cvtepi16_epi32    ( _mm256_castsi256_si128( vsrc1 ) );
-        vsum = _mm256_add_epi32         ( vsum, vdst );
+        __m256i vsum, vdst;
+        vsum = _mm256_unpacklo_epi16    ( vsrc0, vsrc1 );
+        vsum = _mm256_madd_epi16        ( vsum, vone );
         vsum = _mm256_add_epi32         ( vsum, voffset );
-        vtmp = _mm256_srai_epi32        ( vsum, shift );
-
-        vsum = _mm256_cvtepi16_epi32    ( _mm256_extracti128_si256( vsrc0, 1 ) );
-        vdst = _mm256_cvtepi16_epi32    ( _mm256_extracti128_si256( vsrc1, 1 ) );
-        vsum = _mm256_add_epi32         ( vsum, vdst );
+        vdst = _mm256_srai_epi32        ( vsum, shift );
+        
+        vsum = _mm256_unpackhi_epi16    ( vsrc0, vsrc1 );
+        vsum = _mm256_madd_epi16        ( vsum, vone );
         vsum = _mm256_add_epi32         ( vsum, voffset );
         vsum = _mm256_srai_epi32        ( vsum, shift );
-        vtmp = _mm256_packs_epi32       ( vtmp, vsum );
-        vsum = _mm256_permute4x64_epi64 ( vtmp, ( 0 << 0 ) + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) );
 
-        vsum = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vsum ) );
-        _mm256_storeu_si256( ( __m256i * )&dst[col], vsum );
+        vdst = _mm256_packs_epi32       ( vdst, vsum );
+
+        vdst = _mm256_min_epi16( vibdimax, _mm256_max_epi16( vibdimin, vdst ) );
+        _mm256_storeu_si256( ( __m256i * )&dst[col], vdst );
       }
 
       src0 += src0Stride;
@@ -846,10 +818,11 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
 #else
   if( W >= 8 )
   {
-    __m128i vzero    = _mm_setzero_si128();
-    __m128i voffset  = _mm_set1_epi32( offset );
-    __m128i vibdimin = _mm_set1_epi16( clpRng.min );
-    __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vzero    = _mm_setzero_si128();
+    const __m128i voffset  = _mm_set1_epi32( offset );
+    const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
+    const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
+    const __m128i vone     = _mm_set1_epi16( 1 );
 
     for( int row = 0; row < height; row++ )
     {
@@ -858,24 +831,21 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
         __m128i vsrc0 = load_aligned<srcAligned>( ( const void* )&src0[col] );
         __m128i vsrc1 = load_aligned<srcAligned>( ( const void* )&src1[col] );
 
-        __m128i vtmp, vsum, vdst;
-        vsum = _mm_cvtepi16_epi32   ( vsrc0 );
-        vdst = _mm_cvtepi16_epi32   ( vsrc1 );
-        vsum = _mm_add_epi32        ( vsum, vdst );
-        vsum = _mm_add_epi32        ( vsum, voffset );
-        vtmp = _mm_srai_epi32       ( vsum, shift );
+        __m128i vsum, vdst;
+        vsum = _mm_unpacklo_epi16    ( vsrc0, vsrc1 );
+        vsum = _mm_madd_epi16        ( vsum, vone );
+        vsum = _mm_add_epi32         ( vsum, voffset );
+        vdst = _mm_srai_epi32        ( vsum, shift );
+        
+        vsum = _mm_unpackhi_epi16    ( vsrc0, vsrc1 );
+        vsum = _mm_madd_epi16        ( vsum, vone );
+        vsum = _mm_add_epi32         ( vsum, voffset );
+        vsum = _mm_srai_epi32        ( vsum, shift );
 
-        vsrc0 = _mm_unpackhi_epi64  ( vsrc0, vzero );
-        vsrc1 = _mm_unpackhi_epi64  ( vsrc1, vzero );
-        vsum = _mm_cvtepi16_epi32   ( vsrc0 );
-        vdst = _mm_cvtepi16_epi32   ( vsrc1 );
-        vsum = _mm_add_epi32        ( vsum, vdst );
-        vsum = _mm_add_epi32        ( vsum, voffset );
-        vsum = _mm_srai_epi32       ( vsum, shift );
-        vsum = _mm_packs_epi32      ( vtmp, vsum );
+        vdst = _mm_packs_epi32       ( vdst, vsum );
 
-        vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
-        _mm_storeu_si128( ( __m128i * )&dst[col], vsum );
+        vdst = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vdst ) );
+        _mm_storeu_si128( ( __m128i * )&dst[col], vdst );
       }
 
       src0 += src0Stride;
