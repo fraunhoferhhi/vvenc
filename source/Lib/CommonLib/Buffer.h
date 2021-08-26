@@ -103,7 +103,6 @@ struct PelBufferOps
   void ( *linTf4 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *linTf8 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *copyBuffer )    ( const char* src, int srcStride, char* dst, int dstStride, int width, int height );
-  void ( *padding )       ( Pel* dst, int stride, int width, int height, int padSize);
   void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
