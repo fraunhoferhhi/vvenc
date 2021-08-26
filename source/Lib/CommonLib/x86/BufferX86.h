@@ -530,7 +530,6 @@ void addAvg_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, uns
   if( numSamples >= 8 )
   {
     const __m128i vone     = _mm_set1_epi16( 1 );
-    const __m128i vzero    = _mm_setzero_si128();
     const __m128i voffset  = _mm_set1_epi32( offset );
     const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
     const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
@@ -818,7 +817,6 @@ void addAvg_SSE_algn( const int16_t* src0, int src0Stride, const int16_t* src1, 
 #else
   if( W >= 8 )
   {
-    const __m128i vzero    = _mm_setzero_si128();
     const __m128i voffset  = _mm_set1_epi32( offset );
     const __m128i vibdimin = _mm_set1_epi16( clpRng.min );
     const __m128i vibdimax = _mm_set1_epi16( clpRng.max );
