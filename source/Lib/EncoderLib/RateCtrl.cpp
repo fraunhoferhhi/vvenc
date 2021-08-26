@@ -1416,13 +1416,13 @@ void RateCtrl::optimizeQpHierarchy()
 
     if (optimRatio[vecIdx] > 0.0f) // optimization: increase low-layer QP by 1, lower high-layer QP by 1
     {
-      const int lThr = 3 - (int) optimRatio[vecIdx];
+      const int lThr = 2 - (int) optimRatio[vecIdx];
 
       if (it->tempLayer < lThr && it->qp < MAX_QP)
       {
         it->qp++;   it->numBits = (it->numBits << 3) / 9;   it->lambda *= 1.2599;
       }
-      else if (it->tempLayer > lThr && it->qp > 0)
+      else if (it->tempLayer == gopShift && it->qp > 0)
       {
         it->qp--;   it->numBits = (it->numBits * 9) >> 3;   it->lambda *= 0.7937;
       }
