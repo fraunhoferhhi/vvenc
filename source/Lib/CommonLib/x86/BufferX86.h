@@ -1224,80 +1224,6 @@ void copyBufferSimd( const char* src, int srcStride, char* dst, int dstStride, i
   }
 }
 
-
-template<X86_VEXT vext>
-void paddingSimd(Pel* dst, int stride, int width, int height, int padSize)
-{
-  __m128i x;
-#ifdef USE_AVX2
-  __m256i x16;
-#endif
-  int temp, j;
-  for (int i = 1; i <= padSize; i++)
-  {
-    j = 0;
-    temp = width;
-#ifdef USE_AVX2
-    while ((temp >> 4) > 0)
-    {
-
-      x16 = _mm256_loadu_si256((const __m256i*)(&(dst[j])));
-      _mm256_storeu_si256((__m256i*)(dst + j - i*stride), x16);
-      x16 = _mm256_loadu_si256((const __m256i*)(dst + j + (height - 1)*stride));
-      _mm256_storeu_si256((__m256i*)(dst + j + (height - 1 + i)*stride), x16);
-
-
-      j = j + 16;
-      temp = temp - 16;
-    }
-#endif
-    while ((temp >> 3) > 0)
-    {
-
-      x = _mm_loadu_si128((const __m128i*)(&(dst[j])));
-      _mm_storeu_si128((__m128i*)(dst + j - i*stride), x);
-      x = _mm_loadu_si128((const __m128i*)(dst + j + (height - 1)*stride));
-      _mm_storeu_si128((__m128i*)(dst + j + (height - 1 + i)*stride), x);
-
-      j = j + 8;
-      temp = temp - 8;
-    }
-    while ((temp >> 2) > 0)
-    {
-      x = _mm_loadl_epi64((const __m128i*)(&dst[j]));
-      _mm_storel_epi64((__m128i*)(dst + j - i*stride), x);
-      x = _mm_loadl_epi64((const __m128i*)(dst + j + (height - 1)*stride));
-      _mm_storel_epi64((__m128i*)(dst + j + (height - 1 + i)*stride), x);
-
-      j = j + 4;
-      temp = temp - 4;
-    }
-    while (temp > 0)
-    {
-      dst[j - i*stride] = dst[j];
-      dst[j + (height - 1 + i)*stride] = dst[j + (height - 1)*stride];
-      j++;
-      temp--;
-    }
-  }
-
-
-  //Left and Right Padding
-  Pel* ptr1 = dst - padSize*stride;
-  Pel* ptr2 = dst - padSize*stride + width - 1;
-  int offset = 0;
-  for (int i = 0; i < height + 2 * padSize; i++)
-  {
-    offset = stride * i;
-    for (int j = 1; j <= padSize; j++)
-    {
-      *(ptr1 - j + offset) = *(ptr1 + offset);
-      *(ptr2 + j + offset) = *(ptr2 + offset);
-    }
-
-  }
-}
-
 #if ENABLE_SIMD_OPT_BCW
 template< X86_VEXT vext, int W >
 void removeHighFreq_SSE(int16_t* src0, int src0Stride, const int16_t* src1, int src1Stride, int width, int height)
@@ -1837,7 +1763,6 @@ void PelBufferOps::_initPelBufOpsX86()
   linTf8 = linTf_SSE_entry<vext, 8>;
 
   copyBuffer = copyBufferSimd<vext>;
-  padding    = paddingSimd<vext>;
 
 #if ENABLE_SIMD_OPT_BCW
   removeHighFreq8 = removeHighFreq_SSE<vext, 8>;
