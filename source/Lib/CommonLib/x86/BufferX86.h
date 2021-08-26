@@ -552,8 +552,8 @@ void addAvg_SSE( const Pel* src0, const Pel* src1, Pel* dst, int numSamples, uns
 
       vdst = _mm_packs_epi32       ( vdst, vsum );
 
-      vsum = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vsum ) );
-      _mm_store_si128( ( __m128i * )&dst[col], vsum );
+      vdst = _mm_min_epi16( vibdimax, _mm_max_epi16( vibdimin, vdst ) );
+      _mm_store_si128( ( __m128i * )&dst[col], vdst );
     }
   }
   else if( numSamples == 4 )
