@@ -415,7 +415,7 @@ public:
   int  getApsIdStart                () { return m_apsIdStart; }
   void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
 
-  void copyAndExtendCTUForCCALF     ( CodingStructure& cs, int ctuPosX, int ctuPosY );
+  void copyCTUForCCALF     ( CodingStructure& cs, int ctuPosX, int ctuPosY );
   void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
   void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );

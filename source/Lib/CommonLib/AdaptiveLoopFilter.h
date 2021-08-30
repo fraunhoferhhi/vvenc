@@ -166,7 +166,6 @@ protected:
   uint8_t*                     m_ctuAlternative[MAX_NUM_COMP];
   PelStorage                   m_tempBuf;
   PelStorage                   m_tempBuf2;
-  PelStorage                   m_tempBuf3;
   int                          m_inputBitDepth[MAX_NUM_CH];
   int                          m_picWidth;
   int                          m_picHeight;

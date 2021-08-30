@@ -332,7 +332,7 @@ void AdaptiveLoopFilter::applyCcAlfFilterCTU( CodingStructure &cs, ComponentID c
 
           const ClpRngs& clpRngs      = cs.slice->clpRngs;
           const PelBuf& dstBuf        = cs.getRecoBuf().get( compID );
-          const PelUnitBuf& recYuvExt = m_tempBuf3.getBuf( cs.area );
+          const PelUnitBuf& recYuvExt = m_tempBuf.getBuf( cs.area );
 
           bool clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
           int  numHorVirBndry = 0, numVerVirBndry = 0;
@@ -774,8 +774,6 @@ void AdaptiveLoopFilter::create( const int picWidth, const int picHeight, const 
   m_tempBuf.create( format, Area( 0, 0, picWidth, picHeight ), maxCUWidth, ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1, 0, false );
   m_tempBuf2.destroy();
   m_tempBuf2.create( format, Area( 0, 0, maxCUWidth + (MAX_ALF_PADDING_SIZE << 1), maxCUHeight + (MAX_ALF_PADDING_SIZE << 1) ), maxCUWidth, MAX_ALF_PADDING_SIZE, 0, false );
-  m_tempBuf3.destroy();
-  m_tempBuf3.create( format, Area( 0, 0, picWidth, picHeight ), maxCUWidth, ( MAX_ALF_FILTER_LENGTH + 1 ) >> 1, 0, false );
 
   // Classification
   if ( m_classifier == nullptr )
@@ -824,7 +822,6 @@ void AdaptiveLoopFilter::destroy()
 
   m_tempBuf.destroy();
   m_tempBuf2.destroy();
-  m_tempBuf3.destroy();
   m_filterShapes[CH_L].clear();
   m_filterShapes[CH_C].clear();
 

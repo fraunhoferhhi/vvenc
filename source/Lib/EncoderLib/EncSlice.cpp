@@ -1021,14 +1021,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKSTART( itt_domain_encode, itt_handle_alf_stat );
 
         // ALF pre-processing
-        unsigned lastPreProcCTU = ( pcv.heightInCtus * pcv.widthInCtus ) - 1;
-        if( ctuRsAddr <= lastPreProcCTU )
+        if( slice.sps->alfEnabled )
         {
-          if( slice.sps->alfEnabled )
-          {
-            PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-            encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctuRsAddr );
-          }
+          PelUnitBuf recoBuf = cs.picture->getRecoBuf();
+          encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctuRsAddr );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_stat );
@@ -1088,10 +1084,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->alfEnabled )
         {
           encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctuRsAddr );
-          if( slice.sps->ccalfEnabled )
-          {
-            encSlice->m_pALF->copyAndExtendCTUForCCALF( cs, ctuPosX, ctuPosY );
-          }
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_recon );
@@ -1115,14 +1107,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         ITT_TASKSTART( itt_domain_encode, itt_handle_ccalf_stat );
 
         // ALF pre-processing
-        unsigned lastPreProcCTU = ( pcv.heightInCtus * pcv.widthInCtus ) - 1;
-        if( ctuRsAddr <= lastPreProcCTU )
+        if( slice.sps->ccalfEnabled )
         {
-          if( slice.sps->ccalfEnabled )
-          {
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctuRsAddr );
-            encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctuRsAddr );
-          }
+          encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctuRsAddr );
+          encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctuRsAddr );
+          encSlice->m_pALF->copyCTUForCCALF( cs, ctuPosX, ctuPosY );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_stat );
