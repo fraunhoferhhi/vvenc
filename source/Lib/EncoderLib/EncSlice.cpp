@@ -840,7 +840,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case CTU_ENCODE:
       {
         // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
+        if( ctuPosY > 0                            && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
           return false;
         if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
           return false;
@@ -958,7 +958,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case SAO_FILTER:
       {
         // general wpp conditions, top and top-right ctu have to be filtered
-        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
+        if( ctuPosY > 0                            && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
           return false;
         if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
           return false;
@@ -968,7 +968,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked
         if( ctuPosX + 1 < tileBDcol                                   && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
           return false;
-        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
+        if(                            ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
           return false;
         if( ctuPosX + 1 < tileBDcol && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
           return false;
@@ -1020,7 +1020,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // due to wpp condition above in SAO_FILTER, only right, bottom and bottom-right ctu have to be checked
         if( ctuPosX + 1 < tileBDcol                                   && processStates[ ctuRsAddr + 1             ] <= SAO_FILTER )
           return false;
-        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= SAO_FILTER )
+        if(                            ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= SAO_FILTER )
           return false;
         if( ctuPosX + 1 < tileBDcol && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= SAO_FILTER )
           return false;
@@ -1085,7 +1085,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           return false;
 
         // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
+        if( ctuPosY > 0                            && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
           return false;
         if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= ALF_RECONSTRUCT )
           return false;
