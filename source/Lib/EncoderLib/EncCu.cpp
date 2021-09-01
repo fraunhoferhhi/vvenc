@@ -3263,7 +3263,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   }
 
   ComponentID compStr = ( CU::isSepTree(*cu) && !isLuma( partitioner.chType ) ) ? COMP_Cb : COMP_Y;
-  ComponentID compEnd = ( CU::isSepTree(*cu) &&  isLuma( partitioner.chType ) ) ? COMP_Y : COMP_Cr;
+  ComponentID compEnd = (( CU::isSepTree(*cu) && isLuma( partitioner.chType )) || cu->chromaFormat == VVENC_CHROMA_400 ) ? COMP_Y : COMP_Cr;
   const UnitArea currCsArea = clipArea( CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ), *cs.picture );
 
   PelStorage&  picDbBuf = m_dbBuffer; //th we could reduce the buffer size and do some relocate
@@ -3362,7 +3362,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   CHECK( CU::isSepTree(*cu) && !cu->Y().valid() && partitioner.chType == CH_L, "xxx" );
 
   if( cu->Y() .valid() ) m_cLoopFilter.setOrigin( CH_L, cu->lumaPos() );
-  if( cu->Cb().valid() ) m_cLoopFilter.setOrigin( CH_C, cu->chromaPos() );
+  if( cu->chromaFormat != VVENC_CHROMA_400 && cu->Cb().valid() ) m_cLoopFilter.setOrigin( CH_C, cu->chromaPos() );
 
   //deblock
   if( leftEdgeAvai )
