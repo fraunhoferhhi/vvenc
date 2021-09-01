@@ -405,11 +405,7 @@ void DecCu::xReconInter(CodingUnit &cu)
   // inter recon
   xDecodeInterTexture(cu);
 
-  bool LumaOnly = predBuf.bufs.size() > 1 ? false : true;
-  if (predBuf.bufs[1].stride == 0 || predBuf.bufs[2].stride == 0)
-  {
-    LumaOnly = true;
-  }
+  bool LumaOnly = ((predBuf.bufs.size() > 1) && (predBuf.bufs[1].stride != 0 && predBuf.bufs[2].stride != 0) ) ? false : true;
   if (cu.rootCbf)
   {
     if (LumaOnly)

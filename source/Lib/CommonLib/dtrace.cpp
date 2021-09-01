@@ -201,7 +201,7 @@ int CDTrace::addRule( std::string rulestring )
 {
     vstring chans_conds = split( rulestring, ':' );
     vstring channels = split( chans_conds[0], ',' );
-    vstring conditions = split( chans_conds[1], ',' );
+    vstring conditions = chans_conds.size()>1 ? split( chans_conds[1], ',' ) : vstring();
 
     /* parse the rules first */
     std::vector<Condition> rule;

@@ -392,9 +392,9 @@ VVENC_DECL const char* vvenc_get_compile_info_string()
 {
   return vvenc::VVEncImpl::getCompileInfoString();
 }
-VVENC_DECL int vvenc_decode_bitstream( const char* FileName)
+VVENC_DECL int vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule)
 {
-  return vvenc::VVEncImpl::decodeBitstream( FileName );
+  return vvenc::VVEncImpl::decodeBitstream( FileName, trcFile, trcRule );
 }
 
 VVENC_DECL int vvenc_get_width_of_component( const vvencChromaFormat chFmt, const int frameWidth, const int compId )

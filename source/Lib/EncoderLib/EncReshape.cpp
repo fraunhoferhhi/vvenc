@@ -389,11 +389,6 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
   }
 
   picY = pic.getOrigBuf(COMP_Y);
-  CPelBuf picU = pic.getOrigBuf(COMP_Cb);
-  CPelBuf picV = pic.getOrigBuf(COMP_Cr);
-  const int widthC = picU.width;
-  const int heightC = picU.height;
-  const int strideC = picU.stride;
   double avgY = 0.0, avgU = 0.0, avgV = 0.0;
   double varY = 0.0, varU = 0.0, varV = 0.0;
   for (int y = 0; y < height; y++)
@@ -405,28 +400,37 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
     }
     picY.buf += stride;
   }
-  for (int y = 0; y < heightC; y++)
+
+  if( pic.chromaFormat != VVENC_CHROMA_400 )
   {
-    for (int x = 0; x < widthC; x++)
+    CPelBuf picU = pic.getOrigBuf(COMP_Cb);
+    CPelBuf picV = pic.getOrigBuf(COMP_Cr);
+    const int widthC = picU.width;
+    const int heightC = picU.height;
+    const int strideC = picU.stride;
+    for (int y = 0; y < heightC; y++)
     {
-      avgU += picU.buf[x];
-      avgV += picV.buf[x];
-      varU += (int64_t)picU.buf[x] * (int64_t)picU.buf[x];
-      varV += (int64_t)picV.buf[x] * (int64_t)picV.buf[x];
+      for (int x = 0; x < widthC; x++)
+      {
+        avgU += picU.buf[x];
+        avgV += picV.buf[x];
+        varU += (int64_t)picU.buf[x] * (int64_t)picU.buf[x];
+        varV += (int64_t)picV.buf[x] * (int64_t)picV.buf[x];
+      }
+      picU.buf += strideC;
+      picV.buf += strideC;
     }
-    picU.buf += strideC;
-    picV.buf += strideC;
-  }
-  avgY = avgY / (width * height);
-  avgU = avgU / (widthC * heightC);
-  avgV = avgV / (widthC * heightC);
-  varY = varY / (width * height) - avgY * avgY;
-  varU = varU / (widthC * heightC) - avgU * avgU;
-  varV = varV / (widthC * heightC) - avgV * avgV;
-  if (varY > 0)
-  {
-    stats.ratioStdU = sqrt(varU) / sqrt(varY);
-    stats.ratioStdV = sqrt(varV) / sqrt(varY);
+    avgY = avgY / (width * height);
+    avgU = avgU / (widthC * heightC);
+    avgV = avgV / (widthC * heightC);
+    varY = varY / (width * height) - avgY * avgY;
+    varU = varU / (widthC * heightC) - avgU * avgU;
+    varV = varV / (widthC * heightC) - avgV * avgV;
+    if (varY > 0)
+    {
+      stats.ratioStdU = sqrt(varU) / sqrt(varY);
+      stats.ratioStdV = sqrt(varV) / sqrt(varY);
+    }
   }
 }
 
