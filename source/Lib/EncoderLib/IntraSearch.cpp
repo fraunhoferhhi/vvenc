@@ -215,6 +215,11 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   cu.mipFlag = false;
   cu.multiRefIdx = 0;
 
+//  if( cu.lumaPos().x == 512 && cu.lumaPos().y == 0 )
+//  {
+//    printf("\nbase");
+//  }
+
   //===== init pattern for luma prediction =====
   initIntraPatternChType(cu, cu.Y(), true);
 
@@ -798,6 +803,10 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
 
     cu.intraDir[1] = MDLM_L_IDX; // temporary assigned, just to indicate this is a MDLM mode. for luma down-sampling operation.
 
+//    if( cu.chromaPos().x == 256 && cu.chromaPos().y == 0 )
+//    {
+//      printf("\nbase");
+//    }
     initIntraPatternChType(cu, cu.Cb());
     initIntraPatternChType(cu, cu.Cr());
     loadLMLumaRecPels(cu, cu.Cb());
@@ -1271,6 +1280,10 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
 
   const CodingUnit& cu            = *tu.cu;
 
+//  if( cu.lumaPos().x == 512 && cu.lumaPos().y == 0 )
+//  {
+//    printf("\nbase");
+//  }
   //===== init availability pattern =====
   CHECK( tu.jointCbCr && compID == COMP_Cr, "wrong combination of compID and jointCbCr" );
   bool jointCbCr = tu.jointCbCr && compID == COMP_Cb;

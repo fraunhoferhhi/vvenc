@@ -1270,9 +1270,13 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 
   CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
 
+//  if( partitioner.chType == CH_C && cu.chromaPos().x == 256 && cu.chromaPos().y == 0 )
+//  {
+//    printf("\nbase");
+//  }
   partitioner.setCUData( cu );
   cu.slice            = tempCS->slice;
-  cu.tileIdx          = 0;
+  cu.tileIdx          = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
   cu.skip             = false;
   cu.mmvdSkip         = false;
   cu.predMode         = MODE_INTRA;
@@ -1534,7 +1538,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
     cu.cs       = tempCS;
     cu.predMode = MODE_INTER;
     cu.slice    = tempCS->slice;
-    cu.tileIdx  = 0;
+    cu.tileIdx  = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
 
     CU::getInterMergeCandidates(cu, mergeCtx, 0 );
     CU::getInterMMVDMergeCandidates(cu, mergeCtx);
@@ -1620,7 +1624,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
       const double sqrtLambdaForFirstPassIntra = m_cRdCost.getMotionLambda() * FRAC_BITS_SCALE;
       partitioner.setCUData( cu );
       cu.slice        = tempCS->slice;
-      cu.tileIdx      = 0;
+      cu.tileIdx      = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
       cu.skip         = false;
       cu.mmvdSkip     = false;
       cu.geo          = false;
@@ -1982,7 +1986,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
       partitioner.setCUData( cu );
       cu.slice        = tempCS->slice;
-      cu.tileIdx      = 0;
+      cu.tileIdx      = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
       cu.skip         = false;
       cu.mmvdSkip     = false;
       cu.geo          = false;
@@ -2195,7 +2199,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
   pm.setCUData(cu);
   cu.predMode  = MODE_INTER;
   cu.slice     = tempCS->slice;
-  cu.tileIdx   = 0;
+  cu.tileIdx   = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
   cu.qp        = encTestMode.qp;
   cu.affine    = false;
   cu.mtsFlag   = false;
@@ -2529,7 +2533,7 @@ void EncCu::xCheckRDCostMergeGeo(CodingStructure *&tempCS, CodingStructure *&bes
       pm.setCUData(cu);
       cu.predMode         = MODE_INTER;
       cu.slice            = tempCS->slice;
-      cu.tileIdx          = 0;
+      cu.tileIdx          = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
       cu.qp               = encTestMode.qp;
       cu.affine           = false;
       cu.mtsFlag          = false;
@@ -2905,7 +2909,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     partitioner.setCUData( cu );
     cu.slice            = tempCS->slice;
-    cu.tileIdx          = 0;
+    cu.tileIdx          = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
     cu.skip             = false;
     cu.mmvdSkip         = false;
     cu.predMode         = MODE_INTER;
@@ -3105,7 +3109,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
         {
           partitioner.setCUData(cu);
           cu.slice = tempCS->slice;
-          cu.tileIdx = 0;
+          cu.tileIdx = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
           cu.skip = false;
           cu.mmvdSkip = false;
           cu.predMode = MODE_INTER;

@@ -1183,6 +1183,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   }
   else
   {
+    pps.ctuSize        = sps.CTUSize;
     pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
     pps.picWidthInCtu  = ( pps.picWidthInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
     pps.picHeightInCtu = ( pps.picHeightInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;

@@ -262,7 +262,7 @@ void CABACWriter::sao( const Slice& slice, unsigned ctuRsAddr )
   int                 rx                      = ctuRsAddr - ry * frame_width_in_ctus;
   const Position      pos                     ( rx * cs.pcv->maxCUSize, ry * cs.pcv->maxCUSize );
   const unsigned      curSliceIdx             = slice.independentSliceIdx;
-  const unsigned      curTileIdx              = 0;//cs.picture->brickMap->getBrickIdxRsMap( pos );
+  const unsigned      curTileIdx              = cs.pps->getTileIdx( pos );
   bool                leftMergeAvail          = cs.getCURestricted( pos.offset( -(int)pcv.maxCUSize, 0  ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
   bool                aboveMergeAvail         = cs.getCURestricted( pos.offset( 0, -(int)pcv.maxCUSize ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
   sao_block_pars( sao_ctu_pars, sps.bitDepths, sliceEnabled, leftMergeAvail, aboveMergeAvail, false );
@@ -2250,6 +2250,11 @@ void CABACWriter::residual_coding( const TransformUnit& tu, ComponentID compID, 
   const CodingUnit& cu = *tu.cu;
   DTRACE( g_trace_ctx, D_SYNTAX, "residual_coding() etype=%d pos=(%d,%d) size=%dx%d predMode=%d\n", tu.blocks[compID].compID, tu.blocks[compID].x, tu.blocks[compID].y, tu.blocks[compID].width, tu.blocks[compID].height, cu.predMode );
 
+  if( tu.blocks[compID].compID == 2 && tu.blocks[compID].x == 256 && tu.blocks[compID].y == 6 && m_Bitstream != nullptr )
+  {
+    printf("\nbase");
+  }
+  
   if( compID == COMP_Cr && tu.jointCbCr == 3 )
   {
     return;
@@ -2916,7 +2921,7 @@ void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr
     int                 rx = ctuRsAddr - ry * frame_width_in_ctus;
     const Position      pos( rx * cs.pcv->maxCUSize, ry * cs.pcv->maxCUSize );
     const uint32_t          curSliceIdx = cs.slice->independentSliceIdx;
-    const uint32_t      curTileIdx = 0;//cs.picture->brickMap->getBrickIdxRsMap( pos );
+    const uint32_t      curTileIdx = cs.pps->getTileIdx( pos );
     bool                leftAvail = cs.getCURestricted( pos.offset( -(int)pcv.maxCUSize, 0 ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
     bool                aboveAvail = cs.getCURestricted( pos.offset( 0, -(int)pcv.maxCUSize ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
 

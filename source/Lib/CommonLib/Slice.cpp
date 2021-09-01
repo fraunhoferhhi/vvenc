@@ -1924,7 +1924,7 @@ int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
   }
 
   uint32_t ctuAddr, ctuX, ctuY;
-//  uint32_t prevCtuAddr, prevCtuX, prevCtuY;
+  uint32_t prevCtuAddr, prevCtuX, prevCtuY;
   int numEntryPoints = 0;
 
   // count the number of CTUs that align with either the start of a tile, or with an entropy coding sync point
@@ -1934,18 +1934,18 @@ int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
     ctuAddr = pps.sliceMap[0].ctuAddrInSlice[i];
     ctuX = ( ctuAddr % pps.picWidthInCtu );
     ctuY = ( ctuAddr / pps.picWidthInCtu );
-    if( ctuX == pps.ctuToTileCol[ctuX] && (ctuY == pps.ctuToTileRow[ctuY] || sps.entropyCodingSyncEnabled ) )
-    {
-      numEntryPoints++;
-    }
-//    prevCtuAddr = pps.sliceMap[0].ctuAddrInSlice[i-1];
-//    prevCtuX = ( prevCtuAddr % pps.picWidthInCtu );
-//    prevCtuY = ( prevCtuAddr / pps.picWidthInCtu );
-//
-//    if( pps.tileRowBd[pps.ctuToTileRow[ctuY]] != pps.tileRowBd[pps.ctuToTileRow[prevCtuY]] || pps.tileColBd[pps.ctuToTileCol[ctuX]] != pps.tileColBd[pps.ctuToTileCol[prevCtuX]] || ( ctuY != prevCtuY && sps.entropyCodingSyncEnabled ) )
+//    if( ctuX == pps.ctuToTileCol[ctuX] && (ctuY == pps.ctuToTileRow[ctuY] || sps.entropyCodingSyncEnabled ) )
 //    {
 //      numEntryPoints++;
 //    }
+    prevCtuAddr = pps.sliceMap[0].ctuAddrInSlice[i-1];
+    prevCtuX = ( prevCtuAddr % pps.picWidthInCtu );
+    prevCtuY = ( prevCtuAddr / pps.picWidthInCtu );
+
+    if( pps.tileRowBd[pps.ctuToTileRow[ctuY]] != pps.tileRowBd[pps.ctuToTileRow[prevCtuY]] || pps.tileColBd[pps.ctuToTileCol[ctuX]] != pps.tileColBd[pps.ctuToTileCol[prevCtuX]] || ( ctuY != prevCtuY && sps.entropyCodingSyncEnabled ) )
+    {
+      numEntryPoints++;
+    }
   }
   return numEntryPoints;
 }

@@ -826,7 +826,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
-  printf("\nbase ctuRsAddr: %d  %d\n", ctuRsAddr, processStates[ ctuRsAddr ].load() );
+//  printf("\nbase ctuRsAddr: %d  %d\n", ctuRsAddr, processStates[ ctuRsAddr ].load() );
   
   const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
   
@@ -1194,7 +1194,7 @@ void EncSlice::encodeSliceData( Picture* pic )
     m_CABACWriter.initBitstream( &substreamsOut[ uiSubStrm ] );
 
     // set up CABAC contexts' state for this CTU
-    if (ctuRsAddr == firstCtuRsAddrOfTile)
+    if (ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]] && ctuYPosInCtus == cs.pps->tileRowBd[cs.pps->ctuToTileRow[ctuYPosInCtus]] )
     {
       if (ctuTsAddr != startCtuTsAddr) // if it is the first CTU, then the entropy coder has already been reset
       {
@@ -1226,7 +1226,7 @@ void EncSlice::encodeSliceData( Picture* pic )
     // terminate the sub-stream, if required (end of slice-segment, end of tile, end of wavefront-CTU-row):
     bool isMoreCTUsinSlice = ctuRsAddr != (boundingCtuTsAddr - 1);
     bool isLastCTUinTile   = isMoreCTUsinSlice && slice->pps->getTileIdx( ctuRsAddr ) != slice->pps->getTileIdx( slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] );
-    bool isLastCTUinWPP    = wavefrontsEnabled && isMoreCTUsinSlice && !isLastCTUinTile && (((ctuRsAddr + 1) % widthInCtus) == tileXPosInCtus); //TODO: adjust tile bound condition
+    bool isLastCTUinWPP    = wavefrontsEnabled && isMoreCTUsinSlice && !isLastCTUinTile && ( (slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] % widthInCtus) == cs.pps->tileColBd[cs.pps->ctuToTileCol[slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] % widthInCtus]] ); //TODO: adjust tile bound condition
 
     if (isLastCTUinWPP || !isMoreCTUsinSlice || isLastCTUinTile )         // this the the last CTU of either tile/brick/WPP/slice
     {
