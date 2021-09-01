@@ -186,6 +186,43 @@ void calcBDOFSumsCore(const Pel* srcY0Tmp, const Pel* srcY1Tmp, Pel* gradX0, Pel
   }
 }
 
+
+template<int padSize>
+void paddingCore(Pel *ptr, int stride, int width, int height)
+{
+  /*left and right padding*/
+  Pel *ptrTemp1 = ptr;
+  Pel *ptrTemp2 = ptr + (width - 1);
+  ptrdiff_t offset = 0;
+  for (int i = 0; i < height; i++)
+  {
+    offset = stride * i;
+    for (int j = 1; j <= padSize; j++)
+    {
+      *(ptrTemp1 - j + offset) = *(ptrTemp1 + offset);
+      *(ptrTemp2 + j + offset) = *(ptrTemp2 + offset);
+    }
+  }
+  /*Top and Bottom padding*/
+  int numBytes = (width + padSize + padSize) * sizeof(Pel);
+  ptrTemp1 = (ptr - padSize);
+  ptrTemp2 = (ptr + (stride * (height - 1)) - padSize);
+  for (int i = 1; i <= padSize; i++)
+  {
+    memcpy(ptrTemp1 - (i * stride), (ptrTemp1), numBytes);
+    memcpy(ptrTemp2 + (i * stride), (ptrTemp2), numBytes);
+  }
+}
+
+void padDmvrCore( const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, int padSize )
+{
+  g_pelBufOP.copyBuffer( ( const char* ) src, srcStride * sizeof( Pel ), ( char* ) dst, dstStride * sizeof( Pel ), width * sizeof( Pel ), height );
+  if( padSize == 1 )
+    paddingCore<1>( dst, dstStride, width, height );
+  else
+    paddingCore<2>( dst, dstStride, width, height );
+}
+
 // ====================================================================================================================
 // Constructor / destructor / initialize
 // ====================================================================================================================
@@ -493,8 +530,11 @@ bool InterPrediction::motionCompensation( CodingUnit& cu, PelUnitBuf& predBuf, c
   DTRACE( g_trace_ctx, D_MOT_COMP, "MV=%d,%d\n", cu.mv[0][0].hor, cu.mv[0][0].ver );
   DTRACE( g_trace_ctx, D_MOT_COMP, "MV=%d,%d\n", cu.mv[1][0].hor, cu.mv[1][0].ver );
   DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Y(), cu, cu.predMode, COMP_Y );
-  DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Cb(), cu, cu.predMode, COMP_Cb );
-  DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Cr(), cu, cu.predMode, COMP_Cr );
+  if( cu.chromaFormat != VVENC_CHROMA_400 )
+  {
+    DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Cb(), cu, cu.predMode, COMP_Cb );
+    DTRACE_PEL_BUF( D_MOT_COMP, predBuf.Cr(), cu, cu.predMode, COMP_Cr );
+  }
   return ret;
 }
 
@@ -652,6 +692,7 @@ void InterPredInterpolation::init()
   xFpBDOFGradFilter = gradFilterCore;
   xFpProfGradFilter = gradFilterCore<false>;
   xFpApplyPROF      = applyPROFCore;
+  xFpPadDmvr        = padDmvrCore;
 
 #if ENABLE_SIMD_OPT_BDOF && defined( TARGET_SIMD_X86 )
   initInterPredictionX86();
@@ -1121,8 +1162,7 @@ void DMVR::xCopyAndPad( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refI
       const int padOffset        = leftTopFilterExt * dstBuf.stride + leftTopFilterExt;
       const int padSize          = (DMVR_NUM_ITERATION) >> getComponentScaleX((ComponentID)compID, cu.chromaFormat);
 
-      g_pelBufOP.copyBuffer((const char*)refBufPtr, refBuf.stride * sizeof(Pel), (char*)(dstBuf.buf - padOffset), dstBuf.stride * sizeof(Pel), width * sizeof(Pel), height);
-      g_pelBufOP.padding   (dstBuf.buf - padOffset, dstBuf.stride, width, height, padSize);
+      xFpPadDmvr( refBufPtr, refBuf.stride, dstBuf.buf - padOffset, dstBuf.stride, width, height, padSize );
     }
   }
 }
@@ -1199,7 +1239,7 @@ void DMVR::xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, cons
     clipMv(cMvClipped, cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
     const Picture* refPic = cu.slice->getRefPic(refId, cu.refIdx[refId]);
     const Mv& startMv = mergeMv[refId];
-    for (int compID = 0; compID < MAX_NUM_COMP; compID++)
+    for (int compID = 0; compID < getNumberValidComponents(cu.chromaFormat); compID++)
     {
       int mvshiftTemp = mvShift + getComponentScaleX((ComponentID)compID, cu.chromaFormat);
       int deltaIntMvX = (cMv.hor >> mvshiftTemp) - (startMv.hor >> mvshiftTemp);
@@ -1418,7 +1458,7 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
   const int scaleX = getComponentScaleX(COMP_Cb, cu.chromaFormat);
   const int scaleY = getComponentScaleY(COMP_Cb, cu.chromaFormat);
 
-  const ptrdiff_t dstStride[MAX_NUM_COMP] = { pcYuvDst.bufs[COMP_Y].stride, pcYuvDst.bufs[COMP_Cb].stride, pcYuvDst.bufs[COMP_Cr].stride };
+  const ptrdiff_t dstStride[MAX_NUM_COMP] = { pcYuvDst.bufs[COMP_Y].stride, cu.chromaFormat != CHROMA_400 ? pcYuvDst.bufs[COMP_Cb].stride : 0, cu.chromaFormat != CHROMA_400 ? pcYuvDst.bufs[COMP_Cr].stride : 0 };
   for (y = puPos.y; y < (puPos.y + cu.lumaSize().height); y = y + dy, yStart = yStart + dy)
   {
     for (x = puPos.x, xStart = 0; x < (puPos.x + cu.lumaSize().width); x = x + dx, xStart = xStart + dx)
@@ -1445,8 +1485,11 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
       xFinalPaddedMCForDMVR( subCu, predBuf, padBuf, bioAppliedType[num], mergeMv, cu.mvdL0SubPu[num] );
 
       subPredBuf.bufs[COMP_Y].buf  = pcYuvDst.bufs[COMP_Y].buf + xStart + yStart * dstStride[COMP_Y];
-      subPredBuf.bufs[COMP_Cb].buf = pcYuvDst.bufs[COMP_Cb].buf + (xStart >> scaleX) + ((yStart >> scaleY) * dstStride[COMP_Cb]);
-      subPredBuf.bufs[COMP_Cr].buf = pcYuvDst.bufs[COMP_Cr].buf + (xStart >> scaleX) + ((yStart >> scaleY) * dstStride[COMP_Cr]);
+      if( cu.chromaFormat != CHROMA_400 )
+      {
+        subPredBuf.bufs[COMP_Cb].buf = pcYuvDst.bufs[COMP_Cb].buf + (xStart >> scaleX) + ((yStart >> scaleY) * dstStride[COMP_Cb]);
+        subPredBuf.bufs[COMP_Cr].buf = pcYuvDst.bufs[COMP_Cr].buf + (xStart >> scaleX) + ((yStart >> scaleY) * dstStride[COMP_Cr]);
+      }
 
       xWeightedAverage(subCu, predBuf[L0], predBuf[L1], subPredBuf, bioAppliedType[num] );
       num++;

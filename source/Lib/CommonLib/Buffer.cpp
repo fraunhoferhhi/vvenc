@@ -308,32 +308,6 @@ void copyBufferCore( const char* src, int srcStride, char* dst, int dstStride, i
   }
 }
 
-void paddingCore(Pel* ptr, int stride, int width, int height, int padSize)
-{
-  /*left and right padding*/
-  Pel* ptrTemp1 = ptr;
-  Pel* ptrTemp2 = ptr + (width - 1);
-  int offset = 0;
-  for (int i = 0; i < height; i++)
-  {
-    offset = stride * i;
-    for (int j = 1; j <= padSize; j++)
-    {
-      *(ptrTemp1 - j + offset) = *(ptrTemp1 + offset);
-      *(ptrTemp2 + j + offset) = *(ptrTemp2 + offset);
-    }
-  }
-  /*Top and Bottom padding*/
-  int numBytes = (width + padSize + padSize) * sizeof(Pel);
-  ptrTemp1 = (ptr - padSize);
-  ptrTemp2 = (ptr + (stride * (height - 1)) - padSize);
-  for (int i = 1; i <= padSize; i++)
-  {
-    memcpy(ptrTemp1 - (i * stride), (ptrTemp1), numBytes);
-    memcpy(ptrTemp2 + (i * stride), (ptrTemp2), numBytes);
-  }
-}
-
 void applyLutCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
 {
 #define RSP_SGNL_OP( ADDR ) dst[ADDR] = lut[src[ADDR]]
@@ -390,7 +364,6 @@ PelBufferOps::PelBufferOps()
   linTf8            = linTfCore<Pel>;
 
   copyBuffer        = copyBufferCore;
-  padding           = paddingCore;
 
   removeHighFreq8   = removeHighFreq;
   removeHighFreq4   = removeHighFreq;
@@ -863,6 +836,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
     CHECK( !area, "Trying to create a buffer with zero area" );
     bufSize += area;
   }
+
+  bufSize += 1; // for SIMD DMVR on the bottom right corner, which overreads the lines by 1 sample
 
   //allocate one buffer
   m_origin[0] = ( Pel* ) xMalloc( Pel, bufSize );

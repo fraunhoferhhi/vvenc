@@ -114,7 +114,7 @@ int EncApp::encode()
   vvenc_config& vvencCfg = m_cEncAppCfg;
   if( m_cEncAppCfg.m_decode )
   {
-    return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str() );
+    return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str(), m_cEncAppCfg.m_traceFile, m_cEncAppCfg.m_traceRule );
   }
 
   // initialize encoder lib

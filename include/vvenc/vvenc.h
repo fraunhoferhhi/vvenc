@@ -428,7 +428,7 @@ VVENC_DECL bool  vvenc_is_tracing_enabled( void );
  * set filename of a bitstream that should be decoded
  \retval[ ] const char* file name of bitstream
 */
-VVENC_DECL int   vvenc_decode_bitstream( const char* FileName);
+VVENC_DECL int   vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
 
 VVENC_NAMESPACE_END

@@ -361,7 +361,7 @@ void HLSWriter::codePPS( const PPS* pcPPS, const SPS* pcSPS )
       }
     }
   }
-  WRITE_FLAG( pcPPS->deblockingFilterControlPresent,    "debpps_locking_filter_control_present_flag");
+  WRITE_FLAG( pcPPS->deblockingFilterControlPresent,    "pps_deblocking_filter_control_present_flag");
   if(pcPPS->deblockingFilterControlPresent)
   {
     WRITE_FLAG( pcPPS->deblockingFilterOverrideEnabled, "pps_deblocking_filter_override_enabled_flag" );
