@@ -830,10 +830,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   
   const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
   
-//  if( ctuRsAddr == 9 || ctuRsAddr == 10 || ctuRsAddr == 16 )
-//  {
-//    printf("\nbase  %d", tileBDcol );
-//  }
   // process ctu's line wise from left to right
   if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;

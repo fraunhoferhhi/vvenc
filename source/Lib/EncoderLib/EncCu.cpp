@@ -301,7 +301,6 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   CodingStructure&     cs          = *pic->cs;
   Slice*               slice       = cs.slice;
   const PreCalcValues& pcv         = *cs.pcv;
-  const uint32_t       widthInCtus = pcv.widthInCtus;
 
 #if ENABLE_MEASURE_SEARCH_SPACE
   if( ctuXPosInCtus == 0 && ctuYPosInCtus == 0 )
@@ -313,14 +312,12 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
 #endif
   const int ctuRsAddr                 = ctuYPosInCtus * pcv.widthInCtus + ctuXPosInCtus;
-  const uint32_t firstCtuRsAddrOfTile = 0;
-  const uint32_t tileXPosInCtus       = firstCtuRsAddrOfTile % widthInCtus;
 
   const Position pos (ctuXPosInCtus * pcv.maxCUSize, ctuYPosInCtus * pcv.maxCUSize);
   const UnitArea ctuArea( cs.area.chromaFormat, Area( pos.x, pos.y, pcv.maxCUSize, pcv.maxCUSize ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
 
-  if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == tileXPosInCtus)
+  if ((cs.slice->sliceType != VVENC_I_SLICE || cs.sps->IBC) && ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]])
   {
     cs.motionLutBuf[ctuYPosInCtus].lut.resize(0);
     cs.motionLutBuf[ctuYPosInCtus].lutIbc.resize(0);
@@ -340,12 +337,12 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
     prevQP[CH_L] = prevQP[CH_C] = slice->sliceQp; // hlm: call CU::predictQP() here!
   }
-  else if (ctuRsAddr == firstCtuRsAddrOfTile )
+  else if (ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]] && ctuYPosInCtus == cs.pps->tileRowBd[cs.pps->ctuToTileRow[ctuYPosInCtus]])
   {
     m_CABACEstimator->initCtxModels( *slice );
     prevQP[CH_L] = prevQP[CH_C] = slice->sliceQp; // hlm: call CU::predictQP() here!
   }
-  else if (ctuXPosInCtus == tileXPosInCtus && m_pcEncCfg->m_entropyCodingSyncEnabled)
+  else if (ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]] && m_pcEncCfg->m_entropyCodingSyncEnabled)
   {
     // reset and then update contexts to the state at the end of the top-right CTU (if within current slice and tile).
     m_CABACEstimator->initCtxModels( *slice );
@@ -364,7 +361,7 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   m_CABACEstimator->coding_tree_unit( cs, ctuArea, prevQP, ctuRsAddr, true, true );
 
   // Store probabilities of second CTU in line into buffer - used only if wavefront-parallel-processing is enabled.
-  if( ctuXPosInCtus == tileXPosInCtus && m_pcEncCfg->m_entropyCodingSyncEnabled )
+  if( ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]] && m_pcEncCfg->m_entropyCodingSyncEnabled )
   {
     m_syncPicCtx[ctuYPosInCtus] = m_CABACEstimator->getCtx();
   }
@@ -1270,10 +1267,6 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 
   CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
 
-//  if( partitioner.chType == CH_C && cu.chromaPos().x == 256 && cu.chromaPos().y == 0 )
-//  {
-//    printf("\nbase");
-//  }
   partitioner.setCUData( cu );
   cu.slice            = tempCS->slice;
   cu.tileIdx          = tempCS->pps->getTileIdx( tempCS->area.lumaPos() );
