@@ -826,8 +826,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
-//  printf("\nbase ctuRsAddr: %d  %d\n", ctuRsAddr, processStates[ ctuRsAddr ].load() );
-  
   const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
   
   // process ctu's line wise from left to right

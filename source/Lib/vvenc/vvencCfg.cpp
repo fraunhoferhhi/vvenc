@@ -675,9 +675,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_deblockingFilterMetric                  = 0;
 
-  c->m_bLFCrossTileBoundaryFlag                = true;
-  c->m_bLFCrossSliceBoundaryFlag               = true;
-  c->m_loopFilterAcrossSlicesEnabled           = false;
+  c->m_bDisableLFCrossTileBoundaryFlag         = false;
+  c->m_bDisableLFCrossSliceBoundaryFlag        = false;
 
   c->m_bUseSAO                                 = true;
   c->m_saoEncodingRate                         = -1.0;

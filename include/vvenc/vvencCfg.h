@@ -658,9 +658,8 @@ typedef struct vvenc_config
   int                 m_loopFilterTcOffsetDiv2[3];                                       // tc offset for deblocking filter
   int                 m_deblockingFilterMetric;
 
-  bool                m_bLFCrossTileBoundaryFlag;
-  bool                m_bLFCrossSliceBoundaryFlag;                                       // 1: filter across slice boundaries 0: do not filter across slice boundaries
-  bool                m_loopFilterAcrossSlicesEnabled;
+  bool                m_bDisableLFCrossTileBoundaryFlag;                                 // 0: filter across tile boundaries 1: do not filter across tile boundaries
+  bool                m_bDisableLFCrossSliceBoundaryFlag;                                // 0: filter across slice boundaries 1: do not filter across slice boundaries
 
   bool                m_bUseSAO;
   double              m_saoEncodingRate;                                                 // When >0 SAO early picture termination is enabled for luma and chroma

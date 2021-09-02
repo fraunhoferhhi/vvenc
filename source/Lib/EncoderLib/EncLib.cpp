@@ -1136,7 +1136,8 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
 
   pps.deblockingFilterControlPresent    = deblockingFilterControlPresent;
   pps.cabacInitPresent                  = m_cEncCfg.m_cabacInitPresent != 0;
-  pps.loopFilterAcrossSlicesEnabled     = m_cEncCfg.m_bLFCrossSliceBoundaryFlag;
+  pps.loopFilterAcrossTilesEnabled      = !m_cEncCfg.m_bDisableLFCrossTileBoundaryFlag;
+  pps.loopFilterAcrossSlicesEnabled     = !m_cEncCfg.m_bDisableLFCrossSliceBoundaryFlag;
   pps.rpl1IdxPresent                    = sps.rpl1IdxPresent;
 
   const uint32_t chromaArrayType = (int)sps.separateColourPlane ? CHROMA_400 : sps.chromaFormatIdc;
@@ -1176,14 +1177,15 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.numRefIdxL1DefaultActive = bestPos;
 
   pps.noPicPartition = !m_cEncCfg.m_picPartitionFlag;
-  
+  pps.ctuSize        = sps.CTUSize;
+
   if( pps.noPicPartition )
   {
     xInitPPSforTiles(pps);
+    pps.initTiles();
   }
   else
   {
-    pps.ctuSize        = sps.CTUSize;
     pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
     pps.picWidthInCtu  = ( pps.picWidthInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
     pps.picHeightInCtu = ( pps.picHeightInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
@@ -1206,8 +1208,6 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
     {
       CHECK( true, "raster-scan slices not yet supported" );
     }
-//    pps.loopFilterAcrossTilesEnabled  = m_cEncCfg.m_loopFilterAcrossTilesEnabled;
-//    pps.loopFilterAcrossSlicesEnabled = m_cEncCfg.m_loopFilterAcrossSlicesEnabled;
   }
 
   pps.pcv            = new PreCalcValues( sps, pps, true );
@@ -1304,6 +1304,10 @@ void EncLib::xInitPPSforTiles(PPS &pps) const
   pps.sliceMap[0].addCtusToSlice(0, pps.picWidthInCtu, 0, pps.picHeightInCtu, pps.picWidthInCtu);
   pps.ctuToTileCol.resize(pps.picWidthInCtu, 0);
   pps.ctuToTileRow.resize(pps.picHeightInCtu, 0);
+  pps.tileColWidth.resize( 1, pps.picWidthInCtu );
+  pps.tileRowHeight.resize( 1, pps.picHeightInCtu );
+  pps.numExpTileCols = 1;
+  pps.numExpTileRows = 1;
 }
 
 void EncLib::xOutputRecYuv()
