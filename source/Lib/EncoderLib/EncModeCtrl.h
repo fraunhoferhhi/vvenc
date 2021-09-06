@@ -258,6 +258,9 @@ struct CodedCUInfo
   bool isIntra;
   bool isSkip;
   bool isMMVDSkip;
+#if QTBTT_SPEED3
+  int  isMergeSimple;
+#endif
   bool isIBC;
   uint8_t BcwIdx;
   int  ctuRsAddr, poc;

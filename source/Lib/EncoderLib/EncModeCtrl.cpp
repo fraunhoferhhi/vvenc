@@ -566,8 +566,20 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
+#if QTBTT_SPEED3
+    bool MergeFlag = 0;
+    if (!cs.slice->isIntra() && (m_pcEncCfg->m_qtbttSpeedUp == 5))
+    {
+      const PartitioningStack& ps = partitioner.getPartStack();
+      const UnitArea& AreaCuMax = ps[0].parts[ps[0].idx];
+      CodedCUInfo& relatedCU = getBlkInfo(AreaCuMax);
+      MergeFlag = bool(relatedCU.isMergeSimple);
+    }
+    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, m_pcEncCfg->m_qtbttSpeedUp, MergeFlag);
+#else
     bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
     partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
+#endif
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
