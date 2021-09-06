@@ -225,7 +225,8 @@ int main( int argc, char* argv[] )
   // --- allocate memory for output packets
   vvencAccessUnit AU;
   vvenc_accessUnit_default( &AU );
-  vvenc_accessUnit_alloc_payload( &AU, 3 * vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight + 1024 );
+  const int auSizeScale = vvencappCfg.m_internChromaFormat <= VVENC_CHROMA_420 ? 2 : 4;
+  vvenc_accessUnit_alloc_payload( &AU, auSizeScale * vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight + 1024 );
 
   // --- allocate memory for YUV input picture
   vvencYUVBuffer cYUVInputBuffer;
