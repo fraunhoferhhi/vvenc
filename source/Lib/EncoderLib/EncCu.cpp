@@ -732,6 +732,45 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         m_cInterSearch.loadGlobalUniMvs( lumaArea, *pps.pcv );
       }
+
+#if QTBTT_SPEED3
+      if (!cs.slice->isIntra()&&(partitioner.chType == CH_L) && m_pcEncCfg->m_qtbttSpeedUp == 5 && (partitioner.currQtDepth < 3) && bestCS->cus.size())
+      {
+        int flagDbefore = 0;
+        const PartitioningStack& ps = partitioner.getPartStack();
+        const UnitArea& AreaCuMax = ps[0].parts[ps[0].idx];
+        CodedCUInfo& relatedCUMax = m_modeCtrl.getBlkInfo(AreaCuMax);
+        if (partitioner.currQtDepth == 0)
+        {
+          relatedCUMax.isMergeSimple = 0;
+        }
+        int usedNeighSET = relatedCUMax.isMergeSimple;
+
+        if (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo)
+        {
+          flagDbefore = 1;
+        }
+        int shift_used = partitioner.currQtDepth;
+        if (shift_used == 0)
+        {
+          usedNeighSET = flagDbefore;
+        }
+        else
+        {
+          if (shift_used == 1)
+          {
+            int storedData = usedNeighSET & 1;
+            usedNeighSET = flagDbefore << shift_used | storedData;
+          }
+          if (shift_used == 2)
+          {
+            int storedData = usedNeighSET & 3;
+            usedNeighSET = flagDbefore << shift_used | storedData;
+          }
+        }
+        relatedCUMax.isMergeSimple = usedNeighSET;
+      }
+#endif
     } //boundary
 
     //////////////////////////////////////////////////////////////////////////
