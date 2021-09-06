@@ -731,14 +731,15 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_rasterSliceFlag                         = false;
   c->m_rectSliceFixedWidth                     = 0;
   c->m_rectSliceFixedHeight                    = 0;
-  c->m_tileColumnWidth.clear();
-  c->m_tileRowHeight.clear();
-  c->m_rectSlicePos.clear();
+  memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
+  memset( c->m_tileRowHeight,   0, sizeof(c->m_tileRowHeight) );
+  memset( c->m_rectSlicePos,   -1, sizeof(c->m_rectSlicePos) );
+  c->m_numExpTileCols                          = 1;
+  c->m_numExpTileRows                          = 1;
   c->m_numTileCols                             = 1;
   c->m_numTileRows                             = 1;
   c->m_numSlicesInPic                          = 1;
   c->m_tileIdxDeltaPresentFlag                 = false;
-  c->m_rectSlices.clear();
   c->m_singleSlicePerSubPicFlag                = false;
   
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
@@ -2751,50 +2752,72 @@ static bool checkCfgParameter( vvenc_config *c )
     pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
     pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
 
+    int i, numTileColumnWidths, numTileRowHeights;
+
     // set default tile column if not provided
-    if( c->m_tileColumnWidth.size() == 0 )
+    if( c->m_tileColumnWidth[0] == 0 )
     {
-      c->m_tileColumnWidth.push_back( pps.picWidthInCtu );
+      c->m_tileColumnWidth[0] = pps.picWidthInCtu;
     }
     // set default tile row if not provided
-    if( c->m_tileRowHeight.size() == 0 )
+    if( c->m_tileRowHeight[0] == 0 )
     {
-      c->m_tileRowHeight.push_back( pps.picHeightInCtu );
+      c->m_tileRowHeight[0] = pps.picHeightInCtu;
     }
 
     // remove any tile columns that can be specified implicitly
-    while( c->m_tileColumnWidth.size() > 1 && c->m_tileColumnWidth.end()[-1] == c->m_tileColumnWidth.end()[-2] )
+    if( c->m_tileColumnWidth[1] > 0 )
     {
-      c->m_tileColumnWidth.pop_back();
+      i = 9;
+      while( i > 0 && c->m_tileColumnWidth[i-1] == c->m_tileColumnWidth[i] )
+      {
+        c->m_tileColumnWidth[i] = 0;
+        i--;
+      }
+      numTileColumnWidths = i;
+    }
+    else
+    {
+      numTileColumnWidths = 1;
     }
 
     // remove any tile rows that can be specified implicitly
-    while( c->m_tileRowHeight.size() > 1 && c->m_tileRowHeight.end()[-1] == c->m_tileRowHeight.end()[-2] )
+    if( c->m_tileRowHeight[1] > 0 )
     {
-      c->m_tileRowHeight.pop_back();
+      i = 9;
+      while( i > 0 && c->m_tileRowHeight[i-1] == c->m_tileRowHeight[i] )
+      {
+        c->m_tileRowHeight[i] = 0;
+        i--;
+      }
+      numTileRowHeights = i;
+    }
+    else
+    {
+      numTileRowHeights = 1;
     }
 
     // setup tiles in temporary PPS structure
     remSize = pps.picWidthInCtu;
-    for( colIdx=0; remSize > 0 && colIdx < c->m_tileColumnWidth.size(); colIdx++ )
+    for( colIdx=0; remSize > 0 && colIdx < numTileColumnWidths; colIdx++ )
     {
       vvenc_confirmParameter( c, c->m_tileColumnWidth[ colIdx ] == 0, "Tile column widths cannot be equal to 0" );
       c->m_tileColumnWidth[ colIdx ] = std::min( remSize, c->m_tileColumnWidth[ colIdx ]);
       pps.tileColWidth.push_back( c->m_tileColumnWidth[ colIdx ] );
       remSize -= c->m_tileColumnWidth[ colIdx ];
     }
-    c->m_tileColumnWidth.resize( colIdx );
-    pps.numExpTileCols = (uint32_t)c->m_tileColumnWidth.size();
+    pps.numExpTileCols  = numTileColumnWidths;
+    c->m_numExpTileCols = numTileColumnWidths;
     remSize = pps.picHeightInCtu;
-    for( rowIdx=0; remSize > 0 && rowIdx < c->m_tileRowHeight.size(); rowIdx++ )
+    for( rowIdx=0; remSize > 0 && rowIdx < numTileRowHeights; rowIdx++ )
     {
       vvenc_confirmParameter( c, c->m_tileRowHeight[ rowIdx ] == 0, "Tile row heights cannot be equal to 0" );
       c->m_tileRowHeight[ rowIdx ] = std::min( remSize, c->m_tileRowHeight[ rowIdx ]);
       pps.tileRowHeight.push_back( c->m_tileRowHeight[ rowIdx ] );
       remSize -= c->m_tileRowHeight[ rowIdx ];
     }
-    c->m_tileRowHeight.resize( rowIdx );
-    pps.numExpTileRows = (uint32_t)c->m_tileRowHeight.size();
+    pps.numExpTileRows  = numTileRowHeights;
+    c->m_numExpTileRows = numTileRowHeights;
     pps.initTiles();
     vvenc_confirmParameter( c, pps.numTileCols > getMaxTileColsByLevel( c->m_level ), "Number of tile columns exceeds maximum number allowed according to specified level" );
     vvenc_confirmParameter( c, pps.numTileRows > getMaxTileRowsByLevel( c->m_level ), "Number of tile rows exceeds maximum number allowed according to specified level" );
@@ -2814,16 +2837,25 @@ static bool checkCfgParameter( vvenc_config *c )
           vvenc_confirmParameter( c, true, "Simplified fixed-rectangular-slice-size config not yet supported" );
         }
 
-        vvenc_confirmParameter( c, c->m_rectSlicePos.size() & 1, "Odd number of rectangular slice positions provided. Rectangular slice positions must be specified in pairs of (top-left / bottom-right) raster-scan CTU addresses." );
+        uint32_t numRectPos = 0;
+        if( c->m_rectSlicePos[0] >= 0 )
+        {
+          numRectPos = 1;
+          while( c->m_rectSlicePos[numRectPos] > 0 )
+          {
+            numRectPos++;
+          }
+        }
+        vvenc_confirmParameter( c, numRectPos & 1, "Odd number of rectangular slice positions provided. Rectangular slice positions must be specified in pairs of (top-left / bottom-right) raster-scan CTU addresses." );
 
         // set default slice size if not provided
-        if( c->m_rectSlicePos.size() == 0 )
+        if( numRectPos == 0 )
         {
-          c->m_rectSlicePos.push_back( 0 );
-          c->m_rectSlicePos.push_back( pps.picWidthInCtu * pps.picHeightInCtu - 1 );
+          c->m_rectSlicePos[0] = 0;
+          c->m_rectSlicePos[1] = pps.picWidthInCtu * pps.picHeightInCtu - 1;
         }
 
-        pps.numSlicesInPic = (uint32_t)(c->m_rectSlicePos.size() >> 1);
+        pps.numSlicesInPic = numRectPos >> 1;
         vvenc_confirmParameter( c, pps.numSlicesInPic > 1, "Encoding of multiple slices not yet supported" );
         vvenc_confirmParameter( c, pps.numSlicesInPic > getMaxSlicesByLevel( c->m_level ), "Number of rectangular slices exceeds maximum number allowed according to specified level" );
         pps.initRectSlices();
@@ -2881,55 +2913,11 @@ static bool checkCfgParameter( vvenc_config *c )
           // special case for multiple slices within a single tile
           if( sliceWidth == 1 && sliceHeight == 1 )
           {
-            uint32_t firstSliceIdx = sliceIdx;
-            uint32_t numSlicesInTile = 1;
-            pps.rectSlices[sliceIdx].sliceHeightInCtu = stopCtuY - startCtuY + 1;
-
-            while( sliceIdx < pps.numSlicesInPic-1 )
-            {
-              uint32_t nextTileIdx;
-              startCtuX   = c->m_rectSlicePos[2*(sliceIdx+1)]     % pps.picWidthInCtu;
-              startCtuY   = c->m_rectSlicePos[2*(sliceIdx+1)]     / pps.picWidthInCtu;
-              stopCtuX    = c->m_rectSlicePos[2*(sliceIdx+1) + 1] % pps.picWidthInCtu;
-              stopCtuY    = c->m_rectSlicePos[2*(sliceIdx+1) + 1] / pps.picWidthInCtu;
-              startTileX  = pps.ctuToTileCol[ startCtuX ];
-              startTileY  = pps.ctuToTileRow[ startCtuY ];
-              stopTileX   = pps.ctuToTileCol[ stopCtuX ];
-              stopTileY   = pps.ctuToTileRow[ stopCtuY ];
-              nextTileIdx = startTileY * pps.numTileCols + startTileX;
-              sliceWidth  = stopTileX - startTileX + 1;
-              sliceHeight = stopTileY - startTileY + 1;
-              if(nextTileIdx != tileIdx || sliceWidth != 1 || sliceHeight != 1)
-              {
-                break;
-              }
-              numSlicesInTile++;
-              sliceIdx++;
-              pps.rectSlices[sliceIdx].sliceWidthInTiles  = 1;
-              pps.rectSlices[sliceIdx].sliceHeightInTiles = sliceHeight;
-              pps.rectSlices[sliceIdx].tileIdx            = tileIdx;
-              pps.rectSlices[sliceIdx].sliceHeightInCtu   = stopCtuY - startCtuY + 1;
-            }
-            pps.rectSlices[firstSliceIdx].numSlicesInTile = numSlicesInTile;
+            vvenc_confirmParameter( c, true, "Encoding of multiple slices within a single tile not yet supported" );
           }
         }
         pps.tileIdxDeltaPresent      = needTileIdxDelta;
         c->m_tileIdxDeltaPresentFlag = needTileIdxDelta;
-
-        // check rectangular slice mapping and full picture CTU coverage
-        pps.initRectSliceMap( nullptr );
-
-        // store rectangular slice parameters from temporary PPS structure
-        c->m_numSlicesInPic = pps.numSlicesInPic;
-        c->m_rectSlices.resize( pps.numSlicesInPic );
-        for( sliceIdx = 0; sliceIdx < pps.numSlicesInPic; sliceIdx++ )
-        {
-          c->m_rectSlices[sliceIdx].sliceWidthInTiles  = pps.rectSlices[sliceIdx].sliceWidthInTiles;
-          c->m_rectSlices[sliceIdx].sliceHeightInTiles = pps.rectSlices[sliceIdx].sliceHeightInTiles;
-          c->m_rectSlices[sliceIdx].numSlicesInTile    = pps.rectSlices[sliceIdx].numSlicesInTile;
-          c->m_rectSlices[sliceIdx].sliceHeightInCtu   = pps.rectSlices[sliceIdx].sliceHeightInCtu;
-          c->m_rectSlices[sliceIdx].tileIdx            = pps.rectSlices[sliceIdx].tileIdx;
-        }
       }
     }
     // raster-scan slices

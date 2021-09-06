@@ -1189,10 +1189,16 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
     pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
     pps.picWidthInCtu  = ( pps.picWidthInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
     pps.picHeightInCtu = ( pps.picHeightInLumaSamples + sps.CTUSize - 1 ) / sps.CTUSize;
-    pps.numExpTileCols = m_cEncCfg.m_tileColumnWidth.size();
-    pps.numExpTileRows = m_cEncCfg.m_tileRowHeight.size();
-    pps.tileColWidth   = m_cEncCfg.m_tileColumnWidth;
-    pps.tileRowHeight  = m_cEncCfg.m_tileRowHeight;
+    pps.numExpTileCols = m_cEncCfg.m_numExpTileCols;
+    pps.numExpTileRows = m_cEncCfg.m_numExpTileRows;
+    for( int i = 0; i < pps.numExpTileCols; i++ )
+    {
+      pps.tileColWidth.push_back( m_cEncCfg.m_tileColumnWidth[i] );
+    }
+    for( int i = 0; i < pps.numExpTileRows; i++ )
+    {
+      pps.tileRowHeight.push_back( m_cEncCfg.m_tileRowHeight[i] );
+    }
     pps.initTiles();
     pps.rectSlice      = !m_cEncCfg.m_rasterSliceFlag;
 
@@ -1201,7 +1207,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
       pps.singleSlicePerSubPic = m_cEncCfg.m_singleSlicePerSubPicFlag;
       pps.numSlicesInPic       = m_cEncCfg.m_numSlicesInPic;
       pps.tileIdxDeltaPresent  = m_cEncCfg.m_tileIdxDeltaPresentFlag;
-      pps.rectSlices           = m_cEncCfg.m_rectSlices;
+      pps.rectSlices.resize( pps.numSlicesInPic );
       pps.initRectSliceMap( &sps );
     }
     else

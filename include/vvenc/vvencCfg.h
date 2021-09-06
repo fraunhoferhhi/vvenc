@@ -55,7 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <vector>
 
 #define VVENC_NAMESPACE_BEGIN
 #define VVENC_NAMESPACE_END
@@ -714,16 +713,17 @@ typedef struct vvenc_config
 
   bool                m_picPartitionFlag;
   bool                m_rasterSliceFlag;
-  std::vector<unsigned int> m_tileColumnWidth;
-  std::vector<unsigned int> m_tileRowHeight;
-  std::vector<unsigned int> m_rectSlicePos;
+  unsigned int        m_tileColumnWidth[10];
+  unsigned int        m_tileRowHeight[10];
+  int                 m_rectSlicePos[1200];
   int                 m_rectSliceFixedWidth;
   int                 m_rectSliceFixedHeight;
+  uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
+  uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
   uint32_t            m_numTileCols;                                                     // derived number of tile columns
   uint32_t            m_numTileRows;                                                     // derived number of tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
   bool                m_tileIdxDeltaPresentFlag;                                         // derived tile index delta present flag
-  std::vector<vvencRectSlice> m_rectSlices;
   bool                m_singleSlicePerSubPicFlag;
   
   // decode bitstream options
