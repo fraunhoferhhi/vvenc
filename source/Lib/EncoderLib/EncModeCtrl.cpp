@@ -568,7 +568,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   {
 #if QTBTT_SPEED3
     bool MergeFlag = 0;
-    if (!cs.slice->isIntra() && (m_pcEncCfg->m_qtbttSpeedUp == 5))
+    if (!cs.slice->isIntra() && ((m_pcEncCfg->m_qtbttSpeedUp == 5) || (m_pcEncCfg->m_qtbttSpeedUp == 7)))
     {
       const PartitioningStack& ps = partitioner.getPartStack();
       const UnitArea& AreaCuMax = ps[0].parts[ps[0].idx];
