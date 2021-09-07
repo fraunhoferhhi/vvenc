@@ -381,8 +381,8 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
   msum0 = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
-  
-  
+
+
   mcoef1 = _mm_blend_pd( mcoef1, mzero, 1 );
 
   mE1  = _mm_loadu_pd( &E[0][0][1][ 1] );
@@ -400,15 +400,15 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
   msum1 = _mm_add_pd( _mm_add_pd( mE1, mE3 ), _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
-  
-  msum0 = _mm_hadd_pd( msum0, msum1 );
 
+  msum0 = _mm_hadd_pd( msum0, msum1 );
+  
 
   
   __m128d mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[0] ) );
   __m128d my      =                  _mm_loadu_pd(                       &y[0][0] );
   __m128d mE      =                  _mm_setr_pd( E[0][0][0][0], E[0][0][1][1] );
-
+  
   mE1 = _mm_mul_pd( mE, mcoef );
   mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
@@ -441,7 +441,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
 
   msum0 = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
 
-  
+
   mcoef3 = _mm_blend_pd( mcoef3, mzero, 1 );
 
   //mE1  = _mm_loadu_pd( &E[0][0][3][ 1] );
@@ -461,12 +461,12 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   msum1 = _mm_add_pd( mE3, _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) ) );
   msum0 = _mm_hadd_pd( msum0, msum1 );
 
-
+  
   
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[2] ) );
   my      =                  _mm_loadu_pd(                       &y[0][2] );
   mE      =                  _mm_setr_pd( E[0][0][2][2], E[0][0][3][3] );
-
+  
   mE1 = _mm_mul_pd( mE, mcoef );
   mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
@@ -498,8 +498,8 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mE11 = _mm_mul_pd( mcoef11, mE11 );
 
   msum0 = _mm_add_pd( _mm_add_pd( mE5, mE7 ), _mm_add_pd( mE9, mE11 ) );
-  
-  
+
+
   mcoef5 = _mm_blend_pd( mcoef5, mzero, 1 );
 
   //mE1  = _mm_loadu_pd( &E[0][0][5][ 1] );
@@ -524,7 +524,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[4] ) );
   my      =                  _mm_loadu_pd(                       &y[0][4] );
   mE      =                  _mm_setr_pd( E[0][0][4][4], E[0][0][5][5] );
-
+  
   mE1 = _mm_mul_pd( mE, mcoef );
   mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
@@ -557,7 +557,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
 
   msum0 = _mm_add_pd( mE7, _mm_add_pd( mE9, mE11 ) );
 
-  
+
   mcoef7 = _mm_blend_pd( mcoef7, mzero, 1 );
 
   //mE1  = _mm_loadu_pd( &E[0][0][7][ 1] );
@@ -582,7 +582,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[6] ) );
   my      =                  _mm_loadu_pd(                       &y[0][6] );
   mE      =                  _mm_setr_pd( E[0][0][6][6], E[0][0][7][7] );
-
+  
   mE1 = _mm_mul_pd( mE, mcoef );
   mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
@@ -640,7 +640,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[8] ) );
   my      =                  _mm_loadu_pd(                       &y[0][8] );
   mE      =                  _mm_setr_pd( E[0][0][8][8], E[0][0][9][9] );
-
+  
   mE1 = _mm_mul_pd( mE, mcoef );
   mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
@@ -698,7 +698,7 @@ static double calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const A
   mcoef   = _mm_cvtepi32_pd( _mm_loadl_epi64( ( const __m128i* ) &coeff[10] ) );
   my      =                  _mm_loadu_pd(                       &y[0][10] );
   mE      =                  _mm_setr_pd( E[0][0][10][10], E[0][0][11][11] );
-
+  
   mE1 = _mm_mul_pd( mE, mcoef );
   mE3 = _mm_mul_pd( msum0, mtwo );
   mE1 = _mm_add_pd( mE1, mE3 );
@@ -1542,70 +1542,19 @@ void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs,
   }
 }
 
-void EncAdaptiveLoopFilter::performCCALF( Picture& pic, CodingStructure& cs )
+void EncAdaptiveLoopFilter::copyCTUForCCALF( CodingStructure& cs, int ctuPosX, int ctuPosY )
 {
-  initCABACEstimator( cs.slice, &pic.picApsMap );
-  const TempCtx ctxStartCcAlf(m_CtxCache, SubCtx(Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx()));
-
-  // Do not transmit CC ALF if it is unchanged
-  if (cs.slice->tileGroupAlfEnabled[COMP_Y])
-  {
-    for (int32_t lumaAlfApsId : cs.slice->tileGroupLumaApsId)
-    {
-      APS* aps = (lumaAlfApsId >= 0) ? m_apsMap->getPS((lumaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS) : nullptr;
-      if (aps && m_apsMap->getChangedFlag((lumaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS))
-      {
-        aps->ccAlfParam.newCcAlfFilter[0] = false;
-        aps->ccAlfParam.newCcAlfFilter[1] = false;
-      }
-    }
-  }
-  int chromaAlfApsId = ( cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr]) ? cs.slice->tileGroupChromaApsId : -1;
-  APS* aps = (chromaAlfApsId >= 0) ? m_apsMap->getPS((chromaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS) : nullptr;
-  if (aps && m_apsMap->getChangedFlag((chromaAlfApsId << NUM_APS_TYPE_LEN) + ALF_APS))
-  {
-    aps->ccAlfParam.newCcAlfFilter[0] = false;
-    aps->ccAlfParam.newCcAlfFilter[1] = false;
-  }
-
-  if (!cs.slice->sps->ccalfEnabled )
-  {
-    return;
-  }
-
-  m_tempBuf.get(COMP_Cb).copyFrom(cs.getRecoBuf().get(COMP_Cb));
-  m_tempBuf.get(COMP_Cr).copyFrom(cs.getRecoBuf().get(COMP_Cr));
-
-  PelUnitBuf orgYuv = cs.picture->getOrigBuf();
-  PelUnitBuf recYuv = m_tempBuf.getBuf(cs.area);
-  recYuv.extendBorderPel(MAX_ALF_FILTER_LENGTH >> 1);
-  
-  deriveStatsForCcAlfFiltering(orgYuv, recYuv, COMP_Cb, m_numCTUsInWidth, (0 + 1), cs);
-  deriveStatsForCcAlfFiltering(orgYuv, recYuv, COMP_Cr, m_numCTUsInWidth, (0 + 1), cs);
-  initDistortionCcalf();
-
-  m_CABACEstimator->getCtx() = SubCtx(Ctx::CcAlfFilterControlFlag, ctxStartCcAlf);
-  deriveCcAlfFilter(cs, COMP_Cb, orgYuv, recYuv, cs.getRecoBuf());
-  m_CABACEstimator->getCtx() = SubCtx(Ctx::CcAlfFilterControlFlag, ctxStartCcAlf);
-  deriveCcAlfFilter(cs, COMP_Cr, orgYuv, recYuv, cs.getRecoBuf());
-
-  xSetupCcAlfAPS(cs);
-
-  for (int compIdx = 1; compIdx < getNumberValidComponents(cs.pcv->chrFormat); compIdx++)
-  {
-    ComponentID compID     = ComponentID(compIdx);
-    if (m_ccAlfFilterParam.ccAlfFilterEnabled[compIdx - 1])
-    {
-      applyCcAlfFilter(cs, compID, cs.getRecoBuf().get(compID), recYuv, m_ccAlfFilterControl[compIdx - 1],
-                       m_ccAlfFilterParam.ccAlfCoeff[compIdx - 1], -1);
-    }
-  }
+  UnitArea   ctuArea   = UnitArea( m_chromaFormat, cs.pcv->getCtuArea( ctuPosX, ctuPosY ) );
+  PelUnitBuf ctuBufSrc = cs.getRecoBuf( ctuArea );
+  PelUnitBuf ctuBufDst  = m_tempBuf.getBuf( ctuArea );
+  ctuBufDst.get( COMP_Cb ).copyFrom( ctuBufSrc.get( COMP_Cb ) );
+  ctuBufDst.get( COMP_Cr ).copyFrom( ctuBufSrc.get( COMP_Cr ) );
 }
 
 void EncAdaptiveLoopFilter::getStatisticsFrame( Picture& pic, CodingStructure& cs )
 {
   PelUnitBuf recoBuf = cs.picture->getRecoBuf();
-  resetFrameStats();
+  resetFrameStats( cs.slice->sps->ccalfEnabled );
   for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
   {
     getStatisticsCTU( pic, cs, recoBuf, ctuRsAddr );
@@ -1983,7 +1932,7 @@ void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
   }
 }
 
-void EncAdaptiveLoopFilter::resetFrameStats()
+void EncAdaptiveLoopFilter::resetFrameStats( bool ccAlfEnabled )
 {
   // init Frame stats buffers
   const int numberOfChannels = getNumberValidChannels( m_chromaFormat );
@@ -2001,6 +1950,19 @@ void EncAdaptiveLoopFilter::resetFrameStats()
         {
           m_alfCovarianceFrame[channelIdx][shape][isLuma( channelID ) ? classIdx : altIdx].reset();
         }
+      }
+    }
+  }
+
+  if( ccAlfEnabled )
+  {
+    const int filterIdx = 0;
+    const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+    for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
+    {
+      for( int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++ )
+      {
+        m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx].reset();
       }
     }
   }
@@ -4879,6 +4841,64 @@ void EncAdaptiveLoopFilter::getFrameStatsCcalf(ComponentID compIdx, int filterId
   }
 }
 
+void EncAdaptiveLoopFilter::deriveCcAlfFilter( Picture& pic, CodingStructure& cs )
+{
+  initCABACEstimator( cs.slice, &pic.picApsMap );
+  initDistortionCcalf();
+
+  // Do not transmit CC ALF if it is unchanged
+  if( cs.slice->tileGroupAlfEnabled[COMP_Y] )
+  {
+    for( int32_t lumaAlfApsId : cs.slice->tileGroupLumaApsId )
+    {
+      APS* aps = ( lumaAlfApsId >= 0 ) ? m_apsMap->getPS( ( lumaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) : nullptr;
+      if( aps && m_apsMap->getChangedFlag( ( lumaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) )
+      {
+        aps->ccAlfParam.newCcAlfFilter[0] = false;
+        aps->ccAlfParam.newCcAlfFilter[1] = false;
+      }
+    }
+  }
+  int chromaAlfApsId = ( cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr] ) ? cs.slice->tileGroupChromaApsId : -1;
+  APS* aps = ( chromaAlfApsId >= 0 ) ? m_apsMap->getPS( ( chromaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) : nullptr;
+  if( aps && m_apsMap->getChangedFlag( ( chromaAlfApsId << NUM_APS_TYPE_LEN ) + ALF_APS ) )
+  {
+    aps->ccAlfParam.newCcAlfFilter[0] = false;
+    aps->ccAlfParam.newCcAlfFilter[1] = false;
+  }
+
+  // Accumulate ALF statistic
+  const int filterIdx = 0;
+  const int numberOfComponents = getNumberValidComponents( m_chromaFormat );
+  for( int compIdx = 1; compIdx < numberOfComponents; compIdx++ )
+  {
+    const ComponentID compID = ComponentID( compIdx );
+    for( int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++ )
+    {
+      for( int ctuRsAddr = 0; ctuRsAddr < m_numCTUsInPic; ctuRsAddr++ )
+      {
+        for( int classIdx = 0; classIdx < ( isLuma( compID ) ? MAX_NUM_ALF_CLASSES : 1 ); classIdx++ )
+        {
+          m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx] += m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuRsAddr];
+        }
+      }
+    }
+  }
+
+  const TempCtx ctxStartCcAlf( m_CtxCache, SubCtx( Ctx::CcAlfFilterControlFlag, m_CABACEstimator->getCtx() ) );
+  const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
+  const PelUnitBuf tmpYuv = m_tempBuf.getBuf( cs.area );
+  const PelUnitBuf recYuv = cs.getRecoBuf();
+
+  m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
+  deriveCcAlfFilter( cs, COMP_Cb, orgYuv, tmpYuv, recYuv );
+
+  m_CABACEstimator->getCtx() = SubCtx( Ctx::CcAlfFilterControlFlag, ctxStartCcAlf );
+  deriveCcAlfFilter( cs, COMP_Cr, orgYuv, tmpYuv, recYuv );
+
+  xSetupCcAlfAPS( cs );
+}
+
 void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID compID, const PelUnitBuf& orgYuv, const PelUnitBuf& tempDecYuvBuf, const PelUnitBuf& dstYuv )
 {
   if (!cs.slice->tileGroupAlfEnabled[COMP_Y])
@@ -5182,117 +5202,97 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilter( CodingStructure& cs, ComponentID 
   }
 }
 
-void EncAdaptiveLoopFilter::deriveStatsForCcAlfFiltering(const PelUnitBuf &orgYuv, const PelUnitBuf &recYuv,
-                                                         const int compIdx, const int maskStride,
-                                                         const uint8_t filterIdc, CodingStructure &cs)
+void EncAdaptiveLoopFilter::deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuRsAddr )
 {
-  const int filterIdx = filterIdc - 1;
+  const int filterIdx = 0;
 
   // init CTU stats buffers
-  for( int shape = 0; shape != m_filterShapesCcAlf[compIdx-1].size(); shape++ )
+  for( int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++ )
   {
-    for (int ctuIdx = 0; ctuIdx < m_numCTUsInPic; ctuIdx++)
-    {
-      m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuIdx].reset();
-    }
+      m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuRsAddr].reset();
   }
 
-  // init Frame stats buffers
-  for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-  {
-    m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx].reset();
-  }
-
-  int                  ctuRsAddr = 0;
-  const PreCalcValues &pcv       = *cs.pcv;
+  const PreCalcValues& pcv = *cs.pcv;
   bool                 clipTop = false, clipBottom = false, clipLeft = false, clipRight = false;
   int                  numHorVirBndry = 0, numVerVirBndry = 0;
   int                  horVirBndryPos[] = { 0, 0, 0 };
   int                  verVirBndryPos[] = { 0, 0, 0 };
 
-  for (int yPos = 0; yPos < m_picHeight; yPos += m_maxCUHeight)
+  const int xPos = ( ctuRsAddr % pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int yPos = ( ctuRsAddr / pcv.widthInCtus ) << pcv.maxCUSizeLog2;
+  const int width = ( xPos + m_maxCUWidth > m_picWidth ) ? ( m_picWidth - xPos ) : m_maxCUWidth;
+  const int height = ( yPos + m_maxCUHeight > m_picHeight ) ? ( m_picHeight - yPos ) : m_maxCUHeight;
+  int       rasterSliceAlfPad = 0;
+
+  const PelUnitBuf orgYuv = cs.picture->getOrigBuf();
+  const PelUnitBuf recYuv = PelUnitBuf( m_chromaFormat, m_tempBuf.getBuf( COMP_Y ), cs.getRecoBuf( COMP_Cb ), cs.getRecoBuf( COMP_Cr ) );
+
+  if( isCrossedByVirtualBoundaries( cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
+    numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
+    rasterSliceAlfPad ) )
   {
-    for (int xPos = 0; xPos < m_picWidth; xPos += m_maxCUWidth)
+    int yStart = yPos;
+    for( int i = 0; i <= numHorVirBndry; i++ )
     {
-//      if (m_trainingCovControl[ctuRsAddr] == filterIdc)
+      const int  yEnd = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
+      const int  h = yEnd - yStart;
+      const bool clipT = ( i == 0 && clipTop ) || ( i > 0 ) || ( yStart == 0 );
+      const bool clipB = ( i == numHorVirBndry && clipBottom ) || ( i < numHorVirBndry ) || ( yEnd == pcv.lumaHeight );
+      int        xStart = xPos;
+      for( int j = 0; j <= numVerVirBndry; j++ )
       {
-        const int width             = (xPos + m_maxCUWidth > m_picWidth) ? (m_picWidth - xPos) : m_maxCUWidth;
-        const int height            = (yPos + m_maxCUHeight > m_picHeight) ? (m_picHeight - yPos) : m_maxCUHeight;
-        int       rasterSliceAlfPad = 0;
-        if (isCrossedByVirtualBoundaries(cs, xPos, yPos, width, height, clipTop, clipBottom, clipLeft, clipRight,
-                                         numHorVirBndry, numVerVirBndry, horVirBndryPos, verVirBndryPos,
-                                         rasterSliceAlfPad))
+        const int  xEnd = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
+        const int  w = xEnd - xStart;
+        const bool clipL = ( j == 0 && clipLeft ) || ( j > 0 ) || ( xStart == 0 );
+        const bool clipR = ( j == numVerVirBndry && clipRight ) || ( j < numVerVirBndry ) || ( xEnd == pcv.lumaWidth );
+        const int  wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
+        const int  hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
+        PelUnitBuf recBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
+        recBuf.copyFrom( recYuv.subBuf(
+          UnitArea( cs.area.chromaFormat, Area( xStart - ( clipL ? 0 : MAX_ALF_PADDING_SIZE ),
+            yStart - ( clipT ? 0 : MAX_ALF_PADDING_SIZE ), wBuf, hBuf ) ) ) );
+        // pad top-left unavailable samples for raster slice
+        if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
         {
-          int yStart = yPos;
-          for (int i = 0; i <= numHorVirBndry; i++)
-          {
-            const int  yEnd   = i == numHorVirBndry ? yPos + height : horVirBndryPos[i];
-            const int  h      = yEnd - yStart;
-            const bool clipT  = (i == 0 && clipTop) || (i > 0) || (yStart == 0);
-            const bool clipB  = (i == numHorVirBndry && clipBottom) || (i < numHorVirBndry) || (yEnd == pcv.lumaHeight);
-            int        xStart = xPos;
-            for (int j = 0; j <= numVerVirBndry; j++)
-            {
-              const int  xEnd   = j == numVerVirBndry ? xPos + width : verVirBndryPos[j];
-              const int  w      = xEnd - xStart;
-              const bool clipL  = (j == 0 && clipLeft) || (j > 0) || (xStart == 0);
-              const bool clipR  = (j == numVerVirBndry && clipRight) || (j < numVerVirBndry) || (xEnd == pcv.lumaWidth);
-              const int  wBuf   = w + (clipL ? 0 : MAX_ALF_PADDING_SIZE) + (clipR ? 0 : MAX_ALF_PADDING_SIZE);
-              const int  hBuf   = h + (clipT ? 0 : MAX_ALF_PADDING_SIZE) + (clipB ? 0 : MAX_ALF_PADDING_SIZE);
-              PelUnitBuf recBuf = m_tempBuf2.subBuf(UnitArea(cs.area.chromaFormat, Area(0, 0, wBuf, hBuf)));
-              recBuf.copyFrom(recYuv.subBuf(
-                UnitArea(cs.area.chromaFormat, Area(xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE),
-                                                    yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf))));
-              // pad top-left unavailable samples for raster slice
-              if (xStart == xPos && yStart == yPos && (rasterSliceAlfPad & 1))
-              {
-                recBuf.padBorderPel(MAX_ALF_PADDING_SIZE, 1);
-              }
-
-              // pad bottom-right unavailable samples for raster slice
-              if (xEnd == xPos + width && yEnd == yPos + height && (rasterSliceAlfPad & 2))
-              {
-                recBuf.padBorderPel(MAX_ALF_PADDING_SIZE, 2);
-              }
-              recBuf.extendBorderPel(MAX_ALF_PADDING_SIZE);
-              recBuf = recBuf.subBuf(UnitArea(
-                cs.area.chromaFormat, Area(clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h)));
-
-              const UnitArea area(m_chromaFormat, Area(0, 0, w, h));
-              const UnitArea areaDst(m_chromaFormat, Area(xStart, yStart, w, h));
-
-              const ComponentID compID = ComponentID(compIdx);
-
-              for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-              {
-                getBlkStatsCcAlf(m_alfCovarianceCcAlf[compIdx - 1][0][filterIdx][ctuRsAddr],
-                                 m_filterShapesCcAlf[compIdx - 1][shape], orgYuv, recBuf, areaDst, area, compID, yPos);
-                m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx] +=
-                  m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuRsAddr];
-              }
-
-              xStart = xEnd;
-            }
-
-            yStart = yEnd;
-          }
+          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 1 );
         }
-        else
+
+        // pad bottom-right unavailable samples for raster slice
+        if( xEnd == xPos + width && yEnd == yPos + height && ( rasterSliceAlfPad & 2 ) )
         {
-          const UnitArea area(m_chromaFormat, Area(xPos, yPos, width, height));
-
-          const ComponentID compID = ComponentID(compIdx);
-
-          for (int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++)
-          {
-            getBlkStatsCcAlf(m_alfCovarianceCcAlf[compIdx - 1][0][filterIdx][ctuRsAddr],
-                             m_filterShapesCcAlf[compIdx - 1][shape], orgYuv, recYuv, area, area, compID, yPos);
-            m_alfCovarianceFrameCcAlf[compIdx - 1][shape][filterIdx] +=
-              m_alfCovarianceCcAlf[compIdx - 1][shape][filterIdx][ctuRsAddr];
-          }
+          recBuf.padBorderPel( MAX_ALF_PADDING_SIZE, 2 );
         }
+        recBuf.extendBorderPel( MAX_ALF_PADDING_SIZE );
+        recBuf = recBuf.subBuf( UnitArea(
+          cs.area.chromaFormat, Area( clipL ? 0 : MAX_ALF_PADDING_SIZE, clipT ? 0 : MAX_ALF_PADDING_SIZE, w, h ) ) );
+
+        const UnitArea area( m_chromaFormat, Area( 0, 0, w, h ) );
+        const UnitArea areaDst( m_chromaFormat, Area( xStart, yStart, w, h ) );
+
+        const ComponentID compID = ComponentID( compIdx );
+
+        for( int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++ )
+        {
+          getBlkStatsCcAlf( m_alfCovarianceCcAlf[compIdx - 1][0][filterIdx][ctuRsAddr],
+            m_filterShapesCcAlf[compIdx - 1][shape], orgYuv, recBuf, areaDst, area, compID, yPos );
+        }
+
+        xStart = xEnd;
       }
-      ctuRsAddr++;
+
+      yStart = yEnd;
+    }
+  }
+  else
+  {
+    const UnitArea area( m_chromaFormat, Area( xPos, yPos, width, height ) );
+
+    const ComponentID compID = ComponentID( compIdx );
+
+    for( int shape = 0; shape != m_filterShapesCcAlf[compIdx - 1].size(); shape++ )
+    {
+      getBlkStatsCcAlf( m_alfCovarianceCcAlf[compIdx - 1][0][filterIdx][ctuRsAddr],
+        m_filterShapesCcAlf[compIdx - 1][shape], orgYuv, recYuv, area, area, compID, yPos );
     }
   }
 }
@@ -5506,7 +5506,7 @@ void EncAdaptiveLoopFilter::calcCovariance4CcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROM
   {
     recYM1 = recY0;
     recYP2 = recYP1 = recY0;
-  }
+}
 
   const int dx0 = 0;
   const int dx1 = 1 << getChannelTypeScaleX( CH_C, m_chromaFormat );
@@ -5573,7 +5573,7 @@ void EncAdaptiveLoopFilter::calcCovarianceCcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROMA
     recYP2 = recYP1 = recY0;
   }
 
-  const Pel centerValue = recY0[+0];
+    const Pel centerValue = recY0[+0];
 
   ELocal[0] += recYM1[+0] - centerValue;
   ELocal[1] += recY0 [-1] - centerValue;
@@ -5582,7 +5582,7 @@ void EncAdaptiveLoopFilter::calcCovarianceCcAlf(Pel ELocal[MAX_NUM_CC_ALF_CHROMA
   ELocal[4] += recYP1[+0] - centerValue;
   ELocal[5] += recYP1[+1] - centerValue;
   ELocal[6] += recYP2[+0] - centerValue;
-}
+  }
 
 void EncAdaptiveLoopFilter::countLumaSwingGreaterThanThreshold(const Pel* luma, int lumaStride, int height, int width, int log2BlockWidth, int log2BlockHeight, uint64_t* lumaSwingGreaterThanThresholdCount, int lumaCountStride)
 {
