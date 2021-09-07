@@ -1942,8 +1942,10 @@ void HLSyntaxReader::parsePictureHeader( PicHeader* picHeader, ParameterSetManag
     pps->picWidthInCtu  = (pps->picWidthInLumaSamples + (sps->CTUSize-1)) / sps->CTUSize;
     pps->picHeightInCtu = (pps->picHeightInLumaSamples + (sps->CTUSize-1)) / sps->CTUSize;
     pps->log2CtuSize = ( ceilLog2(sps->CTUSize) );
+    pps->ctuSize = sps->CTUSize;
     pps->tileColWidth.push_back(pps->picWidthInCtu );
     pps->tileRowHeight.push_back( pps->picHeightInCtu );
+    pps->initTiles();
     pps->subPics.clear();
     pps->subPics.resize(1);
     pps->subPics[0].init( pps->picWidthInCtu, pps->picHeightInCtu, pps->picWidthInLumaSamples, pps->picHeightInLumaSamples);
