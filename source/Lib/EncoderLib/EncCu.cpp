@@ -734,7 +734,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
 
 #if QTBTT_SPEED3
-      if (!cs.slice->isIntra()&&(partitioner.chType == CH_L) && m_pcEncCfg->m_qtbttSpeedUp == 5 && (partitioner.currQtDepth < 3) && bestCS->cus.size())
+      if (!cs.slice->isIntra()&&(partitioner.chType == CH_L) && ((m_pcEncCfg->m_qtbttSpeedUp == 5) || (m_pcEncCfg->m_qtbttSpeedUp == 7)) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
       {
         int flagDbefore = 0;
         const PartitioningStack& ps = partitioner.getPartStack();
