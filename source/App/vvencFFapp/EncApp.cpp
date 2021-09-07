@@ -171,7 +171,8 @@ int EncApp::encode()
   // create sufficient memory for output data
   vvencAccessUnit au;
   vvenc_accessUnit_default( &au );
-  vvenc_accessUnit_alloc_payload( &au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
+  const int auSizeScale = vvencCfg.m_internChromaFormat <= VVENC_CHROMA_420 ? 2 : 3;
+  vvenc_accessUnit_alloc_payload( &au, auSizeScale * vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight + 1024 );
 
   // main loop
   int tempRate   = vvencCfg.m_FrameRate;
