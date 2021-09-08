@@ -352,6 +352,14 @@ struct SliceMap
   {
   }
 
+  void  initSliceMap()
+  {
+    sliceID = 0;
+    numTilesInSlice = 0;
+    numCtuInSlice = 0;
+    ctuAddrInSlice.clear();
+  }
+
   void  addCtusToSlice( uint32_t startX, uint32_t stopX, uint32_t startY, uint32_t stopY, uint32_t picWidthInCtbsY )
   {
     CHECK( startX >= stopX || startY >= stopY, "Invalid slice definition");

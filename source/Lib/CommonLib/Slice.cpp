@@ -1859,6 +1859,8 @@ void PPS::initRectSliceMap( const SPS* sps )
 
     for( uint32_t i = 0; i < numSlicesInPic; i++ )
     {
+      sliceMap[i].initSliceMap();
+      
       // get position of first tile in slice
       tileX =  rectSlices[ i ].tileIdx % numTileCols;
       tileY =  rectSlices[ i ].tileIdx / numTileCols;
