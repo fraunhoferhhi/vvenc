@@ -841,7 +841,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // quantization threshold
   if( c->m_quantThresholdVal < 0 )
   {
-    c->m_quantThresholdVal = c->m_DepQuantEnabled ? 8 : 6;
+    c->m_quantThresholdVal = 8;
   }
 
   // MCTF
