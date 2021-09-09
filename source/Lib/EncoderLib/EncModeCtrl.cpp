@@ -571,9 +571,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   if( m_pcEncCfg->m_useFastLCTU )
   {
 #if QTBTT_SPEED3
-    int QTBTTmode = (m_pcEncCfg->m_qtbttSpeedUp >= 5) ? 1 : 0;
-    QTBTTmode = (QTBTTmode << 2) | m_pcEncCfg->m_qtbttSpeedUpMode;
-    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, QTBTTmode, MergeSimpleFlag);
+    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, m_pcEncCfg->m_qtbttSpeedUpMode, MergeSimpleFlag);
 #else
     bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
     partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );

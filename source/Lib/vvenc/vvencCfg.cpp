@@ -2241,8 +2241,9 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
 #if QTBTT_SPEED3
-  c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp == 3) || (c->m_qtbttSpeedUp == 6) ? 1 : 0;
-  c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp == 4) || (c->m_qtbttSpeedUp == 7) ? 2 : c->m_qtbttSpeedUpMode;
+  c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp > 2) ? (c->m_qtbttSpeedUp - 2) : 0;
+  const int QTBTSMModeMap[] = { 0, 1, 3, 4, 5, 7 };
+  c->m_qtbttSpeedUpMode = QTBTSMModeMap[c->m_qtbttSpeedUpMode];
 #endif
 
   if( c->m_alf )
