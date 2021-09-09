@@ -622,6 +622,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
+#if 1//QTBTT_SPEED3
+  c->m_qtbttSpeedUpMode                        = 0;
+#endif 
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -2237,6 +2240,11 @@ static bool checkCfgParameter( vvenc_config *c )
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
 
+#if QTBTT_SPEED3
+  c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp == 3) || (c->m_qtbttSpeedUp == 6) ? 1 : 0;
+  c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp == 4) || (c->m_qtbttSpeedUp == 7) ? 2 : c->m_qtbttSpeedUpMode;
+#endif
+
   if( c->m_alf )
   {
     vvenc_confirmParameter( c, c->m_maxNumAlfAlternativesChroma < 1 || c->m_maxNumAlfAlternativesChroma > VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA, std::string( std::string( "The maximum number of ALF Chroma filter alternatives must be in the range (1-" ) + std::to_string( VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA ) + std::string( ", inclusive)" ) ).c_str() );
@@ -2765,7 +2773,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
+#if 1//QTBTT_SPEED3
+      c->m_qtbttSpeedUp                    = 5;
+#else
       c->m_qtbttSpeedUp                    = 3;
+#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -2812,7 +2824,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
+#if 1//QTBTT_SPEED3
+      c->m_qtbttSpeedUp                    = 5;
+#else
       c->m_qtbttSpeedUp                    = 3;
+#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
