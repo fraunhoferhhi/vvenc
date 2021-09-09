@@ -746,7 +746,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
 
 #if QTBTT_SPEED3
-      if (!cs.slice->isIntra() && (partitioner.chType == CH_L) && ((m_pcEncCfg->m_qtbttSpeedUpMode&3) == 3) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
+      if (!cs.slice->isIntra() && (partitioner.chType == CH_L) && ( m_pcEncCfg->m_qtbttSpeedUpMode & 2) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
       {
         int flagDbefore = (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo) ? 1 : 0;
         if (partitioner.currQtDepth == 0)
