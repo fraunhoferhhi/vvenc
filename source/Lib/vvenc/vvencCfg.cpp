@@ -622,6 +622,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
+#if 1//QTBTT_SPEED3
+  c->m_qtbttSpeedUpMode                        = 0;
+#endif 
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -2222,7 +2225,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
   vvenc_confirmParameter( c, c->m_BCW < 0 || c->m_BCW > 2,                     "BCW out of range [0..2]");
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
+#if QTBTT_SPEED3
+  vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
+#else
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 3,   "QtbttExtraFast out of range [0..3]");
+#endif
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
@@ -2232,6 +2239,12 @@ static bool checkCfgParameter( vvenc_config *c )
     const int lbm = std::max<int>( 7, log2( c->m_GOPSize ) );
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
+
+#if QTBTT_SPEED3
+  c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp > 2) ? (c->m_qtbttSpeedUp - 2) : 0;
+  const int QTBTSMModeMap[] = { 0, 1, 3, 4, 5, 7 };
+  c->m_qtbttSpeedUpMode = QTBTSMModeMap[c->m_qtbttSpeedUpMode];
+#endif
 
   if( c->m_alf )
   {
@@ -2761,7 +2774,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
+#if 1//QTBTT_SPEED3
+      c->m_qtbttSpeedUp                    = 5;
+#else
       c->m_qtbttSpeedUp                    = 3;
+#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -2808,7 +2825,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
+#if 1//QTBTT_SPEED3
+      c->m_qtbttSpeedUp                    = 5;
+#else
       c->m_qtbttSpeedUp                    = 3;
+#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;

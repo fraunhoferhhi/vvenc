@@ -696,6 +696,9 @@ typedef struct vvenc_config
 
   int                 m_quantThresholdVal;
   int                 m_qtbttSpeedUp;
+#if 1//QTBTT_SPEED3
+  int                 m_qtbttSpeedUpMode;
+#endif
 
   int                 m_fastLocalDualTreeMode;
 
