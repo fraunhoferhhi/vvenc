@@ -588,7 +588,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 #if QTBTT_SPEED3
   if (partitioner.currQtDepth == 0)
   {
-      m_MergeSimpleFlag = 0;
+    m_MergeSimpleFlag = 0;
   }
   m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
 #else
