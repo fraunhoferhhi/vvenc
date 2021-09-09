@@ -242,6 +242,10 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_CurrCtx = 0;
   if( encCfg.m_EDO )
     m_dbBuffer.create( chromaFormat, Area( 0, 0, uiMaxSize, uiMaxSize ), 0, 8 );
+
+#if QTBTT_SPEED3
+  m_MergeSimpleFlag = 0;
+#endif
 }
 
 
@@ -581,7 +585,15 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
   }
 
+#if QTBTT_SPEED3
+  if (partitioner.currQtDepth == 0)
+  {
+      m_MergeSimpleFlag = 0;
+  }
+  m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
+#else
   m_modeCtrl.initCULevel( partitioner, *tempCS );
+#endif
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
@@ -736,39 +748,16 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 #if QTBTT_SPEED3
       if (!cs.slice->isIntra()&&(partitioner.chType == CH_L) && ((m_pcEncCfg->m_qtbttSpeedUp == 5) || (m_pcEncCfg->m_qtbttSpeedUp == 7)) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
       {
-        int flagDbefore = 0;
-        const PartitioningStack& ps = partitioner.getPartStack();
-        const UnitArea& AreaCuMax = ps[0].parts[ps[0].idx];
-        CodedCUInfo& relatedCUMax = m_modeCtrl.getBlkInfo(AreaCuMax);
+        int flagDbefore = (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo) ? 1 : 0;
         if (partitioner.currQtDepth == 0)
         {
-          relatedCUMax.isMergeSimple = 0;
-        }
-        int usedNeighSET = relatedCUMax.isMergeSimple;
-
-        if (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo)
-        {
-          flagDbefore = 1;
-        }
-        int shift_used = partitioner.currQtDepth;
-        if (shift_used == 0)
-        {
-          usedNeighSET = flagDbefore;
+          m_MergeSimpleFlag = flagDbefore;
         }
         else
         {
-          if (shift_used == 1)
-          {
-            int storedData = usedNeighSET & 1;
-            usedNeighSET = flagDbefore << shift_used | storedData;
-          }
-          if (shift_used == 2)
-          {
-            int storedData = usedNeighSET & 3;
-            usedNeighSET = flagDbefore << shift_used | storedData;
-          }
+          int markFlag = (partitioner.currQtDepth == 1) ? 1 : 3;
+          m_MergeSimpleFlag = (flagDbefore << partitioner.currQtDepth) | (m_MergeSimpleFlag & markFlag);
         }
-        relatedCUMax.isMergeSimple = usedNeighSET;
       }
 #endif
     } //boundary

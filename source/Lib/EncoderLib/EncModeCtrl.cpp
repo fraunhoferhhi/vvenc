@@ -559,7 +559,11 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   }
 }
 
+#if QTBTT_SPEED3
+void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
+#else
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )
+#endif
 {
   // Min/max depth
   unsigned minDepth = 0;
@@ -567,15 +571,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   if( m_pcEncCfg->m_useFastLCTU )
   {
 #if QTBTT_SPEED3
-    bool MergeFlag = 0;
-    if (!cs.slice->isIntra() && ((m_pcEncCfg->m_qtbttSpeedUp == 5) || (m_pcEncCfg->m_qtbttSpeedUp == 7)))
-    {
-      const PartitioningStack& ps = partitioner.getPartStack();
-      const UnitArea& AreaCuMax = ps[0].parts[ps[0].idx];
-      CodedCUInfo& relatedCU = getBlkInfo(AreaCuMax);
-      MergeFlag = bool(relatedCU.isMergeSimple);
-    }
-    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, m_pcEncCfg->m_qtbttSpeedUp, MergeFlag);
+    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, m_pcEncCfg->m_qtbttSpeedUp, MergeSimpleFlag);
 #else
     bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
     partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
