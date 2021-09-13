@@ -276,11 +276,11 @@ bool IntraSearch::isValidIntraPredLuma(CodingUnit &cu, int luma_dirMode)
 
   if (ph->inGdrInterval) 
   {
-    int x = pu.Y().x;
+    int x = cu.lumaPos().x;
 
     // count num of recons on the top
     int virX           = ph->virtualBoundariesPosX[0];   
-    int numOfTopRecons = getNumTopRecons(pu, luma_dirMode, false);    
+    int numOfTopRecons = getNumTopRecons(cu, luma_dirMode, false);    
 
     // check if recon is out of boundary
     if (x < virX && virX < (x + numOfTopRecons)) 

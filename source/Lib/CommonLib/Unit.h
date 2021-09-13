@@ -321,8 +321,21 @@ struct InterPredictionData
   uint8_t     mvpNum  [NUM_REF_PIC_LIST_01];
   Mv          mvd     [NUM_REF_PIC_LIST_01][3];
   Mv          mv      [NUM_REF_PIC_LIST_01][3];
+#if GDR_ENABLED 
+  bool        mvSolid[NUM_REF_PIC_LIST_01];
+  bool        mvValid[NUM_REF_PIC_LIST_01];
+  bool        mvpSolid[NUM_REF_PIC_LIST_01];
+  MvpType     mvpType[NUM_REF_PIC_LIST_01];
+  Position    mvpPos[NUM_REF_PIC_LIST_01];
+#endif
   int16_t     refIdx  [NUM_REF_PIC_LIST_01];
   Mv          bv;     // block vector for IBC
+#if GDR_ENABLED
+  bool        mvAffiSolid[NUM_REF_PIC_LIST_01][3];
+  bool        mvAffiValid[NUM_REF_PIC_LIST_01][3];
+  MvpType     mvAffiType[NUM_REF_PIC_LIST_01][3];
+  Position    mvAffiPos[NUM_REF_PIC_LIST_01][3];
+#endif
 };
 
 

@@ -778,7 +778,7 @@ bool CodingStructure::isSubPuClean(CodingUnit &cu, const Mv *mv) const
 
   if (cu.affine)
   {
-    Position puPos = cu.lumaPos;
+    Position puPos = cu.lumaPos();
     Size subPuSize = Size(4, 4);
 
     int isProf = 1;    

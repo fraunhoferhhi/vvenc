@@ -444,7 +444,16 @@ typedef struct vvenc_config
   int                 m_IntraPeriod;                                                     // period of I-slice in frames  (random access period)
   int                 m_IntraPeriodSec;                                                  // period of I-slice in seconds (random access period)
   vvencDecodingRefreshType m_DecodingRefreshType;                                        // random access type
-  int                 m_GOPSize;                                                         // GOP size of hierarchical structure
+  int                 m_GOPSize;                                                          // GOP size of hierarchical structure
+
+#define  GDR_ENABLED 1 // for testing
+#if GDR_ENABLED 
+  bool                m_gdrEnabled;
+  int                 m_gdrPocStart;
+  int                 m_gdrPeriod;
+  int                 m_gdrInterval;  
+  bool                m_gdrNoHash;  
+#endif
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 

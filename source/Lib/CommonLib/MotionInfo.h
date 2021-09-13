@@ -57,12 +57,43 @@ namespace vvenc {
 // ====================================================================================================================
 // Type definition
 // ====================================================================================================================
+#if GDR_ENABLED
+  enum MvpType
+  {
+    MVP_LEFT,
+    MVP_ABOVE,
+    MVP_ABOVE_RIGHT,
+    MVP_BELOW_LEFT,
+    MVP_ABOVE_LEFT,
+
+    MVP_BELOW_RIGHT,
+    MVP_COMPOSITE,
+
+    MVP_TMVP_C0,
+    MVP_TMVP_C1,
+    MVP_HMVP,
+    MVP_ZERO,
+
+    AFFINE_INHERIT,
+    AFFINE_INHERIT_LB_RB,
+
+    NUM_MVPTYPES
+  };
+#endif
 
 /// parameters for AMVP
 struct AMVPInfo
 {
   Mv       mvCand[ AMVP_MAX_NUM_CANDS_MEM ];  ///< array of motion vector predictor candidates
   unsigned numCand;                       ///< number of motion vector predictor candidates
+#if GDR_ENABLED
+  bool     allCandSolidInAbove;
+  bool     mvSolid[AMVP_MAX_NUM_CANDS_MEM];
+  bool     mvValid[AMVP_MAX_NUM_CANDS_MEM];
+
+  Position mvPos[AMVP_MAX_NUM_CANDS_MEM];
+  MvpType  mvType[AMVP_MAX_NUM_CANDS_MEM];
+#endif
 };
 
 struct AffineAMVPInfo
@@ -71,6 +102,25 @@ struct AffineAMVPInfo
   Mv       mvCandRT[ AMVP_MAX_NUM_CANDS_MEM ];  ///< array of affine motion vector predictor candidates for right-top corner
   Mv       mvCandLB[ AMVP_MAX_NUM_CANDS_MEM ];  ///< array of affine motion vector predictor candidates for left-bottom corner
   unsigned numCand;                       ///< number of motion vector predictor candidates
+#if GDR_ENABLED
+  bool     allCandSolidInAbove;  
+
+  bool     mvSolidLT[AMVP_MAX_NUM_CANDS_MEM];
+  bool     mvSolidRT[AMVP_MAX_NUM_CANDS_MEM];
+  bool     mvSolidLB[AMVP_MAX_NUM_CANDS_MEM];
+
+  bool     mvValidLT[AMVP_MAX_NUM_CANDS_MEM];
+  bool     mvValidRT[AMVP_MAX_NUM_CANDS_MEM];
+  bool     mvValidLB[AMVP_MAX_NUM_CANDS_MEM];
+
+  MvpType  mvTypeLT[AMVP_MAX_NUM_CANDS_MEM];
+  MvpType  mvTypeRT[AMVP_MAX_NUM_CANDS_MEM];
+  MvpType  mvTypeLB[AMVP_MAX_NUM_CANDS_MEM];
+
+  Position mvPosLT[AMVP_MAX_NUM_CANDS_MEM];
+  Position mvPosRT[AMVP_MAX_NUM_CANDS_MEM];
+  Position mvPosLB[AMVP_MAX_NUM_CANDS_MEM];
+#endif
 };
 
 // ====================================================================================================================
@@ -117,6 +167,10 @@ struct MotionInfo
   char     interDir = 0;
   bool     isIBCmot = false;
   Mv       bv;
+#if GDR_ENABLED
+  bool      sourceClean;  // source Position is clean/dirty
+  Position  sourcePos;    // source Position of Mv
+#endif
 
   bool operator==( const MotionInfo& mi ) const
   {
@@ -157,6 +211,11 @@ struct HPMVInfo
   uint8_t  BcwIdx   = 0;
   bool     useAltHpelIf = false;
   Mv       bv;
+
+#if GDR_ENABLED
+  bool      sourceClean;  // source Position is clean/dirty
+  Position  sourcePos;    // source Position of Mv
+#endif
 
   HPMVInfo() = default;
   HPMVInfo( const MotionInfo& mi, uint8_t _bcwIdx, bool _useAltHpelIf )

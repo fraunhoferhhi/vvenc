@@ -357,6 +357,13 @@ protected:
 public:
   ComprCUCtx*           comprCUCtx;
 
+#if GDR_ENABLED
+  bool                  forceIntraMode;
+  bool                  forceVerSplitOnly;
+  bool                  forceRemoveTTV;
+  bool                  forceRemoveQT;
+#endif
+
   ~EncModeCtrl    () { destroy(); }
 
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );

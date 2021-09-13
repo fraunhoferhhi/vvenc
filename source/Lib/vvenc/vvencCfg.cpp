@@ -717,8 +717,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_intraQPOffset = 0;
     c->m_GOPSize = 1;
 
+    char sliceType = c->m_GOPList[0].m_sliceType;
     c->m_GOPList[0].m_POC = 1;
-    c->m_GOPList[0].m_sliceType = 'B';
     c->m_GOPList[0].m_QPOffset = 0;
     c->m_GOPList[0].m_QPOffsetModelOffset = 0;
     c->m_GOPList[0].m_QPOffsetModelScale = 0;
@@ -740,12 +740,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_GOPList[0].m_deltaRefPics[0][2] = 3;
     c->m_GOPList[0].m_deltaRefPics[0][3] = 4;
 
-    c->m_GOPList[0].m_numRefPicsActive[1] = 4;
-    c->m_GOPList[0].m_numRefPics[1] = 4;
-    c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
-    c->m_GOPList[0].m_deltaRefPics[1][1] = 2;
-    c->m_GOPList[0].m_deltaRefPics[1][2] = 3;
-    c->m_GOPList[0].m_deltaRefPics[1][3] = 4;
+    if (sliceType == 'B')
+    {
+      c->m_GOPList[0].m_numRefPicsActive[1] = 4;
+      c->m_GOPList[0].m_numRefPics[1] = 4;
+      c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
+      c->m_GOPList[0].m_deltaRefPics[1][1] = 2;
+      c->m_GOPList[0].m_deltaRefPics[1][2] = 3;
+      c->m_GOPList[0].m_deltaRefPics[1][3] = 4;
+    }
 
     c->m_BDOF  = false;
     c->m_DMVR = false;

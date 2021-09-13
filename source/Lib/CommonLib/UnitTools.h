@@ -156,7 +156,11 @@ namespace CU
   bool     getColocatedMVP              (const CodingUnit& cu, const RefPicList refPicList, const Position& pos, Mv& rcMv, const int refIdx, bool sbFlag = false);
   void     fillMvpCand                  (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AMVPInfo &amvpInfo );
   bool     addMVPCandUnscaled           (const CodingUnit& cu, const RefPicList refPicList, const int iRefIdx, const Position& pos, const MvpDir dir, AMVPInfo &amvpInfo);
+#if GDR_ENABLED
+  bool     addMergeHMVPCand             (const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo &miLeft, const bool isAvailableB1, const MotionInfo &miAbove, const bool ibcFlag, const bool isGt4x4, const CodingUnit &cu, bool &allCandSolidInAbove);
+#else
   bool     addMergeHMVPCand             (const CodingStructure &cs, MergeCtx& mrgCtx, const int& mrgCandIdx, const uint32_t maxNumMergeCandMin1, int &cnt, const bool isAvailableA1, const MotionInfo &miLeft, const bool isAvailableB1, const MotionInfo &miAbove, const bool ibcFlag, const bool isGt4x4);
+#endif
   void     addAMVPHMVPCand              (const CodingUnit& cu, const RefPicList refPicList, const int currRefPOC, AMVPInfo &info);
   bool     isBipredRestriction          (const CodingUnit& cu);
   void     spanMotionInfo               (      CodingUnit& cu, const MergeCtx &mrgCtx = MergeCtx() );
@@ -172,6 +176,9 @@ namespace CU
   void     getAffineMergeCand           (      CodingUnit& cu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx = -1);
   void     setAllAffineMvField          (      CodingUnit& cu, MvField *mvField, RefPicList eRefList);
   void     setAllAffineMv               (      CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs = false);
+#if GDR_ENABLED
+  void     xInheritedAffineMv           (const CodingUnit& cu, const CodingUnit* cuNeighbour, RefPicList refPicList, Mv rcMv[3], bool rcMvSolid[3], MvpType rcMvType[3], Position rcMvPos[3]);
+#endif
   void     xInheritedAffineMv           (const CodingUnit& cu, const CodingUnit* cuNeighbour, RefPicList refPicList, Mv rcMv[3]);
   void     fillAffineMvpCand            (      CodingUnit& cu, const RefPicList refPicList, const int refIdx, AffineAMVPInfo &affiAMVPInfo);
   bool     addAffineMVPCandUnscaled     (const CodingUnit& cu, const RefPicList refPicList, const int refIdx, const Position& pos, const MvpDir dir, AffineAMVPInfo &affiAmvpInfo);

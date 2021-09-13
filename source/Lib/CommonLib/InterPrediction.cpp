@@ -1524,7 +1524,11 @@ bool InterPredInterpolation::isSubblockVectorSpreadOverLimit(int a, int b, int c
   return false;
 }
 
+#if GDR_ENABLED
+bool InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv* _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng, const RefPicList refPicList)
+#else
 void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const CodingUnit& cu, const Picture* refPic, const Mv* _mv, PelUnitBuf& dstPic, const bool bi, const ClpRng& clpRng, const RefPicList refPicList)
+#endif
 {
   const ChromaFormat chFmt = cu.chromaFormat;
   int iScaleX = getComponentScaleX(compID, chFmt);
@@ -1533,6 +1537,13 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   Mv mvLT = _mv[0];
   Mv mvRT = _mv[1];
   Mv mvLB = _mv[2];
+#if GDR_ENABLED  
+  bool allOk = true;
+  const CodingStructure &cs = *cu.cs;
+  const bool isEncodeGdrClean = cs.sps->GDR && cs.pcv->isEncoder && ((cs.picHeader->inGdrInterval && cs.isClean(cu.Y().topRight(), CH_L)) || (cs.picHeader->numVerVirtualBoundaries == 0));
+  const int pux = cu.lx();
+  const int puy = cu.ly();
+#endif
 
   // get affine sub-block width and height
   const int width = cu.Y().width;
@@ -1769,6 +1780,16 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
             iMvScaleTmpVer = std::min<int>(iVerMax, std::max<int>(iVerMin, iMvScaleTmpVer));
           }
         }
+#if GDR_ENABLED
+        if (isEncodeGdrClean) 
+        {
+          Position subPuPos = Position(pux + w + blockWidth, puy + h + blockHeight);
+          Mv subPuMv = Mv(iMvScaleTmpHor, iMvScaleTmpVer);
+          bool puClean = cs.isClean(subPuPos, subPuMv, refPic);
+
+          allOk = allOk && puClean;
+        }
+#endif
       }
       else
       {
@@ -1790,6 +1811,17 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
         }
         iMvScaleTmpHor = curMv.hor;
         iMvScaleTmpVer = curMv.ver;
+
+#if GDR_ENABLED
+        if (isEncodeGdrClean) 
+        {
+          Position subPuPos = Position(pux + (w + blockWidth) * 2, puy + (h + blockHeight) * 2);
+          Mv subPuMv = Mv(iMvScaleTmpHor, iMvScaleTmpVer);
+          bool puClean = cs.isClean(subPuPos, subPuMv, refPic);
+
+          allOk = allOk && puClean;
+        }
+#endif
       }
 
       // get the MV in high precision
@@ -1889,6 +1921,9 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     }
   }
 
+#if GDR_ENABLED
+  return allOk;
+#endif
 }
 
 void InterPrediction::xFillIBCBuffer(CodingUnit& cu)

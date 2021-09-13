@@ -636,6 +636,100 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
+#if GDR_ENABLED 
+  if (m_pcEncCfg->m_gdrEnabled)
+  {
+    bool isInGdrInterval = slice.picHeader->inGdrInterval;
+
+    // 1.0 applicable to inter picture only  
+    if (isInGdrInterval)
+    {
+      int gdrPocStart = m_pcEncCfg->m_gdrPocStart;
+      int gdrInterval = m_pcEncCfg->m_gdrInterval;
+
+      int picWidth = slice.pps->picWidthInLumaSamples;
+      int m1, m2, n1;
+
+      int curPoc = slice.poc;
+      int gdrPoc = (curPoc - gdrPocStart) % gdrInterval;
+
+      int begGdrX = 0;
+      int endGdrX = 0;
+
+      double dd = (picWidth / (double)gdrInterval);
+      int mm = (int)((picWidth / (double)gdrInterval) + 0.49999);
+      m1 = ((mm + 7) >> 3) << 3;
+      m2 = ((mm + 0) >> 3) << 3;
+
+      if (dd > mm && m1 == m2)
+      {
+        m1 = m1 + 8;
+      }
+
+      n1 = (picWidth - m2 * gdrInterval) / 8;
+
+      if (gdrPoc < n1)
+      {
+        begGdrX = m1 * gdrPoc;
+        endGdrX = begGdrX + m1;
+      }
+      else
+      {
+        begGdrX = m1 * n1 + m2 * (gdrPoc - n1);
+        endGdrX = begGdrX + m2;
+        if (picWidth <= endGdrX)
+        {          
+          begGdrX = picWidth;
+          endGdrX = picWidth;
+        }
+      }
+
+      bool isInRefreshArea = tempCS->withinRefresh(begGdrX, endGdrX);
+
+      if (isInRefreshArea)
+      {
+        m_modeCtrl.forceIntraMode = true;
+        partitioner.modeType = MODE_TYPE_INTRA;
+      }
+      else if (tempCS->containRefresh(begGdrX, endGdrX) || tempCS->overlapRefresh(begGdrX, endGdrX))
+      {
+        // 1.3.1 enable only vertical splits (QT, BT_V, TT_V)                  
+        m_modeCtrl.forceVerSplitOnly = true;
+
+        // 1.3.2 remove TT_V if it does not satisfy the condition
+        if (tempCS->refreshCrossTTV(begGdrX, endGdrX))
+        {
+          m_modeCtrl.forceRemoveTTV = true;
+        }
+      }
+
+      if (tempCS->area.lwidth() != tempCS->area.lheight())
+      {
+        m_modeCtrl.forceRemoveQT = true;
+      }
+
+#if 0
+      if (!m_modeCtrl->anyPredModeLeft())
+      {
+        m_modeCtrl->forceRemoveDontSplit();
+      }
+#endif
+
+      bool checkIbc = m_pcEncCfg->m_IBCMode && bestCS->picture->useScIBC && (partitioner.chType == CH_L);
+      if ((m_pcEncCfg->m_IBCFastMethod>3) && (tempCS->area.lwidth() * tempCS->area.lheight()) > (16 * 16))
+      {
+        checkIbc = false;
+      }
+
+      if (isInRefreshArea && !checkIbc && (tempCS->area.lwidth() == 4 || tempCS->area.lheight() == 4))
+      {
+        m_modeCtrl.finishCULevel(partitioner);
+        return;
+      }
+    }
+  }
+#endif
+
   m_CurrCtx->start = m_CABACEstimator->getCtx();
 
   m_cuChromaQpOffsetIdxPlus1 = 0;

@@ -1309,6 +1309,18 @@ vvencNalUnitType EncGOP::xGetNalUnitType( const Slice* slice ) const
 {
   const GOPEntry& gopEntry = *slice->pic->gopEntry;
 
+#if GDR_ENABLED
+  if (m_pcEncCfg->m_gdrEnabled && m_pcEncCfg->m_DecodingRefreshType == 3 && (gopEntry.m_POC >= m_pcEncCfg->m_gdrPocStart))
+  {
+    int m = gopEntry.m_POC - m_pcEncCfg->m_gdrPocStart;
+    int n = m_pcEncCfg->m_gdrPeriod;
+    if (m % n == 0)
+    {
+      return VVENC_NAL_UNIT_CODED_SLICE_GDR;
+    }
+  }
+#endif
+
   if( gopEntry.m_POC == 0 && m_pcEncCfg->m_DecodingRefreshType != VVENC_DRT_IDR2 )
   {
     return VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP;

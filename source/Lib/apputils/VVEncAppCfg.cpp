@@ -670,6 +670,17 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("PackedInput",                                     m_packedYUVInput,                                    "Enable 10-bit packed YUV input data ( pack 4 samples( 8-byte) into 5-bytes consecutively.")
     ;
 
+#if GDR_ENABLED
+    opts.setSubSection("Gradual Decoder Refresh");
+    opts.addOptions()
+    ("GdrEnabled",                                      c->m_gdrEnabled,                                     "GDR enabled")
+    ("GdrPocStart",                                     c->m_gdrPocStart,                                    "GDR poc start")
+    ("GdrPeriod",                                       c->m_gdrPeriod,                                      "Number of frames between GDR picture to the next GDR picture")
+    ("GdrInterval",                                     c->m_gdrInterval,                                    "Number of frames from GDR picture to the recovery point picture")  
+    ("GdrNoHash",                                       c->m_gdrNoHash,                                      "Do not generate decode picture hash SEI messages for GDR and recovering pictures")  
+    ;
+#endif
+
     opts.setSubSection("Profile, Level, Tier");
     opts.addOptions()
     ("SubProfile",                                      c->m_subProfile,                                     "Sub-profile idc")

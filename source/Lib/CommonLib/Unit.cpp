@@ -383,6 +383,10 @@ void CodingUnit::initPuData()
     {
       mvd[i][j].setZero();
       mv [i][j].setZero();
+#if GDR_ENABLED
+      mvAffiSolid[i][j] = true;
+      mvAffiValid[i][j] = true;
+#endif
     }
   }
 }
