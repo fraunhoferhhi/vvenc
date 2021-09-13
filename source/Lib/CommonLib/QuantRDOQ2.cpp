@@ -622,9 +622,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
     useThres = thres / ( defaultQuantScale << 2 );
   }
 
-#if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
-  const bool scanFirstSimd = !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 && read_x86_extension_flags() > SCALAR;
-#endif
+  const bool scanFirstBlk = !bUseScalingList && log2CGSize == 4 && cctx.log2CGWidth() == 2;
 
   int subSetId = iScanPos >> log2CGSize;
   for( ; subSetId >= 0; subSetId-- )
@@ -636,10 +634,10 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
 
     int iScanPosinCG = iScanPos & ( iCGSize - 1 );
     if( iLastScanPos < 0 )
-    { 
+    {
 #if ENABLE_SIMD_OPT_QUANT && defined( TARGET_SIMD_X86 )
       // if more than one 4x4 coding subblock is available, use SIMD to find first subblock with coefficient larger than threshold
-      if( scanFirstSimd )
+      if( scanFirstBlk && iScanPos >= 16 && read_x86_extension_flags() > SCALAR )
       {
         // move the pointer to the beginning of the current subblock
         const int firstTestPos  = iScanPos - iScanPosinCG;
@@ -676,7 +674,7 @@ int QuantRDOQ2::xRateDistOptQuantFast( TransformUnit &tu, const ComponentID &com
       }
       else
 #endif
-      if( !bUseScalingList && iScanPos >= 16 && log2CGSize == 4 && cctx.log2CGWidth() == 2 )
+      if( scanFirstBlk && iScanPos >= 16 )
       {
         bool allSmaller = true;
 

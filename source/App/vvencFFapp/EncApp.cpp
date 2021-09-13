@@ -114,7 +114,7 @@ int EncApp::encode()
   vvenc_config& vvencCfg = m_cEncAppCfg;
   if( m_cEncAppCfg.m_decode )
   {
-    return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str() );
+    return vvenc_decode_bitstream( m_cEncAppCfg.m_bitstreamFileName.c_str(), m_cEncAppCfg.m_traceFile, m_cEncAppCfg.m_traceRule );
   }
 
   // initialize encoder lib
@@ -171,7 +171,8 @@ int EncApp::encode()
   // create sufficient memory for output data
   vvencAccessUnit au;
   vvenc_accessUnit_default( &au );
-  vvenc_accessUnit_alloc_payload( &au, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
+  const int auSizeScale = vvencCfg.m_internChromaFormat <= VVENC_CHROMA_420 ? 2 : 3;
+  vvenc_accessUnit_alloc_payload( &au, auSizeScale * vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight + 1024 );
 
   // main loop
   int tempRate   = vvencCfg.m_FrameRate;

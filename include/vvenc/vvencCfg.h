@@ -180,10 +180,11 @@ typedef enum
 /// supported IDR types
 typedef enum
 {
-  VVENC_DRT_NONE               = 0,
-  VVENC_DRT_CRA                = 1,
-  VVENC_DRT_IDR                = 2,
-  VVENC_DRT_RECOVERY_POINT_SEI = 3
+  VVENC_DRT_NONE = 0,
+  VVENC_DRT_CRA,
+  VVENC_DRT_IDR,
+  VVENC_DRT_RECOVERY_POINT_SEI,
+  VVENC_DRT_IDR2,
 }vvencDecodingRefreshType;
 
 typedef enum
@@ -557,7 +558,7 @@ typedef struct vvenc_config
   bool                m_fastQtBtEnc;
   bool                m_contentBasedFastQtbt;
   int                 m_fastInterSearchMode;                                             // Parameter that controls fast encoder settings
-  bool                m_bUseEarlyCU;                                                     // flag for using Early CU setting
+  int                 m_useEarlyCU;                                                      // flag for using Early CU setting
   bool                m_useFastDecisionForMerge;                                         // flag for using Fast Decision Merge RD-Cost
 
   bool                m_bDisableIntraCUsInInterSlices;                                   // Flag for disabling intra predicted CUs in inter slices.
@@ -695,6 +696,9 @@ typedef struct vvenc_config
 
   int                 m_quantThresholdVal;
   int                 m_qtbttSpeedUp;
+#if 1//QTBTT_SPEED3
+  int                 m_qtbttSpeedUpMode;
+#endif
 
   int                 m_fastLocalDualTreeMode;
 
@@ -720,6 +724,8 @@ typedef struct vvenc_config
   char                m_summaryOutFilename[VVENC_MAX_STRING_LEN];                        // filename to use for producing summary output file.
   char                m_summaryPicFilenameBase[VVENC_MAX_STRING_LEN];                    // Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
   unsigned            m_summaryVerboseness;                                              // Specifies the level of the verboseness of the text output.
+  int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
+
 }vvenc_config;
 
 VVENC_DECL void vvenc_config_default( vvenc_config *cfg );

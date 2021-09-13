@@ -242,6 +242,10 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   m_CurrCtx = 0;
   if( encCfg.m_EDO )
     m_dbBuffer.create( chromaFormat, Area( 0, 0, uiMaxSize, uiMaxSize ), 0, 8 );
+
+#if QTBTT_SPEED3
+  m_MergeSimpleFlag = 0;
+#endif
 }
 
 
@@ -581,7 +585,15 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
   }
 
+#if QTBTT_SPEED3
+  if (partitioner.currQtDepth == 0)
+  {
+    m_MergeSimpleFlag = 0;
+  }
+  m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
+#else
   m_modeCtrl.initCULevel( partitioner, *tempCS );
+#endif
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
@@ -732,6 +744,22 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         m_cInterSearch.loadGlobalUniMvs( lumaArea, *pps.pcv );
       }
+
+#if QTBTT_SPEED3
+      if (!cs.slice->isIntra() && (partitioner.chType == CH_L) && ( m_pcEncCfg->m_qtbttSpeedUpMode & 2) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
+      {
+        int flagDbefore = (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo) ? 1 : 0;
+        if (partitioner.currQtDepth == 0)
+        {
+          m_MergeSimpleFlag = flagDbefore;
+        }
+        else
+        {
+          int markFlag = (partitioner.currQtDepth == 1) ? 1 : 3;
+          m_MergeSimpleFlag = (flagDbefore << partitioner.currQtDepth) | (m_MergeSimpleFlag & markFlag);
+        }
+      }
+#endif
     } //boundary
 
     //////////////////////////////////////////////////////////////////////////
@@ -3263,7 +3291,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   }
 
   ComponentID compStr = ( CU::isSepTree(*cu) && !isLuma( partitioner.chType ) ) ? COMP_Cb : COMP_Y;
-  ComponentID compEnd = ( CU::isSepTree(*cu) &&  isLuma( partitioner.chType ) ) ? COMP_Y : COMP_Cr;
+  ComponentID compEnd = (( CU::isSepTree(*cu) && isLuma( partitioner.chType )) || cu->chromaFormat == VVENC_CHROMA_400 ) ? COMP_Y : COMP_Cr;
   const UnitArea currCsArea = clipArea( CS::getArea( cs, cs.area, partitioner.chType, partitioner.treeType ), *cs.picture );
 
   PelStorage&  picDbBuf = m_dbBuffer; //th we could reduce the buffer size and do some relocate
@@ -3362,7 +3390,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   CHECK( CU::isSepTree(*cu) && !cu->Y().valid() && partitioner.chType == CH_L, "xxx" );
 
   if( cu->Y() .valid() ) m_cLoopFilter.setOrigin( CH_L, cu->lumaPos() );
-  if( cu->Cb().valid() ) m_cLoopFilter.setOrigin( CH_C, cu->chromaPos() );
+  if( cu->chromaFormat != VVENC_CHROMA_400 && cu->Cb().valid() ) m_cLoopFilter.setOrigin( CH_C, cu->chromaPos() );
 
   //deblock
   if( leftEdgeAvai )

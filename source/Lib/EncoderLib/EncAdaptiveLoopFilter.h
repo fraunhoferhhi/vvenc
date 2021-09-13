@@ -415,14 +415,15 @@ public:
   int  getApsIdStart                () { return m_apsIdStart; }
   void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
 
-  void performCCALF                 ( Picture& pic, CodingStructure& cs );
+  void copyCTUForCCALF     ( CodingStructure& cs, int ctuPosX, int ctuPosY );
+  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
+  void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
   void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
   void alfReconstructor             ( CodingStructure& cs );
   void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
-  void resetFrameStats              ();
-
+  void resetFrameStats              ( bool ccAlfEnabled );
 private:
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
@@ -437,12 +438,11 @@ private:
   void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
   template < bool clipToBdry >
   void   calcLinCovariance       ( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
-  void   deriveStatsForCcAlfFiltering(const PelUnitBuf &orgYuv, const PelUnitBuf &recYuv, const int compIdx,
-                                      const int maskStride, const uint8_t filterIdc, CodingStructure &cs);
-  void   getBlkStatsCcAlf        ( AlfCovariance &alfCovariance, const AlfFilterShape &shape, const PelUnitBuf &orgYuv,
+  void   getBlkStatsCcAlf        ( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const PelUnitBuf& orgYuv,
                                    const PelUnitBuf &recYuv, const UnitArea &areaDst, const UnitArea &area,
                                    const ComponentID compID, const int yPos);
-  void   calcCovarianceCcAlf     ( int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][1], const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance);
+  void   calcCovarianceCcAlf     ( Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF], const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance);
+  void   calcCovariance4CcAlf    ( Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const int N, const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance);
   void   mergeClasses            ( const AlfFilterShape& alfShape, AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], const int numClasses, short filterIndices[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES]);
 
 
