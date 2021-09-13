@@ -757,7 +757,8 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   // fill encoder parameter list
   int idx = 0;
   const std::vector<int> base = slice.sliceMap.ctuAddrInSlice;
-  auto ctuIter = ( slice.pps->numTileCols * slice.pps->numTileRows > 1 ) ? CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, slice.sliceMap.ctuAddrInSlice ): CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
+//  auto ctuIter = ( slice.pps->numTileCols * slice.pps->numTileRows > 1 ) ? CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, slice.sliceMap.ctuAddrInSlice ): CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
+  auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
   for( auto ctuPos : ctuIter )
   {
     ctuEncParams[ idx ].pic       = pic;
@@ -826,8 +827,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
-  const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
-  
+//  const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
+  const int tileBDcol            = pcv.widthInCtus;
+
   // process ctu's line wise from left to right
   if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;

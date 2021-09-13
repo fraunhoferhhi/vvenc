@@ -2824,6 +2824,8 @@ static bool checkCfgParameter( vvenc_config *c )
     c->m_numTileCols = pps.numTileCols;
     c->m_numTileRows = pps.numTileRows;
 
+    vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
+
     // rectangular slices
     if( !c->m_rasterSliceFlag )
     {
