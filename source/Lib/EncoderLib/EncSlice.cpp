@@ -827,9 +827,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
-//  const int tileBDcol            = cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuPosX]+1];
-  const int tileBDcol            = pcv.widthInCtus;
-
   // process ctu's line wise from left to right
   if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;
@@ -840,9 +837,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case CTU_ENCODE:
       {
         // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0                            && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
+        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
+        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
           return false;
 
         if( checkReadyState )
@@ -934,7 +931,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // ensure vertical loop filter of neighbor ctu's will not modify current residual
         // check top, top-right and right ctu
         // (top, top-right checked implicitly due to ordering check above)
-        if( ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
+        if( ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr + 1 ] <= RESHAPE_LF_VER )
           return false;
 
         if( checkReadyState )
@@ -958,19 +955,19 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case SAO_FILTER:
       {
         // general wpp conditions, top and top-right ctu have to be filtered
-        if( ctuPosY > 0                            && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
+        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= SAO_FILTER )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
+        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= SAO_FILTER )
           return false;
 
         // ensure loop filter of neighbor ctu's will not modify current residual
         // sao processing dependents on +1 pixel to each side
         // due to wpp condition above, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < tileBDcol                                   && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
+        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= LF_HOR )
           return false;
-        if(                            ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
+        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= LF_HOR )
           return false;
-        if( ctuPosX + 1 < tileBDcol && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
+        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= LF_HOR )
           return false;
 
         if( checkReadyState )
@@ -1003,7 +1000,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           const int xR       = ( ctuPosX+1 == pcv.widthInCtus ) ? ( x+width+fltSize ) : ( x+width );
 
           if( ctuPosX == 0 )                  recoBuf.extendBorderPelLft( y, height, fltSize );
-          if( ctuPosX+1 == tileBDcol )  recoBuf.extendBorderPelRgt( y, height, fltSize );
+          if( ctuPosX+1 == pcv.widthInCtus )  recoBuf.extendBorderPelRgt( y, height, fltSize );
           if( ctuPosY == 0 )                  recoBuf.extendBorderPelTop( xL, xR-xL, fltSize );
           if( ctuPosY+1 == pcv.heightInCtus ) recoBuf.extendBorderPelBot( xL, xR-xL, fltSize );
         }
@@ -1018,11 +1015,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // ensure all surrounding ctu's are filtered (ALF will use pixels of adjacent CTU's)
         // due to wpp condition above in SAO_FILTER, only right, bottom and bottom-right ctu have to be checked
-        if( ctuPosX + 1 < tileBDcol                                   && processStates[ ctuRsAddr + 1             ] <= SAO_FILTER )
+        if( ctuPosX + 1 < pcv.widthInCtus                                   && processStates[ ctuRsAddr + 1             ] <= SAO_FILTER )
           return false;
-        if(                            ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= SAO_FILTER )
+        if(                                  ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr     + ctuStride ] <= SAO_FILTER )
           return false;
-        if( ctuPosX + 1 < tileBDcol && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= SAO_FILTER )
+        if( ctuPosX + 1 < pcv.widthInCtus && ctuPosY + 1 < pcv.heightInCtus && processStates[ ctuRsAddr + 1 + ctuStride ] <= SAO_FILTER )
           return false;
 
         if( checkReadyState )
@@ -1085,9 +1082,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           return false;
 
         // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0                            && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
+        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < tileBDcol && processStates[ ctuRsAddr - ctuStride + 1 ] <= ALF_RECONSTRUCT )
+        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= ALF_RECONSTRUCT )
           return false;
 
         if( checkReadyState )
