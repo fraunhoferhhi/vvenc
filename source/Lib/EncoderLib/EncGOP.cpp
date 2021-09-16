@@ -1791,7 +1791,11 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
               itNext++;
             }
           }
-          if (it->refreshParameters) encRCSeq->qpCorrection[frameLevel] = encRCSeq->actualBitCnt[frameLevel] = encRCSeq->targetBitCnt[frameLevel] = 0;
+          if (it->refreshParameters)
+          {
+            encRCSeq->qpCorrection[frameLevel] = ((it->poc == 0) && (d < it->numBits) ? std::max (-1.0 * visAct / double (1 << (encRCSeq->bitDepth - 3)), 1.0 - it->numBits / d) : 0.0);
+            encRCSeq->actualBitCnt[frameLevel] = encRCSeq->targetBitCnt[frameLevel] = 0;
+          }
           CHECK (slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7");
 
           // try to hit target rate more aggressively in last coded frames, lambda/QP clipping below will ensure smooth value change

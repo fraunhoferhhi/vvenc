@@ -378,7 +378,7 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_QP /*base QP*/  = (m_cEncCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_cEncCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0))));
 
     // restore the settings
-    if (m_cBckCfg.m_usePerceptQPA && (m_cBckCfg.m_QP <= MAX_QP_PERCEPT_QPA))
+    if (m_cBckCfg.m_usePerceptQPA && (m_cBckCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_cBckCfg.m_framesToBeEncoded == 1))
     {
       m_cBckCfg.m_CTUSize       = cs;
     }
@@ -1044,7 +1044,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
 {
   bool bUseDQP = m_cEncCfg.m_cuQpDeltaSubdiv > 0;
   bUseDQP |= m_cEncCfg.m_lumaLevelToDeltaQPEnabled;
-  bUseDQP |= m_cEncCfg.m_usePerceptQPA && (m_cEncCfg.m_QP <= MAX_QP_PERCEPT_QPA);
+  bUseDQP |= m_cEncCfg.m_usePerceptQPA && (m_cEncCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_cEncCfg.m_framesToBeEncoded == 1);
 
   if (m_cEncCfg.m_costMode==VVENC_COST_SEQUENCE_LEVEL_LOSSLESS || m_cEncCfg.m_costMode==VVENC_COST_LOSSLESS_CODING)
   {
