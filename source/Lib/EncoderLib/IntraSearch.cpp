@@ -471,7 +471,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   // after this point, don't use numModesForFullRD
   if( m_pcEncCfg->m_usePbIntraFast && !cs.slice->isIntra() && RdModeList.size() < numModesAvailable && !cs.slice->disableSATDForRd )
   {
-    double pbintraRatio = PBINTRA_RATIO;
+    double pbintraRatio = m_pcEncCfg->m_usePbIntraFast == 2 && ( cs.area.lwidth() >= 8 && cs.area.lheight() >= 8 ) ? 1.3 : PBINTRA_RATIO;
+
     int maxSize = -1;
     ModeInfo bestMipMode;
     int bestMipIdx = -1;

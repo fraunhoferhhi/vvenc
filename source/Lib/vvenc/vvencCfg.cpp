@@ -478,7 +478,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_JointCbCrMode                           = false;
   c->m_cabacInitPresent                        = -1;
   c->m_useFastLCTU                             = false;
-  c->m_usePbIntraFast                          = false;
+  c->m_usePbIntraFast                          = 0;
   c->m_useFastMrg                              = 0;
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
@@ -2831,7 +2831,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_qtbttSpeedUp                    = 3;
 #endif
       c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
@@ -2877,7 +2877,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
       c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
@@ -2936,7 +2936,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
       c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;

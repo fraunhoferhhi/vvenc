@@ -552,7 +552,7 @@ typedef struct vvenc_config
   bool                m_JointCbCrMode;
   int                 m_cabacInitPresent;
   bool                m_useFastLCTU;
-  bool                m_usePbIntraFast;
+  int                 m_usePbIntraFast;
   int                 m_useFastMrg;
   int                 m_useAMaxBT;
   bool                m_fastQtBtEnc;
