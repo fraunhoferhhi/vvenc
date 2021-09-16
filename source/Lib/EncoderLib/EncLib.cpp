@@ -385,6 +385,12 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_vvencMCTF.MCTF  = mctf;
     m_cBckCfg.m_IBCMode         = ibcMode;
 
+    // clear MaxCuDQPSubdiv
+    if (m_cBckCfg.m_CTUSize < 128 && (m_cBckCfg.m_PadSourceWidth > 1024 || m_cBckCfg.m_PadSourceHeight > 640))
+    {
+      m_cBckCfg.m_cuQpDeltaSubdiv = 0;
+    }
+
     std::swap( const_cast<VVEncCfg&>(m_cEncCfg), m_cBckCfg );
   }
   else // estimate near-optimal base QP for PPS in second RC pass
