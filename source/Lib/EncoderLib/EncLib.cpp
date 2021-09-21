@@ -386,7 +386,7 @@ void EncLib::xSetRCEncCfg( int pass )
     m_cBckCfg.m_IBCMode         = ibcMode;
 
     // clear MaxCuDQPSubdiv
-    if( m_cBckCfg.m_CTUSize < 128 )
+    if (m_cBckCfg.m_CTUSize < 128 && (m_cBckCfg.m_PadSourceWidth > 1024 || m_cBckCfg.m_PadSourceHeight > 640))
     {
       m_cBckCfg.m_cuQpDeltaSubdiv = 0;
     }
