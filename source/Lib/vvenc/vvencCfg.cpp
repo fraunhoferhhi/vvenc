@@ -1247,7 +1247,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_cuQpDeltaSubdiv = 0;
     if ( c->m_usePerceptQPA
         && c->m_QP <= vvenc::MAX_QP_PERCEPT_QPA
-        && c->m_CTUSize == 128
+        && ( c->m_CTUSize == 128 || ( c->m_CTUSize == 64 && c->m_PadSourceWidth <= 1024 && c->m_PadSourceHeight <= 640 ) )
         && c->m_PadSourceWidth <= 2048
         && c->m_PadSourceHeight <= 1280 )
     {

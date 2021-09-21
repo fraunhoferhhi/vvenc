@@ -472,7 +472,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
           else /*even addr*/ ctuRCQPMemory->push_back (Clip3 (-8, 7, ctuPumpRedQP[ctuRsAddr]) + 8);
           if (adaptedLumaQP > 0)
           {
-            adaptedLumaQP--; // this is a first-pass tuning to stabilize rate control
+            adaptedLumaQP -= (sliceQP >> 4); // a first-pass tuning for stabilization
           }
         }
         if (ctuPumpRedQP[ctuRsAddr] < 0) adaptedLumaQP = Clip3 (0, MAX_QP, adaptedLumaQP + (ctuPumpRedQP[ctuRsAddr] * encCfg->m_GOPSize - (dvsr >> 1)) / dvsr);
