@@ -573,7 +573,7 @@ int callingOrderRegularInitPass()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
   fillInputPic( pcYuvPicture );
-  if( 0 != vvenc_init_pass( enc, 0 ) )
+  if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_encoder_close( enc );
@@ -629,7 +629,7 @@ int callingOrderRegularInit2Pass()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
 
-  if( 0 != vvenc_init_pass( enc, 0 ) )
+  if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     return -1;
@@ -653,7 +653,7 @@ int callingOrderRegularInit2Pass()
     }
   }
 
-  if( 0 != vvenc_init_pass( enc, 1 ) )
+  if( 0 != vvenc_init_pass( enc, 1, nullptr ) )
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -696,6 +696,7 @@ int checkSDKDefaultBehaviourRC()
   vvenc_config vvencParams;
   defaultSDKInit( vvencParams,  500000 );
   vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
+  vvencParams.m_RCNumPasses = 1;
 
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )

@@ -446,7 +446,9 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("preset",            toPreset,                 "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
 
   ("bitrate,b",         m_RCTargetBitrate,        "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
-  ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2) " )
+  ("passes,p",          m_RCNumPasses,            "number of rate control passes (1,2)" )
+  ("pass",              m_RCPass,                 "rate control pass for two-pass rate control (-1,1,2)" )
+  ("rcstatsfile",       m_RCStatsFileName,        "rate control statistics file" )
   ("qp,q",              m_QP,                     "quantization parameter, QP (0-63)")
   ("qpa",               toQPA,                    "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
 
@@ -483,7 +485,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("hrdparameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
   ("decodedpicturehash,-dph",   toHashType,            "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
   ;
-  
+
   if ( vvenc_is_tracing_enabled() )
   {
     opts.setSubSection( "Tracing" );
@@ -523,37 +525,22 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
 
   if ( err.is_errored && ! warnUnknowParameter )
   {
-    /* error report has already been printed on stderr */
+    // error report has already been printed
     return false;
   }
-
-  //
-  // check own parameters
-  //
 
   if( m_showVersion )
   {
     return true;
   }
 
-  if( m_bitstreamFileName.empty() )
-  {
-    cout <<  "error: A bitstream file name must be specified (--output=bit.266)" << std::endl;
-    return false;
-  }
-
-  // this has to be set outside
+  // has to be set outside
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = m_inputFileChromaFormat;
   }
 
-  if( m_RCNumPasses < 0 )
-  {
-    m_RCNumPasses = m_RCTargetBitrate > 0 ? 2 : 1;
-  }
-
-  return true;
+  return checkCfg();
 }
 
 
@@ -676,7 +663,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   opts.setSubSection("Rate control, Perceptual Quantization");
   opts.addOptions()
-  ("NumPasses",                                       m_RCNumPasses,                                    "number of passes; 1: one-pass rate control; 2: two-pass rate control" )
+  ("NumPasses",                                       m_RCNumPasses,                                    "number of rate control passes (1,2)" )
+  ("Passes",                                          m_RCNumPasses,                                    "number of rate control passes (1,2)" )
+  ("Pass",                                            m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
+  ("RCStatsFile",                                     m_RCStatsFileName,                                "rate control statistics file" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
 
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
@@ -1135,7 +1125,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   //
   // parse command line parameters and read configuration files
   //
-    
+
   po::setDefaults( opts );
   po::ErrorReporter err;
   const list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
@@ -1196,94 +1186,18 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
     }
   }
 
-  //
-  // check own parameters
-  //
-
   if( m_showVersion )
   {
     return true;
   }
 
-  bool error = false;
-  if( m_bitstreamFileName.empty() )
-  {
-    cout <<  "error: A bitstream file name must be specified (BitstreamFile)" << std::endl;
-    error = true;
-  }
-  else
-  {
-    if( m_decodeBitstreams[0][0] != '\0' && m_decodeBitstreams[0] == m_bitstreamFileName )
-    {
-      cout <<  "error: Debug bitstream and the output bitstream cannot be equal" << std::endl;
-      error = true;
-    }
-    if( m_decodeBitstreams[1][0] != '\0' && m_decodeBitstreams[1] == m_bitstreamFileName )
-    {
-      cout <<  "error: Decode2 bitstream and the output bitstream cannot be equal" << std::endl;
-      error = true;
-    }
-  }
-
-  if( m_inputFileChromaFormat < 0 || m_inputFileChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
-  {
-    cout <<  "error: Input chroma format must be either 400, 420, 422 or 444" << std::endl;
-    error = true;
-  }
-
-  if ( error )
-  {
-    return false;
-  }
-
-  if( m_decode )
-  {
-    return true;
-  }
-
-  //
-  // set intern derived parameters (for convenience purposes only)
-  //
-
+  // has to be set outside
   if ( m_internChromaFormat < 0 || m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
     m_internChromaFormat = m_inputFileChromaFormat;
   }
 
-  if( m_RCNumPasses < 0 )
-  {
-    m_RCNumPasses = m_RCTargetBitrate > 0 ? 2 : 1;
-  }
-
-  if( m_packedYUVMode && ! m_reconFileName.empty() )  
-  {
-    if( ( m_outputBitDepth[ 0 ] != 10 && m_outputBitDepth[ 0 ] != 12 )
-        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
-    {
-      cout <<  "error: Invalid output bit-depth or image width for packed YUV output, aborting" << std::endl;
-      error = true;
-    }
-    if( ( m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( m_outputBitDepth[ 1 ] != 10 && m_outputBitDepth[ 1 ] != 12 )
-          || ( ( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
-    {
-      cout <<  "error: Invalid chroma output bit-depth or image width for packed YUV output, aborting" << std::endl;
-      error = true;
-    }
-
-    if ( error )
-    {
-      return false;
-    }
-  }
-
-  // check config parameter
-  VVEncAppCfg appCfg = *this;
-  if ( vvenc_init_config_parameter(&appCfg) )
-  {
-    return false;
-  }
-
-  return true;
+  return checkCfg();
 }
 
 std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
@@ -1294,6 +1208,7 @@ std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
     css << "Input          File                    : " << m_inputFileName << "\n";
     css << "Bitstream      File                    : " << m_bitstreamFileName << "\n";
     css << "Reconstruction File                    : " << m_reconFileName << "\n";
+    css << "RC Statistics  File                    : " << m_RCStatsFileName << "\n";
   }
 
   const VVEncAppCfg* configPtr = this;
@@ -1303,6 +1218,97 @@ std::string VVEncAppCfg::getConfigAsString( vvencMsgLevel eMsgLevel ) const
 
   return css.str();
 }
+
+bool VVEncAppCfg::checkCfg()
+{
+  bool ret = true;
+
+  // check bitstream file name in encode and decode mode
+  if( m_bitstreamFileName.empty() )
+  {
+    cout << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
+    ret = false;
+  }
+
+  // check remaining parameters in encode mode only
+  if( m_decode )
+  {
+    return ret;
+  }
+
+  // check internal config parameters and derive adapted parameter set
+  VVEncAppCfg appCfg = *this;
+  if( vvenc_init_config_parameter( &appCfg ) )
+  {
+    ret = false;
+  }
+
+  // check remaining parameter set
+  return appCfg.xCheckCfg();
+}
+
+bool VVEncAppCfg::xCheckCfg()
+{
+  bool ret = true;
+
+  if( m_inputFileName.empty() )
+  {
+    cout << "error: input yuv file name must be specified (--input=video.yuv)" << std::endl;
+    ret = false;
+  }
+  if( ! strcmp( m_inputFileName.c_str(), "-" )
+      && m_RCNumPasses > 1
+      && m_RCPass < 0 )
+  {
+    cout << "error: two pass rate control within single application call and reading from stdin not supported" << std::endl;
+    ret = false;
+  }
+
+  if( ! m_bitstreamFileName.empty() )
+  {
+    if( m_decodeBitstreams[0][0] != '\0' && m_decodeBitstreams[0] == m_bitstreamFileName )
+    {
+      cout << "error: debug bitstream and the output bitstream cannot be equal" << std::endl;
+      ret = false;
+    }
+    if( m_decodeBitstreams[1][0] != '\0' && m_decodeBitstreams[1] == m_bitstreamFileName )
+    {
+      cout << "error: decode2 bitstream and the output bitstream cannot be equal" << std::endl;
+      ret = false;
+    }
+  }
+
+  if( m_RCPass > 0 && m_RCStatsFileName.empty() )
+  {
+    cout << "error: rate control statistics file name must be specify, when pass parameter is set (--rcstatsfile=stats.json)" << std::endl;
+    ret = false;
+  }
+
+  if( m_inputFileChromaFormat != VVENC_CHROMA_400 && m_inputFileChromaFormat != VVENC_CHROMA_420 )
+  {
+    cout << "error: input chroma format must be either 400, 420" << std::endl;
+    ret = false;
+  }
+
+  if( ! m_reconFileName.empty() && m_packedYUVMode )
+  {
+    if( ( m_outputBitDepth[ 0 ] != 10 && m_outputBitDepth[ 0 ] != 12 )
+        || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
+    {
+      cout << "error: invalid output bit-depth or image width for packed YUV output" << std::endl;
+      ret = false;
+    }
+    if( ( m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( m_outputBitDepth[ 1 ] != 10 && m_outputBitDepth[ 1 ] != 12 )
+          || ( ( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) & ( 1 + ( m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
+    {
+      cout << "error: invalid chroma output bit-depth or image width for packed YUV output" << std::endl;
+      ret = false;
+    }
+  }
+
+  return ret;
+}
+
 
 } // namespace
 

@@ -111,7 +111,7 @@ public:
   virtual ~EncLib();
 
   void     initEncoderLib      ( const VVEncCfg& encCfg );
-  void     initPass            ( int pass );
+  void     initPass            ( int pass, const char* statsFName );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
