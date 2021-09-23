@@ -1442,19 +1442,20 @@ void RateCtrl::readStatsHeader()
 
 void RateCtrl::storeStatsData( const TRCPassStats& statsData )
 {
+  nlohmann::json data = {
+    { "poc",       statsData.poc },
+    { "qp",        statsData.qp },
+    { "lambda",    statsData.lambda },
+    { "visActY",   statsData.visActY },
+    { "numBits",   statsData.numBits },
+    { "psnrY",     statsData.psnrY },
+    { "isIntra",   statsData.isIntra },
+    { "tempLayer", statsData.tempLayer }
+  };
+
   if( m_rcStatsFHandle.is_open() )
   {
     CHECK( ! m_rcStatsFHandle.good(), "unable to write to rate control statistics file" );
-    nlohmann::json data = {
-      { "poc",       statsData.poc },
-      { "qp",        statsData.qp },
-      { "lambda",    statsData.lambda },
-      { "visActY",   statsData.visActY },
-      { "numBits",   statsData.numBits },
-      { "psnrY",     statsData.psnrY },
-      { "isIntra",   statsData.isIntra },
-      { "tempLayer", statsData.tempLayer }
-    };
     if( m_listRCIntraPQPAStats.size() > m_pqpaStatsWritten )
     {
       std::vector<uint8_t> pqpaTemp;
@@ -1469,7 +1470,19 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
   }
   else
   {
-    m_listRCFirstPassStats.push_back( statsData );
+    // ensure same precision for internal and written data by serializing internal data as well
+    std::stringstream iss;
+    iss << data;
+    data = nlohmann::json::parse( iss.str() );
+    m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
+                                                    data[ "qp" ],
+                                                    data[ "lambda" ],
+                                                    data[ "visActY" ],
+                                                    data[ "numBits" ],
+                                                    data[ "psnrY" ],
+                                                    data[ "isIntra" ],
+                                                    data[ "tempLayer" ]
+                                                    ) );
   }
 }
 
