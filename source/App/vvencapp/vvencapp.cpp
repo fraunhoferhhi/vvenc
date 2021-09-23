@@ -93,11 +93,11 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
     case VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required."; break;
     case VVENC_ERR_PARAMETER :     std::cout << "invalid parameter."; break;
     case VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request."; break;
-    default :                      std::cout << "error " << code; break;
+    default :                      std::cout << "code " << code; break;
   };
   if( !cErr.empty() )
   {
-    std::cout << " - " << cErr;
+    std::cout << cErr;
   }
   std::cout << std::endl;
 }
@@ -234,7 +234,7 @@ int main( int argc, char* argv[] )
     iRet = vvenc_init_pass( enc, pass, vvencappCfg.m_RCStatsFileName.c_str() );
     if( 0 != iRet )
     {
-      printVVEncErrorMsg( cAppname, "[error]: init pass failed", iRet, vvenc_get_last_error( enc ) );
+      printVVEncErrorMsg( cAppname, "init pass failed", iRet, vvenc_get_last_error( enc ) );
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
       vvenc_accessUnit_free_payload( &AU );
       vvenc_encoder_close( enc );

@@ -247,18 +247,24 @@ void EncRCSeq::updateAfterPic ( int bits, int tgtBits )
 
 void EncRCSeq::getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters)
 {
-  std::list<TRCPassStats>::iterator it;
-  for ( it = firstPassData.begin(); it != firstPassData.end(); it++ )
+  TRCPassStats* stats = nullptr;
+  for( auto& it : firstPassData )
   {
-    if ( poc == it->poc )
+    if( poc == it.poc )
     {
-      targetBits = it->targetBits;
-      frameVsGopRatio = it->frameInGopRatio;
-      isNewScene = it->isNewScene;
-      refreshParameters = it->refreshParameters;
-      break;
+      stats = &it;
     }
   }
+  if( ! stats )
+  {
+    std::stringstream errMsg;
+    errMsg << "miss entry for poc " << poc << " in first pass rate control statistics";
+    THROW( errMsg.str().c_str() );
+  }
+  targetBits        = stats->targetBits;
+  frameVsGopRatio   = stats->frameInGopRatio;
+  isNewScene        = stats->isNewScene;
+  refreshParameters = stats->refreshParameters;
 }
 
 void EncRCSeq::setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB )
@@ -1413,7 +1419,25 @@ void RateCtrl::readStatsHeader()
     THROW( "unable to read header from rate control statistics file" );
   }
   nlohmann::json header = nlohmann::json::parse( line );
-  CHECK( header.find( "version" ) == header.end() || header[ "version" ] != VVENC_VERSION, "wrong first past statistics version" );
+  if( header.find( "version" )         == header.end() || ! header[ "version" ].is_string()
+      || header.find( "SourceWidth" )  == header.end() || ! header[ "SourceWidth" ].is_number()
+      || header.find( "SourceHeight" ) == header.end() || ! header[ "SourceHeight" ].is_number()
+      || header.find( "CTUSize" )      == header.end() || ! header[ "CTUSize" ].is_number()
+      || header.find( "GOPSize" )      == header.end() || ! header[ "GOPSize" ].is_number()
+      || header.find( "IntraPeriod" )  == header.end() || ! header[ "IntraPeriod" ].is_number()
+      || header.find( "PQPA" )         == header.end() || ! header[ "PQPA" ].is_boolean()
+      || header.find( "QP" )           == header.end() || ! header[ "QP" ].is_number()
+      || header.find( "RCInitialQP" )  == header.end() || ! header[ "RCInitialQP" ].is_number()
+    )
+  {
+    THROW( "header line in rate control statistics file not recognized" );
+  }
+  if( header[ "version" ]      != VVENC_VERSION )              msg( VVENC_WARNING, "WARNING: wrong version in rate control statistics file\n" );
+  if( header[ "SourceWidth" ]  != m_pcEncCfg->m_SourceWidth )  msg( VVENC_WARNING, "WARNING: wrong frame width in rate control statistics file\n" );
+  if( header[ "SourceHeight" ] != m_pcEncCfg->m_SourceHeight ) msg( VVENC_WARNING, "WARNING: wrong frame height in rate control statistics file\n" );
+  if( header[ "CTUSize" ]      != m_pcEncCfg->m_CTUSize )      msg( VVENC_WARNING, "WARNING: wrong CTU size in rate control statistics file\n" );
+  if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      msg( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
+  if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  msg( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
 }
 
 void RateCtrl::storeStatsData( const TRCPassStats& statsData )
@@ -1465,7 +1489,7 @@ void RateCtrl::readStatsFile()
         || data.find( "numBits" )   == data.end() || ! data[ "numBits" ].is_number()
         || data.find( "psnrY" )     == data.end() || ! data[ "psnrY" ].is_number()
         || data.find( "isIntra" )   == data.end() || ! data[ "isIntra" ].is_boolean()
-        || data.find( "tempLayer" ) == data.end() || ! data[ "tempLayer" ].is_number()  )
+        || data.find( "tempLayer" ) == data.end() || ! data[ "tempLayer" ].is_number() )
     {
       std::stringstream errMsg;
       errMsg << "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")";

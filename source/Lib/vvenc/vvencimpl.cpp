@@ -162,7 +162,7 @@ int VVEncImpl::init( const vvenc_config& config )
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "init failed %s", e.what() );
+    msg( VVENC_ERROR, "%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -195,7 +195,7 @@ int VVEncImpl::initPass( int pass, const char* statsFName )
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "init pass failed %s", e.what() );
+      msg( VVENC_ERROR, "%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -223,7 +223,7 @@ int VVEncImpl::uninit()
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "uninit failed %s", e.what() );
+      msg( VVENC_ERROR, "%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -366,7 +366,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "encode failed %s", e.what() );
+    msg( VVENC_ERROR, "%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -694,12 +694,12 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
 #endif
   {
     ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
-    if( ret )  { msg( VVENC_ERROR, "decoding failed"); }
+    if( ret )  { msg( VVENC_ERROR, "decoding failed\n"); }
   }
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "decoding failed %s", e.what() );
+    msg( VVENC_ERROR, "decoding failed %s\n", e.what() );
     return VVENC_ERR_UNSPECIFIED;
   }
 #endif

@@ -126,7 +126,7 @@ int EncApp::encode()
   int iRet = vvenc_encoder_open( m_encCtx, &m_cEncAppCfg );
   if( 0 != iRet )
   {
-    msgApp( VVENC_ERROR, vvenc_get_last_error( m_encCtx ) );
+    msgApp( VVENC_ERROR, "open encoder failed %s\n", vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
     return iRet;
   }
@@ -182,7 +182,7 @@ int EncApp::encode()
     if( m_yuvInputFile.open( m_cEncAppCfg.m_inputFileName, false, m_cEncAppCfg.m_inputBitDepth[0], m_cEncAppCfg.m_MSBExtendedBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0],
                              m_cEncAppCfg.m_inputFileChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipInputVideoToRec709Range, false ))
     {
-      msgApp( VVENC_ERROR, "%s", m_yuvInputFile.getLastError().c_str() );
+      msgApp( VVENC_ERROR, "open input file failed %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );
       vvenc_YUVBuffer_free_buffer( &yuvInBuf );
       vvenc_accessUnit_free_payload( &au );
@@ -200,7 +200,7 @@ int EncApp::encode()
     iRet = vvenc_init_pass( m_encCtx, pass, m_cEncAppCfg.m_RCStatsFileName.c_str() );
     if( iRet != 0 )
     {
-      msgApp( VVENC_ERROR, "%s", vvenc_get_last_error(m_encCtx) );
+      msgApp( VVENC_ERROR, "init pass failed %s\n", vvenc_get_last_error(m_encCtx) );
       vvenc_encoder_close( m_encCtx );
       vvenc_YUVBuffer_free_buffer( &yuvInBuf );
       vvenc_accessUnit_free_payload( &au );
@@ -224,7 +224,7 @@ int EncApp::encode()
       {
         if( 0 != m_yuvInputFile.readYuvBuf( yuvInBuf, inputDone ) )
         {
-          msgApp( VVENC_ERROR, "read file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
+          msgApp( VVENC_ERROR, "read input file failed %s\n", m_yuvInputFile.getLastError().c_str() );
           vvenc_encoder_close( m_encCtx );
           vvenc_YUVBuffer_free_buffer( &yuvInBuf );
           vvenc_accessUnit_free_payload( &au );
@@ -252,7 +252,7 @@ int EncApp::encode()
       iRet = vvenc_encode( m_encCtx, inputPacket, &au, &encDone );
       if( 0 != iRet )
       {
-        msgApp( VVENC_ERROR, "encoding failed: err code %d - %s\n", iRet, vvenc_get_last_error(m_encCtx) );
+        msgApp( VVENC_ERROR, "encoding failed: err code %d %s\n", iRet, vvenc_get_last_error(m_encCtx) );
         encDone = true;
         inputDone = true;
       }
@@ -320,7 +320,7 @@ bool EncApp::openFileIO()
     if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0],
                              m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
     {
-      msgApp( VVENC_ERROR, "%s", m_yuvReconFile.getLastError().c_str() );
+      msgApp( VVENC_ERROR, "open reconstruction file failed %s\n", m_yuvReconFile.getLastError().c_str() );
       return false;
     }
   }
@@ -329,7 +329,7 @@ bool EncApp::openFileIO()
   m_bitstream.open( m_cEncAppCfg.m_bitstreamFileName.c_str(), fstream::binary | fstream::out );
   if( ! m_bitstream )
   {
-    msgApp( VVENC_ERROR, "Failed to open bitstream file %s for writing\n", m_cEncAppCfg.m_bitstreamFileName.c_str() );
+    msgApp( VVENC_ERROR, "open bitstream file failed %s\n", m_cEncAppCfg.m_bitstreamFileName.c_str() );
     return false;
   }
 
@@ -368,7 +368,7 @@ void EncApp::printChromaFormat()
       case VVENC_CHROMA_420:  ssOut << "  420"; break;
       case VVENC_CHROMA_422:  ssOut << "  422"; break;
       case VVENC_CHROMA_444:  ssOut << "  444"; break;
-      default:          msgApp( VVENC_ERROR, "invalid chroma format" );
+      default:          msgApp( VVENC_ERROR, "invalid chroma format\n" );
                         return;
     }
     ssOut << std::endl;
@@ -380,7 +380,7 @@ void EncApp::printChromaFormat()
       case VVENC_CHROMA_420:  ssOut << "  420"; break;
       case VVENC_CHROMA_422:  ssOut << "  422"; break;
       case VVENC_CHROMA_444:  ssOut << "  444"; break;
-      default:          msgApp( VVENC_ERROR, "invalid chroma format" );
+      default:          msgApp( VVENC_ERROR, "invalid chroma format\n" );
                         return;
     }
     msgApp( VVENC_DETAILS, "%s\n", ssOut.str().c_str() );
