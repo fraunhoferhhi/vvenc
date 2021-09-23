@@ -1428,6 +1428,10 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
       }
     }
     isSccWeak = ((s * 100 / AmountBlock) > K_SC);
+
+#if QTBTT_SPEED3
+    pic.useScQTBTTEF = isSccStrg;
+#endif
   }
 
   pic.useScME    = m_cEncCfg.m_motionEstimationSearchMethodSCC > 0                            && isSccStrg;

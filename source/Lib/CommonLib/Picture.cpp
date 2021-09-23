@@ -186,6 +186,9 @@ Picture::Picture()
     , useScBDPCM        ( false )
     , useScIBC          ( false )
     , useScLMCS         ( false )
+#if QTBTT_SPEED3
+    , useScQTBTTEF      ( false )
+#endif
     , seqBaseQp         ( 0 )
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )

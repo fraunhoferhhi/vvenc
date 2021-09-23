@@ -251,6 +251,9 @@ public:
   bool                          useScBDPCM;
   bool                          useScIBC;
   bool                          useScLMCS;
+#if QTBTT_SPEED3
+  bool                          useScQTBTTEF;
+#endif
   int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;
