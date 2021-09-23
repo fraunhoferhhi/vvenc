@@ -1278,6 +1278,19 @@ bool VVEncAppCfg::xCheckCfg()
     }
   }
 
+#ifndef VVENC_ENABLE_THIRDPARTY_JSON
+  if( m_RCPass > 0 )
+  {
+    cout << "error: reading/writing rate control statistics file not supported, please disable pass parameter or compile with json enabled" << std::endl;
+    ret = false;
+  }
+  if( ! m_RCStatsFileName.empty() )
+  {
+    cout << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
+    ret = false;
+  }
+#endif
+
   if( m_RCPass > 0 && m_RCStatsFileName.empty() )
   {
     cout << "error: rate control statistics file name must be specify, when pass parameter is set (--rcstatsfile=stats.json)" << std::endl;

@@ -280,18 +280,22 @@ namespace vvenc {
     bool                 rcIsFinalPass;
 
   protected:
-    void openStatsFile(const std::string& name);
+    void storeStatsData( const TRCPassStats& statsData );
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+    void openStatsFile( const std::string& name );
     void writeStatsHeader();
     void readStatsHeader();
-    void storeStatsData( const TRCPassStats& statsData );
     void readStatsFile();
+#endif
 
   private:
     const VVEncCfg*         m_pcEncCfg;
     std::list<TRCPassStats> m_listRCFirstPassStats;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream            m_rcStatsFHandle;
     int                     m_pqpaStatsWritten;
+#endif
   };
 }
 #endif

@@ -48,10 +48,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 /** \file     RateCtrl.cpp
     \brief    Rate control manager class
 */
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+#include "nlohmann/json.hpp"
+#endif
+
 #include "vvenc/version.h"
 #include "RateCtrl.h"
 #include "CommonLib/Picture.h"
-#include "nlohmann/json.hpp"
 
 #include <cmath>
 
@@ -1122,7 +1125,9 @@ RateCtrl::RateCtrl()
   flushPOC           = -1;
   rcPass             = 0;
   rcIsFinalPass      = true;
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
   m_pqpaStatsWritten = 0;
+#endif
 }
 
 RateCtrl::~RateCtrl()
@@ -1149,13 +1154,15 @@ void RateCtrl::destroy()
     delete p;
   }
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
   if ( m_rcStatsFHandle.is_open() )
   {
     m_rcStatsFHandle.close();
   }
-
-  flushPOC           = -1;
   m_pqpaStatsWritten = 0;
+#endif
+
+  flushPOC = -1;
 }
 
 void RateCtrl::init( const VVEncCfg& encCfg )
@@ -1362,13 +1369,14 @@ void RateCtrl::destroyRCGOP()
 
 void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* statsFName)
 {
-  m_pcEncCfg        = &encCfg;
-  rcPass            = pass;
-  rcIsFinalPass     = (pass >= m_pcEncCfg->m_RCNumPasses - 1);
-  const std::string name = statsFName != nullptr ? statsFName : "";
+  m_pcEncCfg    = &encCfg;
+  rcPass        = pass;
+  rcIsFinalPass = (pass >= m_pcEncCfg->m_RCNumPasses - 1);
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
   if( m_rcStatsFHandle.is_open() ) m_rcStatsFHandle.close();
 
+  const std::string name = statsFName != nullptr ? statsFName : "";
   if( name.length() )
   {
     openStatsFile( name );
@@ -1377,8 +1385,12 @@ void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* sta
       readStatsFile();
     }
   }
+#else
+  CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
+#endif
 }
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
 void RateCtrl::openStatsFile(const std::string& name)
 {
   if( rcIsFinalPass )
@@ -1394,7 +1406,9 @@ void RateCtrl::openStatsFile(const std::string& name)
     writeStatsHeader();
   }
 }
+#endif
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
 void RateCtrl::writeStatsHeader()
 {
   nlohmann::json header = {
@@ -1410,7 +1424,9 @@ void RateCtrl::writeStatsHeader()
   };
   m_rcStatsFHandle << header << std::endl;
 }
+#endif
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
 void RateCtrl::readStatsHeader()
 {
   std::string line;
@@ -1439,9 +1455,11 @@ void RateCtrl::readStatsHeader()
   if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      msg( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
   if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  msg( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
 }
+#endif
 
 void RateCtrl::storeStatsData( const TRCPassStats& statsData )
 {
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
   nlohmann::json data = {
     { "poc",       statsData.poc },
     { "qp",        statsData.qp },
@@ -1484,8 +1502,12 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "tempLayer" ]
                                                     ) );
   }
+#else
+  m_listRCFirstPassStats.push_back( statsData );
+#endif
 }
 
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
 void RateCtrl::readStatsFile()
 {
   CHECK( ! m_rcStatsFHandle.good(), "unable to read from rate control statistics file" );
@@ -1529,6 +1551,7 @@ void RateCtrl::readStatsFile()
     lineNum++;
   }
 }
+#endif
 
 void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 {
