@@ -1444,7 +1444,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
   pic.useQtbttSpeedUpMode = m_cEncCfg.m_qtbttSpeedUpMode;
   if ((m_cEncCfg.m_qtbttSpeedUpMode & 2) && isSccStrg)
   {
-    pic.useQtbttSpeedUpMode = ((m_cEncCfg.m_qtbttSpeedUpMode >> 2) << 2) | 2;
+    pic.useQtbttSpeedUpMode &= ~1;
   }
 #endif
 
