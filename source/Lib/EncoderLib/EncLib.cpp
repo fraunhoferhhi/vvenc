@@ -1344,7 +1344,11 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
       || m_cEncCfg.m_vvencMCTF.MCTF    == 2
       || m_cEncCfg.m_IBCMode           == 2
       || m_cEncCfg.m_lumaReshapeEnable == 2
-      || m_cEncCfg.m_motionEstimationSearchMethodSCC > 0 )
+      || m_cEncCfg.m_motionEstimationSearchMethodSCC > 0 
+#if QTBTT_SPEED3
+      || m_cEncCfg.m_qtbttSpeedUpMode & 2
+#endif
+    )
   {
     int SIZE_BL = 4;
     int K_SC = 25;
@@ -1436,6 +1440,13 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
   pic.useScMCTF  = m_cEncCfg.m_vvencMCTF.MCTF == 1    || ( m_cEncCfg.m_vvencMCTF.MCTF == 2    && ! isSccStrg );
   pic.useScLMCS  = m_cEncCfg.m_lumaReshapeEnable == 1 || ( m_cEncCfg.m_lumaReshapeEnable == 2 && ! isSccStrg );
   pic.useScIBC   = m_cEncCfg.m_IBCMode == 1           || ( m_cEncCfg.m_IBCMode == 2           && isSccStrg );
+#if QTBTT_SPEED3
+  pic.useQtbttSpeedUpMode = m_cEncCfg.m_qtbttSpeedUpMode;
+  if ((m_cEncCfg.m_qtbttSpeedUpMode & 2) && isSccStrg)
+  {
+    pic.useQtbttSpeedUpMode &= ~1;
+  }
+#endif
 
 }
 
