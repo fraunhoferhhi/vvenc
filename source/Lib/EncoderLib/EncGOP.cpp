@@ -1799,7 +1799,7 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
           CHECK (slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7");
 
           // try to hit target rate more aggressively in last coded frames, lambda/QP clipping below will ensure smooth value change
-          if (m_pcRateCtrl->flushPOC >= 0 && it->poc >= m_pcRateCtrl->flushPOC)
+          if (it->poc >= m_pcRateCtrl->flushPOC)
           {
             d = std::max (1.0, d + (encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed) * 0.5 * it->frameInGopRatio);
             encRCPic->targetBits = int (d + 0.5); // update the member to be on the safe side
