@@ -503,11 +503,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     // update current poc
     m_pocEncode = xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, m_cEncCfg.m_DecodingRefreshType == 4 );
 
-    if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.rcIsFinalPass) && (m_cRateCtrl.flushPOC < 0) && flush)
-    {
-      m_cRateCtrl.flushPOC = m_pocEncode;
-    }
-
     std::vector<Picture*> encList;
     xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList, m_cEncCfg.m_DecodingRefreshType == 4 );
 

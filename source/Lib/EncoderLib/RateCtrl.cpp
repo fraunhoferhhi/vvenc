@@ -1161,8 +1161,6 @@ void RateCtrl::destroy()
   }
   m_pqpaStatsWritten = 0;
 #endif
-
-  flushPOC = -1;
 }
 
 void RateCtrl::init( const VVEncCfg& encCfg )
@@ -1558,6 +1556,9 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP)
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
+
+  // store start poc of last chunk of pictures
+  flushPOC = m_listRCFirstPassStats.back().poc - std::min( 32, m_pcEncCfg->m_GOPSize );
 
   // run a simple scene change detection
   detectNewScene();
