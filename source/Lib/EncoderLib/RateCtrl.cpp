@@ -260,9 +260,7 @@ void EncRCSeq::getTargetBitsFromFirstPass (const int poc, int &targetBits, doubl
   }
   if( ! stats )
   {
-    std::stringstream errMsg;
-    errMsg << "miss entry for poc " << poc << " in first pass rate control statistics";
-    THROW( errMsg.str().c_str() );
+    THROW( "miss entry for poc " << poc << " in first pass rate control statistics" );
   }
   targetBits        = stats->targetBits;
   frameVsGopRatio   = stats->frameInGopRatio;
@@ -1524,9 +1522,7 @@ void RateCtrl::readStatsFile()
         || data.find( "isIntra" )   == data.end() || ! data[ "isIntra" ].is_boolean()
         || data.find( "tempLayer" ) == data.end() || ! data[ "tempLayer" ].is_number() )
     {
-      std::stringstream errMsg;
-      errMsg << "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")";
-      THROW( errMsg.str().c_str() );
+      THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
     m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
                                                     data[ "qp" ],
@@ -1557,8 +1553,8 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
 
-  // store start poc of last chunk of pictures
-  flushPOC = m_listRCFirstPassStats.back().poc - std::min( 32, m_pcEncCfg->m_GOPSize );
+  // store start POC of last chunk of pictures
+  flushPOC = m_listRCFirstPassStats.back().poc - std::max( 32, m_pcEncCfg->m_GOPSize );
 
   // run a simple scene change detection
   detectNewScene();

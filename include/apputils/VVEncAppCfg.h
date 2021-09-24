@@ -90,11 +90,11 @@ public:
 public:
   bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
   bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+  bool checkCfg();
 
   virtual std::string getConfigAsString( vvencMsgLevel eMsgLevel ) const;
 
-protected:
-  bool checkCfg();
+private:
   bool xCheckCfg();
 };
 

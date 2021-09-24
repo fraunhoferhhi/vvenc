@@ -90,14 +90,14 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
   std::cout << cAppname  << " [error]: " << cMessage << ", ";
   switch( code )
   {
-    case VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required."; break;
-    case VVENC_ERR_PARAMETER :     std::cout << "invalid parameter."; break;
-    case VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request."; break;
+    case VVENC_ERR_CPU :           std::cout << "SSE 4.1 cpu support required"; break;
+    case VVENC_ERR_PARAMETER :     std::cout << "invalid parameter"; break;
+    case VVENC_ERR_NOT_SUPPORTED : std::cout << "unsupported request"; break;
     default :                      std::cout << "code " << code; break;
   };
   if( !cErr.empty() )
   {
-    std::cout << cErr;
+    std::cout  << ": " << cErr;
   }
   std::cout << std::endl;
 }
