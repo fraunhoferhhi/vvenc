@@ -187,7 +187,7 @@ Picture::Picture()
     , useScIBC          ( false )
     , useScLMCS         ( false )
 #if QTBTT_SPEED3
-    , useScQTBTTEF      ( false )
+    , useQtbttSpeedUpMode( 0 )
 #endif
     , seqBaseQp         ( 0 )
     , actualHeadBits    ( 0 )
