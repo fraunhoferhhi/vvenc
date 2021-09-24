@@ -1296,6 +1296,11 @@ bool VVEncAppCfg::xCheckCfg()
     cout << "error: rate control statistics file name must be specify, when pass parameter is set (--rcstatsfile=stats.json)" << std::endl;
     ret = false;
   }
+  if( m_RCNumPasses == 1 && ! m_RCStatsFileName.empty() )
+  {
+    cout << "error: rate control statistics file not supported in single pass encoding" << std::endl;
+    ret = false;
+  }
 
   if( m_inputFileChromaFormat != VVENC_CHROMA_400 && m_inputFileChromaFormat != VVENC_CHROMA_420 )
   {
