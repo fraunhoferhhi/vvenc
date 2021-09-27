@@ -72,7 +72,7 @@ The expert mode encoder (**vvencFFapp**) is based on the [VVC test model (VTM)](
 **Example usage:** In order to start your first experiments with the expert mode encoder, adapt the sequence.cfg configuration file to your input YUV source file and use the following command:
 
     vvencFFapp -c randomaccess_medium.cfg -c sequence.cfg
-    
+
 ## How to map command line parameters of the standard encoder into the full featured expert mode encoder?
 The export mode encoder (**vvencFFapp**) can be used in the same manner as the standard encoder (**vvencapp**) by using the adapted expert option names.
 Be aware of that some options have different default values. The following table shows only expert options that differs from the standard encoder:
@@ -110,14 +110,14 @@ Be aware of that some options have different default values. The following table
 the following calls will encode the input file with the medium speedup preset with 1Mbit/s by using Two pass rate control. 
 Both calls will produce the same output.
 
-**standard encoder:** 
+**standard encoder:**
 
     vvencapp --preset medium -i BUS_176x144_75@15.yuv -s 176x144 -r 15 -b 1000000 -p 2 -o str.266
 
-**full featured expert mode encoder:** 
+**full featured expert mode encoder:**
 
     vvencFFapp --preset medium --InputFile BUS_176x144_75@15.yuv -s 176x144 -fr 15 -TargetBitrate 1000000 --NumPasses 2 -qpa 1 -t -1 -b str.266
-    
+
 # Contributing
 
 Feel free to contribute. To do so:
@@ -125,6 +125,20 @@ Feel free to contribute. To do so:
 * Fork the current-most state of the master branch
 * Apply the desired changes
 * Create a pull-request to the upstream repository
+
+# Third party tools
+
+## nlohmann/json: JSON for Modern C++
+
+JSON serialization is used for writing / reading rate control statistics. The external library is available under
+MIT license at https://github.com/nlohmann/json. Please see [LICENSE.MIT](./thirdparty/nlohmann_json/LICENSE.MIT) for
+the terms of use of the contents of this library.
+
+In case you don't want to include the external nlohmann/json library, please compile with
+
+    make install-release disable-json=1
+
+In this case writing / reading rate control statistic files is not supported by the VVenC encoders.
 
 # License
 
