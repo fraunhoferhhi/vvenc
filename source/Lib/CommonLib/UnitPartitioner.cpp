@@ -258,8 +258,9 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
     }
   }
 #if QTBTT_SPEED3
-  if (!cs.slice->isIntra() && (QtbttSpeedUp & 1))
+  if (!cs.slice->isIntra() && (QtbttSpeedUp & 3))
   {
+    bool doMin_SCC = !(((QtbttSpeedUp & 3) == 2) && (cs.area.Y().width < cs.pcv->maxCUSize));
     bool LimitDepths = (QtbttSpeedUp & 2) ? (MergeFlag == 0) : (cs.area.Y().width >= cs.pcv->maxCUSize);
     if (LimitDepths && cuAbove && cuLeft && (cuLeft->qtDepth == cuAbove->qtDepth))
     {
@@ -270,7 +271,7 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
       maxDepth = std::min<unsigned>(maxDepthCur, maxDepth);
       minDepth = std::max<unsigned>(minDepthCur, minDepth);
     }
-    else if ( LimitDepths && cuAbove && cuLeft)
+    else if (doMin_SCC && LimitDepths && cuAbove && cuLeft)
     {
       int minDepthCur = cuAbove->qtDepth;
       int maxDepthCur = cuAbove->qtDepth;
