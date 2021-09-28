@@ -735,7 +735,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
     uint32_t  uiMinMode = 0;
     uint32_t  uiMaxMode = NUM_CHROMA_MODE;
 
-    uint32_t reducedModeNumber=uiMaxMode- (m_pcEncCfg->m_reduceIntraChromaModesFullRD ? 4 : 2); 
+    const int reducedModeNumber = uiMaxMode >> (m_pcEncCfg->m_reduceIntraChromaModesFullRD ? 1 : 2);
     //----- check chroma modes -----
     uint32_t chromaCandModes[ NUM_CHROMA_MODE ];
     CU::getIntraChromaCandModes( cu, chromaCandModes );
