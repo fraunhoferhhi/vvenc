@@ -533,16 +533,16 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
     }
     else
     {
-      if( m_bufferChrFmt != VVENC_CHROMA_420)
+      if( m_bufferChrFmt != VVENC_CHROMA_420 && m_bufferChrFmt != VVENC_CHROMA_400)
       {
-        m_lastError = "\nERROR: read packed yuv supports only chroma 420";
+        m_lastError = "\nERROR: read packed yuv supports only chroma 420 or chrom 400";
         return -1;
       }
     }
 
-    if( m_fileBitdepth < 10 )
+    if( m_fileBitdepth != 10 )
     {
-      m_lastError = "\nERROR: file bitdepth for packed yuv must be > 10";
+      m_lastError = "\nERROR: file bitdepth for packed yuv must be 10";
       return -1;
     }
   }
