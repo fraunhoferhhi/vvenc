@@ -375,7 +375,7 @@ void EncLib::xSetRCEncCfg( int pass )
 
     // fixed-QP encoding in first rate control pass
     m_cBckCfg.m_RCTargetBitrate = 0;
-    m_cBckCfg.m_QP /*base QP*/  = (m_cEncCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_cEncCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 1 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0))));
+    m_cBckCfg.m_QP /*base QP*/  = (m_cEncCfg.m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_cEncCfg.m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0))));
 
     // restore the settings
     if (m_cBckCfg.m_usePerceptQPA && (m_cBckCfg.m_QP <= MAX_QP_PERCEPT_QPA || m_cBckCfg.m_framesToBeEncoded == 1))
@@ -408,7 +408,7 @@ void EncLib::xSetRCEncCfg( int pass )
     if ((firstPassData.size() > 0) && (fps > 0))
     {
       double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
-      const int firstPassBaseQP  = std::max (17, MAX_QP_PERCEPT_QPA - 1 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
+      const int firstPassBaseQP  = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_cEncCfg.m_RCTargetBitrate) / 500000.0)));
       const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_cEncCfg.m_SourceHeight)) / log (2.0)) - 7;
 
       d = (double) m_cEncCfg.m_RCTargetBitrate * (double) firstPassData.size() / double (fps * sumFrBits);
