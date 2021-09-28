@@ -984,7 +984,7 @@ void EncLib::xInitSPS(SPS &sps) const
   {
     sps.bitDepths.recon[chType]     = m_cEncCfg.m_internalBitDepth[chType];
     sps.qpBDOffset[chType]          = 6 * (m_cEncCfg.m_internalBitDepth[chType] - 8);
-    sps.internalMinusInputBitDepth[chType] = (m_cEncCfg.m_internalBitDepth[chType] - m_cEncCfg.m_inputBitDepth[chType]);
+    sps.internalMinusInputBitDepth[chType] = std::max(0, (m_cEncCfg.m_internalBitDepth[chType] - m_cEncCfg.m_inputBitDepth[chType]));
   }
 
   sps.alfEnabled                    = m_cEncCfg.m_alf;
