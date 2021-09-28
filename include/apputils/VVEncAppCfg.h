@@ -73,7 +73,8 @@ public:
   vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
-  bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_packedYUVInput                = false;        ///< If true, hhi-packed 10-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_decode                        = false;
   bool         m_showVersion                   = false;
 
