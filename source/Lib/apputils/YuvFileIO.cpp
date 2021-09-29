@@ -521,13 +521,10 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   m_packedYUVMode       = packedYUVMode;
   m_readStdin           = false;
 
-  if ( m_packedYUVMode )
+  if( m_packedYUVMode && !bWriteMode && m_fileBitdepth != 10 )
   {
-    if( m_fileBitdepth != 10 )
-    {
-      m_lastError = "\nERROR: file bitdepth for packed yuv must be 10";
-      return -1;
-    }
+    m_lastError = "\nERROR: file bitdepth for packed yuv input must be 10";
+    return -1;
   }
 
   if ( m_fileBitdepth > 16 )
