@@ -181,8 +181,9 @@ int EncApp::encode()
   for( int pass = start; pass < end; pass++ )
   {
     // open input YUV
+
     if( m_yuvInputFile.open( vvencCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
-                             vvencCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, vvencCfg.m_bClipInputVideoToRec709Range, false ))
+                             vvencCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, vvencCfg.m_bClipInputVideoToRec709Range, vvencCfg.m_packedYUVInput ))
     {
       msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );
@@ -320,7 +321,7 @@ bool EncApp::openFileIO()
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
     if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0],
-                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVMode ))
+                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVOutput ))
     {
       msgApp( VVENC_ERROR, "open reconstruction file failed: %s\n", m_yuvReconFile.getLastError().c_str() );
       return false;
@@ -390,4 +391,3 @@ void EncApp::printChromaFormat()
 }
 
 //! \}
-

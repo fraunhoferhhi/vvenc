@@ -244,7 +244,7 @@ int main( int argc, char* argv[] )
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
     if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0],
-                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, false ) )
+                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << vvencappCfg.m_inputFileName << std::endl;
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
@@ -366,4 +366,3 @@ int main( int argc, char* argv[] )
 
   return 0;
 }
-

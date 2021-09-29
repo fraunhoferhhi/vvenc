@@ -88,6 +88,7 @@ enum BitDepthAndColorSpace
   YUV444_10,
   YUV400_8,
   YUV400_10,
+  YUV420_10_PACKED
 };
 
 // ====================================================================================================================
@@ -226,6 +227,7 @@ const std::vector<SVPair<BitDepthAndColorSpace>> BitColorSpaceToIntMap =
 {
   { "yuv420",                    YUV420_8 },
   { "yuv420_10",                 YUV420_10 },
+  { "yuv420_10_packed",          YUV420_10_PACKED },
 };
 
 
@@ -354,14 +356,15 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* cfg, int dbcs )
 {
   switch( dbcs )
   {
-  case YUV420_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV420_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV422_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV422_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV444_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV444_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV400_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV400_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV420_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV420_10_PACKED : cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; cfg->m_packedYUVInput=true; break;
+  case YUV422_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
 }
@@ -425,7 +428,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   opts.addOptions()
   ("input,i",           m_inputFileName,          "original YUV input file name or '-' for reading from stdin")
   ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
-  ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10)")
+  ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10, yuv420_10_packed)")
 
   ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
   ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, (1..27000000)")
@@ -719,6 +722,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("VerticalPadding",                                 m_aiPad[1],                                       "Vertical source padding for conformance window mode 2")
 
   ("InputChromaFormat",                               toInputFileCoFormat,                              "input file chroma format (400, 420, 422, 444)")
+  ("PackedInput",                                     m_packedYUVInput,                                 "Enable 10-bit packed YUV input data ( pack 4 samples( 8-byte) into 5-bytes consecutively.")
   ;
 
   opts.setSubSection("Quality reporting metrics");
@@ -1073,7 +1077,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.setSubSection("Reconstructed video options");
   opts.addOptions()
   ("ClipOutputVideoToRec709Range",                    m_bClipOutputVideoToRec709Range,                  "Enable clipping output video to the Rec. 709 Range on saving when OutputBitDepth is less than InternalBitDepth")
-  ("PYUV",                                            m_packedYUVMode,                                  "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
+  ("PYUV",                                            m_packedYUVOutput,                                "Enable output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data. Ignored for interlaced output.")
     ;
 
 
@@ -1308,8 +1312,28 @@ bool VVEncAppCfg::xCheckCfg()
     ret = false;
   }
 
-  if( ! m_reconFileName.empty() && m_packedYUVMode )
+  if( m_packedYUVInput )
   {
+    if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 0 ) % 4 != 0 )
+    {
+      cout <<  "error: unsupported input width for packed input (width must be a multiple of 4)" << std::endl;
+      ret = false;
+    }
+
+    if( (m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422) &&
+         vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
+    {
+      cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
+      ret = false;
+    }
+  }
+
+  if( m_packedYUVOutput && ! m_reconFileName.empty() )
+  {
+    // if output bitdepth not defined, use internal bitdepth as default value
+    if (m_outputBitDepth[0] == 0) m_outputBitDepth[0] = m_internalBitDepth[0];
+    if (m_outputBitDepth[1] == 0) m_outputBitDepth[1] = m_outputBitDepth[0];
+
     if( ( m_outputBitDepth[ 0 ] != 10 && m_outputBitDepth[ 0 ] != 12 )
         || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
     {
