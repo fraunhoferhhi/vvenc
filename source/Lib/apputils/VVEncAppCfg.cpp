@@ -356,15 +356,15 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* cfg, int dbcs )
 {
   switch( dbcs )
   {
-  case YUV420_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV420_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV420_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV420_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; break;
   case YUV420_10_PACKED : cfg->m_inputFileChromaFormat = VVENC_CHROMA_420; cfg->m_inputBitDepth[0] = 10; cfg->m_packedYUVInput=true; break;
-  case YUV422_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV422_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV444_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV444_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
-  case YUV400_8 :  cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
-  case YUV400_10 : cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV422_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV422_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_422; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV444_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV444_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_444; cfg->m_inputBitDepth[0] = 10; break;
+  case YUV400_8 :         cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 8;  break;
+  case YUV400_10 :        cfg->m_inputFileChromaFormat = VVENC_CHROMA_400; cfg->m_inputBitDepth[0] = 10; break;
   default: break;
   }
 }
@@ -560,13 +560,11 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
       return false;
     }
 
-    if( m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422 )
+    if( (m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422) &&
+         vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
     {
-      if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
-      {
-        cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
-        return false;
-      }
+      cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
+      return false;
     }
   }
 
@@ -1286,13 +1284,11 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
       error = true;
     }
 
-    if( m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422 )
+    if( (m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422) &&
+         vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
     {
-      if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
-      {
-        cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
-        error = true;
-      }
+      cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
+      error = true;
     }
   }
 
