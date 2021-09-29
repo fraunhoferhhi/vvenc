@@ -3001,41 +3001,146 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
           {
             weight[ii][jj] = m_lumaLevelToWeightPLUT[org[j + jj + ii * orgStride]];
           }
-          
-          for( int k = 0; k < shape.numCoeff; k++ )
-          {
-            const Pel* Elocalk  = &ELocal[k << 4];
-            double* cov   = &alfCovariance[classIdx].E[0][0][k][k];
 
-            for( int l = k; l < shape.numCoeff; l++ )
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+          if( read_x86_extension_flags() > SCALAR )
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
             {
-              const Pel* Elocall = &ELocal[l << 4];
+              const Pel* Elocalk  = &ELocal[k << 4];
+              double* cov         = &alfCovariance[classIdx].E[0][0][k][k];
+
+              for( int l = k; l < shape.numCoeff; l++ )
+              {
+                const Pel* Elocall = &ELocal[l << 4];
+
+                //double sum = 0.0;
+                __m128d xacc = _mm_setzero_pd();
+
+                for( int ii = 0; ii < 4; ii++ )
+                {
+                  const __m128i xloclx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocall[(ii << 2)] ) );
+                  const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                  
+                  __m128d xlocld = _mm_cvtepi32_pd( xloclx32 );
+                  __m128d xlockd = _mm_cvtepi32_pd( xlockx32 );
+                  __m128d xwght  = _mm_loadu_pd   ( &weight[ii][0] );
+                  __m128d xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd     ( xlocld, xlockd ) );
+                  
+                  xacc = _mm_add_pd( xacc, xprdct );
+                  
+                  xlocld = _mm_cvtepi32_pd( _mm_unpackhi_epi64( xloclx32, xloclx32 ) );
+                  xlockd = _mm_cvtepi32_pd( _mm_unpackhi_epi64( xlockx32, xlockx32 ) );
+                  xwght  = _mm_loadu_pd   ( &weight[ii][2] );
+                  xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd     ( xlocld, xlockd ) );
+                  
+                  xacc = _mm_add_pd( xacc, xprdct );
+
+                  //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
+                }
+
+                xacc = _mm_hadd_pd( xacc, xacc );
+
+                *cov++ += _mm_cvtsd_f64( xacc );
+                //*cov++ += sum;
+              }
+
+              //double sum = 0.0;
+              __m128d xacc = _mm_setzero_pd();
+
+              for( int ii = 0; ii < 4; ii++ )
+              {
+                const __m128i xlockx32 = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &Elocalk[(ii << 2)] ) );
+                const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal [ii][0] ) );
+                
+                __m128d ylocd  = _mm_cvtepi32_pd( yloc32 );
+                __m128d xlockd = _mm_cvtepi32_pd( xlockx32 );
+                __m128d xwght  = _mm_loadu_pd   ( &weight[ii][0] );
+                __m128d xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd( ylocd, xlockd ) );
+                
+                xacc    = _mm_add_pd      ( xacc, xprdct );
+                
+                ylocd   = _mm_cvtepi32_pd ( _mm_unpackhi_epi64( yloc32, yloc32 ) );
+                xlockd  = _mm_cvtepi32_pd ( _mm_unpackhi_epi64( xlockx32, xlockx32 ) );
+                xwght   = _mm_loadu_pd    ( &weight[ii][2] );
+                xprdct  = _mm_mul_pd      ( xwght, _mm_mul_pd( ylocd, xlockd ) );
+                
+                xacc    = _mm_add_pd      ( xacc, xprdct );
+
+                //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
+              }
+
+              xacc = _mm_hadd_pd( xacc, xacc );
+
+              alfCovariance[classIdx].y[0][k] += _mm_cvtsd_f64( xacc );
+              //alfCovariance[classIdx].y[0][k] += sum;
+            }
+
+            //double sum = 0.0;
+            __m128d xacc = _mm_setzero_pd();
+
+            for( int ii = 0; ii < 4; ii++ )
+            {
+              const __m128i yloc32   = _mm_cvtepi16_epi32( _mm_loadl_epi64( ( const __m128i* ) &yLocal[ii][0] ) );
+              
+              __m128d ylocd  = _mm_cvtepi32_pd( yloc32 );
+              __m128d xwght  = _mm_loadu_pd   ( &weight[ii][0] );
+              __m128d xprdct = _mm_mul_pd     ( xwght, _mm_mul_pd( ylocd, ylocd ) );
+              
+              xacc    = _mm_add_pd      ( xacc, xprdct );
+              
+              ylocd   = _mm_cvtepi32_pd ( _mm_unpackhi_epi64( yloc32, yloc32 ) );
+              xwght   = _mm_loadu_pd    ( &weight[ii][2] );
+              xprdct  = _mm_mul_pd      ( xwght, _mm_mul_pd( ylocd, ylocd ) );
+              
+              xacc    = _mm_add_pd      ( xacc, xprdct );
+
+              //for( int jj = 0; jj < 4; jj++ ) sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
+            }
+
+            xacc = _mm_hadd_pd( xacc, xacc );
+
+            alfCovariance[classIdx].pixAcc += _mm_cvtsd_f64( xacc );
+            //alfCovariance[classIdx].pixAcc += sum;
+          }
+          else
+#endif
+          {
+            for( int k = 0; k < shape.numCoeff; k++ )
+            {
+              const Pel* Elocalk  = &ELocal[k << 4];
+              double* cov   = &alfCovariance[classIdx].E[0][0][k][k];
+
+              for( int l = k; l < shape.numCoeff; l++ )
+              {
+                const Pel* Elocall = &ELocal[l << 4];
+
+                double sum = 0.0;
+                for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
+                {
+                  sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
+                }
+
+                *cov++ += sum;
+              }
 
               double sum = 0.0;
               for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
               {
-                sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
+                sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
               }
 
-              *cov++ += sum;
+              alfCovariance[classIdx].y[0][k] += sum;
             }
 
             double sum = 0.0;
             for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
             {
-              sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
+              sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
             }
 
-            alfCovariance[classIdx].y[0][k] += sum;
+            alfCovariance[classIdx].pixAcc += sum;
           }
-
-          double sum = 0.0;
-          for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
-          {
-            sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
-          }
-
-          alfCovariance[classIdx].pixAcc += sum;
         }
         else
         {
