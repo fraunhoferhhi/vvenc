@@ -551,23 +551,22 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
     m_internChromaFormat = m_inputFileChromaFormat;
   }
 
+
   if( m_packedYUVInput )
   {
-    if( m_internChromaFormat != VVENC_CHROMA_400 && m_internChromaFormat != VVENC_CHROMA_420 )
-    {
-      cout <<  "error: Input chroma format must be either 400 or 420 for packed input" << std::endl;
-      return false;
-    }
-
-    if( m_internChromaFormat == VVENC_CHROMA_420 && vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
-    {
-      cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
-      return false;
-    }
-    else if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 0 ) % 4 != 0 )
+    if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 0 ) % 4 != 0 )
     {
       cout <<  "error: unsupported input width for packed input (width must be a multiple of 4)" << std::endl;
       return false;
+    }
+
+    if( m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422 )
+    {
+      if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
+      {
+        cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
+        return false;
+      }
     }
   }
 
@@ -1281,30 +1280,27 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   if( m_packedYUVInput )
   {
-    if( m_internChromaFormat != VVENC_CHROMA_400 && m_internChromaFormat != VVENC_CHROMA_420 )
-    {
-      cout <<  "error: Input chroma format must be either 400 or 420 for packed input" << std::endl;
-      error = true;
-    }
-
-    if( m_internChromaFormat == VVENC_CHROMA_420 && vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
-    {
-      cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
-      error = true;
-    }
-    else if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 0 ) % 4 != 0 )
+    if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 0 ) % 4 != 0 )
     {
       cout <<  "error: unsupported input width for packed input (width must be a multiple of 4)" << std::endl;
       error = true;
+    }
+
+    if( m_internChromaFormat == VVENC_CHROMA_420 || m_internChromaFormat == VVENC_CHROMA_422 )
+    {
+      if( vvenc_get_width_of_component( m_internChromaFormat, m_SourceWidth, 1 ) % 4 != 0 )
+      {
+        cout <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
+        error = true;
+      }
     }
   }
 
   if( m_packedYUVOutput && ! m_reconFileName.empty() )
   {
-    if (m_outputBitDepth[0] == 0)
-      m_outputBitDepth[0] = m_internalBitDepth[0];
-    if (m_outputBitDepth[1] == 0)
-      m_outputBitDepth[1] = m_outputBitDepth[0];
+    // if output bitdepth not defined, use internal bitdepth as default value
+    if (m_outputBitDepth[0] == 0) m_outputBitDepth[0] = m_internalBitDepth[0];
+    if (m_outputBitDepth[1] == 0) m_outputBitDepth[1] = m_outputBitDepth[0];
 
     if( ( m_outputBitDepth[ 0 ] != 10 && m_outputBitDepth[ 0 ] != 12 )
         || ( ( ( m_SourceWidth ) & ( 1 + ( m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )

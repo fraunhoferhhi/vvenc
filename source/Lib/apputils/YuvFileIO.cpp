@@ -625,8 +625,9 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
   {
     for ( int i = 0; i < numComp; i++ )
     {
-      const int csx_file = (i == 0) ? 0 : 2;
-      frameSize += ( ( width * 5 / 4 ) * height ) >> csx_file;
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += (( ( width * 5 / 4 ) >> csx_file) * (height >> csy_file));
     }
   }
   else
@@ -716,14 +717,11 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
     if ( m_bufferChrFmt == VVENC_CHROMA_400 && comp)
       continue;
 
-    if( !m_packedYUVMode )
+    if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
     {
-      if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
-      {
-        eof = true;
-        m_lastError = "Source image contains values outside the specified bit range!";
-        return -1;
-      }
+      eof = true;
+      m_lastError = "Source image contains values outside the specified bit range!";
+      return -1;
     }
 
     scaleYuvPlane( yuvPlane, yuvPlane, m_bitdepthShift, minVal, maxVal );
