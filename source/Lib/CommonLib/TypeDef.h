@@ -665,10 +665,8 @@ private:
 };
 
 // if a check fails with THROW or CHECK, please check if ported correctly from assert in revision 1196)
-#define THROW(x)            throw( Exception( "\nERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
+#define THROW(x)            throw( Exception( "ERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
 #define CHECK(c,x)          if(c){ THROW(x); }
-#define EXIT(x)             throw( Exception( "\n" ) << x << "\n" )
-#define CHECK_NULLPTR(_ptr) CHECK( !( _ptr ), "Accessing an empty pointer pointer!" )
 
 #if !NDEBUG  // for non MSVC compiler, define _DEBUG if in debug mode to have same behavior between MSVC and others in debug
 #ifndef _DEBUG

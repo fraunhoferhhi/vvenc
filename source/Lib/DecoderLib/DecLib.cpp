@@ -1102,28 +1102,28 @@ void DecLib::xActivateParameterSets( const int layerId)
     // check that the current active PPS has not changed...
     if (m_parameterSetManager.getSPSChangedFlag(sps->spsId) )
     {
-      EXIT("Error - a new SPS has been decoded while processing a picture");
+      THROW("a new SPS has been decoded while processing a picture");
     }
     if (m_parameterSetManager.getPPSChangedFlag(pps->ppsId) )
     {
-      EXIT("Error - a new PPS has been decoded while processing a picture");
+      THROW("a new PPS has been decoded while processing a picture");
     }
     for (int i = 0; i < ALF_CTB_MAX_NUM_APS; i++)
     {
       APS* aps = m_parameterSetManager.getAPS(i, ALF_APS);
       if (aps && m_parameterSetManager.getAPSChangedFlag(i, ALF_APS))
       {
-        EXIT("Error - a new APS has been decoded while processing a picture");
+        THROW("a new APS has been decoded while processing a picture");
       }
     }
 
     if (lmcsAPS && m_parameterSetManager.getAPSChangedFlag(lmcsAPS->apsId, LMCS_APS) )
     {
-      EXIT("Error - a new LMCS APS has been decoded while processing a picture");
+      THROW("a new LMCS APS has been decoded while processing a picture");
     }
     if( scalinglistAPS && m_parameterSetManager.getAPSChangedFlag( scalinglistAPS->apsId, SCALING_LIST_APS ) )
     {
-      EXIT( "Error - a new SCALING LIST APS has been decoded while processing a picture" );
+      THROW( "a new SCALING LIST APS has been decoded while processing a picture" );
     }
 
     activateAPS(&m_picHeader, pSlice, m_parameterSetManager, apss, lmcsAPS, scalinglistAPS);

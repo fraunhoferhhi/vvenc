@@ -46,6 +46,10 @@ ifneq ($(disable-lto),)
 CONFIG_OPTIONS += -DVVENC_ENABLE_LINK_TIME_OPT=OFF
 endif
 
+ifneq ($(disable-json),)
+CONFIG_OPTIONS += -DVVENC_ENABLE_THIRDPARTY_JSON=OFF
+endif
+
 ifneq ($(enable-build-type-postfix),)
 CONFIG_OPTIONS += -DVVENC_ENABLE_BUILD_TYPE_POSTFIX=ON
 endif

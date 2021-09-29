@@ -70,6 +70,7 @@ public:
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
   std::string  m_reconFileName;                                ///< output reconstruction file
+  std::string  m_RCStatsFileName;                              ///< rate control statistics file
   vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
@@ -90,8 +91,12 @@ public:
 public:
   bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
   bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+  bool checkCfg();
 
   virtual std::string getConfigAsString( vvencMsgLevel eMsgLevel ) const;
+
+private:
+  bool xCheckCfg();
 };
 
 } // namespace

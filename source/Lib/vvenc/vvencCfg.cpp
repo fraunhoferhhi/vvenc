@@ -346,6 +346,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_RCTargetBitrate                         = 0;
   c->m_RCNumPasses                             = -1;
+  c->m_RCPass                                  = -1;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
@@ -817,7 +818,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   // rate control
-  if( c->m_RCNumPasses < 0 ) c->m_RCNumPasses = 1;
+  if( c->m_RCNumPasses < 0 )
+  {
+    if( c->m_RCPass > 0 )
+      c->m_RCNumPasses = 2;
+    else
+      c->m_RCNumPasses = c->m_RCTargetBitrate > 0 ? 2 : 1;
+  }
 
   // threading
   if( c->m_numThreads < 0 )
@@ -2038,10 +2045,10 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_level   == vvencLevel::VVENC_LEVEL_AUTO, "can not determin level");
 
-  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3, "Error: FastInterSearchMode parameter out of range" );
+  vvenc_confirmParameter( c, c->m_fastInterSearchMode<VVENC_FASTINTERSEARCH_AUTO || c->m_fastInterSearchMode>VVENC_FASTINTERSEARCH_MODE3,    "Error: FastInterSearchMode parameter out of range" );
   vvenc_confirmParameter( c, c->m_motionEstimationSearchMethod < 0 || c->m_motionEstimationSearchMethod >= VVENC_MESEARCH_NUMBER_OF_METHODS, "Error: FastSearch parameter out of range" );
-  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3, "Error: FastSearchSCC parameter out of range" );
-  vvenc_confirmParameter( c, c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT,                                                "Intern chroma format must be either 400, 420, 422 or 444" );
+  vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
+  vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
 
   switch ( c->m_conformanceWindowMode)
   {
@@ -2260,6 +2267,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_RCTargetBitrate == 0 && c->m_RCNumPasses != 1, "Only single pass encoding supported, when rate control is disabled" );
   vvenc_confirmParameter( c, c->m_RCNumPasses < 1 || c->m_RCNumPasses > 2,       "Only one pass or two pass encoding supported" );
+  vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
+  vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
@@ -3397,6 +3406,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   if ( c->m_RCTargetBitrate > 0 )
   {
     css << "Passes:" << c->m_RCNumPasses << " ";
+    css << "Pass:" << c->m_RCPass << " ";
     css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
     css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";

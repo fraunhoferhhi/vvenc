@@ -240,7 +240,7 @@ VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *enc, void * 
   return VVENC_OK;
 }
 
-VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass )
+VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass, const char * statsFName )
 {
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
@@ -248,7 +248,7 @@ VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass )
     return VVENC_ERR_INITIALIZE;
   }
 
-  return d->initPass( pass );
+  return d->initPass( pass, statsFName );
 }
 
 

@@ -215,7 +215,7 @@ X86_VEXT read_x86_extension_flags(const std::string &extStrId)
         }
         else
         {
-          EXIT( "SIMD Mode not supported: " << ext_flags << "\n" );
+          THROW( "SIMD Mode not supported: " << ext_flags << "\n" );
         }
       }
       else
