@@ -1952,7 +1952,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   const uint32_t uibits = numRBSPBytes * 8;
 
-  if ((m_pcEncCfg->m_RCNumPasses == 2) && (m_pcRateCtrl->rcPass < m_pcRateCtrl->rcMaxPass))
+  if ( m_pcEncCfg->m_RCNumPasses == 2 && ! m_pcRateCtrl->rcIsFinalPass )
   {
     visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
   }
@@ -1997,7 +1997,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     {
       std::string cInfo = print("RC pass %d/%d, analyze poc %d",
           m_pcRateCtrl->rcPass + 1,
-          m_pcRateCtrl->rcMaxPass + 1,
+          m_pcEncCfg->m_RCNumPasses,
           slice->poc );
 
           accessUnit.InfoString.append( cInfo );

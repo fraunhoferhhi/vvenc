@@ -439,6 +439,7 @@ typedef struct vvenc_config
 
   int                 m_RCTargetBitrate;
   int                 m_RCNumPasses;
+  int                 m_RCPass;
 
   vvencSegmentMode    m_SegmentMode;
 
