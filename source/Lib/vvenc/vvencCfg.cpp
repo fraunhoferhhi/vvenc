@@ -2800,6 +2800,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 2;
       c->m_bIntegerET                      = 1;
       c->m_IntraEstDecBit                  = 3;
+      c->m_reduceIntraChromaModesFullRD    = true;
 
       // tools
       c->m_RDOQ                            = 2;
