@@ -1370,9 +1370,9 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
         int j = hh;
         int n = 0;
         int Var[4];
-        for (j = hh; (j < hh + SizeS) && (j < uiHeight); j++)
+        for (j = hh; (j < hh + SizeS) && (j < uiHeight);)
         {
-          for (i = ww; (i < ww + SizeS) && (i < uiWidth); i++)
+          for (i = ww; (i < ww + SizeS) && (i < uiWidth);)
           {
             int sum = 0;
             int Mit = 0;
