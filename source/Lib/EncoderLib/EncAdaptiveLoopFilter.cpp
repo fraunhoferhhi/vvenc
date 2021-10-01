@@ -3278,7 +3278,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
   }
   else
   {
-    for( int i = 0; i < area.height; i += 4 )
+    for( int i = 0; i < area.height; i++ )
     {
       const int maxFilterSamples = 4;
 
