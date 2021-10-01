@@ -580,7 +580,6 @@ void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const 
       bool enableRsp = m_tcase == 5 ? false : (m_tcase < 5 ? (cTid < m_tcase + 1 ? false : true) : (cTid <= 10 - m_tcase ? true : false));
       m_sliceReshapeInfo.sliceReshaperEnabled = enableRsp;
 
-
       if( m_sliceReshapeInfo.sliceReshaperEnabled )
       {
         m_binNum = PIC_CODE_CW_BINS;
