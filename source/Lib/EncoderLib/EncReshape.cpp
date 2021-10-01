@@ -579,6 +579,97 @@ void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const 
       const int cTid = m_reshapeCW.rspTid;
       bool enableRsp = m_tcase == 5 ? false : (m_tcase < 5 ? (cTid < m_tcase + 1 ? false : true) : (cTid <= 10 - m_tcase ? true : false));
       m_sliceReshapeInfo.sliceReshaperEnabled = enableRsp;
+
+
+      if( m_sliceReshapeInfo.sliceReshaperEnabled )
+      {
+        m_binNum = PIC_CODE_CW_BINS;
+        CPelBuf picY = pic.getOrigBuf( COMP_Y );
+        const int width = picY.width;
+        const int height = picY.height;
+        const int stride = picY.stride;
+        uint32_t binCnt[PIC_CODE_CW_BINS];
+        std::fill_n( binCnt, m_binNum, 0 );
+
+        m_srcSeqStats = SeqInfo();
+        for( uint32_t y = 0; y < height; y++ )
+        {
+          for( uint32_t x = 0; x < width; x++ )
+          {
+            const Pel pxlY = picY.buf[x];
+            int binLen = m_reshapeLUTSize / m_binNum;
+            uint32_t binIdx = ( uint32_t ) (pxlY / binLen);
+            binCnt[binIdx]++;
+          }
+          picY.buf += stride;
+        }
+
+        for( int b = 0; b < m_binNum; b++ )
+        {
+          m_srcSeqStats.binHist[b] = ( double ) binCnt[b] / ( double ) (m_reshapeCW.rspPicSize);
+        }
+
+        double avgY = 0.0;
+        double varY = 0.0;
+        picY = pic.getOrigBuf( COMP_Y );
+        for( int y = 0; y < height; y++ )
+        {
+          for( int x = 0; x < width; x++ )
+          {
+            avgY += picY.buf[x];
+            varY += ( double ) picY.buf[x] * ( double ) picY.buf[x];
+          }
+          picY.buf += stride;
+        }
+        avgY = avgY / (width * height);
+        varY = varY / (width * height) - avgY * avgY;
+
+        if( isChromaEnabled( pic.chromaFormat ) )
+        {
+          CPelBuf picU = pic.getOrigBuf( COMP_Cb );
+          CPelBuf picV = pic.getOrigBuf( COMP_Cr );
+          const int widthC = picU.width;
+          const int heightC = picU.height;
+          const int strideC = picU.stride;
+          double avgU = 0.0, avgV = 0.0;
+          double varU = 0.0, varV = 0.0;
+          for( int y = 0; y < heightC; y++ )
+          {
+            for( int x = 0; x < widthC; x++ )
+            {
+              avgU += picU.buf[x];
+              avgV += picV.buf[x];
+              varU += ( int64_t ) picU.buf[x] * ( int64_t ) picU.buf[x];
+              varV += ( int64_t ) picV.buf[x] * ( int64_t ) picV.buf[x];
+            }
+            picU.buf += strideC;
+            picV.buf += strideC;
+          }
+          avgU = avgU / (widthC * heightC);
+          avgV = avgV / (widthC * heightC);
+          varU = varU / (widthC * heightC) - avgU * avgU;
+          varV = varV / (widthC * heightC) - avgV * avgV;
+          if( varY > 0 )
+          {
+            m_srcSeqStats.ratioStdU = sqrt( varU ) / sqrt( varY );
+            m_srcSeqStats.ratioStdV = sqrt( varV ) / sqrt( varY );
+          }
+        }
+
+        if( m_srcSeqStats.binHist[m_binNum - 1] > 0.0003 )
+        {
+          m_sliceReshapeInfo.sliceReshaperEnabled = false;
+        }
+        if( m_srcSeqStats.binHist[0] > 0.03 )
+        {
+          m_sliceReshapeInfo.sliceReshaperEnabled = false;
+        }
+
+        if( (m_srcSeqStats.ratioStdU + m_srcSeqStats.ratioStdV) > 1.5 && m_srcSeqStats.binHist[1] > 0.5 )
+        {
+          m_sliceReshapeInfo.sliceReshaperEnabled = false;
+        }
+      }
     }
   }
 }
