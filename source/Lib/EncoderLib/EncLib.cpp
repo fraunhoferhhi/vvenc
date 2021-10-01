@@ -1358,9 +1358,9 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
     int SizeS = SIZE_BL << 1;
     int sR[4] = { 0,0,0,0 };
     int AmountBlock = (uiWidth >> 2) * (uiHeight >> 2);
-    for (hh = 0; hh < uiHeight;)
+    for (hh = 0; hh < uiHeight; hh += SizeS)
     {
-      for (ww = 0; ww < uiWidth;)
+      for (ww = 0; ww < uiWidth; ww += SizeS)
       {
         int Rx = ww > (uiWidth >> 1) ? 1 : 0;
         int Ry = hh > (uiHeight >> 1) ? 1 : 0;
@@ -1370,9 +1370,9 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
         int j = hh;
         int n = 0;
         int Var[4];
-        for (j = hh; (j < hh + SizeS) && (j < uiHeight); j++)
+        for (j = hh; (j < hh + SizeS) && (j < uiHeight); j += size)
         {
-          for (i = ww; (i < ww + SizeS) && (i < uiWidth); i++)
+          for (i = ww; (i < ww + SizeS) && (i < uiWidth); i += size)
           {
             int sum = 0;
             int Mit = 0;
@@ -1399,9 +1399,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
             V = V / sizeEnd;
             Var[n] = V;
             n++;
-            i += size;
           }
-          j += size;
         }
         for (int i = 0; i < 2; i++)
         {
@@ -1414,9 +1412,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
             sR[Ry] += 1;
           }
         }
-        ww += SizeS;
       }
-      hh += SizeS;
     }
     int s = 0;
     isSccStrg = true;
