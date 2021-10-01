@@ -2785,11 +2785,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 5;
 
       // speedups
-#if 1//QTBTT_SPEED3
-      c->m_qtbttSpeedUp                    = 5;
-#else
-      c->m_qtbttSpeedUp                    = 3;
-#endif
+      c->m_qtbttSpeedUp                    = 7;
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -2800,6 +2796,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 2;
       c->m_bIntegerET                      = 1;
       c->m_IntraEstDecBit                  = 3;
+      c->m_numIntraModesFullRD             = 1;
       c->m_reduceIntraChromaModesFullRD    = true;
 
       // tools
@@ -2837,11 +2834,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups
-#if 1//QTBTT_SPEED3
-      c->m_qtbttSpeedUp                    = 5;
-#else
-      c->m_qtbttSpeedUp                    = 3;
-#endif
+      c->m_qtbttSpeedUp                    = 7;
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -2852,8 +2845,13 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 1;
       c->m_IntraEstDecBit                  = 3;
+      c->m_numIntraModesFullRD             = 1;
+      c->m_reduceIntraChromaModesFullRD    = true;
 
       // tools
+      c->m_alf                             = 1;
+      c->m_alfSpeed                        = 1;
+      c->m_ccalf                           = 1;
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
@@ -2887,7 +2885,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups                          
-      c->m_qtbttSpeedUp                    = 2;
+      c->m_qtbttSpeedUp                    = 3;
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -2897,7 +2895,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_FIMMode                         = 2;
       c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 0;
-      c->m_IntraEstDecBit                  = 3;
+      c->m_IntraEstDecBit                  = 2;
+      c->m_numIntraModesFullRD             = -1;
+      c->m_reduceIntraChromaModesFullRD    = true;
 
       // tools                             
       c->m_RDOQ                            = 2;
@@ -2905,10 +2905,12 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_Affine                          = 2;
       c->m_alf                             = 1;
       c->m_alfSpeed                        = 1;
+      c->m_allowDisFracMMVD                = 1;
       c->m_BDOF                            = 1;
       c->m_ccalf                           = 1;
       c->m_DMVR                            = 1;
       c->m_AMVRspeed                       = 5;
+      c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
@@ -2946,8 +2948,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_log2MinCodingBlockSize          = 2;
 
       // speedups                          
-      c->m_qtbttSpeedUp                    = 2;
-      c->m_contentBasedFastQtbt            = 1;
+      c->m_qtbttSpeedUp                    = 3;
+      c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
@@ -2957,6 +2959,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 2;
+      c->m_numIntraModesFullRD             = -1;
+      c->m_reduceIntraChromaModesFullRD    = false;
 
       // tools
       c->m_Affine                          = 2;
@@ -3023,6 +3027,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 1;
+      c->m_numIntraModesFullRD             = -1;
+      c->m_reduceIntraChromaModesFullRD    = false;
 
       // tools
       c->m_Affine                          = 2;
@@ -3038,7 +3044,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_EDO                             = 2;
       c->m_Geo                             = 1;
       c->m_AMVRspeed                       = 1;
-      c->m_ISP                             = 3;
+      c->m_ISP                             = 1;
       c->m_JointCbCrMode                   = 1;
       c->m_LFNST                           = 1;
       c->m_LMChroma                        = 1;
@@ -3046,7 +3052,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_vvencMCTF.MCTF                  = 2;
       c->m_vvencMCTF.MCTFSpeed             = 0;
       c->m_MIP                             = 1;
-      c->m_useFastMIP                      = 4;
+      c->m_useFastMIP                      = 0;
       c->m_MMVD                            = 3;
       c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
@@ -3092,6 +3098,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 0;
       c->m_bIntegerET                      = 0;
       c->m_IntraEstDecBit                  = 1;
+      c->m_numIntraModesFullRD             = -1;
+      c->m_reduceIntraChromaModesFullRD    = false;
 
       // tools
       c->m_Affine                          = 1;
@@ -3163,6 +3171,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_useEarlyCU                      = 1;
       c->m_bIntegerET                      = 1;
       c->m_IntraEstDecBit                  = 3;
+      c->m_numIntraModesFullRD             = -1;
+      c->m_reduceIntraChromaModesFullRD    = false;
 
       // tools
       c->m_Affine                          = 2;
