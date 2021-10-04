@@ -1061,8 +1061,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("IBCFastMethod",                                   m_IBCFastMethod,                                  "Fast methods for IBC. 1:default, [2..6] speedups")
   ("BCW",                                             m_BCW,                                            "Enable Generalized Bi-prediction(Bcw) 0: disabled, 1: enabled, 2: fast")
   ("FastInferMerge",                                  m_FIMMode,                                        "Fast method to skip Inter/Intra modes. 0: off, [1..4] speedups")
-  ("NumIntraModesFullRD",                             m_numIntraModesFullRD,                            "Number Modes for Full RD Intra Search. Default: -1=Auto. If set to 1: 5% speedup 1% Loss for fast and faster")
-  ("ReduceIntraChromaModesFullRD",                    m_reduceIntraChromaModesFullRD,                   "Reduce Modes for Chroma Full RD Intra Search. ")
+  ("NumIntraModesFullRD",                             m_numIntraModesFullRD,                            "Number modes for full RD intra search [-1, 1..3] (default: -1 auto)")
+  ("ReduceIntraChromaModesFullRD",                    m_reduceIntraChromaModesFullRD,                   "Reduce modes for chroma full RD intra search")
   ;
 
   opts.setSubSection("Input options");
