@@ -1258,7 +1258,7 @@ void IntraAnglePDPC_SIMD(Pel* pDsty,const int dstStride,Pel* refSide,const int w
         _mm_storel_epi64( ( __m128i * )(pDsty), xdst );
       else
       {
-        EXIT("wrong blocksize");
+        THROW("wrong blocksize");
       }
     }
   }

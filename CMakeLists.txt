@@ -54,10 +54,10 @@ if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   if( MSVC )
     add_compile_options( "/EHsc" )
   endif()
-  
+
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencFFapp" vvEncFfAppFound )
   list( FIND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/App/vvencapp" vvEncAppFound )
-  
+
   if( vvEncFfAppFound GREATER_EQUAL 0 OR vvEncAppFound GREATER_EQUAL 0 )
     list( PREPEND ${PROJECT_NAME}_ADD_SUBDIRECTORIES "source/Lib/apputils" )
   endif()
@@ -75,18 +75,20 @@ endif()
 
 # enable install target
 set( VVENC_ENABLE_INSTALL                   ON  CACHE BOOL   "Enable or disable install target" )
-                                                             
+
 # enable postfix                                             
 set( VVENC_ENABLE_BUILD_TYPE_POSTFIX        OFF CACHE BOOL   "Enable or disable build type postfix for apps and libs" )
-                                                             
+
 set( VVENC_ENABLE_LINK_TIME_OPT             ON  CACHE BOOL   "Enable link time optimization for release and profile builds" )
+
+set( VVENC_ENABLE_THIRDPARTY_JSON           ON  CACHE BOOL   "Enable use of thirdparty json library" )
 
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-    
+
   # enable address sanitizer
   set( VVENC_USE_ADDRESS_SANITIZER          OFF CACHE BOOL   "Enable or disable address sanitizer" )
-  
+
   # add -march=native
   set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
 endif()
@@ -343,8 +345,26 @@ add_test( NAME Test_compare_output-medium_noqpa_0thr COMMAND ${CMAKE_COMMAND} -E
 add_test( NAME Test_vvencFFapp-lowdelay_medium_enc COMMAND vvencFFapp -c ../../cfg/experimental/lowdelay_medium.cfg -c ../../test/data/RTn23.cfg --IntraPeriod=-1 -dph 1 -f 8 -b outf.vvc )
 add_test( NAME Test_vvencFFapp-lowdelay_medium_dec COMMAND vvencFFapp --decode -b outf.vvc )
 
-add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc )
- 
+add_test( NAME Test_vvencapp-medium_rc2p COMMAND vvencapp --preset medium -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 --Bitrate=10000 --Passes=2 -o out.vvc )
+set_tests_properties( Test_vvencapp-medium_rc2p PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_vvencFFapp-medium_rc2p COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../test/data/RTn23.cfg -f 5 --TargetBitrate=10000 --Passes=2 -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-medium_rc2p PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_compare_output-medium_rc2p COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_vvencFFapp-medium_rc2p_statsFile1_exp COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../test/data/RTn23.cfg -f 5 --TargetBitrate=10000 --Pass=1 --RCStatsFile=stats.json -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-medium_rc2p_statsFile1_exp PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_vvencFFapp-medium_rc2p_statsFile2_exp COMMAND vvencFFapp -c ../../cfg/randomaccess_medium.cfg -c ../../test/data/RTn23.cfg -f 5 --TargetBitrate=10000 --Pass=2 --RCStatsFile=stats.json -b outf.vvc )
+set_tests_properties( Test_vvencFFapp-medium_rc2p_statsFile2_exp PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_compare_output-medium_rc2p_statsFile_exp COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_vvencapp-medium_rc2p_statsFile1_easy COMMAND vvencapp --preset medium -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 --Bitrate=10000 --Pass=1 --RCStatsFile=stats.json -o out.vvc )
+set_tests_properties( Test_vvencapp-medium_rc2p_statsFile1_easy PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_vvencapp-medium_rc2p_statsFile2_easy COMMAND vvencapp --preset medium -s 80x44 -r 15 -i ../../test/data/RTn23_80x44p15_f15.yuv -f 5 --Bitrate=10000 --Pass=2 --RCStatsFile=stats.json -o out.vvc )
+set_tests_properties( Test_vvencapp-medium_rc2p_statsFile2_easy PROPERTIES TIMEOUT 30 )
+add_test( NAME Test_compare_output-medium_rc2p_statsFile_easy COMMAND ${CMAKE_COMMAND} -E compare_files out.vvc outf.vvc )
+
+add_test( NAME Test_remove_temp_files COMMAND ${CMAKE_COMMAND} -E remove out.vvc tout.vvc rec.yuv outf.vvc stats.json )
+
 
 if( VVENC_ENABLE_INSTALL )
   # include installer
