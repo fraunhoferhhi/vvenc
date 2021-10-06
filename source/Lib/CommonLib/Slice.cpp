@@ -972,7 +972,7 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
 {
   Picture* pic;
   int isAvailable = 0;
-  int notPresentPoc = -1;
+  int notPresentPoc = -2;
 
   if (isIDRorBLA()) return 0; //Assume that all pic in the DPB will be flushed anyway so no need to check.
 

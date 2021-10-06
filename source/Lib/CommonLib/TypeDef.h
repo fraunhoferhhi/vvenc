@@ -73,6 +73,8 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
+#define QTBTT_SPEED3                                      1
+
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
@@ -663,10 +665,8 @@ private:
 };
 
 // if a check fails with THROW or CHECK, please check if ported correctly from assert in revision 1196)
-#define THROW(x)            throw( Exception( "\nERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
+#define THROW(x)            throw( Exception( "ERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
 #define CHECK(c,x)          if(c){ THROW(x); }
-#define EXIT(x)             throw( Exception( "\n" ) << x << "\n" )
-#define CHECK_NULLPTR(_ptr) CHECK( !( _ptr ), "Accessing an empty pointer pointer!" )
 
 #if !NDEBUG  // for non MSVC compiler, define _DEBUG if in debug mode to have same behavior between MSVC and others in debug
 #ifndef _DEBUG

@@ -125,10 +125,7 @@ public:
   void (*m_filterCcAlf)             ( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, const Area &blkDst, const Area &blkSrc,
                                       const ComponentID compId, const int16_t *filterCoeff, const ClpRngs &clpRngs,
                                       CodingStructure &cs, int vbCTUHeight, int vbPos);
-  void applyCcAlfFilter             ( CodingStructure &cs, ComponentID compID, const PelBuf &dstBuf, const PelUnitBuf &recYuvExt,
-                                      uint8_t *   filterControl,
-                                      const short filterSet[MAX_NUM_CC_ALF_FILTERS][MAX_NUM_CC_ALF_CHROMA_COEFF],
-                                      const int   selectedFilterIdx);
+  void applyCcAlfFilterCTU          ( CodingStructure& cs, ComponentID compID, int ctuRsAddr );
   CcAlfFilterParam &getCcAlfFilterParam() { return m_ccAlfFilterParam; }
   uint8_t* getCcAlfControlIdc       ( const ComponentID compID)   { return m_ccAlfFilterControl[compID-1]; }
   void (*m_filter5x5Blk[2])         ( const AlfClassifier *classifier, const PelUnitBuf& recDst, const CPelUnitBuf& recSrc,

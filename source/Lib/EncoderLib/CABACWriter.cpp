@@ -484,35 +484,35 @@ void CABACWriter::coding_tree(const CodingStructure& cs, Partitioner& partitione
       {
         partitioner.treeType = chromaNotSplit ? TREE_L : TREE_D;
       }
-    partitioner.splitCurrArea( splitMode, cs );
+      partitioner.splitCurrArea( splitMode, cs );
 
-    do
-    {
-      if( cs.picture->blocks[partitioner.chType].contains( partitioner.currArea().blocks[partitioner.chType].pos() ) )
+      do
       {
-        coding_tree( cs, partitioner, cuCtx );
-      }
-    } while( partitioner.nextPart( cs ) );
-
-    partitioner.exitCurrSplit();
-    if( chromaNotSplit )
-    {
-      if (isChromaEnabled(cs.pcv->chrFormat))
-      {
-        CHECK( partitioner.chType != CH_L, "must be luma status" );
-        partitioner.chType = CH_C;
-        partitioner.treeType = TREE_C;
-
         if( cs.picture->blocks[partitioner.chType].contains( partitioner.currArea().blocks[partitioner.chType].pos() ) )
         {
           coding_tree( cs, partitioner, cuCtx );
         }
+      } while( partitioner.nextPart( cs ) );
+
+      partitioner.exitCurrSplit();
+      if( chromaNotSplit )
+      {
+        if (isChromaEnabled(cs.pcv->chrFormat))
+        {
+          CHECK( partitioner.chType != CH_L, "must be luma status" );
+          partitioner.chType = CH_C;
+          partitioner.treeType = TREE_C;
+
+          if( cs.picture->blocks[partitioner.chType].contains( partitioner.currArea().blocks[partitioner.chType].pos() ) )
+          {
+            coding_tree( cs, partitioner, cuCtx );
+          }
+        }
+        //recover
+        partitioner.chType = CH_L;
+        partitioner.treeType = TREE_D;
       }
-      //recover
-      partitioner.chType = CH_L;
-      partitioner.treeType = TREE_D;
-    }
-    partitioner.modeType = modeTypeParent;
+      partitioner.modeType = modeTypeParent;
     }
     return;
   }
@@ -535,7 +535,7 @@ void CABACWriter::coding_tree(const CodingStructure& cs, Partitioner& partitione
   }
   else
   {
-  DTRACE_COND( ( isEncoding() ), g_trace_ctx, D_QP, "x=%d, y=%d, w=%d, h=%d, qp=%d\n", cu.Y().x, cu.Y().y, cu.Y().width, cu.Y().height, cu.qp );
+    DTRACE_COND( ( isEncoding() ), g_trace_ctx, D_QP, "x=%d, y=%d, w=%d, h=%d, qp=%d\n", cu.Y().x, cu.Y().y, cu.Y().width, cu.Y().height, cu.qp );
   }
   DTRACE_BLOCK_REC_COND( ( !isEncoding() ), cs.picture->getRecoBuf( cu ), cu, cu.predMode );
 }
@@ -1451,31 +1451,31 @@ void CABACWriter::prediction_unit( const CodingUnit& cu )
     {
       if ( cu.smvdMode != 1 )
       {
-      ref_idx     ( cu, REF_PIC_LIST_1 );
-      if( !cu.cs->picHeader->mvdL1Zero || cu.interDir != 3 /* PRED_BI */ )
-      {
-        if ( cu.affine )
+        ref_idx     ( cu, REF_PIC_LIST_1 );
+        if( !cu.cs->picHeader->mvdL1Zero || cu.interDir != 3 /* PRED_BI */ )
         {
-          Mv mvd = cu.mvd[REF_PIC_LIST_1][0];
-          mvd.changeAffinePrecInternal2Amvr(cu.imv);
-          mvd_coding(mvd, 0); // already changed to signaling precision
-          mvd = cu.mvd[REF_PIC_LIST_1][1];
-          mvd.changeAffinePrecInternal2Amvr(cu.imv);
-          mvd_coding(mvd, 0); // already changed to signaling precision
-          if ( cu.affineType == AFFINEMODEL_6PARAM )
+          if ( cu.affine )
           {
-            mvd = cu.mvd[REF_PIC_LIST_1][2];
+            Mv mvd = cu.mvd[REF_PIC_LIST_1][0];
             mvd.changeAffinePrecInternal2Amvr(cu.imv);
+            mvd_coding(mvd, 0); // already changed to signaling precision
+            mvd = cu.mvd[REF_PIC_LIST_1][1];
+            mvd.changeAffinePrecInternal2Amvr(cu.imv);
+            mvd_coding(mvd, 0); // already changed to signaling precision
+            if ( cu.affineType == AFFINEMODEL_6PARAM )
+            {
+              mvd = cu.mvd[REF_PIC_LIST_1][2];
+              mvd.changeAffinePrecInternal2Amvr(cu.imv);
+              mvd_coding(mvd, 0); // already changed to signaling precision
+            }
+          }
+          else
+          {
+            Mv mvd = cu.mvd[REF_PIC_LIST_1][0];
+            mvd.changeTransPrecInternal2Amvr(cu.imv);
             mvd_coding(mvd, 0); // already changed to signaling precision
           }
         }
-        else
-        {
-          Mv mvd = cu.mvd[REF_PIC_LIST_1][0];
-          mvd.changeTransPrecInternal2Amvr(cu.imv);
-          mvd_coding(mvd, 0); // already changed to signaling precision
-        }
-      }
       }
       mvp_flag    ( cu, REF_PIC_LIST_1 );
     }
@@ -1536,7 +1536,6 @@ void CABACWriter::merge_flag( const CodingUnit& cu )
   m_BinEncoder.encodeBin( cu.mergeFlag, Ctx::MergeFlag() );
 
   DTRACE( g_trace_ctx, D_SYNTAX, "merge_flag() merge=%d pos=(%d,%d) size=%dx%d\n", cu.mergeFlag ? 1 : 0, cu.lumaPos().x, cu.lumaPos().y, cu.lumaSize().width, cu.lumaSize().height );
-
 }
 
 
@@ -2048,7 +2047,6 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
   {
     const bool              chromaCbfISP = area.blocks[COMP_Cb].valid() && cu.ispMode;
     if (area.blocks[COMP_Cb].valid() && (!CU::isSepTree(cu) || partitioner.chType == CH_C) && (!cu.ispMode || chromaCbfISP))
-  {
     {
       unsigned cbfDepth = chromaCbfISP ? trDepth - 1 : trDepth;
       {
@@ -2065,11 +2063,10 @@ void CABACWriter::transform_unit( const TransformUnit& tu, CUCtx& cuCtx, Partiti
           cbf_comp(*tu.cu, chromaCbfs.Cr, area.blocks[COMP_Cr], cbfDepth, chromaCbfs.Cb);
       }
     }
-  }
-  else if (CU::isSepTree(cu))
-  {
-    chromaCbfs = ChromaCbfs(false);
-  }
+    else if (CU::isSepTree(cu))
+    {
+      chromaCbfs = ChromaCbfs(false);
+    }
   }
   else if (CU::isSepTree(cu))
   {

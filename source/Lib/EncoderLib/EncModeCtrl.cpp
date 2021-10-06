@@ -559,15 +559,23 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   }
 }
 
+#if QTBTT_SPEED3
+void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
+#else
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )
+#endif
 {
   // Min/max depth
   unsigned minDepth = 0;
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
+#if QTBTT_SPEED3
+    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag);
+#else
     bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
     partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
+#endif
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
@@ -762,7 +770,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
           const CodingUnit *cuBR = bestCS->cus.back();
           unsigned height        = partitioner.currArea().lumaSize().height;
 
-          if (bestCU && ((bestCU->btDepth == 0 && maxBTD >= ((slice.isIntra() && !slice.sps->IBC) ? 3 : 2))
+          if(((bestCU->btDepth == 0 && maxBTD >= ((slice.isIntra() && !slice.sps->IBC) ? 3 : 2))
             || (bestCU->btDepth == 1 && cuBR && cuBR->btDepth == 1 && maxBTD >= ((slice.isIntra() && !slice.sps->IBC) ? 4 : 3)))
             && (width <= MAX_TB_SIZEY && height <= MAX_TB_SIZEY)
             && cuECtx.didHorzSplit && cuECtx.didVertSplit )
@@ -770,11 +778,19 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
             return false;
           }
         }
-        int stopSplit = (m_pcEncCfg->m_FastInferMerge >> 4) && (bestCS->slice->TLayer > 4);
-        int limitBLsize = stopSplit ? 2048 : 1024;
-        if ((m_pcEncCfg->m_bUseEarlyCU || stopSplit)&& bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < limitBLsize )
+        if( bestCS )
         {
-          return false;
+          if ( m_pcEncCfg->m_useEarlyCU == 2 && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip )
+          {
+            return false;
+          }
+
+          int stopSplit = (m_pcEncCfg->m_FastInferMerge >> 4) && (bestCS->slice->TLayer > 4);
+          int limitBLsize = stopSplit ? 2048 : 1024;
+          if((m_pcEncCfg->m_useEarlyCU == 1 || stopSplit) && bestCS->cost != MAX_DOUBLE && bestCU && bestCU->skip && partitioner.currArea().lumaSize().area() < limitBLsize )
+          {
+            return false;
+          }
         }
       }
       break;

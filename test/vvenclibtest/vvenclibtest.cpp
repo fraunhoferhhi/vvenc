@@ -228,8 +228,8 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams, false );
 
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4 }, true );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4 } );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,5 }, true );
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 15,31,256, }, true );
@@ -583,7 +583,7 @@ int callingOrderRegularInitPass()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
 
   fillInputPic( pcYuvPicture );
-  if( 0 != vvenc_init_pass( enc, 0 ) )
+  if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_encoder_close( enc );
@@ -639,7 +639,7 @@ int callingOrderRegularInit2Pass()
   vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
   fillInputPic( pcYuvPicture );
 
-  if( 0 != vvenc_init_pass( enc, 0 ) )
+  if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     return -1;
@@ -663,7 +663,7 @@ int callingOrderRegularInit2Pass()
     }
   }
 
-  if( 0 != vvenc_init_pass( enc, 1 ) )
+  if( 0 != vvenc_init_pass( enc, 1, nullptr ) )
   {
     vvenc_YUVBuffer_free( pcYuvPicture, true );
     vvenc_accessUnit_free( AU, true );
@@ -706,6 +706,7 @@ int checkSDKDefaultBehaviourRC()
   vvenc_config vvencParams;
   defaultSDKInit( vvencParams,  500000 );
   vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
+  vvencParams.m_RCNumPasses = 1;
 
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )

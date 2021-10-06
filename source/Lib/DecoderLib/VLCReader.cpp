@@ -407,7 +407,7 @@ void HLSyntaxReader::parsePPS( PPS* pcPPS, ParameterSetManager *parameterSetMana
     pcPPS->conformanceWindow = pcSPS->conformanceWindow;
   }
 
-  READ_FLAG( uiCode, "spps_caling_window_flag" );
+  READ_FLAG( uiCode, "pps_scaling_window_flag" );
   if( uiCode != 0 )
   {
     //th assume that the sps is there and its the final one  

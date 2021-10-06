@@ -258,6 +258,9 @@ struct CodedCUInfo
   bool isIntra;
   bool isSkip;
   bool isMMVDSkip;
+#if QTBTT_SPEED3
+  int  isMergeSimple;
+#endif
   bool isIBC;
   uint8_t BcwIdx;
   int  ctuRsAddr, poc;
@@ -356,7 +359,11 @@ public:
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
   void initCTUEncoding    ( const Slice &slice );
+#if QTBTT_SPEED3
+  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag );
+#else
   void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs );
+#endif
   void finishCULevel      ( Partitioner &partitioner );
 
   bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner );

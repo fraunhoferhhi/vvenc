@@ -280,10 +280,11 @@ VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *, void * ctx
   This method initializes the encoder instance in dependency to the encoder pass.
  \param[in]  vvencEncoder pointer to opaque handler
  \param[in]  pass number of current pass to init
+ \param[in]  rate control statistics file name
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        None
 */
-VVENC_DECL int vvenc_init_pass( vvencEncoder *, int pass );
+VVENC_DECL int vvenc_init_pass( vvencEncoder *, int pass, const char * statsFName );
 
 /* vvenc_encode
   This method encodes a picture.
@@ -428,7 +429,7 @@ VVENC_DECL bool  vvenc_is_tracing_enabled( void );
  * set filename of a bitstream that should be decoded
  \retval[ ] const char* file name of bitstream
 */
-VVENC_DECL int   vvenc_decode_bitstream( const char* FileName);
+VVENC_DECL int   vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
 
 VVENC_NAMESPACE_END

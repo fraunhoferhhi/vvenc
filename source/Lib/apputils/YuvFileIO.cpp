@@ -74,6 +74,7 @@ bool readYuvPlane( std::istream&       fd,
                    vvencYUVPlane&      yuvPlane,
                    bool                is16bit,
                    int                 fileBitDepth,
+                   int                 packedYUVInput,
                    const int&          compID,
                    const vvencChromaFormat& inputChFmt,
                    const vvencChromaFormat& internChFmt
@@ -91,9 +92,6 @@ bool readYuvPlane( std::istream&       fd,
 
   const int fileStride = ( ( width  << csx_dest ) * ( is16bit ? 2 : 1 ) ) >> csx_file;
   const int fileHeight = ( ( height << csy_dest )                       ) >> csy_file;
-
-  std::vector<uint8_t> bufVec( fileStride );
-  uint8_t *buf = &( bufVec[0] );
 
   if ( compID != 0 && ( inputChFmt == VVENC_CHROMA_400 || internChFmt == VVENC_CHROMA_400 ) )
   {
@@ -119,8 +117,45 @@ bool readYuvPlane( std::istream&       fd,
       }
     }
   }
+  else if ( packedYUVInput )
+  {
+    const int fileStride_packed = ( width * 5 / 4 );
+    std::vector<uint8_t> bufVec( fileStride_packed );
+
+    for( int y = 0; y < height; y++ )
+    {
+      uint8_t *buf = &( bufVec[0] );
+
+      // read a new line
+      fd.read( reinterpret_cast<char*>( buf ), fileStride_packed );
+      if ( fd.eof() || fd.fail() )
+      {
+        return false;
+      }
+
+      for ( int x = 0; x < width; x += 4 )
+      {
+        int64_t iTemp = 0;
+        unsigned char* pucTemp = reinterpret_cast< unsigned char* >( &iTemp );
+        pucTemp[0] = buf[0];
+        pucTemp[1] = buf[1];
+        pucTemp[2] = buf[2];
+        pucTemp[3] = buf[3];
+        pucTemp[4] = buf[4];
+
+        dst[x+0] = 0x03ff & (iTemp>>0);
+        dst[x+1] = 0x03ff & (iTemp>>10);
+        dst[x+2] = 0x03ff & (iTemp>>20);
+        dst[x+3] = 0x03ff & (iTemp>>30);
+        buf += 5;
+      }
+      dst += stride;
+    }
+  }
   else
   {
+    std::vector<uint8_t> bufVec( fileStride );
+    uint8_t *buf = &( bufVec[0] );
     const unsigned mask_y_file = ( 1 << csy_file ) - 1;
     const unsigned mask_y_dest = ( 1 << csy_dest ) - 1;
     for( int y444 = 0; y444 < ( height << csy_dest ); y444++ )
@@ -464,7 +499,7 @@ void scaleYuvPlane( vvencYUVPlane& yuvPlaneOut, const vvencYUVPlane& yuvPlaneIn,
       for( int x = 0; x < width; x++)
       {
         LPel val = ( src[ x ] + rounding ) >> shiftbitsr;
-        dst[ x ] = std::min<LPel>( minVal, std::max<LPel>( maxVal, val ) );
+        dst[ x ] = std::max<LPel>( minVal, std::min<LPel>( maxVal, val ) );
       }
     }
   }
@@ -486,15 +521,9 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
   m_packedYUVMode       = packedYUVMode;
   m_readStdin           = false;
 
-  if( m_packedYUVMode && (m_bufferChrFmt == VVENC_CHROMA_400) )
-  {  
-    m_lastError = "\nERROR: write packed yuv for chroma 400 not supported";
-    return -1;
-  }
-
-  if( m_packedYUVMode &&  !bWriteMode )
+  if( m_packedYUVMode && !bWriteMode && m_fileBitdepth != 10 )
   {
-    m_lastError = "\nERROR: yuv file input - no packed mode support";
+    m_lastError = "\nERROR: file bitdepth for packed yuv input must be 10";
     return -1;
   }
 
@@ -570,15 +599,28 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
 
   //set the frame size according to the chroma format
   std::streamoff frameSize      = 0;
-  unsigned wordsize             = ( m_fileBitdepth > 8 ) ? 2 : 1;
   const int numComp = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
-  for ( int i = 0; i < numComp; i++ )
+
+  if( m_packedYUVMode)
   {
-    const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
-    const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
-    frameSize += ( width >> csx_file ) * ( height >> csy_file );
+    for ( int i = 0; i < numComp; i++ )
+    {
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += (( ( width * 5 / 4 ) >> csx_file) * (height >> csy_file));
+    }
   }
-  frameSize *= wordsize;
+  else
+  {
+    unsigned wordsize             = ( m_fileBitdepth > 8 ) ? 2 : 1;
+    for ( int i = 0; i < numComp; i++ )
+    {
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += ( width >> csx_file ) * ( height >> csy_file );
+    }
+    frameSize *= wordsize;
+  }
 
   const std::streamoff offset = frameSize * numFrames;
 
@@ -611,19 +653,34 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
     return -1;
   }
 
+  if ( m_packedYUVMode &&  ( 0 != (yuvInBuf.planes[0].width >> 1) % 4 ) )
+  {
+    m_lastError = "unsupported file width for packed input";
+    return -1;
+  }
+
+  const bool monochromFix    = ( m_bufferChrFmt==VVENC_CHROMA_400 && m_fileChrFmt!=VVENC_CHROMA_400 ); 
   const bool is16bit         = m_fileBitdepth > 8;
   const int desired_bitdepth = m_MSBExtendedBitDepth + m_bitdepthShift;
   const bool b709Compliance  = ( m_clipToRec709 ) && ( m_bitdepthShift < 0 && desired_bitdepth >= 8 );     /* ITU-R BT.709 compliant clipping for converting say 10b to 8b */
   const LPel minVal           = b709Compliance ? ( (    1 << ( desired_bitdepth - 8 ) )    ) : 0;
   const LPel maxVal           = b709Compliance ? ( ( 0xff << ( desired_bitdepth - 8 ) ) -1 ) : ( 1 << desired_bitdepth ) - 1;
   const int numComp                = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
+
   for( int comp = 0; comp < numComp; comp++ )
   {
-    vvencYUVPlane& yuvPlane = yuvInBuf.planes[ comp ];
+    vvencYUVPlane yuvPlane = yuvInBuf.planes[ comp ];
+
+    if( monochromFix && comp )
+    {
+      yuvPlane.width  = yuvInBuf.planes[0].width  >> (m_fileChrFmt == VVENC_CHROMA_444 ? 0 : 1);
+      yuvPlane.height = 2*yuvInBuf.planes[0].height >> (m_fileChrFmt != VVENC_CHROMA_420 ? 0 : 1);
+      yuvPlane.stride = yuvPlane.width;
+    }
 
     if( m_readStdin )
     {
-      if ( ! readYuvPlane( std::cin, yuvPlane, is16bit, m_fileBitdepth, comp, m_fileChrFmt, m_bufferChrFmt ) )
+      if ( ! readYuvPlane( std::cin, yuvPlane, is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_fileChrFmt, m_bufferChrFmt ) )
       {
         eof = true;
         return 0;
@@ -631,13 +688,13 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
     }
     else
     {
-      if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, comp, m_fileChrFmt, m_bufferChrFmt ) )
+      if ( ! readYuvPlane( m_cHandle, yuvPlane, is16bit, m_fileBitdepth, m_packedYUVMode, comp, m_fileChrFmt, m_bufferChrFmt ) )
       {
         eof = true;
         return 0;
       }
     }
-    if ( m_bufferChrFmt == VVENC_CHROMA_400 )
+    if ( m_bufferChrFmt == VVENC_CHROMA_400 && comp)
       continue;
 
     if ( ! verifyYuvPlane( yuvPlane, m_fileBitdepth ) )
