@@ -1200,20 +1200,11 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
       pps.tileRowHeight.push_back( m_cEncCfg.m_tileRowHeight[i] );
     }
     pps.initTiles();
-    pps.rectSlice      = !m_cEncCfg.m_rasterSliceFlag;
-
-    if( pps.rectSlice )
-    {
-      pps.singleSlicePerSubPic = m_cEncCfg.m_singleSlicePerSubPicFlag;
-      pps.numSlicesInPic       = m_cEncCfg.m_numSlicesInPic;
-      pps.tileIdxDeltaPresent  = m_cEncCfg.m_tileIdxDeltaPresentFlag;
-      pps.rectSlices.resize( pps.numSlicesInPic );
-      pps.initRectSliceMap( &sps );
-    }
-    else
-    {
-      CHECK( true, "raster-scan slices not yet supported" );
-    }
+    pps.rectSlice            = true;
+    pps.numSlicesInPic       = m_cEncCfg.m_numSlicesInPic;
+    pps.tileIdxDeltaPresent  = false;
+    pps.rectSlices.resize( pps.numSlicesInPic );
+    pps.initRectSliceMap( &sps );
   }
 
   pps.pcv            = new PreCalcValues( sps, pps, true );

@@ -712,19 +712,13 @@ typedef struct vvenc_config
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 
   bool                m_picPartitionFlag;
-  bool                m_rasterSliceFlag;
   unsigned int        m_tileColumnWidth[10];
   unsigned int        m_tileRowHeight[10];
-  int                 m_rectSlicePos[1200];
-  int                 m_rectSliceFixedWidth;
-  int                 m_rectSliceFixedHeight;
   uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
   uint32_t            m_numTileCols;                                                     // derived number of tile columns
   uint32_t            m_numTileRows;                                                     // derived number of tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
-  bool                m_tileIdxDeltaPresentFlag;                                         // derived tile index delta present flag
-  bool                m_singleSlicePerSubPicFlag;
   
   // decode bitstream options
   int                 m_switchPOC;                                                       // dbg poc.

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Fï¿¶rderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,7 @@ struct LevelTierFeatures
   uint32_t      maxSlicesPerAu;
   uint32_t      maxTilesPerAu;
   uint32_t      maxTileCols;
+  uint32_t      maxTileRows;
   uint64_t      maxLumaSr;
   uint32_t      maxBr[VVENC_NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
   uint32_t      minCrBase[VVENC_NUMBER_OF_TIERS];
@@ -69,6 +70,7 @@ struct LevelTierFeatures
   uint32_t      getMaxPicHeightInLumaSamples() const;
 
   static vvencLevel getLevelForInput( uint32_t width, uint32_t height, bool tier, int temporalRate, int temporalScale, int bitrate );
+  static void getMaxTileColsRowsPerLevel( vvencLevel level, uint32_t &maxCols, uint32_t &maxRows );
 };
 
 

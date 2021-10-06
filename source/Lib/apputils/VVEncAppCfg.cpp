@@ -591,7 +591,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   IStreamToArr<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth[0], 10 );
   IStreamToArr<unsigned int>        toTileRowHeight              ( &m_tileRowHeight[0], 10 );
-  IStreamToArr<int>                 toRectSlicePos               ( &m_rectSlicePos[0], 1200 );
 
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
@@ -1050,10 +1049,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
   ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
   ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
-  ("RasterScanSlices",                                m_rasterSliceFlag,                                "Indicates if using raster-scan or rectangular slices (0: rectangular, 1: raster-scan)")
-  ("RectSliceFixedWidth",                             m_rectSliceFixedWidth,                            "Fixed rectangular slice width in units of tiles (0: disable this feature and use RectSlicePositions instead)")
-  ("RectSliceFixedHeight",                            m_rectSliceFixedHeight,                           "Fixed rectangular slice height in units of tiles (0: disable this feature and use RectSlicePositions instead)")
-  ("RectSlicePositions",                              toRectSlicePos,                                   "Rectangular slice positions. List containing pairs of top-left CTU RS address followed by bottom-right CTU RS address")
   ;
 
   opts.setSubSection("Coding tools");
