@@ -150,6 +150,7 @@ void LevelTierFeatures::getMaxTileColsRowsPerLevel( vvencLevel level, uint32_t &
     {
       maxCols = info.maxTileCols;
       maxRows = info.maxTileRows;
+      return;
     }
   }
 
