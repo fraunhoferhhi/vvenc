@@ -1671,7 +1671,7 @@ void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda,
 {
   if( ! rcIsFinalPass )
   {
-    storeStatsData( TRCPassStats( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer ) );
+    storeStatsData( TRCPassStats( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int( !isIntra ) ) );
   }
 }
 
