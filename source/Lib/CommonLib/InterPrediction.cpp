@@ -250,7 +250,7 @@ void InterPrediction::destroy()
   m_IBCBuffer.destroy();
 }
 
-void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize )
+void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int ctuSize _TPROF_DEF )
 {
   // if it has been initialised before, but the chroma format has changed, release the memory and start again.
   if( m_yuvPred[L0].getOrigin( COMP_Y ) != nullptr && m_currChromaFormat != chFormat )
@@ -270,7 +270,7 @@ void InterPrediction::init( RdCost* pcRdCost, ChromaFormat chFormat, const int c
     }
 
     InterPredInterpolation::init();
-    DMVR::init( pcRdCost, chFormat );
+    DMVR::init( pcRdCost, chFormat _TPROF_VAR);
     m_geoPartBuf[0].create(UnitArea(chFormat, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE)));
     m_geoPartBuf[1].create(UnitArea(chFormat, Area(0, 0, MAX_CU_SIZE, MAX_CU_SIZE)));
   }
@@ -1098,7 +1098,7 @@ void DMVR::destroy()
   m_pcRdCost = nullptr;
 }
 
-void DMVR::init( RdCost* pcRdCost, const ChromaFormat chFormat )
+void DMVR::init( RdCost* pcRdCost, const ChromaFormat chFormat _TPROF_DEF )
 {
   if( m_pcRdCost == nullptr )
   {
@@ -1113,6 +1113,9 @@ void DMVR::init( RdCost* pcRdCost, const ChromaFormat chFormat )
       m_yuvPad[i].create( chFormat, predArea, 0, DMVR_NUM_ITERATION + (NTAPS_LUMA>>1), 32 );
     }
   }
+#if ENABLE_TIME_PROFILING_MT_MODE
+  m_timeProfiler = tp;
+#endif
 }
 
 void DMVR::xCopyAndPad( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool forLuma)
@@ -1286,7 +1289,7 @@ void xDMVRSubPixelErrorSurface( bool notZeroCost, int16_t *totalDeltaMV, int16_t
 
 void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_INTER_MRG_DMVR );
+  PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MRG_DMVR, cu.cs, CH_L );
   int iterationCount = 1;
   /*Always High Precision*/
   const int mvShift  = MV_FRACTIONAL_BITS_INTERNAL;

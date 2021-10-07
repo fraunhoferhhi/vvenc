@@ -100,6 +100,12 @@ namespace vvenc {
 #ifndef ENABLE_TIME_PROFILING
 #define ENABLE_TIME_PROFILING                             0 // DISABLED by default (can be enabled by project configuration or make command)
 #endif
+#ifndef ENABLE_TIME_PROFILING_MT_MODE
+#define ENABLE_TIME_PROFILING_MT_MODE                   ( 0 && ENABLE_TIME_PROFILING )
+#endif
+#ifndef ENABLE_TIME_PROFILING_TL
+#define ENABLE_TIME_PROFILING_TL                          0 // DISABLED by default (can be enabled by project configuration or make command)
+#endif
 #ifndef ENABLE_TIME_PROFILING_PIC_TYPES
 #define ENABLE_TIME_PROFILING_PIC_TYPES                   0 // DISABLED by default (can be enabled by project configuration or make command)
 #endif
@@ -108,8 +114,8 @@ namespace vvenc {
 #endif
 #ifndef ENABLE_TIME_PROFILING_CU_SHAPES
 #define ENABLE_TIME_PROFILING_CU_SHAPES                   0 // DISABLED by default (can be enabled by project configuration or make command)
-#endif
-#define ENABLE_TIME_PROFILING_EXTENDED                    ( ENABLE_TIME_PROFILING_PIC_TYPES || ENABLE_TIME_PROFILING_CTUS_IN_PIC || ENABLE_TIME_PROFILING_CU_SHAPES )
+#endif  
+#define ENABLE_TIME_PROFILING_EXTENDED                    ( ENABLE_TIME_PROFILING_PIC_TYPES || ENABLE_TIME_PROFILING_TL || ENABLE_TIME_PROFILING_CTUS_IN_PIC || ENABLE_TIME_PROFILING_CU_SHAPES )
 
 #ifndef ENABLE_CU_MODE_COUNTERS
 #define ENABLE_CU_MODE_COUNTERS                           0
@@ -893,6 +899,8 @@ struct XUCache
   CUCache cuCache;
   TUCache tuCache;
 };
+
+
 
 } // namespace vvenc
 

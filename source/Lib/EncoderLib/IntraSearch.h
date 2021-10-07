@@ -93,7 +93,9 @@ private:
     ModeInfo(const bool mipf, const bool miptf, const int8_t mrid, const uint8_t ispm, const uint8_t mode) : mipFlg(mipf), mipTrFlg(miptf), mRefId(mrid), ispMod(ispm), modeId(mode) {}
     bool operator==(const ModeInfo cmp) const { return (0 == ::memcmp(this,&cmp,sizeof(ModeInfo))); }
   };
-
+#if ENABLE_TIME_PROFILING_MT_MODE
+  TProfiler*      m_timeProfiler = nullptr;
+#endif
 protected:
   // interface to option
   const VVEncCfg* m_pcEncCfg;
@@ -163,8 +165,7 @@ public:
   };
 
   ISPTestedModesInfo m_ispTestedModes[ NUM_LFNST_NUM_PER_SET ];
-
-  void init                       ( const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache);
+  void init                       ( const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache _TPROF_DECL );
   void setCtuEncRsrc              ( CABACWriter* cabacEstimator, CtxCache* ctxCache );
   void destroy                    ();
 

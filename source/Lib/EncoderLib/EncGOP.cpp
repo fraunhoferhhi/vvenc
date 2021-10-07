@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "CommonLib/TimeProfiler.h"
 #include "CommonLib/MD5.h"
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
@@ -375,6 +376,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
     // fetch next picture to be encoded and next free picture encoder
     {
+      PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
       std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
       if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 

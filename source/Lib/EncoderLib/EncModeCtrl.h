@@ -366,7 +366,11 @@ public:
 #endif
   void finishCULevel      ( Partitioner &partitioner );
 
+#if FSIM_AVOID_CALC_INTER_HAD
+  bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner, bool calcInterHad = true );
+#else
   bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner );
+#endif
   bool trySplit           ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner, const EncTestMode& lastTestmode );
   bool useModeResult      ( const EncTestMode& encTestmode, CodingStructure*& tempCS,  Partitioner& partitioner, const bool useEDO );
 

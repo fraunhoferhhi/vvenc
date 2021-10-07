@@ -217,6 +217,9 @@ private:
 #if QTBTT_SPEED3
   int                   m_MergeSimpleFlag;
 #endif
+#if ENABLE_TIME_PROFILING_MT_MODE
+  TProfiler*   m_timeProfiler = nullptr;
+#endif
 
 public:
   EncCu();
@@ -234,6 +237,9 @@ public:
   void  updateLambda          ( const Slice& slice, const double ctuLambda, const int ctuQP, const int newQP, const bool saveUnadjusted);
 
   void encodeCtu              ( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPosInCtus, uint32_t ctuYPosInCtus );
+#if ENABLE_TIME_PROFILING_MT_MODE
+  TProfiler* getProfiler      () { return _TPROF; }
+#endif
 
 private:
   void  xCompressCtu          ( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] );

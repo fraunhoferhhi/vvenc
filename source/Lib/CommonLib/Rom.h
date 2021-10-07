@@ -69,9 +69,7 @@ extern CDTrace* g_trace_ctx;
 #endif
 
 #if ENABLE_TIME_PROFILING
-extern TimeProfiler *g_timeProfiler;
-#elif ENABLE_TIME_PROFILING_EXTENDED
-extern TimeProfiler2D *g_timeProfiler;
+extern TProfiler *g_timeProfiler;
 #endif
 
 // ====================================================================================================================

@@ -581,6 +581,7 @@ typedef struct vvenc_config
   unsigned            m_maxNumGeoCand;
   int                 m_FastIntraTools;
   int                 m_IntraEstDecBit;                                                  // Intra estimation decimation factor.
+  bool                m_FastSkipInterModes;
 
   int                 m_RCInitialQP;
   bool                m_RCForceIntraQP;

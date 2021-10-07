@@ -116,20 +116,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
 #if ENABLE_TIME_PROFILING
   if( g_timeProfiler == nullptr )
   {
-    g_timeProfiler = new TimeProfiler();
-  }
-#elif ENABLE_TIME_PROFILING_EXTENDED
-  if( g_timeProfiler == nullptr )
-  {
-#if ENABLE_TIME_PROFILING_PIC_TYPES
-    g_timeProfiler = new TimeProfiler2D( 3, 1 );
-#elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
-    int   widthInCTU  = ( m_cEncCfg.m_PadSourceWidth % m_cEncCfg.m_CTUSize )  ? m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize  + 1 : m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize;
-    int   heightInCTU = ( m_cEncCfg.m_PadSourceHeight % m_cEncCfg.m_CTUSize ) ? m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize + 1 : m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize;
-    g_timeProfiler = new TimeProfiler2D( widthInCTU, heightInCTU, 2 );
-#elif ENABLE_TIME_PROFILING_CU_SHAPES
-    g_timeProfiler = new TimeProfiler2D( Log2(m_cEncCfg.m_CTUSize) + 1, Log2(m_cEncCfg.m_CTUSize) + 1, 2 );
-#endif
+    g_timeProfiler = timeProfilerCreate( encCfg );
   }
 #endif
 }
@@ -163,56 +150,7 @@ void EncLib::uninitEncoderLib()
 #endif
 
 #if ENABLE_TIME_PROFILING
-  if( g_timeProfiler )
-  {
-    std::cout << *g_timeProfiler;
-    delete g_timeProfiler;
-    g_timeProfiler = nullptr;
-  }
-#elif ENABLE_TIME_PROFILING_EXTENDED
-  if( g_timeProfiler )
-  {
-#if ENABLE_TIME_PROFILING_PIC_TYPES
-    std::cout << std::endl;
-    std::cout << "Run-time of selected encoder stages across picture types (0:Intra, 1:Inter)" << std::endl;
-    for( int j = 0; j < g_timeProfiler->getCountersSet()[0].getNumCntTypes(); j++ )
-    {
-      g_timeProfiler->getCountersSet()[0][j][0][2] += g_timeProfiler->getCountersSet()[0][j][0][0] + g_timeProfiler->getCountersSet()[0][j][0][1];
-    }
-    StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[0], false, true, false, true, true, -1 );
-#endif
-
-#if ENABLE_TIME_PROFILING_CTUS_IN_PIC
-    for( int i = 0; i < g_timeProfiler->getCountersSet().size(); i++ )
-    {
-      std::cout << "Run-time of selected encoder stages across CTUs of all pictures " << "(" << ( i == 0 ? "Intra": "Inter" << ")" ) << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[i], false, true, false, true, true, -1 );
-      if( i > 0 )
-        g_timeProfiler->getCountersSet()[0] += g_timeProfiler->getCountersSet()[i];
-    }
-    if( g_timeProfiler->getCountersSet().size() > 1 )
-    {
-      std::cout << "Run-time of selected encoder stages across CTUs of all pictures (total)" << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[0], false, true, false, true, true, -1 );
-    }
-#endif
-
-#if ENABLE_TIME_PROFILING_CU_SHAPES
-    for( int i = 0; i < g_timeProfiler->getCountersSet().size(); i++ )
-    {
-      std::cout << "Run-time of selected encoder stages across CU block shapes of all pictures " << "(" << ( i == 0 ? "Intra": "Inter" ) << ")"  << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[i],  true, true, false, true, true, -1 );
-      if( i > 0 ) g_timeProfiler->getCountersSet()[0] += g_timeProfiler->getCountersSet()[i];
-    }
-    if( g_timeProfiler->getCountersSet().size() > 1 )
-    {
-      std::cout << "Run-time of selected encoder stages across CU block shapes of all pictures (total)" << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[0],  true, true, false, true, true, -1 );
-    }
-#endif
-    delete g_timeProfiler;
-    g_timeProfiler = nullptr;
-  }
+  timeProfilerResults( g_timeProfiler );
 #endif
 }
 
@@ -424,7 +362,7 @@ void EncLib::xSetRCEncCfg( int pass )
 
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
-  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
 
   // clear output access unit
   au.clearAu();
@@ -463,6 +401,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       xDetectScreenC(*pic, pic->getOrigBuf());
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
+      PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
     }
   }
   else

@@ -219,9 +219,9 @@ InterSearch::~InterSearch()
   destroy();
 }
 
-void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
+void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS _TPROF_DEF )
 {
-  InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
+  InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize _TPROF_VAR );
   m_numBVs                       = 0;
   m_pcEncCfg                     = &encCfg;
   m_pcTrQuant                    = pTrQuant;
@@ -269,6 +269,9 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
   m_tmpAffiError = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[0] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[1] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
+#if ENABLE_TIME_PROFILING_MT_MODE
+  m_timeProfiler = tp;
+#endif
 }
 
 void InterSearch::destroy()
@@ -1027,6 +1030,7 @@ Distortion InterSearch::xPatternRefinement( const CPelBuf* pcPatternKey,
 //! search of the best candidate for inter prediction
 bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, double& bestCostInter)
 {
+  PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MVD_SEARCH, cu.cs, partitioner.chType );
   CodingStructure& cs = *cu.cs;
 
   AMVPInfo     amvp[2];
@@ -1232,6 +1236,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
       //  Bi-predictive Motion estimation
       if( cs.slice->isInterB() && !CU::isBipredRestriction( cu ) && (cu.slice->checkLDC || BcwIdx == BCW_DEFAULT  || !m_affineModeSelected || m_pcEncCfg->m_BCW != 2 ) )
       {
+        PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MVD_SEARCH_B, &cs, partitioner.chType );
         bool doBiPred = true;
         cMvBi[0] = cMv[0];
         cMvBi[1] = cMv[1];
@@ -1641,7 +1646,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
     }
     if (cu.Y().width > 8 && cu.Y().height > 8 && cu.slice->sps->Affine && checkAffine)
     {
-      PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_INTER_MVD_SEARCH_AFFINE, &cs, partitioner.chType );
+      PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MVD_SEARCH_AFFINE, &cs, partitioner.chType );
       m_hevcCost = uiHevcCost;
       // save normal hevc result
       uint32_t uiMRGIndex = cu.mergeIdx;
@@ -2872,7 +2877,7 @@ void InterSearch::xPatternSearchFracDIF(
   Distortion&           ruiCost
 )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_FRAC_PEL );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_FRAC_PEL );
 
   //  Reference pattern initialization (integer scale)
   int         iOffset    = rcMvInt.hor + rcMvInt.ver * cStruct.iRefStride;
@@ -2896,7 +2901,7 @@ void InterSearch::xPatternSearchFracDIF(
   //  quarter-pel refinement
   if( cStruct.imvShift == IMV_OFF && 0 != patternId )
   {
-    PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_QPEL );
+    PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_QPEL );
     m_pcRdCost->setCostScale( 0 );
     xExtDIFUpSamplingQ( &cPatternRoi, rcMvHalf, patternId );
     baseRefMv = rcMvHalf;
@@ -3088,7 +3093,7 @@ void InterSearch::xSymMotionEstimation( CodingUnit& cu, CPelUnitBuf& origBuf, Mv
 */
 void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_HPEL_INTERP );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_HPEL_INTERP );
   const ClpRng& clpRng = m_lumaClpRng;
   int width      = pattern->width;
   int height     = pattern->height;
@@ -3146,7 +3151,7 @@ void InterSearch::xExtDIFUpSamplingH(CPelBuf* pattern, bool useAltHpelIf)
 */
 void InterSearch::xExtDIFUpSamplingQ( CPelBuf* pattern, Mv halfPelRef, int& patternId )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_QPEL_INTERP );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_QPEL_INTERP );
   const ClpRng& clpRng = m_lumaClpRng;
   int width      = pattern->width;
   int height     = pattern->height;

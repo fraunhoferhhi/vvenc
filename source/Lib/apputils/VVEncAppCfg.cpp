@@ -880,6 +880,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MaxNumGeoCand",                                   m_maxNumGeoCand,                                  "Maximum number of geometric partitioning mode candidates")
   ("FastIntraTools",                                  m_FastIntraTools,                                 "SpeedUPIntraTools:LFNST,ISP,MTS. (0:off, 1:speed1, 2:speed2)")
   ("IntraEstDecBit",                                  m_IntraEstDecBit,                                 "Intra estimation decimation binary exponent for first pass directional modes screening (only test each (2^N)-th mode in the first estimation pass)")
+  ("FSIM",                                            m_FastSkipInterModes,                         "Fast inter/intra decision")
   ;
 
   // motion search options

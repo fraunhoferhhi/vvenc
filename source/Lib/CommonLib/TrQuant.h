@@ -88,6 +88,9 @@ public:
              const bool bEnc                 = false,
              const bool useTransformSkipFast = false,
              const int  thrValue             = 8
+#if ENABLE_TIME_PROFILING_MT_MODE
+             ,TProfiler* m_timeProfiler      = nullptr
+#endif
            );
 
 public:
@@ -123,6 +126,9 @@ private:
   void                      (**m_invICT)(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(**m_fwdICT)(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
   TCoeff    m_mtsCoeffs[NUM_TRAFO_MODES_MTS][MAX_TB_SIZEY * MAX_TB_SIZEY];
+#if ENABLE_TIME_PROFILING_MT_MODE
+  TProfiler* m_timeProfiler = nullptr;
+#endif
 
   uint32_t xGetLFNSTIntraMode( const Area& tuArea, const uint32_t dirMode );
   bool     xGetTransposeFlag(uint32_t intraMode);

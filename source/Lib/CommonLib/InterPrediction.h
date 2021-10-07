@@ -137,6 +137,9 @@ class DMVR : public InterPredInterpolation
                                    Mv(-2, 0), Mv(-1, 0), Mv(0, 0), Mv(1, 0), Mv(2, 0),
                                    Mv(-2, 1), Mv(-1, 1), Mv(0, 1), Mv(1, 1), Mv(2, 1),
                                    Mv(-2, 2), Mv(-1, 2), Mv(0, 2), Mv(1, 2), Mv(2, 2) };
+#if ENABLE_TIME_PROFILING_MT_MODE
+  TProfiler*              m_timeProfiler = nullptr;
+#endif
 private:
   void     xCopyAndPad          ( const CodingUnit& cu, PelUnitBuf& pcPad, RefPicList refId, bool forLuma);
   void     xFinalPaddedMCForDMVR( const CodingUnit& cu, PelUnitBuf* dstBuf, const PelUnitBuf *refBuf, const bool bioApplied, const Mv startMV[NUM_REF_PIC_LIST_01], const Mv& refMV );
@@ -145,7 +148,7 @@ protected:
   DMVR();
   virtual ~DMVR();
   void destroy();
-  void init                    ( RdCost* pcRdCost, const ChromaFormat chFormat );
+  void init                    ( RdCost* pcRdCost, const ChromaFormat chFormat _TPROF_DECL );
   void xProcessDMVR            ( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied );
 };
 
@@ -160,6 +163,9 @@ private:
   PelStorage   m_geoPartBuf[2]; 
   int          m_IBCBufferWidth;
   PelStorage   m_IBCBuffer;
+#if ENABLE_TIME_PROFILING_MT_MODE
+  TProfiler*   m_timeProfiler = nullptr;
+#endif
   void xIntraBlockCopyIBC       ( CodingUnit& cu, PelUnitBuf& predBuf, const ComponentID compID );
 
   void xPredInterUni            ( const CodingUnit& cu, const RefPicList& refPicList, PelUnitBuf& pcYuvPred, const bool bi, const bool bdofApplied );
@@ -171,7 +177,7 @@ public:
   InterPrediction();
   virtual ~InterPrediction();
 
-  void    init                  ( RdCost* pcRdCost, ChromaFormat chromaFormatIDC, const int ctuSize);
+  void    init                  ( RdCost* pcRdCost, ChromaFormat chromaFormatIDC, const int ctuSize _TPROF_DECL);
   void    destroy               ();
 
   // inter

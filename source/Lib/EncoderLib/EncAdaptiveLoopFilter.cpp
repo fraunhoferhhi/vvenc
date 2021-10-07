@@ -1392,7 +1392,7 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
 
 void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  //PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_ALF, &cs, CH_L );
 
   if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
   {
@@ -1563,7 +1563,7 @@ void EncAdaptiveLoopFilter::getStatisticsFrame( Picture& pic, CodingStructure& c
 
 void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, const double* lambdas )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  //PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_ALF, &cs, CH_L );
 
   if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
   {
@@ -1669,7 +1669,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
 void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, int ctuRsAddr )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  //PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_ALF, &cs, CH_L );
 
   if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
   {

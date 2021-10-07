@@ -72,9 +72,7 @@ CDTrace *g_trace_ctx = nullptr;
 #endif
 
 #if ENABLE_TIME_PROFILING
-TimeProfiler *g_timeProfiler = nullptr;
-#elif ENABLE_TIME_PROFILING_EXTENDED
-TimeProfiler2D *g_timeProfiler = nullptr;
+TProfiler *g_timeProfiler = nullptr;
 #endif
 #if ENABLE_CU_MODE_COUNTERS
 StatCounters::StatCounter2DSet<int64_t> g_cuCounters1D( std::vector<std::string> { g_cuCounterIdNames, std::end( g_cuCounterIdNames ) }, 8, 1 );
