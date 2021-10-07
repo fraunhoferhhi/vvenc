@@ -1871,7 +1871,7 @@ int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
     return 0;
   }
 
-  uint32_t ctuAddr, ctuX, ctuY, prevCtuX, prevCtuY;
+  uint32_t ctuAddr, ctuX, ctuY, prevCtuX = 0, prevCtuY = 0;
   int numEntryPoints = 0;
 
   // count the number of CTUs that align with either the start of a tile, or with an entropy coding sync point
