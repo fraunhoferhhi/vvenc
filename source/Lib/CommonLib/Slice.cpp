@@ -1726,25 +1726,6 @@ PPS::~PPS()
   delete pcv;
 }
 
-
-void PPS::resetTileSliceInfo()
-{
-  numExpTileCols = 0;
-  numExpTileRows = 0;
-  numTileCols    = 0;
-  numTileRows    = 0;
-  numSlicesInPic = 0;
-  tileColWidth.  clear();
-  tileRowHeight. clear();
-  tileColBd.     clear();
-  tileRowBd.     clear();
-  ctuToTileCol.  clear();
-  ctuToTileRow.  clear();
-  ctuToSubPicIdx.clear();
-  rectSlices.    clear();
-  sliceMap.      clear();
-}
-
 /**
  - initialize tile row/column sizes and boundaries
  */
@@ -1832,57 +1813,34 @@ void PPS::initTiles()
 /**
  - initialize memory for rectangular slice parameters
  */
-void PPS::initRectSlices()
-{
-  CHECK(numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range");
-  rectSlices.resize(numSlicesInPic);
-}
-
 void PPS::initRectSliceMap( const SPS* sps )
 {
-//  uint32_t  ctuY;
-  uint32_t  tileX, tileY;
-
+  //currently only one slice is allowed
   if( sps )
   {
     CHECK( sps->numSubPics > 1, "SubPic encoding not yet supported" );
   }
   
-    CHECK( numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
-    sliceMap.resize( numSlicesInPic );
+  CHECK( numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
+  sliceMap.resize( numSlicesInPic );
 
-    for( uint32_t i = 0; i < numSlicesInPic; i++ )
+  sliceMap[0].initSliceMap();
+  
+  uint32_t tileX = 0, tileY = 0;
+  rectSliceStruct.tileIdx            = 0;
+  rectSliceStruct.sliceWidthInTiles  = numTileCols;
+  rectSliceStruct.sliceHeightInTiles = numTileRows;
+  rectSliceStruct.numSlicesInTile    = 1;
+  
+  for( uint32_t j = 0; j < rectSliceStruct.sliceHeightInTiles; j++ )
+  {
+    for( uint32_t k = 0; k < rectSliceStruct.sliceWidthInTiles; k++ )
     {
-      sliceMap[i].initSliceMap();
-      
-      // get position of first tile in slice
-      tileX =  rectSlices[ i ].tileIdx % numTileCols;
-      tileY =  rectSlices[ i ].tileIdx / numTileCols;
-
-      // infer slice size for last slice in picture
-      if( i == numSlicesInPic-1 )
-      {
-        rectSlices[ i ].sliceWidthInTiles  = numTileCols - tileX;
-        rectSlices[ i ].sliceHeightInTiles = numTileRows - tileY;
-        rectSlices[ i ].numSlicesInTile    = 1;
-      }
-
-      // set slice index
-      sliceMap[ i ].sliceID = i;
-      
-      // complete tiles within a single slice case
-      if( rectSlices[ i ].sliceWidthInTiles > 1 || rectSlices[ i ].sliceHeightInTiles > 1 )
-      {
-        for( uint32_t j = 0; j < rectSlices[ i ].sliceHeightInTiles; j++ )
-        {
-          for( uint32_t k = 0; k < rectSlices[ i ].sliceWidthInTiles; k++ )
-          {
-            sliceMap[ i ].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
-                                          tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
-          }
-        }
-      }
+      sliceMap[0].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
+                                  tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
+    }
   }
+
   checkSliceMap();
 }
 
@@ -1913,19 +1871,18 @@ int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
     return 0;
   }
 
-  uint32_t ctuAddr, ctuX, ctuY;
-  uint32_t prevCtuX = 0, prevCtuY = 0;
+  uint32_t ctuAddr, ctuX, ctuY, prevCtuX, prevCtuY;
   int numEntryPoints = 0;
 
   // count the number of CTUs that align with either the start of a tile, or with an entropy coding sync point
   // ignore the first CTU since it doesn't count as an entry point
-  for( uint32_t i = 1; i < sliceMap.numCtuInSlice; i++ )
+  for( uint32_t i = 0; i < sliceMap.numCtuInSlice; i++ )
   {
-    ctuAddr = pps.sliceMap[0].ctuAddrInSlice[i];
+    ctuAddr = sliceMap.ctuAddrInSlice[i];
     ctuX = ( ctuAddr % pps.picWidthInCtu );
     ctuY = ( ctuAddr / pps.picWidthInCtu );
 
-    if( pps.tileRowBd[pps.ctuToTileRow[ctuY]] != pps.tileRowBd[pps.ctuToTileRow[prevCtuY]] || pps.tileColBd[pps.ctuToTileCol[ctuX]] != pps.tileColBd[pps.ctuToTileCol[prevCtuX]] || ( ctuY != prevCtuY && sps.entropyCodingSyncEnabled ) )
+    if( i != 0 && ( pps.tileRowBd[pps.ctuToTileRow[ctuY]] != pps.tileRowBd[pps.ctuToTileRow[prevCtuY]] || pps.tileColBd[pps.ctuToTileCol[ctuX]] != pps.tileColBd[pps.ctuToTileCol[prevCtuX]] || ( ctuY != prevCtuY && sps.entropyCodingSyncEnabled ) ) )
     {
       numEntryPoints++;
     }

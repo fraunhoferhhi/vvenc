@@ -337,63 +337,8 @@ void HLSWriter::codePPS( const PPS* pcPPS, const SPS* pcSPS )
     }
     if( pcPPS->rectSlice & !pcPPS->singleSlicePerSubPic )
     {
+      CHECK( pcPPS->numSlicesInPic > 1, "currently only one slice supported" );
       WRITE_UVLC( pcPPS->numSlicesInPic - 1,            "pps_num_slices_in_pic_minus1" );
-      if( ( pcPPS->numSlicesInPic - 1 ) > 1 )
-      {
-        WRITE_FLAG( pcPPS->tileIdxDeltaPresent ? 1 : 0, "pps_tile_idx_delta_present_flag" );
-      }
-
-      // write rectangular slice parameters
-      for( int i = 0; i < pcPPS->numSlicesInPic-1; i++ )
-      {
-        // complete tiles within a single slice
-        if( ( pcPPS->rectSlices[ i ].tileIdx % pcPPS->numTileCols ) != pcPPS->numTileCols - 1 )
-        {
-          WRITE_UVLC( pcPPS->rectSlices[ i ].sliceWidthInTiles - 1, "pps_slice_width_in_tiles_minus1[i]" );
-        }
-
-        if( pcPPS->rectSlices[ i ].tileIdx / pcPPS->numTileCols != pcPPS->numTileRows - 1 &&
-          ( pcPPS->tileIdxDeltaPresent || pcPPS->rectSlices[ i ].tileIdx % pcPPS->numTileCols == 0 ) )
-        {
-           WRITE_UVLC( pcPPS->rectSlices[ i ].sliceHeightInTiles - 1, "pps_slice_height_in_tiles_minus1[i]" );
-        }
-
-        // multiple slices within a single tile special case
-        if( pcPPS->rectSlices[ i ].sliceWidthInTiles == 1 && pcPPS->rectSlices[ i ].sliceHeightInTiles == 1 && pcPPS->tileRowHeight[ pcPPS->rectSlices[ i ].tileIdx / pcPPS->numTileCols ] > 1 )
-        {
-          uint32_t numExpSliceInTile = ( pcPPS->rectSlices[ i ].numSlicesInTile == 1 ) ? 0 : pcPPS->rectSlices[ i ].numSlicesInTile;
-          if( numExpSliceInTile > 1 && pcPPS->rectSlices[i + numExpSliceInTile - 2].sliceHeightInCtu >= pcPPS->rectSlices[i + numExpSliceInTile - 1].sliceHeightInCtu )
-          {
-            for( int j = numExpSliceInTile - 2; j >= 0; j-- )
-            {
-              if( pcPPS->rectSlices[i + j].sliceHeightInCtu == pcPPS->rectSlices[i + j + 1].sliceHeightInCtu )
-              {
-                numExpSliceInTile--;
-              }
-            }
-          }
-          uint32_t expSliceHeightSum = 0;
-          WRITE_UVLC( numExpSliceInTile, "pps_num_exp_slices_in_tile[i]" );
-          for( int j = 0; j < numExpSliceInTile; j++ )
-          {
-            WRITE_UVLC(pcPPS->rectSlices[i + j].sliceHeightInCtu - 1, "pps_exp_slice_height_in_ctus_minus1[i]");
-            expSliceHeightSum += pcPPS->rectSlices[i + j].sliceHeightInCtu;
-          }
-
-          CHECK( expSliceHeightSum > pcPPS->tileRowHeight[ pcPPS->rectSlices[ i ].tileIdx / pcPPS->numTileCols ], "The sum of expressed slice heights is larger than the height of the tile containing the slices.");
-          i += (pcPPS->rectSlices[i].numSlicesInTile - 1);
-        }
-
-        // tile index offset to start of next slice
-        if( i < pcPPS->numSlicesInPic-1 )
-        {
-          if( pcPPS->tileIdxDeltaPresent )
-          {
-            int32_t  tileIdxDelta = pcPPS->rectSlices[ i+1 ].tileIdx - pcPPS->rectSlices[ i ].tileIdx;
-            WRITE_SVLC( tileIdxDelta,  "pps_tile_idx_delta[i]" );
-          }
-        }
-      }
     }
 
     if( pcPPS->rectSlice == 0 || pcPPS->singleSlicePerSubPic || pcPPS->numSlicesInPic > 1 )

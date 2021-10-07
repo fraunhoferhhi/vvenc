@@ -516,7 +516,6 @@ void HLSyntaxReader::parsePPS( PPS* pcPPS, ParameterSetManager *parameterSetMana
       {
         pcPPS->tileIdxDeltaPresent = false;
       }
-      pcPPS->initRectSlices();
     }
     
     if( pcPPS->rectSlice == 0 || pcPPS->singleSlicePerSubPic || pcPPS->numSlicesInPic > 1 )
