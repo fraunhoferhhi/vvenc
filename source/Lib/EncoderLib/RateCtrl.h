@@ -85,7 +85,8 @@ namespace vvenc {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   uint32_t _numBits, double _psnrY, bool _isIntra, int _tempLayer ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
-                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer + int( !_isIntra ) ),
+                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), 
+                  tempLayer( _tempLayer ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 )
                   {}
     int       poc;
