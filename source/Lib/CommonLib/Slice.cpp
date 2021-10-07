@@ -1719,6 +1719,11 @@ PPS::PPS()
   chromaQpAdjTableIncludingNullEntry[0].u.comp.CbOffset = 0; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0. This is initialised here and never subsequently changed.
   chromaQpAdjTableIncludingNullEntry[0].u.comp.CrOffset = 0;
   chromaQpAdjTableIncludingNullEntry[0].u.comp.JointCbCrOffset = 0;
+  rectSliceStruct.tileIdx            = 0;
+  rectSliceStruct.sliceWidthInTiles  = 0;
+  rectSliceStruct.sliceHeightInTiles = 0;
+  rectSliceStruct.numSlicesInTile    = 0;
+  rectSliceStruct.sliceHeightInCtu   = 0;
 }
 
 PPS::~PPS()
