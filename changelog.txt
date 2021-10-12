@@ -4,7 +4,7 @@ tag 1.2.0
 * libvvenc:
   - added parameters: m_qtbttSpeedUpMode, m_numIntraModesFullRD, m_reduceIntraChromaModesFullRD, m_RCPass
   - renamed parameters: m_bUseEarlyCU to m_useEarlyCU, m_dqThresholdVal to m_quantThresholdVal
-  - added IDR2 refresh type, which aligns the layout of the first intra period with others (using IDR_W_RASL rather than just an IDR picture)
+  - added IDR2 refresh type, which aligns the layout of the first intra period with others (using IDR_W_RADL rather than IDR_N_LP picture)
   - added nlohmann_json as a third party lib (can be disabled with CMake variable VVENC_ENABLE_THIRDPARTY_JSON)
   - redefined the presets
   - improvements to single picture rate control
