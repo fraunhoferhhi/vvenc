@@ -2,7 +2,7 @@
 tag 1.2.0
 
 * libvvenc:
-  - added parameters: m_qtbttSpeedUpMode, m_numIntraModesFullRD, m_reduceIntraChromaModesFullRD
+  - added parameters: m_qtbttSpeedUpMode, m_numIntraModesFullRD, m_reduceIntraChromaModesFullRD, m_RCPass
   - renamed parameters: m_bUseEarlyCU to m_useEarlyCU, m_dqThresholdVal to m_quantThresholdVal
   - added IDR2 refresh type, which aligns the layout of the first intra period with others (using IDR_W_RASL rather than just an IDR picture)
   - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout
