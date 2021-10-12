@@ -1,4 +1,34 @@
 /////////////////////////////////////////
+tag 1.2.0
+
+* libvvenc:
+  - added parameters: m_qtbttSpeedUpMode, m_numIntraModesFullRD, m_reduceIntraChromaModesFullRD, m_RCPass
+  - renamed parameters: m_bUseEarlyCU to m_useEarlyCU, m_dqThresholdVal to m_quantThresholdVal
+  - added IDR2 refresh type, which aligns the layout of the first intra period with others (using IDR_W_RASL rather than just an IDR picture)
+  - added nlohmann_json as a third party lib (can be disabled with CMake variable VVENC_ENABLE_THIRDPARTY_JSON)
+  - redefined the presets
+  - improvements to single picture rate control
+  - added additional partitioning speedups
+  - improved linear ALF implementation (memory access patterns and SIMD)
+  - improved DMVR implementation
+  - improved error handling
+  - various cleanups and bugfixes
+
+* vvencapp:
+  - added command line parameters:
+    - rcstatsfile: defines the location of the to-be-written/to-be-read rate control statistics file
+    - pass: if != -1, defines which encoding pass is to be performed in case of 2-pass RC (requires rcstatsfile)
+  - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout
+
+
+* vvencFFapp:
+  - added command line parameters:
+    - RCStatsFile, Pass (analogue to vvencapp)
+    - NumIntraModesFullRD, ReduceIntraChromaModesFullRD
+  - renamed command line parameters: DQThrVal to QuantThrVal
+  - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout (PYUV=1)
+
+/////////////////////////////////////////
 tag 1.1.0
 
 * libvvenc:
