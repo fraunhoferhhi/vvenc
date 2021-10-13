@@ -559,15 +559,23 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   }
 }
 
+#if QTBTT_SPEED3
+void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
+#else
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )
+#endif
 {
   // Min/max depth
   unsigned minDepth = 0;
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
+#if QTBTT_SPEED3
+    partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag);
+#else
     bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
     partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
+#endif
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );

@@ -98,7 +98,7 @@ public:
 
   int init( const vvenc_config& rcVVEncCfg );
 
-  int initPass( int pass );
+  int initPass( int pass, const char* statsFName );
   int uninit();
 
   bool isInitialized() const;
@@ -124,7 +124,7 @@ public:
 
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
-  
+
   static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );            ///< set message output function for encoder lib. if not set, no messages will be printed.
   static const char* setSIMDExtension( const char* simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
   static const char* getCompileInfoString();
