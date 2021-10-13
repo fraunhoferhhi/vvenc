@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <vector>
 #include <algorithm>
 #include <list>
+#include <fstream>
 
 namespace vvenc {
   struct Picture;
@@ -84,7 +85,8 @@ namespace vvenc {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   uint32_t _numBits, double _psnrY, bool _isIntra, int _tempLayer ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
-                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer + int( !_isIntra ) ),
+                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), 
+                  tempLayer( _tempLayer ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 )
                   {}
     int       poc;
@@ -250,13 +252,12 @@ namespace vvenc {
     RateCtrl();
     ~RateCtrl();
 
-    void init( int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int picWidth, int picHeight,
-               int LCUWidth, int LCUHeight, int bitDepth, const vvencGOPEntry GOPList[ VVENC_MAX_GOP ], int maxParallelFrames );
+    void init(const VVEncCfg& encCfg);
     void destroy();
     void initRCGOP (const int numberOfPictures);
     void destroyRCGOP();
 
-    void setRCPass (const int pass, const int maxPass);
+    void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
     void processFirstPassData (const int secondPassBaseQP);
@@ -270,19 +271,32 @@ namespace vvenc {
     std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
 
   public:
-    std::list<EncRCPic*>    m_listRCPictures;
-    EncRCSeq*   encRCSeq;
-    EncRCGOP*   encRCGOP;
-    EncRCPic*   encRCPic;
-    std::mutex  rcMutex;
-    int         flushPOC;
-    int         rcPass;
-    int         rcMaxPass;
-    bool        rcIsFinalPass;
+    std::list<EncRCPic*> m_listRCPictures;
+    EncRCSeq*            encRCSeq;
+    EncRCGOP*            encRCGOP;
+    EncRCPic*            encRCPic;
+    std::mutex           rcMutex;
+    int                  flushPOC;
+    int                  rcPass;
+    bool                 rcIsFinalPass;
+
+  protected:
+    void storeStatsData( const TRCPassStats& statsData );
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+    void openStatsFile( const std::string& name );
+    void writeStatsHeader();
+    void readStatsHeader();
+    void readStatsFile();
+#endif
 
   private:
+    const VVEncCfg*         m_pcEncCfg;
     std::list<TRCPassStats> m_listRCFirstPassStats;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+    std::fstream            m_rcStatsFHandle;
+    int                     m_pqpaStatsWritten;
+#endif
   };
 }
 #endif

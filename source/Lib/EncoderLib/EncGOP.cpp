@@ -1791,7 +1791,11 @@ void EncGOP::picInitRateControl( int gopId, Picture& pic, Slice* slice, EncPictu
               itNext++;
             }
           }
-          if (it->refreshParameters) encRCSeq->qpCorrection[frameLevel] = encRCSeq->actualBitCnt[frameLevel] = encRCSeq->targetBitCnt[frameLevel] = 0;
+          if (it->refreshParameters)
+          {
+            encRCSeq->qpCorrection[frameLevel] = ((it->poc == 0) && (d < it->numBits) ? std::max (-1.0 * visAct / double (1 << (encRCSeq->bitDepth - 3)), 1.0 - it->numBits / d) : 0.0);
+            encRCSeq->actualBitCnt[frameLevel] = encRCSeq->targetBitCnt[frameLevel] = 0;
+          }
           CHECK (slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7");
 
           // try to hit target rate more aggressively in last coded frames, lambda/QP clipping below will ensure smooth value change
@@ -1948,7 +1952,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   const uint32_t uibits = numRBSPBytes * 8;
 
-  if ((m_pcEncCfg->m_RCNumPasses == 2) && (m_pcRateCtrl->rcPass < m_pcRateCtrl->rcMaxPass))
+  if ( m_pcEncCfg->m_RCNumPasses == 2 && ! m_pcRateCtrl->rcIsFinalPass )
   {
     visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
   }
@@ -1993,7 +1997,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     {
       std::string cInfo = print("RC pass %d/%d, analyze poc %d",
           m_pcRateCtrl->rcPass + 1,
-          m_pcRateCtrl->rcMaxPass + 1,
+          m_pcEncCfg->m_RCNumPasses,
           slice->poc );
 
           accessUnit.InfoString.append( cInfo );

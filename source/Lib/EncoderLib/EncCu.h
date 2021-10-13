@@ -214,6 +214,10 @@ private:
   int                   m_bestBcwIdx[2];
   double                m_bestBcwCost[2];
 
+#if QTBTT_SPEED3
+  int                   m_MergeSimpleFlag;
+#endif
+
 public:
   EncCu();
   virtual ~EncCu();

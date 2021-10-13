@@ -48,6 +48,11 @@ THE POSSIBILITY OF SUCH DAMAGE.
 /** \file     RateCtrl.cpp
     \brief    Rate control manager class
 */
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+#include "nlohmann/json.hpp"
+#endif
+
+#include "vvenc/version.h"
 #include "RateCtrl.h"
 #include "CommonLib/Picture.h"
 
@@ -245,18 +250,22 @@ void EncRCSeq::updateAfterPic ( int bits, int tgtBits )
 
 void EncRCSeq::getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters)
 {
-  std::list<TRCPassStats>::iterator it;
-  for ( it = firstPassData.begin(); it != firstPassData.end(); it++ )
+  TRCPassStats* stats = nullptr;
+  for( auto& it : firstPassData )
   {
-    if ( poc == it->poc )
+    if( poc == it.poc )
     {
-      targetBits = it->targetBits;
-      frameVsGopRatio = it->frameInGopRatio;
-      isNewScene = it->isNewScene;
-      refreshParameters = it->refreshParameters;
-      break;
+      stats = &it;
     }
   }
+  if( ! stats )
+  {
+    THROW( "miss entry for poc " << poc << " in first pass rate control statistics" );
+  }
+  targetBits        = stats->targetBits;
+  frameVsGopRatio   = stats->frameInGopRatio;
+  isNewScene        = stats->isNewScene;
+  refreshParameters = stats->refreshParameters;
 }
 
 void EncRCSeq::setAllBitRatio( double basicLambda, double* equaCoeffA, double* equaCoeffB )
@@ -1107,13 +1116,16 @@ void EncRCPic::updateAlphaBetaIntra(double& alpha, double& beta)
 
 RateCtrl::RateCtrl()
 {
-  encRCSeq      = NULL;
-  encRCGOP      = NULL;
-  encRCPic      = NULL;
-  flushPOC      = -1;
-  rcPass        = 0;
-  rcMaxPass     = 0;
-  rcIsFinalPass = true;
+  m_pcEncCfg         = nullptr;
+  encRCSeq           = NULL;
+  encRCGOP           = NULL;
+  encRCPic           = NULL;
+  flushPOC           = -1;
+  rcPass             = 0;
+  rcIsFinalPass      = true;
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+  m_pqpaStatsWritten = 0;
+#endif
 }
 
 RateCtrl::~RateCtrl()
@@ -1139,18 +1151,26 @@ void RateCtrl::destroy()
     m_listRCPictures.pop_front();
     delete p;
   }
+
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+  if ( m_rcStatsFHandle.is_open() )
+  {
+    m_rcStatsFHandle.close();
+  }
+  m_pqpaStatsWritten = 0;
+#endif
 }
 
-void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize,
-                     int picWidth, int picHeight, int LCUWidth, int LCUHeight, int bitDepth,
-                     const vvencGOPEntry GOPList[ VVENC_MAX_GOP ], int maxParallelFrames )
+void RateCtrl::init( const VVEncCfg& encCfg )
 {
   destroy();
 
+  m_pcEncCfg = &encCfg;
+
   bool isLowdelay = true;
-  for ( int i = 0; i < GOPSize - 1; i++ )
+  for ( int i = 0; i < m_pcEncCfg->m_GOPSize - 1; i++ )
   {
-    if ( GOPList[ i ].m_POC > GOPList[ i + 1 ].m_POC )
+    if ( m_pcEncCfg->m_GOPList[ i ].m_POC > m_pcEncCfg->m_GOPList[ i + 1 ].m_POC )
     {
       isLowdelay = false;
       break;
@@ -1159,27 +1179,28 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
 
   int numberOfLevel = 1;
   int adaptiveBit = 0;
-  if ( !isLowdelay && ( GOPSize == 32 || GOPSize == 16 || GOPSize == 8 ) )
+  if ( !isLowdelay && ( m_pcEncCfg->m_GOPSize == 32 || m_pcEncCfg->m_GOPSize == 16 || m_pcEncCfg->m_GOPSize == 8 ) )
   {
-    numberOfLevel = int( log( (double)GOPSize ) / log( 2.0 ) + 0.5 ) + 1;
+    numberOfLevel = int( log( (double)m_pcEncCfg->m_GOPSize ) / log( 2.0 ) + 0.5 ) + 1;
   }
   numberOfLevel++;    // intra picture
   numberOfLevel++;    // non-reference picture
 
 
   int* bitsRatio;
-  bitsRatio = new int[ GOPSize ];
-  for ( int i = 0; i < GOPSize; i++ )
+  bitsRatio = new int[ m_pcEncCfg->m_GOPSize ];
+  for ( int i = 0; i < m_pcEncCfg->m_GOPSize; i++ )
   {
     bitsRatio[ i ] = 10;
-    if ( !GOPList[ i ].m_refPic )
+    if ( ! m_pcEncCfg->m_GOPList[ i ].m_refPic )
     {
       bitsRatio[ i ] = 2;
     }
   }
 
-  double bpp = (double)( targetBitrate / (double)( frameRate * picWidth * picHeight ) );
-  if ( GOPSize == 4 && isLowdelay )
+  const int frameRate = (int)( (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 );
+  double bpp = (double)( m_pcEncCfg->m_RCTargetBitrate / (double)( frameRate * m_pcEncCfg->m_PadSourceWidth * m_pcEncCfg->m_PadSourceHeight ) );
+  if ( m_pcEncCfg->m_GOPSize == 4 && isLowdelay )
   {
     if ( bpp > 0.2 )
     {
@@ -1204,7 +1225,7 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
 
     adaptiveBit = 1;
   }
-  else if ( GOPSize == 8 && !isLowdelay )
+  else if ( m_pcEncCfg->m_GOPSize == 8 && !isLowdelay )
   {
     if ( bpp > 0.2 )
     {
@@ -1229,7 +1250,7 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
 
     adaptiveBit = 2;
   }
-  else if ( GOPSize == 16 && !isLowdelay )
+  else if ( m_pcEncCfg->m_GOPSize == 16 && !isLowdelay )
   {
     bitsRatio[  0 ] = (int)( ( -0.5691 * bpp + 0.3577 ) * 1000 + 0.5 );
     bitsRatio[  1 ] = (int)( ( -0.0332 * bpp + 0.1782 ) * 1000 + 0.5 );
@@ -1250,7 +1271,7 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
 
     adaptiveBit = 2;
   }
-  else if ( GOPSize == 32 && !isLowdelay )
+  else if ( m_pcEncCfg->m_GOPSize == 32 && !isLowdelay )
   {
     static const int bitsRatioInit[ 4 ][ 6 ] = {
       { 16, 10, 8, 4, 2, 1 },
@@ -1287,44 +1308,44 @@ void RateCtrl::init( int totalFrames, int targetBitrate, int frameRate, int intr
     msg( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
   }
 
-  int* GOPID2Level = new int[ GOPSize ];
-  for ( int i = 0; i<GOPSize; i++ )
+  int* GOPID2Level = new int[ m_pcEncCfg->m_GOPSize ];
+  for ( int i = 0; i<m_pcEncCfg->m_GOPSize; i++ )
   {
     GOPID2Level[ i ] = 1;
-    if ( !GOPList[ i ].m_refPic )
+    if ( ! m_pcEncCfg->m_GOPList[ i ].m_refPic )
     {
       GOPID2Level[ i ] = 2;
     }
   }
 
-  if ( GOPSize == 4 && isLowdelay )
+  if ( m_pcEncCfg->m_GOPSize == 4 && isLowdelay )
   {
     static const int init[] = { 3, 2, 3, 1 };
     std::copy_n( init, 4, GOPID2Level );
   }
-  else if ( GOPSize == 8 && !isLowdelay )
+  else if ( m_pcEncCfg->m_GOPSize == 8 && !isLowdelay )
   {
     static const int init[] = { 1, 2, 3, 4, 4, 3, 4, 4 };
     std::copy_n( init, 8, GOPID2Level );
   }
-  else if ( GOPSize == 16 && !isLowdelay )
+  else if ( m_pcEncCfg->m_GOPSize == 16 && !isLowdelay )
   {
     static const int init[] = { 1, 2, 3, 4, 5, 5, 4, 5, 5, 3, 4, 5, 5, 4, 5, 5 };
     std::copy_n( init, 16, GOPID2Level );
   }
-  else if ( GOPSize == 32 && !isLowdelay )
+  else if ( m_pcEncCfg->m_GOPSize == 32 && !isLowdelay )
   {
     static const int init[] = { 1, 2, 3, 4,  5, 6, 6, 6,  6, 6, 4, 5,  6, 6, 5, 6,  6, 3, 4, 5,  6, 6, 5, 6,  6, 4, 5, 6,  6, 5, 6, 6 };
     std::copy_n( init, 32, GOPID2Level );
   }
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( rcMaxPass == 1, totalFrames, targetBitrate, frameRate, intraPeriod, GOPSize, picWidth, picHeight, LCUWidth, LCUHeight, numberOfLevel, adaptiveBit, getFirstPassStats() );
+  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_framesToBeEncoded, m_pcEncCfg->m_RCTargetBitrate, frameRate, m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_CTUSize, m_pcEncCfg->m_CTUSize, numberOfLevel, adaptiveBit, getFirstPassStats() );
   encRCSeq->initBitsRatio( bitsRatio );
   encRCSeq->initGOPID2Level( GOPID2Level );
-  encRCSeq->bitDepth = bitDepth;
-  if (rcMaxPass <= 0) encRCSeq->initPicPara();
-  encRCSeq->fppParFrames = maxParallelFrames;
+  encRCSeq->bitDepth = m_pcEncCfg->m_internalBitDepth[ CH_L ];
+  if (m_pcEncCfg->m_RCNumPasses <= 1) encRCSeq->initPicPara();
+  encRCSeq->fppParFrames = m_pcEncCfg->m_maxParallelFrames;
 
   delete[] bitsRatio;
   delete[] GOPID2Level;
@@ -1342,18 +1363,198 @@ void RateCtrl::destroyRCGOP()
   encRCGOP = NULL;
 }
 
-void RateCtrl::setRCPass (const int pass, const int maxPass)
+void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* statsFName)
 {
+  m_pcEncCfg    = &encCfg;
   rcPass        = pass;
-  rcMaxPass     = maxPass;
-  rcIsFinalPass = (pass >= maxPass);
+  rcIsFinalPass = (pass >= m_pcEncCfg->m_RCNumPasses - 1);
+
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+  if( m_rcStatsFHandle.is_open() ) m_rcStatsFHandle.close();
+
+  const std::string name = statsFName != nullptr ? statsFName : "";
+  if( name.length() )
+  {
+    openStatsFile( name );
+    if( rcIsFinalPass )
+    {
+      readStatsFile();
+    }
+  }
+#else
+  CHECK( statsFName != nullptr && strlen( statsFName ) > 0, "reading/writing rate control statistics file not supported, please compile with json enabled" );
+#endif
 }
+
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+void RateCtrl::openStatsFile(const std::string& name)
+{
+  if( rcIsFinalPass )
+  {
+    m_rcStatsFHandle.open( name, std::ios::in );
+    CHECK( m_rcStatsFHandle.fail(), "unable to open rate control statistics file for reading" );
+    readStatsHeader();
+  }
+  else
+  {
+    m_rcStatsFHandle.open( name, std::ios::trunc | std::ios::out );
+    CHECK( m_rcStatsFHandle.fail(), "unable to open rate control statistics file for writing" );
+    writeStatsHeader();
+  }
+}
+#endif
+
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+void RateCtrl::writeStatsHeader()
+{
+  nlohmann::json header = {
+    { "version",      VVENC_VERSION },
+    { "SourceWidth",  m_pcEncCfg->m_SourceWidth },
+    { "SourceHeight", m_pcEncCfg->m_SourceHeight },
+    { "CTUSize",      m_pcEncCfg->m_CTUSize },
+    { "GOPSize",      m_pcEncCfg->m_GOPSize },
+    { "IntraPeriod",  m_pcEncCfg->m_IntraPeriod },
+    { "PQPA",         m_pcEncCfg->m_usePerceptQPA },
+    { "QP",           m_pcEncCfg->m_QP },
+    { "RCInitialQP",  m_pcEncCfg->m_RCInitialQP }
+  };
+  m_rcStatsFHandle << header << std::endl;
+}
+#endif
+
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+void RateCtrl::readStatsHeader()
+{
+  std::string line;
+  if( ! std::getline( m_rcStatsFHandle, line ) )
+  {
+    THROW( "unable to read header from rate control statistics file" );
+  }
+  nlohmann::json header = nlohmann::json::parse( line );
+  if( header.find( "version" )         == header.end() || ! header[ "version" ].is_string()
+      || header.find( "SourceWidth" )  == header.end() || ! header[ "SourceWidth" ].is_number()
+      || header.find( "SourceHeight" ) == header.end() || ! header[ "SourceHeight" ].is_number()
+      || header.find( "CTUSize" )      == header.end() || ! header[ "CTUSize" ].is_number()
+      || header.find( "GOPSize" )      == header.end() || ! header[ "GOPSize" ].is_number()
+      || header.find( "IntraPeriod" )  == header.end() || ! header[ "IntraPeriod" ].is_number()
+      || header.find( "PQPA" )         == header.end() || ! header[ "PQPA" ].is_boolean()
+      || header.find( "QP" )           == header.end() || ! header[ "QP" ].is_number()
+      || header.find( "RCInitialQP" )  == header.end() || ! header[ "RCInitialQP" ].is_number()
+    )
+  {
+    THROW( "header line in rate control statistics file not recognized" );
+  }
+  if( header[ "version" ]      != VVENC_VERSION )              msg( VVENC_WARNING, "WARNING: wrong version in rate control statistics file\n" );
+  if( header[ "SourceWidth" ]  != m_pcEncCfg->m_SourceWidth )  msg( VVENC_WARNING, "WARNING: wrong frame width in rate control statistics file\n" );
+  if( header[ "SourceHeight" ] != m_pcEncCfg->m_SourceHeight ) msg( VVENC_WARNING, "WARNING: wrong frame height in rate control statistics file\n" );
+  if( header[ "CTUSize" ]      != m_pcEncCfg->m_CTUSize )      msg( VVENC_WARNING, "WARNING: wrong CTU size in rate control statistics file\n" );
+  if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      msg( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
+  if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  msg( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
+}
+#endif
+
+void RateCtrl::storeStatsData( const TRCPassStats& statsData )
+{
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+  nlohmann::json data = {
+    { "poc",       statsData.poc },
+    { "qp",        statsData.qp },
+    { "lambda",    statsData.lambda },
+    { "visActY",   statsData.visActY },
+    { "numBits",   statsData.numBits },
+    { "psnrY",     statsData.psnrY },
+    { "isIntra",   statsData.isIntra },
+    { "tempLayer", statsData.tempLayer }
+  };
+
+  if( m_rcStatsFHandle.is_open() )
+  {
+    CHECK( ! m_rcStatsFHandle.good(), "unable to write to rate control statistics file" );
+    if( m_listRCIntraPQPAStats.size() > m_pqpaStatsWritten )
+    {
+      std::vector<uint8_t> pqpaTemp;
+      while( m_pqpaStatsWritten < (int)m_listRCIntraPQPAStats.size() )
+      {
+        pqpaTemp.push_back( m_listRCIntraPQPAStats[ m_pqpaStatsWritten ] );
+        m_pqpaStatsWritten++;
+      }
+      data[ "pqpaStats" ] = pqpaTemp;
+    }
+    m_rcStatsFHandle << data << std::endl;
+  }
+  else
+  {
+    // ensure same precision for internal and written data by serializing internal data as well
+    std::stringstream iss;
+    iss << data;
+    data = nlohmann::json::parse( iss.str() );
+    m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
+                                                    data[ "qp" ],
+                                                    data[ "lambda" ],
+                                                    data[ "visActY" ],
+                                                    data[ "numBits" ],
+                                                    data[ "psnrY" ],
+                                                    data[ "isIntra" ],
+                                                    data[ "tempLayer" ]
+                                                    ) );
+  }
+#else
+  m_listRCFirstPassStats.push_back( statsData );
+#endif
+}
+
+#ifdef VVENC_ENABLE_THIRDPARTY_JSON
+void RateCtrl::readStatsFile()
+{
+  CHECK( ! m_rcStatsFHandle.good(), "unable to read from rate control statistics file" );
+
+  int lineNum = 2;
+  std::string line;
+  while( std::getline( m_rcStatsFHandle, line ) )
+  {
+    nlohmann::json data = nlohmann::json::parse( line );
+    if( data.find( "poc" )          == data.end() || ! data[ "poc" ].is_number()
+        || data.find( "qp" )        == data.end() || ! data[ "qp" ].is_number()
+        || data.find( "lambda" )    == data.end() || ! data[ "lambda" ].is_number()
+        || data.find( "visActY" )   == data.end() || ! data[ "visActY" ].is_number()
+        || data.find( "numBits" )   == data.end() || ! data[ "numBits" ].is_number()
+        || data.find( "psnrY" )     == data.end() || ! data[ "psnrY" ].is_number()
+        || data.find( "isIntra" )   == data.end() || ! data[ "isIntra" ].is_boolean()
+        || data.find( "tempLayer" ) == data.end() || ! data[ "tempLayer" ].is_number() )
+    {
+      THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
+    }
+    m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
+                                                    data[ "qp" ],
+                                                    data[ "lambda" ],
+                                                    data[ "visActY" ],
+                                                    data[ "numBits" ],
+                                                    data[ "psnrY" ],
+                                                    data[ "isIntra" ],
+                                                    data[ "tempLayer" ]
+                                                    ) );
+    if( data.find( "pqpaStats" ) != data.end() )
+    {
+      CHECK( ! data[ "pqpaStats" ].is_array(), "pqpa array data in rate control statistics file not recognized" );
+      std::vector<uint8_t> pqpaTemp = data[ "pqpaStats" ];
+      for( auto el : pqpaTemp )
+      {
+        m_listRCIntraPQPAStats.push_back( el );
+      }
+    }
+    lineNum++;
+  }
+}
+#endif
 
 void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
+
+  // store start POC of last chunk of pictures
+  flushPOC = m_listRCFirstPassStats.back().poc - std::max( 32, m_pcEncCfg->m_GOPSize );
 
   // run a simple scene change detection
   detectNewScene();
@@ -1468,10 +1669,9 @@ void RateCtrl::adaptToSceneChanges()
 void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                                const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer)
 {
-  if (rcPass < rcMaxPass)
+  if( ! rcIsFinalPass )
   {
-    m_listRCFirstPassStats.push_back( TRCPassStats( poc, qp, lambda, visActY,
-                                                    numBits, psnrY, isIntra, tempLayer ) );
+    storeStatsData( TRCPassStats( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int( !isIntra ) ) );
   }
 }
 

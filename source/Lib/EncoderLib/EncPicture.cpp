@@ -65,8 +65,6 @@ namespace vvenc {
 #ifdef TRACE_ENABLE_ITT
 static __itt_string_handle* itt_handle_start = __itt_string_handle_create( "PicEnc" );
 static __itt_domain* itt_domain_picEncoder   = __itt_domain_create( "PictureEncoder" );
-static __itt_string_handle* itt_handle_post  = __itt_string_handle_create( "ALF_post" );
-static __itt_domain* itt_domain_ALF_post     = __itt_domain_create( "ALFPost" );
 #endif
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -143,13 +141,6 @@ void EncPicture::finalizePicture( Picture& pic )
     ss << "ALF_post_" << slice->poc;
     __itt_string_handle* itt_handle_post = __itt_string_handle_create( ss.str().c_str() );
 #endif
-    ITT_TASKSTART( itt_domain_ALF_post, itt_handle_post );
-
-    if( m_pcEncCfg->m_ccalf )
-    {
-      m_ALF.performCCALF( pic, cs );
-    }
-    ITT_TASKEND( itt_domain_ALF_post, itt_handle_post );
     pic.picApsMap.setApsIdStart( m_ALF.getApsIdStart() );
 
     cs.slice->ccAlfFilterParam      = m_ALF.getCcAlfFilterParam();
