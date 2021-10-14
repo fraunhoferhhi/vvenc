@@ -66,7 +66,13 @@ struct MotionVector
 {
   int x, y;
   int error;
+#if JVET_V0056_MCTF
+  int noise;
+  MotionVector() : x(0), y(0), error(INT_LEAST32_MAX), noise(0) {}
+#else
   MotionVector() : x(0), y(0), error(INT_LEAST32_MAX) {}
+#endif
+
   void set(int vectorX, int vectorY, int errorValue) { x = vectorX; y = vectorY; error = errorValue; }
 };
 
@@ -105,10 +111,17 @@ public:
 
 struct TemporalFilterSourcePicInfo
 {
+#if JVET_V0056_MCTF && 0
+  TemporalFilterSourcePicInfo() : picBuffer(), mvs(), index(0), origOffset(0) { }
+#else
   TemporalFilterSourcePicInfo() : picBuffer(), mvs(), index(0) { }
+#endif
   PelStorage            picBuffer;
   Array2D<MotionVector> mvs;
   int                   index;
+#if JVET_V0056_MCTF && 0
+  int                   origOffset;
+#endif
 };
 
 // ====================================================================================================================
@@ -167,7 +180,11 @@ private:
   static const int      m_motionVectorFactor;
   static const int      m_padding;
   static const int16_t  m_interpolationFilter[16][8];
+#if JVET_V0056_MCTF
+  static const double   m_refStrengths[3][4];
+#else
   static const double   m_refStrengths[3][2];
+#endif
 
   // Private member variables
   int64_t               m_input_cnt;
@@ -203,12 +220,19 @@ private:
   void motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int bs,
     const Array2D<MotionVector> *previous=0, const int factor = 1, const bool doubleRes = false) const;
 
+#if JVET_V0056_MCTF
+  void bilateralFilter(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
+  
+  void xFinalizeBlkLine(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
+    std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
+#else
   void bilateralFilter(const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
+  
+  void xFinalizeBlkLine(const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
+    std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], const std::vector<double> refStrengthCh[MAX_NUM_CH]) const;
+#endif
 
   void applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &input, PelStorage &output, int blockNumY, int comp ) const;
-
-  void xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
-    std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], const std::vector<double> refStrengthCh[MAX_NUM_CH] ) const;
 
 }; // END CLASS DEFINITION MCTF
 
