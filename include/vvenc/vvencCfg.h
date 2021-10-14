@@ -407,6 +407,17 @@ typedef struct vvencMCTF
 
 VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF );
 
+typedef struct vvencRectSlice
+{
+  uint32_t         tileIdx;                           //!< tile index corresponding to the first CTU in the slice
+  uint32_t         sliceWidthInTiles;                 //!< slice width in units of tiles
+  uint32_t         sliceHeightInTiles;                //!< slice height in units of tiles
+  uint32_t         numSlicesInTile;                   //!< number of slices in current tile for the special case of multiple slices inside a single tile
+  uint32_t         sliceHeightInCtu;                  //!< slice height in units of CTUs for the special case of multiple slices inside a single tile
+}vvencRectSlice;
+
+VVENC_DECL void vvenc_vvencRectSlice_default(vvencRectSlice *vvencRectSlice );
+
 // ====================================================================================================================
 
 typedef struct vvenc_config

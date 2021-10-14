@@ -316,6 +316,15 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   memset( vvencMCTF->MCTFStrengths, 0, sizeof( vvencMCTF->MCTFStrengths ) );
 }
 
+VVENC_DECL void vvenc_vvencRectSlice_default(vvencRectSlice *vvencRectSlice )
+{
+  vvencRectSlice->tileIdx = 0;
+  vvencRectSlice->sliceWidthInTiles = 0;
+  vvencRectSlice->sliceHeightInTiles = 0;
+  vvencRectSlice->numSlicesInTile = 0;
+  vvencRectSlice->sliceHeightInCtu = 0;
+}
+
 VVENC_DECL void vvenc_config_default(vvenc_config *c )
 {
   int i = 0;

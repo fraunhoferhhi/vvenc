@@ -1719,11 +1719,6 @@ PPS::PPS()
   chromaQpAdjTableIncludingNullEntry[0].u.comp.CbOffset = 0; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0. This is initialised here and never subsequently changed.
   chromaQpAdjTableIncludingNullEntry[0].u.comp.CrOffset = 0;
   chromaQpAdjTableIncludingNullEntry[0].u.comp.JointCbCrOffset = 0;
-  rectSliceStruct.tileIdx            = 0;
-  rectSliceStruct.sliceWidthInTiles  = 0;
-  rectSliceStruct.sliceHeightInTiles = 0;
-  rectSliceStruct.numSlicesInTile    = 0;
-  rectSliceStruct.sliceHeightInCtu   = 0;
 }
 
 PPS::~PPS()
@@ -1829,6 +1824,41 @@ void PPS::initRectSliceMap( const SPS* sps )
   CHECK( numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
   sliceMap.resize( numSlicesInPic );
 
+#if 1
+    uint32_t tileX = 0, tileY = 0;
+    for( uint32_t i = 0; i < numSlicesInPic; i++ )
+    {
+      sliceMap[i].initSliceMap();
+      
+      // get position of first tile in slice
+      tileX =  rectSlices[ i ].tileIdx % numTileCols;
+      tileY =  rectSlices[ i ].tileIdx / numTileCols;
+
+      // infer slice size for last slice in picture
+      if( i == numSlicesInPic-1 )
+      {
+        rectSlices[ i ].sliceWidthInTiles  = numTileCols - tileX;
+        rectSlices[ i ].sliceHeightInTiles = numTileRows - tileY;
+        rectSlices[ i ].numSlicesInTile    = 1;
+      }
+
+      // set slice index
+      sliceMap[ i ].sliceID = i;
+      
+      // complete tiles within a single slice case
+      if( rectSlices[ i ].sliceWidthInTiles > 1 || rectSlices[ i ].sliceHeightInTiles > 1 )
+      {
+        for( uint32_t j = 0; j < rectSlices[ i ].sliceHeightInTiles; j++ )
+        {
+          for( uint32_t k = 0; k < rectSlices[ i ].sliceWidthInTiles; k++ )
+          {
+            sliceMap[ i ].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
+                                          tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
+          }
+        }
+      }
+  }
+#else
   sliceMap[0].initSliceMap();
   
   uint32_t tileX = 0, tileY = 0;
@@ -1845,7 +1875,7 @@ void PPS::initRectSliceMap( const SPS* sps )
                                   tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
     }
   }
-
+#endif
   checkSliceMap();
 }
 

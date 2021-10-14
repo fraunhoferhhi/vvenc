@@ -137,7 +137,11 @@ private:
   void     xInitConstraintInfo ( ConstraintInfo &ci )                        const;  ///< initialize SPS from encoder options
   void     xInitSPS            ( SPS &sps )                                  const; ///< initialize SPS from encoder options
   void     xInitPPS            ( PPS &pps, const SPS &sps )                  const;  ///< initialize PPS from encoder options
+#if 1
+  void     xInitPPSforTiles    ( PPS &pps ) const;
+#else
   void     xInitPPSforTiles    ( PPS &pps, const SPS sps ) const;
+#endif
   void     xInitRPL            ( SPS &sps ) const;
   void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
