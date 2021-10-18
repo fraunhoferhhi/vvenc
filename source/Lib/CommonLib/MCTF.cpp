@@ -850,6 +850,16 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
 
 
 #if JVET_V0056_MCTF
+inline static double fastExp( double x )
+{
+  // using the e^x ~= ( 1 + x/n )^n for n -> inf
+  x = 1.0 + x / 1024;
+  x *= x; x *= x; x *= x; x *= x;
+  x *= x; x *= x; x *= x; x *= x;
+  x *= x; x *= x;
+  return x;
+}
+
 void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
   std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
 #else
@@ -962,7 +972,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
           ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
           sw *= ( error < 50 ) ? 1.0 : 0.8;
           ww *= ( ( minError + 1 ) / ( error + 1 ) );
-          double weight = weightScaling * m_refStrengths[refStrengthRow][i] * ww * exp( -diffSq / ( 2 * sw * sigmaSq ) );
+          double weight = weightScaling * m_refStrengths[refStrengthRow][i] * ww * fastExp( -diffSq / ( 2 * sw * sigmaSq ) );
 #else
           const double weight = refStrength[i] * exp(-diffSq / (2 * sigmaSq));
 #endif
