@@ -641,6 +641,226 @@ void applyPROF_SSE(Pel* dstPel, int dstStride, const Pel* srcPel, int srcStride,
 #endif
 }
 
+#ifndef _mm_storeu_si16
+#define VVENC_mm_storeu_si16
+#define _mm_storeu_si16(p, a) (void)(*(short*)(p) = (short)_mm_cvtsi128_si32((a)))
+#endif // !_mm_storeu_si16
+#ifndef _mm_storeu_si32
+#define VVENC_mm_storeu_si32
+#define _mm_storeu_si32(p, a) (void)(*(int*)(p) = (int)_mm_cvtsi128_si32((a)))
+#endif // !_mm_storeu_si16
+
+template<X86_VEXT vext>
+void padDmvr_SSE( const Pel* src, const int srcStride, Pel* dst, const int dstStride, int width, int height, int padSize )
+{
+  _mm_prefetch( ( const char* )  src,            _MM_HINT_T0 );
+  _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+  if( width == 7 && padSize == 1 )
+  {
+    const __m128i sl = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 );
+    __m128i l = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) src ), sl );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride - 1 ), l );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride     ), l );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride - 1 ), l );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride     ), l );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) src ), sl );
+
+      _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l );
+      _mm_storeu_si128( ( __m128i* ) ( dst     ), l );
+    }
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l );
+    _mm_storeu_si128( ( __m128i* ) ( dst     ), l );
+  }
+  else if( width == 11 && padSize == 1 )
+  {
+    const __m128i sl = _mm_setr_epi8( 0, 1, 2, 3, 4, 5, 4, 5, 8, 9, 10, 11, 12, 13, 14, 15 );
+    __m128i l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+    __m128i l1 = _mm_shuffle_epi8( _mm_loadl_epi64( ( const __m128i* ) &src[8] ), sl );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride - 1 ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride     ), l0 );
+    _mm_storel_epi64( ( __m128i* ) ( dst - 1 * dstStride + 8 ), l1 );
+
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride - 1 ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride     ), l0 );
+    _mm_storel_epi64( ( __m128i* ) ( dst - 0 * dstStride + 8 ), l1 );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+      l1 = _mm_shuffle_epi8( _mm_loadl_epi64( ( const __m128i* ) &src[8] ), sl );
+
+      _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l0 );
+      _mm_storeu_si128( ( __m128i* ) ( dst     ), l0 );
+      _mm_storel_epi64( ( __m128i* ) ( dst + 8 ), l1 );
+    }
+    
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst     ), l0 );
+    _mm_storel_epi64( ( __m128i* ) ( dst + 8 ), l1 );
+  }
+  else if( width == 15 && padSize == 2 )
+  {
+    const __m128i sl = _mm_setr_epi8(  0,  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 );
+    const __m128i sb = _mm_setr_epi8(  0,  1, 0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    const __m128i se = _mm_setr_epi8( 12, 13, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    __m128i l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+    __m128i l1 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[8] ), sl );
+    __m128i b  = _mm_shuffle_epi8( l0, sb );
+    __m128i e  = _mm_shuffle_epi8( l1, se );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 2 * dstStride -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 2 * dstStride + 16 ), e  );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 1 * dstStride -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride + 16 ), e  );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 0 * dstStride -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride + 16 ), e  );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[0] );
+      l1 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[8] ), sl );
+      b = _mm_shuffle_epi8( l0, sb );
+      e = _mm_shuffle_epi8( l1, se );
+      
+      _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b  );
+      _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+      _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+      _mm_storeu_si16 ( ( __m128i* ) ( dst + 16 ), e  );
+    }
+    
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 16 ), e  );
+
+    dst += dstStride;
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b  );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 16 ), e  );
+  }
+  else if( width == 23 && padSize == 2 )
+  {
+    const __m128i sl = _mm_setr_epi8(  0,  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 12, 13 );
+    const __m128i sb = _mm_setr_epi8(  0,  1, 0, 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    const __m128i se = _mm_setr_epi8( 12, 13, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 );
+    __m128i l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 0] );
+    __m128i l1 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 8] );
+    __m128i l2 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[16] ), sl );
+    __m128i b  = _mm_shuffle_epi8( l0, sb );
+    __m128i e  = _mm_shuffle_epi8( l2, se );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 2 * dstStride -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 2 * dstStride + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 2 * dstStride + 24 ), e );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 1 * dstStride -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 1 * dstStride + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 1 * dstStride + 24 ), e );
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst - 0 * dstStride -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst - 0 * dstStride + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst - 0 * dstStride + 24 ), e );
+
+    for( height--, dst += dstStride, src += srcStride; height > 0; height--, src += srcStride, dst += dstStride )
+    {
+      _mm_prefetch( ( const char* ) &src[srcStride], _MM_HINT_T0 );
+
+      l0 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 0] );
+      l1 =                   _mm_loadu_si128( ( const __m128i* ) &src[ 8] );
+      l2 = _mm_shuffle_epi8( _mm_loadu_si128( ( const __m128i* ) &src[16] ), sl );
+      b  = _mm_shuffle_epi8( l0, sb );
+      e  = _mm_shuffle_epi8( l2, se );
+
+      _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b );
+      _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+      _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+      _mm_storeu_si128( ( __m128i* ) ( dst + 16 ), l2 );
+      _mm_storeu_si16 ( ( __m128i* ) ( dst + 24 ), e );
+    }
+    
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 24 ), e );
+
+    dst += dstStride;
+
+    _mm_storeu_si32 ( ( __m128i* ) ( dst -  2 ), b );
+    _mm_storeu_si128( ( __m128i* ) ( dst      ), l0 );
+    _mm_storeu_si128( ( __m128i* ) ( dst +  8 ), l1 );
+    _mm_storeu_si128( ( __m128i* ) ( dst + 16 ), l2 );
+    _mm_storeu_si16 ( ( __m128i* ) ( dst + 24 ), e );
+  }
+  else
+  {
+    // TODO: fix for 444!
+
+    g_pelBufOP.copyBuffer( ( const char* ) src, srcStride * sizeof( Pel ), ( char* ) dst, dstStride * sizeof( Pel ), width * sizeof( Pel ), height );
+
+    /*left and right padding*/
+    Pel* ptrTemp1 = dst;
+    Pel* ptrTemp2 = dst + (width - 1);
+    ptrdiff_t offset = 0;
+    for( int i = 0; i < height; i++ )
+    {
+      offset = dstStride * i;
+      for( int j = 1; j <= padSize; j++ )
+      {
+        *(ptrTemp1 - j + offset) = *(ptrTemp1 + offset);
+        *(ptrTemp2 + j + offset) = *(ptrTemp2 + offset);
+      }
+    }
+    /*Top and Bottom padding*/
+    int numBytes = (width + padSize + padSize) * sizeof( Pel );
+    ptrTemp1 = (dst - padSize);
+    ptrTemp2 = (dst + (dstStride * (height - 1)) - padSize);
+    for( int i = 1; i <= padSize; i++ )
+    {
+      memcpy( ptrTemp1 - (i * dstStride), (ptrTemp1), numBytes );
+      memcpy( ptrTemp2 + (i * dstStride), (ptrTemp2), numBytes );
+    }
+  }
+}
+
+#ifdef VVENC_mm_storeu_si32
+#undef _mm_storeu_si32
+#endif
+#ifdef VVENC_mm_storeu_si16
+#undef _mm_storeu_si16
+#endif
+
+#if ENABLE_SIMD_OPT_BDOF
 template<X86_VEXT vext>
 void InterPredInterpolation::_initInterPredictionX86()
 {
@@ -648,9 +868,11 @@ void InterPredInterpolation::_initInterPredictionX86()
   xFpBDOFGradFilter   = gradFilter_SSE<vext>;
   xFpProfGradFilter   = gradFilter_SSE<vext, false>;
   xFpApplyPROF        = applyPROF_SSE<vext>;
+  xFpPadDmvr          = padDmvr_SSE<vext>;
 }
 template void InterPredInterpolation::_initInterPredictionX86<SIMDX86>();
 
+#endif
 } // namespace vvenc
 
 //! \}

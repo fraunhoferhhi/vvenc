@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/AffineGradientSearch.h"
 
+#include <unordered_map>
 #include <vector>
 
 //! \ingroup EncoderLib
@@ -74,15 +75,35 @@ static const uint32_t MAX_NUM_REF_LIST_ADAPT_SR = 2;
 static const uint32_t MAX_IDX_ADAPT_SR          = MAX_REF_PICS;
 static const uint32_t NUM_MV_PREDICTORS         = 3;
 
+struct ModeInfo
+{
+  uint32_t mergeCand;
+  bool     isRegularMerge;
+  bool     isMMVD;
+  bool     isCIIP;
+  bool     isBioOrDmvr;
+  bool     isAffine;
+  ModeInfo() {}
+
+  ModeInfo(const uint32_t mergeCand, const bool isRegularMerge, const bool isMMVD, const bool isCIIP, const bool BioOrDmvr, const bool Affine) :
+    mergeCand(mergeCand), isRegularMerge(isRegularMerge), isMMVD(isMMVD), isCIIP(isCIIP), isBioOrDmvr(BioOrDmvr), isAffine(Affine) {}
+};
+
 struct BlkUniMvInfo
 {
   Mv uniMvs[2][MAX_REF_PICS];
   int x, y, w, h;
 };
 
+struct BlkRecord
+{
+  std::unordered_map<Mv, Distortion> bvRecord;
+};
+
 struct BlkUniMvInfoBuffer
 {
-  BlkUniMvInfo* getBlkUniMvInfo( int i ) const { return m_uniMvList + ((m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)); }
+  const BlkUniMvInfo* getBlkUniMvInfo(int i) const { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
+        BlkUniMvInfo* getBlkUniMvInfo(int i)       { return &m_uniMvList[(m_uniMvListIdx - 1 - i + m_uniMvListMaxSize) % (m_uniMvListMaxSize)]; }
 
   void insertUniMvCands( const Area& blkArea, const Mv* cMvTemp)
   {
@@ -118,7 +139,7 @@ struct BlkUniMvInfoBuffer
   void savePrevUniMvInfo(const CompArea& blkArea, BlkUniMvInfo &tmpUniMvInfo, bool& isUniMvInfoSaved)
   {
     int j = 0;
-    BlkUniMvInfo* curMvInfo = nullptr;
+    const BlkUniMvInfo* curMvInfo = nullptr;
     for (; j < m_uniMvListSize; j++)
     {
       curMvInfo = getBlkUniMvInfo( j );
@@ -166,31 +187,23 @@ struct BlkUniMvInfoBuffer
 
   BlkUniMvInfoBuffer()
   {
-    m_uniMvListMaxSize = 15;
-    m_uniMvList = new BlkUniMvInfo[m_uniMvListMaxSize];
     m_uniMvListIdx = 0;
     m_uniMvListSize = 0;
   }
 
   ~BlkUniMvInfoBuffer()
   {
-    if ( m_uniMvList )
-    {
-      delete[] m_uniMvList;
-      m_uniMvList = nullptr;
-    }
     m_uniMvListIdx = 0;
     m_uniMvListSize = 0;
   }
 
-  BlkUniMvInfo*   m_uniMvList;
-  int             m_uniMvListIdx;
-  int             m_uniMvListSize;
-  int             m_uniMvListMaxSize;
+  static const int m_uniMvListMaxSize = 15;
+  BlkUniMvInfo     m_uniMvList[m_uniMvListMaxSize];
+  int              m_uniMvListIdx;
+  int              m_uniMvListSize;
 };
 
 class EncPicture;
-class VVEncCfg;
 class EncModeCtrl;
 class EncReshape;
 class EncCu;
@@ -337,6 +350,10 @@ private:
   CodingStructure** m_pSaveCS;
 
   ClpRng            m_lumaClpRng;
+  Mv                m_acBVs[2 * IBC_NUM_CANDIDATES];
+  unsigned int      m_numBVs;
+  IbcBvCand*        m_defaultCachedBvs;
+  std::unordered_map< Position, std::unordered_map< Size, BlkRecord> > m_ctuRecord;
 
 protected:
   // interface to option
@@ -349,7 +366,8 @@ protected:
   // ME parameters
   int               m_iSearchRange;
   int               m_bipredSearchRange; // Search range for bi-prediction
-  MESearchMethod    m_motionEstimationSearchMethod;
+  vvencMESearchMethod m_motionEstimationSearchMethod;
+  int               m_motionEstimationSearchMethodSCC;
   int               m_aaiAdaptSR[MAX_NUM_REF_LIST_ADAPT_SR][MAX_IDX_ADAPT_SR];
 
   // RD computation
@@ -373,22 +391,28 @@ protected:
   uint8_t           m_sbtRdoOrder[NUMBER_SBT_MODE];       // order of SBT mode in RDO
   bool              m_skipSbtAll;                         // to skip all SBT modes for the current PU
 
+  BcwMotionParam    m_uniMotions;
+  uint8_t           m_estWeightIdxBits[BCW_NUM] = { 4, 3, 1, 2, 4 };
+  bool              m_affineModeSelected;
+
 public:
   ReuseUniMv*         m_ReuseUniMv;
   BlkUniMvInfoBuffer* m_BlkUniMvInfoBuffer;
   AffineProfList*     m_AffineProfList;
+  bool                m_clipMvInSubPic;
 
 public:
   InterSearch();
   virtual ~InterSearch();
 
   void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
-  void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList );
+  void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
 
   void destroy                      ();
 
   /// encoder estimation - inter prediction (non-skip)
-  void predInterSearch              ( CodingUnit& cu, Partitioner& partitioner );
+  bool predInterSearch              ( CodingUnit& cu, Partitioner& partitioner, double& bestCostInter);
+
   /// set ME search range
   void encodeResAndCalcRdInterCU    ( CodingStructure &cs, Partitioner &partitioner, const bool skipResidual );
 
@@ -405,6 +429,14 @@ public:
   void       initSbtRdoOrder        ( uint8_t sbtMode )                 { m_sbtRdoOrder[0] = sbtMode; m_estMinDistSbt[0] = m_estMinDistSbt[sbtMode]; }
 
   void       getBestSbt             ( CodingStructure* tempCS, CodingUnit* cu, uint8_t& histBestSbt, Distortion& curPuSse, uint8_t sbtAllowed, bool doPreAnalyzeResi, bool mtsAllowed );
+  bool       predIBCSearch          (CodingUnit& cu, Partitioner& partitioner);
+  bool       searchBvIBC            (const CodingUnit& pu, int xPos, int yPos, int width, int height, int picWidth, int picHeight, int xBv, int yBv, int ctuSize) const;
+
+  void       resetCtuRecordIBC      () { m_ctuRecord.clear(); }
+
+  void       resetBufferedUniMotions() { m_uniMotions.reset(); }
+  uint8_t    getWeightIdxBits       ( uint8_t bcwIdx ) { return m_estWeightIdxBits[bcwIdx]; }
+  void       setAffineModeSelected  ( bool flag ) { m_affineModeSelected = flag; }
 
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
@@ -441,6 +473,7 @@ private:
   // sub-functions for ME
   inline void xTZSearchHelp         ( TZSearchStruct& rcStruct, const int iSearchX, const int iSearchY, const uint8_t ucPointNr, const uint32_t uiDistance );
   inline void xTZ2PointSearch       ( TZSearchStruct& rcStruct );
+  inline void xTZ4PointSquareSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointSquareSearch ( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist );
   inline void xTZ8PointDiamondSearch( TZSearchStruct& rcStruct, const int iStartX, const int iStartY, const int iDist, const bool bCheckCornersAtDist1 );
 
@@ -577,13 +610,20 @@ private:
   void xSymMvdCheckBestMvp            ( CodingUnit& cu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
                                         int32_t BcwIdx, Mv cMvPredSym[2], int32_t mvpIdxSym[2], Distortion& bestCost, bool skip );
 
+  bool xReadBufferedAffineUniMv       ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv acMvPred[3], Mv acMv[3], uint32_t& ruiBits, Distortion& ruiCost, int& mvpIdx, const AffineAMVPInfo& aamvpi );
+  bool xReadBufferedUniMv             ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv& pcMvPred, Mv& rcMv, uint32_t& ruiBits, Distortion& ruiCost);
+
   void xExtDIFUpSamplingH             ( CPelBuf* pcPattern, bool useAltHpelIf);
   void xExtDIFUpSamplingQ             ( CPelBuf* pcPatternKey, Mv halfPelRef, int& patternId );
 
   void xEncodeInterResidualQT         ( CodingStructure &cs, Partitioner &partitioner, const ComponentID compID );
   void xEstimateInterResidualQT       ( CodingStructure &cs, Partitioner &partitioner, Distortion *puiZeroDist = NULL );
   uint64_t xGetSymbolFracBitsInter    ( CodingStructure &cs, Partitioner &partitioner );
-
+  void  xSetIntraSearchRangeIBC       ( CodingUnit& pu, int iRoiWidth, int iRoiHeight, Mv& rcMvSrchRngLT, Mv& rcMvSrchRngRB);
+  void  xIBCEstimation                ( CodingUnit& cu, PelUnitBuf& origBuf, Mv* pcMvPred, Mv& rcMv, Distortion& ruiCost );
+  void  xIBCSearchMVCandUpdate        ( Distortion  uiSad, int x, int y, Distortion* uiSadBestCand, Mv* cMVCand);
+  int   xIBCSearchMVChromaRefine      ( CodingUnit& cu, int iRoiWidth, int iRoiHeight, int cuPelX, int cuPelY, Distortion* uiSadBestCand, Mv* cMVCand);
+  void  xIntraPatternSearchIBC        ( CodingUnit& pu, TZSearchStruct& cStruct, Mv& rcMv, Distortion& ruiCost, Mv* cMvSrchRngLT, Mv* cMvSrchRngRB, Mv* pcMvPred);
 };// END CLASS DEFINITION EncSearch
 
 } // namespace vvenc

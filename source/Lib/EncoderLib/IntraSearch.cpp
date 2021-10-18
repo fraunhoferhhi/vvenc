@@ -223,80 +223,74 @@ void IntraSearch::xEstimateLumaRdModeList(int& numModesForFullRD,
   unsigned mpmLst[NUM_MOST_PROBABLE_MODES];
   CU::getIntraMPMs(cu, mpmLst);
 
+  const int decMsk = ( 1 << m_pcEncCfg->m_IntraEstDecBit ) - 1;
+
+  std::vector<ModeInfo> parentCandList;
+  parentCandList.reserve( ( numModesAvailable >> m_pcEncCfg->m_IntraEstDecBit ) + 2 );
+
   for( unsigned mode = 0; mode < numModesAvailable; mode++ )
   {
     // Skip checking extended Angular modes in the first round of SATD
-    if( mode > DC_IDX && ( mode & 1 ) )
+    if( mode > DC_IDX && ( mode & decMsk ) )
     {
       continue;
     }
 
-    cu.intraDir[0] = mode;
-
-    initPredIntraParams(cu, cu.Y(), sps);
-    distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-    predIntraAng( COMP_Y, piPred, cu);
-
-    // Use the min between SAD and HAD as the cost criterion
-    // SAD is scaled by 2 to align with the scaling of HAD
-    Distortion minSadHad = distParam.distFunc(distParam);
-
-    uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-
-    //restore ctx
-    m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
-
-    double cost = ( double ) minSadHad + (double)fracModeBits * sqrtLambdaForFirstPass;
-    DTRACE(g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode);
-
-    int insertPos = -1;
-    updateCandList( ModeInfo(false, false, 0, NOT_INTRA_SUBPARTITIONS, mode), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
-    updateCandList( ModeInfo(false, false, 0, NOT_INTRA_SUBPARTITIONS, mode), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
-    m_SortedPelUnitBufs->insert( insertPos, (int)RdModeList.size() );
-
-    satdChecked[mode] = true;
+    parentCandList.push_back( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ) );
   }
-
-  std::vector<ModeInfo> parentCandList( RdModeList.cbegin(), RdModeList.cend());
-
-  // Second round of SATD for extended Angular modes
-  for (unsigned modeIdx = 0; modeIdx < numModesForFullRD; modeIdx++)
+   
+  for( int decDst = 1 << m_pcEncCfg->m_IntraEstDecBit; decDst > 0; decDst >>= 1 )
   {
-    unsigned parentMode = parentCandList[modeIdx].modeId;
-    if (parentMode > (DC_IDX + 1) && parentMode < (NUM_LUMA_MODE - 1))
+    for( unsigned idx = 0; idx < parentCandList.size(); idx++ )
     {
-      for (int subModeIdx = -1; subModeIdx <= 1; subModeIdx += 2)
+      int modeParent = parentCandList[idx].modeId;
+
+      int off = decDst & decMsk;
+      int inc = decDst << 1;
+
+#if 1 // INTRA_AS_IN_VTM
+      if( off != 0 && ( modeParent <= ( DC_IDX + 1 ) || modeParent >= ( NUM_LUMA_MODE - 1 ) ) )
       {
-        unsigned mode = parentMode + subModeIdx;
+        continue;
+      }
 
-        if( ! satdChecked[mode])
+#endif
+      for( int mode = modeParent - off; mode < modeParent + off + 1; mode += inc )
+      {
+        if( satdChecked[mode] || mode < 0 || mode >= NUM_LUMA_MODE )
         {
-          cu.intraDir[0] = mode;
-
-          initPredIntraParams(cu, cu.Y(), sps);
-          distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
-          predIntraAng(COMP_Y, piPred, cu );
-
-          // Use the min between SAD and SATD as the cost criterion
-          // SAD is scaled by 2 to align with the scaling of HAD
-          Distortion minSadHad = distParam.distFunc(distParam);
-
-          uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
-          //restore ctx
-          m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::IntraLumaMpmFlag(), intra_ctx_size), ctxStartIntraCtx);
-
-          double cost = (double) minSadHad + (double) fracModeBits * sqrtLambdaForFirstPass;
-//          DTRACE(g_trace_ctx, D_INTRA_COST, "IntraHAD2: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode);
-
-          int insertPos = -1;
-          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
-          updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), (double)minSadHad, HadModeList, CandHadList,  numHadCand );
-          m_SortedPelUnitBufs->insert(insertPos, (int)RdModeList.size());
-
-          satdChecked[mode] = true;
+          continue;
         }
+
+        cu.intraDir[0] = mode;
+
+        initPredIntraParams( cu, cu.Y(), sps );
+        distParam.cur.buf = piPred.buf = m_SortedPelUnitBufs->getTestBuf().Y().buf;
+        predIntraAng( COMP_Y, piPred, cu );
+
+        // Use the min between SAD and HAD as the cost criterion
+        // SAD is scaled by 2 to align with the scaling of HAD
+        Distortion minSadHad = distParam.distFunc( distParam );
+
+        uint64_t fracModeBits = xFracModeBitsIntraLuma( cu, mpmLst );
+
+        //restore ctx
+        m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::IntraLumaMpmFlag(), intra_ctx_size ), ctxStartIntraCtx );
+
+        double cost = ( double ) minSadHad + ( double ) fracModeBits * sqrtLambdaForFirstPass;
+        DTRACE( g_trace_ctx, D_INTRA_COST, "IntraHAD: %u, %llu, %f (%d)\n", minSadHad, fracModeBits, cost, mode );
+
+        int insertPos = -1;
+        updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), cost, RdModeList, CandCostList, numModesForFullRD, &insertPos );
+        updateCandList( ModeInfo( false, false, 0, NOT_INTRA_SUBPARTITIONS, mode ), ( double ) minSadHad, HadModeList, CandHadList, numHadCand );
+        m_SortedPelUnitBufs->insert( insertPos, ( int ) RdModeList.size() );
+
+        satdChecked[mode] = true;
       }
     }
+
+    parentCandList.resize( RdModeList.size() );
+    std::copy( RdModeList.cbegin(), RdModeList.cend(), parentCandList.begin() );
   }
 
   const bool isFirstLineOfCtu = (((cu.block(COMP_Y).y)&((cu.cs->sps)->CTUSize - 1)) == 0);
@@ -439,6 +433,8 @@ bool IntraSearch::estIntraPredLumaQT(CodingUnit &cu, Partitioner &partitioner, d
   static_vector<double, FAST_UDI_MAX_RDMODE_NUM> CandHadList;
 
   int numModesForFullRD = g_aucIntraModeNumFast_UseMPM_2D[Log2(width) - MIN_CU_LOG2][Log2(height) - MIN_CU_LOG2];
+  if (m_pcEncCfg->m_numIntraModesFullRD > 0)
+    numModesForFullRD=m_pcEncCfg->m_numIntraModesFullRD;
 
 #if INTRA_FULL_SEARCH
   numModesForFullRD = numModesAvailable;
@@ -739,6 +735,7 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
     uint32_t  uiMinMode = 0;
     uint32_t  uiMaxMode = NUM_CHROMA_MODE;
 
+    const int reducedModeNumber = uiMaxMode >> (m_pcEncCfg->m_reduceIntraChromaModesFullRD ? 1 : 2);
     //----- check chroma modes -----
     uint32_t chromaCandModes[ NUM_CHROMA_MODE ];
     CU::getIntraChromaCandModes( cu, chromaCandModes );
@@ -865,7 +862,6 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       }
     }
 
-    int reducedModeNumber = 2; // reduce the number of chroma modes
     for (int i = 0; i < reducedModeNumber; i++)
     {
       modeDisable[satdModeList[uiMaxMode - 1 - i]] = true; // disable the last reducedModeNumber modes
@@ -1300,7 +1296,7 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       else
         initIntraPatternChTypeISP(*tu.cu, area, piReco);
     }
-    else
+    else if( !predBuf )
     {
       initIntraPatternChType(*tu.cu, area);
     }
@@ -1364,11 +1360,6 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     m_pcTrQuant->scaleLambda( 1.0/(cRescale*cRescale) );
   }
 
-  CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
-  PelBuf          crPred = cs.getPredBuf ( COMP_Cr );
-  PelBuf          crResi = cs.getResiBuf ( COMP_Cr );
-  PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
-
   if ( jointCbCr )
   {
     // Lambda is loosened for the joint mode with respect to single modes as the same residual is used for both chroma blocks
@@ -1404,6 +1395,10 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
   }
   else // chroma
   {
+    PelBuf          crPred = cs.getPredBuf ( COMP_Cr );
+    PelBuf          crResi = cs.getResiBuf ( COMP_Cr );
+    PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
+
     int         codedCbfMask  = 0;
     ComponentID codeCompId    = (tu.jointCbCr ? (tu.jointCbCr >> 1 ? COMP_Cb : COMP_Cr) : compID);
     const QpParam qpCbCr(tu, codeCompId);
@@ -1443,24 +1438,25 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       m_pcTrQuant->invTransformICT( tu, piResi, crResi );
       uiAbsSum = codedCbfMask;
     }
-  }
 
-  //===== reconstruction =====
-  if ( flag && uiAbsSum > 0 && isChroma(compID) && cs.picHeader->lmcsChromaResidualScale )
-  {
-    piResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[compID]);
+    //===== reconstruction =====
+    if ( flag && uiAbsSum > 0 && cs.picHeader->lmcsChromaResidualScale )
+    {
+      piResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[compID]);
+
+      if( jointCbCr )
+      {
+        crResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cr]);
+      }
+    }
 
     if( jointCbCr )
     {
-      crResi.scaleSignal(tu.chromaAdj, 0, slice.clpRngs[COMP_Cr]);
+      crReco.reconstruct(crPred, crResi, cs.slice->clpRngs[ COMP_Cr ]);
     }
   }
-
   piReco.reconstruct(piPred, piResi, cs.slice->clpRngs[ compID ]);
-  if( jointCbCr )
-  {
-    crReco.reconstruct(crPred, crResi, cs.slice->clpRngs[ COMP_Cr ]);
-  }
+  
 
 
   //===== update distortion =====
@@ -1479,6 +1475,8 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
       ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE_WTD, &orgLuma );
       if( jointCbCr )
       {
+        CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
+        PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
         ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE_WTD, &orgLuma );
       }
     }
@@ -1488,6 +1486,8 @@ void IntraSearch::xIntraCodingTUBlock(TransformUnit &tu, const ComponentID compI
     ruiDist += m_pcRdCost->getDistPart( piOrg, piReco, bitDepth, compID, DF_SSE );
     if( jointCbCr )
     {
+      CPelBuf         crOrg  = cs.getOrgBuf  ( COMP_Cr );
+      PelBuf          crReco = cs.getRecoBuf ( COMP_Cr );
       ruiDist += m_pcRdCost->getDistPart( crOrg, crReco, bitDepth, COMP_Cr, DF_SSE );
     }
   }
@@ -1999,11 +1999,11 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
     saveCS.pcv = cs.pcv;
     saveCS.picture = cs.picture;
     saveCS.area.repositionTo(cs.area);
+    saveCS.initStructData(MAX_INT, true);
 
     TransformUnit& tmpTU = saveCS.tus.empty() ? saveCS.addTU(currArea, partitioner.chType, nullptr) : *saveCS.tus.front();
     tmpTU.initData();
     tmpTU.UnitArea::operator=(currArea);
-
     const unsigned      numTBlocks = getNumberValidTBlocks(*cs.pcv);
 
     CompArea& cbArea = currTU.blocks[COMP_Cb];
@@ -2684,15 +2684,15 @@ void IntraSearch::xReduceHadCandList(static_vector<T, N>& candModeList, static_v
 
 void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, const int maxCand, PelUnitBuf *predBuf, const ComponentID& compID)
 {
-  CodingStructure&   cs          = *tu.cs;
-  const CompArea& area = tu.blocks[compID];
-  const ReshapeData& reshapeData = cs.picture->reshapeData;
-  PelBuf piPred = cs.getPredBuf(area);
-  PelBuf piResi = cs.getResiBuf(area);
-
-  const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
   if (compID == COMP_Y)
   {
+    CodingStructure&  cs = *tu.cs;
+    const CompArea& area = tu.blocks[compID];
+    const ReshapeData& reshapeData = cs.picture->reshapeData;
+    const CodingUnit& cu = *cs.getCU(area.pos(), CH_L,TREE_D);
+    PelBuf piPred = cs.getPredBuf(area);
+    PelBuf piResi = cs.getResiBuf(area);
+
     initIntraPatternChType(*tu.cu, area);
     if (predBuf)
     {
@@ -2707,11 +2707,8 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
     {
       predIntraAng(COMP_Y, piPred, cu);
     }
-  }
 
-  //===== get residual signal =====
-  if (isLuma(compID))
-  {
+    //===== get residual signal =====
     if (cs.picHeader->lmcsEnabled && reshapeData.getCTUFlag())
     {
       piResi.subtract(cs.getRspOrgBuf(), piPred);
@@ -2721,15 +2718,13 @@ void IntraSearch::xPreCheckMTS(TransformUnit &tu, std::vector<TrMode> *trModes, 
       CPelBuf piOrg = cs.getOrgBuf(COMP_Y);
       piResi.subtract(piOrg, piPred);
     }
+    m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, compID);
   }
-
-  if (isChroma(compID))
+  else
   {
     ComponentID codeCompId = (tu.jointCbCr ? (tu.jointCbCr >> 1 ? COMP_Cb : COMP_Cr) : compID);
     m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, codeCompId);
   }
-  else
-    m_pcTrQuant->checktransformsNxN(tu, trModes, m_pcEncCfg->m_MTSIntraMaxCand, compID);
 }
 
 double IntraSearch::xTestISP(CodingStructure& cs, Partitioner& subTuPartitioner, double bestCostForISP, PartSplit ispType, bool& splitcbf, uint64_t& singleFracBits, Distortion& singleDistLuma, CUCtx& cuCtx)

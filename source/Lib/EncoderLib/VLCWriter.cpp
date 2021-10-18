@@ -361,7 +361,7 @@ void HLSWriter::codePPS( const PPS* pcPPS, const SPS* pcSPS )
       }
     }
   }
-  WRITE_FLAG( pcPPS->deblockingFilterControlPresent,    "debpps_locking_filter_control_present_flag");
+  WRITE_FLAG( pcPPS->deblockingFilterControlPresent,    "pps_deblocking_filter_control_present_flag");
   if(pcPPS->deblockingFilterControlPresent)
   {
     WRITE_FLAG( pcPPS->deblockingFilterOverrideEnabled, "pps_deblocking_filter_override_enabled_flag" );
@@ -464,7 +464,7 @@ void HLSWriter::codeAlfAps( const APS* pcAPS )
   if (param.newFilterFlag[CH_C])
   {
     WRITE_FLAG(param.nonLinearFlag[CH_C],               "alf_nonlinear_enable_flag_chroma");
-    if( MAX_NUM_ALF_ALTERNATIVES_CHROMA > 1 )
+    if( VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA > 1 )
     {
       WRITE_UVLC( param.numAlternativesChroma - 1,      "alf_chroma_num_alts_minus1" );
     }
@@ -1130,7 +1130,7 @@ void HLSWriter::codeVPS(const VPS* pcVPS)
         bool presentFlag = false;
         for (int j = 0; j < i; j++)
         {
-          presentFlag |= ((pcVPS->maxTidIlRefPicsPlus1[i][j] != MAX_TLAYER) && pcVPS->directRefLayer[i][j]);
+          presentFlag |= ((pcVPS->maxTidIlRefPicsPlus1[i][j] != VVENC_MAX_TLAYER) && pcVPS->directRefLayer[i][j]);
         }
         WRITE_FLAG(presentFlag, "max_tid_ref_present_flag[ i ]");
         for (int j = 0; j < i; j++)
@@ -1650,22 +1650,22 @@ void HLSWriter::codePictureHeader( const PicHeader* picHeader, bool writeRbspTra
       if (pps->dbfInfoInPh)
       {
         WRITE_FLAG ( picHeader->deblockingFilterOverride, "ph_deblocking_filter_override_flag" );
-      }
-    }
-
-    if(picHeader->deblockingFilterOverride)
-    {
-      WRITE_FLAG( picHeader->deblockingFilterDisable, "ph_deblocking_filter_disabled_flag" );
-      if( !picHeader->deblockingFilterDisable )
-      {
-        WRITE_SVLC( picHeader->deblockingFilterBetaOffsetDiv2[COMP_Y], "ph_beta_offset_div2" );
-        WRITE_SVLC( picHeader->deblockingFilterTcOffsetDiv2[COMP_Y], "ph_tc_offset_div2" );
-        if( pps->usePPSChromaTool )
+ 
+        if(picHeader->deblockingFilterOverride)
         {
-          WRITE_SVLC( picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cb], "ph_cb_beta_offset_div2" );
-          WRITE_SVLC( picHeader->deblockingFilterTcOffsetDiv2[COMP_Cb], "ph_cb_tc_offset_div2" );
-          WRITE_SVLC( picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cr], "ph_cr_beta_offset_div2" );
-          WRITE_SVLC( picHeader->deblockingFilterTcOffsetDiv2[COMP_Cr], "ph_cr_tc_offset_div2" );
+          WRITE_FLAG( picHeader->deblockingFilterDisable, "ph_deblocking_filter_disabled_flag" );
+          if( !picHeader->deblockingFilterDisable )
+          {
+            WRITE_SVLC( picHeader->deblockingFilterBetaOffsetDiv2[COMP_Y], "ph_beta_offset_div2" );
+            WRITE_SVLC( picHeader->deblockingFilterTcOffsetDiv2[COMP_Y], "ph_tc_offset_div2" );
+            if( pps->usePPSChromaTool )
+            {
+              WRITE_SVLC( picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cb], "ph_cb_beta_offset_div2" );
+              WRITE_SVLC( picHeader->deblockingFilterTcOffsetDiv2[COMP_Cb], "ph_cb_tc_offset_div2" );
+              WRITE_SVLC( picHeader->deblockingFilterBetaOffsetDiv2[COMP_Cr], "ph_cr_beta_offset_div2" );
+              WRITE_SVLC( picHeader->deblockingFilterTcOffsetDiv2[COMP_Cr], "ph_cr_tc_offset_div2" );
+            }
+          }
         }
       }
     }
@@ -1750,7 +1750,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
 
   if (!picHeader->picIntraSliceAllowed )
   {
-    CHECK(slice->sliceType == I_SLICE, "when pic_intra_slice_allowed_flag = 0, no I_Slice is allowed");
+    CHECK(slice->sliceType == VVENC_I_SLICE, "when pic_intra_slice_allowed_flag = 0, no I_Slice is allowed");
   }
 
   if (slice->sps->alfEnabled && !slice->pps->alfInfoInPh)
@@ -1939,7 +1939,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
       if( !slice->isIntra() && slice->pps->cabacInitPresent )
       {
         const SliceType encCABACTableIdx = slice->encCABACTableIdx;
-        bool encCabacInitFlag = ( slice->sliceType != encCABACTableIdx && encCABACTableIdx != I_SLICE ) ? true : false;
+        bool encCabacInitFlag = ( slice->sliceType != encCABACTableIdx && encCABACTableIdx != VVENC_I_SLICE ) ? true : false;
         WRITE_FLAG( encCabacInitFlag ? 1 : 0, "sh_cabac_init_flag" );
       }
     }
@@ -1948,13 +1948,13 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
     {
       if(!slice->pps->rplInfoInPh)
       {
-        if (slice->sliceType == B_SLICE)
+        if (slice->sliceType == VVENC_B_SLICE)
         {
           WRITE_FLAG(slice->colFromL0Flag, "sh_collocated_from_l0_flag");
         }
       }
 
-    if( slice->sliceType != I_SLICE &&
+    if( slice->sliceType != VVENC_I_SLICE &&
       ( ( slice->colFromL0Flag == 1 && slice->numRefIdx[ REF_PIC_LIST_0 ] > 1 ) ||
         ( slice->colFromL0Flag == 0 && slice->numRefIdx[ REF_PIC_LIST_1 ] > 1 ) ) )
     {
@@ -1962,7 +1962,7 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
     }
   }
 
-  if( ( slice->pps->weightPred && slice->sliceType == P_SLICE ) || ( slice->pps->weightedBiPred && slice->sliceType == B_SLICE ) )
+  if( ( slice->pps->weightPred && slice->sliceType == VVENC_P_SLICE ) || ( slice->pps->weightedBiPred && slice->sliceType == VVENC_B_SLICE ) )
   {
     if( !slice->pps->wpInfoInPh )
     {
@@ -2161,7 +2161,7 @@ void  HLSWriter::codeProfileTierLevel    ( const ProfileTierLevel* ptl, bool pro
   if(profileTierPresent)
   {
     WRITE_CODE( (uint32_t)ptl->profileIdc, 7 ,        "general_profile_idc"                     );
-    WRITE_FLAG( ptl->tierFlag==Tier::TIER_HIGH,           "general_tier_flag"                       );
+    WRITE_FLAG( ptl->tierFlag==vvencTier::VVENC_TIER_HIGH,           "general_tier_flag"                       );
   }
 
   WRITE_CODE( (uint32_t)ptl->levelIdc, 8 ,            "general_level_idc");
@@ -2255,11 +2255,11 @@ void HLSWriter::xCodePredWeightTable( const Slice* slice )
   const ChromaFormat  format                = slice->sps->chromaFormatIdc;
   const uint32_t      numberValidComponents = getNumberValidComponents(format);
   const bool          bChroma               = isChromaEnabled(format);
-  const int           iNbRef                = (slice->sliceType == B_SLICE ) ? (2) : (1);
+  const int           iNbRef                = (slice->sliceType == VVENC_B_SLICE ) ? (2) : (1);
   bool                bDenomCoded           = false;
   uint32_t            uiTotalSignalledWeightFlags = 0;
 
-  if ( (slice->sliceType==P_SLICE && slice->pps->weightPred) || (slice->sliceType==B_SLICE && slice->pps->weightedBiPred) )
+  if ( (slice->sliceType==VVENC_P_SLICE && slice->pps->weightPred) || (slice->sliceType==VVENC_B_SLICE && slice->pps->weightedBiPred) )
   {
     for ( int iNumRef=0 ; iNumRef<iNbRef ; iNumRef++ ) // loop over l0 and l1 syntax elements
     {

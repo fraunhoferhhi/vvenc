@@ -119,26 +119,30 @@ struct MotionInfo
   uint16_t sliceIdx = 0;
   bool     isInter  = false;
   char     interDir = 0;
+  bool     isIBCmot = false;
+  Mv       bv;
 
   bool operator==( const MotionInfo& mi ) const
   {
     if( isInter  != mi.isInter  ) return false;
-
-    if( sliceIdx != mi.sliceIdx ) return false;
-    if( interDir != mi.interDir ) return false;
-
-    if( interDir != 2 )
+    if( isIBCmot != mi.isIBCmot ) return false;
+    if (isInter)
     {
-      if( refIdx[0] != mi.refIdx[0] ) return false;
-      if( mv[0]     != mi.mv[0]     ) return false;
-    }
+      if (sliceIdx != mi.sliceIdx) return false;
+      if (interDir != mi.interDir) return false;
 
-    if( interDir != 1 )
-    {
-      if( refIdx[1] != mi.refIdx[1] ) return false;
-      if( mv[1]     != mi.mv[1]     ) return false;
-    }
+      if (interDir != 2)
+      {
+        if (refIdx[0] != mi.refIdx[0]) return false;
+        if (mv[0] != mi.mv[0]) return false;
+      }
 
+      if (interDir != 1)
+      {
+        if (refIdx[1] != mi.refIdx[1]) return false;
+        if (mv[1] != mi.mv[1]) return false;
+      }
+    }
     return true;
   }
 
@@ -156,6 +160,7 @@ struct HPMVInfo
   char     interDir = 0;
   uint8_t  BcwIdx   = 0;
   bool     useAltHpelIf = false;
+  Mv       bv;
 
   HPMVInfo() = default;
   HPMVInfo( const MotionInfo& mi, uint8_t _bcwIdx, bool _useAltHpelIf )
@@ -170,6 +175,7 @@ struct HPMVInfo
 
     BcwIdx       = _bcwIdx;
     useAltHpelIf = _useAltHpelIf;
+    bv           = mi.bv;
   }
 
   bool operator==( const HPMVInfo& mi ) const
@@ -224,6 +230,96 @@ struct HPMVInfo
 struct LutMotionCand
 {
   static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lut;
+  static_vector<HPMVInfo, MAX_NUM_HMVP_CANDS> lutIbc;
+};
+
+struct IbcBvCand
+{
+  Mv m_bvCands[IBC_NUM_CANDIDATES];
+  int currCnt;
+  void resetIbcBvCand()
+  {
+    for( int i = 0; i < IBC_NUM_CANDIDATES; i++ )
+    {
+      m_bvCands[ i ].setZero();
+    }
+    currCnt = 0;
+  }
+};
+
+class BcwMotionParam
+{
+  bool       m_readOnly[2][33];       // 2 RefLists, 33 RefFrams
+  Mv         m_mv[2][33];
+  Distortion m_dist[2][33];
+
+  bool       m_readOnlyAffine[2][2][33];
+  Mv         m_mvAffine[2][2][33][3];
+  Distortion m_distAffine[2][2][33];
+  int        m_mvpIdx[2][2][33];
+
+public:
+
+  void reset()
+  {
+    Mv* pMv = &(m_mv[0][0]);
+    for (int ui = 0; ui < 1 * 2 * 33; ++ui, ++pMv)
+    {
+      pMv->set(std::numeric_limits<int16_t>::max(), std::numeric_limits<int16_t>::max());
+    }
+
+    Mv* pAffineMv = &(m_mvAffine[0][0][0][0]);
+    for (int ui = 0; ui < 2 * 2 * 33 * 3; ++ui, ++pAffineMv)
+    {
+      pAffineMv->set(0, 0);
+    }
+
+    memset(m_readOnly, false, 2 * 33 * sizeof(bool));
+    memset(m_dist, -1, 2 * 33 * sizeof(Distortion));
+    memset(m_readOnlyAffine, false, 2 * 2 * 33 * sizeof(bool));
+    memset(m_distAffine, -1, 2 * 2 * 33 * sizeof(Distortion));
+    memset( m_mvpIdx, 0, 2 * 2 * 33 * sizeof( int ) );
+  }
+
+  void setReadMode(bool b, uint32_t uiRefList, uint32_t uiRefIdx) { m_readOnly[uiRefList][uiRefIdx] = b; }
+  bool isReadMode(uint32_t uiRefList, uint32_t uiRefIdx) { return m_readOnly[uiRefList][uiRefIdx]; }
+
+  void setReadModeAffine(bool b, uint32_t uiRefList, uint32_t uiRefIdx, int bP4) { m_readOnlyAffine[bP4][uiRefList][uiRefIdx] = b; }
+  bool isReadModeAffine(uint32_t uiRefList, uint32_t uiRefIdx, int bP4) { return m_readOnlyAffine[bP4][uiRefList][uiRefIdx]; }
+
+  Mv&  getMv(uint32_t uiRefList, uint32_t uiRefIdx) { return m_mv[uiRefList][uiRefIdx]; }
+
+  void copyFrom(Mv& rcMv, Distortion uiDist, uint32_t uiRefList, uint32_t uiRefIdx)
+  {
+    m_mv[uiRefList][uiRefIdx] = rcMv;
+    m_dist[uiRefList][uiRefIdx] = uiDist;
+  }
+
+  void copyTo(Mv& rcMv, Distortion& ruiDist, uint32_t uiRefList, uint32_t uiRefIdx)
+  {
+    rcMv = m_mv[uiRefList][uiRefIdx];
+    ruiDist = m_dist[uiRefList][uiRefIdx];
+  }
+
+  Mv& getAffineMv(uint32_t uiRefList, uint32_t uiRefIdx, uint32_t uiAffineMvIdx, int bP4) { return m_mvAffine[bP4][uiRefList][uiRefIdx][uiAffineMvIdx]; }
+
+  void copyAffineMvFrom(Mv(&racAffineMvs)[3], Distortion uiDist, uint32_t uiRefList, uint32_t uiRefIdx, int bP4
+                        , const int mvpIdx
+  )
+  {
+    memcpy(m_mvAffine[bP4][uiRefList][uiRefIdx], racAffineMvs, 3 * sizeof(Mv));
+    m_distAffine[bP4][uiRefList][uiRefIdx] = uiDist;
+    m_mvpIdx[bP4][uiRefList][uiRefIdx]     = mvpIdx;
+  }
+
+  void copyAffineMvTo(Mv acAffineMvs[3], Distortion& ruiDist, uint32_t uiRefList, uint32_t uiRefIdx, int bP4
+                      , int& mvpIdx
+  )
+  {
+    memcpy(acAffineMvs, m_mvAffine[bP4][uiRefList][uiRefIdx], 3 * sizeof(Mv));
+    ruiDist = m_distAffine[bP4][uiRefList][uiRefIdx];
+    mvpIdx  = m_mvpIdx[bP4][uiRefList][uiRefIdx];
+  }
 };
 
 } // namespace vvenc

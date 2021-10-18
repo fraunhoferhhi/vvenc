@@ -232,9 +232,9 @@ void SEIWriter::xWriteSEIDecodedPictureHash(const SEIDecodedPictureHash& sei)
   const char *traceString="\0";
   switch (sei.method)
   {
-    case HASHTYPE_MD5: traceString="picture_md5"; break;
-    case HASHTYPE_CRC: traceString="picture_crc"; break;
-    case HASHTYPE_CHECKSUM: traceString="picture_checksum"; break;
+    case VVENC_HASHTYPE_MD5: traceString="picture_md5"; break;
+    case VVENC_HASHTYPE_CRC: traceString="picture_crc"; break;
+    case VVENC_HASHTYPE_CHECKSUM: traceString="picture_checksum"; break;
     default: THROW("Unknown hash type"); break;
   }
 

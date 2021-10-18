@@ -720,12 +720,12 @@ namespace DQIntern
     const int           numCoeff  = area.area();
     const SizeType      hsId      = Log2( area.width );
     const SizeType      vsId      = Log2( area.height );
-    const ScanElement *scan       = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
-    const TCoeff*       qCoeff    = tu.getCoeffs( compID ).buf;
+    const ScanElement  *scan      = getScanOrder( SCAN_GROUPED_4x4, hsId, vsId );
+    const TCoeffSig*    qCoeff    = tu.getCoeffs( compID ).buf;
           TCoeff*       tCoeff    = recCoeff.buf;
 
     //----- reset coefficients and get last scan index -----
-    ::memset( tCoeff, 0, numCoeff * sizeof(TCoeff) );
+    ::memset( tCoeff, 0, numCoeff * sizeof( TCoeff ) );
     int lastScanIdx = tu.lastPos[compID];
     if( lastScanIdx < 0 )
     {
@@ -752,8 +752,8 @@ namespace DQIntern
     //----- dequant coefficients -----
     for( int state = 0, scanIdx = lastScanIdx; scanIdx >= 0; scanIdx-- )
     {
-      const unsigned  rasterPos = scan[scanIdx].idx;
-      const TCoeff&   level     = qCoeff[ rasterPos ];
+      const unsigned   rasterPos = scan[scanIdx].idx;
+      const TCoeffSig& level     = qCoeff[ rasterPos ];
       if( level )
       {
         if (enableScalingLists)
@@ -1472,10 +1472,10 @@ namespace DQIntern
     //===== reset / pre-init =====
     const TUParameters& tuPars  = *m_scansRom.getTUPars( tu.blocks[compID], compID );
     m_quant.initQuantBlock    ( tu, compID, cQP, lambda );
-    TCoeff*       qCoeff      = tu.getCoeffs( compID ).buf;
+    TCoeffSig*    qCoeff      = tu.getCoeffs( compID ).buf;
     const TCoeff* tCoeff      = srcCoeff.buf;
     const int     numCoeff    = tu.blocks[compID].area();
-    ::memset( qCoeff, 0x00, numCoeff * sizeof( TCoeff ) );
+    ::memset( qCoeff, 0x00, numCoeff * sizeof( TCoeffSig ) );
     absSum                    = 0;
 
     const CompArea& area      = tu.blocks[ compID ];
@@ -1643,7 +1643,7 @@ namespace DQIntern
     {
       decision          = m_trellis[ scanIdx ][ decision.prevId ];
       int32_t blkpos    = tuPars.m_scanId2BlkPos[scanIdx].idx;
-      qCoeff[ blkpos ]  = ( tCoeff[ blkpos ] < 0 ? -decision.absLevel : decision.absLevel );
+      qCoeff[ blkpos ]  = TCoeffSig( tCoeff[ blkpos ] < 0 ? -decision.absLevel : decision.absLevel );
       absSum           += decision.absLevel;
     }
 
@@ -1717,11 +1717,11 @@ void DepQuant::dequant( const TransformUnit& tu, CoeffBuf& dstCoeff, const Compo
   }
 }
 
-void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int dqThrVal )
+void DepQuant::init( int rdoq, bool useRDOQTS, bool useSelectiveRDOQ, int thrVal )
 {
-  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, dqThrVal );
+  QuantRDOQ2::init( rdoq, useRDOQTS, useSelectiveRDOQ, thrVal );
 
-  static_cast<DQIntern::DepQuant*>(p)->init( dqThrVal );
+  static_cast<DQIntern::DepQuant*>(p)->init( thrVal );
 }
 
 } // namespace vvenc

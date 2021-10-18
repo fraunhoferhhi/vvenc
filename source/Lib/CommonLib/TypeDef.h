@@ -63,11 +63,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "vvenc/vvencCfg.h"
 
+typedef struct vvenc_config VVEncCfg;
+
+typedef vvencChromaFormat ChromaFormat;
+typedef vvencSliceType    SliceType;
 
 //! \ingroup CommonLib
 //! \{
 
 namespace vvenc {
+
+#define QTBTT_SPEED3                                      1
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
@@ -109,13 +115,14 @@ namespace vvenc {
 #define ENABLE_CU_MODE_COUNTERS                           0
 #endif
 
+#define ENABLE_MEASURE_SEARCH_SPACE                       0
+
 // ====================================================================================================================
 // Debugging
 // ====================================================================================================================
 
 #define INTRA_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 #define INTER_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
-
 
 // This can be enabled by the makefile
 #ifndef RExt__HIGH_BIT_DEPTH_SUPPORT
@@ -184,10 +191,11 @@ typedef       int64_t           Intermediate_Int;  ///< used as intermediate val
 typedef       uint64_t          Intermediate_UInt; ///< used as intermediate value in calculations
 #else
 typedef       int16_t           Pel;               ///< pixel type
-typedef       int               TCoeff;            ///< transform coefficient
+typedef       int32_t           TCoeff;            ///< transform coefficient
+typedef       int16_t           TCoeffSig;         ///< transform coefficient as signalled
 typedef       int16_t           TMatrixCoeff;      ///< transform matrix coefficient
 typedef       int16_t           TFilterCoeff;      ///< filter coefficient
-typedef       int               Intermediate_Int;  ///< used as intermediate value in calculations
+typedef       int32_t           Intermediate_Int;  ///< used as intermediate value in calculations
 typedef       uint32_t          Intermediate_UInt; ///< used as intermediate value in calculations
 #endif
 
@@ -199,6 +207,29 @@ typedef       uint64_t          Distortion;        ///< distortion measurement
 // ====================================================================================================================
 // Enumeration
 // ====================================================================================================================
+
+#define CHROMA_400 VVENC_CHROMA_400
+#define CHROMA_420 VVENC_CHROMA_420
+#define CHROMA_422 VVENC_CHROMA_422
+#define CHROMA_444 VVENC_CHROMA_444
+#define NUM_CHROMA_FORMAT VVENC_NUM_CHROMA_FORMAT
+
+enum ChannelType
+{
+  CH_L = 0,
+  CH_C = 1,
+  MAX_NUM_CH = 2
+};
+
+enum ComponentID
+{
+  COMP_Y          = 0,
+  COMP_Cb         = 1,
+  COMP_Cr         = 2,
+  MAX_NUM_COMP    = 3,
+  COMP_JOINT_CbCr = MAX_NUM_COMP,
+  MAX_NUM_TBLOCKS = MAX_NUM_COMP
+};
 
 enum ApsType
 {
@@ -474,8 +505,8 @@ enum MergeType
 {
   MRG_TYPE_DEFAULT_N        = 0, // 0
   MRG_TYPE_SUBPU_ATMVP,
-//  MRG_TYPE_IBC,
-  NUM_MRG_TYPE                   // 5
+  MRG_TYPE_IBC,
+  NUM_MRG_TYPE
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -634,10 +665,8 @@ private:
 };
 
 // if a check fails with THROW or CHECK, please check if ported correctly from assert in revision 1196)
-#define THROW(x)            throw( Exception( "\nERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
+#define THROW(x)            throw( Exception( "ERROR: In function \"" ) << __FUNCTION__ << "\" in " << __FILE__ << ":" << __LINE__ << ": " << x )
 #define CHECK(c,x)          if(c){ THROW(x); }
-#define EXIT(x)             throw( Exception( "\n" ) << x << "\n" )
-#define CHECK_NULLPTR(_ptr) CHECK( !( _ptr ), "Accessing an empty pointer pointer!" )
 
 #if !NDEBUG  // for non MSVC compiler, define _DEBUG if in debug mode to have same behavior between MSVC and others in debug
 #ifndef _DEBUG

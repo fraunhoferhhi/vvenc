@@ -50,6 +50,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 #include "apputils/apputilsDecl.h"
 #include "vvenc/vvencCfg.h"
+#include <string>
 
 namespace apputils {
 
@@ -61,22 +62,28 @@ namespace apputils {
 // ====================================================================================================================
 
 /// encoder configuration class
-class APPUTILS_DECL VVEncAppCfg : public vvenc::VVEncCfg
+class APPUTILS_DECL VVEncAppCfg : public vvenc_config
 {
 public:
+  //vvenc_config conf;
+
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
   std::string  m_reconFileName;                                ///< output reconstruction file
-  vvenc::ChromaFormat m_inputFileChromaFormat  = vvenc::CHROMA_420;
+  std::string  m_RCStatsFileName;                              ///< rate control statistics file
+  vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
-  bool         m_packedYUVMode                 = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )
+  bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_decode                        = false;
+  bool         m_showVersion                   = false;
 
 public:
 
   VVEncAppCfg()
   {
+    vvenc_config_default( this );
   }
 
   virtual ~VVEncAppCfg();
@@ -84,8 +91,12 @@ public:
 public:
   bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
   bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
+  bool checkCfg();
 
-  virtual std::string getConfigAsString( vvenc::MsgLevel eMsgLevel ) const;
+  virtual std::string getConfigAsString( vvencMsgLevel eMsgLevel ) const;
+
+private:
+  bool xCheckCfg();
 };
 
 } // namespace

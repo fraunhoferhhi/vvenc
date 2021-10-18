@@ -97,10 +97,17 @@ void  EncReshape::init( const VVEncCfg& encCfg )
     m_initCWAnalyze = m_reshapeLUTSize / PIC_ANALYZE_CW_BINS;
     m_initCW = m_reshapeLUTSize / PIC_CODE_CW_BINS;
 
-    if (m_fwdLUT.empty())
-      m_fwdLUT.resize(m_reshapeLUTSize, 0);
-    if (m_invLUT.empty())
-      m_invLUT.resize(m_reshapeLUTSize,0);
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_BUFFER
+    if( m_fwdLUT.empty() )
+      m_fwdLUT.resize( m_reshapeLUTSize + 2, 0 );
+    if( m_invLUT.empty() )
+      m_invLUT.resize( m_reshapeLUTSize + 2, 0 );
+#else
+    if( m_fwdLUT.empty() )
+      m_fwdLUT.resize( m_reshapeLUTSize, 0 );
+    if( m_invLUT.empty() )
+      m_invLUT.resize( m_reshapeLUTSize, 0 );
+#endif
     if (m_binCW.empty())
       m_binCW.resize(PIC_ANALYZE_CW_BINS);
     if (m_binImportance.empty())
@@ -156,14 +163,13 @@ void  EncReshape::destroy()
 \param   pcPic describe pointer of current coding picture
 \param   sliceType describe the slice type
 */
-void EncReshape::preAnalyzerHDR(Picture& pic, const SliceType sliceType, const ReshapeCW& reshapeCW, bool isDualT)
+void EncReshape::preAnalyzerHDR(Picture& pic, const SliceType sliceType, const vvencReshapeCW& reshapeCW)
 {
   if (m_lumaBD >= 10)
   {
     m_sliceReshapeInfo.sliceReshaperEnabled = true;
-      if (sliceType == I_SLICE )                                              { m_sliceReshapeInfo.sliceReshaperModelPresent = true;  }
-      else                                                                    { m_sliceReshapeInfo.sliceReshaperModelPresent = false; }
-    { m_sliceReshapeInfo.enableChromaAdj = 1;                   }
+    m_sliceReshapeInfo.sliceReshaperModelPresent = (sliceType == VVENC_I_SLICE );
+    m_sliceReshapeInfo.enableChromaAdj = 1;
   }
   else
   {
@@ -383,11 +389,6 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
   }
 
   picY = pic.getOrigBuf(COMP_Y);
-  CPelBuf picU = pic.getOrigBuf(COMP_Cb);
-  CPelBuf picV = pic.getOrigBuf(COMP_Cr);
-  const int widthC = picU.width;
-  const int heightC = picU.height;
-  const int strideC = picU.stride;
   double avgY = 0.0, avgU = 0.0, avgV = 0.0;
   double varY = 0.0, varU = 0.0, varV = 0.0;
   for (int y = 0; y < height; y++)
@@ -399,37 +400,46 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
     }
     picY.buf += stride;
   }
-  for (int y = 0; y < heightC; y++)
+
+  if( pic.chromaFormat != VVENC_CHROMA_400 )
   {
-    for (int x = 0; x < widthC; x++)
+    CPelBuf picU = pic.getOrigBuf(COMP_Cb);
+    CPelBuf picV = pic.getOrigBuf(COMP_Cr);
+    const int widthC = picU.width;
+    const int heightC = picU.height;
+    const int strideC = picU.stride;
+    for (int y = 0; y < heightC; y++)
     {
-      avgU += picU.buf[x];
-      avgV += picV.buf[x];
-      varU += (int64_t)picU.buf[x] * (int64_t)picU.buf[x];
-      varV += (int64_t)picV.buf[x] * (int64_t)picV.buf[x];
+      for (int x = 0; x < widthC; x++)
+      {
+        avgU += picU.buf[x];
+        avgV += picV.buf[x];
+        varU += (int64_t)picU.buf[x] * (int64_t)picU.buf[x];
+        varV += (int64_t)picV.buf[x] * (int64_t)picV.buf[x];
+      }
+      picU.buf += strideC;
+      picV.buf += strideC;
     }
-    picU.buf += strideC;
-    picV.buf += strideC;
-  }
-  avgY = avgY / (width * height);
-  avgU = avgU / (widthC * heightC);
-  avgV = avgV / (widthC * heightC);
-  varY = varY / (width * height) - avgY * avgY;
-  varU = varU / (widthC * heightC) - avgU * avgU;
-  varV = varV / (widthC * heightC) - avgV * avgV;
-  if (varY > 0)
-  {
-    stats.ratioStdU = sqrt(varU) / sqrt(varY);
-    stats.ratioStdV = sqrt(varV) / sqrt(varY);
+    avgY = avgY / (width * height);
+    avgU = avgU / (widthC * heightC);
+    avgV = avgV / (widthC * heightC);
+    varY = varY / (width * height) - avgY * avgY;
+    varU = varU / (widthC * heightC) - avgU * avgU;
+    varV = varV / (widthC * heightC) - avgV * avgV;
+    if (varY > 0)
+    {
+      stats.ratioStdU = sqrt(varU) / sqrt(varY);
+      stats.ratioStdV = sqrt(varV) / sqrt(varY);
+    }
   }
 }
 
-void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const SliceType sliceType, const ReshapeCW& reshapeCW)
+void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const SliceType sliceType, const vvencReshapeCW& reshapeCW)
 {
   m_sliceReshapeInfo.sliceReshaperModelPresent = true;
   m_sliceReshapeInfo.sliceReshaperEnabled = true;
   int modIP = pic.getPOC() - pic.getPOC() / reshapeCW.rspFpsToIp * reshapeCW.rspFpsToIp;
-  if (sliceType == I_SLICE || (reshapeCW.updateCtrl == 2 && modIP == 0))
+  if (sliceType == VVENC_I_SLICE || (reshapeCW.updateCtrl == 2 && modIP == 0))
   {
     if (m_sliceReshapeInfo.sliceReshaperModelPresent == true)
     {
@@ -569,6 +579,99 @@ void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const 
       const int cTid = m_reshapeCW.rspTid;
       bool enableRsp = m_tcase == 5 ? false : (m_tcase < 5 ? (cTid < m_tcase + 1 ? false : true) : (cTid <= 10 - m_tcase ? true : false));
       m_sliceReshapeInfo.sliceReshaperEnabled = enableRsp;
+
+      if( m_sliceReshapeInfo.sliceReshaperEnabled )
+      {
+        m_binNum = PIC_CODE_CW_BINS;
+        CPelBuf picY = pic.getOrigBuf( COMP_Y );
+        const int width = picY.width;
+        const int height = picY.height;
+        const int stride = picY.stride;
+        uint32_t binCnt[PIC_CODE_CW_BINS];
+        std::fill_n( binCnt, m_binNum, 0 );
+
+        m_srcSeqStats = SeqInfo();
+        for( uint32_t y = 0; y < height; y++ )
+        {
+          for( uint32_t x = 0; x < width; x++ )
+          {
+            const Pel pxlY = picY.buf[x];
+            int binLen = m_reshapeLUTSize / m_binNum;
+            uint32_t binIdx = ( uint32_t ) (pxlY / binLen);
+            binCnt[binIdx]++;
+          }
+          picY.buf += stride;
+        }
+
+        for( int b = 0; b < m_binNum; b++ )
+        {
+          m_srcSeqStats.binHist[b] = ( double ) binCnt[b] / ( double ) (m_reshapeCW.rspPicSize);
+        }
+
+        if( m_srcSeqStats.binHist[m_binNum - 1] > 0.0003 )
+        {
+          m_sliceReshapeInfo.sliceReshaperEnabled = false;
+        }
+        if( m_srcSeqStats.binHist[0] > 0.03 )
+        {
+          m_sliceReshapeInfo.sliceReshaperEnabled = false;
+        }
+
+        if( m_sliceReshapeInfo.sliceReshaperEnabled )
+        {
+          double avgY = 0.0;
+          double varY = 0.0;
+          picY = pic.getOrigBuf( COMP_Y );
+          for( int y = 0; y < height; y++ )
+          {
+            for( int x = 0; x < width; x++ )
+            {
+              avgY += picY.buf[x];
+              varY += ( double ) picY.buf[x] * ( double ) picY.buf[x];
+            }
+            picY.buf += stride;
+          }
+          avgY = avgY / (width * height);
+          varY = varY / (width * height) - avgY * avgY;
+
+          if( isChromaEnabled( pic.chromaFormat ) )
+          {
+            CPelBuf picU = pic.getOrigBuf( COMP_Cb );
+            CPelBuf picV = pic.getOrigBuf( COMP_Cr );
+            const int widthC = picU.width;
+            const int heightC = picU.height;
+            const int strideC = picU.stride;
+            double avgU = 0.0, avgV = 0.0;
+            double varU = 0.0, varV = 0.0;
+            for( int y = 0; y < heightC; y++ )
+            {
+              for( int x = 0; x < widthC; x++ )
+              {
+                avgU += picU.buf[x];
+                avgV += picV.buf[x];
+                varU += ( int64_t ) picU.buf[x] * ( int64_t ) picU.buf[x];
+                varV += ( int64_t ) picV.buf[x] * ( int64_t ) picV.buf[x];
+              }
+              picU.buf += strideC;
+              picV.buf += strideC;
+            }
+            avgU = avgU / (widthC * heightC);
+            avgV = avgV / (widthC * heightC);
+            varU = varU / (widthC * heightC) - avgU * avgU;
+            varV = varV / (widthC * heightC) - avgV * avgV;
+            if( varY > 0 )
+            {
+              m_srcSeqStats.ratioStdU = sqrt( varU ) / sqrt( varY );
+              m_srcSeqStats.ratioStdV = sqrt( varV ) / sqrt( varY );
+            }
+          }
+        }
+
+        if( (m_srcSeqStats.ratioStdU + m_srcSeqStats.ratioStdV) > 1.5 && m_srcSeqStats.binHist[1] > 0.5 )
+        {
+          m_sliceReshapeInfo.sliceReshaperEnabled = false;
+        }
+      }
     }
   }
 }
@@ -897,7 +1000,7 @@ void EncReshape::deriveReshapeParametersSDR(bool *intraAdp, bool *interAdp)
   }
 }
 
-void EncReshape::deriveReshapeParameters(double *array, int start, int end, ReshapeCW respCW, double &alpha, double &beta)
+void EncReshape::deriveReshapeParameters(double *array, int start, int end, vvencReshapeCW respCW, double &alpha, double &beta)
 {
   double minVar = 10.0, maxVar = 0.0;
   for (int b = start; b <= end; b++)

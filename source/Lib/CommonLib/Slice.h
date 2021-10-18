@@ -56,7 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "MotionInfo.h"
 #include "HRD.h"
 
-#include "vvenc/vvencCfgExpert.h"
+#include "vvenc/vvencCfg.h"
 
 
 #include <cstring>
@@ -87,9 +87,9 @@ static const uint32_t REF_PIC_LIST_NUM_IDX=32;
 // ====================================================================================================================
 struct DpbParameters
 {
-  int maxDecPicBuffering     [MAX_TLAYER] = { 0 };
-  int numReorderPics         [MAX_TLAYER] = { 0 };
-  int maxLatencyIncreasePlus1[MAX_TLAYER] = { 0 };
+  int maxDecPicBuffering     [VVENC_MAX_TLAYER] = { 0 };
+  int numReorderPics         [VVENC_MAX_TLAYER] = { 0 };
+  int maxLatencyIncreasePlus1[VVENC_MAX_TLAYER] = { 0 };
 };
 
 struct ReferencePictureList
@@ -97,15 +97,15 @@ struct ReferencePictureList
   int       numberOfShorttermPictures;
   int       numberOfLongtermPictures;
   int       numberOfActivePictures;
-  bool      isLongtermRefPic[MAX_NUM_REF_PICS];
-  int       refPicIdentifier[MAX_NUM_REF_PICS];  //This can be delta POC for STRP or POC LSB for LTRP
-  int       POC[MAX_NUM_REF_PICS];
-  uint32_t  deltaPocMSBCycleLT[MAX_NUM_REF_PICS];
-  bool      deltaPocMSBPresent[MAX_NUM_REF_PICS];
+  bool      isLongtermRefPic[VVENC_MAX_NUM_REF_PICS];
+  int       refPicIdentifier[VVENC_MAX_NUM_REF_PICS];  //This can be delta POC for STRP or POC LSB for LTRP
+  int       POC[VVENC_MAX_NUM_REF_PICS];
+  uint32_t  deltaPocMSBCycleLT[VVENC_MAX_NUM_REF_PICS];
+  bool      deltaPocMSBPresent[VVENC_MAX_NUM_REF_PICS];
   bool      ltrpInSliceHeader;
   bool      interLayerPresent;
-  bool      isInterLayerRefPic[MAX_NUM_REF_PICS];
-  int       interLayerRefPicIdx[MAX_NUM_REF_PICS];
+  bool      isInterLayerRefPic[VVENC_MAX_NUM_REF_PICS];
+  int       interLayerRefPicIdx[VVENC_MAX_NUM_REF_PICS];
   int       numberOfInterLayerPictures;
 
   ReferencePictureList();
@@ -264,23 +264,23 @@ struct ConstraintInfo
 
 struct ProfileTierLevel
 {
-  Tier                  tierFlag;
-  Profile               profileIdc;
+  vvencTier             tierFlag;
+  vvencProfile          profileIdc;
   uint8_t               numSubProfile;
   std::vector<uint32_t> subProfileIdc;
-  Level                 levelIdc;
+  vvencLevel                 levelIdc;
   bool                  frameOnlyConstraintFlag;
   bool                  multiLayerEnabledFlag;
   ConstraintInfo        constraintInfo;
-  bool                  subLayerLevelPresent[MAX_TLAYER - 1];
-  Level                 subLayerLevelIdc[MAX_TLAYER - 1];
+  bool                  subLayerLevelPresent[VVENC_MAX_TLAYER - 1];
+  vvencLevel            subLayerLevelIdc[VVENC_MAX_TLAYER - 1];
 
   ProfileTierLevel()
-    : tierFlag        ( TIER_MAIN )
-    , profileIdc      ( PROFILE_AUTO )
+    : tierFlag        ( VVENC_TIER_MAIN )
+    , profileIdc      ( VVENC_PROFILE_AUTO )
     , numSubProfile   (0)
     , subProfileIdc   (0)
-    , levelIdc        ( LEVEL_AUTO )
+    , levelIdc        ( VVENC_LEVEL_AUTO )
     , frameOnlyConstraintFlag ( true )
     , multiLayerEnabledFlag   ( false )
   {
@@ -328,13 +328,13 @@ struct ChromaQpAdj
   } u;
 };
 
-struct ChromaQpMappingTable : ChromaQpMappingTableParams
+struct ChromaQpMappingTable : vvencChromaQpMappingTableParams
 {
   int       getMappedChromaQpValue(ComponentID compID, const int qpVal)  const { return m_chromaQpMappingTables[m_sameCQPTableForAllChromaFlag ? 0 : (int)compID - 1].at(qpVal + m_qpBdOffset); }
   void      derivedChromaQPMappingTables();
-  void      setParams(const ChromaQpMappingTableParams &params, const int qpBdOffset);
+  void      setParams(const vvencChromaQpMappingTableParams &params, const int qpBdOffset);
 private:
-  std::vector<int> m_chromaQpMappingTables[MAX_NUM_CQP_MAPPING_TABLES];
+  std::vector<int> m_chromaQpMappingTables[VVENC_MAX_NUM_CQP_MAPPING_TABLES];
 };
 
 struct SliceMap
@@ -489,7 +489,7 @@ struct VPS
   uint32_t              hrdMaxTid[MAX_NUM_OLSS];
   uint32_t              olsHrdIdx[MAX_NUM_OLSS];
   GeneralHrdParams      generalHrdParams;
-  OlsHrdParams          olsHrdParams[MAX_TLAYER];
+  OlsHrdParams          olsHrdParams[VVENC_MAX_TLAYER];
   std::vector<Size>             olsDpbPicSize;
   std::vector<int>              olsDpbParamsIdx;
   std::vector<std::vector<int>> outputLayerIdInOls;
@@ -712,7 +712,7 @@ struct SPS
   bool              allRplEntriesHasSameSign;
   bool              longTermRefsPresent;
   bool              temporalMVPEnabled;
-  int               numReorderPics[MAX_TLAYER];
+  int               numReorderPics[VVENC_MAX_TLAYER];
 
   // Tool list
   bool              transformSkip;
@@ -761,16 +761,17 @@ struct SPS
   unsigned          numHorVirtualBoundaries;                         //!< number of horizontal virtual boundaries
   unsigned          virtualBoundariesPosX[3];                        //!< horizontal position of each vertical virtual boundary
   unsigned          virtualBoundariesPosY[3];                        //!< vertical position of each horizontal virtual boundary
-  uint32_t          maxDecPicBuffering[MAX_TLAYER];
-  uint32_t          maxLatencyIncreasePlus1[MAX_TLAYER];
+  uint32_t          maxDecPicBuffering[VVENC_MAX_TLAYER];
+  uint32_t          maxLatencyIncreasePlus1[VVENC_MAX_TLAYER];
 
 
   bool              hrdParametersPresent;
   bool              subLayerParametersPresent;
   GeneralHrdParams  generalHrdParams;
-  OlsHrdParams      olsHrdParams[MAX_TLAYER];
+  OlsHrdParams      olsHrdParams[VVENC_MAX_TLAYER];
   bool              fieldSeqFlag;
   bool              vuiParametersPresent;
+  unsigned          vuiPayloadSize;
   VUI               vuiParameters;
 
   SPSRExt           spsRExt;
@@ -1185,7 +1186,7 @@ class Slice
   int                         lastIDR;
   int                         prevGDRInSameLayerPOC;  //< the previous GDR in the same layer
   int                         associatedIRAP;
-  NalUnitType                 associatedIRAPType;
+  vvencNalUnitType            associatedIRAPType;
   bool                        enableDRAPSEI;
   bool                        useLTforDRAP;
   bool                        isDRAP;
@@ -1197,7 +1198,7 @@ class Slice
   int                         colourPlaneId;                         //!< 4:4:4 colour plane ID
   bool                        pictureHeaderInSliceHeader;
   uint32_t                    nuhLayerId;
-NalUnitType                 nalUnitType;         ///< Nal unit type for the slice
+  vvencNalUnitType            nalUnitType;         ///< Nal unit type for the slice
   SliceType                   sliceType;
   int                         sliceQp;
   bool                        chromaQpAdjEnabled;
@@ -1279,15 +1280,15 @@ public:
   int                         getNumEntryPoints(const SPS& sps, const PPS& pps) const;
 
   bool                        getRapPicFlag() const;
-  bool                        getIdrPicFlag() const                                  { return nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL || nalUnitType == NAL_UNIT_CODED_SLICE_IDR_N_LP; }
-  bool                        isIRAP() const { return (nalUnitType >= NAL_UNIT_CODED_SLICE_IDR_W_RADL) && (nalUnitType <= NAL_UNIT_CODED_SLICE_CRA); }
-  bool                        isIDRorBLA() const { return (nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL) || (nalUnitType == NAL_UNIT_CODED_SLICE_IDR_N_LP); }
-  void                        checkCRA(const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, int& pocCRA, NalUnitType& associatedIRAPType, PicList& rcListPic);
+  bool                        getIdrPicFlag() const                                  { return nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP; }
+  bool                        isIRAP() const { return (nalUnitType >= VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) && (nalUnitType <= VVENC_NAL_UNIT_CODED_SLICE_CRA); }
+  bool                        isIDRorBLA() const { return (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) || (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP); }
+  void                        checkCRA(const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, int& pocCRA, vvencNalUnitType& associatedIRAPType, PicList& rcListPic);
   void                        setDecodingRefreshMarking(int& pocCRA, bool& bRefreshPending, PicList& rcListPic);
 
-  bool                        isIntra() const                                        { return sliceType == I_SLICE; }
-  bool                        isInterB() const                                       { return sliceType == B_SLICE; }
-  bool                        isInterP() const                                       { return sliceType == P_SLICE; }
+  bool                        isIntra() const                                        { return sliceType == VVENC_I_SLICE; }
+  bool                        isInterB() const                                       { return sliceType == VVENC_B_SLICE; }
+  bool                        isInterP() const                                       { return sliceType == VVENC_P_SLICE; }
 
   void                        setLambdas( const double lambdas_[MAX_NUM_COMP] )  { for (int component = 0; component < MAX_NUM_COMP; component++) lambdas[component] = lambdas_[component]; }
   const double*               getLambdas() const                                     { return lambdas;                                             }
@@ -1305,6 +1306,7 @@ public:
   void                        createExplicitReferencePictureSetFromReference(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
+  void                        resetWpScaling();
 
   void                        clearSubstreamSizes( )                                 { return substreamSizes.clear();                              }
   uint32_t                    getNumberOfSubstreamSizes( )                           { return (uint32_t) substreamSizes.size();                    }
@@ -1569,8 +1571,6 @@ public:
     , lumaWidth           ( pps.picWidthInLumaSamples )
     , lumaHeight          ( pps.picHeightInLumaSamples )
     , fastDeltaQPCuMaxSize( Clip3<unsigned>( (1 << sps.log2MinCodingBlockSize), sps.CTUSize, 32u) )
-    , multiBlock422       ( false )
-    , noChroma2x2         ( false )
     , isEncoder           ( _isEncoder )
     , ISingleTree         ( !sps.dualITree )
     , wrapArround         ( sps.wrapAroundEnabled )
@@ -1596,8 +1596,6 @@ public:
   const unsigned     lumaWidth;
   const unsigned     lumaHeight;
   const unsigned     fastDeltaQPCuMaxSize;
-  const bool         multiBlock422;
-  const bool         noChroma2x2;
   const bool         isEncoder;
   const bool         ISingleTree;
   const bool         wrapArround;
@@ -1617,7 +1615,7 @@ public:
   unsigned getMaxBtSize   ( const Slice &slice, const ChannelType chType ) const;
   unsigned getMaxTtSize   ( const Slice &slice, const ChannelType chType ) const;
   unsigned getMinQtSize   ( const Slice &slice, const ChannelType chType ) const;
-  unsigned getMaxDepth    ( const SliceType slicetype, const ChannelType chType )   const { return maxCUSizeLog2 - Log2(slicetype == I_SLICE ? (chType == CH_L ? minQtSize[0] : minQtSize[2]) : minQtSize[1]); }
+  unsigned getMaxDepth    ( const SliceType slicetype, const ChannelType chType )   const { return maxCUSizeLog2 - Log2(slicetype == VVENC_I_SLICE ? (chType == CH_L ? minQtSize[0] : minQtSize[2]) : minQtSize[1]); }
   Area     getCtuArea     ( const int ctuPosX, const int ctuPosY ) const;
 };
 

@@ -179,9 +179,17 @@ Picture::Picture()
     , ctsValid          ( false )
     , m_bufsOrigPrev    { nullptr, nullptr }
     , picInitialQP      ( 0 )
+    , picVisActY        ( 0.0 )
+    , useScME           ( false )
     , useScMCTF         ( false )
     , useScTS           ( false )
     , useScBDPCM        ( false )
+    , useScIBC          ( false )
+    , useScLMCS         ( false )
+#if QTBTT_SPEED3
+    , useQtbttSpeedUpMode( 0 )
+#endif
+    , seqBaseQp         ( 0 )
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )

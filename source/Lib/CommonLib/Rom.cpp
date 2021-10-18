@@ -81,7 +81,8 @@ StatCounters::StatCounter2DSet<int64_t> g_cuCounters1D( std::vector<std::string>
 StatCounters::StatCounter2DSet<int64_t> g_cuCounters2D( std::vector<std::string> { g_cuCounterIdNames, std::end( g_cuCounterIdNames ) }, MAX_CU_SIZE_IDX, MAX_CU_SIZE_IDX );
 #endif
 
-std::function<void( int, const char*, va_list )> g_msgFnc = nullptr;
+std::function<void( void*, int, const char*, va_list )> g_msgFnc = nullptr;
+void * m_msgFncCtx = nullptr;
 
 // ====================================================================================================================
 // LFNST Tables
@@ -584,6 +585,51 @@ uint32_t const g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2] =
   { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } },
   { { 4,0 },{ 3,1 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 },{ 2,2 } }
 };
+
+const int8_t g_BcwLog2WeightBase = 3;
+const int8_t g_BcwWeightBase = (1 << g_BcwLog2WeightBase);
+const int8_t g_BcwWeights[BCW_NUM]      = { -2, 3, 4, 5, 10 };
+const int8_t g_BcwSearchOrder[BCW_NUM]  = { BCW_DEFAULT, BCW_DEFAULT - 2, BCW_DEFAULT + 2, BCW_DEFAULT - 1, BCW_DEFAULT + 1 };
+const int8_t g_BcwParsingOrder[BCW_NUM] = { 2, 3, 1, 4, 0 };
+const int8_t g_BcwCodingOrder[BCW_NUM]  = { 4, 2, 0, 1, 3 };
+
+
+int8_t getBcwWeight(uint8_t bcwIdx, uint8_t uhRefFrmList)
+{
+  // Weghts for the model: P0 + w * (P1 - P0) = (1-w) * P0 + w * P1
+  // Retuning  1-w for P0 or w for P1
+  return (uhRefFrmList == REF_PIC_LIST_0 ? g_BcwWeightBase - g_BcwWeights[bcwIdx] : g_BcwWeights[bcwIdx]);
+}
+
+uint32_t deriveWeightIdxBits(uint8_t bcwIdx) // Note: align this with TEncSbac::codeBcwIdx and TDecSbac::parseBcwIdx
+{
+  uint32_t numBits = 1;
+  uint8_t  bcwCodingIdx = (uint8_t)g_BcwCodingOrder[bcwIdx];
+
+  if (BCW_NUM > 2 && bcwCodingIdx != 0)
+  {
+    uint32_t prefixNumBits = BCW_NUM - 2;
+    uint32_t step = 1;
+    uint8_t  prefixSymbol = bcwCodingIdx;
+
+    // Truncated unary code
+    uint8_t idx = 1;
+    for (int ui = 0; ui < prefixNumBits; ++ui)
+    {
+      if (prefixSymbol == idx)
+      {
+        ++numBits;
+        break;
+      }
+      else
+      {
+        ++numBits;
+        idx += step;
+      }
+    }
+  }
+  return numBits;
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 

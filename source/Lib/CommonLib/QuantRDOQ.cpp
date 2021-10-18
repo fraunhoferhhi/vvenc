@@ -490,12 +490,12 @@ void QuantRDOQ::xDestroyScalingList()
 
 void QuantRDOQ::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx)
 {
-  const CompArea& rect      = tu.blocks[compID];
-  const uint32_t uiWidth        = rect.width;
-  const uint32_t uiHeight       = rect.height;
+  const CompArea& rect       = tu.blocks[compID];
+  const uint32_t uiWidth     = rect.width;
+  const uint32_t uiHeight    = rect.height;
 
-  const CCoeffBuf& piCoef   = pSrc;
-        CoeffBuf   piQCoef  = tu.getCoeffs(compID);
+  const CCoeffBuf&  piCoef   = pSrc;
+        CoeffSigBuf piQCoef  = tu.getCoeffs(compID);
 
   const bool useTransformSkip      = tu.mtsIdx[compID]==MTS_SKIP;
 
@@ -582,8 +582,8 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
 
   CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
 
-  const TCoeff *plSrcCoeff = pSrc.buf;
-        TCoeff *piDstCoeff = tu.getCoeffs(compID).buf;
+  const TCoeff    *plSrcCoeff = pSrc.buf;
+        TCoeffSig *piDstCoeff = tu.getCoeffs(compID).buf;
 
   double *pdCostCoeff  = m_pdCostCoeff;
   double *pdCostSig    = m_pdCostSig;
@@ -593,7 +593,7 @@ void QuantRDOQ::xRateDistOptQuant(TransformUnit& tu, const ComponentID compID, c
   int    *sigRateDelta = m_sigRateDelta;
   TCoeff *deltaU       = m_deltaU;
 
-  memset(piDstCoeff, 0, sizeof(*piDstCoeff) * uiMaxNumCoeff);
+  memset( piDstCoeff,     0, sizeof( TCoeffSig ) * uiMaxNumCoeff );
   memset( m_pdCostCoeff,  0, sizeof( double ) *  uiMaxNumCoeff );
   memset( m_pdCostSig,    0, sizeof( double ) *  uiMaxNumCoeff );
   memset( m_rateIncUp,    0, sizeof( int    ) *  uiMaxNumCoeff );
@@ -1192,8 +1192,8 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
   int scalingListType = getScalingListType( tu.cu->predMode, compID );
   CHECK( scalingListType >= SCALING_LIST_NUM, "Invalid scaling list" );
 
-  const TCoeff *srcCoeff = coeffs.buf;
-        TCoeff *dstCoeff = tu.getCoeffs( compID ).buf;
+  const TCoeff    *srcCoeff = coeffs.buf;
+        TCoeffSig *dstCoeff = tu.getCoeffs( compID ).buf;
 
   double *costCoeff  = m_pdCostCoeff;
   double *costSig    = m_pdCostSig;
@@ -1414,8 +1414,8 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
   int scalingListType = getScalingListType(tu.cu->predMode, compID);
   CHECK(scalingListType >= SCALING_LIST_NUM, "Invalid scaling list");
 
-  const TCoeff *srcCoeff = coeffs.buf;
-  TCoeff *dstCoeff = tu.getCoeffs(compID).buf;
+  const TCoeff    *srcCoeff = coeffs.buf;
+        TCoeffSig *dstCoeff = tu.getCoeffs(compID).buf;
 
   double *costCoeff = m_pdCostCoeff;
   double *costSig = m_pdCostSig;
@@ -1538,6 +1538,7 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
       {
         dstCoeff[blkPos] = -dstCoeff[blkPos];
       }
+
       xDequantSample( m_fullCoeff[blkPos], dstCoeff[blkPos], trQuantParams );
       m_fullCoeff[blkPos] += predCoeff;
 
@@ -1616,7 +1617,7 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
   }
 }
 
-void QuantRDOQ::xDequantSample(TCoeff& pRes, TCoeff& coeff, const TrQuantParams& trQuantParams)
+void QuantRDOQ::xDequantSample(TCoeff& pRes, TCoeffSig& coeff, const TrQuantParams& trQuantParams)
 {
   // xDequant
   if (trQuantParams.rightShift > 0)

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur FÃ¶rderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -159,7 +159,7 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
   uint32_t duCpbSizeValue;
   uint32_t duBitRateValue = 0;
 
-  for (i = 0; i < MAX_TLAYER; i++)
+  for (i = 0; i < VVENC_MAX_TLAYER; i++)
   {
     olsHrdParams[i].fixedPicRateGeneralFlag = true;
     olsHrdParams[i].fixedPicRateWithinCvsFlag = true;

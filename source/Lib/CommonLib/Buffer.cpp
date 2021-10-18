@@ -144,6 +144,37 @@ void addAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T
 #undef ADD_AVG_CORE_INC
 }
 
+template<typename T>
+void addWeightedAvgCore( const T* src1, int src1Stride, const T* src2, int src2Stride, T* dest, int destStride, int width, int height, unsigned rshift, int offset, int w0, int w1, const ClpRng& clpRng )
+{
+#define ADD_WGHT_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src1[ADDR]*w0 + src2[ADDR]*w1 + offset ), rshift ), clpRng )
+#define ADD_WGHT_AVG_INC     \
+    src1 += src1Stride; \
+    src2 += src2Stride; \
+    dest += destStride; \
+
+  SIZE_AWARE_PER_EL_OP( ADD_WGHT_AVG_OP, ADD_WGHT_AVG_INC );
+
+#undef ADD_WGHT_AVG_OP
+#undef ADD_WGHT_AVG_INC
+}
+
+template<typename T>
+void subsCore( const T* src0, int src0Stride, const T* src1, int src1Stride, T* dest, int destStride, int width, int height )
+{
+#define SUBS_INC                \
+  dest += destStride;  \
+  src0 += src0Stride;  \
+  src1 += src1Stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = src0[ADDR] - src1[ADDR]
+
+  SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
+}
+
 void removeHighFreq(int16_t* dst, int dstStride, const int16_t* src, int srcStride, int width, int height)
 {
 #define REM_HF_INC  \
@@ -277,32 +308,6 @@ void copyBufferCore( const char* src, int srcStride, char* dst, int dstStride, i
   }
 }
 
-void paddingCore(Pel* ptr, int stride, int width, int height, int padSize)
-{
-  /*left and right padding*/
-  Pel* ptrTemp1 = ptr;
-  Pel* ptrTemp2 = ptr + (width - 1);
-  int offset = 0;
-  for (int i = 0; i < height; i++)
-  {
-    offset = stride * i;
-    for (int j = 1; j <= padSize; j++)
-    {
-      *(ptrTemp1 - j + offset) = *(ptrTemp1 + offset);
-      *(ptrTemp2 + j + offset) = *(ptrTemp2 + offset);
-    }
-  }
-  /*Top and Bottom padding*/
-  int numBytes = (width + padSize + padSize) * sizeof(Pel);
-  ptrTemp1 = (ptr - padSize);
-  ptrTemp2 = (ptr + (stride * (height - 1)) - padSize);
-  for (int i = 1; i <= padSize; i++)
-  {
-    memcpy(ptrTemp1 - (i * stride), (ptrTemp1), numBytes);
-    memcpy(ptrTemp2 + (i * stride), (ptrTemp2), numBytes);
-  }
-}
-
 void applyLutCore( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
 {
 #define RSP_SGNL_OP( ADDR ) dst[ADDR] = lut[src[ADDR]]
@@ -343,6 +348,12 @@ PelBufferOps::PelBufferOps()
   addAvg8           = addAvgCore<Pel>;
   addAvg16          = addAvgCore<Pel>;
 
+  sub4              = subsCore<Pel>;
+  sub8              = subsCore<Pel>;
+
+  wghtAvg4          = addWeightedAvgCore<Pel>;
+  wghtAvg8          = addWeightedAvgCore<Pel>;
+
   copyClip4         = copyClipCore<Pel>;
   copyClip8         = copyClipCore<Pel>;
 
@@ -353,7 +364,6 @@ PelBufferOps::PelBufferOps()
   linTf8            = linTfCore<Pel>;
 
   copyBuffer        = copyBufferCore;
-  padding           = paddingCore;
 
   removeHighFreq8   = removeHighFreq;
   removeHighFreq4   = removeHighFreq;
@@ -376,31 +386,41 @@ PelBufferOps g_pelBufOP = PelBufferOps();
 template<>
 void AreaBuf<Pel>::addWeightedAvg(const AreaBuf<const Pel>& other1, const AreaBuf<const Pel>& other2, const ClpRng& clpRng, const int8_t BcwIdx)
 {
-  const int8_t w0 = 4;//getBcwWeight(BcwIdx, REF_PIC_LIST_0);
-  const int8_t w1 = 4; //getBcwWeight(BcwIdx, REF_PIC_LIST_1);
-  const int8_t log2WeightBase = 3; //g_BCWLog2WeightBase;
-  //
+  const int8_t w0 = getBcwWeight( BcwIdx, REF_PIC_LIST_0 );
+  const int8_t w1 = getBcwWeight( BcwIdx, REF_PIC_LIST_1 );
+  const int8_t log2WeightBase = g_BcwLog2WeightBase;
   const Pel* src0 = other1.buf;
   const Pel* src2 = other2.buf;
-  Pel* dest = buf;
+        Pel* dest =        buf;
 
-  const unsigned src1Stride = other1.stride;
-  const unsigned src2Stride = other2.stride;
-  const unsigned destStride = stride;
-  const int      clipbd     = clpRng.bd;
-  const unsigned shiftNum   = std::max<int>(2, (IF_INTERNAL_PREC - clipbd)) + log2WeightBase;
-  const int      offset     = (1 << (shiftNum - 1)) + (IF_INTERNAL_OFFS << log2WeightBase);
+  const int src1Stride = other1.stride;
+  const int src2Stride = other2.stride;
+  const int destStride =        stride;
+  const int clipbd     = clpRng.bd;
+  const int shiftNum   = std::max<int>( 2, ( IF_INTERNAL_PREC - clipbd ) ) + log2WeightBase;
+  const int offset     = ( 1 << ( shiftNum - 1 ) ) + ( IF_INTERNAL_OFFS << log2WeightBase );
 
-#define ADD_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src0[ADDR]*w0 + src2[ADDR]*w1 + offset ), shiftNum ), clpRng )
-#define ADD_AVG_INC     \
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.wghtAvg8( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, w0, w1, clpRng );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.wghtAvg4( src0, src1Stride, src2, src2Stride, dest, destStride, width, height, shiftNum, offset, w0, w1, clpRng );
+  }
+  else
+  {
+#define WGHT_AVG_OP( ADDR ) dest[ADDR] = ClipPel( rightShiftU( ( src0[ADDR]*w0 + src2[ADDR]*w1 + offset ), shiftNum ), clpRng )
+#define WGHT_AVG_INC    \
     src0 += src1Stride; \
     src2 += src2Stride; \
     dest += destStride; \
 
-  SIZE_AWARE_PER_EL_OP(ADD_AVG_OP, ADD_AVG_INC);
+    SIZE_AWARE_PER_EL_OP( WGHT_AVG_OP, WGHT_AVG_INC );
 
-#undef ADD_AVG_OP
-#undef ADD_AVG_INC
+#undef WGHT_AVG_OP
+#undef WGHT_AVG_INC
+  }
 }
 
 template<>
@@ -518,6 +538,49 @@ void AreaBuf<Pel>::addAvg( const AreaBuf<const Pel>& other1, const AreaBuf<const
 }
 
 template<>
+void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend )
+{
+  CHECKD( width  != minuend.width,     "Incompatible size" );
+  CHECKD( height != minuend.height,    "Incompatible size" );
+  CHECKD( width  != subtrahend.width,  "Incompatible size");
+  CHECKD( height != subtrahend.height, "Incompatible size");
+  
+        Pel* dest =            buf;
+  const Pel* mins = minuend   .buf;
+  const Pel* subs = subtrahend.buf;
+
+
+  const unsigned destStride =            stride;
+  const unsigned minsStride = minuend.   stride;
+  const unsigned subsStride = subtrahend.stride;
+
+#if ENABLE_SIMD_OPT_BUFFER
+  if( ( width & 7 ) == 0 )
+  {
+    g_pelBufOP.sub8( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else if( ( width & 3 ) == 0 )
+  {
+    g_pelBufOP.sub4( mins, minsStride, subs, subsStride, dest, destStride, width, height );
+  }
+  else
+#endif
+  {
+#define SUBS_INC                \
+    dest +=            stride;  \
+    mins += minuend   .stride;  \
+    subs += subtrahend.stride;  \
+
+#define SUBS_OP( ADDR ) dest[ADDR] = mins[ADDR] - subs[ADDR]
+
+    SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
+
+#undef SUBS_OP
+#undef SUBS_INC
+  }
+}
+
+template<>
 void AreaBuf<Pel>::copyClip( const AreaBuf<const Pel>& src, const ClpRng& clpRng )
 {
   const Pel* srcp = src.buf;
@@ -560,7 +623,6 @@ void AreaBuf<Pel>::reconstruct( const AreaBuf<const Pel>& pred, const AreaBuf<co
   const unsigned src1Stride = pred.stride;
   const unsigned src2Stride = resi.stride;
   const unsigned destStride =      stride;
-
   if( src2Stride == width )
   {
     g_pelBufOP.reco( pred.buf, resi.buf, buf, width * height, clpRng );
@@ -775,6 +837,8 @@ void PelStorage::create( const ChromaFormat &_chromaFormat, const Area& _area )
     bufSize += area;
   }
 
+  bufSize += 1; // for SIMD DMVR on the bottom right corner, which overreads the lines by 1 sample
+
   //allocate one buffer
   m_origin[0] = ( Pel* ) xMalloc( Pel, bufSize );
 
@@ -984,14 +1048,38 @@ const CPelUnitBuf PelStorage::getBufPart(const UnitArea& unit) const
 
 const CPelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit) const
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : CPelUnitBuf(chromaFormat, CPelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), CPelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), CPelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+  
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 PelUnitBuf PelStorage::getCompactBuf(const UnitArea& unit)
 {
-  CHECK( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
-  return (chromaFormat == CHROMA_400) ? PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y())) : PelUnitBuf(chromaFormat, PelBuf( bufs[COMP_Y].buf, unit.Y().width, unit.Y()), PelBuf( bufs[COMP_Cb].buf, unit.Cb().width, unit.Cb()), PelBuf( bufs[COMP_Cr].buf, unit.Cr().width, unit.Cr()));
+  CHECKD( unit.Y().width > bufs[COMP_Y].width && unit.Y().height > bufs[COMP_Y].height, "unsuported request" );
+
+  PelUnitBuf ret;
+  ret.chromaFormat = chromaFormat;
+  ret.bufs.resize_noinit( chromaFormat == CHROMA_400 ? 1 : 3 );
+
+  ret.Y   ().buf = bufs[COMP_Y ].buf; ret.Y ().width = ret.Y ().stride = unit.Y ().width; ret.Y ().height = unit.Y ().height;
+  if( chromaFormat != CHROMA_400 )
+  {
+    ret.Cb().buf = bufs[COMP_Cb].buf; ret.Cb().width = ret.Cb().stride = unit.Cb().width; ret.Cb().height = unit.Cb().height;
+    ret.Cr().buf = bufs[COMP_Cr].buf; ret.Cr().width = ret.Cr().stride = unit.Cr().width; ret.Cr().height = unit.Cr().height;
+  }
+
+  return ret;
 }
 
 const CPelBuf PelStorage::getCompactBuf(const CompArea& carea) const
@@ -1004,14 +1092,14 @@ PelBuf PelStorage::getCompactBuf(const CompArea& carea)
   return PelBuf( bufs[carea.compID].buf, carea.width, carea);
 }
 
-void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt )
 {
   CHECK( pelUnitBuf.bufs.size() == 0, "pelUnitBuf not initialized" );
   pelUnitBuf.chromaFormat = chFmt;
   const int numComp = getNumberValidComponents( chFmt );
   for ( int i = 0; i < numComp; i++ )
   {
-    const YUVBuffer::Plane& src = yuvBuffer.planes[ i ];
+    const vvencYUVPlane& src = yuvBuffer.planes[ i ];
     CHECK( src.ptr == nullptr, "yuvBuffer not setup" );
     PelBuf& dest = pelUnitBuf.bufs[i];
     CHECK( dest.buf == nullptr, "yuvBuffer not setup" );
@@ -1049,7 +1137,7 @@ void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const 
   }
 }
 */
-void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow )
+void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, vvencYUVBuffer& yuvBuffer, const Window* confWindow )
 {
   const ChromaFormat chFmt = pelUnitBuf.chromaFormat;
   const int numComp        = getNumberValidComponents( chFmt );
@@ -1059,7 +1147,7 @@ void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const 
           PelBuf area        = pelUnitBuf.get( compId );
     const int sx             = getComponentScaleX( compId, chFmt );
     const int sy             = getComponentScaleY( compId, chFmt );
-    YUVBuffer::Plane& yuvPlane = yuvBuffer.planes[ i ];
+    vvencYUVPlane& yuvPlane = yuvBuffer.planes[ i ];
     CHECK( yuvPlane.ptr != nullptr, "yuvBuffer already in use" );
     yuvPlane.ptr             = area.bufAt( confWindow->winLeftOffset >> sx, confWindow->winTopOffset >> sy );
     yuvPlane.width           = ( ( area.width  << sx ) - ( confWindow->winLeftOffset + confWindow->winRightOffset  ) ) >> sx;

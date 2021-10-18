@@ -178,5 +178,26 @@ inline Area clipArea(const Area& _area, const Area& boundingBox)
 
 } // namespace vvenc
 
+namespace std
+{
+  template <>
+  struct hash<vvenc::Position> : public unary_function<vvenc::Position, uint64_t>
+  {
+    uint64_t operator()(const vvenc::Position& value) const
+    {
+      return (((uint64_t)value.x << 32) + value.y);
+    }
+  };
+
+  template <>
+  struct hash<vvenc::Size> : public unary_function<vvenc::Size, uint64_t>
+  {
+    uint64_t operator()(const vvenc::Size& value) const
+    {
+      return (((uint64_t)value.width << 32) + value.height);
+    }
+  };
+}
+
 //! \}
 

@@ -50,152 +50,335 @@ THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "vvenc/vvenc.h"
+#include "vvenc/vvencCfg.h"
+#include "vvenc/version.h"
+
 #include "vvencimpl.h"
 
-namespace vvenc {
+VVENC_NAMESPACE_BEGIN
 
-VVEnc::VVEnc()
+VVENC_DECL vvencYUVBuffer* vvenc_YUVBuffer_alloc()
 {
-  m_pcVVEncImpl = new VVEncImpl;
+  vvencYUVBuffer* yuvBuffer = (vvencYUVBuffer*)malloc(sizeof(vvencYUVBuffer));
+  vvenc_YUVBuffer_default( yuvBuffer );
+  return yuvBuffer;
 }
 
-/// Destructor
-VVEnc::~VVEnc()
+VVENC_DECL void vvenc_YUVBuffer_free(vvencYUVBuffer *yuvBuffer, bool freePicBuffer )
 {
-  if( NULL != m_pcVVEncImpl )
+  if( yuvBuffer )
   {
-    if( m_pcVVEncImpl->isInitialized() )
+    if( freePicBuffer && yuvBuffer->planes[0].ptr )
     {
-      uninit();
+      vvenc_YUVBuffer_free_buffer ( yuvBuffer );
     }
-    delete m_pcVVEncImpl;
-    m_pcVVEncImpl = NULL;
+    free(yuvBuffer);
   }
 }
 
-int VVEnc::checkConfig( const VVEncCfg& rcVVEncCfg )
+VVENC_DECL void vvenc_YUVBuffer_default(vvencYUVBuffer *yuvBuffer )
 {
-  return m_pcVVEncImpl->checkConfig( rcVVEncCfg );
-}
-
-int VVEnc::init( const VVEncCfg& rcVVEncCfg, YUVWriterIf* pcYUVWriterIf  )
-{
-  if( m_pcVVEncImpl->isInitialized() )      { return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-
-  return m_pcVVEncImpl->init( rcVVEncCfg, pcYUVWriterIf );
-}
-
-int VVEnc::initPass( int pass )
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-
-  return m_pcVVEncImpl->initPass( pass );
-}
-
-int VVEnc::uninit()
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg( VVENC_ERR_INITIALIZE ); }
-
-  return m_pcVVEncImpl->uninit( );
-}
-
-bool VVEnc::isInitialized()
-{
-  return m_pcVVEncImpl->isInitialized();
-}
-
-int VVEnc::encode( YUVBuffer* pcYUVBuffer, AccessUnit& rcAccessUnit, bool& rbEncodeDone)
-{
-  if( !m_pcVVEncImpl->isInitialized() ){ return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->encode( pcYUVBuffer, rcAccessUnit, rbEncodeDone );
-}
-
-int VVEnc::getConfig( VVEncCfg& rcVVEncCfg )
-{
-  if( !m_pcVVEncImpl->isInitialized() )
-  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->getConfig( rcVVEncCfg ) );
-}
-
-int VVEnc::reconfig( const VVEncCfg& rcVVEncCfg )
-{
-  if( !m_pcVVEncImpl->isInitialized() )
-  {  return m_pcVVEncImpl->setAndRetErrorMsg(VVENC_ERR_INITIALIZE); }
-
-  return m_pcVVEncImpl->setAndRetErrorMsg( m_pcVVEncImpl->reconfig( rcVVEncCfg ) );
-}
-
-std::string VVEnc::getEncoderInfo() const
-{
-  return m_pcVVEncImpl->getEncoderInfo();
-}
-
-std::string VVEnc::getLastError() const
-{
-  return m_pcVVEncImpl->getLastError();
-}
-
-int VVEnc::getNumLeadFrames() const
-{
-  return m_pcVVEncImpl->getNumLeadFrames();
-}
-
-int VVEnc::getNumTrailFrames() const
-{
-  return m_pcVVEncImpl->getNumTrailFrames();
-}
-
-int VVEnc::printSummary() const
-{
-  return m_pcVVEncImpl->printSummary();
-}
-
-std::string VVEnc::getVersionNumber()
-{
-  return VVEncImpl::getVersionNumber();
-}
-
-std::string VVEnc::getErrorMsg( int nRet )
-{
-  return VVEncImpl::getErrorMsg(nRet);
-}
-
-void VVEnc::registerMsgCbf( std::function<void( int, const char*, va_list )> msgFnc )
-{
-  VVEncImpl::registerMsgCbf( msgFnc );
-}
-
-std::string VVEnc::setSIMDExtension( const std::string& simdId )  ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
-{
-  return VVEncImpl::setSIMDExtension( simdId );
-}
-
-YUVBufferStorage::YUVBufferStorage( const ChromaFormat& chFmt, const int frameWidth, const int frameHeight )
-  : YUVBuffer()
-{
-  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  for( int i = 0; i < 3; i ++ )
   {
-    YUVBuffer::Plane& yuvPlane = planes[ i ];
-    yuvPlane.width  = getWidthOfComponent ( chFmt, frameWidth,  i );
-    yuvPlane.height = getHeightOfComponent( chFmt, frameHeight, i );
+    yuvBuffer->planes[i].ptr     = NULL;
+    yuvBuffer->planes[i].width   = 0;
+    yuvBuffer->planes[i].height  = 0;
+    yuvBuffer->planes[i].stride  = 0;
+  }
+  yuvBuffer->sequenceNumber  = 0;
+  yuvBuffer->cts             = 0;
+  yuvBuffer->ctsValid        = false;
+}
+
+
+VVENC_DECL void vvenc_YUVBuffer_alloc_buffer( vvencYUVBuffer *yuvBuffer, const vvencChromaFormat chFmt, const int frameWidth, const int frameHeight )
+{
+  for ( int i = 0; i < 3; i++ )
+  {
+    vvencYUVPlane&    yuvPlane = yuvBuffer->planes[ i ];
+    yuvPlane.width  = vvenc_get_width_of_component ( chFmt, frameWidth,  i );
+    yuvPlane.height = vvenc_get_height_of_component( chFmt, frameHeight, i );
     yuvPlane.stride = yuvPlane.width;
     const int size  = yuvPlane.stride * yuvPlane.height;
     yuvPlane.ptr    = ( size > 0 ) ? new int16_t[ size ] : nullptr;
   }
 }
 
-YUVBufferStorage::~YUVBufferStorage()
+VVENC_DECL void vvenc_YUVBuffer_free_buffer( vvencYUVBuffer *yuvBuffer )
 {
-  for ( int i = 0; i < MAX_NUM_COMP; i++ )
+  for ( int i = 0; i < 3; i++ )
   {
-    delete [] planes[ i ].ptr;
+    if( yuvBuffer->planes[ i ].ptr )
+      delete [] yuvBuffer->planes[ i ].ptr;
   }
 }
 
+
+VVENC_DECL vvencAccessUnit* vvenc_accessUnit_alloc()
+{
+  vvencAccessUnit* accessUnit = (vvencAccessUnit*)malloc(sizeof(vvencAccessUnit));
+  vvenc_accessUnit_default( accessUnit );
+  return accessUnit;
+}
+
+VVENC_DECL void vvenc_accessUnit_free(vvencAccessUnit *accessUnit, bool freePayload  )
+{
+  if( accessUnit )
+  {
+    if( freePayload && accessUnit->payload )
+    {
+      vvenc_accessUnit_free_payload ( accessUnit );
+    }
+    free(accessUnit);
+  }
+}
+
+VVENC_DECL void vvenc_accessUnit_alloc_payload(vvencAccessUnit *accessUnit, int payload_size )
+{
+  accessUnit->payload = (unsigned char*)malloc(sizeof(unsigned char) * payload_size );
+  accessUnit->payloadSize = payload_size;
+  accessUnit->payloadUsedSize = 0;
+}
+
+VVENC_DECL void vvenc_accessUnit_free_payload(vvencAccessUnit *accessUnit )
+{
+  if( accessUnit->payload )
+  {
+    free(accessUnit->payload);
+    accessUnit->payloadSize = 0;
+    accessUnit->payloadUsedSize = 0;
+  }
+}
+
+VVENC_DECL void vvenc_accessUnit_reset(vvencAccessUnit *accessUnit )
+{
+  accessUnit->payloadUsedSize = 0;
+  accessUnit->cts             = 0;
+  accessUnit->dts             = 0;
+  accessUnit->ctsValid        = false;
+  accessUnit->dtsValid        = false;
+  accessUnit->rap             = false;
+  accessUnit->sliceType       = VVENC_NUMBER_OF_SLICE_TYPES;
+  accessUnit->refPic          = false;
+  accessUnit->temporalLayer   = 0;
+  accessUnit->poc             = 0;
+  accessUnit->status          = 0;
+  accessUnit->essentialBytes  = 0;
+
+  memset( accessUnit->infoString, 0, sizeof( accessUnit->infoString ) );
+  accessUnit->infoString[0]   ='\0';
+}
+
+VVENC_DECL void vvenc_accessUnit_default(vvencAccessUnit *accessUnit )
+{
+  accessUnit->payload         = NULL;
+  accessUnit->payloadSize     = 0;
+  vvenc_accessUnit_reset( accessUnit );
+}
+
+VVENC_DECL vvencEncoder* vvenc_encoder_create()
+{
+  vvenc::VVEncImpl* encCtx = new vvenc::VVEncImpl();
+  if (!encCtx)
+  {
+    vvenc::msg( VVENC_ERROR, "cannot allocate memory for VVdeC decoder\n" );
+    return nullptr;
+  }
+
+  return (vvencEncoder*)encCtx;
+}
+
+
+VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
+{
+  if (nullptr == config)
+  {
+    vvenc::msg( VVENC_ERROR, "vvenc_config is null\n" );
+    return VVENC_ERR_PARAMETER;
+  }
+
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  int ret = d->init( *config );
+  if (ret != 0)
+  {
+    // Error initializing the decoder
+    vvenc::msg( VVENC_ERROR, "cannot init the VVenC encoder\n" );
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  return VVENC_OK;
+}
+
+VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  int ret = d->uninit();
+  delete d;
+
+  return ret;
+}
+
+VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *enc, void * ctx, vvencRecYUVBufferCallback callback )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  d->setRecYUVBufferCallback( ctx, callback );
+  return VVENC_OK;
+}
+
+VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass, const char * statsFName )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  return d->initPass( pass, statsFName );
+}
+
+
+VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvencAccessUnit* accessUnit, bool* encodeDone )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_INITIALIZE;
+  }
+
+  return d->encode( YUVBuffer, accessUnit, encodeDone );
+}
+
+VVENC_DECL int vvenc_get_config( vvencEncoder *enc, vvenc_config* cfg )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->getConfig( *cfg );
+}
+
+
+VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const vvenc_config *cfg )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->reconfig( *cfg );
+}
+
+VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const vvenc_config *cfg )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->checkConfig( *cfg );
+}
+
+VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return NULL;
+  }
+
+  return d->getLastError();
+}
+
+VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return NULL;
+  }
+
+  return d->getEncoderInfo();
+}
+
+VVENC_DECL int vvenc_get_num_lead_frames( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->getNumLeadFrames();
+}
+
+VVENC_DECL int vvenc_get_num_trail_frames( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->getNumTrailFrames();
+}
+
+VVENC_DECL int vvenc_print_summary( vvencEncoder *enc )
+{
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->printSummary();
+}
+
+
+VVENC_DECL const char* vvenc_get_version()
+{
+  return VVENC_VERSION;
+}
+
+VVENC_DECL const char* vvenc_get_error_msg( int nRet )
+{
+  return vvenc::VVEncImpl::getErrorMsg( nRet );
+}
+
+
+VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback )
+{
+  vvenc::VVEncImpl::registerMsgCbf ( ctx, callback );
+  return VVENC_OK;
+}
+
+
+VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId )
+{
+  return vvenc::VVEncImpl::setSIMDExtension( simdId );
+}
+
+
 ///< checks if library has tracing supported enabled (see ENABLE_TRACING).
-VVENC_DECL bool isTracingEnabled()
+VVENC_DECL bool vvenc_is_tracing_enabled()
 {
 #if ENABLE_TRACING
   return true;
@@ -204,5 +387,46 @@ VVENC_DECL bool isTracingEnabled()
 #endif
 }
 
-} // namespace
+// creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
+VVENC_DECL const char* vvenc_get_compile_info_string()
+{
+  return vvenc::VVEncImpl::getCompileInfoString();
+}
+VVENC_DECL int vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule)
+{
+  return vvenc::VVEncImpl::decodeBitstream( FileName, trcFile, trcRule );
+}
 
+VVENC_DECL int vvenc_get_width_of_component( const vvencChromaFormat chFmt, const int frameWidth, const int compId )
+{
+  int w = frameWidth;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case VVENC_CHROMA_400: w = 0;      break;
+      case VVENC_CHROMA_420:
+      case VVENC_CHROMA_422: w = w >> 1; break;
+      default: break;
+    }
+  }
+  return w;
+}
+
+VVENC_DECL int vvenc_get_height_of_component( const vvencChromaFormat chFmt, const int frameHeight, const int compId )
+{
+  int h = frameHeight;
+  if ( compId > 0 )
+  {
+    switch ( chFmt )
+    {
+      case VVENC_CHROMA_400: h = 0;      break;
+      case VVENC_CHROMA_420: h = h >> 1; break;
+      case VVENC_CHROMA_422:
+      default: break;
+    }
+  }
+  return h;
+}
+
+VVENC_NAMESPACE_END

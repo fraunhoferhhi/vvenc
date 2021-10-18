@@ -407,7 +407,7 @@ void HLSyntaxReader::parsePPS( PPS* pcPPS, ParameterSetManager *parameterSetMana
     pcPPS->conformanceWindow = pcSPS->conformanceWindow;
   }
 
-  READ_FLAG( uiCode, "spps_caling_window_flag" );
+  READ_FLAG( uiCode, "pps_scaling_window_flag" );
   if( uiCode != 0 )
   {
     //th assume that the sps is there and its the final one  
@@ -698,7 +698,7 @@ void HLSyntaxReader::parseAlfAps( APS* aps )
   {
     READ_FLAG(alfp.nonLinearFlag[CH_C], "alf_nonlinear_enable_flag_chroma");
 
-    if( MAX_NUM_ALF_ALTERNATIVES_CHROMA > 1 )
+    if( VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA > 1 )
       READ_UVLC( code, "alf_chroma_num_alts_minus1" );
     else
       code = 0;
@@ -800,17 +800,20 @@ void HLSyntaxReader::parseLmcsAps( APS* aps )
 
 void  HLSyntaxReader::parseVUI(VUI* pcVUI, SPS *pcSPS)
 {
-  assert(0); //to be checked
 #if ENABLE_TRACING
   DTRACE( g_trace_ctx, D_HEADER, "----------- vui_parameters -----------\n");
 #endif
-  READ_FLAG(pcVUI->progressiveSourceFlag,  "vui_progressive_source_flag" ); 
-  READ_FLAG(pcVUI->interlacedSourceFlag,  "vui_interlaced_source_flag" ); 
+  InputBitstream *bs = getBitstream();
+  setBitstream( bs->extractSubstream( pcSPS->vuiPayloadSize * 8 ) );
+
+  READ_FLAG(pcVUI->progressiveSourceFlag,  "vui_general_progressive_source_flag" );
+  READ_FLAG(pcVUI->interlacedSourceFlag,  "vui_general_interlaced_source_flag" );
   READ_FLAG(pcVUI->nonPackedFlag, "vui_non_packed_constraint_flag");
   READ_FLAG(pcVUI->nonProjectedFlag, "vui_non_projected_constraint_flag");
   READ_FLAG( pcVUI->aspectRatioInfoPresent, "vui_aspect_ratio_info_present_flag");
   if (pcVUI->aspectRatioInfoPresent)
   {
+    READ_FLAG( pcVUI->aspectRatioConstantFlag, "vui_aspect_ratio_constant_flag");
     READ_CODE(8, pcVUI->aspectRatioIdc, "vui_aspect_ratio_idc");
     if (pcVUI->aspectRatioIdc == 255)
     {
@@ -846,6 +849,40 @@ void  HLSyntaxReader::parseVUI(VUI* pcVUI, SPS *pcSPS)
       READ_UVLC( pcVUI->chromaSampleLocTypeBottomField, "vui_chroma_sample_loc_type_bottom_field" );
     }
   }
+
+  int payloadBitsRem = getBitstream()->getNumBitsLeft();
+  if( payloadBitsRem )      //Corresponds to more_data_in_payload()
+  {
+    uint32_t  symbol;
+    while( payloadBitsRem > 9 )    //payload_extension_present()
+    {
+      READ_CODE( 1, symbol, "vui_reserved_payload_extension_data" );
+      payloadBitsRem--;
+    }
+    int finalBits = getBitstream()->peekBits( payloadBitsRem );
+    int numFinalZeroBits = 0;
+    int mask = 0xff;
+    while( finalBits & (mask >> numFinalZeroBits) )
+    {
+      numFinalZeroBits++;
+    }
+    while( payloadBitsRem > 9-numFinalZeroBits )     //payload_extension_present()
+    {
+      READ_CODE( 1, symbol, "vui_reserved_payload_extension_data" );
+      payloadBitsRem--;
+    }
+    READ_FLAG( symbol, "vui_payload_bit_equal_to_one" );
+    CHECK( symbol != 1, "vui_payload_bit_equal_to_one not equal to 1" );
+    payloadBitsRem--;
+    while( payloadBitsRem )
+    {
+      READ_FLAG( symbol, "vui_payload_bit_equal_to_zero" );
+      CHECK( symbol != 0, "vui_payload_bit_equal_to_zero not equal to 0" );
+      payloadBitsRem--;
+    }
+  }
+  delete getBitstream();
+  setBitstream(bs);
 }
 
 void HLSyntaxReader::parseGeneralHrdParameters(GeneralHrdParams *hrd)
@@ -1161,7 +1198,9 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
   if (pcSPS->chromaFormatIdc != CHROMA_400)
   {
     READ_FLAG(pcSPS->jointCbCr, "sps_joint_cbcr_enabled_flag");
-    ChromaQpMappingTableParams chromaQpMappingTableParams;
+    vvencChromaQpMappingTableParams chromaQpMappingTableParams;
+    vvenc_ChromaQpMappingTableParams_default(&chromaQpMappingTableParams);
+
     READ_FLAG(chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag, "sps_same_qp_table_for_chroma");
     int numQpTables = chromaQpMappingTableParams.m_sameCQPTableForAllChromaFlag ? 1 : (pcSPS->jointCbCr ? 3 : 2);
     chromaQpMappingTableParams.m_numQpTables = numQpTables;
@@ -1178,8 +1217,11 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
         READ_UVLC(uiCode, "sps_delta_qp_diff_val");
         deltaQpOutVal[j] = uiCode ^ deltaQpInValMinus1[j];
       }
-      chromaQpMappingTableParams.m_deltaQpInValMinus1[i] = deltaQpInValMinus1;
-      chromaQpMappingTableParams.m_deltaQpOutVal[i] = deltaQpOutVal;
+      CHECK( deltaQpInValMinus1.size() > sizeof(chromaQpMappingTableParams.m_deltaQpInValMinus1[i]), "deltaQpInValMinus1 size > QpInVal");
+      CHECK( deltaQpOutVal.size() > sizeof(chromaQpMappingTableParams.m_deltaQpOutVal[i]), "m_deltaQpOutVal size > QpOutVal");
+
+      std::copy(deltaQpInValMinus1.begin(), deltaQpInValMinus1.end(), chromaQpMappingTableParams.m_deltaQpInValMinus1[i]);
+      std::copy(deltaQpOutVal.begin(), deltaQpOutVal.end(), chromaQpMappingTableParams.m_deltaQpOutVal[i]);
     }
     pcSPS->chromaQpMappingTable.m_numQpTables = chromaQpMappingTableParams.m_numQpTables;
     pcSPS->chromaQpMappingTable.setParams(chromaQpMappingTableParams, pcSPS->qpBDOffset[ CH_C ]);
@@ -1406,6 +1448,8 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
   if (pcSPS->vuiParametersPresent)
   {
     READ_UVLC(uiCode, "sps_vui_payload_size_minus1");
+    pcSPS->vuiPayloadSize = uiCode+1;
+
     while (!isByteAligned())
     {
       READ_FLAG(uiCode, "sps_vui_alignment_zero_bit");
@@ -2483,11 +2527,11 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   }
   else
   {
-    pcSlice->sliceType = (I_SLICE);
+    pcSlice->sliceType = (VVENC_I_SLICE);
   }
   if (!picHeader->picIntraSliceAllowed)
   {
-    CHECK(pcSlice->sliceType == I_SLICE, "when ph_intra_slice_allowed_flag = 0, no I_Slice is allowed");
+    CHECK(pcSlice->sliceType == VVENC_I_SLICE, "when ph_intra_slice_allowed_flag = 0, no I_Slice is allowed");
   }
 
   //   set default values in case slice overrides are disabled
@@ -2529,7 +2573,7 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   pcSlice->ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cb - 1] = picHeader->ccalfEnabled[COMP_Cb];
   pcSlice->ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cr - 1] = picHeader->ccalfEnabled[COMP_Cr];
 
-  if (pcSlice->nalUnitType == NAL_UNIT_CODED_SLICE_CRA || pcSlice->nalUnitType == NAL_UNIT_CODED_SLICE_IDR_N_LP || pcSlice->nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL || pcSlice->nalUnitType == NAL_UNIT_CODED_SLICE_GDR)
+  if (pcSlice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_CRA || pcSlice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP || pcSlice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL || pcSlice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_GDR)
   {
     READ_FLAG(picHeader->noOutputOfPriorPics, "sh_no_output_of_prior_pics_flag");
   }
@@ -2854,16 +2898,16 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   if(pps->cabacInitPresent && !slice->isIntra())
   {
     READ_FLAG(slice->cabacInitFlag, "sh_cabac_init_flag");
-    slice->encCABACTableIdx = ( slice->sliceType == B_SLICE ? ( slice->cabacInitFlag ? P_SLICE : B_SLICE ) : ( slice->cabacInitFlag ? B_SLICE : P_SLICE ) );
+    slice->encCABACTableIdx = ( slice->sliceType == VVENC_B_SLICE ? ( slice->cabacInitFlag ? VVENC_P_SLICE : VVENC_B_SLICE ) : ( slice->cabacInitFlag ? VVENC_B_SLICE : VVENC_P_SLICE ) );
   }
 
   if ( picHeader->enableTMVP )
   {
-    if( pcSlice->sliceType == P_SLICE )
+    if( pcSlice->sliceType == VVENC_P_SLICE )
     {
       pcSlice->colFromL0Flag = true;
     }
-    else if( !pps->rplInfoInPh && pcSlice->sliceType == B_SLICE )
+    else if( !pps->rplInfoInPh && pcSlice->sliceType == VVENC_B_SLICE )
     {
       READ_FLAG( pcSlice->colFromL0Flag, "sh_collocated_from_l0_flag" );
     }
@@ -2874,7 +2918,7 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
 
     if (!pps->rplInfoInPh)
     {
-      if ( slice->sliceType != I_SLICE &&
+      if ( slice->sliceType != VVENC_I_SLICE &&
             ((slice->colFromL0Flag == 1 && slice->numRefIdx[ REF_PIC_LIST_0 ] > 1)||
             (slice->colFromL0Flag == 0 && slice->numRefIdx[ REF_PIC_LIST_1 ] > 1)))
       {
@@ -2887,7 +2931,7 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
       }
     }
   }
-  if ( (pps->weightPred && slice->sliceType==P_SLICE) || (pps->weightedBiPred && slice->sliceType==B_SLICE) )
+  if ( (pps->weightPred && slice->sliceType==VVENC_P_SLICE) || (pps->weightedBiPred && slice->sliceType==VVENC_B_SLICE) )
   {
     if (pps->wpInfoInPh)
     {
@@ -3298,14 +3342,14 @@ void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTi
   if(profileTierPresent)
   {
     READ_CODE(7 , symbol,   "general_profile_idc"              );
-    ptl->profileIdc  = Profile(symbol);
+    ptl->profileIdc  = vvencProfile(symbol);
 
     READ_FLAG(    flag,   "general_tier_flag"                );
-    ptl->tierFlag =  flag ? Tier::TIER_HIGH : Tier::TIER_MAIN;
+    ptl->tierFlag =  flag ? vvencTier::VVENC_TIER_HIGH : vvencTier::VVENC_TIER_MAIN;
   }
 
   READ_CODE(8 , symbol,   "general_level_idc"                );
-  ptl->levelIdc   = Level(symbol);
+  ptl->levelIdc   = vvencLevel(symbol);
   READ_FLAG( ptl->frameOnlyConstraintFlag,   "ptl_frame_only_constraint_flag"   );
   READ_FLAG( ptl->multiLayerEnabledFlag,     "ptl_multilayer_enabled_flag" );
 
@@ -3329,7 +3373,7 @@ void HLSyntaxReader::parseProfileTierLevel(ProfileTierLevel *ptl, bool profileTi
     if (ptl->subLayerLevelPresent[i])
     {
       READ_CODE(8 , symbol,   "sub_layer_level_idc"                );
-      ptl->subLayerLevelIdc[i] = Level(symbol);
+      ptl->subLayerLevelIdc[i] = vvencLevel(symbol);
     }
   }
 
@@ -3373,7 +3417,7 @@ void HLSyntaxReader::parseRemainingBytes( bool noTrailingBytesExpected )
       uint32_t trailingNullByte=m_pcBitstream->readByte();
       if (trailingNullByte!=0)
       {
-        msg( ERROR, "Trailing byte should be 0, but has value %02x\n", trailingNullByte);
+        msg( VVENC_ERROR, "Trailing byte should be 0, but has value %02x\n", trailingNullByte);
         THROW("Invalid trailing '0' byte");
       }
     }
@@ -3392,9 +3436,9 @@ void HLSyntaxReader::parsePredWeightTable( Slice* slice, const SPS *sps )
   const int             numValidComp = int(getNumberValidComponents(chFmt));
   const bool            bChroma      = (chFmt!=CHROMA_400);
   const SliceType       eSliceType   = slice->sliceType;
-  const int             iNbRef       = (eSliceType == B_SLICE ) ? (2) : (1);
-  uint32_t            log2WeightDenomLuma=0, log2WeightDenomChroma=0;
-  uint32_t            uiTotalSignalledWeightFlags = 0;
+  const int             iNbRef       = (eSliceType == VVENC_B_SLICE ) ? (2) : (1);
+  uint32_t              log2WeightDenomLuma=0, log2WeightDenomChroma=0;
+  uint32_t              uiTotalSignalledWeightFlags = 0;
 
   int iDeltaDenom;
   // decode delta_luma_log2_weight_denom :

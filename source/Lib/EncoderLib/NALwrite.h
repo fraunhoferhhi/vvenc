@@ -67,7 +67,7 @@ struct OutputNALUnit : public NALUnit
    * written to the bitstream.
    */
   OutputNALUnit(
-    NalUnitType nalUnitType,
+    vvencNalUnitType nalUnitType,
     uint32_t temporalID = 0,
     uint32_t reserved_zero_6bits = 0)
   : NALUnit(nalUnitType, temporalID, reserved_zero_6bits)

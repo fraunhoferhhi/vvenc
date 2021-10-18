@@ -66,6 +66,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup CommonLib
 //! \{
 
+struct vvencYUVBuffer;
+
 namespace vvenc {
 
 // ---------------------------------------------------------------------------
@@ -90,6 +92,10 @@ struct PelBufferOps
   void ( *addAvg4 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg8 )       ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
   void ( *addAvg16 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,       unsigned shift, int offset, const ClpRng& clpRng );
+  void ( *sub4 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
+  void ( *sub8 )          ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height );
+  void ( *wghtAvg4 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
+  void ( *wghtAvg8 )      ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel *dst, int dstStride, int width, int height,       unsigned shift, int offset, int w0, int w1, const ClpRng& clpRng );
   void ( *copyClip4 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *copyClip8 )     ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
   void ( *reco4 )         ( const Pel* src0, int src0Stride, const Pel* src1, int src1Stride, Pel* dst, int dstStride, int width, int height,                                   const ClpRng& clpRng );
@@ -97,11 +103,8 @@ struct PelBufferOps
   void ( *linTf4 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *linTf8 )        ( const Pel* src0, int src0Stride,                                  Pel* dst, int dstStride, int width, int height, int scale, unsigned shift, int offset, const ClpRng& clpRng, bool bClip );
   void ( *copyBuffer )    ( const char* src, int srcStride, char* dst, int dstStride, int width, int height );
-  void ( *padding )       ( Pel* dst, int stride, int width, int height, int padSize);
-#if ENABLE_SIMD_OPT_BCW
   void ( *removeHighFreq8)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
   void ( *removeHighFreq4)( Pel* src0, int src0Stride, const Pel* src1, int src1Stride, int width, int height);
-#endif
   void ( *transpose4x4 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *transpose8x8 )  ( const Pel* src,  int srcStride, Pel* dst, int dstStride );
   void ( *roundIntVector) ( int* v, int size, unsigned int nShift, const int dmvLimit);
@@ -144,7 +147,7 @@ struct AreaBuf : public Size
   void addAvg               ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng );
   T    getAvg               () const;
   void padBorderPel         ( unsigned marginX, unsigned marginY, int dir );
-  void addWeightedAvg(const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng, const int8_t BcwIdx);
+  void addWeightedAvg       ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng, const int8_t BcwIdx );
   void removeHighFreq       ( const AreaBuf<const T>& other, const bool bClip, const ClpRng& clpRng);
   void extendBorderPelTop   ( int x, int size, int margin );
   void extendBorderPelBot   ( int x, int size, int margin );
@@ -185,6 +188,9 @@ typedef AreaBuf<const Pel> CPelBuf;
 
 typedef AreaBuf<      TCoeff>  CoeffBuf;
 typedef AreaBuf<const TCoeff> CCoeffBuf;
+
+typedef AreaBuf<      TCoeffSig>  CoeffSigBuf;
+typedef AreaBuf<const TCoeffSig> CCoeffSigBuf;
 
 typedef AreaBuf<      MotionInfo>  MotionBuf;
 typedef AreaBuf<const MotionInfo> CMotionBuf;
@@ -354,28 +360,11 @@ void AreaBuf<T>::copyFrom( const AreaBuf<const T>& other )
 template<typename T>
 void AreaBuf<T>::subtract( const AreaBuf<const T>& minuend, const AreaBuf<const T>& subtrahend )
 {
-  CHECK( width  != minuend.width,  "Incompatible size" );
-  CHECK( height != minuend.height, "Incompatible size" );
-  CHECK( width  != subtrahend.width, "Incompatible size");
-  CHECK( height != subtrahend.height, "Incompatible size");
-
-        T* dest =       buf;
-  const T* mins = minuend.buf;
-  const T* subs = subtrahend.buf;
-
-#define SUBS_INC          \
-  dest +=       stride;    \
-  mins += minuend.stride;   \
-  subs += subtrahend.stride; \
-
-#define SUBS_OP( ADDR ) dest[ADDR] = mins[ADDR] - subs[ADDR]
-
-  SIZE_AWARE_PER_EL_OP( SUBS_OP, SUBS_INC );
-
-#undef SUBS_OP
-#undef SUBS_INC
+  THROW( "Type not supported" );
 }
 
+template<>
+void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend );
 
 template<typename T>
 void AreaBuf<T>::copyClip( const AreaBuf<const T>& src, const ClpRng& clpRng )
@@ -1065,12 +1054,11 @@ private:
   static_vector<PelStorage, NumEntries+1> m_acStorage;
 };
 
-struct YUVBuffer;
 struct Window;
 
-void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const YUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
+void copyPadToPelUnitBuf( PelUnitBuf pelUnitBuf, const vvencYUVBuffer& yuvBuffer, const ChromaFormat& chFmt );
 //void setupPelUnitBuf( const YUVBuffer& yuvBuffer, PelUnitBuf& pelUnitBuf, const ChromaFormat& chFmt );
-void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, YUVBuffer& yuvBuffer, const Window* confWindow );
+void setupYuvBuffer ( const PelUnitBuf& pelUnitBuf, vvencYUVBuffer& yuvBuffer, const Window* confWindow );
 
 } // namespace vvenc
 

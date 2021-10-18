@@ -84,7 +84,7 @@ class DecLib
 private:
   int                     m_iMaxRefPicNum;
 
-  NalUnitType             m_associatedIRAPType; ///< NAL unit type of the associated IRAP picture
+  vvencNalUnitType        m_associatedIRAPType; ///< NAL unit type of the associated IRAP picture
   int                     m_pocCRA;            ///< POC number of the latest CRA picture
   int                     m_pocRandomAccess;   ///< POC number of the random access point (the first IDR or CRA picture)
   int                     m_lastRasPoc;
@@ -135,13 +135,14 @@ private:
 
   std::list<InputNALUnit*> m_prefixSEINALUs; /// Buffered up prefix SEI NAL Units.
   int                     m_debugPOC;
-  std::vector<std::pair<NalUnitType, int>> m_accessUnitNals;
+  bool                    m_isDecoderInEncoder;
+  std::vector<std::pair<vvencNalUnitType, int>> m_accessUnitNals;
   struct AccessUnitPicInfo
   {
-    NalUnitType     m_nalUnitType; ///< nal_unit_type
-    uint32_t        m_temporalId;  ///< temporal_id
-    uint32_t        m_nuhLayerId;  ///< nuh_layer_id
-    int             m_POC;
+    vvencNalUnitType m_nalUnitType; ///< nal_unit_type
+    uint32_t         m_temporalId;  ///< temporal_id
+    uint32_t         m_nuhLayerId;  ///< nuh_layer_id
+    int              m_POC;
   };
   std::vector<AccessUnitPicInfo> m_accessUnitPicInfo;
   std::vector<int> m_accessUnitApsNals;
@@ -169,7 +170,7 @@ public:
   void  deletePicBuffer();
 
   void  executeLoopFilters();
-  void  finishPicture(int& poc, PicList*& rpcListPic, MsgLevel msgl = INFO);
+  void  finishPicture(int& poc, PicList*& rpcListPic, vvencMsgLevel msgl = VVENC_INFO);
   void  finishPictureLight(int& poc, PicList*& rpcListPic );
   void  checkNoOutputPriorPics (PicList* rpcListPic);
   void  checkNalUnitConstraints( uint32_t naluType );
@@ -188,6 +189,7 @@ public:
   void resetAccessUnitNals()              { m_accessUnitNals.clear();    }
   void resetAccessUnitPicInfo()           { m_accessUnitPicInfo.clear();    }
   void resetAccessUnitApsNals()           { m_accessUnitApsNals.clear(); }
+  void setDecoderInEncoderMode( bool m )  { m_isDecoderInEncoder = m; }
   bool isSliceNaluFirstInAU( bool newPicture, InputNALUnit &nalu );
 
   const VPS* getVPS()                     { return m_vps; }
@@ -214,7 +216,7 @@ protected:
   void      xDecodeSPS( InputNALUnit& nalu );
   void      xDecodePPS( InputNALUnit& nalu );
   void      xDecodeAPS(InputNALUnit& nalu);
-  void      xUpdatePreviousTid0POC(Slice* pSlice) { if ((pSlice->TLayer == 0) && (pSlice->nalUnitType!=NAL_UNIT_CODED_SLICE_RASL) && (pSlice->nalUnitType!=NAL_UNIT_CODED_SLICE_RADL))  { m_prevTid0POC = pSlice->poc; }  }
+  void      xUpdatePreviousTid0POC(Slice* pSlice) { if ((pSlice->TLayer == 0) && (pSlice->nalUnitType!=VVENC_NAL_UNIT_CODED_SLICE_RASL) && (pSlice->nalUnitType!=VVENC_NAL_UNIT_CODED_SLICE_RADL))  { m_prevTid0POC = pSlice->poc; }  }
   void      xParsePrefixSEImessages();
   void      xParsePrefixSEIsForUnknownVCLNal();
 

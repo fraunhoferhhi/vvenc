@@ -49,12 +49,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include "vvenc/vvencCfg.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/Unit.h"
 
 //! \ingroup EncoderLib
 //! \{
+
+//struct VVEncCfg;
 
 namespace vvenc {
 
@@ -62,15 +63,14 @@ namespace vvenc {
   namespace BitAllocation
   {
     int applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
-                                 std::vector<int>& ctuPumpRedQP,
-                                 int optChromaQPOffset[2]);
+                                 std::vector<int>& ctuPumpRedQP, int optChromaQPOffset[2], double* picVisActY = nullptr);
     int applyQPAdaptationLuma   (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
                                  std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
                                  const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr);
     int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea);
     int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
                                  std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
-    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const PelBuf* origBuf = nullptr);
+    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg);
   }
 
 } // namespace vvenc

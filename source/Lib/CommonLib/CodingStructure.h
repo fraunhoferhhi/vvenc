@@ -144,8 +144,8 @@ public:
   const CodingUnit*    getCURestricted(const Position& pos, const CodingUnit& curCu,    const ChannelType _chType) const;
   const TransformUnit* getTURestricted(const Position& pos, const TransformUnit& curTu, const ChannelType _chType) const;
 
-  CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType);
-  TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu);
+  CodingUnit&     addCU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cuInit = nullptr);
+  TransformUnit&  addTU(const UnitArea& unit, const ChannelType _chType, CodingUnit* cu, TransformUnit* tuInit = nullptr);
   void addEmptyTUs( Partitioner &partitioner, CodingUnit* cu );
 
   CUTraverser     traverseCUs(const UnitArea& _unit, const ChannelType _chType);
@@ -164,15 +164,15 @@ public:
   Distortion  dist;
   Distortion  interHad;
 
-  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr );
+  void initStructData  ( const int QP = MAX_INT, const bool skipMotBuf = false, const UnitArea* area = nullptr, bool force = false );
   void initSubStructure(      CodingStructure& cs, const ChannelType chType, const UnitArea& subArea, const bool isTuEnc, PelStorage* pOrgBuffer = nullptr, PelStorage* pRspBuffer = nullptr);
   void compactResize   ( const UnitArea& area );
 
   void copyStructure   (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const bool copyTUs = false, const bool copyRecoBuffer = false);
-  void useSubStructure (const CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
+  void useSubStructure (      CodingStructure& cs, const ChannelType chType, const TreeType treeType, const UnitArea& subArea, const bool cpyReco );
 
-  void clearTUs();
-  void clearCUs();
+  void clearTUs( bool force = false );
+  void clearCUs( bool force = false );
   const int signalModeCons( const PartSplit split, Partitioner &partitioner, const ModeType modeTypeParent ) const;
 
   void createTempBuffers( const bool isTopLayer );
@@ -214,8 +214,8 @@ private:
   PelStorage* m_org;
   PelStorage* m_rsporg;
 
-  TCoeff* m_coeffs [MAX_NUM_COMP];
-  int     m_offsets[MAX_NUM_COMP];
+  TCoeffSig*  m_coeffs [MAX_NUM_COMP];
+  int         m_offsets[MAX_NUM_COMP];
 
   std::vector<Mv>   m_dmvrMvCache;
   int               m_dmvrMvCacheOffset;
@@ -229,6 +229,7 @@ private:
 
 public:
   CodingStructure*  bestParent;
+  bool              resetIBCBuffer;
 
   MotionBuf getMotionBuf( const     Area& _area );
   MotionBuf getMotionBuf( const UnitArea& _area ) { return getMotionBuf( _area.Y() ); }
@@ -326,7 +327,7 @@ private:
 };
 
 
-static inline uint32_t getNumberValidTBlocks(const PreCalcValues& pcv) { return (pcv.chrFormat==CHROMA_400) ? 1 : ( pcv.multiBlock422 ? MAX_NUM_TBLOCKS : MAX_NUM_COMP ); }
+static inline uint32_t getNumberValidTBlocks(const PreCalcValues& pcv) { return (pcv.chrFormat==CHROMA_400) ? 1 : MAX_NUM_COMP; }
 
 } // namespace vvenc
 

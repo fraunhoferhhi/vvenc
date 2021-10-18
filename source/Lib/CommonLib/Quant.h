@@ -109,7 +109,7 @@ public:
   virtual ~Quant();
 
   // initialize class
-  virtual void init( int rdoq = 0, bool useRDOQTS = false, bool useSelectiveRDOQ = false, int dqThrVal = 8 );
+  virtual void init( int rdoq = 0, bool useRDOQTS = false, bool useSelectiveRDOQ = false, int thrVal = 8 );
 
 public:
 
@@ -139,8 +139,8 @@ private:
   void    xInitScalingList        ( const Quant* other, bool useScalingLists );
   void    xDestroyScalingList     ();
   void    xSetFlatScalingList     ( uint32_t list, uint32_t sizeX, uint32_t sizeY, int qp );
-  void    xSignBitHidingHDQ       ( TCoeff* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange);
-  void    ( *DeQuant)             (const int maxX,const int maxY,const int scale,const TCoeff*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum);
+  void    xSignBitHidingHDQ       ( TCoeffSig* pQCoef, const TCoeff* pCoef, TCoeff* deltaU, const CoeffCodingContext& cctx, const int maxLog2TrDynamicRange);
+  void    ( *DeQuant)             (const int maxX,const int maxY,const int scale,const TCoeffSig*const piQCoef,const size_t piQCfStride,TCoeff   *const piCoef,const int rightShift,const int inputMaximum,const TCoeff transformMaximum);
 
 #ifdef TARGET_SIMD_X86
   void initQuantX86();
@@ -153,6 +153,8 @@ protected:
   bool     m_useRDOQTS;
   bool     m_useSelectiveRDOQ;
   double   m_dLambda;
+  TCoeffSig m_tmpBdpcm[1 << ( MAX_TB_LOG2_SIZEY << 1 )];
+  int      m_thrVal;
 
 private:
   double   m_lambdas[MAX_NUM_COMP];

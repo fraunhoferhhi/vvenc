@@ -150,7 +150,7 @@ public:
 
   void    printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
   {
-    MsgLevel e_msg_level = cDelim == 'a' ? INFO: DETAILS;
+    vvencMsgLevel e_msg_level = cDelim == 'a' ? VVENC_INFO: VVENC_DETAILS;
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
 
@@ -405,7 +405,7 @@ public:
         }
         break;
       default:
-        msg( ERROR, "Unknown format during print out\n");
+        msg( VVENC_ERROR, "Unknown format during print out\n");
         exit(1);
         break;
     }
@@ -458,7 +458,7 @@ public:
         }
 
       default:
-          msg( ERROR, "Unknown format during print out\n");
+          msg( VVENC_ERROR, "Unknown format during print out\n");
           exit(1);
           break;
     }

@@ -99,7 +99,7 @@ int ReshapeData::calculateChromaAdjVpduNei( const TransformUnit& tu, const CompA
     setVPDULoc( xPos, yPos );
   }
   Position topLeft(xPos, yPos);
-  CodingStructure* pcs =  (CS::isDualITree(cs) && cs.slice->sliceType == I_SLICE) ? tu.cs->picture->cs : tu.cs;
+  CodingStructure* pcs =  (CS::isDualITree(cs) && cs.slice->sliceType == VVENC_I_SLICE) ? tu.cs->picture->cs : tu.cs;
   CodingUnit *topLeftLuma   = pcs->getCU(topLeft, CH_L, _treeType);
   const CodingUnit *cuAbove = pcs->getCURestricted( topLeftLuma->lumaPos().offset(0, -1), topLeftLuma->lumaPos(), topLeftLuma->slice->independentSliceIdx, topLeftLuma->tileIdx, CH_L, _treeType );
   const CodingUnit *cuLeft  = pcs->getCURestricted( topLeftLuma->lumaPos().offset(-1, 0), topLeftLuma->lumaPos(), topLeftLuma->slice->independentSliceIdx, topLeftLuma->tileIdx, CH_L, _treeType ); 
@@ -163,10 +163,17 @@ void Reshape::createDec(int bitDepth)
   m_lumaBD = bitDepth;
   m_reshapeLUTSize = 1 << m_lumaBD;
   m_initCW = m_reshapeLUTSize / PIC_CODE_CW_BINS;
-  if (m_fwdLUT.empty())
-    m_fwdLUT.resize(m_reshapeLUTSize, 0);
-  if (m_invLUT.empty())
-    m_invLUT.resize(m_reshapeLUTSize, 0);
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_BUFFER
+  if( m_fwdLUT.empty() )
+    m_fwdLUT.resize( m_reshapeLUTSize + 2, 0 );
+  if( m_invLUT.empty() )
+    m_invLUT.resize( m_reshapeLUTSize + 2, 0 );
+#else
+  if( m_fwdLUT.empty() )
+    m_fwdLUT.resize( m_reshapeLUTSize, 0 );
+  if( m_invLUT.empty() )
+    m_invLUT.resize( m_reshapeLUTSize, 0 );
+#endif
   if (m_binCW.empty())
     m_binCW.resize(PIC_CODE_CW_BINS, 0);
   if (m_inputPivot.empty())

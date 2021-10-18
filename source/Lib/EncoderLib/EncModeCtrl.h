@@ -80,6 +80,8 @@ enum EncTestModeType
   ETM_SPLIT_TT_H,
   ETM_SPLIT_TT_V,
   ETM_RECO_CACHED,
+  ETM_IBC,
+  ETM_IBC_MERGE,
   ETM_INVALID
 };
 
@@ -193,7 +195,6 @@ struct ComprCUCtx
     , grad_dowVal           (0)
     , interHad              (MAX_DISTORTION)
     , maxQtSubDepth         (0)
-    , earlySkip             (false)
     , isReusingCu           (false)
     , qtBeforeBt            (false)
     , doTriHorzSplit        (false)
@@ -229,7 +230,6 @@ struct ComprCUCtx
   double            grad_dowVal;
   Distortion        interHad;
   int               maxQtSubDepth;
-  bool              earlySkip;
   bool              isReusingCu;
   bool              qtBeforeBt;
   bool              doTriHorzSplit;
@@ -258,6 +258,9 @@ struct CodedCUInfo
   bool isIntra;
   bool isSkip;
   bool isMMVDSkip;
+#if QTBTT_SPEED3
+  int  isMergeSimple;
+#endif
   bool isIBC;
   uint8_t BcwIdx;
   int  ctuRsAddr, poc;
@@ -314,7 +317,7 @@ class BestEncInfoCache
 private:
   const PreCalcValues* m_pcv;
   BestEncodingInfo*    m_bestEncInfo[6][6][MAX_CU_SIZE >> MIN_CU_LOG2][MAX_CU_SIZE >> MIN_CU_LOG2];
-  TCoeff*              m_pCoeff;
+  TCoeffSig*           m_pCoeff;
   BestEncodingInfo*    m_encInfoBuf;
   Mv*                  m_dmvrMvBuf;
   CodingStructure      m_dummyCS;
@@ -356,7 +359,11 @@ public:
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
   void initCTUEncoding    ( const Slice &slice );
+#if QTBTT_SPEED3
+  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag );
+#else
   void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs );
+#endif
   void finishCULevel      ( Partitioner &partitioner );
 
   bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner );

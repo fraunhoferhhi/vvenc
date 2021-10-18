@@ -61,8 +61,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
 
-using namespace vvenc;
-
 #define TEST(x)     { int res = x; g_numTests++; g_numFails += res;  if( g_verbose ) if(res) { std::cerr << "\n test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__;} }
 #define TESTT(x,w)  { int res = x; g_numTests++; g_numFails += res;  if( g_verbose ) if(res) { std::cerr << "\n" << w << "\n test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__;} }
 #define ERROR(w)    { g_numTests++; g_numFails ++;                   if( g_verbose ) std::cerr << "\n" << w << " test failed: In function "  << __FUNCTION__ << "\" ln " <<  __LINE__; }
@@ -151,14 +149,14 @@ int main( int argc, char* argv[] )
 }
 
 
-void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true )
+void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = true )
 {
   rcEncCfg.m_SourceWidth                = 176;                 // luminance width of input picture
   rcEncCfg.m_SourceHeight               = 144;                 // luminance height of input picture
   rcEncCfg.m_GOPSize                    = 16;                  // gop size (1: intra only, 16, 32: hierarchical b frames)
-  rcEncCfg.m_DecodingRefreshType        = DRT_CRA;             // intra period refresh type
+  rcEncCfg.m_DecodingRefreshType        = VVENC_DRT_CRA;             // intra period refresh type
   rcEncCfg.m_IntraPeriod                = 32;                  // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
-  rcEncCfg.m_verbosity                  = SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
+  rcEncCfg.m_verbosity                  = VVENC_SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
 //rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
@@ -166,38 +164,39 @@ void fillEncoderParameters( VVEncCfg& rcEncCfg, bool callInitCfgParameter = true
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
   rcEncCfg.m_internalBitDepth[0]        = 10;                  // 10bit internal
 
-  rcEncCfg.m_internChromaFormat         =  CHROMA_420;
+  rcEncCfg.m_internChromaFormat         =  VVENC_CHROMA_420;
 
-  rcEncCfg.initPreset( PresetMode::FASTER  );
+  vvenc_init_preset(  &rcEncCfg, vvencPresetMode::VVENC_FASTER );
   if( callInitCfgParameter )
   {
-    rcEncCfg.initCfgParameter();
+    vvenc_init_config_parameter( &rcEncCfg );
   }
 }
 
-void defaultSDKInit( VVEncCfg& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
+void defaultSDKInit( vvenc_config& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  rcEncCfg.initDefault(176,144,60, targetBitrate, 32,  PresetMode::MEDIUM );
+  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32, vvencPresetMode::VVENC_MEDIUM );
 
   if( callInitCfgParameter )
   {
-    rcEncCfg.initCfgParameter();
+    vvenc_init_config_parameter( &rcEncCfg );
   }
 }
 
-void fillInputPic( YUVBuffer& cYuvBuffer, const short val = 512 )
+void fillInputPic( vvencYUVBuffer* pcYuvBuffer, const short val = 512 )
 {
-  for( int n = 0; n < MAX_NUM_COMP; n++)
+  for( int n = 0; n < VVENC_MAX_NUM_COMP; n++)
   {
-    const int size = cYuvBuffer.planes[n].stride * cYuvBuffer.planes[n].height;
-    std::fill_n( static_cast<short*> (cYuvBuffer.planes[n].ptr), size, val );
+    const int size = pcYuvBuffer->planes[n].stride * pcYuvBuffer->planes[n].height;
+    std::fill_n( static_cast<short*> (pcYuvBuffer->planes[n].ptr), size, val );
   }
 }
 
 template< typename T, typename V = int>
-int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
+int testParamList( const std::string& w, T& testParam, vvenc_config& vvencParams, const std::vector<V>& testValues, const bool expectedFail = false )
 {
-  VVEnc cVVEnc;
+  vvencEncoder *enc = vvenc_encoder_create();
+
   const int numFails = g_numFails;
   const T savedTestParam = testParam;
 
@@ -207,13 +206,15 @@ int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, co
     try
     {
       // initialize the encoder
-      TESTT( expectedFail == ( 0 == cVVEnc.checkConfig( vvencParams ) ), "\n" << w << "==" << testVal << " expected " << ( expectedFail ? "failure" : "success" ) );
+      TESTT( expectedFail == ( 0 == vvenc_check_config( enc, &vvencParams ) ), "\n" << w << "==" << testVal << " expected " << ( expectedFail ? "failure" : "success" ) );
     }
     catch ( ... )
     {
       ERROR( "\nCaught Exception " << w << "==" << testVal << " expected " << ( expectedFail ? "failure" : "success" ) ); //fail due to exception 
     }
   }
+
+  vvenc_encoder_close( enc );
 
   //restore original test param
   testParam = savedTestParam;
@@ -222,11 +223,13 @@ int testParamList( const std::string& w, T& testParam, VVEncCfg& vvencParams, co
 
 int testLibParameterRanges()
 {
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams, false );
 
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,4 }, true );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4 } );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,5 }, true );
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 15,31,256, }, true );
@@ -234,13 +237,13 @@ int testLibParameterRanges()
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, { 0,1,2,3,4,5,6} );
   //  testParamList( "LogLevel",                               vvencParams.msgLevel,                   vvencParams, {-1,7,8}, true );
 
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,1,2 } );
-  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 3,4,5,6,7,8,9,10 }, true );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 0,1,17,33,49,65,81,97,113 } );
+  testParamList( "Profile",                                vvencParams.m_profile,                    vvencParams, { 2,3,5,6,7,8,9,114 }, true );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { 1,3,9 } );
 //  testParamList( "Profile",                                vvencParams.profile,                    vvencParams, { -1,0,2,4,5,6,7,8,10 }, true );
 
-  testParamList( "Tier",                                   vvencParams.m_levelTier,                       vvencParams, { 0,1 } );
-  testParamList( "Tier",                                   vvencParams.m_levelTier,                       vvencParams, { -1,2 }, true );
+  testParamList( "Tier",                                   vvencParams.m_levelTier,                  vvencParams, { 0,1 } );
+  testParamList( "Tier",                                   vvencParams.m_levelTier,                  vvencParams, { -1,2 }, true );
 
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 16,32 } );
   vvencParams.m_IntraPeriod = 1;
@@ -248,14 +251,14 @@ int testLibParameterRanges()
   vvencParams.m_IntraPeriod = 32;
   testParamList( "GOPSize",                                vvencParams.m_GOPSize,                    vvencParams, { 1,8, -1,0,2,3,4,17,33,64,128 }, true ); //th is this intended
 
-  testParamList( "Width",                                  vvencParams.m_SourceWidth,                      vvencParams, { 320,1920,3840 } );
-  testParamList( "Width",                                  vvencParams.m_SourceWidth,                      vvencParams, { -1,0 }, true );
+  testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { 320,1920,3840 } );
+  testParamList( "Width",                                  vvencParams.m_SourceWidth,                vvencParams, { -1,0 }, true );
 
-  testParamList( "Height",                                 vvencParams.m_SourceHeight,                     vvencParams, { 16,32,1080,1088 } );
-  testParamList( "Height",                                 vvencParams.m_SourceHeight,                     vvencParams, { -1,0 }, true );
+  testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { 16,32,1080,1088 } );
+  testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { -1,0 }, true );
 
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 16,32,48, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                  vvencParams, { 1,-1,17,24 }, true );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 16,32,48, 0 } );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 1,-1,17,24 }, true );
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );
@@ -263,22 +266,22 @@ int testLibParameterRanges()
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { 0,1,2,3,4 } );
 //  testParamList( "Quality",                                vvencParams.quality,                    vvencParams, { -1,5 }, true );
 
-  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { 0,1000000,20000000 } );
-  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,              vvencParams, { -1,800000001 }, true );
+  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,            vvencParams, { 0,1000000,20000000 } );
+  testParamList( "TargetBitRate",                          vvencParams.m_RCTargetBitrate,            vvencParams, { -1,800000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 1;
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1,2 } );
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,3 }, true );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1,2 } );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,3 }, true );
   vvencParams.m_RCTargetBitrate = 0;
 
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 1 } );
-  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                  vvencParams, { 0,2 }, true );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 1 } );
+  testParamList( "NumPasses",                              vvencParams.m_RCNumPasses,                vvencParams, { 0,2 }, true );
 
-  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],              vvencParams, { 8,10 } );
-  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],              vvencParams, { 0,1,7,9,11 }, true );
+  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 8,10 } );
+  testParamList( "InputBitDepth",                          vvencParams.m_inputBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
 
-  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],           vvencParams, { 8,10 } );
-  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],           vvencParams, { 0,1,7,9,11 }, true );
+  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 8,10 } );
+  testParamList( "InternalBitDepth",                       vvencParams.m_internalBitDepth[0],        vvencParams, { 0,1,7,9,11 }, true );
 
 //  vvencParams.temporalScale = 1;
 //  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { 1,25,30,50,60,100,120 } );
@@ -323,8 +326,8 @@ int testfunc( const std::string& w, int (*funcCallingOrder)(void), const bool ex
 
 int callingOrderInvalidUninit()
 {
-  VVEnc cVVEnc;
-  if( 0 != cVVEnc.uninit())
+  vvencEncoder *enc = nullptr;
+  if( 0 != vvenc_encoder_close( enc ))
   {
     return -1;
   }
@@ -333,250 +336,434 @@ int callingOrderInvalidUninit()
 
 int callingOrderInitNoUninit()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams, true );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
   return 0;
 }
 
 int callingOrderInitTwice()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams; //
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
-  if( 0 != cVVEnc.init( vvencParams ))
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
+    vvenc_encoder_close( enc );
     return -1;
   }
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvenc_encoder_close( enc );
+
   return 0;
 }
 
 int callingOrderNoInit()
 {
-  VVEnc cVVEnc;
-  AccessUnit cAU;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
+  bool encodeDone = false;
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+    return -1;
+  }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+
   return 0;
 }
 
 int callingOrderRegular()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
+  fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  YUVBuffer* pcYUVBuffer = nullptr;
-  if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
+  while( ! encodeDone )
   {
-    return -1;
+    vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+    if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
   }
 
   if( !encodeDone )
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != cVVEnc.uninit())
+  if( 0 != vvenc_encoder_close( enc ) )
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+
   return 0;
 }
 
 int callingOrderNotRegular()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
+  vvencYUVBuffer* pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  YUVBuffer* pcYUVBuffer = nullptr;
-  if( 0 != cVVEnc.encode( pcYUVBuffer, cAU, encodeDone ))
+  vvencYUVBuffer* pcYUVBufferFlush = nullptr;
+  if( 0 != vvenc_encode( enc, pcYUVBufferFlush, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != cVVEnc.uninit())
+  if( 0 != vvenc_encoder_close( enc ) )
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+
   return 0;
 }
 
 int callingOrderRegularInitPass()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ) )
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
-  if( 0 != cVVEnc.initPass( 0 ) )
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+
+  fillInputPic( pcYuvPicture );
+  if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_encoder_close( enc );
     return -1;
   }
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+    vvenc_encoder_close( enc );
     return -1;
   }
-  if( 0 != cVVEnc.uninit())
+  if( 0 != vvenc_encoder_close( enc ) )
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
+
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
   return 0;
 }
 
 int callingOrderRegularInit2Pass()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   vvencParams.m_RCNumPasses = 2;
   vvencParams.m_RCTargetBitrate = 500000;
 
   fillEncoderParameters( vvencParams );
 
-  if( 0 != cVVEnc.init( vvencParams ) )
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
-  if( 0 != cVVEnc.initPass( 0 ) )
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
   {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
+
+  if( 0 != vvenc_init_pass( enc, 0, nullptr ) )
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
     return -1;
   }
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
+  while( ! encodeDone )
   {
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+  }
+
+  if( 0 != vvenc_init_pass( enc, 1, nullptr ) )
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != cVVEnc.initPass( 1 ) )
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
+  while( ! encodeDone )
   {
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
+    {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
+      return -1;
+    }
+  }
+
+  if( 0 != vvenc_encoder_close( enc ))
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
-  if( 0 != cVVEnc.uninit())
-  {
-    return -1;
-  }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
+
   return 0;
 }
 
 
 int checkSDKDefaultBehaviourRC()
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
   defaultSDKInit( vvencParams,  500000 );
-  vvencParams.m_internChromaFormat = CHROMA_420;
+  vvencParams.m_internChromaFormat = VVENC_CHROMA_420;
+  vvencParams.m_RCNumPasses = 1;
 
-  if( 0 != cVVEnc.init( vvencParams ) )
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
 
-  AccessUnit cAU;
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
 
   int validAUs = 0;
 
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone ))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
-  if( ! cAU.payload.empty()  )
+  if( AU && AU->payloadUsedSize > 0 )
   {
     validAUs++;
   }
 
   while ( !encodeDone )
   {
-    if( 0 != cVVEnc.encode( nullptr, cAU, encodeDone ))
+    if( 0 != vvenc_encode( enc, nullptr, AU, &encodeDone ))
     {
+      vvenc_YUVBuffer_free( pcYuvPicture, true );
+      vvenc_accessUnit_free( AU, true );
       return -1;
     }
 
-    if( ! cAU.payload.empty()  )
+    if( AU && AU->payloadUsedSize > 0 )
     {
       validAUs++;
     }
   }
 
-  if( 0 != cVVEnc.uninit())
+  if( 0 != vvenc_encoder_close( enc ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
 
 
   if( validAUs != 1 )
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    vvenc_accessUnit_free( AU, true );
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+  vvenc_accessUnit_free( AU, true );
 
   return 0;
 }
@@ -603,38 +790,53 @@ int testSDKDefaultBehaviour()
   return 0;
 }
 
-
-
-int inputBufTest( YUVBuffer& cYuvPicture )
+int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
-  AccessUnit cAU;
+
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
+
+  vvencAccessUnit* AU = vvenc_accessUnit_alloc();
+  vvenc_accessUnit_alloc_payload( AU, vvencParams.m_SourceWidth*vvencParams.m_SourceHeight );
+
   bool encodeDone = false;
-  if( 0 != cVVEnc.encode( &cYuvPicture, cAU, encodeDone))
+  if( 0 != vvenc_encode( enc, pcYuvPicture, AU, &encodeDone))
   {
     return -1;
   }
-  if( 0 != cVVEnc.uninit())
+
+  if( 0 != vvenc_encoder_close( enc ))
   {
     return -1;
   }
+
+  vvenc_accessUnit_free( AU, true );
+
   return 0;
 }
 
 
 int invaildInputUninitialzedInputPic( )
 {
-  YUVBuffer  cYuvPicture;
-  if( 0 != inputBufTest( cYuvPicture ))
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  if( 0 != inputBufTest( pcYuvPicture ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
 
   return 0;
 }
@@ -642,15 +844,19 @@ int invaildInputUninitialzedInputPic( )
 int invaildInputInvalidPicSize( )
 {
   int16_t dummy = 0;
-  YUVBuffer  cYuvPicture;
-  cYuvPicture.planes[0].ptr = &dummy;
-  cYuvPicture.planes[1].ptr = &dummy;
-  cYuvPicture.planes[2].ptr = &dummy;
 
-  if( 0 != inputBufTest( cYuvPicture ))
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  pcYuvPicture->planes[0].ptr = &dummy;
+  pcYuvPicture->planes[1].ptr = &dummy;
+  pcYuvPicture->planes[2].ptr = &dummy;
+
+  if( 0 != inputBufTest( pcYuvPicture ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
     return -1;
   }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
 
   return 0;
 }
@@ -658,19 +864,22 @@ int invaildInputInvalidPicSize( )
 int invaildInputInvalidLumaStride( )
 {
   int16_t dummy = 0;
-  YUVBuffer  cYuvPicture;
-  cYuvPicture.planes[0].ptr = &dummy;
-  cYuvPicture.planes[1].ptr = &dummy;
-  cYuvPicture.planes[2].ptr = &dummy;
-  cYuvPicture.planes[0].width  = 176;
-  cYuvPicture.planes[0].height = 144;
-  cYuvPicture.planes[0].stride = 100;
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
 
-  if( 0 != inputBufTest( cYuvPicture ))
+  pcYuvPicture->planes[0].ptr = &dummy;
+  pcYuvPicture->planes[1].ptr = &dummy;
+  pcYuvPicture->planes[2].ptr = &dummy;
+  pcYuvPicture->planes[0].width  = 176;
+  pcYuvPicture->planes[0].height = 144;
+  pcYuvPicture->planes[0].stride = 100;
+
+  if( 0 != inputBufTest( pcYuvPicture ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
     return -1;
   }
 
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
   return 0;
 }
 
@@ -678,43 +887,63 @@ int invaildInputInvalidLumaStride( )
 int invaildInputInvalidChromaStride( )
 {
   int16_t dummy = 0;
-  YUVBuffer  cYuvPicture;
-  cYuvPicture.planes[0].ptr = &dummy;
-  cYuvPicture.planes[1].ptr = &dummy;
-  cYuvPicture.planes[2].ptr = &dummy;
-  cYuvPicture.planes[0].width  = 176;
-  cYuvPicture.planes[0].height = 144;
-  cYuvPicture.planes[0].stride = 100;
-  cYuvPicture.planes[1].width  = 88;
-  cYuvPicture.planes[1].height = 72;
-  cYuvPicture.planes[1].stride = 50;
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
 
-  if( 0 != inputBufTest( cYuvPicture ))
+  pcYuvPicture->planes[0].ptr = &dummy;
+  pcYuvPicture->planes[1].ptr = &dummy;
+  pcYuvPicture->planes[2].ptr = &dummy;
+  pcYuvPicture->planes[0].width  = 176;
+  pcYuvPicture->planes[0].height = 144;
+  pcYuvPicture->planes[0].stride = 100;
+  pcYuvPicture->planes[1].width  = 88;
+  pcYuvPicture->planes[1].height = 72;
+  pcYuvPicture->planes[1].stride = 50;
+
+  if( 0 != inputBufTest( pcYuvPicture ))
   {
+    vvenc_YUVBuffer_free( pcYuvPicture, false );
     return -1;
   }
 
+  vvenc_YUVBuffer_free( pcYuvPicture, false );
   return 0;
 }
 
 
 int invaildInputBuf( )
 {
-  VVEnc cVVEnc;
-  VVEncCfg vvencParams;
+  vvenc_config vvencParams;
   fillEncoderParameters( vvencParams );
-  if( 0 != cVVEnc.init( vvencParams ))
+
+  vvencEncoder *enc = vvenc_encoder_create();
+  if( nullptr == enc )
   {
     return -1;
   }
 
-  YUVBufferStorage cYuvPicture( vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
-  fillInputPic( cYuvPicture );
+  if( 0 != vvenc_encoder_open( enc, &vvencParams ) )
+  {
+    vvenc_encoder_close( enc );
+    return -1;
+  }
 
-  if( 0 != inputBufTest( cYuvPicture ))
+  vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
+  vvenc_YUVBuffer_alloc_buffer( pcYuvPicture, vvencParams.m_internChromaFormat, vvencParams.m_SourceWidth, vvencParams.m_SourceHeight );
+  fillInputPic( pcYuvPicture );
+
+  if( 0 != inputBufTest( pcYuvPicture ))
   {
     return -1;
   }
+
+  if( 0 != vvenc_encoder_close( enc ))
+  {
+    vvenc_YUVBuffer_free( pcYuvPicture, true );
+    return -1;
+  }
+
+  vvenc_YUVBuffer_free( pcYuvPicture, true );
+
   return 0;
 }
 

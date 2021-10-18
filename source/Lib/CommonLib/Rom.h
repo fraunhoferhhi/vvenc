@@ -106,6 +106,18 @@ extern const ScanElement* m_scanOrder[SCAN_NUMBER_OF_GROUP_TYPES][MAX_TU_SIZE_ID
 
 const ScanElement* const getScanOrder( int g, int w2, int h2 );
 
+extern const int8_t g_BcwLog2WeightBase;
+extern const int8_t g_BcwWeightBase;
+extern const int8_t g_BcwWeights[BCW_NUM];
+extern const int8_t g_BcwSearchOrder[BCW_NUM];
+extern const int8_t g_BcwCodingOrder[BCW_NUM];
+extern const int8_t g_BcwParsingOrder[BCW_NUM];
+
+class CodingStructure;
+int8_t getBcwWeight(uint8_t bcwIdx, uint8_t uhRefFrmList);
+void resetBcwCodingOrder(bool bRunDecoding, const CodingStructure &cs);
+uint32_t deriveWeightIdxBits(uint8_t bcwIdx);
+
 extern const InitGeoRom g_scanOrderRom;
 
 extern const uint32_t g_log2SbbSize[MAX_TU_SIZE_IDX][MAX_TU_SIZE_IDX][2];
@@ -197,6 +209,8 @@ extern const uint32_t g_scalingListSize [SCALING_LIST_SIZE_NUM];
 extern const uint32_t g_scalingListSizeX[SCALING_LIST_SIZE_NUM];
 
 class CodingStructure;
+
+const int g_IBCBufferSize = 256 * 128;
 
 constexpr uint8_t g_tbMax[257] = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,

@@ -155,9 +155,9 @@ public:
   void        residual_lfnst_mode       ( const CodingUnit&             cu,       CUCtx&            cuCtx );
   void        isp_mode                  ( const CodingUnit&             cu );
   void        last_sig_coeff            ( CoeffCodingContext&           cctx,     const TransformUnit& tu, ComponentID       compID );
-  void        residual_coding_subblock  ( CoeffCodingContext&           cctx,     const TCoeff*     coeff, const int stateTransTable, int& state );
+  void        residual_coding_subblock  ( CoeffCodingContext&           cctx,     const TCoeffSig*  coeff, const int stateTransTable, int& state );
   void        residual_codingTS         ( const TransformUnit&          tu,       ComponentID       compID );
-  void        residual_coding_subblockTS( CoeffCodingContext&           cctx,     const TCoeff*     coeff  );
+  void        residual_coding_subblockTS( CoeffCodingContext&           cctx,     const TCoeffSig*  coeff  );
   void        joint_cb_cr               ( const TransformUnit&          tu,       const int cbfMask );
 
 

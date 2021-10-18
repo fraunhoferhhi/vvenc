@@ -1,4 +1,102 @@
 /////////////////////////////////////////
+tag 1.2.0
+
+* libvvenc:
+  - added parameters: m_qtbttSpeedUpMode, m_numIntraModesFullRD, m_reduceIntraChromaModesFullRD, m_RCPass
+  - renamed parameters: m_bUseEarlyCU to m_useEarlyCU, m_dqThresholdVal to m_quantThresholdVal
+  - added IDR2 refresh type, which aligns the layout of the first intra period with others (using IDR_W_RADL rather than IDR_N_LP picture)
+  - added nlohmann_json as a third party lib (can be disabled with CMake variable VVENC_ENABLE_THIRDPARTY_JSON)
+  - redefined the presets
+  - improvements to single picture rate control
+  - added additional partitioning speedups
+  - improved linear ALF implementation (memory access patterns and SIMD)
+  - improved DMVR implementation
+  - improved error handling
+  - various cleanups and bugfixes
+
+* vvencapp:
+  - added command line parameters:
+    - rcstatsfile: defines the location of the to-be-written/to-be-read rate control statistics file
+    - pass: if != -1, defines which encoding pass is to be performed in case of 2-pass RC (requires rcstatsfile)
+  - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout
+
+
+* vvencFFapp:
+  - added command line parameters:
+    - RCStatsFile, Pass (analogue to vvencapp)
+    - NumIntraModesFullRD, ReduceIntraChromaModesFullRD
+  - renamed command line parameters: DQThrVal to QuantThrVal
+  - added support for yuv420_10_packed (packed 10-bit YUV) raw bitstream layout (PYUV=1)
+
+/////////////////////////////////////////
+tag 1.1.0
+
+* libvvenc:
+  - mostly about faster/fast speedups, minor improvements to other presets
+  - redefined the presets
+  - improved RC rate accuracy
+  - added tool: BCW
+  - added parameters: m_FIMMode, m_bIntegerET, (m_vvencMCTF.)MCTFSpeed, m_alfSpeed, m_IntraEstDecBit, m_BCW, m_motionEstimationSearchMethodSCC
+  - removed parameters: m_useEarlySkipDetection
+  - SCC coding: using alternative ME strategy, disabling LMCS
+  - memory reduction (storing coeffs as 16bit, single storage for displacement/affine motion models, move objects rather than copy during search, garbage collection)
+  - removed dynamic memory from partitioner
+  - SIMD search for last coeff in DQ=0 RDOQ=2
+  - combined regular and affine merge search into a single function
+  - optimized motion search
+  - RC cleanup
+  - various cleanups
+  
+* vvencapp:
+
+* vvencFFapp:
+  - added options: IntegerET, FastInferMerge, MCTFSpeed, ALFSpeed, IntraEstDecBit, BCW, FastSearchSCC
+  - removed options: ESD
+
+* bugfixes:
+  - fixed the TU-split z-partitioning
+  - fixed the ECU option
+  - fixed picture/sequence-level deblocking parameter management
+  - fixed SwitchDQP option when used with multi-threading
+  - fixed TemporalSubsampling (used in JVET AI test conditions)
+  - fixed ALF covariance accumulation domain to double when required (LMCS+ALF+Hdr=pq)
+  - fixed IDR coding with GOPSize==IntraPeriod
+  - fixed short sequence coding (<3 frames) with MCTF
+
+/////////////////////////////////////////
+tag 1.0.0
+
+* libvvenc:
+  - add pkgconfig
+  - rewriting the vvenc interface in c
+    - restructuring vvenc.h and vvencCfg.h to pure C syntax
+    - removing namespace vvenc and replacing all struct and enumx to typedefs with prefix 'vvenc'
+    - removing file vvencCfgExpert.h and integrating all expert options into single struct vvenc_config
+    - vvencCfg replacing existing lists/vector by fixed size arrays, std::strings are fixed size char arrays now
+  - added IBC
+    - added parameters m_IBCMode (0 - off, 1 - always on, 2 - on with SCC auto detection) and m_IBCFastMethod (1 - slowest with biggest gain to 6 - fastest with lowest gain)
+  - improvements to rate control based on the XPSNR model
+  - supports for generation of main10stillpicture profile bitstreams
+    
+* vvencapp:
+  - adding parameter --version to show current version
+  - changed parameter: -i/--input accepts "-" to indicate reading input from stdin
+   
+* vvencFFapp:
+  - adding parameter --version/-v to show current version
+  - vvenc::YUVWriterIf is replaced by callback function vvencRecYUVBufferCallback
+  - changed parameter: -i/--InputFile accepts "-" to indicate reading input from stdin
+  - added parameters IBC and IBCFastMethod as described in the libvvenc
+
+* bugfixes
+  - fixes #51, #47, #46, #37, #33 and many more
+  - fixed AVX2 CCALF for non-multiple of 8 picture width
+  - fixed PQ content encoding with LMCS
+  - fixed C++17 compatibility
+  - fixed level/tier auto-settings
+  - fixed FastForwardToPOC and DebugBitstram options
+
+/////////////////////////////////////////
 tag 0.3.1.0
 
 * libvvenc:

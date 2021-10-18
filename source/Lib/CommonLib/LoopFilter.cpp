@@ -411,22 +411,25 @@ void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) c
      }
   }
 
-  for (int y = 0; y < pcv.heightInCtus; y++)
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
   {
-    for (int x = 0; x < pcv.widthInCtus; x++)
+    for (int y = 0; y < pcv.heightInCtus; y++)
     {
-      const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
+      for (int x = 0; x < pcv.widthInCtus; x++)
+      {
+        const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
+        DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
+        DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
 
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-        if( currCU.Cb().valid() )
-        {
-          if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-        }
-     }
+        for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
+          if( currCU.Cb().valid() )
+          {
+            if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
+          }
+       }
+    }
   }
 
 #endif
@@ -475,28 +478,34 @@ void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) c
      }
   }
 
-  for (int y = 0; y < pcv.heightInCtus; y++)
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
   {
-    for (int x = 0; x < pcv.widthInCtus; x++)
+    for (int y = 0; y < pcv.heightInCtus; y++)
     {
-      const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
-      DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
-      DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
+      for (int x = 0; x < pcv.widthInCtus; x++)
+      {
+        const UnitArea ctuArea( pcv.chrFormat, Area( x << pcv.maxCUSizeLog2, y << pcv.maxCUSizeLog2, pcv.maxCUSize, pcv.maxCUSize ) );
+        DTRACE    ( g_trace_ctx, D_CRC, "CTU %d %d", ctuArea.Y().x, ctuArea.Y().y );
+        DTRACE_CRC( g_trace_ctx, D_CRC, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
 
-      for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
-        if( currCU.Cb().valid() )
-        {
-          if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
-          DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
-        }
-     }
+        for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
+          if( currCU.Cb().valid() )
+          {
+            if( ! currCU.Y().valid() )   DTRACE(g_trace_ctx, D_CRC, "CU chroma Pos %d %d", currCU.Cb().x, currCU.Cb().y);
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
+            DTRACE_CCRC(g_trace_ctx, D_CRC, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
+          }
+       }
+    }
   }
 #endif
 
   DTRACE_PIC_COMP(D_REC_CB_LUMA_LF,   cs, cs.getRecoBuf(), COMP_Y);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb);
-  DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cr);
+  if( pcv.chrFormat != VVENC_CHROMA_400 )
+  {
+    DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cb);
+    DTRACE_PIC_COMP(D_REC_CB_CHROMA_LF, cs, cs.getRecoBuf(), COMP_Cr);
+  }
 }
 
 void LoopFilter::loopFilterPicLine( CodingStructure &cs, const ChannelType chType, const int ctuLine, const int offset, const DeblockEdgeDir edgeDir ) const
@@ -904,7 +913,6 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
         if( lineLfpPtrV->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_VER>( *lineLfpPtrV, cu, Position{ area.x + x, area.y + y }, x ? cu : *cuP );
 
         lineLfpPtrV->bs &= ~BsSet( 3, MAX_NUM_COMP );
-
         INCX( lineLfpPtrV, lfpStride );
       }
 
@@ -930,7 +938,6 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
         if( lineLfpPtrH->filterEdge( chType ) ) xGetBoundaryStrengthSingle<EDGE_HOR>( *lineLfpPtrH, cu, Position{ area.x + x, area.y + y }, y ? cu : *cuP );
 
         lineLfpPtrH->bs &= ~BsSet( 3, MAX_NUM_COMP );
-
         INCX( lineLfpPtrH, lfpStride );
       }
 
@@ -1022,7 +1029,7 @@ void xSetMaxFilterLengthPQFromTransformSizes( const CodingUnit& cu, const Transf
     }
   }
 
-  if( start != end && !currTU.Cb().valid() )
+  if( start != end && (cu.chromaFormat == VVENC_CHROMA_400 || !currTU.Cb().valid() ))
   {
     end = CH_L;
   }
@@ -1227,7 +1234,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   const TransformUnit &tuP = cuP.firstTU->next == nullptr ? *cuP.firstTU : *CU::getTU( cuP, posP, chType ); //TODO: check this: based on chType of the current cu, because cuQ.chType and cuP.chType are not the same when local dual-tree is applied
   
   const bool hasLuma   = cuQ.Y(). valid();
-  const bool hasChroma = cuQ.Cb().valid();
+  const bool hasChroma = cuQ.blocks.size()>1 && cuQ.Cb().valid();
 
   bool cuPcIsIntra = false;
   int  chrmBS      = 2;
@@ -1274,9 +1281,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( MODE_INTRA == cuP.predMode || MODE_INTRA == cuQ.predMode )
   {
     const int edgeIdx = ( perpPos<edgeDir>( localPos ) - perpPos<edgeDir>( cuPos ) ) / 4;
-
     int bsY = ( MODE_INTRA == cuP.predMode && cuP.bdpcmM[CH_L] ) && ( MODE_INTRA == cuQ.predMode && cuQ.bdpcmM[CH_L] ) ? 0 : 2;
-
     if( cuQ.ispMode && edgeIdx )
     {
       lfp.bs |= BsSet( bsY, COMP_Y ) & bsMask;
@@ -1285,7 +1290,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     {
       lfp.bs |= ( BsSet( bsY, COMP_Y ) + BsSet( chrmBS, COMP_Cb ) + BsSet( chrmBS, COMP_Cr ) ) & bsMask;
     }
-
     return;
   }
   else if( cuPcIsIntra )
@@ -1296,7 +1300,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( ( lfp.bs & bsMask ) && ( cuP.ciip || cuQ.ciip ) )
   {
     lfp.bs |= ( BsSet( 2, COMP_Y ) + BsSet( 2, COMP_Cb ) + BsSet( 2, COMP_Cr ) ) & bsMask;
-
     return;
   }
 
@@ -1306,21 +1309,22 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( lfp.bs & bsMask )
   {
     tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Y  ) || TU::getCbf( tuP, COMP_Y  )                                   ) ? 1 : 0, COMP_Y  );
-    tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Cb ) || TU::getCbf( tuP, COMP_Cb ) || tuQ.jointCbCr || tuP.jointCbCr ) ? 1 : 0, COMP_Cb );
-    tmpBs |= BsSet( ( TU::getCbf( tuQ, COMP_Cr ) || TU::getCbf( tuP, COMP_Cr ) || tuQ.jointCbCr || tuP.jointCbCr ) ? 1 : 0, COMP_Cr );
+    if (!(MODE_INTRA != cuP.predMode && MODE_INTRA != cuQ.predMode && cuPcIsIntra) && cuQ.chromaFormat != VVENC_CHROMA_400)
+    {
+      tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cb) || TU::getCbf(tuP, COMP_Cb) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cb);
+      tmpBs |= BsSet((TU::getCbf(tuQ, COMP_Cr) || TU::getCbf(tuP, COMP_Cr) || tuQ.jointCbCr || tuP.jointCbCr) ? 1 : 0, COMP_Cr);
+    }
   }
 
   if( BsGet( tmpBs, COMP_Y ) == 1 )
   {
     lfp.bs |= tmpBs & bsMask;
-
     return;
   }
 
   if( cuP.ciip || cuQ.ciip )
   {
     lfp.bs |= 1 & bsMask;
-
     return;
   }
 
@@ -1442,7 +1446,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
     }
 
     lfp.bs |= ( uiBs + tmpBs ) & bsMask;
-
     return;
   }
 
@@ -1456,7 +1459,6 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   if( piRefP0 != piRefQ0 )
   {
     lfp.bs |= ( tmpBs + 1 ) & bsMask;
-
     return;
   }
 

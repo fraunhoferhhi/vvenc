@@ -58,6 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CodingStructure.h"
 #include "dtrace_buffer.h"
 #include "TimeProfiler.h"
+#include "SearchSpaceCounter.h"
 
 #include <stdlib.h>
 #include <memory.h>
@@ -240,7 +241,7 @@ void TrQuant::init( const Quant* otherQuant,
                     const bool scalingListsEnabled,
                     const bool bEnc,
                     const bool useTransformSkipFast,
-                    const int  dqThrVal
+                    const int  thrVal
 )
 {
   m_bEnc = bEnc;
@@ -254,7 +255,7 @@ void TrQuant::init( const Quant* otherQuant,
 
   if( m_quant )
   {
-    m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, dqThrVal );
+    m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, thrVal );
   }
 }
 
@@ -643,6 +644,10 @@ void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBu
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_QUANT, tu.cs, toChannelType(compID) );
   m_quant->quant( tu, compID, pSrc, uiAbsSum, cQP, ctx );
+#if ENABLE_MEASURE_SEARCH_SPACE
+
+  g_searchSpaceAcc.addQuant( tu, toChannelType( compID ) );
+#endif
 }
 
 

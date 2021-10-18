@@ -60,7 +60,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class VVEncCfg;
 class NoMallocThreadPool;
 
 struct AlfCovariance
@@ -80,8 +79,9 @@ public:
   TKy y;
   TKE E;
   double pixAcc;
+  bool all0;
 
-  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ) {}
+  AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true ) {}
   ~AlfCovariance() { }
 
   void create( int size, int num_bins )
@@ -125,6 +125,7 @@ public:
   void reset()
   {
     pixAcc = 0;
+    all0   = true;
 
     for( int i = 0; i < _numBinsAlloc; i++ )
     {
@@ -159,6 +160,7 @@ public:
     }
 
     pixAcc = src.pixAcc;
+    all0   = src.all0;
 
     return *this;
   }
@@ -206,6 +208,7 @@ public:
 
     numCoeff = lhs.numCoeff;
     numBins  = lhs.numBins;
+    all0     = lhs.all0 & rhs.all0;
 
     for( int b0 = 0; b0 < numBins; b0++ )
     {
@@ -230,6 +233,7 @@ public:
     }
 
     pixAcc = lhs.pixAcc + rhs.pixAcc;
+    all0   = lhs.all0 && rhs.all0;
   }
 
   const AlfCovariance& operator+= ( const AlfCovariance& src )
@@ -257,6 +261,7 @@ public:
     }
 
     pixAcc += src.pixAcc;
+    all0   &= src.all0;
 
     return *this;
   }
@@ -286,6 +291,7 @@ public:
     }
 
     pixAcc -= src.pixAcc;
+    all0   &= src.all0;
 
     return *this;
   }
@@ -348,7 +354,7 @@ public:
 private:
   std::vector<double>    m_lumaLevelToWeightPLUT;
   int                    m_alfWSSD;
-  const VVEncCfg*        m_encCfg;
+  const VVEncCfg*    m_encCfg;
   AlfCovariance***       m_alfCovariance[MAX_NUM_COMP];          // [compIdx][shapeIdx][ctbAddr][classIdx]
   AlfCovariance**        m_alfCovarianceFrame[MAX_NUM_CH];   // [CHANNEL][shapeIdx][lumaClassIdx/chromaAltIdx]
   uint8_t*               m_ctuEnableFlagTmp[MAX_NUM_COMP];
@@ -409,14 +415,15 @@ public:
   int  getApsIdStart                () { return m_apsIdStart; }
   void getStatisticsCTU             ( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr );
 
-  void performCCALF                 ( Picture& pic, CodingStructure& cs );
+  void copyCTUForCCALF     ( CodingStructure& cs, int ctuPosX, int ctuPosY );
+  void deriveStatsForCcAlfFilteringCTU( CodingStructure& cs, const int compIdx, int ctuIdx );
+  void deriveCcAlfFilter            ( Picture& pic, CodingStructure& cs );
   void deriveFilter                 ( Picture& pic, CodingStructure& cs, const double* lambdas );
   void reconstructCTU_MT            ( Picture& pic, CodingStructure& cs, int ctuRsAddr );
   void reconstructCTU               ( Picture& pic, CodingStructure& cs, const CPelUnitBuf& recBuf, int ctuRsAddr );
   void alfReconstructor             ( CodingStructure& cs );
   void getStatisticsFrame           ( Picture& pic, CodingStructure& cs );
-  void resetFrameStats              ();
-
+  void resetFrameStats              ( bool ccAlfEnabled );
 private:
   void   alfEncoder              ( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight );
 
@@ -428,13 +435,14 @@ private:
   void   getPreBlkStats          ( AlfCovariance* alfCovariace, const AlfFilterShape& shape, AlfClassifier* classifier, Pel* org, const int orgStride, Pel* rec, const int recStride, const CompArea& areaDst, const CompArea& area, const ChannelType channel, int vbCTUHeight, int vbPos);
   void   calcCovariance          ( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance);
   template < bool clipToBdry >
-  void   calcLinCovariance       ( int* ELocal, const Pel* rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, int clipTopRow, int clipBotRow );
-  void   deriveStatsForCcAlfFiltering(const PelUnitBuf &orgYuv, const PelUnitBuf &recYuv, const int compIdx,
-                                      const int maskStride, const uint8_t filterIdc, CodingStructure &cs);
-  void   getBlkStatsCcAlf        ( AlfCovariance &alfCovariance, const AlfFilterShape &shape, const PelUnitBuf &orgYuv,
+  void   calcLinCovariance4      ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+  template < bool clipToBdry >
+  void   calcLinCovariance       ( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+  void   getBlkStatsCcAlf        ( AlfCovariance& alfCovariance, const AlfFilterShape& shape, const PelUnitBuf& orgYuv,
                                    const PelUnitBuf &recYuv, const UnitArea &areaDst, const UnitArea &area,
                                    const ComponentID compID, const int yPos);
-  void   calcCovarianceCcAlf     ( int ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][1], const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance);
+  void   calcCovarianceCcAlf     ( Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF], const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance);
+  void   calcCovariance4CcAlf    ( Pel ELocal[MAX_NUM_CC_ALF_CHROMA_COEFF][16], const int N, const Pel* rec, const int stride, const AlfFilterShape& shape, int vbDistance);
   void   mergeClasses            ( const AlfFilterShape& alfShape, AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], const int numClasses, short filterIndices[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES]);
 
 
