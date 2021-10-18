@@ -394,11 +394,11 @@ void MCTF::filter( Picture* pic )
   {
     int threshold = (m_MCTFSpeedVal>>(idx*2))&3;
     isFilterThisFrame = threshold < 2;
-    dropFrames        = threshold & 1;
+    dropFrames        = ( threshold & 1 ) << 1;
   }
 
   Picture* fltrPic = nullptr;
-  for ( int idx = 0; idx < m_picFifo.size(); idx++ )
+  for ( idx = 0; idx < m_picFifo.size(); idx++ )
   {
     if ( m_picFifo[ idx ]->poc == process_poc )
     {
@@ -406,6 +406,10 @@ void MCTF::filter( Picture* pic )
       break;
     }
   }
+
+  int dropFramesFront = idx == 0 ? 0 : dropFrames;
+  int dropFramesBack  = idx == m_picFifo.size() - 1 ? 0 : dropFrames;
+
   if( !fltrPic->useScMCTF )
   {
     isFilterThisFrame = false;
@@ -425,7 +429,7 @@ void MCTF::filter( Picture* pic )
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
-    for ( int idx = dropFrames; idx < m_picFifo.size()-dropFrames; idx++ )
+    for ( idx = dropFramesFront; idx < m_picFifo.size() - dropFramesBack; idx++ )
     {
       Picture* curPic = m_picFifo[ idx ];
       if ( curPic->poc == process_poc )
