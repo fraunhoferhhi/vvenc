@@ -220,19 +220,18 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
       const __m128i xsrc4 = _mm_loadu_si128( ( const __m128i * ) &rowStart[5] );
       const __m128i xsrc5 = _mm_loadu_si128( ( const __m128i * ) &rowStart[6] );
 
-      __m256i vsrc0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc0, xsrc1 ) ),
-                                                                       _mm_unpackhi_epi16( xsrc0, xsrc1 ), 1 );
-      __m256i vsrc1 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc2, xsrc3  ) ),
-                                                                       _mm_unpackhi_epi16( xsrc2, xsrc3 ), 1 );
-      __m256i vsrc2 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc4, xsrc5 ) ),
-                                                                       _mm_unpackhi_epi16( xsrc4, xsrc5 ), 1 );
+      const __m256i vsrc0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc0, xsrc1 ) ),
+                                                                             _mm_unpackhi_epi16( xsrc0, xsrc1 ), 1 );
+      const __m256i vsrc1 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc2, xsrc3  ) ),
+                                                                             _mm_unpackhi_epi16( xsrc2, xsrc3 ), 1 );
+      const __m256i vsrc2 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc4, xsrc5 ) ),
+                                                                             _mm_unpackhi_epi16( xsrc4, xsrc5 ), 1 );
 
-      vsrc0 = _mm256_madd_epi16( vsrc0, hfilt12 );
-      vsrc1 = _mm256_madd_epi16( vsrc1, hfilt34 );
-      vsrc2 = _mm256_madd_epi16( vsrc2, hfilt56 );
-
-      vsrc0 = _mm256_add_epi32( vsrc0, vsrc1 );
-      vsrc0 = _mm256_add_epi32( vsrc0, vsrc2 );
+      __m256i
+      vsum = _mm256_set1_epi32( 1 << 5 );
+      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vsrc0, hfilt12 ) );
+      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vsrc1, hfilt34 ) );
+      vsum = _mm256_add_epi32( vsum, _mm256_madd_epi16( vsrc2, hfilt56 ) );
 #else
       __m256i vsrc0 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[0] ) );
       __m256i vsrc1 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[1] ) );
@@ -253,10 +252,10 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
       vsrc2 = _mm256_hadd_epi32( vsrc2, vsrc3 );
 
       vsrc0 = _mm256_hadd_epi32( vsrc0, vsrc2 );
-#endif
 
       __m256i
-      vsum = _mm256_add_epi32  ( vsrc0, _mm256_set1_epi32( 1 << 5 ) );
+      vsum = _mm256_add_epi32  ( vsrc0, );
+#endif
       vsum = _mm256_srai_epi32 ( vsum,  6 );
       vsum = _mm256_min_epi32  ( vmax,  _mm256_max_epi32( vmin, vsum ) );
 
