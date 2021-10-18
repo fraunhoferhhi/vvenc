@@ -188,14 +188,16 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
   const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
 
 #if USE_AVX2
-  __m256i vfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[1] ), _mm256_set1_epi16( yFilter[2] ) );
-  __m256i vfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[3] ), _mm256_set1_epi16( yFilter[4] ) );
-  __m256i vfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[5] ), _mm256_set1_epi16( yFilter[6] ) );
+  const __m256i vfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[1] ), _mm256_set1_epi16( yFilter[2] ) );
+  const __m256i vfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[3] ), _mm256_set1_epi16( yFilter[4] ) );
+  const __m256i vfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[5] ), _mm256_set1_epi16( yFilter[6] ) );
 
-  __m256i vfilt1 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) xFilter ) );
-          vfilt1 = _mm256_inserti128_si256( vfilt1, _mm256_castsi256_si128( vfilt1 ), 1 );
-  __m256i vmax   = _mm256_set1_epi32( maxSampleValue );
-  __m256i vmin   = _mm256_setzero_si256();
+  const __m256i hfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[1] ), _mm256_set1_epi16( xFilter[2] ) );
+  const __m256i hfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[3] ), _mm256_set1_epi16( xFilter[4] ) );
+  const __m256i hfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[5] ), _mm256_set1_epi16( xFilter[6] ) );
+
+  const __m256i vmax   = _mm256_set1_epi32( maxSampleValue );
+  const __m256i vmin   = _mm256_setzero_si256();
   
   const int yOffset    = y + 1 + ( dy >> 4 ) - 3;
   const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
@@ -210,6 +212,28 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
 
     for( int y1 = 1; y1 < bs + 6; y1++, rowStart += buffStride )
     {
+#if 1
+      const __m128i xsrc0 = _mm_loadu_si128( ( const __m128i * ) &rowStart[1] );
+      const __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &rowStart[2] );
+      const __m128i xsrc2 = _mm_loadu_si128( ( const __m128i * ) &rowStart[3] );
+      const __m128i xsrc3 = _mm_loadu_si128( ( const __m128i * ) &rowStart[4] );
+      const __m128i xsrc4 = _mm_loadu_si128( ( const __m128i * ) &rowStart[5] );
+      const __m128i xsrc5 = _mm_loadu_si128( ( const __m128i * ) &rowStart[6] );
+
+      __m256i vsrc0 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc0, xsrc1 ) ),
+                                                                       _mm_unpackhi_epi16( xsrc0, xsrc1 ), 1 );
+      __m256i vsrc1 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc2, xsrc3  ) ),
+                                                                       _mm_unpackhi_epi16( xsrc2, xsrc3 ), 1 );
+      __m256i vsrc2 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc4, xsrc5 ) ),
+                                                                       _mm_unpackhi_epi16( xsrc4, xsrc5 ), 1 );
+
+      vsrc0 = _mm256_madd_epi16( vsrc0, hfilt12 );
+      vsrc1 = _mm256_madd_epi16( vsrc1, hfilt34 );
+      vsrc2 = _mm256_madd_epi16( vsrc2, hfilt56 );
+
+      vsrc0 = _mm256_add_epi32( vsrc0, vsrc1 );
+      vsrc0 = _mm256_add_epi32( vsrc0, vsrc2 );
+#else
       __m256i vsrc0 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[0] ) );
       __m256i vsrc1 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[1] ) );
       __m256i vsrc2 = _mm256_castsi128_si256( _mm_loadu_si128( ( const __m128i * ) &rowStart[2] ) );
@@ -229,6 +253,7 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
       vsrc2 = _mm256_hadd_epi32( vsrc2, vsrc3 );
 
       vsrc0 = _mm256_hadd_epi32( vsrc0, vsrc2 );
+#endif
 
       __m256i
       vsum = _mm256_add_epi32  ( vsrc0, _mm256_set1_epi32( 1 << 5 ) );
@@ -247,7 +272,7 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
         xsrc[4] = xsrc[5];
         xsrc[5] = xsum;
 
-        __m256i vsrc12 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc[0], xsrc[1] ) ),
+        __m256i vsrc12 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc[0], xsrc[1] ) ), 
                                                                           _mm_unpackhi_epi16( xsrc[0], xsrc[1] ), 1 );
         __m256i vsrc34 = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_unpacklo_epi16( xsrc[2], xsrc[3] ) ),
                                                                           _mm_unpackhi_epi16( xsrc[2], xsrc[3] ), 1 );
