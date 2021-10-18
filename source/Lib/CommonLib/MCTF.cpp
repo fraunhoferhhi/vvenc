@@ -911,10 +911,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
     Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
     for (int y = yOut; y < std::min(yOut+blkSizeY,height); y++, srcPelRow+=srcStride, dstPelRow+=dstStride)
     {
+      const int yBlkAddr = y / blkSizeY;
+
       const Pel* srcPel=srcPelRow;
       Pel* dstPel=dstPelRow;
       for (int x = 0; x < width; x++, srcPel++, dstPel++)
       {
+        const int xBlkAddr = x / blkSizeX;
         const int orgVal = (int) *srcPel;
         double temporalWeightSum = 1.0;
         double newVal = (double) orgVal;
@@ -923,7 +926,8 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
         {
           for( int i = 0; i < numRefs; i++ )
           {
-            double variance = 0, diffsum = 0;
+            const PelBuf& corrBuf = correctedPics[i].bufs[c];
+            int64_t variance = 0, diffsum = 0;
             for( int y1 = 0; y1 < blkSizeY - 1; y1++ )
             {
               for( int x1 = 0; x1 < blkSizeX - 1; x1++ )
@@ -931,9 +935,9 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
                 int pix =  srcPel[x1];
                 int pixR = srcPel[x1 + 1];
                 int pixD = srcPel[x1 + srcStride];
-                int ref =  correctedPics[i].bufs[c].buf[( ( y + y1     ) * correctedPics[i].bufs[c].stride + x + x1 )];
-                int refR = correctedPics[i].bufs[c].buf[( ( y + y1     ) * correctedPics[i].bufs[c].stride + x + x1 + 1 )];
-                int refD = correctedPics[i].bufs[c].buf[( ( y + y1 + 1 ) * correctedPics[i].bufs[c].stride + x + x1 )];
+                int ref =  corrBuf.buf[( ( y + y1     ) * corrBuf.stride + x + x1 )];
+                int refR = corrBuf.buf[( ( y + y1     ) * corrBuf.stride + x + x1 + 1 )];
+                int refD = corrBuf.buf[( ( y + y1 + 1 ) * corrBuf.stride + x + x1 )];
 
                 int diff = pix - ref;
                 int diffR = pixR - refR;
@@ -944,21 +948,22 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
                 diffsum += ( diffD - diff ) * ( diffD - diff );
               }
             }
-            srcFrameInfo[i].mvs.get( x / blkSizeX, y / blkSizeY ).noise = ( int ) round( ( 300 * variance + 50 ) / ( 10 * diffsum + 50 ) );
+            srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 300 * variance + 50 ) / ( 10 * diffsum + 50 ) );
           }
         }
         double minError = 9999999;
         for( int i = 0; i < numRefs; i++ )
         {
-          minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( x / blkSizeX, y / blkSizeY ).error );
+          minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error );
         }
 #endif
 
         for (int i = 0; i < numRefs; i++)
         {
 #if JVET_V0056_MCTF
-          const int error = srcFrameInfo[i].mvs.get( x / blkSizeX, y / blkSizeY ).error;
-          const int noise = srcFrameInfo[i].mvs.get( x / blkSizeX, y / blkSizeY ).noise;
+          const MotionVector& mv = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr );
+          const int error = mv.error;
+          const int noise = mv.noise;
 #endif
           const Pel*   pCorrectedPelPtr=correctedPics[i].bufs[c].buf+(y*correctedPics[i].bufs[c].stride+x);
           const int    refVal = (int) *pCorrectedPelPtr;
