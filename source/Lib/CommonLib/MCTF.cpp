@@ -458,7 +458,11 @@ void MCTF::filter( Picture* pic )
         motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, 8, &mv_2, 1, true);
       }
 
+#if JVET_V0056_MCTF
+      srcPic.index = std::min(3, std::abs(curPic->poc - process_poc) - 1);
+#else
       srcPic.index = std::min(1, std::abs(curPic->poc - process_poc) - 1);
+#endif
     }
 
     // filter
@@ -977,7 +981,8 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
           ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
           sw *= ( error < 50 ) ? 1.0 : 0.8;
           ww *= ( ( minError + 1 ) / ( error + 1 ) );
-          double weight = weightScaling * m_refStrengths[refStrengthRow][i] * ww * fastExp( -diffSq / ( 2 * sw * sigmaSq ) );
+          const int index = srcFrameInfo[i].index;
+          double weight = weightScaling * m_refStrengths[refStrengthRow][index] * ww * fastExp( -diffSq / ( 2 * sw * sigmaSq ) );
 #else
           const double weight = refStrength[i] * exp(-diffSq / (2 * sigmaSq));
 #endif

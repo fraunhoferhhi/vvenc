@@ -111,17 +111,10 @@ public:
 
 struct TemporalFilterSourcePicInfo
 {
-#if JVET_V0056_MCTF && 0
-  TemporalFilterSourcePicInfo() : picBuffer(), mvs(), index(0), origOffset(0) { }
-#else
   TemporalFilterSourcePicInfo() : picBuffer(), mvs(), index(0) { }
-#endif
   PelStorage            picBuffer;
   Array2D<MotionVector> mvs;
   int                   index;
-#if JVET_V0056_MCTF && 0
-  int                   origOffset;
-#endif
 };
 
 // ====================================================================================================================
