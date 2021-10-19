@@ -403,6 +403,87 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
     }
     else
 #endif
+    if( iRows == 16 && ( iWidth == 16 || iWidth == 8 ) && iSubShift == 1 && rcDtParam.bitDepth <= 10 )
+    {
+      static constexpr bool isWdt16 = iWidth >= 16;
+
+      __m128i vone   = _mm_set1_epi16( 1 );
+      __m128i vsum32 = _mm_setzero_si128();
+
+      for( int i = 0; i < 2; i++ )
+      {
+        //0
+        __m128i vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1) );
+        __m128i vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2) );
+
+        __m128i vsum16 = _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) );
+
+        if( isWdt16 )
+        {
+          vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1 + 8) );
+          vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2 + 8) );
+
+          vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+        }
+
+        pSrc1 += iStrideSrc1; pSrc2 += iStrideSrc2;
+
+        // 1
+        vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1) );
+        vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2) );
+
+        vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+
+        if( isWdt16 )
+        {
+          vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1 + 8) );
+          vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2 + 8) );
+
+          vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+        }
+
+        pSrc1 += iStrideSrc1; pSrc2 += iStrideSrc2;
+
+        // 2
+        vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1) );
+        vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2) );
+
+        vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+
+        if( isWdt16 )
+        {
+          vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1 + 8) );
+          vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2 + 8) );
+
+          vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+        }
+
+        pSrc1 += iStrideSrc1; pSrc2 += iStrideSrc2;
+
+        // 3
+        vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1) );
+        vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2) );
+
+        vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+
+        if( isWdt16 )
+        {
+          vsrc1 = _mm_loadu_si128( (const __m128i*)(pSrc1 + 8) );
+          vsrc2 = _mm_loadu_si128( (const __m128i*)(pSrc2 + 8) );
+
+          vsum16 = _mm_add_epi16( vsum16, _mm_abs_epi16( _mm_sub_epi16( vsrc1, vsrc2 ) ) );
+        }
+
+        pSrc1 += iStrideSrc1; pSrc2 += iStrideSrc2;
+
+        vsum32 = _mm_add_epi32( vsum32, _mm_madd_epi16( vsum16, vone ) );
+      }
+
+      vsum32 = _mm_hadd_epi32( vsum32, vone );
+      vsum32 = _mm_hadd_epi32( vsum32, vone );
+      uiSum = _mm_cvtsi128_si32( vsum32 );
+    }
+    else
     {
       // For width that multiple of 8
       __m128i vone   = _mm_set1_epi16( 1 );
