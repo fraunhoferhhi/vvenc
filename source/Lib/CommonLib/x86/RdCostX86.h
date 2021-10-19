@@ -482,6 +482,9 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
       vsum32 = _mm_hadd_epi32( vsum32, vone );
       vsum32 = _mm_hadd_epi32( vsum32, vone );
       uiSum = _mm_cvtsi128_si32( vsum32 );
+
+      uiSum <<= 1;
+      return uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
     }
     else
     {
