@@ -910,7 +910,6 @@ struct PPS
   uint32_t               numSlicesInPic;               //!< number of rectangular slices in the picture (raster-scan slice specified at slice level)
   bool                   tileIdxDeltaPresent;          //!< tile index delta present flag
 
-  std::vector<RectSlice> rectSlices;                  //!< list of rectangular slice signalling parameters
   std::vector<SliceMap>  sliceMap;                     //!< list of CTU maps for each slice in the picture
   std::vector<SubPic>    subPics;                      //!< list of subpictures in the picture
 

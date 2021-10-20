@@ -1826,15 +1826,10 @@ void PPS::initRectSliceMap( const SPS* sps )
 
   sliceMap[0].initSliceMap();
   
-  uint32_t tileX = 0, tileY = 0;
-  rectSlices[0].tileIdx            = 0;
-  rectSlices[0].sliceWidthInTiles  = numTileCols;
-  rectSlices[0].sliceHeightInTiles = numTileRows;
-  rectSlices[0].numSlicesInTile    = 1;
-  
-  for( uint32_t j = 0; j < rectSlices[0].sliceHeightInTiles; j++ )
+  uint32_t tileX = 0, tileY = 0;  
+  for( uint32_t j = 0; j < numTileRows; j++ )
   {
-    for( uint32_t k = 0; k < rectSlices[0].sliceWidthInTiles; k++ )
+    for( uint32_t k = 0; k < numTileCols; k++ )
     {
       sliceMap[0].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
                                   tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
