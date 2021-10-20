@@ -374,16 +374,16 @@ struct SliceMap
   }
 };
 
-//struct RectSlice
-//{
-//  uint32_t         tileIdx;                           //!< tile index corresponding to the first CTU in the slice
-//  uint32_t         sliceWidthInTiles;                 //!< slice width in units of tiles
-//  uint32_t         sliceHeightInTiles;                //!< slice height in units of tiles
-//  uint32_t         numSlicesInTile;                   //!< number of slices in current tile for the special case of multiple slices inside a single tile
-//  uint32_t         sliceHeightInCtu;                  //!< slice height in units of CTUs for the special case of multiple slices inside a single tile
-//
-//  RectSlice()  {}
-//};
+struct RectSlice
+{
+  uint32_t         tileIdx;                           //!< tile index corresponding to the first CTU in the slice
+  uint32_t         sliceWidthInTiles;                 //!< slice width in units of tiles
+  uint32_t         sliceHeightInTiles;                //!< slice height in units of tiles
+  uint32_t         numSlicesInTile;                   //!< number of slices in current tile for the special case of multiple slices inside a single tile
+  uint32_t         sliceHeightInCtu;                  //!< slice height in units of CTUs for the special case of multiple slices inside a single tile
+
+  RectSlice()  {}
+};
 
 struct SubPic
 {
@@ -909,11 +909,8 @@ struct PPS
   std::vector<uint32_t>  ctuToSubPicIdx;               //!< mapping between CTU and Sub-picture index
   uint32_t               numSlicesInPic;               //!< number of rectangular slices in the picture (raster-scan slice specified at slice level)
   bool                   tileIdxDeltaPresent;          //!< tile index delta present flag
-#if 1
-  std::vector<vvencRectSlice> rectSlices;                  //!< list of rectangular slice signalling parameters
-#else
-  RectSlice              rectSliceStruct;
-#endif
+
+  std::vector<RectSlice> rectSlices;                  //!< list of rectangular slice signalling parameters
   std::vector<SliceMap>  sliceMap;                     //!< list of CTU maps for each slice in the picture
   std::vector<SubPic>    subPics;                      //!< list of subpictures in the picture
 
