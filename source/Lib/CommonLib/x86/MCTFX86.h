@@ -192,7 +192,7 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
   const __m256i vfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[3] ), _mm256_set1_epi16( yFilter[4] ) );
   const __m256i vfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( yFilter[5] ), _mm256_set1_epi16( yFilter[6] ) );
 
-#if 1
+#if 0
   const __m256i hfilt12 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[1] ), _mm256_set1_epi16( xFilter[2] ) );
   const __m256i hfilt34 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[3] ), _mm256_set1_epi16( xFilter[4] ) );
   const __m256i hfilt56 = _mm256_unpacklo_epi16( _mm256_set1_epi16( xFilter[5] ), _mm256_set1_epi16( xFilter[6] ) );
@@ -217,7 +217,7 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
 
     for( int y1 = 1; y1 < bs + 6; y1++, rowStart += buffStride )
     {
-#if 1
+#if 0
       const __m128i xsrc0 = _mm_loadu_si128( ( const __m128i * ) &rowStart[1] );
       const __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &rowStart[2] );
       const __m128i xsrc2 = _mm_loadu_si128( ( const __m128i * ) &rowStart[3] );
