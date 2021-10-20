@@ -1824,58 +1824,23 @@ void PPS::initRectSliceMap( const SPS* sps )
   CHECK( numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
   sliceMap.resize( numSlicesInPic );
 
-#if 1
-    uint32_t tileX = 0, tileY = 0;
-    for( uint32_t i = 0; i < numSlicesInPic; i++ )
-    {
-      sliceMap[i].initSliceMap();
-      
-      // get position of first tile in slice
-      tileX =  rectSlices[ i ].tileIdx % numTileCols;
-      tileY =  rectSlices[ i ].tileIdx / numTileCols;
-
-      // infer slice size for last slice in picture
-      if( i == numSlicesInPic-1 )
-      {
-        rectSlices[ i ].sliceWidthInTiles  = numTileCols - tileX;
-        rectSlices[ i ].sliceHeightInTiles = numTileRows - tileY;
-        rectSlices[ i ].numSlicesInTile    = 1;
-      }
-
-      // set slice index
-      sliceMap[ i ].sliceID = i;
-      
-      // complete tiles within a single slice case
-      if( rectSlices[ i ].sliceWidthInTiles > 1 || rectSlices[ i ].sliceHeightInTiles > 1 )
-      {
-        for( uint32_t j = 0; j < rectSlices[ i ].sliceHeightInTiles; j++ )
-        {
-          for( uint32_t k = 0; k < rectSlices[ i ].sliceWidthInTiles; k++ )
-          {
-            sliceMap[ i ].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
-                                          tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
-          }
-        }
-      }
-  }
-#else
   sliceMap[0].initSliceMap();
   
   uint32_t tileX = 0, tileY = 0;
-  rectSliceStruct.tileIdx            = 0;
-  rectSliceStruct.sliceWidthInTiles  = numTileCols;
-  rectSliceStruct.sliceHeightInTiles = numTileRows;
-  rectSliceStruct.numSlicesInTile    = 1;
+  rectSlices[0].tileIdx            = 0;
+  rectSlices[0].sliceWidthInTiles  = numTileCols;
+  rectSlices[0].sliceHeightInTiles = numTileRows;
+  rectSlices[0].numSlicesInTile    = 1;
   
-  for( uint32_t j = 0; j < rectSliceStruct.sliceHeightInTiles; j++ )
+  for( uint32_t j = 0; j < rectSlices[0].sliceHeightInTiles; j++ )
   {
-    for( uint32_t k = 0; k < rectSliceStruct.sliceWidthInTiles; k++ )
+    for( uint32_t k = 0; k < rectSlices[0].sliceWidthInTiles; k++ )
     {
       sliceMap[0].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
                                   tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
     }
   }
-#endif
+
   checkSliceMap();
 }
 
