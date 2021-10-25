@@ -409,8 +409,8 @@ void MCTF::filter( Picture* pic )
 
   const int filterFrames = VVENC_MCTF_RANGE - dropFrames;
 
-  int dropFramesFront = std::min( std::max<int>(                        idx - filterFrames, 0 ), dropFrames );
-  int dropFramesBack  = std::min( std::max<int>( m_picFifo.size() - 1 - idx - filterFrames, 0 ), dropFrames );
+  int dropFramesFront = std::min( std::max(                                            idx - filterFrames, 0 ), dropFrames );
+  int dropFramesBack  = std::min( std::max( static_cast<int>( m_picFifo.size() ) - 1 - idx - filterFrames, 0 ), dropFrames );
 
   if( !fltrPic->useScMCTF )
   {
