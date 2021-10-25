@@ -101,7 +101,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   m_cBckCfg = encCfg;
 
   // initialize first pass
-  initPass( 0 );
+  initPass( 0, nullptr );
 
 #if ENABLE_TRACING
   g_trace_ctx = tracing_init( m_cEncCfg.m_traceFile, m_cEncCfg.m_traceRule );
@@ -216,9 +216,12 @@ void EncLib::uninitEncoderLib()
 #endif
 }
 
-void EncLib::initPass( int pass )
+void EncLib::initPass( int pass, const char* statsFName )
 {
   CHECK( m_numPassInitialized != pass && m_numPassInitialized + 1 != pass, "initialization of passes only in successive order possible" );
+
+  // set rate control pass
+  m_cRateCtrl.setRCPass( m_cEncCfg, pass, statsFName );
 
   if( m_numPassInitialized + 1 != pass )
   {
@@ -226,9 +229,6 @@ void EncLib::initPass( int pass )
   }
 
   xUninitLib();
-
-  // set rate control pass
-  m_cRateCtrl.setRCPass( pass, m_cEncCfg.m_RCNumPasses - 1 );
 
   // modify encoder config based on rate control pass
   if( m_cEncCfg.m_RCNumPasses > 1 )
@@ -285,8 +285,7 @@ void EncLib::initPass( int pass )
 
   if ( m_cEncCfg.m_RCTargetBitrate > 0 )
   {
-    m_cRateCtrl.init( m_cEncCfg.m_framesToBeEncoded, m_cEncCfg.m_RCTargetBitrate, (int)( (double)m_cEncCfg.m_FrameRate / m_cEncCfg.m_temporalSubsampleRatio + 0.5 ), m_cEncCfg.m_IntraPeriod, m_cEncCfg.m_GOPSize, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight,
-      m_cEncCfg.m_CTUSize, m_cEncCfg.m_CTUSize, m_cEncCfg.m_internalBitDepth[ CH_L ], m_cEncCfg.m_GOPList, m_cEncCfg.m_maxParallelFrames );
+    m_cRateCtrl.init( m_cEncCfg );
 
     if ( pass == 1 )
     {
@@ -503,8 +502,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
     // update current poc
     m_pocEncode = xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, m_cEncCfg.m_DecodingRefreshType == 4 );
-
-    if ((m_cEncCfg.m_RCNumPasses == 2) && (m_cRateCtrl.flushPOC < 0) && flush) m_cRateCtrl.flushPOC = m_pocEncode;
 
     std::vector<Picture*> encList;
     xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList, m_cEncCfg.m_DecodingRefreshType == 4 );
@@ -1361,9 +1358,9 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
     int SizeS = SIZE_BL << 1;
     int sR[4] = { 0,0,0,0 };
     int AmountBlock = (uiWidth >> 2) * (uiHeight >> 2);
-    for (hh = 0; hh < uiHeight;)
+    for (hh = 0; hh < uiHeight; hh += SizeS)
     {
-      for (ww = 0; ww < uiWidth;)
+      for (ww = 0; ww < uiWidth; ww += SizeS)
       {
         int Rx = ww > (uiWidth >> 1) ? 1 : 0;
         int Ry = hh > (uiHeight >> 1) ? 1 : 0;
@@ -1373,9 +1370,9 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
         int j = hh;
         int n = 0;
         int Var[4];
-        for (j = hh; (j < hh + SizeS) && (j < uiHeight); j++)
+        for (j = hh; (j < hh + SizeS) && (j < uiHeight); j += size)
         {
-          for (i = ww; (i < ww + SizeS) && (i < uiWidth); i++)
+          for (i = ww; (i < ww + SizeS) && (i < uiWidth); i += size)
           {
             int sum = 0;
             int Mit = 0;
@@ -1402,9 +1399,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
             V = V / sizeEnd;
             Var[n] = V;
             n++;
-            i += size;
           }
-          j += size;
         }
         for (int i = 0; i < 2; i++)
         {
@@ -1417,9 +1412,7 @@ void EncLib::xDetectScreenC(Picture& pic, PelUnitBuf yuvOrgBuf)
             sR[Ry] += 1;
           }
         }
-        ww += SizeS;
       }
-      hh += SizeS;
     }
     int s = 0;
     isSccStrg = true;
