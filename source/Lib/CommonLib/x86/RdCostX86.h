@@ -2607,52 +2607,63 @@ static Distortion lumaWeightedSSE_SIMD( const DistParam& rcDtParam, ChromaFormat
   
   if( ( iCols & 7 ) == 0 )
   {
-    const __m128i xoffs = _mm_set1_epi32( 1 << 15 );
-    const __m128i xzero = _mm_setzero_si128();
+    const __m128i xoffs = _mm_set1_epi64x( 1 << 15 );
           __m128i xsum  = _mm_setzero_si128();
 
     for( ; iRows != 0; iRows-- )
     {
       for (int n = 0; n < iCols; n += 8 )
       {
-        const uint32_t weight1[4] = { lumaWeights[piOrgLuma[(n  )<<csx]],
-                                      lumaWeights[piOrgLuma[(n+1)<<csx]],
-                                      lumaWeights[piOrgLuma[(n+2)<<csx]], 
-                                      lumaWeights[piOrgLuma[(n+3)<<csx]] };
-        
-        const uint32_t weight2[4] = { lumaWeights[piOrgLuma[(n+4)<<csx]],
-                                      lumaWeights[piOrgLuma[(n+5)<<csx]],
-                                      lumaWeights[piOrgLuma[(n+6)<<csx]], 
-                                      lumaWeights[piOrgLuma[(n+7)<<csx]] };
+        const int o = n<<csx;
         
         __m128i xorg = _mm_loadu_si128( ( const __m128i* ) &piOrg[n] );
         __m128i xcur = _mm_loadu_si128( ( const __m128i* ) &piCur[n] );
         
         xcur = _mm_sub_epi16     ( xorg, xcur );
 
-        __m128i
+        const __m128i
         xmlo = _mm_mullo_epi16   ( xcur, xcur ),
         xmhi = _mm_mulhi_epi16   ( xcur, xcur );
 
         __m128i
-        xwgt = _mm_loadu_si128   ( ( const __m128i* ) weight1 );
+        xwgt = _mm_setr_epi32    ( lumaWeights[piOrgLuma[o+(0<<csx)]],
+                                   lumaWeights[piOrgLuma[o+(2<<csx)]],
+                                   lumaWeights[piOrgLuma[o+(1<<csx)]],
+                                   lumaWeights[piOrgLuma[o+(3<<csx)]] );
+
         __m128i
         xlow = _mm_unpacklo_epi16( xmlo, xmhi );
-        xlow = _mm_mullo_epi32   ( xlow, xwgt );
-        xlow = _mm_add_epi32     ( xlow, xoffs );
-        xlow = _mm_srai_epi32    ( xlow, uiShift );
+        xlow = _mm_mul_epi32     ( xlow, xwgt );
+        xlow = _mm_add_epi64     ( xlow, xoffs );
+        xlow = _mm_srli_epi64    ( xlow, uiShift );
+        xsum = _mm_add_epi64     ( xsum, xlow );
 
-        xwgt = _mm_loadu_si128   ( ( const __m128i* ) weight2 );
+        xlow = _mm_unpacklo_epi16( xmlo, xmhi );
+        xwgt = _mm_shuffle_epi32 ( xwgt, 1 + 0 + 48 + 128 );
+        xlow = _mm_shuffle_epi32 ( xlow, 1 + 0 + 48 + 128 );
+        xlow = _mm_mul_epi32     ( xlow, xwgt );
+        xlow = _mm_add_epi64     ( xlow, xoffs );
+        xlow = _mm_srli_epi64    ( xlow, uiShift );
+        xsum = _mm_add_epi64     ( xsum, xlow );
+        
+        xwgt = _mm_setr_epi32    ( lumaWeights[piOrgLuma[o+(4<<csx)]],
+                                   lumaWeights[piOrgLuma[o+(6<<csx)]],
+                                   lumaWeights[piOrgLuma[o+(5<<csx)]],
+                                   lumaWeights[piOrgLuma[o+(7<<csx)]] );
         __m128i
         xhgh = _mm_unpackhi_epi16( xmlo, xmhi );
-        xhgh = _mm_mullo_epi32   ( xhgh, xwgt );
-        xhgh = _mm_add_epi32     ( xhgh, xoffs );
-        xhgh = _mm_srai_epi32    ( xhgh, uiShift );
-        
-        xsum = _mm_add_epi64     ( xsum, _mm_unpacklo_epi32( xlow, xzero ) );
-        xsum = _mm_add_epi64     ( xsum, _mm_unpackhi_epi32( xlow, xzero ) );
-        xsum = _mm_add_epi64     ( xsum, _mm_unpacklo_epi32( xhgh, xzero ) );
-        xsum = _mm_add_epi64     ( xsum, _mm_unpackhi_epi32( xhgh, xzero ) );
+        xhgh = _mm_mul_epi32     ( xhgh, xwgt );
+        xhgh = _mm_add_epi64     ( xhgh, xoffs );
+        xhgh = _mm_srli_epi64    ( xhgh, uiShift );
+        xsum = _mm_add_epi64     ( xsum, xhgh );
+
+        xhgh = _mm_unpackhi_epi16( xmlo, xmhi );
+        xwgt = _mm_shuffle_epi32 ( xwgt, 1 + 0 + 48 + 128 );
+        xhgh = _mm_shuffle_epi32 ( xhgh, 1 + 0 + 48 + 128 );
+        xhgh = _mm_mul_epi32     ( xhgh, xwgt );
+        xhgh = _mm_add_epi64     ( xhgh, xoffs );
+        xhgh = _mm_srli_epi64    ( xhgh, uiShift );
+        xsum = _mm_add_epi64     ( xsum, xhgh );
 
         //uiSum += getWeightedMSE_SIMD( piOrg[n  ], piCur[n  ], lumaWeights[piOrgLuma[(n  )<<csx]], uiShift );
         //uiSum += getWeightedMSE_SIMD( piOrg[n+1], piCur[n+1], lumaWeights[piOrgLuma[(n+1)<<csx]], uiShift );
@@ -2668,7 +2679,7 @@ static Distortion lumaWeightedSSE_SIMD( const DistParam& rcDtParam, ChromaFormat
 
     return uiSum;
   }
-  if( ( iCols & 3 ) == 0 )
+  else if( ( iCols & 3 ) == 0 )
   {
     const __m128i xoffs = _mm_set1_epi32( 1 << 15 );
     const __m128i xzero = _mm_setzero_si128();
@@ -2859,9 +2870,9 @@ void RdCost::_initRdCostX86()
   m_afpDistortFunc[0][DF_HAD_2SAD ] = RdCost::xGetHAD2SADs_SIMD<vext>;
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = xGetSADwMask_SIMD<vext>;
 
-  //m_wtdPredPtr[0] = lumaWeightedSSE_SIMD<vext, 0>;
-  //m_wtdPredPtr[1] = lumaWeightedSSE_SIMD<vext, 1>;
-  //m_fxdWtdPredPtr = fixWeightedSSE_SIMD <vext>;
+  m_wtdPredPtr[0] = lumaWeightedSSE_SIMD<vext, 0>;
+  m_wtdPredPtr[1] = lumaWeightedSSE_SIMD<vext, 1>;
+  m_fxdWtdPredPtr = fixWeightedSSE_SIMD <vext>;
 }
 
 template void RdCost::_initRdCostX86<SIMDX86>();
