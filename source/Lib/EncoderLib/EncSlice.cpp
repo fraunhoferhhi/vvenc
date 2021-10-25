@@ -269,6 +269,11 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
   const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
 
+  if (!slice->TLayer == 0 && m_pcEncCfg->m_QP > MAX_QP_PERCEPT_QPA && m_pcEncCfg->m_framesToBeEncoded > 1 && m_pcEncCfg->m_RCTargetBitrate == 0)
+  {
+    const_cast<PPS*>(slice->pps)->useDQP = false; // works only if TLayer 0 is not coded in parallel
+  }
+
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
   double dQP     = xGetQPForPicture( slice, gopId );
