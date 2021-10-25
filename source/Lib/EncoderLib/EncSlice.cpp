@@ -269,9 +269,9 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
   const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
 
-  if (!slice->TLayer == 0 && m_pcEncCfg->m_QP > MAX_QP_PERCEPT_QPA && m_pcEncCfg->m_framesToBeEncoded > 1 && m_pcEncCfg->m_RCTargetBitrate == 0)
+  if (m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_QP > MAX_QP_PERCEPT_QPA && m_pcEncCfg->m_RCTargetBitrate == 0)
   {
-    const_cast<PPS*>(slice->pps)->useDQP = false; // works only if TLayer 0 is not coded in parallel
+    const_cast<PPS*>(slice->pps)->useDQP = (slice->TLayer == 0); // TODO: check pic. parallelization
   }
 
   // pre-compute lambda and qp

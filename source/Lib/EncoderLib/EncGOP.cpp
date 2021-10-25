@@ -861,7 +861,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
     slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = slice->pps->deblockingFilterBetaOffsetDiv2[comp];
   }
 
-  if (slice->pps->useDQP)
+  if (slice->pps->useDQP || (m_pcEncCfg->m_usePerceptQPA && m_pcEncCfg->m_QP > MAX_QP_PERCEPT_QPA && m_pcEncCfg->m_RCTargetBitrate == 0))
   {
     const uint32_t cuLumaQpSubdiv = (m_pcEncCfg->m_cuQpDeltaSubdiv > 0 ? (uint32_t) m_pcEncCfg->m_cuQpDeltaSubdiv : 0);
 
