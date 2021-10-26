@@ -2016,9 +2016,6 @@ void HLSyntaxReader::parsePictureHeader( PicHeader* picHeader, ParameterSetManag
     pps->tileColWidth.push_back(pps->picWidthInCtu );
     pps->tileRowHeight.push_back( pps->picHeightInCtu );
     pps->initTiles();
-//    pps->subPics.clear();
-//    pps->subPics.resize(1);
-//    pps->subPics[0].init( pps->picWidthInCtu, pps->picHeightInCtu, pps->picWidthInLumaSamples, pps->picHeightInLumaSamples);
     pps->sliceMap.clear();
     pps->sliceMap.resize(1);
     pps->sliceMap[0].addCtusToSlice(0, pps->picWidthInCtu, 0, pps->picHeightInCtu, pps->picWidthInCtu);
