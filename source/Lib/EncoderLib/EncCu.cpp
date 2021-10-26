@@ -3118,6 +3118,10 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
               Do_Search = true; //do_est
             }
           }
+          if (bestCS->getCU(partitioner.chType, partitioner.treeType)->mmvdMergeFlag || bestCS->getCU(partitioner.chType, partitioner.treeType)->geo)
+          {
+            Do_Search = true;
+          }
         }
         tempCS->initStructData(encTestMode.qp);
 
