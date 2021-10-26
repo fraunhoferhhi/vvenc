@@ -493,7 +493,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
         if ((adaptedLumaQP > MAX_QP) && !isHDR) adaptedLumaQP = MAX_QP;
       }
       // change the CTU-level QP index based on CTU area's average luma value (Sharp)
-      if (isHDR && (encCfg->m_QP <= MAX_QP_PERCEPT_QPA))
+      if (isHDR)
       {
         if (meanLuma == MAX_UINT) meanLuma = pic->ctuAdaptedQP[ctuRsAddr];
 
@@ -502,10 +502,10 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       // reduce delta-QP variance, avoid wasting precious bit budget at low bit-rates
       if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (savedQP >= 0) && (encCfg->m_framesToBeEncoded != 1))
       {
-        const int originalAdLumaQP = adaptedLumaQP;
+        const int retunedAdLumaQP = adaptedLumaQP + 1;
 
         adaptedLumaQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedLumaQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * sliceQP + 2) >> 2;
-        if (adaptedLumaQP > originalAdLumaQP) adaptedLumaQP = originalAdLumaQP;
+        if (adaptedLumaQP > retunedAdLumaQP) adaptedLumaQP = retunedAdLumaQP;
       }
 
       hpEnerAvg = lambda * pow (2.0, double (adaptedLumaQP - slice->sliceQp) / 3.0);
