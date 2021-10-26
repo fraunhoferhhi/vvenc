@@ -459,7 +459,77 @@ void HLSyntaxReader::parsePPS( PPS* pcPPS, ParameterSetManager *parameterSetMana
 
   if(!pcPPS->noPicPartition)
   {
-    THROW("no support");
+    READ_CODE( 2, uiCode, "pps_log2_ctu_size_minus5" );
+    CHECK( uiCode > 2, "pps_log2_ctu_size_minus5 must be less than or equal to 2" );
+    pcPPS->log2CtuSize    = uiCode+5;
+    pcPPS->ctuSize        = 1 << pcPPS->log2CtuSize;
+    pcPPS->picWidthInCtu  = ( pcPPS->picWidthInLumaSamples + pcPPS->ctuSize - 1 ) / pcPPS->ctuSize;
+    pcPPS->picHeightInCtu = ( pcPPS->picHeightInLumaSamples + pcPPS->ctuSize - 1 ) / pcPPS->ctuSize;
+
+    READ_UVLC( uiCode, "pps_num_exp_tile_columns_minus1" );               pcPPS->numExpTileCols = uiCode + 1;
+    READ_UVLC( uiCode, "pps_num_exp_tile_rows_minus1" );                  pcPPS->numExpTileRows = uiCode + 1;
+    CHECK( pcPPS->numExpTileCols > MAX_TILE_COLS, "Number of explicit tile columns exceeds valid range" );
+
+    int colIdx, rowIdx;
+    for( colIdx = 0; colIdx < pcPPS->numExpTileCols; colIdx++ )
+    {
+      READ_UVLC( uiCode, "pps_tile_column_width_minus1[i]" );             pcPPS->tileColWidth.push_back( uiCode + 1 );
+      CHECK(uiCode  > (pcPPS->picWidthInCtu-1), "The value of pps_tile_column_width_minus1[i] shall be in the range of 0 to PicWidthInCtbY-1, inclusive");
+    }
+    for( rowIdx = 0; rowIdx < pcPPS->numExpTileRows; rowIdx++ )
+    {
+      READ_UVLC( uiCode, "pps_tile_row_height_minus1[i]" );               pcPPS->tileRowHeight.push_back( uiCode + 1 );
+      CHECK(uiCode > (pcPPS->picHeightInCtu-1), "The value of pps_tile_row_height_minus shall be in the range of 0 to PicHeightInCtbY-1, inclusive");
+    }
+    pcPPS->initTiles();
+
+    if( pcPPS->numTileCols * pcPPS->numTileRows > 1 )
+    {
+      READ_CODE( 1, uiCode, "pps_loop_filter_across_tiles_enabled_flag"); pcPPS->loopFilterAcrossTilesEnabled = (uiCode == 1);
+      READ_CODE( 1, uiCode, "pps_rect_slice_flag" );
+    }
+    else
+    {
+      pcPPS->loopFilterAcrossTilesEnabled = false;
+      uiCode = 1;
+    }
+    pcPPS->rectSlice = (uiCode == 1);
+    if( pcPPS->rectSlice )
+    {
+      READ_FLAG( uiCode, "pps_single_slice_per_subpic_flag" );            pcPPS->singleSlicePerSubPic = (uiCode == 1);
+    }
+    else
+    {
+      pcPPS->singleSlicePerSubPic = false;
+    }
+
+    if( pcPPS->rectSlice & !pcPPS->singleSlicePerSubPic )
+    {
+      READ_UVLC( uiCode, "pps_num_slices_in_pic_minus1" );                pcPPS->numSlicesInPic = uiCode + 1;
+      CHECK( pcPPS->numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
+
+      if( ( pcPPS->numSlicesInPic - 1 ) > 1 )
+      {
+        THROW("no support");
+      }
+      else
+      {
+        pcPPS->tileIdxDeltaPresent = false;
+      }
+    }
+    
+    if( pcPPS->rectSlice == 0 || pcPPS->singleSlicePerSubPic || pcPPS->numSlicesInPic > 1 )
+    {
+      READ_FLAG( pcPPS->loopFilterAcrossSlicesEnabled, "pps_loop_filter_across_slices_enabled_flag" );
+    }
+    else
+    {
+      pcPPS->loopFilterAcrossSlicesEnabled = false;
+    }
+  }
+  else
+  {
+    pcPPS->singleSlicePerSubPic = true;
   }
 
   READ_FLAG( pcPPS->cabacInitPresent,   "pps_cabac_init_present_flag" );
@@ -1942,11 +2012,10 @@ void HLSyntaxReader::parsePictureHeader( PicHeader* picHeader, ParameterSetManag
     pps->picWidthInCtu  = (pps->picWidthInLumaSamples + (sps->CTUSize-1)) / sps->CTUSize;
     pps->picHeightInCtu = (pps->picHeightInLumaSamples + (sps->CTUSize-1)) / sps->CTUSize;
     pps->log2CtuSize = ( ceilLog2(sps->CTUSize) );
+    pps->ctuSize = sps->CTUSize;
     pps->tileColWidth.push_back(pps->picWidthInCtu );
     pps->tileRowHeight.push_back( pps->picHeightInCtu );
-    pps->subPics.clear();
-    pps->subPics.resize(1);
-    pps->subPics[0].init( pps->picWidthInCtu, pps->picHeightInCtu, pps->picWidthInLumaSamples, pps->picHeightInLumaSamples);
+    pps->initTiles();
     pps->sliceMap.clear();
     pps->sliceMap.resize(1);
     pps->sliceMap[0].addCtusToSlice(0, pps->picWidthInCtu, 0, pps->picHeightInCtu, pps->picWidthInCtu);
@@ -1959,7 +2028,14 @@ void HLSyntaxReader::parsePictureHeader( PicHeader* picHeader, ParameterSetManag
   else 
   {
     CHECK(pps->ctuSize != sps->CTUSize, "PPS CTU size does not match CTU size in SPS");
+    if( pps->rectSlice )
+    {
+      pps->initRectSliceMap( sps );
+    }
   }
+  pps->subPics.clear();
+  pps->subPics.resize(1);
+  pps->subPics[0].init( pps->picWidthInCtu, pps->picHeightInCtu, pps->picWidthInLumaSamples, pps->picHeightInLumaSamples);
 
   if( pps->wrapAroundEnabled )
   {

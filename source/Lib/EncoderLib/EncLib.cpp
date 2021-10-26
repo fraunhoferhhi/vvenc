@@ -1067,7 +1067,6 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.subPics.clear();
   pps.subPics.resize(1);
   pps.subPics[0].init( pps.picWidthInCtu, pps.picHeightInCtu, pps.picWidthInLumaSamples, pps.picHeightInLumaSamples);
-  pps.noPicPartition                = true;
   pps.useDQP                        = m_cEncCfg.m_RCTargetBitrate > 0 ? true : bUseDQP;
 
   if ( m_cEncCfg.m_cuChromaQpOffsetSubdiv >= 0 )
@@ -1153,7 +1152,8 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
 
   pps.deblockingFilterControlPresent    = deblockingFilterControlPresent;
   pps.cabacInitPresent                  = m_cEncCfg.m_cabacInitPresent != 0;
-  pps.loopFilterAcrossSlicesEnabled     = m_cEncCfg.m_bLFCrossSliceBoundaryFlag;
+  pps.loopFilterAcrossTilesEnabled      = !m_cEncCfg.m_bDisableLFCrossTileBoundaryFlag;
+  pps.loopFilterAcrossSlicesEnabled     = !m_cEncCfg.m_bDisableLFCrossSliceBoundaryFlag;
   pps.rpl1IdxPresent                    = sps.rpl1IdxPresent;
 
   const uint32_t chromaArrayType = (int)sps.separateColourPlane ? CHROMA_400 : sps.chromaFormatIdc;
@@ -1192,7 +1192,10 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.numRefIdxL0DefaultActive = bestPos;
   pps.numRefIdxL1DefaultActive = bestPos;
 
-  xInitPPSforTiles(pps);
+  pps.noPicPartition = !m_cEncCfg.m_picPartitionFlag;
+  pps.ctuSize        = sps.CTUSize;
+
+  xInitPPSforTiles( pps, sps );
 
   pps.pcv            = new PreCalcValues( sps, pps, true );
 }
@@ -1281,13 +1284,37 @@ void EncLib::xInitRPL(SPS &sps) const
   sps.rpl1CopyFromRpl0 = isRpl1CopiedFromRpl0;
 }
 
-void EncLib::xInitPPSforTiles(PPS &pps) const
+void EncLib::xInitPPSforTiles(PPS &pps,const SPS &sps) const
 {
-  pps.sliceMap.clear();
-  pps.sliceMap.resize(1);
-  pps.sliceMap[0].addCtusToSlice(0, pps.picWidthInCtu, 0, pps.picHeightInCtu, pps.picWidthInCtu);
-  pps.ctuToTileCol.resize(pps.picWidthInCtu, 0);
-  pps.ctuToTileRow.resize(pps.picHeightInCtu, 0);
+  pps.numExpTileCols = m_cEncCfg.m_numExpTileCols;
+  pps.numExpTileRows = m_cEncCfg.m_numExpTileRows;
+  pps.numSlicesInPic = m_cEncCfg.m_numSlicesInPic;
+
+  if( pps.noPicPartition )
+  {
+    pps.tileColWidth.resize( 1, pps.picWidthInCtu );
+    pps.tileRowHeight.resize( 1, pps.picHeightInCtu );
+    pps.initTiles();
+    pps.sliceMap.clear();
+    pps.sliceMap.resize(1);
+    pps.sliceMap[0].addCtusToSlice(0, pps.picWidthInCtu, 0, pps.picHeightInCtu, pps.picWidthInCtu);
+  }
+  else
+  {
+    pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
+    for( int i = 0; i < pps.numExpTileCols; i++ )
+    {
+      pps.tileColWidth.push_back( m_cEncCfg.m_tileColumnWidth[i] );
+    }
+    for( int i = 0; i < pps.numExpTileRows; i++ )
+    {
+      pps.tileRowHeight.push_back( m_cEncCfg.m_tileRowHeight[i] );
+    }
+    pps.initTiles();
+    pps.rectSlice            = true;
+    pps.tileIdxDeltaPresent  = false;
+    pps.initRectSliceMap( &sps );
+  }
 }
 
 void EncLib::xOutputRecYuv()

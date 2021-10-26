@@ -217,6 +217,7 @@ private:
 #if QTBTT_SPEED3
   int                   m_MergeSimpleFlag;
 #endif
+  int                   m_tileIdx;
 
 public:
   EncCu();
