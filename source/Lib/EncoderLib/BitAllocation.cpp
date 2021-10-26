@@ -502,7 +502,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       // reduce delta-QP variance, avoid wasting precious bit budget at low bit-rates
       if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (savedQP >= 0) && (encCfg->m_framesToBeEncoded != 1))
       {
-        const int retunedAdLumaQP = adaptedLumaQP + 1;
+        const int retunedAdLumaQP = adaptedLumaQP + (encCfg->m_QP > MAX_QP_PERCEPT_QPA ? 1 : 0);
 
         adaptedLumaQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedLumaQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * sliceQP + 2) >> 2;
         if (adaptedLumaQP > retunedAdLumaQP) adaptedLumaQP = retunedAdLumaQP;
