@@ -390,17 +390,23 @@ void MCTF::filter( Picture* pic )
   }
 
   int dropFrames = 0;
-  if(idx >= 0)
+  if( idx >= 0 )
   {
-    int threshold = (m_MCTFSpeedVal>>(idx*2))&3;
-    isFilterThisFrame = threshold < 2;
+    // m_MCTFSpeedVal is calculated for m_FiterFrames.size() == 3, with keyframe being  idx == 2
+    // for m_FiterFrames.size() > 3, this is not a problem, since less important images will be discarded with
+    // low values for idx, and keyframe in idx == 3 or higher will be get threshold == 0, i.e. full filtering
+    // for m_FiterFrames.size() < 3 (i.e. GOP16), the value of idx has to shifted so that keyframe is at idx == 2
+    if( m_FilterFrames.size() < 3 ) idx += ( 3 - ( int ) m_FilterFrames.size() );
+
+    int threshold     = ( m_MCTFSpeedVal >> ( idx * 2 ) ) & 3;
+    isFilterThisFrame =   threshold < 2;
     dropFrames        = ( threshold & 1 ) << 1;
   }
 
   Picture* fltrPic = nullptr;
-  for ( idx = 0; idx < m_picFifo.size(); idx++ )
+  for( idx = 0; idx < m_picFifo.size(); idx++ )
   {
-    if ( m_picFifo[ idx ]->poc == process_poc )
+    if( m_picFifo[idx]->poc == process_poc )
     {
       fltrPic = m_picFifo[ idx ];
       break;
