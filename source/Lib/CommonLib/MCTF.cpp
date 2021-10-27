@@ -68,12 +68,12 @@ static __itt_domain* itt_domain_MCTF_flt   = __itt_domain_create( "MCTFFlt" );
 // Constructor / destructor / initialization / destroy
 // ====================================================================================================================
 
-const double MCTF::m_chromaFactor = 0.55;
-const double MCTF::m_sigmaMultiplier = 9.0;
-const double MCTF::m_sigmaZeroPoint = 10.0;
-const int MCTF::m_range = VVENC_MCTF_RANGE;
-const int MCTF::m_motionVectorFactor = 16;
-const int MCTF::m_padding = MCTF_PADDING;
+const double MCTF::m_chromaFactor     =  0.55;
+const double MCTF::m_sigmaMultiplier  =  9.0;
+const double MCTF::m_sigmaZeroPoint   = 10.0;
+const int MCTF::m_range               = VVENC_MCTF_RANGE;
+const int MCTF::m_motionVectorFactor  = 16;
+const int MCTF::m_padding             = MCTF_PADDING;
 const int16_t MCTF::m_interpolationFilter[16][8] =
 {
   {   0,   0,   0,  64,   0,   0,   0,   0 },   //0
@@ -685,9 +685,9 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
 
     // calculate average
     double avg = 0.0;
-    for( int x1 = 0; x1 < blockSize; x1++ )
+    for( int y1 = 0; y1 < blockSize; y1++ )
     {
-      for( int y1 = 0; y1 < blockSize; y1++ )
+      for( int x1 = 0; x1 < blockSize; x1++ )
       {
         avg = avg + orig.Y().at( blockX + x1, blockY + y1 );
       }
@@ -696,9 +696,9 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
 
     // calculate variance
     double variance = 0;
-    for( int x1 = 0; x1 < blockSize; x1++ )
+    for( int y1 = 0; y1 < blockSize; y1++ )
     {
-      for( int y1 = 0; y1 < blockSize; y1++ )
+      for( int x1 = 0; x1 < blockSize; x1++ )
       {
         int pix = orig.Y().at( blockX + x1, blockY + y1 );
         variance = variance + ( pix - avg ) * ( pix - avg );
@@ -812,7 +812,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
     const int numFilterTaps=7;
     const int centreTapOffset=3;
 
-    int tempArray[lumaBlockSize + numFilterTaps][lumaBlockSize];
+    Pel tempArray[lumaBlockSize + numFilterTaps][lumaBlockSize];
 
     for (int by = 1; by < blockSizeY + numFilterTaps; by++)
     {
@@ -831,6 +831,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
         sum += xFilter[5] * rowStart[5];
         sum += xFilter[6] * rowStart[6];
 
+        sum = ( sum + ( 1 << 5 ) ) >> 6;
         tempArray[by][bx] = sum;
       }
     }
@@ -850,7 +851,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
         sum += yFilter[5] * tempArray[by + 5][bx];
         sum += yFilter[6] * tempArray[by + 6][bx];
 
-        sum = (sum + (1 << 11)) >> 12;
+        sum = ( sum + ( 1 << 5 ) ) >> 6;
         sum = sum < 0 ? 0 : (sum > maxValue ? maxValue : sum);
         *dstPel = sum;
       }
@@ -925,6 +926,9 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
 
       const Pel* srcPel=srcPelRow;
       Pel* dstPel=dstPelRow;
+
+      double minError;
+
       for (int x = 0; x < width; x++, srcPel++, dstPel++)
       {
         const int xBlkAddr = x / blkSizeX;
@@ -961,10 +965,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
             srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 300 * variance + 50 ) / ( 10 * diffsum + 50 ) );
           }
         }
-        double minError = 9999999;
-        for( int i = 0; i < numRefs; i++ )
+        if( x % blkSizeX == 0 )
         {
-          minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error );
+          minError = 999999;
+          for( int i = 0; i < numRefs; i++ )
+          {
+            minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error );
+          }
         }
 #endif
 
