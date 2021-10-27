@@ -1205,6 +1205,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       if( c->m_GOPSize == 32 )
       {
+#if JVET_V0056_MCTF
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
+        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
         c->m_vvencMCTF.MCTFFrames[2] = 32;
@@ -1213,15 +1221,25 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_vvencMCTF.MCTFStrengths[1] = 0.5625;      // 18/32
         c->m_vvencMCTF.MCTFStrengths[2] = 0.84375;     // 27/32
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
+#endif
       }
       else if( c->m_GOPSize == 16 )
       {
+#if JVET_V0056_MCTF
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
+        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
 
         c->m_vvencMCTF.MCTFStrengths[0] = 0.4;     // ~12.75/32
         c->m_vvencMCTF.MCTFStrengths[1] = 0.8;     // ~25.50/32
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#endif
       }
       else if( c->m_GOPSize == 8 )
       {

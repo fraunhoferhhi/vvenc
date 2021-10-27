@@ -927,7 +927,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
       const Pel* srcPel=srcPelRow;
       Pel* dstPel=dstPelRow;
 
-      double minError;
+      double minError = 9999999;
 
       for (int x = 0; x < width; x++, srcPel++, dstPel++)
       {
@@ -967,7 +967,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
         }
         if( x % blkSizeX == 0 )
         {
-          minError = 999999;
+          minError = 9999999;
           for( int i = 0; i < numRefs; i++ )
           {
             minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error );
