@@ -393,9 +393,9 @@ void MCTF::filter( Picture* pic )
   if( idx >= 0 )
   {
     // m_MCTFSpeedVal is calculated for m_FiterFrames.size() == 3, with keyframe being  idx == 2
-    // for m_FiterFrames.size() > 3, this is not a problem, since less important images will be discarded with
+    // for m_FiterFrames.size() > 3, this is not a problem, since less important frames will be sped-up
     // low values for idx, and keyframe in idx == 3 or higher will be get threshold == 0, i.e. full filtering
-    // for m_FiterFrames.size() < 3 (i.e. GOP16), the value of idx has to shifted so that keyframe is at idx == 2
+    // for m_FiterFrames.size() < 3 (e.g. GOP16), the value of idx has to shifted so that keyframe is at idx == 2
     if( m_FilterFrames.size() < 3 ) idx += ( 3 - ( int ) m_FilterFrames.size() );
 
     int threshold     = ( m_MCTFSpeedVal >> ( idx * 2 ) ) & 3;
