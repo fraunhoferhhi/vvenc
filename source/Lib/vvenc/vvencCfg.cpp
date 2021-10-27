@@ -1213,7 +1213,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
         c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
         c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
 #else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
