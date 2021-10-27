@@ -463,6 +463,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
     for (uint32_t ctuTsAddr = ctuStartAddr; ctuTsAddr < ctuBoundingAddr; ctuTsAddr++)
     {
       const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
+
       int adaptedLumaQP = Clip3 (0, MAX_QP, slice->sliceQp + apprI3Log2 (pic->ctuQpaLambda[ctuRsAddr]/*hpEner*/ * hpEnerPic));
 
       if ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra() && (ctuPumpRedQP.size() > ctuRsAddr))
@@ -502,7 +503,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       // reduce delta-QP variance, avoid wasting precious bit budget at low bit-rates
       if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (savedQP >= 0) && (encCfg->m_framesToBeEncoded != 1))
       {
-        const int retunedAdLumaQP = adaptedLumaQP + (encCfg->m_QP > MAX_QP_PERCEPT_QPA ? 1 : 0);
+        const int retunedAdLumaQP = adaptedLumaQP + 1;
 
         adaptedLumaQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedLumaQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * sliceQP + 2) >> 2;
         if (adaptedLumaQP > retunedAdLumaQP) adaptedLumaQP = retunedAdLumaQP;
@@ -557,6 +558,21 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
     adaptedSliceQP = ((savedQP < 0 || slice->TLayer == 0 || ((encCfg->m_usePerceptQPATempFiltISlice == 2) && slice->isIntra())) && (ctuBoundingAddr > ctuStartAddr)
                       ? (adaptedSliceQP < 0 ? adaptedSliceQP - ((nCtu + 1) >> 1) : adaptedSliceQP + ((nCtu + 1) >> 1)) / nCtu : sliceQP); // mean adapted luma QP
+    if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (savedQP >= 0) && (encCfg->m_framesToBeEncoded != 1) && (adaptedSliceQP + 1 < sliceQP))
+    {
+      adaptedSliceQP = (sliceQP - adaptedSliceQP) >> (encCfg->m_QP <= MAX_QP_PERCEPT_QPA ? 2 : 1); // for monotonous rate change
+      hpEnerAvg = pow (2.0, double (adaptedSliceQP) / 3.0);
+
+      for (uint32_t ctuTsAddr = ctuStartAddr; ctuTsAddr < ctuBoundingAddr; ctuTsAddr++)
+      {
+        const uint32_t ctuRsAddr = /*tileMap.getCtuBsToRsAddrMap*/ (ctuTsAddr);
+
+        pic->ctuQpaLambda[ctuRsAddr] *= hpEnerAvg;
+        pic->ctuAdaptedQP[ctuRsAddr] = (Pel) std::min (MAX_QP, pic->ctuAdaptedQP[ctuRsAddr] + adaptedSliceQP);
+      }
+
+      adaptedSliceQP = sliceQP;
+    }
   }
 
   return adaptedSliceQP;
@@ -603,6 +619,15 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
     if (meanLuma == MAX_UINT) meanLuma = pic->getOrigBuf (subArea).getAvg();
 
     adaptedSubCtuQP = Clip3 (0, MAX_QP, adaptedSubCtuQP + lumaDQPOffset (meanLuma, bitDepth));
+  }
+  // reduce the delta-QP variance, avoid wasting precious bit budget at low bit-rates
+  if ((3 + encCfg->m_QP > MAX_QP_PERCEPT_QPA) && (slice->sliceQp >= 0) && (encCfg->m_framesToBeEncoded != 1))
+  {
+    const int retunedAdLumaQP = adaptedSubCtuQP + 1;
+
+    adaptedSubCtuQP = (std::max (0, 1 + MAX_QP_PERCEPT_QPA - encCfg->m_QP) * adaptedSubCtuQP + std::min (4, 3 + encCfg->m_QP - MAX_QP_PERCEPT_QPA) * slice->sliceQp + 2) >> 2;
+    if (adaptedSubCtuQP > retunedAdLumaQP) adaptedSubCtuQP = retunedAdLumaQP;
+    if (adaptedSubCtuQP < MAX_QP && encCfg->m_QP > MAX_QP_PERCEPT_QPA) adaptedSubCtuQP++; // for monotonous rate change (l. 563)
   }
 
   return adaptedSubCtuQP;
