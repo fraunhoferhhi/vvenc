@@ -722,7 +722,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   const int stepSize = blockSize;
   const int origHeight = orig.Y().height;
 
-  if( m_threadPool )
+  if( m_threadPool && 0 )
   {
     struct EstParams
     {
