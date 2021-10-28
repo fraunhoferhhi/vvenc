@@ -93,7 +93,7 @@ private:
   void*                     m_RecYUVBufferCallbackCtx;
 
   NoMallocThreadPool*       m_threadPool;
-  RateCtrl                  m_cRateCtrl;                          ///< Rate control class
+  RateCtrl*                 m_pcRateCtrl;                          ///< Rate control class
 
   VPS                       m_cVPS;
   DCI                       m_cDCI;

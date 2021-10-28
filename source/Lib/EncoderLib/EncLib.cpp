@@ -72,6 +72,7 @@ EncLib::EncLib()
   , m_RecYUVBufferCallback     ( nullptr )
   , m_RecYUVBufferCallbackCtx  ( nullptr )
   , m_threadPool    ( nullptr )
+  , m_pcRateCtrl    ( nullptr )
   , m_spsMap        ( MAX_NUM_SPS )
   , m_ppsMap        ( MAX_NUM_PPS )
 {
@@ -220,8 +221,20 @@ void EncLib::initPass( int pass, const char* statsFName )
 {
   CHECK( m_numPassInitialized != pass && m_numPassInitialized + 1 != pass, "initialization of passes only in successive order possible" );
 
+  if ( m_pcRateCtrl == nullptr )
+  {
+    if ( m_cEncCfg.m_RCNumPasses == 1 )
+    {
+      m_pcRateCtrl = new LegacyRateCtrl;
+    }
+    else
+    {
+      m_pcRateCtrl = new RateCtrl;
+    }
+  }
+
   // set rate control pass
-  m_cRateCtrl.setRCPass( m_cEncCfg, pass, statsFName );
+  m_pcRateCtrl->setRCPass( m_cEncCfg, pass, statsFName );
 
   if( m_numPassInitialized + 1 != pass )
   {
@@ -260,7 +273,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
   m_cGOPEncoder = new EncGOP;
-  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, m_cRateCtrl, m_cEncHRD, m_threadPool );
+  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, *m_pcRateCtrl, m_cEncHRD, m_threadPool );
 
   m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
   m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
@@ -285,13 +298,13 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if ( m_cEncCfg.m_RCTargetBitrate > 0 )
   {
-    m_cRateCtrl.init( m_cEncCfg );
+    m_pcRateCtrl->init( m_cEncCfg );
 
     if ( pass == 1 )
     {
-      m_cRateCtrl.processFirstPassData (m_cEncCfg.m_QP);
+      m_pcRateCtrl->processFirstPassData (m_cEncCfg.m_QP);
       // update first-pass data
-      m_cRateCtrl.encRCSeq->firstPassData = m_cRateCtrl.getFirstPassStats();
+      m_pcRateCtrl->encRCSeq->firstPassData = m_pcRateCtrl->getFirstPassStats();
     }
   }
 
@@ -329,7 +342,10 @@ void EncLib::xUninitLib()
   xDeletePicBuffer();
 
   // sub modules
-  m_cRateCtrl.destroy();
+  if ( m_pcRateCtrl != nullptr )
+  {
+    m_pcRateCtrl->destroy();
+  }
   m_nextPocOffset.clear();
   m_pocToGopId.clear();
   if( m_cGOPEncoder )
@@ -361,7 +377,7 @@ void EncLib::xSetRCEncCfg( int pass )
   const_cast<VVEncCfg&>(m_cEncCfg) = m_cBckCfg;
 
   // set encoder config for rate control first pass
-  if( ! m_cRateCtrl.rcIsFinalPass )
+  if( ! m_pcRateCtrl->rcIsFinalPass )
   {
     const double d = (3840.0 * 2160.0) / double (m_cEncCfg.m_SourceWidth * m_cEncCfg.m_SourceHeight);
 
@@ -396,7 +412,7 @@ void EncLib::xSetRCEncCfg( int pass )
   {
     const unsigned fps = m_cEncCfg.m_FrameRate;
     uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
-    std::list<TRCPassStats>& firstPassData = m_cRateCtrl.getFirstPassStats();
+    std::list<TRCPassStats>& firstPassData = m_pcRateCtrl->getFirstPassStats();
     std::list<TRCPassStats>::iterator it;
 
     for (it = firstPassData.begin(); it != firstPassData.end(); it++)
@@ -491,17 +507,19 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     {
       if ( m_numPicsRcvd == m_numPicsInQueue )
       {
-        m_cRateCtrl.initRCGOP( 1 );
+        m_pcRateCtrl->initRCGOP( 1 );
       }
       else if ( 1 == ( m_numPicsRcvd - m_numPicsInQueue ) % m_cEncCfg.m_GOPSize )
       {
-        m_cRateCtrl.destroyRCGOP();
-        m_cRateCtrl.initRCGOP( m_numPicsInQueue >= m_cEncCfg.m_GOPSize ? m_cEncCfg.m_GOPSize : m_numPicsInQueue );
+        m_pcRateCtrl->destroyRCGOP();
+        m_pcRateCtrl->initRCGOP( m_numPicsInQueue >= m_cEncCfg.m_GOPSize ? m_cEncCfg.m_GOPSize : m_numPicsInQueue );
       }
     }
 
     // update current poc
     m_pocEncode = xGetNextPocICO( m_pocEncode, flush, m_numPicsRcvd, m_cEncCfg.m_DecodingRefreshType == 4 );
+    
+    if ((m_cEncCfg.m_RCNumPasses == 2) && (m_pcRateCtrl->flushPOC < 0) && flush) m_pcRateCtrl->flushPOC = m_pocEncode;
 
     std::vector<Picture*> encList;
     xCreateCodingOrder( m_pocEncode, m_numPicsRcvd, m_numPicsInQueue, flush, encList, m_cEncCfg.m_DecodingRefreshType == 4 );
@@ -540,11 +558,11 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   isQueueEmpty = ( m_cEncCfg.m_maxParallelFrames && flush ) ? ( m_numPicsInQueue <= 0 && ! m_cGOPEncoder->anyFramesInOutputQueue() ) : ( m_numPicsInQueue <= 0 );
   if( m_cEncCfg.m_RCTargetBitrate > 0 && isQueueEmpty )
   {
-    m_cRateCtrl.destroyRCGOP();
+    m_pcRateCtrl->destroyRCGOP();
   }
 
   // reset output access unit, if not final pass
-  if( !m_cRateCtrl.rcIsFinalPass )
+  if( !m_pcRateCtrl->rcIsFinalPass )
   {
     au.clearAu();
   }
@@ -1327,7 +1345,7 @@ void EncLib::xOutputRecYuv()
       continue;
     if( ! picItr->isReconstructed || picItr->poc != m_pocRecOut )
       return;
-    if( m_cRateCtrl.rcIsFinalPass && m_RecYUVBufferCallback )
+    if( m_pcRateCtrl->rcIsFinalPass && m_RecYUVBufferCallback )
     {
       const PPS& pps = *(picItr->cs->pps);
       vvencYUVBuffer yuvBuffer;
