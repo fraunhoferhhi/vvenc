@@ -372,7 +372,11 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
   }
 
   const int numberOfWrittenBits = int( m_CABACEstimator->getEstFracBits() >> SCALE_BITS );
-  xUpdateAfterCtuRC( slice, numberOfWrittenBits, ctuRsAddr );
+  if ( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    m_pcRateCtrl->xUpdateAfterCtuRC( slice, numberOfWrittenBits, ctuRsAddr, m_rcMutex, m_cRdCost.getLambda() );
+  }
+
 }
 
 // ====================================================================================================================
@@ -464,7 +468,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
 
   if ( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
-    cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].actualMSE = (double)bestCS->dist / (double)cs.slice->pic->encRCPic->lcu[ ctuRsAddr ].numberOfPixel;
+    cs.slice->pic->encRCPic->updateCtuMSE( ctuRsAddr, (double)bestCS->dist );
   }
 
   // reset context states and uninit context pointer
@@ -533,7 +537,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           pic->ctuAdaptedQP[ ctuRsAddr ] += pic->encRCPic->picQPOffsetQPA;
           pic->ctuAdaptedQP[ ctuRsAddr ] = Clip3( 0, MAX_QP, (int)pic->ctuAdaptedQP[ ctuRsAddr ] );
           pic->ctuQpaLambda[ ctuRsAddr ] *= pic->encRCPic->picLambdaOffsetQPA;
-          pic->ctuQpaLambda[ ctuRsAddr ] = Clip3( m_pcRateCtrl->encRCGOP->minEstLambda, m_pcRateCtrl->encRCGOP->maxEstLambda, pic->ctuQpaLambda[ ctuRsAddr ] );
+          pic->ctuQpaLambda[ ctuRsAddr ] = Clip3( m_pcRateCtrl->encRCSeq->minEstLambda, m_pcRateCtrl->encRCSeq->maxEstLambda, pic->ctuQpaLambda[ ctuRsAddr ] );
         }
         m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea );
       }
@@ -1430,24 +1434,6 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
-}
-
-void EncCu::xUpdateAfterCtuRC( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr )
-{
-  if ( m_pcEncCfg->m_RCTargetBitrate == 0 )
-  {
-    return;
-  }
-
-  double actualLambda = m_cRdCost.getLambda();
-
-  if ( m_rcMutex ) m_rcMutex->lock();
-
-  slice->pic->encRCPic->updateAfterCTU( ctuRsAddr, numberOfWrittenBits, actualLambda );
-
-  if ( m_rcMutex ) m_rcMutex->unlock();
-
-  return;
 }
 
 void EncCu::xCheckDQP( CodingStructure& cs, Partitioner& partitioner, bool bKeepCtx )
