@@ -5413,7 +5413,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
   const Pel* rec       = recYuv.get(COMP_Y).bufAt(area.lumaPos());
   
   int        slfStride = recYuv.get(compID).stride;
-  const Pel* slf       = recYuv.get(compID).bufAt(compArea);
+  const Pel* slf       = recYuv.get(compID).bufAt(area.chromaPos());
 
   int        orgStride = orgYuv.get(compID).stride;
   const Pel *org       = orgYuv.get(compID).bufAt(compArea);
