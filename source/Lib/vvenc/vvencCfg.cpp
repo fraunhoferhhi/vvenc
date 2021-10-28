@@ -1153,7 +1153,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.initialCW  = c->m_initialCW;
 
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < 0 || c->m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 costrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
 
+  if( c->m_rprEnabledFlag != 2 && c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE )
+  {
+    c->m_rprEnabledFlag = 2;
+  }
   if( c->m_rprEnabledFlag == 2 )
   {
     c->m_resChangeInClvsEnabled = true;
@@ -2203,8 +2208,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_InputQueueSize < c->m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 4,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                     "Decoding Refresh Type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );

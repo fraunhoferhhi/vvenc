@@ -595,9 +595,9 @@ vvencNalUnitType EncGOP::xGetNalUnitType( int pocCurr, int lastIDR ) const
   {
     return VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
   }
-  if (m_pcEncCfg->m_DecodingRefreshType < 3 && pocCurr % m_pcEncCfg->m_IntraPeriod == 0)
+  if ((m_pcEncCfg->m_DecodingRefreshType < 3 || m_pcEncCfg->m_DecodingRefreshType == 5) && pocCurr % m_pcEncCfg->m_IntraPeriod == 0)
   {
-    if (m_pcEncCfg->m_DecodingRefreshType == 1)
+    if (m_pcEncCfg->m_DecodingRefreshType == 1 || m_pcEncCfg->m_DecodingRefreshType == 5)
     {
       return VVENC_NAL_UNIT_CODED_SLICE_CRA;
     }
@@ -889,13 +889,8 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   if( slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
     slice->lmChromaCheckDisable = true;
-    if( sliceType == VVENC_B_SLICE )
-    {
-      pic.cs->picHeader->disDmvrFlag = true;
-
-      xUpdateRPRtmvp( pic.cs->picHeader, slice );
-      xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
-    }
+    pic.cs->picHeader->disDmvrFlag = true;
+    xUpdateRPRtmvp( pic.cs->picHeader, slice );
   }
 
   // update RAS
@@ -1072,33 +1067,6 @@ void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
     else
     {
       picHeader->enableTMVP = false;
-    }
-  }
-}
-
-void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
-{
-  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
-  {
-    if( slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc <= m_pocCRA &&
-        slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_RASL )
-    {
-      picHeader->disBdofFlag = true;
-      picHeader->disProfFlag = true;
-
-      return;
-    }
-}
-
-  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
-  {
-    if( slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc <= m_pocCRA &&
-        slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_RASL )
-    {
-      picHeader->disBdofFlag = true;
-      picHeader->disProfFlag = true;
-
-      return;
     }
   }
 }
