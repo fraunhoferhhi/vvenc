@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include <map>
 #include <deque>
+#include <atomic>
 
 namespace vvenc {
 
@@ -207,7 +208,7 @@ private:
 
   int motionErrorLuma(const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
 
-  void estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
+  bool estimateLumaLn( std::atomic_int& blockX, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
     const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const;
 
   void motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int bs,
