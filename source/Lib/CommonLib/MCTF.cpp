@@ -668,8 +668,8 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
         }
       }
     } 
-#if JVET_V0056_MCTF && 0
-
+#if JVET_V0056_MCTF
+#if 0 // cannot be used for due to MT, TODO: fix or remove!
     if( blockY > 0 )
     {
       MotionVector aboveMV = mvs.get( blockX / stepSize, ( blockY - stepSize ) / stepSize );
@@ -679,6 +679,7 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
         best.set( aboveMV.x, aboveMV.y, error );
       }
     }
+#endif
     if( blockX > 0 )
     {
       MotionVector leftMV = mvs.get( ( blockX - stepSize ) / stepSize, blockY / stepSize );
