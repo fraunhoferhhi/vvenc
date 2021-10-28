@@ -313,7 +313,38 @@ void HLSWriter::codePPS( const PPS* pcPPS, const SPS* pcSPS )
 
   if( !pcPPS->noPicPartition )
   {
-    THROW("no suppport");
+    WRITE_CODE( pcPPS->log2CtuSize - 5, 2, "pps_log2_ctu_size_minus5" );
+    WRITE_UVLC( pcPPS->numExpTileCols - 1, "pps_num_exp_tile_columns_minus1" );
+    WRITE_UVLC( pcPPS->numExpTileRows - 1, "pps_num_exp_tile_rows_minus1" );
+
+    for( int colIdx = 0; colIdx < pcPPS->numExpTileCols; colIdx++ )
+    {
+      WRITE_UVLC( pcPPS->tileColWidth[ colIdx ] - 1,    "pps_tile_column_width_minus1[i]" );
+    }
+    for( int rowIdx = 0; rowIdx < pcPPS->numExpTileRows; rowIdx++ )
+    {
+      WRITE_UVLC( pcPPS->tileRowHeight[ rowIdx ] - 1,   "pps_tile_row_height_minus1[i]" );
+    }
+
+    if( pcPPS->numTileCols * pcPPS->numTileRows > 1 )
+    {
+      WRITE_FLAG( pcPPS->loopFilterAcrossTilesEnabled,  "pps_loop_filter_across_tiles_enabled_flag" );
+      WRITE_FLAG( pcPPS->rectSlice ? 1 : 0,             "pps_rect_slice_flag" );
+    }
+    if( pcPPS->rectSlice )
+    {
+      WRITE_FLAG( pcPPS->singleSlicePerSubPic ? 1 : 0,  "pps_single_slice_per_subpic_flag" );
+    }
+    if( pcPPS->rectSlice & !pcPPS->singleSlicePerSubPic )
+    {
+      CHECK( pcPPS->numSlicesInPic > 1, "currently only one slice supported" );
+      WRITE_UVLC( pcPPS->numSlicesInPic - 1,            "pps_num_slices_in_pic_minus1" );
+    }
+
+    if( pcPPS->rectSlice == 0 || pcPPS->singleSlicePerSubPic || pcPPS->numSlicesInPic > 1 )
+    {
+      WRITE_FLAG( pcPPS->loopFilterAcrossSlicesEnabled, "pps_loop_filter_across_slices_enabled_flag" );
+    }
   }
 
   WRITE_FLAG( pcPPS->cabacInitPresent,                "pps_cabac_init_present_flag" );

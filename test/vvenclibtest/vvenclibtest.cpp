@@ -290,6 +290,16 @@ int testLibParameterRanges()
 //  vvencParams.temporalScale = 1001;
 //  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { 24000,30000,60000 /*,1200000*/ } );
 //  testParamList( "TemporalRate",                           vvencParams.temporalRate,               vvencParams, { -1,1,0,24 }, true );
+  
+  vvencParams.m_SourceWidth        = 832;
+  vvencParams.m_SourceHeight       = 480;
+  testParamList<bool, bool>( "PicPartition",               vvencParams.m_picPartitionFlag,           vvencParams, { 1 } );
+  vvencParams.m_tileColumnWidth[0] = 5;
+  vvencParams.m_tileRowHeight[0]   = 3;
+  testParamList<bool, bool>( "PicPartition",               vvencParams.m_picPartitionFlag,           vvencParams, { 1 } );
+  vvencParams.m_tileColumnWidth[0] = 4;
+  vvencParams.m_tileRowHeight[0]   = 2;
+  testParamList<bool, bool>( "PicPartition",               vvencParams.m_picPartitionFlag,           vvencParams, { 1 }, true );
 
   fillEncoderParameters( vvencParams, false );
 

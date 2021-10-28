@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
-#include "RateCtrl.h"
+#include "LegacyRateCtrl.h"
 
 #include <vector>
 #include <list>
@@ -166,7 +166,7 @@ public:
   void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
   void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
-  void picInitRateControl ( int gopId, Picture& pic, Slice* slice, EncPicture *picEncoder );
+  void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   ParameterSetMap<APS>&       getSharedApsMap()       { return m_gopApsMap; }
   const ParameterSetMap<APS>& getSharedApsMap() const { return m_gopApsMap; }
   bool                        anyFramesInOutputQueue() { return !m_gopEncListOutput.empty(); }
@@ -206,7 +206,6 @@ private:
   void xAttachSliceDataToNalUnit      ( OutputNALUnit& rNalu, const OutputBitstream* pcBitstreamRedirect );
   void xCabacZeroWordPadding          ( const Picture& pic, const Slice* slice, uint32_t binCountsInNalUnits, uint32_t numBytesInVclNalUnits, std::ostringstream &nalUnitData );
 
-  void xUpdateAfterPicRC              ( const Picture* pic );
   void xCalculateAddPSNR              ( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList&, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef );
   uint64_t xFindDistortionPlane       ( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift ) const;
   void xPrintPictureInfo              ( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef );

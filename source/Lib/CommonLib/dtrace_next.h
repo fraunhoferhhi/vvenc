@@ -178,8 +178,8 @@ void dtrace_block( CDTrace *trace_ctx, DTRACE_CHANNEL channel, Tsrc *buf, unsign
   {
     for( i = 0; i < block_w; i++ )
     {
-      trace_ctx->dtrace<false>( channel, "%04x ", buf[j*stride + i] );
-      //trace_ctx->dtrace<false>( channel, "%4d ", buf[j*stride + i] );
+//      trace_ctx->dtrace<false>( channel, "%04x ", buf[j*stride + i] );
+      trace_ctx->dtrace<false>( channel, "%4d ", buf[j*stride + i] );
     }
     trace_ctx->dtrace<false>( channel, "\n" );
   }
