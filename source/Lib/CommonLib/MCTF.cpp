@@ -928,16 +928,22 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
     Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
     for (int y = yOut; y < std::min(yOut+blkSizeY,height); y++, srcPelRow+=srcStride, dstPelRow+=dstStride)
     {
+#if JVET_V0056_MCTF
       const int yBlkAddr = y / blkSizeY;
 
+#endif
       const Pel* srcPel=srcPelRow;
       Pel* dstPel=dstPelRow;
 
+#if JVET_V0056_MCTF
       double minError = 9999999;
 
+#endif
       for (int x = 0; x < width; x++, srcPel++, dstPel++)
       {
+#if JVET_V0056_MCTF
         const int xBlkAddr = x / blkSizeX;
+#endif
         const int orgVal = (int) *srcPel;
         double temporalWeightSum = 1.0;
         double newVal = (double) orgVal;
@@ -1067,7 +1073,6 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
   {
     correctedPics[i].create(m_chromaFormatIDC, m_area, 0, m_padding);
   }
-
 
   if( m_threadPool )
   {
