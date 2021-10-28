@@ -1212,6 +1212,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       if( c->m_GOPSize == 32 )
       {
+#if JVET_V0056_MCTF
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+        c->m_vvencMCTF.MCTFFrames[2] = 32;
+
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
+        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
+        c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
+#else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
         c->m_vvencMCTF.MCTFFrames[2] = 32;
@@ -1220,15 +1230,25 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_vvencMCTF.MCTFStrengths[1] = 0.5625;      // 18/32
         c->m_vvencMCTF.MCTFStrengths[2] = 0.84375;     // 27/32
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
+#endif
       }
       else if( c->m_GOPSize == 16 )
       {
+#if JVET_V0056_MCTF
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
+        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
 
         c->m_vvencMCTF.MCTFStrengths[0] = 0.4;     // ~12.75/32
         c->m_vvencMCTF.MCTFStrengths[1] = 0.8;     // ~25.50/32
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#endif
       }
       else if( c->m_GOPSize == 8 )
       {
@@ -2204,7 +2224,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
-  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
+  static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
+  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
 
   if (c->m_lumaReshapeEnable)
   {
@@ -3025,7 +3046,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 1;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MMVD                            = 3;
       c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;

@@ -73,7 +73,11 @@ VVENC_NAMESPACE_BEGIN
 #define VVENC_MAX_TLAYER                      7      // Explicit temporal layer QP offset - max number of temporal layer
 #define VVENC_MAX_NUM_CQP_MAPPING_TABLES      3      // Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
 #define VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA 8
+#if JVET_V0056_MCTF || 1
+#define VVENC_MCTF_RANGE                      4      // max number of frames used for MCTF filtering in forward / backward direction
+#else
 #define VVENC_MCTF_RANGE                      2      // max number of frames used for MCTF filtering in forward / backward direction
+#endif
 #define VVENC_MAX_NUM_COMP                    3      // max number of components
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
