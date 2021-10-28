@@ -668,7 +668,7 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
         }
       }
     } 
-#if JVET_V0056_MCTF
+#if JVET_V0056_MCTF && 0
 
     if( blockY > 0 )
     {
@@ -722,7 +722,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   const int stepSize = blockSize;
   const int origHeight = orig.Y().height;
 
-  if( m_threadPool && 0 )
+  if( m_threadPool )
   {
     struct EstParams
     {
@@ -775,7 +775,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   else
   {
 #if JVET_V0056_MCTF
-    for( int n = 0, blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize, n++ )
+    for( int blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize )
 #else
     for( int n = 0, blockY = 0; blockY + blockSize < origHeight; blockY += stepSize, n++ )
 #endif
