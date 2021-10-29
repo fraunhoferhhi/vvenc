@@ -562,18 +562,20 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
   return error;
 }
 
-void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
+bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
   const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const
 {
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
 #if JVET_V0056_MCTF
-  for( int blockX = 0; blockX + blockSize <= origWidth; blockX += stepSize )
+  for( int blockX = blockX_.load(); blockX + blockSize <= origWidth; blockX += stepSize, blockX_.store( blockX) )
 #else
-  for( int blockX = 0; blockX + blockSize < origWidth; blockX += stepSize )
+  for( int blockX = blockX_.load(); blockX + blockSize < origWidth; blockX += stepSize, blockX_.store( blockX ) )
 #endif
   {
+    if( prevLineX && blockX >= prevLineX->load() ) return false;
+
 #if JVET_V0056_MCTF
     int range = doubleRes ? 0 : 5;
 #else
@@ -669,7 +671,6 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
       }
     } 
 #if JVET_V0056_MCTF
-
     if( blockY > 0 )
     {
       MotionVector aboveMV = mvs.get( blockX / stepSize, ( blockY - stepSize ) / stepSize );
@@ -715,6 +716,8 @@ void MCTF::estimateLumaLn( Array2D<MotionVector> &mvs, const PelStorage &orig, c
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
   }
+
+  return true;
 }
 
 void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize, const Array2D<MotionVector> *previous, const int factor, const bool doubleRes) const
@@ -726,6 +729,8 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   {
     struct EstParams
     {
+      std::atomic_int blockX;
+      std::atomic_int* prevLineX;
       Array2D<MotionVector> *mvs;
       const PelStorage* orig; 
       const PelStorage* buffer; 
@@ -751,13 +756,15 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
       {
         ITT_TASKSTART( itt_domain_MCTF_est, itt_handle_est );
 
-        params->mctf->estimateLumaLn( *params->mvs, *params->orig, *params->buffer, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY);
+        bool ret = params->mctf->estimateLumaLn( params->blockX, params->prevLineX, *params->mvs, *params->orig, *params->buffer, params->blockSize, params->previous, params->factor, params->doubleRes, params->blockY );
 
         ITT_TASKEND( itt_domain_MCTF_est, itt_handle_est );
-        return true;
+        return ret;
       };
 
       EstParams& cEstParams = EstParamsArray[n];
+      cEstParams.blockX = 0;
+      cEstParams.prevLineX = n == 0 ? nullptr : &EstParamsArray[n-1].blockX;
       cEstParams.mvs = &mvs; 
       cEstParams.orig = &orig;
       cEstParams.buffer = &buffer; 
@@ -775,12 +782,13 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   else
   {
 #if JVET_V0056_MCTF
-    for( int n = 0, blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize, n++ )
+    for( int blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize )
 #else
     for( int n = 0, blockY = 0; blockY + blockSize < origHeight; blockY += stepSize, n++ )
 #endif
     {
-      estimateLumaLn( mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY );
+      std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
+      estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY );
     }
 
   }
@@ -928,16 +936,22 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
     Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
     for (int y = yOut; y < std::min(yOut+blkSizeY,height); y++, srcPelRow+=srcStride, dstPelRow+=dstStride)
     {
+#if JVET_V0056_MCTF
       const int yBlkAddr = y / blkSizeY;
 
+#endif
       const Pel* srcPel=srcPelRow;
       Pel* dstPel=dstPelRow;
 
+#if JVET_V0056_MCTF
       double minError = 9999999;
 
+#endif
       for (int x = 0; x < width; x++, srcPel++, dstPel++)
       {
+#if JVET_V0056_MCTF
         const int xBlkAddr = x / blkSizeX;
+#endif
         const int orgVal = (int) *srcPel;
         double temporalWeightSum = 1.0;
         double newVal = (double) orgVal;
@@ -1067,7 +1081,6 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
   {
     correctedPics[i].create(m_chromaFormatIDC, m_area, 0, m_padding);
   }
-
 
   if( m_threadPool )
   {
