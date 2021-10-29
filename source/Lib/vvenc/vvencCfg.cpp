@@ -3081,7 +3081,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
       c->m_contentBasedFastQtbt            = 0;
-      c->m_usePbIntraFast                  = 2;
+      c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
