@@ -581,6 +581,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToArr<int>                 toQpOutCbCr                  ( &m_qpOutValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA         );
   IStreamToArr<double>              toIntraLambdaModifier        ( &m_adIntraLambdaModifier[0], VVENC_MAX_TLAYER );
 
+  IStreamToArr<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth[0], 10 );
+  IStreamToArr<unsigned int>        toTileRowHeight              ( &m_tileRowHeight[0], 10 );
+
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,            &SegmentToEnumMap );
@@ -660,7 +663,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("IntraPeriod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
   ("RefreshSec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
-  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:IDR2, 4:RecPointSEI)")
+  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2)")
   ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
   ;
 
@@ -910,9 +913,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("LoopFilterCrTcOffset_div2",                       m_loopFilterTcOffsetDiv2[2],                      "")
   ("DeblockingFilterMetric",                          m_deblockingFilterMetric,                         "")
 
-  ("LFCrossTileBoundaryFlag",                         m_bLFCrossTileBoundaryFlag,                       "Enable cross-tile-boundary loop filtering")
-  ("LFCrossSliceBoundaryFlag",                        m_bLFCrossSliceBoundaryFlag,                      "Enable cross-slice-boundary loop filtering")
-  ("LoopFilterAcrossTileGroupsEnabled",               m_loopFilterAcrossSlicesEnabled,                  "Enable loop filtering across tile groups")
+  ("DisableLoopFilterAcrossTiles",                    m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
+  ("DisableLoopFilterAcrossSlices",                   m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
   ("SAO",                                             m_bUseSAO,                                        "Enable Sample Adaptive Offset")
   ("SaoEncodingRate",                                 m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
@@ -1041,6 +1043,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("MaxParallelFrames",                               m_maxParallelFrames,                              "Maximum number of frames to be processed in parallel(0:off, >=2: enable parallel frames)")
   ("WppBitEqual",                                     m_ensureWppBitEqual,                              "Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line above, 2:line wise reset)")
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
+  ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
+  ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
   ;
 
   opts.setSubSection("Coding tools");

@@ -266,9 +266,8 @@ static const int MAX_NUM_APS =                                     32;  //Curren
 static const int NUM_APS_TYPE_LEN =                                 3;  //Currently APS Type has 3 bits
 static const int MAX_NUM_APS_TYPE =                                 8;  //Currently APS Type has 3 bits so the max type is 8
 
-static const int MAX_TILE_COLS =                                   20;  ///< Maximum number of tile columns
-static const int MAX_TILE_ROWS =                                   22;  ///< Maximum number of tile rows
-static const int MAX_TILES =            MAX_TILE_COLS * MAX_TILE_ROWS;  ///< Maximum number of tiles
+static const int MAX_TILE_COLS =                                   30;  ///< Maximum number of tile columns
+static const int MAX_TILES =                                      990;  ///< Maximum number of tiles
 static const int MAX_SLICES =                                     600;  ///< Maximum number of slices per picture
 static const int MLS_GRP_NUM =                                    256; ///< Max number of coefficient groups, max(16, 256)
 

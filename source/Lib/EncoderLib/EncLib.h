@@ -93,7 +93,7 @@ private:
   void*                     m_RecYUVBufferCallbackCtx;
 
   NoMallocThreadPool*       m_threadPool;
-  RateCtrl                  m_cRateCtrl;                          ///< Rate control class
+  RateCtrl*                 m_pcRateCtrl;                          ///< Rate control class
 
   VPS                       m_cVPS;
   DCI                       m_cDCI;
@@ -137,7 +137,8 @@ private:
   void     xInitConstraintInfo ( ConstraintInfo &ci )                        const;  ///< initialize SPS from encoder options
   void     xInitSPS            ( SPS &sps )                                  const; ///< initialize SPS from encoder options
   void     xInitPPS            ( PPS &pps, const SPS &sps )                  const;  ///< initialize PPS from encoder options
-  void     xInitPPSforTiles    ( PPS &pps ) const;
+  void     xInitPPSforTiles    ( PPS &pps, const SPS &sps ) const;
+
   void     xInitRPL            ( SPS &sps ) const;
   void     xInitHrdParameters  ( SPS &sps );
   void     xOutputRecYuv       ();
