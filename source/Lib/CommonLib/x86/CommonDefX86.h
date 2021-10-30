@@ -52,9 +52,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef TARGET_SIMD_X86
 
-#include <immintrin.h>
 #if defined _MSC_VER
 #include <tmmintrin.h>
+#else
+#include <immintrin.h>
 #endif
 
 //! \ingroup CommonLib
