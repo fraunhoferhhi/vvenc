@@ -104,7 +104,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #define SIMD_PREFETCH_T0(_s)
 #endif //ENABLE_SIMD_OPT
 
-#ifdef _WIN32
+#if defined( _WIN32 ) && !defined( __MINGW32__ )
 # include <intrin.h>
 #else
 # include <x86intrin.h>
