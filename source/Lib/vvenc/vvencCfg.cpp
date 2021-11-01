@@ -627,7 +627,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_qtbttSpeedUpMode                        = 0;
 #endif 
 #if FASTTT_TH
-  c->m_fastTT                                  = 0;
+  c->m_fastTTSplit                             = 0;
 #endif
 
   c->m_fastLocalDualTreeMode                   = 0;
@@ -2271,7 +2271,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 3,   "QtbttExtraFast out of range [0..3]");
 #endif
 #if FASTTT_TH
-  vvenc_confirmParameter( c, c->m_fastTT < 0 || c->m_fastTT > 7,               "FastTTsplit out of range [0..7]");
+  vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
 #endif
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
@@ -2290,7 +2290,7 @@ static bool checkCfgParameter( vvenc_config *c )
 #endif
 #if FASTTT_TH
   static const float TT_THRESHOLDS[7] = { 1.1f, 1.075f, 1.05f, 1.025f, 1.0f,  0.975f, 0.95f };
-  c->m_fastTT_th = c->m_fastTT ? TT_THRESHOLDS[c->m_fastTT - 1] : 0;
+  c->m_fastTT_th = c->m_fastTTSplit ? TT_THRESHOLDS[c->m_fastTTSplit - 1] : 0;
 #endif
 
   if( c->m_alf )
@@ -2928,7 +2928,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 7;
 #if FASTTT_TH
-      c->m_fastTT                          = 0;
+      c->m_fastTTSplit                     = 0;
 #endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
@@ -2980,7 +2980,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 7;
 #if FASTTT_TH
-      c->m_fastTT                          = 0;
+      c->m_fastTTSplit                     = 0;
 #endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 2;
@@ -3034,7 +3034,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
 #if FASTTT_TH
-      c->m_fastTT                          = 0;
+      c->m_fastTTSplit                     = 0;
 #endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 2;
@@ -3100,7 +3100,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
 #if FASTTT_TH
-      c->m_fastTT                          = 0;
+      c->m_fastTTSplit                     = 0;
 #endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
@@ -3171,7 +3171,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
 #if FASTTT_TH
-      c->m_fastTT                          = 5;
+      c->m_fastTTSplit                     = 5;
 #endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
@@ -3245,7 +3245,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 1;
 #if FASTTT_TH
-      c->m_fastTT                          = 1;
+      c->m_fastTTSplit                     = 1;
 #endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
@@ -3321,7 +3321,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
 #if FASTTT_TH
-      c->m_fastTT                          = 0;
+      c->m_fastTTSplit                     = 0;
 #endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
@@ -3560,7 +3560,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
 #if FASTTT_TH
-  css << "FastTTsplit:" << c->m_fastTT << " ";
+  css << "FastTTSplit:" << c->m_fastTTSplit << " ";
 #endif
   if( c->m_IBCMode )
   {

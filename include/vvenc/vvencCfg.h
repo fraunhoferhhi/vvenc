@@ -704,7 +704,7 @@ typedef struct vvenc_config
   int                 m_qtbttSpeedUpMode;
 #endif
 #if 1//FASTTT_TH
-  int                 m_fastTT;
+  int                 m_fastTTSplit;
   float               m_fastTT_th;
 #endif
 

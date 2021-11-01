@@ -819,7 +819,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
       }
 
 #if FASTTT_TH
-      if (m_pcEncCfg->m_fastTT && cuECtx.bestCostHorzSplit < MAX_DOUBLE)
+      if (m_pcEncCfg->m_fastTTSplit && cuECtx.bestCostHorzSplit < MAX_DOUBLE)
       {
         if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostHorzSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
         {
@@ -853,7 +853,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
       }
 
 #if FASTTT_TH
-      if (m_pcEncCfg->m_fastTT && cuECtx.bestCostVertSplit < MAX_DOUBLE)
+      if (m_pcEncCfg->m_fastTTSplit && cuECtx.bestCostVertSplit < MAX_DOUBLE)
       {
         if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostVertSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
         {
@@ -1086,7 +1086,7 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
   const CodingUnit&  bestCU   = *cuECtx.bestCU;
 
 #if FASTTT_TH
-  if (m_pcEncCfg->m_fastTT)
+  if (m_pcEncCfg->m_fastTTSplit)
   {
     cuECtx.bestCostBeforeSplit = cuECtx.bestCS->cost;
   }
