@@ -856,7 +856,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("JointCbCr",                                       m_JointCbCrMode,                                  "Enable joint coding of chroma residuals (0:off, 1:on)")
   ("CabacInitPresent",                                m_cabacInitPresent,                               "Enable cabac table index selection based on previous frame")
   ("LCTUFast",                                        m_useFastLCTU,                                    "Fast methods for large CTU")
-  ("PBIntraFast",                                     m_usePbIntraFast,                                 "Fast assertion if the intra mode is probable")
+  ("PBIntraFast",                                     m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off, 1: VTM, 2: relaxed, giving intra more chance)")
   ("FastMrg",                                         m_useFastMrg,                                     "Fast methods for inter merge")
   ("AMaxBT",                                          m_useAMaxBT,                                      "Adaptive maximal BT-size")
   ("FastQtBtEnc",                                     m_fastQtBtEnc,                                    "Fast encoding setting for QTBT")
@@ -1036,7 +1036,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
-  ;
+#if 1//FASTTT_TH
+  ("FastTTSplit",                                     m_fastTTSplit,                                    "Fast method for TT split" )
+#endif 
+    ;
 
   opts.setSubSection("Threading, performance");
   opts.addOptions()

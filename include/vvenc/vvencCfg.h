@@ -557,7 +557,7 @@ typedef struct vvenc_config
   bool                m_JointCbCrMode;
   int                 m_cabacInitPresent;
   bool                m_useFastLCTU;
-  bool                m_usePbIntraFast;
+  int                 m_usePbIntraFast;
   int                 m_useFastMrg;
   int                 m_useAMaxBT;
   bool                m_fastQtBtEnc;
@@ -702,6 +702,10 @@ typedef struct vvenc_config
   int                 m_qtbttSpeedUp;
 #if 1//QTBTT_SPEED3
   int                 m_qtbttSpeedUpMode;
+#endif
+#if 1//FASTTT_TH
+  int                 m_fastTTSplit;
+  float               m_fastTT_th;
 #endif
 
   int                 m_fastLocalDualTreeMode;
