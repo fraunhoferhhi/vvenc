@@ -703,6 +703,10 @@ typedef struct vvenc_config
 #if 1//QTBTT_SPEED3
   int                 m_qtbttSpeedUpMode;
 #endif
+#if 1//FASTTT_TH
+  int                 m_fastTT;
+  float               m_fastTT_th;
+#endif
 
   int                 m_fastLocalDualTreeMode;
 

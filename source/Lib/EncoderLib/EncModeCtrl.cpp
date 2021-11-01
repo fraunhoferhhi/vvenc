@@ -817,6 +817,20 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
       {
         return false;
       }
+
+#if FASTTT_TH
+      if (m_pcEncCfg->m_fastTT && cuECtx.bestCostHorzSplit < MAX_DOUBLE)
+      {
+        if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostHorzSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
+        {
+          return false;
+        }
+        if (cuECtx.bestCostVertSplit < MAX_DOUBLE && (cuECtx.bestCostHorzSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostVertSplit))
+        {
+          return false;
+        }
+      }
+#endif
       break;
     case CU_TRIV_SPLIT:
       if( cuECtx.didVertSplit && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
@@ -837,6 +851,20 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
       {
         return false;
       }
+
+#if FASTTT_TH
+      if (m_pcEncCfg->m_fastTT && cuECtx.bestCostVertSplit < MAX_DOUBLE)
+      {
+        if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostVertSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
+        {
+          return false;
+        }
+        if (cuECtx.bestCostHorzSplit < MAX_DOUBLE && (cuECtx.bestCostVertSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostHorzSplit))
+        {
+          return false;
+        }
+      }
+#endif
       break;
     default:
       THROW( "Only CU split modes are governed by the EncModeCtrl" );
@@ -1056,6 +1084,13 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
 
   CodedCUInfo    &relatedCU   = getBlkInfo( partitioner.currArea() );
   const CodingUnit&  bestCU   = *cuECtx.bestCU;
+
+#if FASTTT_TH
+  if (m_pcEncCfg->m_fastTT)
+  {
+    cuECtx.bestCostBeforeSplit = cuECtx.bestCS->cost;
+  }
+#endif
 
   setFromCs( *cuECtx.bestCS, cuECtx.bestMode, partitioner );
 

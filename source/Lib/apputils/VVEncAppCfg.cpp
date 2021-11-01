@@ -1036,7 +1036,10 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
-  ;
+#if 1//FASTTT_TH
+  ("FastTTsplit",                                     m_fastTT,                                         "Fast TTsplit" )
+#endif 
+    ;
 
   opts.setSubSection("Threading, performance");
   opts.addOptions()
