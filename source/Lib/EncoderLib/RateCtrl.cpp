@@ -718,7 +718,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           CHECK( slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7" );
 
           // try to reach target rate less aggressively in first coded frames, prevents temporary very low quality during second GOP
-          if ( it->poc == m_pcEncCfg->m_GOPSize && encRcSeq->estimatedBitUsage < encRcSeq->bitsUsed )
+          if ( it->poc == m_pcEncCfg->m_GOPSize )
           {
             d = std::max( 1.0, d - ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * 0.25 * it->frameInGopRatio );
             encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
