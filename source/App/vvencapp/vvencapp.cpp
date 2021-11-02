@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or
-other Intellectual Property Rights other than the copyrights concerning
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
 For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed.
+especially patent licenses, a separate Agreement needs to be closed. 
 For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
@@ -187,7 +187,7 @@ int main( int argc, char* argv[] )
 
   // open output file
   std::ofstream cOutBitstream;
-  if ( !( vvencappCfg.m_RCPass == 1 && !vvencappCfg.m_RCStatsFileName.empty() ) )
+  if ( !vvencappCfg.m_bitstreamFileName.empty() )
   {
     cOutBitstream.open( vvencappCfg.m_bitstreamFileName, std::ios::out | std::ios::binary | std::ios::trunc );
     if( ! cOutBitstream.is_open() )

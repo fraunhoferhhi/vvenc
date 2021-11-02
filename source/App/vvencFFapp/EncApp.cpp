@@ -329,7 +329,7 @@ bool EncApp::openFileIO()
   }
 
   // output bitstream
-  if ( !(m_cEncAppCfg.m_RCPass == 1 && !m_cEncAppCfg.m_RCStatsFileName.empty()) )
+  if ( !m_cEncAppCfg.m_bitstreamFileName.empty() )
   {
     m_bitstream.open( m_cEncAppCfg.m_bitstreamFileName.c_str(), fstream::binary | fstream::out );
     if( ! m_bitstream )
