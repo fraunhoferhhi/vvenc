@@ -1237,8 +1237,12 @@ bool VVEncAppCfg::checkCfg()
   // check bitstream file name in encode and decode mode
   if( m_bitstreamFileName.empty() )
   {
-    cout << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
-    ret = false;
+    // if rc statsfile is defined and in 1st pass, bitstream file is not needed
+    if ( !(m_RCPass == 1 && !m_RCStatsFileName.empty()) )
+    {
+      cout << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
+      ret = false;
+    }
   }
 
   // check remaining parameters in encode mode only
@@ -1255,7 +1259,11 @@ bool VVEncAppCfg::checkCfg()
   }
 
   // check remaining parameter set
-  return appCfg.xCheckCfg();
+  if( !appCfg.xCheckCfg() )
+  {
+    ret = false;
+  }
+  return ret;
 }
 
 bool VVEncAppCfg::xCheckCfg()
