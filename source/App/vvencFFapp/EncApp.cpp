@@ -329,11 +329,20 @@ bool EncApp::openFileIO()
   }
 
   // output bitstream
-  m_bitstream.open( m_cEncAppCfg.m_bitstreamFileName.c_str(), fstream::binary | fstream::out );
-  if( ! m_bitstream )
+  bool bOpenBitstreamFile = true;
+  if ( m_cEncAppCfg.m_RCPass == 1 && !m_cEncAppCfg.m_RCStatsFileName.empty() )
   {
-    msgApp( VVENC_ERROR, "open bitstream file failed\n" );
-    return false;
+    bOpenBitstreamFile =false;
+  }
+
+  if ( bOpenBitstreamFile )
+  {
+    m_bitstream.open( m_cEncAppCfg.m_bitstreamFileName.c_str(), fstream::binary | fstream::out );
+    if( ! m_bitstream )
+    {
+      msgApp( VVENC_ERROR, "open bitstream file failed\n" );
+      return false;
+    }
   }
 
   return true;
