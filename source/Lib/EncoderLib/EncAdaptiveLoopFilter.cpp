@@ -1801,7 +1801,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
           const int wBuf = w + ( clipL ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipR ? 0 : MAX_ALF_PADDING_SIZE );
           const int hBuf = h + ( clipT ? 0 : MAX_ALF_PADDING_SIZE ) + ( clipB ? 0 : MAX_ALF_PADDING_SIZE );
           PelUnitBuf  dstBuf = m_tempBuf2.subBuf( UnitArea( cs.area.chromaFormat, Area( 0, 0, wBuf, hBuf ) ) );
-          dstBuf.copyFrom( recExtBufCTU );
+          dstBuf.copyFrom( m_tempBuf.subBuf( UnitArea( cs.area.chromaFormat, Area( xStart - (clipL ? 0 : MAX_ALF_PADDING_SIZE), yStart - (clipT ? 0 : MAX_ALF_PADDING_SIZE), wBuf, hBuf ) ) ) );
           // pad top-left unavailable samples for raster slice
           if( xStart == xPos && yStart == yPos && ( rasterSliceAlfPad & 1 ) )
           {
@@ -5413,7 +5413,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
   const Pel* rec       = recYuv.get(COMP_Y).bufAt(area.lumaPos());
   
   int        slfStride = recYuv.get(compID).stride;
-  const Pel* slf       = recYuv.get(compID).bufAt(compArea);
+  const Pel* slf       = recYuv.get(compID).bufAt(area.chromaPos());
 
   int        orgStride = orgYuv.get(compID).stride;
   const Pel *org       = orgYuv.get(compID).bufAt(compArea);

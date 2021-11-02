@@ -217,6 +217,7 @@ private:
 #if QTBTT_SPEED3
   int                   m_MergeSimpleFlag;
 #endif
+  int                   m_tileIdx;
 
 public:
   EncCu();
@@ -254,8 +255,6 @@ private:
   void xCheckModeSplit        ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void xCheckModeSplitInternal( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode, const ModeType modeTypeParent, bool& skipInterPass );
   void xReuseCachedResult     ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm );
-
-  void xUpdateAfterCtuRC      ( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr );
 
   void xCheckDQP              ( CodingStructure& cs, Partitioner& partitioner, bool bKeepCtx = false);
   void xEncodeDontSplit       ( CodingStructure& cs, Partitioner& partitioner);

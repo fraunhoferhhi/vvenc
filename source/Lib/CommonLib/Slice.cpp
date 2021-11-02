@@ -1726,25 +1726,6 @@ PPS::~PPS()
   delete pcv;
 }
 
-
-void PPS::resetTileSliceInfo()
-{
-  numExpTileCols = 0;
-  numExpTileRows = 0;
-  numTileCols    = 0;
-  numTileRows    = 0;
-  numSlicesInPic = 0;
-  tileColWidth.  clear();
-  tileRowHeight. clear();
-  tileColBd.     clear();
-  tileRowBd.     clear();
-  ctuToTileCol.  clear();
-  ctuToTileRow.  clear();
-  ctuToSubPicIdx.clear();
-  rectSlices.    clear();
-  sliceMap.      clear();
-}
-
 /**
  - initialize tile row/column sizes and boundaries
  */
@@ -1785,7 +1766,6 @@ void PPS::initTiles()
   uint32_t  uniformTileRowHeight = tileRowHeight[rowIdx - 1];
   while( remainingHeightInCtu > 0 )
   {
-    CHECK(rowIdx >= MAX_TILE_ROWS, "Number of tile rows exceeds valid range");
     uniformTileRowHeight = std::min(remainingHeightInCtu, uniformTileRowHeight);
     tileRowHeight.push_back( uniformTileRowHeight );
     remainingHeightInCtu -= uniformTileRowHeight;
@@ -1833,29 +1813,77 @@ void PPS::initTiles()
 /**
  - initialize memory for rectangular slice parameters
  */
-void PPS::initRectSlices()
+void PPS::initRectSliceMap( const SPS* sps )
 {
-  CHECK(numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range");
-  rectSlices.resize(numSlicesInPic);
+  //currently only one slice is allowed
+  if( sps )
+  {
+    CHECK( sps->numSubPics > 1, "SubPic encoding not yet supported" );
+  }
+  
+  CHECK( numSlicesInPic > MAX_SLICES, "Number of slices in picture exceeds valid range" );
+  sliceMap.resize( numSlicesInPic );
+
+  sliceMap[0].initSliceMap();
+  
+  uint32_t tileX = 0, tileY = 0;  
+  for( uint32_t j = 0; j < numTileRows; j++ )
+  {
+    for( uint32_t k = 0; k < numTileCols; k++ )
+    {
+      sliceMap[0].addCtusToSlice( tileColBd[tileX + k], tileColBd[tileX + k +1],
+                                  tileRowBd[tileY + j], tileRowBd[tileY + j +1], picWidthInCtu );
+    }
+  }
+
+  checkSliceMap();
 }
 
+void PPS::checkSliceMap()
+{
+  uint32_t i;
+  std::vector<int>  ctuList, sliceList;
+  uint32_t picSizeInCtu = picWidthInCtu * picHeightInCtu;
+  for( i = 0; i < numSlicesInPic; i++ )
+  {
+    sliceList = sliceMap[ i ].ctuAddrInSlice;
+    ctuList.insert( ctuList.end(), sliceList.begin(), sliceList.end() );
+  }
+  CHECK( ctuList.size() < picSizeInCtu, "Slice map contains too few CTUs");
+  CHECK( ctuList.size() > picSizeInCtu, "Slice map contains too many CTUs");
+  std::sort( ctuList.begin(), ctuList.end() );
+  for( i = 1; i < ctuList.size(); i++ )
+  {
+    CHECK( ctuList[i] > ctuList[i-1]+1, "CTU missing in slice map");
+    CHECK( ctuList[i] == ctuList[i-1],  "CTU duplicated in slice map");
+  }
+}
 
 int Slice::getNumEntryPoints( const SPS& sps, const PPS& pps ) const
 {
-  uint32_t ctuAddr, ctuX, ctuY;
+  if (!sps.entryPointsPresent )
+  {
+    return 0;
+  }
+
+  uint32_t ctuAddr, ctuX, ctuY, prevCtuX = 0, prevCtuY = 0;
   int numEntryPoints = 0;
 
   // count the number of CTUs that align with either the start of a tile, or with an entropy coding sync point
   // ignore the first CTU since it doesn't count as an entry point
-  for( uint32_t i = 1; i < sliceMap.numCtuInSlice; i++ )
+  for( uint32_t i = 0; i < sliceMap.numCtuInSlice; i++ )
   {
     ctuAddr = sliceMap.ctuAddrInSlice[i];
     ctuX = ( ctuAddr % pps.picWidthInCtu );
     ctuY = ( ctuAddr / pps.picWidthInCtu );
-    if( ctuX == pps.ctuToTileCol[ctuX] && (ctuY == pps.ctuToTileRow[ctuY] || sps.entropyCodingSyncEnabled ) )
+
+    if( i != 0 && ( pps.tileRowBd[pps.ctuToTileRow[ctuY]] != pps.tileRowBd[pps.ctuToTileRow[prevCtuY]] || pps.tileColBd[pps.ctuToTileCol[ctuX]] != pps.tileColBd[pps.ctuToTileCol[prevCtuX]] || ( ctuY != prevCtuY && sps.entropyCodingSyncEnabled ) ) )
     {
       numEntryPoints++;
     }
+    
+    prevCtuX    = ctuX;
+    prevCtuY    = ctuY;
   }
   return numEntryPoints;
 }

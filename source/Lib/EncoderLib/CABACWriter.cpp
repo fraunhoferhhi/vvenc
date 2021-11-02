@@ -262,7 +262,7 @@ void CABACWriter::sao( const Slice& slice, unsigned ctuRsAddr )
   int                 rx                      = ctuRsAddr - ry * frame_width_in_ctus;
   const Position      pos                     ( rx * cs.pcv->maxCUSize, ry * cs.pcv->maxCUSize );
   const unsigned      curSliceIdx             = slice.independentSliceIdx;
-  const unsigned      curTileIdx              = 0;//cs.picture->brickMap->getBrickIdxRsMap( pos );
+  const unsigned      curTileIdx              = cs.pps->getTileIdx( pos );
   bool                leftMergeAvail          = cs.getCURestricted( pos.offset( -(int)pcv.maxCUSize, 0  ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
   bool                aboveMergeAvail         = cs.getCURestricted( pos.offset( 0, -(int)pcv.maxCUSize ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
   sao_block_pars( sao_ctu_pars, sps.bitDepths, sliceEnabled, leftMergeAvail, aboveMergeAvail, false );
@@ -2913,7 +2913,7 @@ void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr
     int                 rx = ctuRsAddr - ry * frame_width_in_ctus;
     const Position      pos( rx * cs.pcv->maxCUSize, ry * cs.pcv->maxCUSize );
     const uint32_t          curSliceIdx = cs.slice->independentSliceIdx;
-    const uint32_t      curTileIdx = 0;//cs.picture->brickMap->getBrickIdxRsMap( pos );
+    const uint32_t      curTileIdx = cs.pps->getTileIdx( pos );
     bool                leftAvail = cs.getCURestricted( pos.offset( -(int)pcv.maxCUSize, 0 ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
     bool                aboveAvail = cs.getCURestricted( pos.offset( 0, -(int)pcv.maxCUSize ), pos, curSliceIdx, curTileIdx, CH_L, TREE_D ) ? true : false;
 
