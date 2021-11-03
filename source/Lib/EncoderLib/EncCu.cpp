@@ -514,13 +514,17 @@ int EncCu::calcVarianz(const Pel* piOrg, const uint32_t  width, const uint32_t  
   for (int y=0;y<height;y++)
   {
 	for (int x=0;x<width;x++)
+    {    
       mean+=(float)piOrg[y*stride+x];
+    }
   }
   mean=mean/((float)width*(float)height);
   for (int y=0;y<height;y++)
   {
 	for (int x=0;x<width;x++)
+    {
       sum+=pow ((float)piOrg[y*stride+x]-mean,2);
+    }
   }
   sum=sum/((float)width*(float)height);
   return (round(sum));

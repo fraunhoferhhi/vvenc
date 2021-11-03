@@ -451,7 +451,7 @@ static const int    NUM_AMAXBT_LAYER =                             10;
 static const double AMAXBT_TH32 =                                  15.0;
 static const double AMAXBT_TH64 =                                  30.0;
 
-// Threshholds for Fast Chroma Block Patitoning. Only used in Intra Only Coding
+// Threshholds for Fast Chroma Block Partitoning. Only used in Intra Only Coding
 static const int    FCBP_TH1 =                                     18000;
 static const int    FCBP_TH2 =                                     105;
 
@@ -467,7 +467,8 @@ static const int NTAPS_CHROMA             =                         4; ///< Numb
 static const int NTAPS_BILINEAR           =                         2; ///< Number of taps for bilinear filter
 
 static const int ATMVP_SUB_BLOCK_SIZE =                             3; ///< sub-block size for ATMVP
-
+ellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
 static const int GEO_MAX_NUM_UNI_CANDS =                            6;
 static const int GEO_MAX_NUM_CANDS = GEO_MAX_NUM_UNI_CANDS * (GEO_MAX_NUM_UNI_CANDS - 1);
 static const int GEO_MIN_CU_LOG2 =                                  3;
