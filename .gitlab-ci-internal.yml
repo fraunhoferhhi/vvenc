@@ -1,6 +1,11 @@
 stages:
    - build
 
+variables:
+    FULL_BUILD:
+       value: "0"
+       description: "Enable full build with various cpompilers."
+
 .build_only_template:
    stage: build
    interruptible: true

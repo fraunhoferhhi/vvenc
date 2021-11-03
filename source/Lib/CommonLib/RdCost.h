@@ -114,6 +114,8 @@ private:
   // for distortion
 
   FpDistFunc              m_afpDistortFunc[2][DF_TOTAL_FUNCTIONS]; // [eDFunc]
+  Distortion           ( *m_wtdPredPtr[2] )  ( const DistParam& dp, ChromaFormat chmFmt, const uint32_t *lumaWeights );
+  Distortion           ( *m_fxdWtdPredPtr )  ( const DistParam& dp, uint32_t fixedWeight );
   vvencCostMode           m_costMode;
   double                  m_distortionWeight[MAX_NUM_COMP]; // only chroma values are used.
   double                  m_dLambda;

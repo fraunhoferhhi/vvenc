@@ -183,6 +183,9 @@ struct ComprCUCtx
     , bestTU        ( nullptr    )
     , bestMode      ()
     , bestInterCost             ( MAX_DOUBLE )
+#if FASTTT_TH
+    , bestCostBeforeSplit       ( MAX_DOUBLE )
+#endif
     , bestCostVertSplit     (MAX_DOUBLE)
     , bestCostHorzSplit     (MAX_DOUBLE)
     , bestCostTriVertSplit  (MAX_DOUBLE)
@@ -218,6 +221,9 @@ struct ComprCUCtx
   TransformUnit*    bestTU;
   EncTestMode       bestMode;
   double            bestInterCost;
+#if FASTTT_TH
+  double            bestCostBeforeSplit;
+#endif
   double            bestCostVertSplit;
   double            bestCostHorzSplit;
   double            bestCostTriVertSplit;

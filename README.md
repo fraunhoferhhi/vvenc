@@ -49,6 +49,8 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --qp,-q <int>          | 32                               | Quantization parameter (0..63)                                                                       |
 | --bitrate,-b <int>     | 0                                | Bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits per second). <br> Rate control requires correct `--framerate` (see option above). |
 | --passes,-p <int>      | -1                               | Number of rate control passes (1: single-pass rate control, 2: two-pass rate control)                |
+| --pass <int>           | not set                          | Set current rate control pass. If not set, encoder will run both passes. If set to [1,2], <br> encoder will execute first or second pass only. Requires `--rcstatsfile` to be set (see below). |
+| --rcstatsfile <str>    | not set                          | Rate control statistics file, to store or load first pass rate control statistics data.              |
 | --qpa <int>            | 1                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
 | --refreshsec,-rs <int> | 1                                | Intra period/refresh in seconds                                                                      |
 | --threads,-t <int>     | size >= 1280x720: <br> 8, else: 4  | Number of threads (1-N)                                                                              |
@@ -91,7 +93,9 @@ Be aware of that some options have different default values. The following table
 | --output,-o <str>      | not set                          | --BitstreamFile,-b <str> | not set                        |
 | --qp,-q <int>          | 32                               | --QP <int>             | 32                               |
 | --bitrate,-b <int>     | 0                                | --TargetBitrate <int>  | 0                                |
-| --passes,-p <int>      | -1                                | --NumPasses <int>     | -1                               |
+| --passes,-p <int>      | -1                               | --NumPasses <int>      | -1                               |
+| --pass <int>           | -1                               | --Pass <int>           | -1                               |
+| --rcstatsfile <str>    | -                                | --RCStatsFile <str>    | -                                |
 | --qpa <int>            | 1                                | --PerceptQPA,-qpa <int> | 0                               |
 | --refreshtype,-rt <str> | cra                             | --DecodingRefreshType <str> | cra                         |
 | --refreshsec,rs <int>  | 1                                | --RefreshSec <int>       | 1                              |
@@ -104,7 +108,7 @@ Be aware of that some options have different default values. The following table
 | --accessunitdelimiter,-aud <int> | auto                   | --AccessUnitDelimiter,-aud <int> | auto                   |
 | --vuiparameterspresent,-vui <int> | auto                  | --VuiParametersPresent,-vui <int> | auto                  |
 | --hrdparameterspresent,-hrd <int> | auto                  | --HrdParametersPresent,-hrd <int> | auto                  |
-| --decodedpicturehash,-dph <int> | off                     | --SEIDecodedPictureHash,-dph <int> | auto                 |
+| --decodedpicturehash,-dph <int> | off                     | --SEIDecodedPictureHash,-dph <int> | off                  |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels,
 the following calls will encode the input file with the medium speedup preset with 1Mbit/s by using Two pass rate control. 

@@ -10,7 +10,7 @@ if( NOT CMAKE_VERSION VERSION_LESS 3.13.0 )
 endif()
 
 # project name
-project( vvenc VERSION 1.1.0 )
+project( vvenc VERSION 1.2.0 )
 
 set( VVENC_ENABLE_X86_SIMD TRUE )
 set( VVENC_ENABLE_ARM_SIMD FALSE )
@@ -89,7 +89,6 @@ if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
   # enable address sanitizer
   set( VVENC_USE_ADDRESS_SANITIZER          OFF CACHE BOOL   "Enable or disable address sanitizer" )
 
-  # add -march=native
   set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
 endif()
 
@@ -147,9 +146,6 @@ endif()
 if( NOT CMAKE_BUILD_TYPE )
   set( CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE )
 endif()
-
-#set( ENABLE_LINK_TIME_OPT ON       CACHE BOOL   "Enable link time optimization for release and profile builds" )
-#set( OPT_TARGET_ARCH      "native" CACHE STRING "Create code and optimize for this architecture (default native)" )
 
 # set c++11
 set( CMAKE_CXX_STANDARD 14 )

@@ -62,6 +62,12 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
+template<int csx>
+static Distortion lumaWeightedSSE_Core( const DistParam& rcDtParam, ChromaFormat chmFmt, const uint32_t* lumaWeights );
+
+static Distortion fixWeightedSSE_Core( const DistParam& rcDtParam, uint32_t fixedWeight );
+
 RdCost::RdCost()
   : m_afpDistortFunc{ { nullptr, }, { nullptr, } }
 {
@@ -118,6 +124,10 @@ void RdCost::create()
   m_afpDistortFunc[0][DF_SAD_WITH_MASK] = RdCost::xGetSADwMask;
   // m_afpDistortFunc[1] can be used in any case
   memcpy( m_afpDistortFunc[1], m_afpDistortFunc[0], sizeof(m_afpDistortFunc)/2);
+
+  m_wtdPredPtr[0] = lumaWeightedSSE_Core<0>;
+  m_wtdPredPtr[1] = lumaWeightedSSE_Core<1>;
+  m_fxdWtdPredPtr = fixWeightedSSE_Core;
 
 #if ENABLE_SIMD_OPT_DIST
 #ifdef TARGET_SIMD_X86
@@ -1845,12 +1855,9 @@ inline Distortion getWeightedMSE(const Pel org, const Pel cur, const int64_t fix
   return Intermediate_Int((fixedPTweight*(iTemp*iTemp) + (1 << 15)) >> uiShift);
 }
 
-Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
+template<int csx>
+static Distortion lumaWeightedSSE_Core( const DistParam& rcDtParam, ChromaFormat chmFmt, const uint32_t* lumaWeights )
 {
-  if( rcDtParam.applyWeight )
-  {
-    THROW("no support");
-  }
         int  iRows = rcDtParam.org.height;
   const Pel* piOrg = rcDtParam.org.buf;
   const Pel* piCur = rcDtParam.cur.buf;
@@ -1861,62 +1868,79 @@ Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
   const int  iStrideOrgLuma   = rcDtParam.orgLuma->stride;
 
   Distortion uiSum   = 0;
+  uint32_t uiShift   = 16 + (DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth) << 1);
+
+  // cf, column factor, offset of the second column, to be set to '0' for width of '1'
+  const int cf =  1 - ( iCols & 1 );
+  CHECK( ( iCols & 1 ) && iCols != 1, "Width can only be even or equal to '1'!" );
+  const ComponentID compId = rcDtParam.compID;
+  const size_t  cShiftY    = getComponentScaleY(compId, chmFmt);
+
+  for( ; iRows != 0; iRows-- )
+  {
+    for (int n = 0; n < iCols; n+=2 )
+    {
+      uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], lumaWeights[piOrgLuma[(n   )<<csx]], uiShift );
+      uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], lumaWeights[piOrgLuma[(n+cf)<<csx]], uiShift );
+    }
+
+    piOrg     += iStrideOrg;
+    piCur     += iStrideCur;
+    piOrgLuma += iStrideOrgLuma<<cShiftY;
+  }
+
+  return ( uiSum >> ( 1 - cf ) );
+}
+
+static Distortion fixWeightedSSE_Core( const DistParam& rcDtParam, uint32_t fixedPTweight )
+{
+        int  iRows = rcDtParam.org.height;
+  const Pel* piOrg = rcDtParam.org.buf;
+  const Pel* piCur = rcDtParam.cur.buf;
+  const int  iCols = rcDtParam.org.width;
+  const int  iStrideCur = rcDtParam.cur.stride;
+  const int  iStrideOrg = rcDtParam.org.stride;
+
+  Distortion uiSum   = 0;
   uint32_t uiShift = 16 + (DISTORTION_PRECISION_ADJUSTMENT(rcDtParam.bitDepth) << 1);
 
   // cf, column factor, offset of the second column, to be set to '0' for width of '1'
   const int cf =  1 - ( iCols & 1 );
   CHECK( ( iCols & 1 ) && iCols != 1, "Width can only be even or equal to '1'!" );
+  
+  for( ; iRows != 0; iRows-- )
+  {
+    for (int n = 0; n < iCols; n+=2 )
+    {
+      uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], fixedPTweight, uiShift );
+      uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], fixedPTweight, uiShift );
+    }
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+
+  return ( uiSum >> ( 1 - cf ) );
+}
+
+Distortion RdCost::xGetSSE_WTD( const DistParam &rcDtParam ) const
+{
+  if( rcDtParam.applyWeight )
+  {
+    THROW("no support");
+  }
 
   if ((m_signalType == RESHAPE_SIGNAL_SDR || m_signalType == RESHAPE_SIGNAL_HLG) && rcDtParam.compID != COMP_Y)
   {
-    const int64_t fixedPTweight = (int64_t)(m_chromaWeight * (double)(1 << 16));
+    const int64_t fixedPTweight = ( int64_t ) ( m_chromaWeight * ( double ) ( 1 << 16 ) );
 
-    for( ; iRows != 0; iRows-- )
-    {
-      for (int n = 0; n < iCols; n+=2 )
-      {
-        uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], fixedPTweight, uiShift );
-        uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], fixedPTweight, uiShift );
-      }
-      piOrg += iStrideOrg;
-      piCur += iStrideCur;
-    }
-  }
-  else if( rcDtParam.compID == COMP_Y )
-  {
-    for( ; iRows != 0; iRows-- )
-    {
-      for (int n = 0; n < iCols; n+=2 )
-      {
-        uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[n   ]], uiShift );
-        uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[n+cf]], uiShift );
-      }
-      piOrg += iStrideOrg;
-      piCur += iStrideCur;
-      piOrgLuma += iStrideOrgLuma;
-    }
+    return m_fxdWtdPredPtr( rcDtParam, fixedPTweight );
   }
   else
   {
-    const ComponentID compId = rcDtParam.compID;
-    const size_t  cShiftX = getComponentScaleX(compId,  m_cf);
-    const size_t  cShiftY = getComponentScaleY(compId,  m_cf);
-
-    for( ; iRows != 0; iRows-- )
-    {
-      for (int n = 0; n < iCols; n+=2 )
-      {
-        uiSum += getWeightedMSE( piOrg[n   ], piCur[n   ], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[(n   )<<cShiftX]], uiShift );
-        uiSum += getWeightedMSE( piOrg[n+cf], piCur[n+cf], m_reshapeLumaLevelToWeightPLUT[piOrgLuma[(n+cf)<<cShiftX]], uiShift );
-      }
-      piOrg += iStrideOrg;
-      piCur += iStrideCur;
-      piOrgLuma += iStrideOrgLuma<<cShiftY;
-    }
+    return m_wtdPredPtr[getComponentScaleX(rcDtParam.compID, m_cf)]( rcDtParam, m_cf, m_reshapeLumaLevelToWeightPLUT );
   }
 
-  // if the width is '1', cf is '0', the differences are counted double and need to be normalized
-  return ( uiSum >> ( 1 - cf ) );
+  return 0;
 }
 
 void RdCost::setDistParamGeo(DistParam &rcDP, const CPelBuf &org, const Pel *piRefY, int iRefStride, const Pel *mask,
