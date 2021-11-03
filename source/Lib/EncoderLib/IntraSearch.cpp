@@ -78,7 +78,7 @@ IntraSearch::IntraSearch()
 {
 }
 
-void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache _TPROF_DEF )
+void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCost, SortedPelUnitBufs<SORTED_BUFS> *pSortedPelUnitBufs, XUCache &unitCache )
 {
   IntraPrediction::init( encCfg.m_internChromaFormat, encCfg.m_internalBitDepth[ CH_L ] );
 
@@ -106,9 +106,6 @@ void IntraSearch::init(const VVEncCfg &encCfg, TrQuant *pTrQuant, RdCost *pRdCos
     m_pSaveCS[ layer ]->create( chrFormat, Area( 0, 0, maxCUSize, maxCUSize ), false );
     m_pSaveCS[ layer ]->initStructData();
   }
-#if ENABLE_TIME_PROFILING_MT_MODE
-  m_timeProfiler = tp;
-#endif
 }
 
 void IntraSearch::destroy()

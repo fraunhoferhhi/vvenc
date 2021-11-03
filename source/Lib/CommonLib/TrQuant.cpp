@@ -230,7 +230,7 @@ void TrQuant::xDeQuant(const TransformUnit& tu,
                        const ComponentID   &compID,
                        const QpParam       &cQP)
 {
-  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_QUANT );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_QUANT );
   m_quant->dequant( tu, dstCoeff, compID, cQP );
 }
 
@@ -242,9 +242,6 @@ void TrQuant::init( const Quant* otherQuant,
                     const bool bEnc,
                     const bool useTransformSkipFast,
                     const int  thrVal
-#if ENABLE_TIME_PROFILING_MT_MODE
-                    , TProfiler* tp
-#endif
 )
 {
   m_bEnc = bEnc;
@@ -260,9 +257,6 @@ void TrQuant::init( const Quant* otherQuant,
   {
     m_quant->init( rdoq, bUseRDOQTS, useSelectiveRDOQ, thrVal );
   }
-#if ENABLE_TIME_PROFILING_MT_MODE
-  m_timeProfiler = tp;
-#endif
 }
 
 

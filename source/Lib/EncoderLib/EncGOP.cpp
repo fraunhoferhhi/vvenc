@@ -369,6 +369,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
   // encode one picture in serial mode / multiple pictures in FPP mode
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
   while( true )
   {
     Picture* pic           = nullptr;
@@ -376,7 +377,6 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
     // fetch next picture to be encoded and next free picture encoder
     {
-      PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
       std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
       if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
@@ -465,6 +465,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
   CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
 
   // AU output
   Picture* outPic = m_gopEncListOutput.front();

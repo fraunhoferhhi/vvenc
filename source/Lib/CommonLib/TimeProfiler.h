@@ -89,7 +89,7 @@ namespace vvenc {
   E_( P_INTER_MVD_SEARCH_B      ) \
   E_( P_INTER_MVD_SEARCH_AFFINE ) \
   E_( P_INTER_MVD               ) \
-  E_( P_INTER_IMV               ) \
+  E_( P_INTER_MVD_IMV           ) \
   E_( P_INTRA_EST_RD_CAND       ) \
   E_( P_INTRA_RD_SEARCH_LUMA    ) \
   E_( P_INTRA_CHROMA            ) \
@@ -390,9 +390,6 @@ public:
 #elif ENABLE_TIME_PROFILING_CU_SHAPES
 #define PROFILER_SCOPE_AND_STAGE_EXT2D_(cond,p,s,t,l,x,y,w,h)         PROF_SCOPE_AND_STAGE_EXT_COND(cond,p,s,w,h,t)
 #define PROFILER_EXT_ACCUM_AND_START_NEW_SET_(cond,p,s,t,l,x,y,w,h)   PROF_EXT_ACCUM_AND_START_NEW_SET_COND(cond,p,s,w,h,t)
-#else
-#define PROFILER_SCOPE_AND_STAGE_EXT2D_(cond,p,s,t,l,x,y,w,h)  
-#define PROFILER_EXT_ACCUM_AND_START_NEW_SET_(cond,p,s,t,l,x,y,w,h)
 #endif
 
 #define PROFILER_EXT_UPDATE(p,s,t)                              PROF_EXT_UPDATE(p,s,t)
@@ -431,12 +428,15 @@ void       timeProfilerResults( TProfiler* tp );
 #define _TPROF_DECL ,TProfiler*tp=nullptr
 #define _TPROF_DEF ,TProfiler*tp
 #define _TPROF_VAR ,tp
-#define _TPROF m_timeProfiler
+//#define _TPROF  m_timeProfiler
+#define _TPROF  ptls.get()
+#define __TPROF ptls.get()
 #else
 #define _TPROF_DECL
 #define _TPROF_DEF
 #define _TPROF_VAR
-#define _TPROF g_timeProfiler
+#define _TPROF  g_timeProfiler
+#define __TPROF g_timeProfiler
 #endif
 } // namespace vvenc
 

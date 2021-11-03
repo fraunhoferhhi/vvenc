@@ -124,8 +124,6 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
 
 void EncLib::uninitEncoderLib()
 {
-  xUninitLib();
-
 #if ENABLE_TRACING
   if ( g_trace_ctx )
   {
@@ -151,8 +149,15 @@ void EncLib::uninitEncoderLib()
 #endif
 
 #if ENABLE_TIME_PROFILING
+#if ENABLE_TIME_PROFILING_MT_MODE
+  for( auto& p : m_threadPool->getProfilers() )
+  {
+    *g_timeProfiler += *p;
+  }
+#endif
   timeProfilerResults( g_timeProfiler );
 #endif
+  xUninitLib();
 }
 
 void EncLib::initPass( int pass, const char* statsFName )
@@ -203,7 +208,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   // thread pool
   if( m_cEncCfg.m_numThreads > 0 )
   {
-    m_threadPool = new NoMallocThreadPool( m_cEncCfg.m_numThreads, "EncSliceThreadPool" );
+    m_threadPool = new NoMallocThreadPool( m_cEncCfg.m_numThreads, "EncSliceThreadPool", &m_cEncCfg );
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,

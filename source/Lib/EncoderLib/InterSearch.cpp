@@ -219,9 +219,9 @@ InterSearch::~InterSearch()
   destroy();
 }
 
-void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS _TPROF_DEF )
+void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS )
 {
-  InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize _TPROF_VAR );
+  InterPrediction::init( pRdCost, encCfg.m_internChromaFormat, encCfg.m_CTUSize );
   m_numBVs                       = 0;
   m_pcEncCfg                     = &encCfg;
   m_pcTrQuant                    = pTrQuant;
@@ -269,9 +269,6 @@ void InterSearch::init( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCo
   m_tmpAffiError = new Pel[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[0] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
   m_tmpAffiDeri[1] = new int[MAX_CU_SIZE * MAX_CU_SIZE];
-#if ENABLE_TIME_PROFILING_MT_MODE
-  m_timeProfiler = tp;
-#endif
 }
 
 void InterSearch::destroy()

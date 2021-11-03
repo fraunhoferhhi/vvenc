@@ -164,9 +164,6 @@ void EncCu::updateLambda(const Slice& slice, const double ctuLambda, const int c
 void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* const globalCtuQpVector, Ctx* syncPicCtx, RateCtrl* pRateCtrl )
 {
   DecCu::init( &m_cTrQuant, &m_cIntraSearch, &m_cInterSearch, encCfg.m_internChromaFormat );
-#if ENABLE_TIME_PROFILING && ENABLE_TIME_PROFILING_MT_MODE
-  TProfiler *tp = m_timeProfiler = timeProfilerCreate( encCfg );
-#endif
   m_cRdCost.create     ();
   m_cRdCost.setCostMode( encCfg.m_costMode );
   if ( encCfg.m_lumaReshapeEnable || encCfg.m_lumaLevelToDeltaQPEnabled )
@@ -175,9 +172,10 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   }
 
   m_modeCtrl.init     ( encCfg, &m_cRdCost );
-  m_cIntraSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_SortedPelUnitBufs, m_unitCache _TPROF_VAR );
-  m_cInterSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_modeCtrl, m_cIntraSearch.getSaveCSBuf() _TPROF_VAR );
-  m_cTrQuant.init     ( nullptr, encCfg.m_RDOQ, encCfg.m_useRDOQTS, encCfg.m_useSelectiveRDOQ, false, true, false /*m_useTransformSkipFast*/, encCfg.m_quantThresholdVal _TPROF_VAR );
+  m_cIntraSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_SortedPelUnitBufs, m_unitCache );
+  m_cInterSearch.init ( encCfg, &m_cTrQuant, &m_cRdCost, &m_modeCtrl, m_cIntraSearch.getSaveCSBuf() );
+  m_cTrQuant.init     ( nullptr, encCfg.m_RDOQ, encCfg.m_useRDOQTS, encCfg.m_useSelectiveRDOQ, false, true, false /*m_useTransformSkipFast*/, encCfg.m_quantThresholdVal );
+
   m_syncPicCtx = syncPicCtx;                         ///< context storage for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row used for estimation
   m_pcRateCtrl = pRateCtrl;
 
@@ -254,10 +252,6 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
 
 void EncCu::destroy()
 {
-#if ENABLE_TIME_PROFILING_MT_MODE
-  delete m_timeProfiler;
-  m_timeProfiler = nullptr;
-#endif
   for( int i = 0; i < maxCuDepth; i++ )
   {
     if( m_pTempCS[i] )
@@ -2998,7 +2992,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
 void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bestCS, Partitioner &partitioner, const EncTestMode& encTestMode)
 {
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_IMV, tempCS, partitioner.chType );
+  PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MVD_IMV, tempCS, partitioner.chType );
   bool Test_AMVR = m_pcEncCfg->m_AMVRspeed ? true: false;
   if (m_pcEncCfg->m_AMVRspeed > 2 && m_pcEncCfg->m_AMVRspeed < 5 && bestCS->getCU(partitioner.chType, partitioner.treeType)->skip)
   {

@@ -401,15 +401,11 @@ public:
   AffineProfList*     m_AffineProfList;
   bool                m_clipMvInSubPic;
 
-#if ENABLE_TIME_PROFILING_MT_MODE
-  TProfiler*          m_timeProfiler = nullptr;
-#endif
-
 public:
   InterSearch();
   virtual ~InterSearch();
 
-  void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS _TPROF_DECL );
+  void init                         ( const VVEncCfg& encCfg, TrQuant* pTrQuant, RdCost* pRdCost, EncModeCtrl* pModeCtrl, CodingStructure **pSaveCS );
   void setCtuEncRsrc                ( CABACWriter* cabacEstimator, CtxCache* ctxCache, ReuseUniMv* pReuseUniMv, BlkUniMvInfoBuffer* pBlkUniMvInfoBuffer, AffineProfList* pAffineProfList, IbcBvCand* pCachedBvs );
 
   void destroy                      ();

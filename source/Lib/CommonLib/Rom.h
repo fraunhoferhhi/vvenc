@@ -70,6 +70,9 @@ extern CDTrace* g_trace_ctx;
 
 #if ENABLE_TIME_PROFILING
 extern TProfiler *g_timeProfiler;
+#if ENABLE_TIME_PROFILING_MT_MODE
+extern thread_local std::unique_ptr<TProfiler> ptls;
+#endif
 #endif
 
 // ====================================================================================================================
