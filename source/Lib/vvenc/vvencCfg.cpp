@@ -664,6 +664,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_numIntraModesFullRD = -1;
   c->m_reduceIntraChromaModesFullRD = false;
+  c->m_IntraOnly = false;
 
 
   // init default preset
@@ -2699,6 +2700,11 @@ static bool checkCfgParameter( vvenc_config *c )
   if( c->m_picPartitionFlag )
   {
     checkCfgPicPartitioningParameter( c );
+  }
+
+  if ((c->m_IntraPeriod==1) || (c->m_framesToBeEncoded==1))
+  {
+    c->m_IntraOnly=true;  
   }
 
   return( c->m_confirmFailed );

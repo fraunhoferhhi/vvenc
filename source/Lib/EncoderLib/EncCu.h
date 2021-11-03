@@ -279,6 +279,9 @@ private:
   int      xCheckMMVDCand     ( uint32_t& mmvdMergeCand, int& bestDir, int tempNum, double& bestCostOffset, double& bestCostMerge, double bestCostList );
   void     xCheckRDCostIBCMode           ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& pm, const EncTestMode& encTestMode );
   void     xCheckRDCostIBCModeMerge2Nx2N ( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner, const EncTestMode& encTestMode );
+  int calcVarianz(const Pel* piOrg, const uint32_t  width, const uint32_t  height, const uint32_t  stride);
+  void CheckHorVerSplit(CPelBuf orgCb,CPelBuf orgCr,bool *splithor,bool *splitver);
+  void CheckCUsplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner,ComprCUCtx &cuECtx,bool *splithor,bool *splitver);
 };
 
 } // namespace vvenc

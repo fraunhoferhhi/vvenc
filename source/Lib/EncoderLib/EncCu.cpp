@@ -507,6 +507,112 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 }
 
+int EncCu::calcVarianz(const Pel* piOrg, const uint32_t  width, const uint32_t  height, const uint32_t  stride)
+{
+  float mean=0;
+  float sum=0;
+  for (int y=0;y<height;y++)
+  {
+	for (int x=0;x<width;x++)
+      mean+=(float)piOrg[y*stride+x];
+  }
+  mean=mean/((float)width*(float)height);
+  for (int y=0;y<height;y++)
+  {
+	for (int x=0;x<width;x++)
+      sum+=pow ((float)piOrg[y*stride+x]-mean,2);
+  }
+  sum=sum/((float)width*(float)height);
+  return (round(sum));
+}
+
+void  EncCu::CheckHorVerSplit(CPelBuf orgCb,CPelBuf orgCr,bool *splithor,bool *splitver)
+{
+  int varhu_cb,varhl_cb,varvl_cb,varvr_cb;
+  // calc varianz hor upper
+  const Pel* piOrg           = orgCb.buf;
+  varhu_cb=calcVarianz(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
+  // calc varianz hor lower
+  piOrg           = orgCb.buf+((orgCb.height>>1)*orgCb.stride);
+  varhl_cb=calcVarianz(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
+  // calc varianz ver left
+  piOrg           = orgCb.buf;
+  varvl_cb=calcVarianz(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
+  // calc varianz ver right
+  piOrg           = orgCb.buf+(orgCb.width>>1);
+  varvr_cb=calcVarianz(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
+  varhu_cb+=varhl_cb;
+  varvl_cb+=varvr_cb;
+  int varhu_cr,varhl_cr,varvl_cr,varvr_cr;
+  // calc varianz hor upper
+  piOrg           = orgCr.buf;
+  varhu_cr=calcVarianz(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
+  // calc varianz hor lower
+  piOrg           = orgCr.buf+((orgCr.height>>1)*orgCr.stride);
+  varhl_cr=calcVarianz(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
+  // calc varianz ver left
+  piOrg           = orgCr.buf;
+  varvl_cr=calcVarianz(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
+  // calc varianz ver right
+  piOrg           = orgCr.buf+(orgCr.width>>1);
+  varvr_cr=calcVarianz(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
+  varhu_cr+=varhl_cr;
+  varvl_cr+=varvr_cr;
+  if ((varhu_cr*FCBP_TH2<varvl_cr*100) && (varhu_cb*FCBP_TH2<varvl_cb*100))
+  {
+    *splitver=false;
+  }
+  else if ((varvl_cr*FCBP_TH2<varhu_cr*100) && (varvl_cb*FCBP_TH2<varhu_cb*100))
+  {
+    *splithor=false;
+  }
+}
+
+void EncCu::CheckCUsplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner,ComprCUCtx &cuECtx,bool *splithor,bool *splitver)
+{
+  CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
+  CodingStructure &cs   = *cu.cs;
+  const uint32_t uiLPelX  = tempCS->area.Cb().lumaPos().x;
+  const uint32_t uiTPelY  = tempCS->area.Cb().lumaPos().y;
+  int lumaw=0,lumah=0;
+  if (partitioner.isSepTree (*tempCS) && isChroma (partitioner.chType))
+  {
+    Position lumaRefPos (uiLPelX ,uiTPelY);
+    CodingUnit* colLumaCu = bestCS->refCS->getCU (lumaRefPos, CH_L, TREE_D);
+    if (colLumaCu)
+    {
+      lumah=colLumaCu->Y().height;
+      lumaw=colLumaCu->Y().width;
+    }
+  }
+  CPelBuf orgCb  = cs.getOrgBuf (COMP_Cb);
+  CPelBuf orgCr  = cs.getOrgBuf (COMP_Cr);
+  int th1=FCBP_TH1;
+  if (th1>0)
+  {
+    if ( (lumaw>>1) == orgCb.width )
+    {
+      if ( (bestCS->cost/(orgCb.width*orgCb.height) < th1))
+      {
+        *splitver=false;
+        cuECtx.maxDepth=partitioner.currDepth;
+      }
+    }
+    if ((lumah>>1) == orgCb.height )
+    {
+      if ( (bestCS->cost/(orgCb.width*orgCb.height) < th1))
+      {
+        *splithor=false;
+        cuECtx.maxDepth=partitioner.currDepth;
+      }
+    }
+  }
+  if ( orgCb.width==orgCb.height)
+  {
+    CheckHorVerSplit(orgCb,orgCr,splithor,splitver);
+  }
+}
+
 void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner )
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_COMPRESS_CU, tempCS, partitioner.chType );
@@ -629,7 +735,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   m_cInterSearch.resetSavedAffineMotion();
   {
-    const ComprCUCtx &cuECtx      = *m_modeCtrl.comprCUCtx;
+    ComprCUCtx &cuECtx      = *m_modeCtrl.comprCUCtx;
     const CodingStructure& cs     = *tempCS;
     const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
     const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
@@ -765,7 +871,12 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
 #endif
     } //boundary
-
+    bool splithor=true;
+    bool splitver=true;
+    if ((m_pcEncCfg->m_IntraOnly) && (partitioner.chType==CH_C))
+    {
+      CheckCUsplitting(tempCS,bestCS,partitioner,cuECtx,&splithor,&splitver);
+    }
     //////////////////////////////////////////////////////////////////////////
     // split modes
     EncTestMode lastTestMode;
@@ -780,7 +891,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if( partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
+    if(splithor &&  partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_BT_H, ETO_STANDARD, qp, false } );
@@ -791,7 +902,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if( partitioner.canSplit( CU_VERT_SPLIT, cs ) )
+    if(splitver &&  partitioner.canSplit( CU_VERT_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_BT_V, ETO_STANDARD, qp, false } );
@@ -802,7 +913,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if( partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
+    if(splithor &&  partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_TT_H, ETO_STANDARD, qp, false } );
@@ -813,7 +924,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if( partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
+    if(splitver &&  partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_TT_V, ETO_STANDARD, qp, false } );
