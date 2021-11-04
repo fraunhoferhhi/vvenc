@@ -236,7 +236,14 @@ void EncSlice::initPic( Picture* pic, int gopId )
 {
   Slice* slice = pic->cs->slice;
 
-  slice->sliceMap.addCtusToSlice( 0, pic->cs->pcv->widthInCtus, 0, pic->cs->pcv->heightInCtus, pic->cs->pcv->widthInCtus);
+  if( slice->pps->numTileCols * slice->pps->numTileRows > 1 )
+  {
+    slice->sliceMap = slice->pps->sliceMap[0];
+  }
+  else
+  {
+    slice->sliceMap.addCtusToSlice( 0, pic->cs->pcv->widthInCtus, 0, pic->cs->pcv->heightInCtus, pic->cs->pcv->widthInCtus);
+  }
 
   // this ensures that independently encoded bitstream chunks can be combined to bit-equal
   const SliceType cabacTableIdx = ! slice->pps->cabacInitPresent || slice->pendingRasInit ? slice->sliceType : m_encCABACTableIdx;
@@ -644,6 +651,7 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
     }
 
   public:
+    CtuTsIterator( const CodingStructure& _cs, int _s, int _e,       std::vector<int>& _m         ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( _s ) {}
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, bool _wpp                          ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ),                     m_ctuTsAddr( _s ) { if( _wpp ) setWppPattern(); }
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>& _m         ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( _s ) {}
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>& _m, int _c ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( std::max( _s, _c ) ) {}
@@ -751,6 +759,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
 
   // fill encoder parameter list
   int idx = 0;
+  const std::vector<int> base = slice.sliceMap.ctuAddrInSlice;
   auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
   for( auto ctuPos : ctuIter )
   {
@@ -1240,8 +1249,8 @@ void EncSlice::encodeSliceData( Picture* pic )
   const PreCalcValues& pcv        = *cs.pcv;
   const uint32_t widthInCtus      = pcv.widthInCtus;
   uint32_t uiSubStrm              = 0;
-  const int numSubstreamsColumns  = slice->pps->numExpTileCols;
-  const int numSubstreamRows      = slice->sps->entropyCodingSyncEnabled ? pic->cs->pcv->heightInCtus : slice->pps->numExpTileRows;
+  const int numSubstreamsColumns  = slice->pps->numTileCols;
+  const int numSubstreamRows      = slice->sps->entropyCodingSyncEnabled ? pic->cs->pcv->heightInCtus : slice->pps->numTileRows;
   const int numSubstreams         = std::max<int>( numSubstreamRows * numSubstreamsColumns, 0/*(int)pic->brickMap->bricks.size()*/ );
   std::vector<OutputBitstream> substreamsOut( numSubstreams );
 
@@ -1249,7 +1258,7 @@ void EncSlice::encodeSliceData( Picture* pic )
 
   for( uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++ )
   {
-    const uint32_t ctuRsAddr = (ctuTsAddr);
+    const uint32_t ctuRsAddr = slice->sliceMap.ctuAddrInSlice[ctuTsAddr];
     const uint32_t firstCtuRsAddrOfTile = 0;
     const uint32_t tileXPosInCtus       = firstCtuRsAddrOfTile % widthInCtus;
     const uint32_t ctuXPosInCtus        = ctuRsAddr % widthInCtus;
@@ -1263,7 +1272,7 @@ void EncSlice::encodeSliceData( Picture* pic )
     m_CABACWriter.initBitstream( &substreamsOut[ uiSubStrm ] );
 
     // set up CABAC contexts' state for this CTU
-    if (ctuRsAddr == firstCtuRsAddrOfTile)
+    if (ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]] && ctuYPosInCtus == cs.pps->tileRowBd[cs.pps->ctuToTileRow[ctuYPosInCtus]] )
     {
       if (ctuTsAddr != startCtuTsAddr) // if it is the first CTU, then the entropy coder has already been reset
       {
@@ -1293,9 +1302,11 @@ void EncSlice::encodeSliceData( Picture* pic )
     }
 
     // terminate the sub-stream, if required (end of slice-segment, end of tile, end of wavefront-CTU-row):
-    bool isLastCTUinWPP = wavefrontsEnabled && (((ctuRsAddr + 1) % widthInCtus) == tileXPosInCtus);
     bool isMoreCTUsinSlice = ctuRsAddr != (boundingCtuTsAddr - 1);
-    if (isLastCTUinWPP || !isMoreCTUsinSlice)         // this the the last CTU of either tile/brick/WPP/slice
+    bool isLastCTUinTile   = isMoreCTUsinSlice && slice->pps->getTileIdx( ctuRsAddr ) != slice->pps->getTileIdx( slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] );
+    bool isLastCTUinWPP    = wavefrontsEnabled && isMoreCTUsinSlice && !isLastCTUinTile && ( (slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] % widthInCtus) == cs.pps->tileColBd[cs.pps->ctuToTileCol[slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] % widthInCtus]] ); //TODO: adjust tile bound condition
+
+    if (isLastCTUinWPP || !isMoreCTUsinSlice || isLastCTUinTile )         // this the the last CTU of either tile/brick/WPP/slice
     {
       m_CABACWriter.end_of_slice();
 

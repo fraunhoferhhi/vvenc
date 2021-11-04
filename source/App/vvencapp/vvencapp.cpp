@@ -187,11 +187,14 @@ int main( int argc, char* argv[] )
 
   // open output file
   std::ofstream cOutBitstream;
-  cOutBitstream.open( vvencappCfg.m_bitstreamFileName, std::ios::out | std::ios::binary | std::ios::trunc );
-  if( ! cOutBitstream.is_open() )
+  if ( !vvencappCfg.m_bitstreamFileName.empty() )
   {
-    std::cout << cAppname  << " [error]: failed to open output file " << vvencappCfg.m_bitstreamFileName << std::endl;
-    return -1;
+    cOutBitstream.open( vvencappCfg.m_bitstreamFileName, std::ios::out | std::ios::binary | std::ios::trunc );
+    if( ! cOutBitstream.is_open() )
+    {
+      std::cout << cAppname  << " [error]: failed to open output file " << vvencappCfg.m_bitstreamFileName << std::endl;
+      return -1;
+    }
   }
 
   // --- allocate memory for output packets

@@ -137,10 +137,12 @@ void DecSlice::decompressSlice( Slice* slice, InputBitstream* bitstream )
     const unsigned  ctuRsAddr       = slice->sliceMap.ctuAddrInSlice[ctuIdx];
     const unsigned  ctuXPosInCtus   = ctuRsAddr % widthInCtus;
     const unsigned  ctuYPosInCtus   = ctuRsAddr / widthInCtus;    
-    const unsigned  tileXPosInCtus  = 0;
-    const unsigned  tileYPosInCtus  = 0;
-    const unsigned  tileColWidth    = widthInCtus;
-    const unsigned  tileRowHeight   = cs.pcv->heightInCtus;
+    const unsigned  tileColIdx      = slice->pps->ctuToTileCol[ctuXPosInCtus];
+    const unsigned  tileRowIdx      = slice->pps->ctuToTileRow[ctuYPosInCtus];
+    const unsigned  tileXPosInCtus  = slice->pps->tileColBd[tileColIdx];
+    const unsigned  tileYPosInCtus  = slice->pps->tileRowBd[tileRowIdx];
+    const unsigned  tileColWidth    = slice->pps->tileColWidth[tileColIdx];
+    const unsigned  tileRowHeight   = slice->pps->tileRowHeight[tileRowIdx];
     const unsigned  tileIdx         = slice->pps->getTileIdx( Position(ctuXPosInCtus, ctuYPosInCtus));
     const unsigned  maxCUSize       = sps->CTUSize;
     Position pos( ctuXPosInCtus*maxCUSize, ctuYPosInCtus*maxCUSize) ;

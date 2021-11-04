@@ -117,9 +117,7 @@ void EncPicture::compressPicture( Picture& pic, EncGOP& gopEncoder )
   xInitPicEncoder ( pic );
   if( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
-    pic.encRCPic = new EncRCPic;
-    pic.encRCPic->create( m_pcRateCtrl->encRCSeq, m_pcRateCtrl->encRCGOP, (pic.slices[0]->isIntra() ? 0 : pic.slices[0]->TLayer + 1), pic.slices[0]->poc, pic.rcIdxInGop, m_pcRateCtrl->m_listRCPictures );
-    gopEncoder.picInitRateControl( pic.gopId, pic, pic.slices[0], this );
+    gopEncoder.picInitRateControl( pic, pic.slices[0], this );
   }
 
   // compress current slice

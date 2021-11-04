@@ -342,7 +342,7 @@ struct SliceMap
   uint32_t               sliceID;                           //!< slice identifier (slice index for rectangular slices, slice address for raser-scan slices)
   uint32_t               numTilesInSlice;                   //!< number of tiles in slice (raster-scan slices only)
   uint32_t               numCtuInSlice;                     //!< number of CTUs in the slice
-  std::vector<uint32_t>  ctuAddrInSlice;                    //!< raster-scan addresses of all the CTUs in the slice
+  std::vector<int>       ctuAddrInSlice;                    //!< raster-scan addresses of all the CTUs in the slice
 
   SliceMap()
    : sliceID            ( 0 )
@@ -350,6 +350,14 @@ struct SliceMap
    , numCtuInSlice      ( 0 )
    , ctuAddrInSlice     ( )
   {
+  }
+
+  void  initSliceMap()
+  {
+    sliceID = 0;
+    numTilesInSlice = 0;
+    numCtuInSlice = 0;
+    ctuAddrInSlice.clear();
   }
 
   void  addCtusToSlice( uint32_t startX, uint32_t stopX, uint32_t startY, uint32_t stopY, uint32_t picWidthInCtbsY )
@@ -896,14 +904,14 @@ struct PPS
   std::vector<uint32_t>  tileRowBd;                    //!< tile row top-boundaries in units of CTUs
   std::vector<uint32_t>  ctuToTileCol;                 //!< mapping between CTU horizontal address and tile column index
   std::vector<uint32_t>  ctuToTileRow;                 //!< mapping between CTU vertical address and tile row index
-  bool                   rectSlice;                         //!< rectangular slice flag
-  bool                   singleSlicePerSubPic;          //!< single slice per sub-picture flag
+  bool                   rectSlice;                    //!< rectangular slice flag
+  bool                   singleSlicePerSubPic;         //!< single slice per sub-picture flag
   std::vector<uint32_t>  ctuToSubPicIdx;               //!< mapping between CTU and Sub-picture index
-  uint32_t               numSlicesInPic;                    //!< number of rectangular slices in the picture (raster-scan slice specified at slice level)
-  bool                   tileIdxDeltaPresent;               //!< tile index delta present flag
-  std::vector<RectSlice> rectSlices;                  //!< list of rectangular slice signalling parameters
-  std::vector<SliceMap>  sliceMap;                    //!< list of CTU maps for each slice in the picture
-  std::vector<SubPic>    subPics;                   //!< list of subpictures in the picture
+  uint32_t               numSlicesInPic;               //!< number of rectangular slices in the picture (raster-scan slice specified at slice level)
+  bool                   tileIdxDeltaPresent;          //!< tile index delta present flag
+
+  std::vector<SliceMap>  sliceMap;                     //!< list of CTU maps for each slice in the picture
+  std::vector<SubPic>    subPics;                      //!< list of subpictures in the picture
 
   bool             loopFilterAcrossTilesEnabled;        //!< loop filtering applied across tiles flag
   bool             loopFilterAcrossSlicesEnabled;       //!< loop filtering applied across slices flag
@@ -962,14 +970,16 @@ public:
                                                                                                picHeightInLumaSamples != pps.picHeightInLumaSamples       ||
                                                                                                scalingWindow          != pps.scalingWindow; }
 
-
-  uint32_t               getTileIdx( const Position& pos ) const                          { return 0; } //tbd
+  uint32_t               getTileIdx( uint32_t ctuX, uint32_t ctuY ) const            { return (ctuToTileRow[ctuY] * numTileCols) + ctuToTileCol[ctuX]; }
+  uint32_t               getTileIdx( uint32_t ctuRsAddr ) const                      { return getTileIdx( ctuRsAddr % picWidthInCtu,  ctuRsAddr / picWidthInCtu ); }
+  uint32_t               getTileIdx( const Position& pos ) const                     { return getTileIdx( pos.x / ctuSize, pos.y / ctuSize ); }
+  
   const SubPic&          getSubPicFromPos(const Position& pos)  const;
   const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
 
-  void resetTileSliceInfo();
   void initTiles();
-  void initRectSlices();
+  void initRectSliceMap( const SPS* sps );
+  void checkSliceMap();
 
 };
 
