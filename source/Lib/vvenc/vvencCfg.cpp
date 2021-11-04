@@ -61,6 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 VVENC_NAMESPACE_BEGIN
 
 static bool checkCfgParameter( vvenc_config *cfg );
+static void checkCfgPicPartitioningParameter( vvenc_config *c );
 static std::string vvenc_cfgString;
 
 static int vvenc_getQpValsSize( int QpVals[] )
@@ -479,7 +480,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_JointCbCrMode                           = false;
   c->m_cabacInitPresent                        = -1;
   c->m_useFastLCTU                             = false;
-  c->m_usePbIntraFast                          = false;
+  c->m_usePbIntraFast                          = 0;
   c->m_useFastMrg                              = 0;
   c->m_useAMaxBT                               = -1;
   c->m_fastQtBtEnc                             = true;
@@ -576,9 +577,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_deblockingFilterMetric                  = 0;
 
-  c->m_bLFCrossTileBoundaryFlag                = true;
-  c->m_bLFCrossSliceBoundaryFlag               = true;
-  c->m_loopFilterAcrossSlicesEnabled           = false;
+  c->m_bDisableLFCrossTileBoundaryFlag         = false;
+  c->m_bDisableLFCrossSliceBoundaryFlag        = false;
 
   c->m_bUseSAO                                 = true;
   c->m_saoEncodingRate                         = -1.0;
@@ -626,6 +626,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 #if 1//QTBTT_SPEED3
   c->m_qtbttSpeedUpMode                        = 0;
 #endif 
+#if FASTTT_TH
+  c->m_fastTTSplit                             = 0;
+#endif
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -633,7 +636,14 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ensureWppBitEqual                       = -1;
 
   c->m_picPartitionFlag                        = false;
-
+  memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
+  memset( c->m_tileRowHeight,   0, sizeof(c->m_tileRowHeight) );
+  c->m_numExpTileCols                          = 1;
+  c->m_numExpTileRows                          = 1;
+  c->m_numTileCols                             = 1;
+  c->m_numTileRows                             = 1;
+  c->m_numSlicesInPic                          = 1;
+  
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
   memset( c->m_summaryPicFilenameBase, '\0', sizeof(c->m_summaryPicFilenameBase) );
   c->m_summaryVerboseness                      = 0;
@@ -1205,6 +1215,16 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       if( c->m_GOPSize == 32 )
       {
+#if JVET_V0056_MCTF
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+        c->m_vvencMCTF.MCTFFrames[2] = 32;
+
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
+        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
+        c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
+#else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
         c->m_vvencMCTF.MCTFFrames[2] = 32;
@@ -1213,15 +1233,25 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_vvencMCTF.MCTFStrengths[1] = 0.5625;      // 18/32
         c->m_vvencMCTF.MCTFStrengths[2] = 0.84375;     // 27/32
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
+#endif
       }
       else if( c->m_GOPSize == 16 )
       {
+#if JVET_V0056_MCTF
+        c->m_vvencMCTF.MCTFFrames[0] = 8;
+        c->m_vvencMCTF.MCTFFrames[1] = 16;
+
+        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
+        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
+        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#else
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
 
         c->m_vvencMCTF.MCTFStrengths[0] = 0.4;     // ~12.75/32
         c->m_vvencMCTF.MCTFStrengths[1] = 0.8;     // ~25.50/32
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
+#endif
       }
       else if( c->m_GOPSize == 8 )
       {
@@ -2197,7 +2227,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
-  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE,  "When using segment parallel encoding more then 2 frames have to be encoded" );
+  static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
+  vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
 
   if (c->m_lumaReshapeEnable)
   {
@@ -2239,6 +2270,9 @@ static bool checkCfgParameter( vvenc_config *c )
 #else
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 3,   "QtbttExtraFast out of range [0..3]");
 #endif
+#if FASTTT_TH
+  vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
+#endif
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
@@ -2253,6 +2287,10 @@ static bool checkCfgParameter( vvenc_config *c )
   c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp > 2) ? (c->m_qtbttSpeedUp - 2) : 0;
   const int QTBTSMModeMap[] = { 0, 1, 3, 4, 5, 7 };
   c->m_qtbttSpeedUpMode = QTBTSMModeMap[c->m_qtbttSpeedUpMode];
+#endif
+#if FASTTT_TH
+  static const float TT_THRESHOLDS[7] = { 1.1f, 1.075f, 1.05f, 1.025f, 1.0f,  0.975f, 0.95f };
+  c->m_fastTT_th = c->m_fastTTSplit ? TT_THRESHOLDS[c->m_fastTTSplit - 1] : 0;
 #endif
 
   if( c->m_alf )
@@ -2658,8 +2696,112 @@ static bool checkCfgParameter( vvenc_config *c )
     if( c->m_alf )               { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
   }
 
+  if( c->m_picPartitionFlag )
+  {
+    checkCfgPicPartitioningParameter( c );
+  }
 
   return( c->m_confirmFailed );
+}
+
+static void checkCfgPicPartitioningParameter( vvenc_config *c )
+{
+  vvenc::PPS pps;
+
+  pps.picWidthInLumaSamples  = c->m_SourceWidth;
+  pps.picHeightInLumaSamples = c->m_SourceHeight;
+  pps.log2CtuSize            = vvenc::ceilLog2( c->m_CTUSize );
+  pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
+  pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
+
+  int i, numTileColumnWidths, numTileRowHeights;
+
+  // set default tile column if not provided
+  if( c->m_tileColumnWidth[0] == 0 )
+  {
+    c->m_tileColumnWidth[0] = pps.picWidthInCtu;
+  }
+  // set default tile row if not provided
+  if( c->m_tileRowHeight[0] == 0 )
+  {
+    c->m_tileRowHeight[0] = pps.picHeightInCtu;
+  }
+
+  // remove any tile columns that can be specified implicitly
+  if( c->m_tileColumnWidth[1] > 0 )
+  {
+    i = 9;
+    while( i > 0 && c->m_tileColumnWidth[i-1] == c->m_tileColumnWidth[i] )
+    {
+      c->m_tileColumnWidth[i] = 0;
+      i--;
+    }
+    numTileColumnWidths = i;
+  }
+  else
+  {
+    numTileColumnWidths = 1;
+  }
+
+  // remove any tile rows that can be specified implicitly
+  if( c->m_tileRowHeight[1] > 0 )
+  {
+    i = 9;
+    while( i > 0 && c->m_tileRowHeight[i-1] == c->m_tileRowHeight[i] )
+    {
+      c->m_tileRowHeight[i] = 0;
+      i--;
+    }
+    numTileRowHeights = i;
+  }
+  else
+  {
+    numTileRowHeights = 1;
+  }
+
+  // setup tiles in temporary PPS structure
+  uint32_t remSize = pps.picWidthInCtu;
+  int colIdx;
+  for( colIdx=0; remSize > 0 && colIdx < numTileColumnWidths; colIdx++ )
+  {
+    vvenc_confirmParameter( c, c->m_tileColumnWidth[ colIdx ] == 0, "Tile column widths cannot be equal to 0" );
+    c->m_tileColumnWidth[ colIdx ] = std::min( remSize, c->m_tileColumnWidth[ colIdx ]);
+    pps.tileColWidth.push_back( c->m_tileColumnWidth[ colIdx ] );
+    remSize -= c->m_tileColumnWidth[ colIdx ];
+  }
+  if( colIdx < numTileColumnWidths && remSize == 0 )
+  {
+    vvenc_confirmParameter( c, true, "Explicitly given tile column widths exceed picture width" );
+    return;
+  }
+  pps.numExpTileCols  = numTileColumnWidths;
+  c->m_numExpTileCols = numTileColumnWidths;
+  remSize = pps.picHeightInCtu;
+  int rowIdx;
+  for( rowIdx=0; remSize > 0 && rowIdx < numTileRowHeights; rowIdx++ )
+  {
+    vvenc_confirmParameter( c, c->m_tileRowHeight[ rowIdx ] == 0, "Tile row heights cannot be equal to 0" );
+    c->m_tileRowHeight[ rowIdx ] = std::min( remSize, c->m_tileRowHeight[ rowIdx ]);
+    pps.tileRowHeight.push_back( c->m_tileRowHeight[ rowIdx ] );
+    remSize -= c->m_tileRowHeight[ rowIdx ];
+  }
+  if( rowIdx < numTileRowHeights && remSize == 0 )
+  {
+    vvenc_confirmParameter( c, true, "Explicitly given tile row heights exceed picture width" );
+    return;
+  }
+  pps.numExpTileRows  = numTileRowHeights;
+  c->m_numExpTileRows = numTileRowHeights;
+  pps.initTiles();
+
+  uint32_t maxTileCols, maxTileRows;
+  vvenc::LevelTierFeatures::getMaxTileColsRowsPerLevel( c->m_level, maxTileCols, maxTileRows );
+  vvenc_confirmParameter( c, pps.numTileCols > maxTileCols, "Number of tile columns exceeds maximum number allowed according to specified level" );
+  vvenc_confirmParameter( c, pps.numTileRows > maxTileRows, "Number of tile rows exceeds maximum number allowed according to specified level" );
+  c->m_numTileCols = pps.numTileCols;
+  c->m_numTileRows = pps.numTileRows;
+
+  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
 }
 
 VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
@@ -2785,6 +2927,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 0;
+#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -2834,8 +2979,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 0;
+#endif
       c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
@@ -2885,8 +3033,11 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 0;
+#endif
       c->m_contentBasedFastQtbt            = 1;
-      c->m_usePbIntraFast                  = 1;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 1;
@@ -2914,7 +3065,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 1;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MMVD                            = 3;
       c->m_MRL                             = 1;
       c->m_MTSImplicit                     = 1;
@@ -2948,6 +3099,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 0;
+#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3016,6 +3170,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 5;
+#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3087,6 +3244,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 1;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 1;
+#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 1;
@@ -3160,6 +3320,9 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
+#if FASTTT_TH
+      c->m_fastTTSplit                     = 0;
+#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3295,6 +3458,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   }
   css << "CCALF:" << (c->m_ccalf ? 1 : 0) << " ";
 
+  css << "Tiles:" << c->m_numTileCols << "x" << c->m_numTileRows << " ";
+  css << "Slices:"<< c->m_numSlicesInPic << " ";
+
   const int iWaveFrontSubstreams = c->m_entropyCodingSyncEnabled ? ( c->m_PadSourceHeight + c->m_CTUSize - 1 ) / c->m_CTUSize : 1;
   css << "WPP:" << (c->m_entropyCodingSyncEnabled ? 1 : 0) << " ";
   css << "WPP-Substreams:" << iWaveFrontSubstreams << " ";
@@ -3393,6 +3559,9 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "IntegerET:" << c->m_bIntegerET << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
+#if FASTTT_TH
+  css << "FastTTSplit:" << c->m_fastTTSplit << " ";
+#endif
   if( c->m_IBCMode )
   {
     css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";

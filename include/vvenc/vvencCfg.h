@@ -73,7 +73,11 @@ VVENC_NAMESPACE_BEGIN
 #define VVENC_MAX_TLAYER                      7      // Explicit temporal layer QP offset - max number of temporal layer
 #define VVENC_MAX_NUM_CQP_MAPPING_TABLES      3      // Maximum number of chroma QP mapping tables (Cb, Cr and joint Cb-Cr)
 #define VVENC_MAX_NUM_ALF_ALTERNATIVES_CHROMA 8
+#if JVET_V0056_MCTF || 1
+#define VVENC_MCTF_RANGE                      4      // max number of frames used for MCTF filtering in forward / backward direction
+#else
 #define VVENC_MCTF_RANGE                      2      // max number of frames used for MCTF filtering in forward / backward direction
+#endif
 #define VVENC_MAX_NUM_COMP                    3      // max number of components
 #define VVENC_MAX_QP_VALS_CHROMA              8      // max number qp vals in array
 #define VVENC_MAX_MCTF_FRAMES                 16
@@ -553,7 +557,7 @@ typedef struct vvenc_config
   bool                m_JointCbCrMode;
   int                 m_cabacInitPresent;
   bool                m_useFastLCTU;
-  bool                m_usePbIntraFast;
+  int                 m_usePbIntraFast;
   int                 m_useFastMrg;
   int                 m_useAMaxBT;
   bool                m_fastQtBtEnc;
@@ -648,9 +652,8 @@ typedef struct vvenc_config
   int                 m_loopFilterTcOffsetDiv2[3];                                       // tc offset for deblocking filter
   int                 m_deblockingFilterMetric;
 
-  bool                m_bLFCrossTileBoundaryFlag;
-  bool                m_bLFCrossSliceBoundaryFlag;                                       // 1: filter across slice boundaries 0: do not filter across slice boundaries
-  bool                m_loopFilterAcrossSlicesEnabled;
+  bool                m_bDisableLFCrossTileBoundaryFlag;                                 // 0: filter across tile boundaries 1: do not filter across tile boundaries
+  bool                m_bDisableLFCrossSliceBoundaryFlag;                                // 0: filter across slice boundaries 1: do not filter across slice boundaries
 
   bool                m_bUseSAO;
   double              m_saoEncodingRate;                                                 // When >0 SAO early picture termination is enabled for luma and chroma
@@ -700,6 +703,10 @@ typedef struct vvenc_config
 #if 1//QTBTT_SPEED3
   int                 m_qtbttSpeedUpMode;
 #endif
+#if 1//FASTTT_TH
+  int                 m_fastTTSplit;
+  float               m_fastTT_th;
+#endif
 
   int                 m_fastLocalDualTreeMode;
 
@@ -707,7 +714,14 @@ typedef struct vvenc_config
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 
   bool                m_picPartitionFlag;
-
+  unsigned int        m_tileColumnWidth[10];
+  unsigned int        m_tileRowHeight[10];
+  uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
+  uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
+  uint32_t            m_numTileCols;                                                     // derived number of tile columns
+  uint32_t            m_numTileRows;                                                     // derived number of tile rows
+  uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
+  
   // decode bitstream options
   int                 m_switchPOC;                                                       // dbg poc.
   int                 m_switchDQP;                                                       // switch DQP.

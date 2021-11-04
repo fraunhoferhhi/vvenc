@@ -581,6 +581,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToArr<int>                 toQpOutCbCr                  ( &m_qpOutValsCbCr[0], VVENC_MAX_QP_VALS_CHROMA         );
   IStreamToArr<double>              toIntraLambdaModifier        ( &m_adIntraLambdaModifier[0], VVENC_MAX_TLAYER );
 
+  IStreamToArr<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth[0], 10 );
+  IStreamToArr<unsigned int>        toTileRowHeight              ( &m_tileRowHeight[0], 10 );
+
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,            &SegmentToEnumMap );
@@ -853,7 +856,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("JointCbCr",                                       m_JointCbCrMode,                                  "Enable joint coding of chroma residuals (0:off, 1:on)")
   ("CabacInitPresent",                                m_cabacInitPresent,                               "Enable cabac table index selection based on previous frame")
   ("LCTUFast",                                        m_useFastLCTU,                                    "Fast methods for large CTU")
-  ("PBIntraFast",                                     m_usePbIntraFast,                                 "Fast assertion if the intra mode is probable")
+  ("PBIntraFast",                                     m_usePbIntraFast,                                 "Intra mode pre-check dependent on best Inter mode, skip intra if it is not probable (0:off, 1: VTM, 2: relaxed, giving intra more chance)")
   ("FastMrg",                                         m_useFastMrg,                                     "Fast methods for inter merge")
   ("AMaxBT",                                          m_useAMaxBT,                                      "Adaptive maximal BT-size")
   ("FastQtBtEnc",                                     m_fastQtBtEnc,                                    "Fast encoding setting for QTBT")
@@ -910,9 +913,8 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("LoopFilterCrTcOffset_div2",                       m_loopFilterTcOffsetDiv2[2],                      "")
   ("DeblockingFilterMetric",                          m_deblockingFilterMetric,                         "")
 
-  ("LFCrossTileBoundaryFlag",                         m_bLFCrossTileBoundaryFlag,                       "Enable cross-tile-boundary loop filtering")
-  ("LFCrossSliceBoundaryFlag",                        m_bLFCrossSliceBoundaryFlag,                      "Enable cross-slice-boundary loop filtering")
-  ("LoopFilterAcrossTileGroupsEnabled",               m_loopFilterAcrossSlicesEnabled,                  "Enable loop filtering across tile groups")
+  ("DisableLoopFilterAcrossTiles",                    m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
+  ("DisableLoopFilterAcrossSlices",                   m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
   ("SAO",                                             m_bUseSAO,                                        "Enable Sample Adaptive Offset")
   ("SaoEncodingRate",                                 m_saoEncodingRate,                                "When >0 SAO early picture termination is enabled for luma and chroma")
@@ -1034,13 +1036,18 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   ("FastLocalDualTreeMode",                           m_fastLocalDualTreeMode,                          "Fast intra pass coding for local dual-tree in intra coding region (0:off, 1:use threshold, 2:one intra mode only)")
   ("QtbttExtraFast",                                  m_qtbttSpeedUp,                                   "Non-VTM compatible QTBTT speed-ups" )
-  ;
+#if 1//FASTTT_TH
+  ("FastTTSplit",                                     m_fastTTSplit,                                    "Fast method for TT split" )
+#endif 
+    ;
 
   opts.setSubSection("Threading, performance");
   opts.addOptions()
   ("MaxParallelFrames",                               m_maxParallelFrames,                              "Maximum number of frames to be processed in parallel(0:off, >=2: enable parallel frames)")
   ("WppBitEqual",                                     m_ensureWppBitEqual,                              "Ensure bit equality with WPP case (0:off (sequencial mode), 1:copy from wpp line above, 2:line wise reset)")
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
+  ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
+  ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
   ;
 
   opts.setSubSection("Coding tools");
@@ -1230,8 +1237,12 @@ bool VVEncAppCfg::checkCfg()
   // check bitstream file name in encode and decode mode
   if( m_bitstreamFileName.empty() )
   {
-    cout << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
-    ret = false;
+    // if rc statsfile is defined and in 1st pass, bitstream file is not needed
+    if ( !(m_RCPass == 1 && !m_RCStatsFileName.empty()) )
+    {
+      cout << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
+      ret = false;
+    }
   }
 
   // check remaining parameters in encode mode only
@@ -1248,7 +1259,11 @@ bool VVEncAppCfg::checkCfg()
   }
 
   // check remaining parameter set
-  return appCfg.xCheckCfg();
+  if( !appCfg.xCheckCfg() )
+  {
+    ret = false;
+  }
+  return ret;
 }
 
 bool VVEncAppCfg::xCheckCfg()
