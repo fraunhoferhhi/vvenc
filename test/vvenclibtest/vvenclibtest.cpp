@@ -303,7 +303,8 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams, false );
 
-  testParamList( "RPR",                                    vvencParams.m_rprEnabledFlag,             vvencParams, { 2 }, true );
+  testParamList( "RPR",                                    vvencParams.m_rprEnabledFlag,             vvencParams, { -1, 0, 1 } );
+  testParamList( "RPR",                                    vvencParams.m_rprEnabledFlag,             vvencParams, { -2, 2, 3 }, true );
 
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { 0,1,2,64 } );
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { -1,65 }, true );

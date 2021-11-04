@@ -556,7 +556,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useChromaTS                             = 0;
   c->m_useBDPCM                                = 0;
 
-  c->m_rprEnabledFlag                          = 1;
+  c->m_rprEnabledFlag                          = -1;
   c->m_resChangeInClvsEnabled                  = false;
   c->m_craAPSreset                             = false;
   c->m_rprRASLtoolSwitch                       = false;
@@ -1152,12 +1152,24 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
 
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag < 0 || c->m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 costrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
-
-  if( c->m_rprEnabledFlag != 2 && c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE )
+  if( c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE )
   {
     c->m_rprEnabledFlag = 2;
+  }
+  else
+  {
+    if( c->m_rprEnabledFlag == 2 )
+    {
+      vvenc_confirmParameter( c, true, "for using RPR=2 costrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
+    }
+    else if( c->m_rprEnabledFlag == -1 )
+    {
+      c->m_rprEnabledFlag = 0;
+    }
+    else
+    {
+      vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
+    }
   }
   if( c->m_rprEnabledFlag == 2 )
   {
