@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Quant.h"
 
 #ifdef TARGET_SIMD_X86
-#include "CommonDefX86.h"
+#include "x86/CommonDefX86.h"
 #endif
 
 namespace vvenc {

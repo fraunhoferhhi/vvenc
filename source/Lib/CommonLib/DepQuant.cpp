@@ -48,7 +48,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "TrQuant.h"
 #include "CodingStructure.h"
 #include "UnitTools.h"
-#include "CommonDefX86.h"
+#ifdef TARGET_SIMD_X86
+#include "x86/CommonDefX86.h"
+#endif
 
 #include <bitset>
 
