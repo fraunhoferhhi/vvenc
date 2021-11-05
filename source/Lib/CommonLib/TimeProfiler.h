@@ -414,6 +414,12 @@ typedef TimeProfiler2D TProfiler;
 TProfiler* timeProfilerCreate ( const VVEncCfg& encCfg );
 void       timeProfilerResults( TProfiler* tp );
 
+#if ENABLE_TIME_PROFILING_MT_MODE
+#define _TPROF  ptls.get()
+#else
+#define _TPROF  g_timeProfiler
+#endif
+
 #else
 #define PROF_START(p,s)
 #define PROF_STOP(p)
@@ -424,20 +430,6 @@ void       timeProfilerResults( TProfiler* tp );
 #define PROFILER_EXT_UPDATE(p,s,t)
 #endif
 
-#if ENABLE_TIME_PROFILING && ENABLE_TIME_PROFILING_MT_MODE
-#define _TPROF_DECL ,TProfiler*tp=nullptr
-#define _TPROF_DEF ,TProfiler*tp
-#define _TPROF_VAR ,tp
-//#define _TPROF  m_timeProfiler
-#define _TPROF  ptls.get()
-#define __TPROF ptls.get()
-#else
-#define _TPROF_DECL
-#define _TPROF_DEF
-#define _TPROF_VAR
-#define _TPROF  g_timeProfiler
-#define __TPROF g_timeProfiler
-#endif
 } // namespace vvenc
 
 //! \}
