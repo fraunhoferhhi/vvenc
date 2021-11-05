@@ -916,7 +916,7 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noRaslConstraintFlag                         = m_cEncCfg.m_IntraPeriod == 1 || !hasLeadingPictures;
   ci.noRadlConstraintFlag                         = m_cEncCfg.m_IntraPeriod == 1 || !hasLeadingPictures;
   ci.noIdrConstraintFlag                          = false;
-  ci.noCraConstraintFlag                          = m_cEncCfg.m_DecodingRefreshType != 1;
+  ci.noCraConstraintFlag                          = (m_cEncCfg.m_DecodingRefreshType != 1 && m_cEncCfg.m_DecodingRefreshType != 5);
   ci.noGdrConstraintFlag                          = false;
   ci.noApsConstraintFlag                          = ( !m_cEncCfg.m_alf && m_cEncCfg.m_lumaReshapeEnable == 0 /*&& m_useScalingListId == SCALING_LIST_OFF*/);
 }
