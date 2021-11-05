@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "CommonLib/TimeProfiler.h"
 #include "CommonLib/MD5.h"
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
@@ -368,6 +369,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
   // encode one picture in serial mode / multiple pictures in FPP mode
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
   while( true )
   {
     Picture* pic           = nullptr;
@@ -463,6 +465,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
   CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
 
   // AU output
   Picture* outPic = m_gopEncListOutput.front();

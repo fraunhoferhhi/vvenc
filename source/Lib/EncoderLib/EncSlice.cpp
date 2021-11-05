@@ -726,6 +726,7 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )
 {
+  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_IGNORE, pic->cs, CH_L );
   CodingStructure& cs      = *pic->cs;
   Slice&           slice   = *cs.slice;
   const PreCalcValues& pcv = *cs.pcv;
@@ -902,19 +903,23 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // reshape
         if( slice.sps->lumaReshapeEnable && slice.picHeader->lmcsEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_RESHAPER, &cs, CH_L );
           PelBuf reco = pic->getRecoBuf( COMP_Y ).subBuf( x, y, width, height );
           reco.rspSignal( pic->reshapeData.getInvLUT() );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         // loopfilter
         if( !cs.pps->deblockingFilterControlPresent || !cs.pps->deblockingFilterDisabled || cs.pps->deblockingFilterOverrideEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_DEBLOCK_FILTER, &cs, CH_L );
           // calculate filter strengths
           encSlice->m_pLoopFilter->calcFilterStrengthsCTU( cs, ctuArea, true );
 
           // vertical filter
           PelUnitBuf reco = cs.picture->getRecoBuf();
           encSlice->m_pLoopFilter->xDeblockArea<EDGE_VER>( cs, ctuArea, MAX_NUM_CH, reco );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_rspLfVer );
@@ -943,8 +948,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         if( !cs.pps->deblockingFilterControlPresent || !cs.pps->deblockingFilterDisabled || cs.pps->deblockingFilterOverrideEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_DEBLOCK_FILTER, &cs, CH_L );
           PelUnitBuf reco = cs.picture->getRecoBuf();
           encSlice->m_pLoopFilter->xDeblockArea<EDGE_HOR>( cs, ctuArea, MAX_NUM_CH, reco );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_lfHor );
@@ -981,6 +988,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( slice.sps->saoEnabled )
         {
           const int lineIdx               = std::min( (int)( encSlice->m_LineEncRsrc.size() ) - 1, ctuPosY );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_SAO, &cs, CH_L );
           LineEncRsrc* lineEncRsrc        = encSlice->m_LineEncRsrc[ lineIdx ];
           PerThreadRsrc* taskRsrc         = encSlice->m_CtuTaskRsrc[ threadIdx ];
           EncSampleAdaptiveOffset& encSao = lineEncRsrc->m_encSao;
@@ -989,6 +997,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
           encSao.storeCtuReco( cs, ctuArea );
           encSao.getCtuStatistics( cs, encSlice->m_saoStatData, ctuArea, ctuRsAddr );
           encSao.decideCtuParams( cs, encSlice->m_saoStatData, encSlice->m_saoEnabled, encSlice->m_saoAllDisabled, ctuArea, ctuRsAddr, &encSlice->m_saoReconParams[ 0 ], cs.picture->getSAO() );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         // ALF border extension
@@ -1032,8 +1041,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // ALF pre-processing
         if( slice.sps->alfEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
           PelUnitBuf recoBuf = cs.picture->getRecoBuf();
           encSlice->m_pALF->getStatisticsCTU( *cs.picture, cs, recoBuf, ctuRsAddr );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_stat );
@@ -1061,8 +1072,10 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // ALF post-processing
         if( slice.sps->alfEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
           encSlice->m_pALF->deriveFilter( *cs.picture, cs, slice.getLambdas() );
           encSlice->m_pALF->reconstructCoeffAPSs( cs, cs.slice->tileGroupAlfEnabled[COMP_Y], cs.slice->tileGroupAlfEnabled[COMP_Cb] || cs.slice->tileGroupAlfEnabled[COMP_Cr], false );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_derive );
@@ -1092,7 +1105,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         if( slice.sps->alfEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L );
           encSlice->m_pALF->reconstructCTU_MT( *cs.picture, cs, ctuRsAddr );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_alf_recon );
@@ -1118,9 +1133,11 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // ALF pre-processing
         if( slice.sps->ccalfEnabled )
         {
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_ALF, &cs, CH_L);
           encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cb, ctuRsAddr );
           encSlice->m_pALF->deriveStatsForCcAlfFilteringCTU( cs, COMP_Cr, ctuRsAddr );
           encSlice->m_pALF->copyCTUForCCALF( cs, ctuPosX, ctuPosY );
+          PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_IGNORE, &cs, CH_L );
         }
 
         ITT_TASKEND( itt_domain_encode, itt_handle_ccalf_stat );
