@@ -61,17 +61,17 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-template< X86_VEXT vext, int W >
-void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned rows )
+template<X86_VEXT vext, unsigned trSize>
+void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows )
 {
   unsigned maxLoopL = std::min<int>( reducedLines, 4 );
 
 #if USE_AVX2
-  if( W >= 8 && vext >= AVX2 )
+  if( trSize >= 8 && vext >= AVX2 )
   {
     if( ( trSize & 15 ) == 0 )
     {
-      unsigned trLoops = trSize >> 4;
+      static constexpr unsigned trLoops = trSize >> 4 ? trSize >> 4 : 1;
 
       for( int k = 0; k < rows; k += 2 )
       {
@@ -80,7 +80,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
         const TCoeff* srcPtr0 = &src[ k      * lines];
         const TCoeff* srcPtr1 = &src[(k + 1) * lines];
 
-        __m256i vsrc1v[4][2];
+        __m256i vsrc1v[trLoops][2];
         
         const TMatrixCoeff*  itPtr0 = &it[ k      * trSize];
         const TMatrixCoeff*  itPtr1 = &it[(k + 1) * trSize];
@@ -197,7 +197,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
     }
   }
 #else
-  if( W >= 8 )
+  if( trSize >= 8 )
   {
     for( int k = 0; k < rows; k += 2 )
     {
@@ -256,7 +256,7 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
     }
   }
 #endif
-  else if( W >= 4 )
+  else if( trSize >= 4 )
   {
     CHECKD( trSize != 4, "trSize needs to be '4'!" );
 
@@ -311,8 +311,8 @@ void fastInv_SSE( const TMatrixCoeff* it, const TCoeff* src, TCoeff* dst, unsign
 #endif
 }
 
-template<X86_VEXT vext, int W>
-void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
+template<X86_VEXT vext, int trSize>
+void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsigned line, unsigned reducedLine, unsigned cutoff, int shift )
 {
   const int rnd_factor = 1 << ( shift - 1 );
   
@@ -339,17 +339,19 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
   //  src += trSize;
   //}
 
-  if( W >= 8 )
+  if( trSize >= 8 )
   {
 #if USE_AVX2
     if( vext >= AVX2 && ( trSize & 15 ) == 0 )
     {
+      static constexpr unsigned trLoops = trSize >> 4 ? trSize >> 4 : 1;
+
       for( int i = 0; i < reducedLine; i += 2 )
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
         
-        __m256i vsrcarr[2][4];
+        __m256i vsrcarr[2][trLoops];
           
         for( int k = 0; k < trSize; k += 16 )
         {
@@ -481,16 +483,14 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
     else
 #endif
     {
+      static constexpr unsigned trLoops = trSize >> 3 ? trSize >> 3 : 1;
+
       for( int i = 0; i < reducedLine; i += 2 )
       {
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
-        
-#if USE_AVX2
-        __m128i vsrcarr[2][1];
-#else
-        __m128i vsrcarr[2][8];
-#endif
+     
+        __m128i vsrcarr[2][trLoops];
           
         for( int k = 0; k < trSize; k += 8 )
         {
@@ -811,12 +811,18 @@ void TCoeffOps::_initTCoeffOpsX86()
   cpyCoeff8    = cpyCoeff_SSE <vext, 8>;
   roundClip4   = roundClip_SSE<vext, 4>;
   roundClip8   = roundClip_SSE<vext, 8>;
-  fastInvCore4 = fastInv_SSE  <vext, 4>;
-  fastInvCore8 = fastInv_SSE  <vext, 8>;
-  fastFwdCore4_2D
-               = fastFwd_SSE  <vext, 4>;
-  fastFwdCore8_2D
-               = fastFwd_SSE  <vext, 8>;
+
+  fastInvCore[0] = fastInv_SSE<vext,  4>;
+  fastInvCore[1] = fastInv_SSE<vext,  8>;
+  fastInvCore[2] = fastInv_SSE<vext, 16>;
+  fastInvCore[3] = fastInv_SSE<vext, 32>;
+  fastInvCore[4] = fastInv_SSE<vext, 64>;
+
+  fastFwdCore_2D[0] = fastFwd_SSE<vext,  4>;
+  fastFwdCore_2D[1] = fastFwd_SSE<vext,  8>;
+  fastFwdCore_2D[2] = fastFwd_SSE<vext, 16>;
+  fastFwdCore_2D[3] = fastFwd_SSE<vext, 32>;
+  fastFwdCore_2D[4] = fastFwd_SSE<vext, 64>;
 }
 
 template void TCoeffOps::_initTCoeffOpsX86<SIMDX86>();
