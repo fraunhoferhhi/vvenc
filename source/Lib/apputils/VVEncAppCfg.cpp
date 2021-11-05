@@ -460,7 +460,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("threads,-t",        m_numThreads,             "Number of threads default: [size < 720p: 4, >= 720p: 8]")
 
   ("gopsize,g",         m_GOPSize,                "GOP size of temporal structure (16,32)")
-  ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra,idr2)")
+  ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
   ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
   ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
   ;
@@ -665,7 +665,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   opts.addOptions()
   ("IntraPeriod,-ip",                                 m_IntraPeriod,                                    "Intra period in frames, (-1: only first frame)")
   ("RefreshSec,-rs",                                  m_IntraPeriodSec,                                 "Intra period in seconds")
-  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2, 5:CRA_CRE)")
+  ("DecodingRefreshType,-dr",                         toDecRefreshType,                                 "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2, 5:CRA_CRE - CRA with constrained encoding for RASL pictures)")
   ("GOPSize,g",                                       m_GOPSize,                                        "GOP size of temporal structure")
   ;
 
