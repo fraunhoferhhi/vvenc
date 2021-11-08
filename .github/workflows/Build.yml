@@ -13,43 +13,48 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-18.04
-          - os: ubuntu-20.04
-          - os: macos-10.15
-          - os: windows-2019
+          - {
+              name: "Windows 2019 MSVC",
+              os: windows-2019,
+              build_type: "Release",
+              cc: "cl",
+              cxx: "cl",
+              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+              generators: "Visual Studio 16 2019"
+            }
+          - {
+              name: "Windows 2019 MinGW",
+              os: windows-2019,
+              build_type: "Release",
+              cc: "gcc",
+              cxx: "g++",
+              generators: "Ninja"
+            }
+          - {
+              os: ubuntu-18.04
+            }
+          - {
+              os: ubuntu-20.04
+            }
+          - {
+              os: macos-10.15
+            }
     steps:
     - uses: actions/checkout@v2
     - run: git fetch --prune --unshallow
-#    - name: Build Linux / Mac
-#      run: |
-#        mkdir build
-#        cd build
-#        cmake .. -DCMAKE_BUILD_TYPE=Release
-#        make -j$(nproc)
-#      if: matrix.os != 'windows-2019'
-#    - name: Build Windows (MSVC)
-#      run: |
-#        mkdir build
-#        cd build
-#        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-#        cmake .. -DCMAKE_BUILD_TYPE=Release
-#        msbuild vvenc.sln
-#      shell: cmd
-#      if: matrix.os == 'windows-2019'
-    - name: Setup MSYS2
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: MINGW64
-        update: true
-        install: cmake mingw-w64-x86_64-toolchain
-      if: matrix.os == 'windows-2019'
-    - name: Build Windows (MSYS2)
-      shell: msys2 {0}
+    - name: Build Linux / Mac
       run: |
-        mkdir build-msys
-        cd build-msys
-        cmake --help
-        cmake .. -DCMAKE_BUILD_TYPE=Release -G "MSYS Makefiles"
-        make -j$(nproc)
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --build .
+      if: matrix.os != 'windows-2019'
+    - name: Build Windows
+      run: |
+        mkdir build
+        cd build
+        cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release
+        cmake --build . --config ${{ matrix.config.build_type }}
+      shell: cmd
       if: matrix.os == 'windows-2019'
 
