@@ -48,7 +48,8 @@ jobs:
       run: |
         mkdir build-msys
         cd build-msys
-        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --help
+        cmake .. -DCMAKE_BUILD_TYPE=Release -G "MSYS Makefiles"
         make -j$(nproc)
       if: matrix.os == 'windows-2019'
 
