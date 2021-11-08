@@ -27,7 +27,7 @@ jobs:
               os: windows-2019,
               cc: "gcc",
               cxx: "g++",
-              generators: "Ninja"
+              generators: "MinGW Makefiles"
             }
           - {
               name: "Ubuntu 18.04",
