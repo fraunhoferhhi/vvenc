@@ -41,7 +41,7 @@ jobs:
       with:
         msystem: MINGW64
         update: true
-        install: cmake mingw-w64-x86_64-toolchain mingw-w64-x84_64-libc++
+        install: cmake mingw-w64-x86_64-toolchain
       if: matrix.os == 'windows-2019'
     - name: Build Windows (MSYS2)
       shell: msys2 {0}
