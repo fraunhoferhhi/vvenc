@@ -15,15 +15,13 @@ jobs:
       matrix:
         config:
           - {
-              name: "Windows 2019 MSVC",
+              name: "Windows MSVC",
               os: windows-2019,
-              cc: "cl",
-              cxx: "cl",
               environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
               generators: "Visual Studio 16 2019"
             }
           - {
-              name: "Windows 2019 MinGW",
+              name: "Windows MinGW",
               os: windows-2019,
               cc: "gcc",
               cxx: "g++",
@@ -48,14 +46,14 @@ jobs:
         mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
-#        cmake --build .
+        cmake --build .
       if: matrix.config.os != 'windows-2019'
     - run: |
         mkdir build
         cd build
         echo "${{ matrix.config.generators }}"
         cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release
-#        cmake --build . --config Release
+        cmake --build . --config Release
       shell: cmd
       if: matrix.config.os == 'windows-2019'
 
