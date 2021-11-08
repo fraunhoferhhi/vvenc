@@ -51,7 +51,6 @@ jobs:
     - run: |
         mkdir build
         cd build
-        echo "${{ matrix.config.generators }}"
         cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release
         cmake --build . --config Release
       shell: cmd
