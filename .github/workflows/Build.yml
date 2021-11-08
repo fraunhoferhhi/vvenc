@@ -49,7 +49,7 @@ jobs:
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
 #        cmake --build .
-      if: matrix.os != 'windows-2019'
+      if: matrix.config.os != 'windows-2019'
     - run: |
         mkdir build
         cd build
@@ -57,5 +57,5 @@ jobs:
         cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release
 #        cmake --build . --config Release
       shell: cmd
-      if: matrix.os == 'windows-2019'
+      if: matrix.config.os == 'windows-2019'
 
