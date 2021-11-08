@@ -1118,12 +1118,12 @@ namespace DQIntern
           ;
         }
 #undef UPDATE
-        TCoeff sumGt1   = sumAbs1 - sumNum;
-        m_sigFracBits   = m_sigFracBitsArray[scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
-        m_coeffFracBits = m_gtxFracBitsArray[scanInfo.gtxCtxOffsetNext + (sumGt1 < 4 ? sumGt1 : 4)];
+        int sumGt1 = sumAbs1 - sumNum;
+        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
-        int sumAll  = std::max(std::min(31, (int)sumAbs - 4 * 5), 0);
-        m_goRicePar = g_auiGoRiceParsCoeff[sumAll];
+        m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
+        m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
+        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
       }
       else
       {
@@ -1224,40 +1224,48 @@ namespace DQIntern
     currState.m_refSbbCtxId   = currState.m_stateId;
     currState.m_sbbFracBits   = m_sbbFlagBits[ sigNSbb ];
 
-    uint16_t          templateCtxInit[16];
-    const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
-    const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
-    const uint8_t*    absLevels = levels   + scanBeg;
-    for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
+    if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[ scanInfo.nextSbbBelow  + 1 ] : false ) )
     {
-      if( nbOut->num )
+      uint16_t          templateCtxInit[16];
+      const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
+      const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
+      const uint8_t*    absLevels = levels   + scanBeg;
+
+      for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
       {
-        TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
-#define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-        switch( nbOut->num )
+        if( nbOut->num )
         {
-        default:
-        case 5:
-          UPDATE(4);
-        case 4:
-          UPDATE(3);
-        case 3:
-          UPDATE(2);
-        case 2:
-          UPDATE(1);
-        case 1:
-          UPDATE(0);
+          TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
+  #define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
+          switch( nbOut->num )
+          {
+          default:
+          case 5:
+            UPDATE(4);
+          case 4:
+            UPDATE(3);
+          case 3:
+            UPDATE(2);
+          case 2:
+            UPDATE(1);
+          case 1:
+            UPDATE(0);
+          }
+  #undef UPDATE
+          templateCtxInit[id] = uint16_t(sumNum) | ( uint16_t(sumAbs1) << 3 ) | ( (uint16_t)std::min<TCoeff>( 127, sumAbs ) << 8 );
         }
-#undef UPDATE
-        templateCtxInit[id] = uint16_t(sumNum) + ( uint16_t(sumAbs1) << 3 ) + ( (uint16_t)std::min<TCoeff>( 127, sumAbs ) << 8 );
+        else
+        {
+          templateCtxInit[id] = 0;
+        }
       }
-      else
-      {
-        templateCtxInit[id] = 0;
-      }
+      ::memset( currState.m_absLevelsAndCtxInit,     0,               16*sizeof(uint8_t) );
+      ::memcpy( currState.m_absLevelsAndCtxInit + 8, templateCtxInit, 16*sizeof(uint16_t) );
     }
-    ::memset( currState.m_absLevelsAndCtxInit,     0,               16*sizeof(uint8_t) );
-    ::memcpy( currState.m_absLevelsAndCtxInit + 8, templateCtxInit, 16*sizeof(uint16_t) );
+    else
+    {
+      ::memset( currState.m_absLevelsAndCtxInit,     0,               48*sizeof(uint8_t) );
+    }
   }
 
 
