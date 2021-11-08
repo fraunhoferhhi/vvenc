@@ -36,12 +36,14 @@ jobs:
         msbuild vvenc.sln
       shell: cmd
       if: matrix.os == 'windows-2019'
-    - name: Build Windows (MSYS2)
+    - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
         update: true
         install: git mingw-w64-x86_64-toolchain
+      if: matrix.os == 'windows-2019'
+    - name: Build Windows (MSYS2)
       shell: msys2 {0}
       run: |
         mkdir build-msys
