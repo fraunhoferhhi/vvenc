@@ -20,28 +20,28 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - run: git fetch --prune --unshallow
-    - name: Build Linux / Mac
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        make -j$(nproc)
-      if: matrix.os != 'windows-2019'
-    - name: Build Windows (MSVC)
-      run: |
-        mkdir build
-        cd build
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        msbuild vvenc.sln
-      shell: cmd
-      if: matrix.os == 'windows-2019'
+#    - name: Build Linux / Mac
+#      run: |
+#        mkdir build
+#        cd build
+#        cmake .. -DCMAKE_BUILD_TYPE=Release
+#        make -j$(nproc)
+#      if: matrix.os != 'windows-2019'
+#    - name: Build Windows (MSVC)
+#      run: |
+#        mkdir build
+#        cd build
+#        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+#        cmake .. -DCMAKE_BUILD_TYPE=Release
+#        msbuild vvenc.sln
+#      shell: cmd
+#      if: matrix.os == 'windows-2019'
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
         update: true
-        install: git mingw-w64-x86_64-toolchain
+        install: cmake mingw-w64-x86_64-toolchain mingw-w64-x84_64-libc++
       if: matrix.os == 'windows-2019'
     - name: Build Windows (MSYS2)
       shell: msys2 {0}
