@@ -19,14 +19,8 @@ jobs:
           - os: windows-2019
     steps:
     - uses: actions/checkout@v2
-    - uses: msys2/setup-msys2@v2
-      with:
-        msystem: MINGW64
-        update: true
-        install: git mingw-w64-x86_64-toolchain
-        if: name == 'Build Windows (MSYS2)'
     - run: git fetch --prune --unshallow
-    - name: Build Linux / mac
+    - name: Build Linux / Mac
       run: |
         mkdir build
         cd build
@@ -43,11 +37,16 @@ jobs:
       shell: cmd
       if: matrix.os == 'windows-2019'
     - name: Build Windows (MSYS2)
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: git mingw-w64-x86_64-toolchain
+      shell: msys2 {0}
       run: |
-        mkdir build
-        cd build
+        mkdir build-msys
+        cd build-msys
         cmake .. -DCMAKE_BUILD_TYPE=Release
         make -j$(nproc)
-      shell: cmd
       if: matrix.os == 'windows-2019'
 
