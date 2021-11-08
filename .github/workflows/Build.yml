@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        include:
+        config:
           - {
               name: "Windows 2019 MSVC",
               os: windows-2019,
