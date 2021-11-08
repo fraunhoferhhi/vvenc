@@ -9,7 +9,8 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }} # будет запускаться по очереди на всех типах машин
     strategy:
       matrix:
         config:
