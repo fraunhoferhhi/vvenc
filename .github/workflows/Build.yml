@@ -25,6 +25,7 @@ jobs:
               os: windows-2019,
               cc: "gcc",
               cxx: "g++",
+              cxx_flags: -Wno-ignored-attributes
               generators: "MinGW Makefiles"
             }
           - {
@@ -51,7 +52,7 @@ jobs:
     - run: |
         mkdir build
         cd build
-        cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release
+        cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="${{ matrix.config.cxx_flags }}"
         cmake --build . --config Release
       shell: cmd
       if: matrix.config.os == 'windows-2019'
