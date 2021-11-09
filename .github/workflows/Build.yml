@@ -9,30 +9,51 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
     strategy:
       matrix:
-        include:
-          - os: ubuntu-18.04
-          - os: ubuntu-20.04
-          - os: macos-10.15
-          - os: windows-2019
+        config:
+          - {
+              name: "Windows MSVC",
+              os: windows-2019,
+              environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat",
+              generators: "Visual Studio 16 2019"
+            }
+          - {
+              name: "Windows MinGW",
+              os: windows-2019,
+              cc: "gcc",
+              cxx: "g++",
+              cxx_flags: -Wno-ignored-attributes,
+              generators: "MinGW Makefiles"
+            }
+          - {
+              name: "Ubuntu 18.04",
+              os: ubuntu-18.04
+            }
+          - {
+              name: "Ubuntu 20.04",
+              os: ubuntu-20.04
+            }
+          - {
+              name: "Mac OS 10.15",
+              os: macos-10.15
+            }
     steps:
     - uses: actions/checkout@v2
     - run: git fetch --prune --unshallow
-    - name: Build Linux / mac
-      run: |
+    - run: |
         mkdir build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
-        make -j$(nproc)
-      if: matrix.os != 'windows-2019'
-    - name: Build Windows
-      run: |
+        cmake --build .
+      if: matrix.config.os != 'windows-2019'
+    - run: |
         mkdir build
         cd build
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        msbuild vvenc.sln
+        cmake .. -G "${{ matrix.config.generators }}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="${{ matrix.config.cxx_flags }}"
+        cmake --build . --config Release
       shell: cmd
-      if: matrix.os == 'windows-2019'
+      if: matrix.config.os == 'windows-2019'
+
