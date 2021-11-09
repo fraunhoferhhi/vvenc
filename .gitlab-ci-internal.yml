@@ -129,7 +129,7 @@ build_mingw_ubuntu2004:
    extends: .build_only_template
    variables:
      CC:  x86_64-w64-mingw32-gcc-posix
-     CXX: x86_64-w64-mingw32-gcc-posix
+     CXX: x86_64-w64-mingw32-g++-posix
    tags:
       - ubuntu2004
 
