@@ -62,6 +62,10 @@ ifneq ($(osx-arch),)
 CONFIG_OPTIONS += -DCMAKE_OSX_ARCHITECTURES=$(osx-arch)
 endif
 
+ifneq ($(toolchainfile),)
+CONFIG_OPTIONS += -DCMAKE_TOOLCHAIN_FILE=$(toolchainfile)
+endif
+
 ifeq ($(j),)
 # Query cmake for the number of cores
 NUM_JOBS := $(shell cmake -P cmake/modules/vvencNumCores.cmake)
@@ -310,4 +314,3 @@ $(TARGETS_RELWITHDEBINFO_CLEAN_FIRST): $(BUILD_DIR-relwithdebinfo)
 ifeq ($(OS),Windows_NT)
 .NOTPARALLEL:
 endif
-

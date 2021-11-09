@@ -44,6 +44,11 @@ variables:
    extends: .build_only_template
    script:
       - make osx-arch=x86_64 disable-lto=1 all
+      
+.build_only_ubuntu_mingw_template:
+   extends: .build_only_template
+   script:
+      - make toolchainfile=cmake/toolchains/x86_64-w64-mingw32-gcc-posix-ubuntu2004.cmake disable-lto=1 all
 
 build_gcc5_ubuntu1804:
    extends: .build_only_template_full
@@ -126,10 +131,7 @@ build_clang10_ubuntu2004:
       - ubuntu2004
 
 build_mingw_ubuntu2004:
-   extends: .build_only_template_full
-   variables:
-     CC:  x86_64-w64-mingw32-gcc-posix
-     CXX: x86_64-w64-mingw32-g++-posix
+   extends: .build_only_ubuntu_mingw_template
    tags:
       - ubuntu2004
 
