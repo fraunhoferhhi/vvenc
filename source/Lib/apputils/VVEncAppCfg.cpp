@@ -585,6 +585,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   IStreamToArr<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth[0], 10 );
   IStreamToArr<unsigned int>        toTileRowHeight              ( &m_tileRowHeight[0], 10 );
+  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileConfigColumns, &m_numTileConfigRows }, true, 'x' );
 
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
@@ -1050,6 +1051,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
   ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
   ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
+  ("TileConfig",                                      toNumTiles,                                       "Set number of tile columns and rows explicitly. ")
   ;
 
   opts.setSubSection("Coding tools");

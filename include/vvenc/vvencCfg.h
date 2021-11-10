@@ -715,6 +715,8 @@ typedef struct vvenc_config
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
 
   bool                m_picPartitionFlag;
+  uint32_t            m_numTileConfigColumns;                                            // number of explicitly given uniform tile coulmns. The actual column widths will be calculated
+  uint32_t            m_numTileConfigRows;                                               // number of explicitly given uniform tile rows. The actual row heights will be calculated
   unsigned int        m_tileColumnWidth[10];
   unsigned int        m_tileRowHeight[10];
   uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns

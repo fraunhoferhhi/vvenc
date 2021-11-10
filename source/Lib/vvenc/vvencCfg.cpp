@@ -636,6 +636,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_ensureWppBitEqual                       = -1;
 
   c->m_picPartitionFlag                        = false;
+  c->m_numTileConfigColumns                    = 1;
+  c->m_numTileConfigRows                       = 1;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
   memset( c->m_tileRowHeight,   0, sizeof(c->m_tileRowHeight) );
   c->m_numExpTileCols                          = 1;
@@ -2720,51 +2722,96 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
   pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
 
-  int i, numTileColumnWidths, numTileRowHeights;
+  int numTileColumnWidths, numTileRowHeights;
 
-  // set default tile column if not provided
-  if( c->m_tileColumnWidth[0] == 0 )
-  {
-    c->m_tileColumnWidth[0] = pps.picWidthInCtu;
-  }
-  // set default tile row if not provided
-  if( c->m_tileRowHeight[0] == 0 )
-  {
-    c->m_tileRowHeight[0] = pps.picHeightInCtu;
-  }
+  bool colWidth_all_zero  = std::all_of(c->m_tileColumnWidth, c->m_tileColumnWidth+9, [](int x) { return x==0; });
+  bool rowHeight_all_zero = std::all_of(c->m_tileRowHeight, c->m_tileRowHeight+9, [](int x) { return x==0; });
 
-  // remove any tile columns that can be specified implicitly
-  if( c->m_tileColumnWidth[1] > 0 )
+  //number of tiles is set explicitly, e.g. TileConfig=2x2
+  //TileColumnWidthArray and TileRowHeightArray have to be not set
+  if( c->m_numTileConfigColumns > 1 || c->m_numTileConfigRows > 1 )
   {
-    i = 9;
-    while( i > 0 && c->m_tileColumnWidth[i-1] == c->m_tileColumnWidth[i] )
+    vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther TileConfig or TileColumnWidthArray" );
+    vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther TileConfig or TileRowHeightArray" );
+    
+    if( c->m_numTileConfigColumns > 1 )
     {
-      c->m_tileColumnWidth[i] = 0;
-      i--;
+      unsigned int tileWidth = pps.picWidthInCtu / c->m_numTileConfigColumns;
+      if( tileWidth * c->m_numTileConfigColumns < pps.picWidthInCtu ) tileWidth++;
+      c->m_tileColumnWidth[0] = tileWidth;
     }
-    numTileColumnWidths = i;
-  }
-  else
-  {
+    else
+    {
+      c->m_tileColumnWidth[0] = pps.picWidthInCtu;
+    }
+    if( c->m_numTileConfigRows > 1 )
+    {
+      unsigned int tileHeight = pps.picHeightInCtu / c->m_numTileConfigRows;
+      if( tileHeight * c->m_numTileConfigRows < pps.picHeightInCtu ) tileHeight++;
+      c->m_tileRowHeight[0] = tileHeight;
+    }
+    else
+    {
+      c->m_tileRowHeight[0] = pps.picHeightInCtu;
+    }
     numTileColumnWidths = 1;
-  }
-
-  // remove any tile rows that can be specified implicitly
-  if( c->m_tileRowHeight[1] > 0 )
-  {
-    i = 9;
-    while( i > 0 && c->m_tileRowHeight[i-1] == c->m_tileRowHeight[i] )
-    {
-      c->m_tileRowHeight[i] = 0;
-      i--;
-    }
-    numTileRowHeights = i;
+    numTileRowHeights   = 1;
   }
   else
   {
-    numTileRowHeights = 1;
-  }
+    // set default tile column if not provided
+    if( colWidth_all_zero )
+    {
+      c->m_tileColumnWidth[0] = pps.picWidthInCtu;
+    }
+    // set default tile row if not provided
+    if( rowHeight_all_zero )
+    {
+      c->m_tileRowHeight[0] = pps.picHeightInCtu;
+    }
 
+    // remove any tile columns that can be specified implicitly
+    if( c->m_tileColumnWidth[1] > 0 )
+    {
+      int checkIdx = 2;
+      while( c->m_tileColumnWidth[checkIdx] != 0 )
+      {
+        checkIdx++;
+      }
+      int lastNonZeroIdx = checkIdx-1;
+      while( lastNonZeroIdx > 0 && c->m_tileColumnWidth[lastNonZeroIdx-1] == c->m_tileColumnWidth[lastNonZeroIdx] )
+      {
+        c->m_tileColumnWidth[lastNonZeroIdx] = 0;
+        lastNonZeroIdx--;
+      }
+      numTileColumnWidths = lastNonZeroIdx+1;
+    }
+    else
+    {
+      numTileColumnWidths = 1;
+    }
+
+    // remove any tile rows that can be specified implicitly
+    if( c->m_tileRowHeight[1] > 0 )
+    {
+      int checkIdx = 2;
+      while( c->m_tileRowHeight[checkIdx] != 0 )
+      {
+        checkIdx++;
+      }
+      int lastNonZeroIdx = checkIdx-1;
+      while( lastNonZeroIdx > 0 && c->m_tileRowHeight[lastNonZeroIdx-1] == c->m_tileRowHeight[lastNonZeroIdx] )
+      {
+        c->m_tileRowHeight[lastNonZeroIdx] = 0;
+        lastNonZeroIdx--;
+      }
+      numTileRowHeights = lastNonZeroIdx+1;
+    }
+    else
+    {
+      numTileRowHeights = 1;
+    }
+  }
   // setup tiles in temporary PPS structure
   uint32_t remSize = pps.picWidthInCtu;
   int colIdx;
