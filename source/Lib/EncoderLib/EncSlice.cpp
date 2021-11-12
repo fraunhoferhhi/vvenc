@@ -81,7 +81,7 @@ static const __itt_string_handle* itt_handle_ccalf_derive = __itt_string_handle_
 static const __itt_string_handle* itt_handle_ccalf_recon  = __itt_string_handle_create( "CCALF_RECONSTRUCT" );
 #endif
 
-struct LineEncRsrc
+struct TileLineEncRsrc
 {
   BitEstimator            m_BitEstimator;
   CABACWriter             m_CABACEstimator;
@@ -94,7 +94,7 @@ struct LineEncRsrc
   EncCu                   m_encCu;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
-  LineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
+  TileLineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_IntraPeriod); }
 };
 
 struct PerThreadRsrc
@@ -110,15 +110,17 @@ struct CtuEncParam
   int       ctuPosX;
   int       ctuPosY;
   UnitArea  ctuArea;
+  int       tileLineResIdx;
 
-  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ), ctuArea() {}
-  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y )
+  CtuEncParam() : pic( nullptr ), encSlice( nullptr ), ctuRsAddr( 0 ), ctuPosX( 0 ), ctuPosY( 0 ), ctuArea(), tileLineResIdx( 0 ) {}
+  CtuEncParam( Picture* _p, EncSlice* _s, const int _r, const int _x, const int _y, const int _tileLineResIdx )
     : pic( _p )
     , encSlice( _s )
     , ctuRsAddr( _r )
     , ctuPosX( _x )
     , ctuPosY( _y )
-    , ctuArea( pic->chromaFormat, pic->slices[0]->pps->pcv->getCtuArea( _x, _y ) ) {}
+    , ctuArea( pic->chromaFormat, pic->slices[0]->pps->pcv->getCtuArea( _x, _y ) )
+    , tileLineResIdx( _tileLineResIdx ) {}
 };
 
 // ====================================================================================================================
@@ -141,11 +143,11 @@ EncSlice::EncSlice()
 
 EncSlice::~EncSlice()
 {
-  for( auto* lnRsc : m_LineEncRsrc )
+  for( auto* lnRsc : m_TileLineEncRsrc )
   {
     delete lnRsc;
   }
-  m_LineEncRsrc.clear();
+  m_TileLineEncRsrc.clear();
 
   for( auto* taskRsc: m_CtuTaskRsrc )
   {
@@ -182,22 +184,23 @@ void EncSlice::init( const VVEncCfg& encCfg,
   m_pcRateCtrl          = &rateCtrl;
   m_threadPool          = threadPool;
   m_ctuTasksDoneCounter = ctuTasksDoneCounter;
-  m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.pcv->heightInCtus : 0 );
+  m_syncPicCtx.resize( encCfg.m_entropyCodingSyncEnabled ? pps.getNumTileLineIds() : 0 );
 
-  const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.pcv->heightInCtus : 1;
+  
+  const int maxCntRscr = ( encCfg.m_numThreads > 0 ) ? pps.getNumTileLineIds() : 1;
   const int maxCtuEnc  = ( encCfg.m_numThreads > 0 && threadPool ) ? threadPool->numThreads() : 1;
 
   m_CtuTaskRsrc.resize( maxCtuEnc,  nullptr );
-  m_LineEncRsrc.resize( maxCntRscr, nullptr );
+  m_TileLineEncRsrc.resize( maxCntRscr, nullptr );
 
   for( PerThreadRsrc*& taskRsc : m_CtuTaskRsrc )
   {
     taskRsc = new PerThreadRsrc();
   }
 
-  for( LineEncRsrc*& lnRsc : m_LineEncRsrc )
+  for( TileLineEncRsrc*& lnRsc : m_TileLineEncRsrc )
   {
-    lnRsc = new LineEncRsrc( encCfg );
+    lnRsc = new TileLineEncRsrc( encCfg );
     lnRsc->m_encCu.init( encCfg,
                          sps,
                          globalCtuQpVector,
@@ -252,7 +255,7 @@ void EncSlice::initPic( Picture* pic, int gopId )
   // set QP and lambda values
   xInitSliceLambdaQP( slice, gopId );
 
-  for( auto* lnRsc : m_LineEncRsrc )
+  for( auto* lnRsc : m_TileLineEncRsrc )
   {
     lnRsc->m_ReuseUniMv.resetReusedUniMvs();
     lnRsc->m_encCu.initPic( pic );
@@ -287,7 +290,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA &&
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {
-    adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
+    adaptedLumaQP = BitAllocation::applyQPAdaptationChroma (slice, m_pcEncCfg, iQP, *m_TileLineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                             sliceChromaQpOffsetIntraOrPeriodic, &slice->pic->picVisActY); // adapts sliceChromaQpOffsetIntraOrPeriodic[]
   }
   if (m_pcEncCfg->m_usePerceptQPA)
@@ -301,7 +304,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
       const int nCtu = int (boundingCtuTsAddr - startCtuTsAddr);
       const int offs = (slice->poc / m_pcEncCfg->m_IntraPeriod) * ((nCtu + 1) >> 1);
       std::vector<uint8_t>& ctuQPMem = *m_pcRateCtrl->getIntraPQPAStats(); // unpack pass-1 red. QPs
-      std::vector<int>& ctuPumpRedQP = *m_LineEncRsrc[0]->m_encCu.getQpPtr();
+      std::vector<int>& ctuPumpRedQP = *m_TileLineEncRsrc[0]->m_encCu.getQpPtr();
 
       if ((ctuPumpRedQP.size() >= nCtu) && (ctuQPMem.size() >= offs + ((nCtu + 1) >> 1)))
       {
@@ -317,7 +320,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     slice->sliceQp = iQP; // start slice QP for reference
     slice->pic->picInitialQP = iQP;
 
-    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_LineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
+    if ((iQP = BitAllocation::applyQPAdaptationLuma (slice, m_pcEncCfg, adaptedLumaQP, dLambda, *m_TileLineEncRsrc[ 0 ]->m_encCu.getQpPtr(),
                                                      (rcIsFirstPassOf2 && slice->poc > 0 ? m_pcRateCtrl->getIntraPQPAStats() : nullptr),
                                                      startCtuTsAddr, boundingCtuTsAddr )) >= 0) // sets pic->ctuAdaptedQP[] & ctuQpaLambda[]
     {
@@ -352,7 +355,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     slice->sliceChromaQpDelta[COMP_JOINT_CbCr] = 0;
   }
 
-  for( auto& lineRsc : m_LineEncRsrc )
+  for( auto& lineRsc : m_TileLineEncRsrc )
   {
     lineRsc->m_encCu.setUpLambda( *slice, dLambda, iQP, true, true );
   }
@@ -369,7 +372,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     {
       slice->sliceChromaQpDelta[ COMP_JOINT_CbCr ] = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree;
     }
-    for( auto& lineRsc : m_LineEncRsrc )
+    for( auto& lineRsc : m_TileLineEncRsrc )
     {
       lineRsc->m_encCu.setUpLambda( *slice, slice->getLambdas()[0], slice->sliceQp, true, false );
     }
@@ -389,7 +392,7 @@ void EncSlice::resetQP( Picture* pic, int sliceQP, double& lambda )
 
   // store lambda
   slice->sliceQp = sliceQP;
-  for( auto& lineRsc : m_LineEncRsrc )
+  for( auto& lineRsc : m_TileLineEncRsrc )
   {
     lineRsc->m_encCu.setUpLambda( *slice, lambda, sliceQP, true, true );
   }
@@ -535,26 +538,27 @@ void EncSlice::compressSlice( Picture* pic )
 
   if( startCtuTsAddr == 0 )
   {
-    cs.initStructData (slice->sliceQp );
+    cs.initStructData( slice->sliceQp );
   }
 
-  for( auto* lnRsrc : m_LineEncRsrc )
+  for( auto* lnRsrc : m_TileLineEncRsrc )
   {
-    lnRsrc->m_CABACEstimator.initCtxModels( *slice );
-    lnRsrc->m_SaoCABACEstimator.initCtxModels( *slice );
-    lnRsrc->m_AffineProfList.resetAffineMVList();
+    lnRsrc->m_CABACEstimator    .initCtxModels( *slice );
+    lnRsrc->m_SaoCABACEstimator .initCtxModels( *slice );
+    lnRsrc->m_AffineProfList    .resetAffineMVList();
     lnRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
-    lnRsrc->m_encCu.initSlice( slice );
-    lnRsrc->m_CachedBvs.resetIbcBvCand();
+    lnRsrc->m_encCu             .initSlice( slice );
+    lnRsrc->m_CachedBvs         .resetIbcBvCand();
+
     if( slice->sps->saoEnabled )
     {
-      lnRsrc->m_encSao.initSlice( slice );
+      lnRsrc->m_encSao          .initSlice( slice );
     }
   }
 
-  if (slice->sps->fpelMmvd && !slice->picHeader->disFracMMVD)
+  if( slice->sps->fpelMmvd && !slice->picHeader->disFracMMVD )
   {
-    slice->picHeader->disFracMMVD = (pic->lwidth() * pic->lheight() > 1920 * 1080) ? true : false;
+    slice->picHeader->disFracMMVD = ( pic->lwidth() * pic->lheight() > 1920 * 1080 ) ? true : false;
   }
 
   xProcessCtus( pic, startCtuTsAddr, boundingCtuTsAddr );
@@ -770,8 +774,29 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
     ctuEncParams[ idx ].ctuPosX   = ctuPos.ctuPosX;
     ctuEncParams[ idx ].ctuPosY   = ctuPos.ctuPosY;
     ctuEncParams[ idx ].ctuArea   = UnitArea( pic->chromaFormat, slice.pps->pcv->getCtuArea( ctuPos.ctuPosX, ctuPos.ctuPosY ) );
+
+    if( m_pcEncCfg->m_numThreads > 0 )
+    {
+      ctuEncParams[idx].tileLineResIdx = slice.pps->getTileLineId( ctuPos.ctuPosX, ctuPos.ctuPosY );
+    }
+    else
+    {
+      ctuEncParams[idx].tileLineResIdx = 0;
+    }
     idx++;
   }
+
+  //for( int i = 0; i < idx; i++ )
+  //{
+  //  for( int j = i; j < idx; j++ )
+  //  {
+  //    if( ctuEncParams[i].tileLineResIdx != ctuEncParams[j].tileLineResIdx ) continue;
+  //
+  //    CHECK( ctuEncParams[i].ctuPosY != ctuEncParams[j].ctuPosY, "Not the same CTU line!" );
+  //    CHECK( slice.pps->getTileIdx( ctuEncParams[i].ctuPosX, ctuEncParams[i].ctuPosY ) != slice.pps->getTileIdx( ctuEncParams[j].ctuPosX, ctuEncParams[j].ctuPosY ), "Not the same tile!" );
+  //  }
+  //}
+
   CHECK( idx != pcv.sizeInCtus, "array index out of bounds" );
 
   // process ctu's until last ctu is done
@@ -822,6 +847,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   const int width                = std::min( pcv.maxCUSize, pcv.lumaWidth  - x );
   const int height               = std::min( pcv.maxCUSize, pcv.lumaHeight - y );
   const int ctuStride            = pcv.widthInCtus;
+  const int lineIdx              = ctuEncParam->tileLineResIdx;
   ProcessCtuState* processStates = encSlice->m_processStates.data();
   const UnitArea& ctuArea        = ctuEncParam->ctuArea;
   const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
@@ -831,7 +857,9 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
   // process ctu's line wise from left to right
-  if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
+  if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && processStates[ctuRsAddr] == CTU_ENCODE && ctuPosX > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) )
+    ; // for CTU_ENCODE on tile boundaries, allow parallel processing of tiles
+  else if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
     return false;
 
   switch( processStates[ ctuRsAddr ].load() )
@@ -840,11 +868,13 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
     case CTU_ENCODE:
       {
         // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
+        if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && ctuPosY > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX, ctuPosY - 1 ) )
+          ; // allow parallel processing of CTU-encoding on independent tiles
+        else if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= CTU_ENCODE )
           return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
+        else if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= CTU_ENCODE && !wppSyncEnabled )
           return false;
-
+        
         if( checkReadyState )
           return true;
 
@@ -855,21 +885,20 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 #endif
         ITT_TASKSTART( itt_domain_encode, itt_handle_ctuEncode );
 
-        const int lineIdx        = std::min( (int)( encSlice->m_LineEncRsrc.size() ) - 1, ctuPosY );
-        LineEncRsrc* lineEncRsrc = encSlice->m_LineEncRsrc[ lineIdx ];
-        PerThreadRsrc* taskRsrc  = encSlice->m_CtuTaskRsrc[ threadIdx ];
-        EncCu& encCu             = lineEncRsrc->m_encCu;
+        TileLineEncRsrc* lineEncRsrc = encSlice->m_TileLineEncRsrc[ lineIdx ];
+        PerThreadRsrc* taskRsrc      = encSlice->m_CtuTaskRsrc[ threadIdx ];
+        EncCu& encCu                 = lineEncRsrc->m_encCu;
 
         encCu.setCtuEncRsrc( &lineEncRsrc->m_CABACEstimator, &taskRsrc->m_CtxCache, &lineEncRsrc->m_ReuseUniMv, &lineEncRsrc->m_BlkUniMvInfoBuffer, &lineEncRsrc->m_AffineProfList, &lineEncRsrc->m_CachedBvs );
         encCu.encodeCtu( pic, lineEncRsrc->m_prevQp, ctuPosX, ctuPosY );
 
         // cleanup line memory when last ctu in line done to reduce overall memory consumption
-        if( encSlice->m_pcEncCfg->m_ensureWppBitEqual && ctuPosX == pcv.widthInCtus - 1 )
+        if( encSlice->m_pcEncCfg->m_ensureWppBitEqual && ( ctuPosX == pcv.widthInCtus - 1 || slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX + 1, ctuPosY ) ) )
         {
-          lineEncRsrc->m_AffineProfList.resetAffineMVList();
+          lineEncRsrc->m_AffineProfList    .resetAffineMVList();
           lineEncRsrc->m_BlkUniMvInfoBuffer.resetUniMvList();
-          lineEncRsrc->m_ReuseUniMv.resetReusedUniMvs();
-          lineEncRsrc->m_CachedBvs.resetIbcBvCand();
+          lineEncRsrc->m_ReuseUniMv        .resetReusedUniMvs();
+          lineEncRsrc->m_CachedBvs         .resetIbcBvCand();
         }
 
         DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", 1 ) );
@@ -884,6 +913,21 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
       {
         // clip check to right picture border
         const int checkRight = std::min<int>( encSlice->m_ctuEncDelay, (int)pcv.widthInCtus - 1 - ctuPosX );
+
+        // need to check line above bcs of tiling, which allows CTU_ENCODE to run indepedently across tiles
+        if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && slice.pps->getNumTiles() > 1 )
+        {
+          if( ctuPosY > 0 )
+          {
+            if( ctuPosX > 0 && processStates[ctuRsAddr - ctuStride - 1] <= CTU_ENCODE )
+              return false;
+            if( processStates[ctuRsAddr - ctuStride] <= CTU_ENCODE || processStates[ctuRsAddr - ctuStride + checkRight] <= CTU_ENCODE )
+              return false;
+          }
+          // is checked above already
+          if( ctuPosX > 0 && processStates[ctuRsAddr - 1] <= CTU_ENCODE )
+            return false;
+        }
         
         // ensure all surrounding ctu's are encoded (intra pred requires non-reshaped and unfiltered residual, IBC requires unfiltered samples too)
         // check right with max offset (due to WPP condition above, this implies top-right has been already encoded)
@@ -987,9 +1031,8 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // SAO filter
         if( slice.sps->saoEnabled )
         {
-          const int lineIdx               = std::min( (int)( encSlice->m_LineEncRsrc.size() ) - 1, ctuPosY );
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_SAO, &cs, CH_L );
-          LineEncRsrc* lineEncRsrc        = encSlice->m_LineEncRsrc[ lineIdx ];
+          TileLineEncRsrc* lineEncRsrc    = encSlice->m_TileLineEncRsrc[ lineIdx ];
           PerThreadRsrc* taskRsrc         = encSlice->m_CtuTaskRsrc[ threadIdx ];
           EncSampleAdaptiveOffset& encSao = lineEncRsrc->m_encSao;
 
@@ -1275,11 +1318,11 @@ void EncSlice::encodeSliceData( Picture* pic )
 
   for( uint32_t ctuTsAddr = startCtuTsAddr; ctuTsAddr < boundingCtuTsAddr; ctuTsAddr++ )
   {
-    const uint32_t ctuRsAddr = slice->sliceMap.ctuAddrInSlice[ctuTsAddr];
-    const uint32_t firstCtuRsAddrOfTile = 0;
-    const uint32_t tileXPosInCtus       = firstCtuRsAddrOfTile % widthInCtus;
+    const uint32_t ctuRsAddr            = slice->sliceMap.ctuAddrInSlice[ctuTsAddr];
     const uint32_t ctuXPosInCtus        = ctuRsAddr % widthInCtus;
     const uint32_t ctuYPosInCtus        = ctuRsAddr / widthInCtus;
+    const uint32_t tileXPosInCtus       = slice->pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]];
+    const uint32_t tileYPosInCtus       = slice->pps->tileRowBd[cs.pps->ctuToTileRow[ctuYPosInCtus]];
 
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
 
@@ -1289,7 +1332,7 @@ void EncSlice::encodeSliceData( Picture* pic )
     m_CABACWriter.initBitstream( &substreamsOut[ uiSubStrm ] );
 
     // set up CABAC contexts' state for this CTU
-    if (ctuXPosInCtus == cs.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]] && ctuYPosInCtus == cs.pps->tileRowBd[cs.pps->ctuToTileRow[ctuYPosInCtus]] )
+    if (ctuXPosInCtus == tileXPosInCtus && ctuYPosInCtus == tileYPosInCtus )
     {
       if (ctuTsAddr != startCtuTsAddr) // if it is the first CTU, then the entropy coder has already been reset
       {
@@ -1303,7 +1346,7 @@ void EncSlice::encodeSliceData( Picture* pic )
       {
         m_CABACWriter.initCtxModels( *slice );
       }
-      if( cs.getCURestricted( pos.offset( 0, -1 ), pos, slice->independentSliceIdx, 0, CH_L, TREE_D ) )
+      if( cs.getCURestricted( pos.offset( 0, -1 ), pos, slice->independentSliceIdx, slice->pps->getTileIdx( ctuXPosInCtus, ctuYPosInCtus ), CH_L, TREE_D ) )
       {
         // Top-right is available, so use it.
         m_CABACWriter.getCtx() = m_entropyCodingSyncContextState;
@@ -1319,7 +1362,7 @@ void EncSlice::encodeSliceData( Picture* pic )
     }
 
     // terminate the sub-stream, if required (end of slice-segment, end of tile, end of wavefront-CTU-row):
-    bool isMoreCTUsinSlice = ctuRsAddr != (boundingCtuTsAddr - 1);
+    bool isMoreCTUsinSlice = ctuTsAddr != (boundingCtuTsAddr - 1);
     bool isLastCTUinTile   = isMoreCTUsinSlice && slice->pps->getTileIdx( ctuRsAddr ) != slice->pps->getTileIdx( slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] );
     bool isLastCTUinWPP    = wavefrontsEnabled && isMoreCTUsinSlice && !isLastCTUinTile && ( (slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] % widthInCtus) == cs.pps->tileColBd[cs.pps->ctuToTileCol[slice->sliceMap.ctuAddrInSlice[ctuTsAddr+1] % widthInCtus]] ); //TODO: adjust tile bound condition
 

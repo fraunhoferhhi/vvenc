@@ -634,6 +634,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
+  c->m_tileParallelCtuEnc                      = false;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -2808,6 +2809,8 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   c->m_numTileRows = pps.numTileRows;
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
+
+  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_tileParallelCtuEnc && c->m_EDO > 0, "EDO and tile parallelism are mutually exclusive!" );
 }
 
 VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
@@ -3600,8 +3603,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "\nPARALLEL PROCESSING CFG: ";
   css << "NumThreads:" << c->m_numThreads << " ";
   css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+  if( c->m_picPartitionFlag )
+  {
+    css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
+  }
   css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
-  css << "WF:" << c->m_entropyCodingSyncEnabled << "";
+  css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
   css << "\n";
   }
 

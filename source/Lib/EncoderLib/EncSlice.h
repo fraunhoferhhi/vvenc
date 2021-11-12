@@ -72,7 +72,7 @@ struct WaitCounter;
 // Class definition
 // ====================================================================================================================
 
-struct LineEncRsrc;
+struct TileLineEncRsrc;
 struct PerThreadRsrc;
 struct CtuEncParam;
 
@@ -101,7 +101,7 @@ private:
   const VVEncCfg*              m_pcEncCfg;                           ///< encoder configuration class
 
   std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
-  std::vector<LineEncRsrc*>    m_LineEncRsrc;
+  std::vector<TileLineEncRsrc*>m_TileLineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
   WaitCounter*                 m_ctuTasksDoneCounter;
   std::vector<ProcessCtuState> m_processStates;
