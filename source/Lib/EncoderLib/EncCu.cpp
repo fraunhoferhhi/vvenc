@@ -382,6 +382,7 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   partitioner->initCtu( area, CH_L, *cs.slice );
 
   m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
+
   
   if( m_pcEncCfg->m_IBCMode )
   {

@@ -218,7 +218,7 @@ private:
   int                   m_MergeSimpleFlag;
 #endif
   int                   m_tileIdx;
-
+  int                   m_EDO;
 public:
   EncCu();
   virtual ~EncCu();
