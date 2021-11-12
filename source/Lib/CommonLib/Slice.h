@@ -1215,7 +1215,7 @@ class Slice
   bool                        lmcsEnabled;
   bool                        explicitScalingListUsed;
   bool                        deblockingFilterDisable;
-  bool                        deblockingFilterOverrideFlag;      //< offsets for deblocking filter inherit from PPS
+  bool                        deblockingFilterOverride;      //< offsets for deblocking filter inherit from PPS
   int                         deblockingFilterBetaOffsetDiv2[MAX_NUM_COMP];    //< beta offset for deblocking filter
   int                         deblockingFilterTcOffsetDiv2[MAX_NUM_COMP];      //< tc offset for deblocking filter
   bool                        depQuantEnabled;               //!< dependent quantization enabled flag

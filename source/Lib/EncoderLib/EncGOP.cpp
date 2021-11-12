@@ -822,7 +822,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   // reference list
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, false ) != -2 || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, false ) != -2 )
+  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, false ) || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, false ) )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
@@ -861,10 +861,23 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   slice->picHeader->picInterSliceAllowed = sliceType != VVENC_I_SLICE;
   slice->picHeader->picIntraSliceAllowed = sliceType == VVENC_I_SLICE;
 
-  for( int comp = 0; comp < MAX_NUM_COMP; comp++)
+  const vvencGOPEntry& gopEntry = m_pcEncCfg->m_GOPList[pic.gopId];
+  slice->deblockingFilterOverride = sliceType != VVENC_I_SLICE && (gopEntry.m_betaOffsetDiv2 || gopEntry.m_tcOffsetDiv2);
+  if( slice->deblockingFilterOverride )
   {
-    slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = slice->pps->deblockingFilterTcOffsetDiv2[comp];
-    slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = slice->pps->deblockingFilterBetaOffsetDiv2[comp];
+    for( int comp = 0; comp < MAX_NUM_COMP; comp++)
+    {
+      slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = gopEntry.m_tcOffsetDiv2   + m_pcEncCfg->m_loopFilterTcOffsetDiv2[comp];
+      slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = gopEntry.m_betaOffsetDiv2 +   m_pcEncCfg->m_loopFilterBetaOffsetDiv2[comp];
+    }
+  }
+  else
+  {
+    for( int comp = 0; comp < MAX_NUM_COMP; comp++)
+    {
+      slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = slice->pps->deblockingFilterTcOffsetDiv2[comp];
+      slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = slice->pps->deblockingFilterBetaOffsetDiv2[comp];
+    }
   }
 
   if (slice->pps->useDQP)
