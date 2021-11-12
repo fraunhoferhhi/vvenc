@@ -1050,6 +1050,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("EnablePicPartitioning",                           m_picPartitionFlag,                               "Enable picture partitioning (0: single tile, single slice, 1: multiple tiles/slices)")
   ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
   ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
+  ("TileParallelCtuEnc",                              m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
   ;
 
   opts.setSubSection("Coding tools");
