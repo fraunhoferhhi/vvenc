@@ -445,6 +445,7 @@ typedef struct vvenc_config
   int                 m_RCTargetBitrate;
   int                 m_RCNumPasses;
   int                 m_RCPass;
+  bool                m_RCLookAhead;
 
   vvencSegmentMode    m_SegmentMode;
 
@@ -481,7 +482,6 @@ typedef struct vvenc_config
   unsigned            m_bitDepthConstraintValue;
   bool                m_intraOnlyConstraintFlag;
 
-  int                 m_InputQueueSize;                                                  // Size of frame input queue
   bool                m_rewriteParamSets;                                                // Flag to enable rewriting of parameter sets at random access points
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
   vvencRPLEntry       m_RPLList0[ VVENC_MAX_GOP ];                                       // the RPL entries from the config file

@@ -762,7 +762,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   // Coding structure paramters
   opts.setSubSection("Coding structure paramters");
   opts.addOptions()
-  ("InputQueueSize",                                  m_InputQueueSize,                                 "Size of input frames queue (use gop size)")
   ("ReWriteParamSets",                                m_rewriteParamSets,                               "Enable rewriting of Parameter sets before every (intra) random access point")
   ("IDRRefParamList",                                 m_idrRefParamList,                                "Enable indication of reference picture list syntax elements in slice headers of IDR pictures")
   ;

@@ -723,9 +723,6 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   }
 
   CS::setRefinedMotionField( cs );
-
-  // cleanup
-  pic->getFilteredOrigBuffer().destroy();
 }
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )

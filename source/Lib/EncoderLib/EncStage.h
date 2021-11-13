@@ -1,0 +1,331 @@
+/* -----------------------------------------------------------------------------
+The copyright in this software is being made available under the BSD
+License, included below. No patent rights, trademark rights and/or 
+other Intellectual Property Rights other than the copyrights concerning 
+the Software are granted under this license.
+
+For any license concerning other Intellectual Property rights than the software,
+especially patent licenses, a separate Agreement needs to be closed. 
+For more information please contact:
+
+Fraunhofer Heinrich Hertz Institute
+Einsteinufer 37
+10587 Berlin, Germany
+www.hhi.fraunhofer.de/vvc
+vvc@hhi.fraunhofer.de
+
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+ * Neither the name of Fraunhofer nor the names of its contributors may
+   be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+------------------------------------------------------------------------------------------- */
+
+/** \file     EncStage.h
+    \brief
+*/
+
+#pragma once
+
+#include "CommonLib/CommonDef.h"
+#include "CommonLib/Picture.h"
+#include "CommonLib/Nal.h"
+
+//! \ingroup EncoderLib
+//! \{
+
+namespace vvenc {
+
+class StageShared
+{
+public:
+  StageShared()
+  : m_isSccWeak  ( false )
+  , m_isSccStrong( false )
+  , m_maxFrames  ( -1 )
+  , m_isLead     ( false )
+  , m_isTrail    ( false )
+  , m_poc        ( -1 )
+  , m_cts        ( 0 )
+  , m_ctsValid   ( false )
+  , m_refCount   ( -1 )
+  {
+    std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
+  };
+
+  ~StageShared() {};
+
+  bool         isUsed()          const { return m_refCount > 0; }
+  bool         getPoc()          const { return m_poc; }
+  bool         isLeadTrail()     const { return m_isLead || m_isTrail; }
+  ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
+  Size         getLumaSize()     const { return m_origBuf.Y(); }
+
+  void create( int maxFrames, ChromaFormat chromaFormat, const Size& size, bool useFilter )
+  {
+    CHECK( m_refCount >= 0, "StageShared already created" );
+
+    m_maxFrames = maxFrames;
+    m_refCount  = 0;
+
+    const int padding = useFilter ? MCTF_PADDING : 0;
+    m_origBuf.create( chromaFormat, Area( Position(), size ), 0, padding );
+  }
+
+  void reuse( int poc, const vvencYUVBuffer* yuvInBuf )
+  {
+    CHECK( m_refCount < 0, "StageShared not created" );
+    CHECK( isUsed(),       "StageShared still in use" );
+
+    copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
+
+    m_isSccWeak   = false;
+    m_isSccStrong = false;
+    m_isLead      = poc < 0;
+    m_isTrail     = m_maxFrames > 0 && poc >= m_maxFrames;
+    m_poc         = poc;
+    m_cts         = yuvInBuf->cts;
+    m_ctsValid    = yuvInBuf->ctsValid;
+    m_refCount    = 0;
+    std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
+  }
+
+  void shareData( Picture* pic )
+  {
+    PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ];
+    for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+      prevOrigBufs[ i ] = sharePrevOrigBuffer( i );
+    pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
+    pic->isSccWeak   = m_isSccWeak;
+    pic->isSccStrong = m_isSccStrong;
+    pic->poc         = m_poc;
+    pic->cts         = m_cts;
+    pic->ctsValid    = m_ctsValid;
+    m_refCount      += 1;
+  }
+
+  void releaseShared( Picture* pic )
+  {
+    pic->releaseSharedBuffers();
+    for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+      releasePrevOrigBuffer( i );
+    m_refCount -= 1;
+    CHECK( m_refCount < 0, "StageShared invalid state" );
+    if( m_refCount == 0 )
+    {
+      m_filteredBuf.destroy();
+    }
+  };
+
+private:
+  PelStorage* sharePrevOrigBuffer( int idx )
+  {
+    CHECK( idx >= QPA_PREV_FRAMES, "array access out of bounds" );
+    if( m_prevShared[ idx ] )
+    {
+      m_prevShared[ idx ]->m_refCount += 1;
+      return &( m_prevShared[ idx ]->m_origBuf );
+    }
+    return nullptr;
+  }
+
+  void releasePrevOrigBuffer( int idx )
+  {
+    CHECK( idx >= QPA_PREV_FRAMES, "array access out of bounds" );
+    if( m_prevShared[ idx ] )
+    {
+      m_prevShared[ idx ]->m_refCount -= 1;
+      CHECK( m_refCount < 0, "StageShared invalid state" );
+    }
+  }
+
+public:
+  StageShared* m_prevShared[ QPA_PREV_FRAMES ];
+  bool         m_isSccWeak;
+  bool         m_isSccStrong;
+
+private:
+  PelStorage   m_origBuf;
+  PelStorage   m_filteredBuf;
+  int          m_maxFrames;
+  bool         m_isLead;
+  bool         m_isTrail;
+  int          m_poc;
+  uint64_t     m_cts;
+  bool         m_ctsValid;
+  int          m_refCount;
+};
+
+// ====================================================================================================================
+// Class definition
+// ====================================================================================================================
+
+class EncStage
+{
+public:
+  EncStage()
+  : m_nextStage       ( nullptr )
+  , m_minQueueSize    ( 0 )
+  , m_flushAll        ( false )
+  , m_processLeadTrail( false )
+  , m_ctuSize         ( MAX_CU_SIZE )
+  {
+  };
+
+  virtual ~EncStage()
+  {
+    freePicList();
+  };
+
+  void freePicList()
+  {
+    for( auto pic : m_procList )
+    {
+      pic->destroy();
+      delete pic;
+    }
+    m_procList.clear();
+    for( auto pic : m_freeList )
+    {
+      pic->destroy();
+      delete pic;
+    }
+    m_freeList.clear();
+  }
+
+  bool isStageDone() const { return m_procList.empty(); }
+
+  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize )
+  {
+    m_minQueueSize     = minQueueSize;
+    m_flushAll         = flushAll;
+    m_processLeadTrail = processLeadTrail;
+    m_ctuSize          = ctuSize;
+  }
+
+  void linkNextStage( EncStage* nextStage )
+  {
+    m_nextStage = nextStage;
+  }
+
+  void addPicSorted( StageShared* shared )
+  {
+    // send lead trail data to next stage if not requested
+    if( ! m_processLeadTrail && shared->isLeadTrail() )
+    {
+      if( m_nextStage )
+        m_nextStage->addPicSorted( shared );
+      return;
+    }
+
+    // setup new picture or recycle old one
+    const ChromaFormat chromaFormat = shared->getChromaFormat();
+    const Size lumaSize             = shared->getLumaSize();
+    Picture* pic                    = nullptr;
+    if( m_freeList.size() )
+    {
+      pic = m_freeList.front();
+      m_freeList.pop_front();
+    }
+    else
+    {
+      pic = new Picture();
+      pic->create( chromaFormat, lumaSize, m_ctuSize, m_ctuSize + 16, false );
+    }
+    CHECK( pic == nullptr, "out of memory" );
+    CHECK( pic->chromaFormat != chromaFormat || pic->Y().size() != lumaSize, "resolution or format changed" );
+
+    pic->reset();
+    shared->shareData( pic );
+
+    // sort picture into processing queue
+    PicList::iterator picItr;
+    for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
+    {
+      if( pic->poc < ( *picItr )->poc )
+        break;
+    }
+    m_procList.insert( picItr, pic );
+
+    // call first picture init
+    initPicture( pic );
+  }
+
+  void runStage( bool flush, AccessUnitList& auList )
+  {
+    // ready to go?
+    if( ( (int)m_procList.size() >= m_minQueueSize )
+        || ( m_procList.size() && flush ) )
+    {
+      // process always one picture or all if encoder should be flushed
+      do
+      {
+        // process pictures
+        PicList doneList;
+        PicList freeList;
+        processPictures( m_procList, flush, auList, doneList, freeList );
+
+        // send processed/finalized pictures to next stage
+        if( m_nextStage )
+        {
+          for( auto pic : doneList )
+          {
+            m_nextStage->addPicSorted( pic->m_stageShared );
+          }
+        }
+
+        // release unused pictures
+        for( auto pic : freeList )
+        {
+          // release shared buffer
+          StageShared* shared = pic->m_stageShared;
+          shared->releaseShared( pic );
+          // remove pic from own processing queue
+          m_procList.remove( pic );
+          m_freeList.push_back( pic );
+        }
+      } while( m_flushAll && flush && m_procList.size() );
+    }
+  }
+
+protected:
+  virtual void initPicture    ( Picture* pic ) = 0;
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+
+private:
+  EncStage* m_nextStage;
+  PicList   m_procList;
+  PicList   m_freeList;
+  int       m_minQueueSize;
+  bool      m_flushAll;
+  bool      m_processLeadTrail;
+  int       m_ctuSize;
+};
+
+} // namespace vvenc
+
+//! \}
+

@@ -543,6 +543,8 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 
   // loop though the first pass data and update RC parameters when new scenes are detected
   adaptToSceneChanges();
+
+  encRCSeq->firstPassData = m_listRCFirstPassStats;
 }
 
 uint64_t RateCtrl::getTotalBitsInFirstPass()
@@ -648,10 +650,7 @@ void RateCtrl::adaptToSceneChanges()
 void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                                const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer)
 {
-  if( ! rcIsFinalPass )
-  {
-    storeStatsData( TRCPassStats( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int( !isIntra ) ) );
-  }
+  storeStatsData( TRCPassStats( poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int( !isIntra ) ) );
 }
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )

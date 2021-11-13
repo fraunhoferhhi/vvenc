@@ -474,7 +474,7 @@ void DecLib::deletePicBuffer ( )
   }
 }
 
-Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32_t temporalLayer, const int layerId )
+Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32_t temporalLayer )
 {
   Picture * pic = nullptr;
   m_iMaxRefPicNum = ( m_vps == nullptr || m_vps->numLayersInOls[m_vps->targetOlsIdx] == 1 ) ? sps.maxDecPicBuffering[temporalLayer] : m_vps->getMaxDecPicBuffering( temporalLayer );     // m_uiMaxDecPicBuffering has the space for the picture currently being decoded uiMaxDecPicBuffering has the space for the picture currently being decoded
@@ -482,7 +482,7 @@ Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32
   {
     pic = new Picture();
 
-    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true, layerId );
+    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
 
     m_cListPic.push_back( pic );
 
@@ -518,14 +518,14 @@ Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32
 
     m_cListPic.push_back( pic );
 
-    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true, layerId );
+    pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
   }
   else
   {
     if( !pic->Y().Size::operator==( Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ) ) || pic->cs->pcv->maxCUSize != sps.CTUSize || pic->cs->pcv->maxCUSize != sps.CTUSize )
     {
       pic->destroy();
-      pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true, 0 );
+      pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
     }
   }
 
@@ -715,10 +715,10 @@ void DecLib::xUpdateRasInit(Slice* slice)
   }
 }
 
-void DecLib::xCreateLostPicture( int iLostPoc, const int layerId )
+void DecLib::xCreateLostPicture( int iLostPoc )
 {
   msg( VVENC_INFO, "\ninserting lost poc : %d\n",iLostPoc);
-  Picture *cFillPic = xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), 0, layerId);
+  Picture *cFillPic = xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), 0);
 
   CHECK( !cFillPic->slices.size(), "No slices in picture" );
 
@@ -1005,7 +1005,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     }
 
     //  Get a new picture buffer. This will also set up m_pic, and therefore give us a SPS and PPS pointer that we can use.
-    m_pic = xGetNewPicBuffer (*sps, *pps, m_apcSlicePilot->TLayer, layerId);
+    m_pic = xGetNewPicBuffer (*sps, *pps, m_apcSlicePilot->TLayer);
 
     m_apcSlicePilot->pps = pps;
     m_apcSlicePilot->picHeader = &m_picHeader;
@@ -1463,11 +1463,10 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   //detect lost reference picture and insert copy of earlier frame.
   {
     int lostPoc;
-    int layerId = 0;
     while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[0], 0, true)) > 0)
-      xCreateLostPicture(lostPoc - 1, layerId);
+      xCreateLostPicture(lostPoc - 1);
     while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[1], 1, true)) > 0)
-      xCreateLostPicture(lostPoc - 1, layerId);
+      xCreateLostPicture(lostPoc - 1);
   }
 
     m_prevPOC = m_apcSlicePilot->poc;
