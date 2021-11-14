@@ -83,7 +83,7 @@ Slice::Slice()
   , lmcsEnabled                         ( 0 )
   , explicitScalingListUsed             ( 0 )
   , deblockingFilterDisable             ( false )
-  , deblockingFilterOverrideFlag        ( false )
+  , deblockingFilterOverride            ( false )
   , deblockingFilterBetaOffsetDiv2      { 0 }
   , deblockingFilterTcOffsetDiv2        { 0 }
   , depQuantEnabled                     ( false )
@@ -631,7 +631,7 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   sliceQp                         = slice->sliceQp;
   chromaQpAdjEnabled              = slice->chromaQpAdjEnabled;
   deblockingFilterDisable         = slice->deblockingFilterDisable;
-  deblockingFilterOverrideFlag    = slice->deblockingFilterOverrideFlag;
+  deblockingFilterOverride        = slice->deblockingFilterOverride;
   for( int comp = 0; comp < MAX_NUM_COMP; comp++ )
   {
     deblockingFilterBetaOffsetDiv2[comp]  = slice->deblockingFilterBetaOffsetDiv2[comp];
@@ -977,6 +977,8 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
   if (isIDRorBLA()) return 0; //Assume that all pic in the DPB will be flushed anyway so no need to check.
 
   int numberOfPictures = pRPL->numberOfLongtermPictures + pRPL->numberOfShorttermPictures + pRPL->numberOfInterLayerPictures;
+
+  if( numberOfPictures < 1) return -1;
   //Check long term ref pics
   for (int ii = 0; pRPL->numberOfLongtermPictures > 0 && ii < numberOfPictures; ii++)
   {

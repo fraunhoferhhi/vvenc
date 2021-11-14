@@ -1092,6 +1092,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.outputFlagPresent                 = false;
   pps.deblockingFilterOverrideEnabled   = !m_cEncCfg.m_loopFilterOffsetInPPS;
   pps.deblockingFilterDisabled          = m_cEncCfg.m_bLoopFilterDisable;
+  pps.dbfInfoInPh                       = m_cEncCfg.m_picPartitionFlag && !m_cEncCfg.m_loopFilterOffsetInPPS && !m_cEncCfg.m_bLoopFilterDisable;
 
   if (! pps.deblockingFilterDisabled)
   {
@@ -1156,6 +1157,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
 
   pps.noPicPartition = !m_cEncCfg.m_picPartitionFlag;
   pps.ctuSize        = sps.CTUSize;
+  pps.log2CtuSize    = Log2( sps.CTUSize );
 
   xInitPPSforTiles( pps, sps );
 
@@ -1263,7 +1265,6 @@ void EncLib::xInitPPSforTiles(PPS &pps,const SPS &sps) const
   }
   else
   {
-    pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
     for( int i = 0; i < pps.numExpTileCols; i++ )
     {
       pps.tileColWidth.push_back( m_cEncCfg.m_tileColumnWidth[i] );
