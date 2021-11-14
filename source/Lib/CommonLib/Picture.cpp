@@ -240,7 +240,7 @@ void Picture::reset()
   encTime.resetTimer();
 }
 
-void Picture::destroy()
+void Picture::destroy( bool bPicHeader )
 {
   for (uint32_t t = 0; t < NUM_PIC_TYPES; t++)
   {
@@ -248,6 +248,10 @@ void Picture::destroy()
   }
   if( cs )
   {
+    if( bPicHeader && cs->picHeader )
+    {
+      delete cs->picHeader;
+    }
     cs->picHeader = nullptr;
     cs->destroy();
     delete cs;

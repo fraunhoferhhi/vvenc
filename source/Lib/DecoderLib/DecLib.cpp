@@ -467,7 +467,7 @@ void DecLib::deletePicBuffer ( )
   for (int i = 0; i < iSize; i++ )
   {
     Picture* pic = *(iterPic++);
-    pic->destroy();
+    pic->destroy( false );
 
     delete pic;
     pic = NULL;
@@ -524,7 +524,7 @@ Picture* DecLib::xGetNewPicBuffer ( const SPS &sps, const PPS &pps, const uint32
   {
     if( !pic->Y().Size::operator==( Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ) ) || pic->cs->pcv->maxCUSize != sps.CTUSize || pic->cs->pcv->maxCUSize != sps.CTUSize )
     {
-      pic->destroy();
+      pic->destroy( false );
       pic->create( sps.chromaFormatIdc, Size( pps.picWidthInLumaSamples, pps.picHeightInLumaSamples ), sps.CTUSize, sps.CTUSize + 16, true );
     }
   }

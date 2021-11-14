@@ -204,13 +204,13 @@ public:
   {
     for( auto pic : m_procList )
     {
-      pic->destroy();
+      pic->destroy( true );
       delete pic;
     }
     m_procList.clear();
     for( auto pic : m_freeList )
     {
-      pic->destroy();
+      pic->destroy( true );
       delete pic;
     }
     m_freeList.clear();

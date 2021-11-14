@@ -120,7 +120,7 @@ struct Picture : public UnitArea
 
   void create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder );
   void reset();
-  void destroy();
+  void destroy( bool bPicHeader );
 
   void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], StageShared* shared );
   void releaseSharedBuffers();
