@@ -546,14 +546,10 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
         for( int j = 0; j < cutoff; j += 4 )
         {
           __m128i vsum00 = _mm_setzero_si128();
-          //__m128i vsum01 = _mm_setzero_si128();
           __m128i vsum02 = _mm_setzero_si128();
-          //__m128i vsum03 = _mm_setzero_si128();
         
           __m128i vsum10 = _mm_setzero_si128();
-          //__m128i vsum11 = _mm_setzero_si128();
           __m128i vsum12 = _mm_setzero_si128();
-          //__m128i vsum13 = _mm_setzero_si128();
 
           for( int k = 0; k < trLoops; k++ )
           {
