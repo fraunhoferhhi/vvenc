@@ -3089,10 +3089,10 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   {
     if(pps->deblockingFilterOverrideEnabled&& !pps->dbfInfoInPh)
     {
-      READ_FLAG ( slice->deblockingFilterOverrideFlag, "sh_deblocking_filter_params_present_flag" );
+      READ_FLAG ( slice->deblockingFilterOverride, "sh_deblocking_filter_params_present_flag" );
     }
 
-    if(slice->deblockingFilterOverrideFlag)
+    if(slice->deblockingFilterOverride)
     {
       if (!pps->deblockingFilterDisabled )
       {

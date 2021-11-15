@@ -189,6 +189,7 @@ typedef enum
   VVENC_DRT_IDR,
   VVENC_DRT_RECOVERY_POINT_SEI,
   VVENC_DRT_IDR2,
+  VVENC_DRT_CRA_CRE,             //constrained RASL encoding
 }vvencDecodingRefreshType;
 
 typedef enum
@@ -712,6 +713,7 @@ typedef struct vvenc_config
 
   int                 m_maxParallelFrames;
   int                 m_ensureWppBitEqual;                                               // Flag indicating bit equalitiy for single thread runs respecting multithread restrictions
+  bool                m_tileParallelCtuEnc;
 
   bool                m_picPartitionFlag;
   unsigned int        m_tileColumnWidth[10];

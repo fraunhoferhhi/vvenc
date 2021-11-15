@@ -556,7 +556,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useChromaTS                             = 0;
   c->m_useBDPCM                                = 0;
 
-  c->m_rprEnabledFlag                          = 1;
+  c->m_rprEnabledFlag                          = -1;
   c->m_resChangeInClvsEnabled                  = false;
   c->m_craAPSreset                             = false;
   c->m_rprRASLtoolSwitch                       = false;
@@ -634,6 +634,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
+  c->m_tileParallelCtuEnc                      = false;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
@@ -1155,7 +1156,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_reshapeCW.adpOption  = c->m_adpOption;
   c->m_reshapeCW.initialCW  = c->m_initialCW;
 
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag < 0 || c->m_rprEnabledFlag > 2, "RPR must be either 0, 1 or 2" );
+  if( c->m_rprEnabledFlag == -1 )
+  {
+    c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
+  }
+  
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 costrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
@@ -2206,8 +2213,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_InputQueueSize < c->m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 4,                     "Decoding Refresh Type must be comprised between 0 and 3 included" );
-  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                     "Decoding Refresh Type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
@@ -2802,6 +2809,8 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   c->m_numTileRows = pps.numTileRows;
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
+
+  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_tileParallelCtuEnc && c->m_EDO > 0, "EDO and tile parallelism are mutually exclusive!" );
 }
 
 VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
@@ -3594,8 +3603,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "\nPARALLEL PROCESSING CFG: ";
   css << "NumThreads:" << c->m_numThreads << " ";
   css << "MaxParallelFrames:" << c->m_maxParallelFrames << " ";
+  if( c->m_picPartitionFlag )
+  {
+    css << "TileParallelCtuEnc:" << c->m_tileParallelCtuEnc << " ";
+  }
   css << "WppBitEqual:" << c->m_ensureWppBitEqual << " ";
-  css << "WF:" << c->m_entropyCodingSyncEnabled << "";
+  css << "WF:" << c->m_entropyCodingSyncEnabled << " ";
   css << "\n";
   }
 

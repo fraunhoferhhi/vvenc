@@ -1286,7 +1286,7 @@ void xDMVRSubPixelErrorSurface( bool notZeroCost, int16_t *totalDeltaMV, int16_t
 
 void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRngs &clpRngs, const bool bioApplied )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_INTER_MRG_DMVR );
+  PROFILER_SCOPE_AND_STAGE_EXT( 1, _TPROF, P_INTER_MRG_DMVR, cu.cs, CH_L );
   int iterationCount = 1;
   /*Always High Precision*/
   const int mvShift  = MV_FRACTIONAL_BITS_INTERNAL;

@@ -772,9 +772,8 @@ namespace DQIntern
     }
   }
 
-  inline void Quantizer::preQuantCoeff(const TCoeff absCoeff, PQData *pqData, int quanCoeff) const
+  inline void Quantizer::preQuantCoeff( const TCoeff absCoeff, PQData* pqData, int quanCoeff ) const
   {
-    // TODO: vectorize
     int64_t scaledOrg = int64_t( absCoeff ) * quanCoeff;
     TCoeff  qIdx      = std::max<TCoeff>( 1, std::min<TCoeff>( m_maxQIdx, TCoeff( ( scaledOrg + m_QAdd ) >> m_QShift ) ) );
     int64_t scaledAdd = qIdx * m_DistStepAdd - scaledOrg * m_DistOrgFact;
@@ -864,14 +863,13 @@ namespace DQIntern
   public:
     State( const RateEstimator& rateEst, CommonCtx& commonCtx, const int stateId );
 
-    template<uint8_t numIPos>
     inline void updateState(const ScanInfo &scanInfo, const State *prevStates, const Decision &decision);
     inline void updateStateEOS(const ScanInfo &scanInfo, const State *prevStates, const State *skipStates,
                                const Decision &decision);
 
     inline void init()
     {
-      m_rdCost        = std::numeric_limits<int64_t>::max()>>1;
+      m_rdCost        = rdCostInit;
       m_numSigSbb     = 0;
       m_remRegBins    = 4;  // just large enough for last scan pos
       m_refSbbCtxId   = -1;
@@ -883,9 +881,6 @@ namespace DQIntern
 
     void checkRdCosts( const ScanPosType spt, const PQData& pqDataA, const PQData& pqDataB, Decision& decisionA, Decision& decisionB ) const
     {
-      // TODO: avx2 reg: rdCostA | rdCostB | rdCostZ | ...
-      // vectorize...
-
       const int32_t*  goRiceTab = g_goRiceBits[m_goRicePar];
       int64_t         rdCostA   = m_rdCost + pqDataA.deltaDist;
       int64_t         rdCostB   = m_rdCost + pqDataB.deltaDist;
@@ -939,14 +934,13 @@ namespace DQIntern
         rdCostZ += goRiceTab[ m_goRiceZero ];
       }
 
-      if( rdCostA < decisionA.rdCost )
+      if( rdCostA < rdCostZ && rdCostA < decisionA.rdCost )
       {
         decisionA.rdCost    = rdCostA;
         decisionA.absLevel  = pqDataA.absLevel;
         decisionA.prevId    = m_stateId;
       }
-
-      if( rdCostZ < decisionA.rdCost )
+      else if( rdCostZ < decisionA.rdCost )
       {
         decisionA.rdCost    = rdCostZ;
         decisionA.absLevel  = 0;
@@ -961,6 +955,45 @@ namespace DQIntern
       }
     }
 
+#if 0
+    void checkRdCostsZero( const ScanPosType spt, Decision& decisionA ) const
+    {
+      const int32_t* goRiceTab = g_goRiceBits[m_goRicePar];
+      int64_t         rdCostZ  = m_rdCost;
+
+      if( m_remRegBins >= 4 )
+      {
+        if( spt == SCAN_ISCSBB )
+        {
+          rdCostZ += m_sigFracBits.intBits[0];
+        }
+        else if( spt == SCAN_SOCSBB )
+        {
+          rdCostZ += m_sbbFracBits.intBits[1] + m_sigFracBits.intBits[0];
+        }
+        else if( m_numSigSbb )
+        {
+          rdCostZ += m_sigFracBits.intBits[0];
+        }
+        else
+        {
+          rdCostZ = decisionA.rdCost;
+        }
+      }
+      else
+      {
+        rdCostZ += goRiceTab[m_goRiceZero];
+      }
+
+      if( rdCostZ < decisionA.rdCost )
+      {
+        decisionA.rdCost   = rdCostZ;
+        decisionA.absLevel = 0;
+        decisionA.prevId   = m_stateId;
+      }
+    }
+
+#endif
     inline void checkRdCostStart(int32_t lastOffset, const PQData &pqData, Decision &decision) const
     {
       int64_t rdCost = pqData.deltaDist + lastOffset;
@@ -1016,6 +1049,7 @@ namespace DQIntern
     const CoeffFracBits*const m_gtxFracBitsArray;
     CommonCtx&                m_commonCtx;
   public:
+    static const int64_t      rdCostInit = std::numeric_limits<int64_t>::max() >> 1;
     unsigned                  effWidth;
     unsigned                  effHeight;
   };
@@ -1030,7 +1064,6 @@ namespace DQIntern
   {
   }
 
-  template<uint8_t numIPos>
   inline void State::updateState(const ScanInfo &scanInfo, const State *prevStates, const Decision &decision)
   {
     m_rdCost = decision.rdCost;
@@ -1043,7 +1076,6 @@ namespace DQIntern
         m_refSbbCtxId           = prvState->m_refSbbCtxId;
         m_sbbFracBits           = prvState->m_sbbFracBits;
         m_remRegBins            = prvState->m_remRegBins - 1;
-        m_goRicePar             = prvState->m_goRicePar;
         if( m_remRegBins >= 4 )
         {
           m_remRegBins -= (decision.absLevel < 2 ? decision.absLevel : 3);
@@ -1062,124 +1094,60 @@ namespace DQIntern
       uint8_t* levels               = reinterpret_cast<uint8_t*>(m_absLevelsAndCtxInit);
       levels[ scanInfo.insidePos ]  = (uint8_t)std::min<TCoeff>( 255, decision.absLevel );
 
-      // TODO: AVX2 vec: levels[scanInfo.nextNbInfoSbb.inPos[0]] | levels[scanInfo.nextNbInfoSbb.inPos[1]] | levels[scanInfo.nextNbInfoSbb.inPos[2]] | levels[scanInfo.nextNbInfoSbb.inPos[3]] | levels[scanInfo.nextNbInfoSbb.inPos[4]] | 0 | 0 | 0
-      // ...
-      // or SSE42 vec: 0 .. 3, and use UPDATE(4) for last element
-
       if (m_remRegBins >= 4)
       {
-        TCoeff  tinit = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos];
+        TCoeff  tinit   = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos];
+        TCoeff  sumAbs  = tinit >> 8;
         TCoeff  sumAbs1 = (tinit >> 3) & 31;
-        TCoeff  sumNum = tinit & 7;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-        if (numIPos == 1)
+        TCoeff  sumNum  = tinit & 7;
+#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
+        switch( scanInfo.nextNbInfoSbb.num )
         {
-          UPDATE(0);
-        }
-        else if (numIPos == 2)
-        {
-          UPDATE(0);
-          UPDATE(1);
-        }
-        else if (numIPos == 3)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-        }
-        else if (numIPos == 4)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-        }
-        else if (numIPos == 5)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
+        default:
+        case 5:
           UPDATE(4);
+        case 4:
+          UPDATE(3);
+        case 3:
+          UPDATE(2);
+        case 2:
+          UPDATE(1);
+        case 1:
+          UPDATE(0);
+        case 0:
+          ;
         }
 #undef UPDATE
-        TCoeff sumGt1 = sumAbs1 - sumNum;
-        m_sigFracBits = m_sigFracBitsArray[scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
-        m_coeffFracBits = m_gtxFracBitsArray[scanInfo.gtxCtxOffsetNext + (sumGt1 < 4 ? sumGt1 : 4)];
+        int sumGt1 = sumAbs1 - sumNum;
+        int sumAll = std::max( std::min( 31, ( int ) sumAbs - 4 * 5 ), 0 );
 
-        TCoeff  sumAbs = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos] >> 8;
-#define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; }
-        if (numIPos == 1)
-        {
-          UPDATE(0);
-        }
-        else if (numIPos == 2)
-        {
-          UPDATE(0);
-          UPDATE(1);
-        }
-        else if (numIPos == 3)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-        }
-        else if (numIPos == 4)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-        }
-        else if (numIPos == 5)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-          UPDATE(4);
-        }
-#undef UPDATE
-        int sumAll = std::max(std::min(31, (int)sumAbs - 4 * 5), 0);
-        m_goRicePar = g_auiGoRiceParsCoeff[sumAll];
+        m_sigFracBits   = m_sigFracBitsArray  [scanInfo.sigCtxOffsetNext + std::min( (sumAbs1+1)>>1, 3 )];
+        m_coeffFracBits = m_gtxFracBitsArray  [scanInfo.gtxCtxOffsetNext + std::min(  sumGt1,        4 )];
+        m_goRicePar     = g_auiGoRiceParsCoeff[sumAll];
       }
       else
       {
         TCoeff  sumAbs = m_absLevelsAndCtxInit[8 + scanInfo.nextInsidePos] >> 8;
 #define UPDATE(k) {TCoeff t=levels[scanInfo.nextNbInfoSbb.inPos[k]]; sumAbs+=t; }
-        if (numIPos == 1)
+        switch( scanInfo.nextNbInfoSbb.num )
         {
-          UPDATE(0);
-        }
-        else if (numIPos == 2)
-        {
-          UPDATE(0);
-          UPDATE(1);
-        }
-        else if (numIPos == 3)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-        }
-        else if (numIPos == 4)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
-        }
-        else if (numIPos == 5)
-        {
-          UPDATE(0);
-          UPDATE(1);
-          UPDATE(2);
-          UPDATE(3);
+        default:
+        case 5:
           UPDATE(4);
+        case 4:
+          UPDATE(3);
+        case 3:
+          UPDATE(2);
+        case 2:
+          UPDATE(1);
+        case 1:
+          UPDATE(0);
+        case 0:
+          ;
         }
 #undef UPDATE
-        sumAbs = std::min<TCoeff>(31, sumAbs);
-        m_goRicePar = g_auiGoRiceParsCoeff[sumAbs];
+        sumAbs       = std::min<TCoeff>(31, sumAbs);
+        m_goRicePar  = g_auiGoRiceParsCoeff[sumAbs];
         m_goRiceZero = g_auiGoRicePosCoeff0(m_stateId, m_goRicePar);
       }
     }
@@ -1256,43 +1224,48 @@ namespace DQIntern
     currState.m_refSbbCtxId   = currState.m_stateId;
     currState.m_sbbFracBits   = m_sbbFlagBits[ sigNSbb ];
 
-    uint16_t          templateCtxInit[16];
-    const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
-    const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
-    const uint8_t*    absLevels = levels   + scanBeg;
-    for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
+    if( sigNSbb || ( ( scanInfo.nextSbbRight && scanInfo.nextSbbBelow ) ? sbbFlags[ scanInfo.nextSbbBelow  + 1 ] : false ) )
     {
-      if( nbOut->num )
+      uint16_t          templateCtxInit[16];
+      const int         scanBeg   = scanInfo.scanIdx - scanInfo.sbbSize;
+      const NbInfoOut*  nbOut     = m_nbInfo + scanBeg;
+      const uint8_t*    absLevels = levels   + scanBeg;
+
+      for( int id = 0; id < scanInfo.sbbSize; id++, nbOut++ )
       {
-        TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
-#define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
-        UPDATE(0);
-        if( nbOut->num > 1 )
+        if( nbOut->num )
         {
-          UPDATE(1);
-          if( nbOut->num > 2 )
+          TCoeff sumAbs = 0, sumAbs1 = 0, sumNum = 0;
+  #define UPDATE(k) {TCoeff t=absLevels[nbOut->outPos[k]]; sumAbs+=t; sumAbs1+=std::min<TCoeff>(4+(t&1),t); sumNum+=!!t; }
+          switch( nbOut->num )
           {
+          default:
+          case 5:
+            UPDATE(4);
+          case 4:
+            UPDATE(3);
+          case 3:
             UPDATE(2);
-            if( nbOut->num > 3 )
-            {
-              UPDATE(3);
-              if( nbOut->num > 4 )
-              {
-                UPDATE(4);
-              }
-            }
+          case 2:
+            UPDATE(1);
+          case 1:
+            UPDATE(0);
           }
+  #undef UPDATE
+          templateCtxInit[id] = uint16_t(sumNum) | ( uint16_t(sumAbs1) << 3 ) | ( (uint16_t)std::min<TCoeff>( 127, sumAbs ) << 8 );
         }
-#undef UPDATE
-        templateCtxInit[id] = uint16_t(sumNum) + ( uint16_t(sumAbs1) << 3 ) + ( (uint16_t)std::min<TCoeff>( 127, sumAbs ) << 8 );
+        else
+        {
+          templateCtxInit[id] = 0;
+        }
       }
-      else
-      {
-        templateCtxInit[id] = 0;
-      }
+      ::memset( currState.m_absLevelsAndCtxInit,     0,               16*sizeof(uint8_t) );
+      ::memcpy( currState.m_absLevelsAndCtxInit + 8, templateCtxInit, 16*sizeof(uint16_t) );
     }
-    ::memset( currState.m_absLevelsAndCtxInit,     0,               16*sizeof(uint8_t) );
-    ::memcpy( currState.m_absLevelsAndCtxInit + 8, templateCtxInit, 16*sizeof(uint16_t) );
+    else
+    {
+      ::memset( currState.m_absLevelsAndCtxInit,     0,               48*sizeof(uint8_t) );
+    }
   }
 
 
@@ -1365,7 +1338,7 @@ namespace DQIntern
     m_quant.init( dqTrVal );
   }
 
-  void DepQuant::xDecide( const ScanPosType spt, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quanCoeff)
+  void DepQuant::xDecide( const ScanPosType spt, const TCoeff absCoeff, const int lastOffset, Decision* decisions, bool zeroOut, int quanCoeff )
   {
     ::memcpy( decisions, startDec, 4*sizeof(Decision) );
 
@@ -1383,10 +1356,12 @@ namespace DQIntern
 
     PQData  pqData[4];
     m_quant.preQuantCoeff( absCoeff, pqData, quanCoeff );
-    m_prevStates[0].checkRdCosts( spt, pqData[0], pqData[2], decisions[0], decisions[2]);
-    m_prevStates[1].checkRdCosts( spt, pqData[0], pqData[2], decisions[2], decisions[0]);
-    m_prevStates[2].checkRdCosts( spt, pqData[3], pqData[1], decisions[1], decisions[3]);
-    m_prevStates[3].checkRdCosts( spt, pqData[3], pqData[1], decisions[3], decisions[1]);
+
+    m_prevStates[0].checkRdCosts( spt, pqData[0], pqData[2], decisions[0], decisions[2] );
+    m_prevStates[1].checkRdCosts( spt, pqData[0], pqData[2], decisions[2], decisions[0] );
+    m_prevStates[2].checkRdCosts( spt, pqData[3], pqData[1], decisions[1], decisions[3] );
+    m_prevStates[3].checkRdCosts( spt, pqData[3], pqData[1], decisions[3], decisions[1] );
+
     if( spt==SCAN_EOCSBB )
     {
         m_skipStates[0].checkRdCostSkipSbb( decisions[0] );
@@ -1420,44 +1395,10 @@ namespace DQIntern
       }
       else if( !zeroOut )
       {
-        switch( scanInfo.nextNbInfoSbb.num )
-        {
-        case 0:
-          m_currStates[0].updateState<0>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<0>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<0>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<0>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 1:
-          m_currStates[0].updateState<1>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<1>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<1>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<1>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 2:
-          m_currStates[0].updateState<2>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<2>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<2>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<2>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 3:
-          m_currStates[0].updateState<3>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<3>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<3>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<3>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        case 4:
-          m_currStates[0].updateState<4>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<4>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<4>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<4>( scanInfo, m_prevStates, decisions[3] );
-          break;
-        default:
-          m_currStates[0].updateState<5>( scanInfo, m_prevStates, decisions[0] );
-          m_currStates[1].updateState<5>( scanInfo, m_prevStates, decisions[1] );
-          m_currStates[2].updateState<5>( scanInfo, m_prevStates, decisions[2] );
-          m_currStates[3].updateState<5>( scanInfo, m_prevStates, decisions[3] );
-        }
+        m_currStates[0].updateState( scanInfo, m_prevStates, decisions[0] );
+        m_currStates[1].updateState( scanInfo, m_prevStates, decisions[1] );
+        m_currStates[2].updateState( scanInfo, m_prevStates, decisions[2] );
+        m_currStates[3].updateState( scanInfo, m_prevStates, decisions[3] );
       }
 
       if( scanInfo.spt == SCAN_SOCSBB )

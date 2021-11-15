@@ -947,7 +947,6 @@ public:
 
                   PPS();
   virtual         ~PPS();
-  uint32_t        getNumTiles() const;
   uint32_t        getSubPicIdxFromSubPicId( uint32_t subPicId ) const;
   const ChromaQpAdj&     getChromaQpOffsetListEntry( int cuChromaQpOffsetIdxPlus1 ) const
   {
@@ -970,9 +969,30 @@ public:
                                                                                                picHeightInLumaSamples != pps.picHeightInLumaSamples       ||
                                                                                                scalingWindow          != pps.scalingWindow; }
 
+  uint32_t               getNumTiles() const                                         { return numTileCols * numTileRows; }
   uint32_t               getTileIdx( uint32_t ctuX, uint32_t ctuY ) const            { return (ctuToTileRow[ctuY] * numTileCols) + ctuToTileCol[ctuX]; }
   uint32_t               getTileIdx( uint32_t ctuRsAddr ) const                      { return getTileIdx( ctuRsAddr % picWidthInCtu,  ctuRsAddr / picWidthInCtu ); }
-  uint32_t               getTileIdx( const Position& pos ) const                     { return getTileIdx( pos.x / ctuSize, pos.y / ctuSize ); }
+  uint32_t               getTileIdx( const Position& pos ) const                     { return getTileIdx( pos.x >> log2CtuSize, pos.y >> log2CtuSize ); }
+  uint32_t               getTileHeight( const int tileIdx ) const                    { return tileRowHeight[tileIdx / numTileCols]; }
+  uint32_t               getTileWidth( const int tileIdx ) const                     { return tileColWidth[tileIdx % numTileCols]; }
+  uint32_t               getNumTileLineIds() const // number of lines in all the tiles (each tile consisting of indepdent rows
+  {
+    int numTileRows = 0;
+    for( int tileIdx = 0; tileIdx < getNumTiles(); tileIdx++ ) numTileRows += getTileHeight( tileIdx );
+    return numTileRows;
+  }
+  uint32_t               getTileLineId( uint32_t ctuX, uint32_t ctuY ) const // unique id for a tile line at the given position
+  {
+    if( numTileCols == 1 ) return ctuY;
+
+    const int currTileIdx = getTileIdx( ctuX, ctuY );
+    int tileRowResIdx = 0;
+    for( int tileIdx = 0; tileIdx < currTileIdx; tileIdx++ ) tileRowResIdx += getTileHeight( tileIdx );
+
+    const int tileRowResIdxRest = ctuY - tileRowBd[ctuToTileRow[ctuY]];
+
+    return tileRowResIdx + tileRowResIdxRest;
+  }
   
   const SubPic&          getSubPicFromPos(const Position& pos)  const;
   const SubPic&          getSubPicFromCU (const CodingUnit& cu) const;
@@ -1215,7 +1235,7 @@ class Slice
   bool                        lmcsEnabled;
   bool                        explicitScalingListUsed;
   bool                        deblockingFilterDisable;
-  bool                        deblockingFilterOverrideFlag;      //< offsets for deblocking filter inherit from PPS
+  bool                        deblockingFilterOverride;      //< offsets for deblocking filter inherit from PPS
   int                         deblockingFilterBetaOffsetDiv2[MAX_NUM_COMP];    //< beta offset for deblocking filter
   int                         deblockingFilterTcOffsetDiv2[MAX_NUM_COMP];      //< tc offset for deblocking filter
   bool                        depQuantEnabled;               //!< dependent quantization enabled flag

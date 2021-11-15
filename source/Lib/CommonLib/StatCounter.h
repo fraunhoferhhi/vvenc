@@ -676,8 +676,8 @@ public:
     }
   }
 
-  StatCounter2D<T>&       operator[]( int id )       { return m_counters[id]; }
-  const StatCounter2D<T>& operator[]( int id ) const { return m_counters[id]; }
+  StatCounter2D<T>&       operator[]( size_t id )       { return m_counters[id]; }
+  const StatCounter2D<T>& operator[]( size_t id ) const { return m_counters[id]; }
 
   StatCounter2DSet& operator+=( const StatCounter2DSet& other ) {
     auto i1 = m_counters.begin();

@@ -2041,9 +2041,9 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
   {
     if (slice->pps->deblockingFilterOverrideEnabled )
     {
-      WRITE_FLAG(slice->deblockingFilterOverrideFlag, "sh_deblocking_params_present_flag");
+      WRITE_FLAG(slice->deblockingFilterOverride, "sh_deblocking_params_present_flag");
     }
-    if (slice->deblockingFilterOverrideFlag)
+    if (slice->deblockingFilterOverride)
     {
       if (!slice->pps->deblockingFilterDisabled)
       {

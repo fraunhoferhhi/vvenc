@@ -388,7 +388,7 @@ LoopFilter::~LoopFilter()
  */
 void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) const
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_DEBLOCK_FILTER );
+  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_DEBLOCK_FILTER );
   const PreCalcValues& pcv = *cs.pcv;
 
 
