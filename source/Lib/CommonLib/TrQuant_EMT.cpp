@@ -380,15 +380,11 @@ inline void _fastForwardMM( const TCoeff *src, TCoeff *dst, int shift, int line,
 #if ENABLE_SIMD_TRAFO
   if( line == 1 )
   {
-    g_tCoeffOps.fastFwdCore_1l[Log2( uiTrSize ) - 2]( tc, src, dst, line, reducedLine, cutoff, shift );
-  }
-  else if( line == 2 )
-  {
-    g_tCoeffOps.fastFwdCore_2l[Log2( uiTrSize ) - 2]( tc, src, dst, line, reducedLine, cutoff, shift );
+    g_tCoeffOps.fastFwdCore_1D[Log2( uiTrSize ) - 2]( tc, src, dst, line, reducedLine, cutoff, shift );
   }
   else
   {
-    g_tCoeffOps.fastFwdCore_4l[Log2( uiTrSize ) - 2]( tc, src, dst, line, reducedLine, cutoff, shift );
+    g_tCoeffOps.fastFwdCore_2D[Log2( uiTrSize ) - 2]( tc, src, dst, line, reducedLine, cutoff, shift );
   }
 #else
   for( int i = 0; i<reducedLine; i++ )
@@ -2022,21 +2018,16 @@ TCoeffOps::TCoeffOps()
   fastInvCore[2]  = fastInvCore_<16>;
   fastInvCore[3]  = fastInvCore_<32>;
   fastInvCore[4]  = fastInvCore_<64>;
-  fastFwdCore_1l[0] = fastFwdCore< 4>;
-  fastFwdCore_1l[1] = fastFwdCore< 8>;
-  fastFwdCore_1l[2] = fastFwdCore<16>;
-  fastFwdCore_1l[3] = fastFwdCore<32>;
-  fastFwdCore_1l[4] = fastFwdCore<64>;
-  fastFwdCore_2l[0] = fastFwdCore< 4>;
-  fastFwdCore_2l[1] = fastFwdCore< 8>;
-  fastFwdCore_2l[2] = fastFwdCore<16>;
-  fastFwdCore_2l[3] = fastFwdCore<32>;
-  fastFwdCore_2l[4] = fastFwdCore<64>;
-  fastFwdCore_4l[0] = fastFwdCore< 4>;
-  fastFwdCore_4l[1] = fastFwdCore< 8>;
-  fastFwdCore_4l[2] = fastFwdCore<16>;
-  fastFwdCore_4l[3] = fastFwdCore<32>;
-  fastFwdCore_4l[4] = fastFwdCore<64>;
+  fastFwdCore_1D[0] = fastFwdCore< 4>;
+  fastFwdCore_1D[1] = fastFwdCore< 8>;
+  fastFwdCore_1D[2] = fastFwdCore<16>;
+  fastFwdCore_1D[3] = fastFwdCore<32>;
+  fastFwdCore_1D[4] = fastFwdCore<64>;
+  fastFwdCore_2D[0] = fastFwdCore< 4>;
+  fastFwdCore_2D[1] = fastFwdCore< 8>;
+  fastFwdCore_2D[2] = fastFwdCore<16>;
+  fastFwdCore_2D[3] = fastFwdCore<32>;
+  fastFwdCore_2D[4] = fastFwdCore<64>;
 }
 
 TCoeffOps g_tCoeffOps;
