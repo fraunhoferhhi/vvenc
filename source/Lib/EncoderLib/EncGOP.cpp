@@ -639,6 +639,11 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   outPic->slices[ 0 ]->updateRefPicCounter( -1 );
   outPic->isFinished = true;
 
+  if( ! m_isPreAnalysis )
+  {
+    outPic->getFilteredOrigBuffer().destroy();
+  }
+
   doneList.push_back( outPic );
 
   m_pocEncode     = outPic->poc;
