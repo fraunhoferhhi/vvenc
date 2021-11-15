@@ -73,30 +73,30 @@ class NoMallocThreadPool;
 /// encoder class
 class EncLib
 {
-  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufCb;
-  void*                   m_recYuvBufCtx;
+  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
+  void*                                         m_recYuvBufCtx;
 
-  const VVEncCfg           m_encCfg;
-  const VVEncCfg           m_orgCfg;
-  VVEncCfg                 m_firstPassCfg;
-  RateCtrl*                m_rateCtrl;
-  MCTF*                    m_MCTF;
-  EncGOP*                  m_preEncoder;
-  EncGOP*                  m_gopEncoder;
-  std::vector<EncStage*>   m_encStages;
-  std::list<StageShared*>  m_sharedDataList;
-  std::deque<StageShared*> m_prevSharedQueue;
+  const VVEncCfg         m_encCfg;
+  const VVEncCfg         m_orgCfg;
+  VVEncCfg               m_firstPassCfg;
+  RateCtrl*              m_rateCtrl;
+  MCTF*                  m_MCTF;
+  EncGOP*                m_preEncoder;
+  EncGOP*                m_gopEncoder;
+  std::vector<EncStage*> m_encStages;
+  std::list<PicShared*>  m_picSharedList;
+  std::deque<PicShared*> m_prevSharedQueue;
 
-  NoMallocThreadPool*      m_threadPool;
+  NoMallocThreadPool*    m_threadPool;
 
-  int                      m_picsRcvd;
-  int                      m_passInitialized;
+  int                    m_picsRcvd;
+  int                    m_passInitialized;
 
 public:
   EncLib();
   virtual ~EncLib();
 
-  void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback cb );
+  void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func );
   void     initEncoderLib      ( const VVEncCfg& encCfg );
   void     initPass            ( int pass, const char* statsFName );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
@@ -108,10 +108,10 @@ private:
   void     xInitRCCfg          ();
   void     xEnableRCCfg        ();
 
-  StageShared* xGetFreeSharedData();
-  void     xAssignPrevQpaBufs( StageShared* shared );
+  PicShared* xGetFreePicShared();
+  void     xAssignPrevQpaBufs( PicShared* picShared );
 
-  void     xDetectScc          ( StageShared* shared );
+  void     xDetectScc          ( PicShared* picShared );
 };
 
 } // namespace vvenc

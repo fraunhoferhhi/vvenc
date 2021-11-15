@@ -126,8 +126,8 @@ private:
   Analyze                   m_AnalyzeP;
   Analyze                   m_AnalyzeB;
 
-  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufCb;
-  void*                     m_recYuvBufCtx;
+  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
+  void*                                         m_recYuvBufCtx;
 
   NoMallocThreadPool*       m_threadPool;
   std::mutex                m_gopEncMutex;
@@ -181,7 +181,7 @@ public:
   EncGOP();
   virtual ~EncGOP();
 
-  void setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> cb );
+  void setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> func );
 
   const EncReshape& getReshaper() const { return m_Reshaper; }
 

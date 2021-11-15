@@ -176,7 +176,7 @@ Picture::Picture()
     , sliceDataNumBins  ( 0 )
     , cts               ( 0 )
     , ctsValid          ( false )
-    , m_stageShared     ( nullptr )
+    , m_picShared       ( nullptr )
     , picInitialQP      ( 0 )
     , picVisActY        ( 0.0 )
     , isSccWeak         ( false )
@@ -271,9 +271,9 @@ void Picture::destroy( bool bPicHeader )
   SEIs.clear();
 }
 
-void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], StageShared* shared )
+void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], PicShared* picShared )
 {
-  m_stageShared                    = shared;
+  m_picShared                      = picShared;
   m_sharedBufs[ PIC_ORIGINAL ]     = origBuf;
   m_sharedBufs[ PIC_ORIGINAL_RSP ] = filteredBuf;
   for( int i = 0; i < QPA_PREV_FRAMES; i++ )
@@ -282,7 +282,7 @@ void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, P
 
 void Picture::releaseSharedBuffers()
 {
-  m_stageShared                    = nullptr;
+  m_picShared                      = nullptr;
   m_sharedBufs[ PIC_ORIGINAL ]     = nullptr;
   m_sharedBufs[ PIC_ORIGINAL_RSP ] = nullptr;
 }

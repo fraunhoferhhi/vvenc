@@ -59,10 +59,10 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class StageShared
+class PicShared
 {
 public:
-  StageShared()
+  PicShared()
   : m_isSccWeak  ( false )
   , m_isSccStrong( false )
   , m_maxFrames  ( -1 )
@@ -76,7 +76,7 @@ public:
     std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
   };
 
-  ~StageShared() {};
+  ~PicShared() {};
 
   bool         isUsed()          const { return m_refCount > 0; }
   bool         getPoc()          const { return m_poc; }
@@ -86,7 +86,7 @@ public:
 
   void create( int maxFrames, ChromaFormat chromaFormat, const Size& size, bool useFilter )
   {
-    CHECK( m_refCount >= 0, "StageShared already created" );
+    CHECK( m_refCount >= 0, "PicShared already created" );
 
     m_maxFrames = maxFrames;
     m_refCount  = 0;
@@ -97,8 +97,8 @@ public:
 
   void reuse( int poc, const vvencYUVBuffer* yuvInBuf )
   {
-    CHECK( m_refCount < 0, "StageShared not created" );
-    CHECK( isUsed(),       "StageShared still in use" );
+    CHECK( m_refCount < 0, "PicShared not created" );
+    CHECK( isUsed(),       "PicShared still in use" );
 
     copyPadToPelUnitBuf( m_origBuf, *yuvInBuf, getChromaFormat() );
 
@@ -117,7 +117,9 @@ public:
   {
     PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ];
     for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+    {
       prevOrigBufs[ i ] = sharePrevOrigBuffer( i );
+    }
     pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
     pic->isSccWeak   = m_isSccWeak;
     pic->isSccStrong = m_isSccStrong;
@@ -131,9 +133,11 @@ public:
   {
     pic->releaseSharedBuffers();
     for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+    {
       releasePrevOrigBuffer( i );
+    }
     m_refCount -= 1;
-    CHECK( m_refCount < 0, "StageShared invalid state" );
+    CHECK( m_refCount < 0, "PicShared invalid state" );
     if( m_refCount == 0 )
     {
       m_filteredBuf.destroy();
@@ -158,25 +162,25 @@ private:
     if( m_prevShared[ idx ] )
     {
       m_prevShared[ idx ]->m_refCount -= 1;
-      CHECK( m_refCount < 0, "StageShared invalid state" );
+      CHECK( m_refCount < 0, "PicShared invalid state" );
     }
   }
 
 public:
-  StageShared* m_prevShared[ QPA_PREV_FRAMES ];
-  bool         m_isSccWeak;
-  bool         m_isSccStrong;
+  PicShared* m_prevShared[ QPA_PREV_FRAMES ];
+  bool       m_isSccWeak;
+  bool       m_isSccStrong;
 
 private:
-  PelStorage   m_origBuf;
-  PelStorage   m_filteredBuf;
-  int          m_maxFrames;
-  bool         m_isLead;
-  bool         m_isTrail;
-  int          m_poc;
-  uint64_t     m_cts;
-  bool         m_ctsValid;
-  int          m_refCount;
+  PelStorage m_origBuf;
+  PelStorage m_filteredBuf;
+  int        m_maxFrames;
+  bool       m_isLead;
+  bool       m_isTrail;
+  int        m_poc;
+  uint64_t   m_cts;
+  bool       m_ctsValid;
+  int        m_refCount;
 };
 
 // ====================================================================================================================
@@ -231,19 +235,21 @@ public:
     m_nextStage = nextStage;
   }
 
-  void addPicSorted( StageShared* shared )
+  void addPicSorted( PicShared* picShared )
   {
     // send lead trail data to next stage if not requested
-    if( ! m_processLeadTrail && shared->isLeadTrail() )
+    if( ! m_processLeadTrail && picShared->isLeadTrail() )
     {
       if( m_nextStage )
-        m_nextStage->addPicSorted( shared );
+      {
+        m_nextStage->addPicSorted( picShared );
+      }
       return;
     }
 
     // setup new picture or recycle old one
-    const ChromaFormat chromaFormat = shared->getChromaFormat();
-    const Size lumaSize             = shared->getLumaSize();
+    const ChromaFormat chromaFormat = picShared->getChromaFormat();
+    const Size lumaSize             = picShared->getLumaSize();
     Picture* pic                    = nullptr;
     if( m_freeList.size() )
     {
@@ -259,7 +265,7 @@ public:
     CHECK( pic->chromaFormat != chromaFormat || pic->Y().size() != lumaSize, "resolution or format changed" );
 
     pic->reset();
-    shared->shareData( pic );
+    picShared->shareData( pic );
 
     // sort picture into processing queue
     PicList::iterator picItr;
@@ -293,7 +299,7 @@ public:
         {
           for( auto pic : doneList )
           {
-            m_nextStage->addPicSorted( pic->m_stageShared );
+            m_nextStage->addPicSorted( pic->m_picShared );
           }
         }
 
@@ -301,8 +307,8 @@ public:
         for( auto pic : freeList )
         {
           // release shared buffer
-          StageShared* shared = pic->m_stageShared;
-          shared->releaseShared( pic );
+          PicShared* picShared = pic->m_picShared;
+          picShared->releaseShared( pic );
           // remove pic from own processing queue
           m_procList.remove( pic );
           m_freeList.push_back( pic );
