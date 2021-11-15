@@ -342,11 +342,15 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
   if( trSize >= 8 )
   {
 #if USE_AVX2
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     if( vext >= AVX2 && ( trSize & 15 ) == 0 )
     {
       static constexpr unsigned trLoops = trSize >> 4 ? trSize >> 4 : 1;
 
-      static constexpr int nlx4 = reducedLine == 2 ? 0 : 1;
+      const int nlx4 = reducedLine == 2 ? 0 : 1;
 
       for( int i = 0; i < reducedLine; i += ( 2 << nlx4 ) )
       {
@@ -586,6 +590,9 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
       }
     }
     else
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
+#pragma GCC diagnostic pop
+#endif
 #endif
     {
       static constexpr unsigned trLoops = trSize >> 3 ? trSize >> 3 : 1;
@@ -595,7 +602,7 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
               TCoeff*       dstPtr = dst + i;
         const TMatrixCoeff* itPtr  = tc;
      
-        __m128i vsrcarrx[trLoops][2];
+        __m128i vsrcarr[trLoops][2];
           
         for( int k = 0; k < trSize; k += 8 )
         {
