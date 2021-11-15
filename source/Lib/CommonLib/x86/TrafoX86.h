@@ -344,7 +344,7 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 #if USE_AVX2
     if( vext >= AVX2 && ( trSize & 15 ) == 0 )
     {
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
       // vsrcarr[2] and vsrcarr[3] might be unitialized for nlx4==0, but in that case they will not be used, so discard the warning!
@@ -512,7 +512,7 @@ void fastFwd_SSE( const TMatrixCoeff* tc, const TCoeff* src, TCoeff* dst, unsign
 
         src += ( trSize << ( 1 + nlx4 ) );
       }
-#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ )
+#if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && !defined( __clang__ )
 #pragma GCC diagnostic pop
 #endif
     }
