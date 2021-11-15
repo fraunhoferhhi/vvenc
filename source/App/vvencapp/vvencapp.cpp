@@ -131,8 +131,6 @@ int main( int argc, char* argv[] )
     cAppname = cAppname.substr(iPos+1 );
   }
 
-  vvenc_set_logging_callback( nullptr, msgFnc );
-
   // default encoder configuration
   apputils::VVEncAppCfg vvencappCfg;
   vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
@@ -161,6 +159,8 @@ int main( int argc, char* argv[] )
   {
     return -1;
   }
+
+  vvenc_set_logging_callback( enc, nullptr, msgFnc );
 
   int iRet = vvenc_encoder_open( enc, &vvencappCfg );
   if( 0 != iRet )

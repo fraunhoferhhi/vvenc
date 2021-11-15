@@ -674,7 +674,7 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
 {
   if ( ! bflag )
     return false;
-  vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+  //vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
   c->m_confirmFailed = true;
   return true;
 }
@@ -1061,11 +1061,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+        //vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+        //vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
@@ -1206,7 +1206,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
-    vvenc::msg( VVENC_WARNING, "disable MCTF for QP < 17\n");
+    //vvenc::msg( VVENC_WARNING, "disable MCTF for QP < 17\n");
     c->m_vvencMCTF.MCTF = 0;
   }
   if( c->m_vvencMCTF.MCTF )
@@ -1700,7 +1700,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
     if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      //vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
       errorGOP = true;
     }
     else
@@ -1736,7 +1736,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
           }
           if (!found)
           {
-            vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            //vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -2014,7 +2014,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
-    vvenc::msg( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
+    //vvenc::msg( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
     c->m_allowDisFracMMVD = false;
   }
 
@@ -2095,11 +2095,11 @@ static bool checkCfgParameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+        //vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+        //vvenc::msg( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n");
       }
       break;
   }
@@ -2338,9 +2338,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if (c->m_usePerceptQPA && c->m_dualITree && (c->m_internChromaFormat != VVENC_CHROMA_400) && (c->m_chromaCbQpOffsetDualTree != 0 || c->m_chromaCrQpOffsetDualTree != 0 || c->m_chromaCbCrQpOffsetDualTree != 0))
   {
-    vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
-    vvenc::msg(VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
-    vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
+    //vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
+    //vvenc::msg(VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
+    //vvenc::msg(VVENC_WARNING, "***************************************************************************\n");
   }
 
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
@@ -2498,7 +2498,7 @@ static bool checkCfgParameter( vvenc_config *c )
     int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
     if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      //vvenc::msg(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
       errorGOP = true;
     }
     else
@@ -2524,7 +2524,7 @@ static bool checkCfgParameter( vvenc_config *c )
           }
           if (!found)
           {
-            vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            //vvenc::msg(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -2684,7 +2684,7 @@ static bool checkCfgParameter( vvenc_config *c )
   {
     if( c->m_vvencMCTF.MCTFFrames[0] == 0 )
     {
-      vvenc::msg( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
+      //vvenc::msg( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
     }
 
     vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
@@ -2692,8 +2692,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if( c->m_fastForwardToPOC != -1 )
   {
-    if( c->m_cabacInitPresent )  { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); }
-    if( c->m_alf )               { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
+    if( c->m_cabacInitPresent )  { /* vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" ); */ }
+    if( c->m_alf )               { /* vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); */ }
   }
 
   if( c->m_picPartitionFlag )

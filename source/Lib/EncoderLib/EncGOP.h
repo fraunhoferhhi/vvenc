@@ -59,7 +59,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
-#include "LegacyRateCtrl.h"
+#include "RateCtrl.h"
+#include "Utilities/Logger.h"
 
 #include <vector>
 #include <list>
@@ -146,6 +147,7 @@ private:
   RateCtrl*                 m_pcRateCtrl;
   EncHRD*                   m_pcEncHRD;
   ParameterSetMap<APS>      m_gopApsMap;
+  Logger*                   m_Logger;
 
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
@@ -163,7 +165,7 @@ public:
   EncGOP();
   virtual ~EncGOP();
 
-  void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
+  void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool, Logger* logger );
   void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );

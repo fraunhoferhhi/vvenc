@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 #include "EncoderLib/EncLib.h"
+#include "Utilities/Logger.h"
 
 namespace vvenc {
 
@@ -122,10 +123,12 @@ public:
 
   const char* getLastError() const;
 
+  int     registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );
+  Logger* getLogger() { return &m_logger; }
+
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
 
-  static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );            ///< set message output function for encoder lib. if not set, no messages will be printed.
   static const char* setSIMDExtension( const char* simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
   static const char* getCompileInfoString();
   static int         decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
@@ -146,6 +149,8 @@ private:
   std::string            m_sEncoderCapabilities;
 
   EncLib*                m_pEncLib = nullptr;
+
+  Logger                 m_logger;
 };
 
 
