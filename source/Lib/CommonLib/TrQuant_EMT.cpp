@@ -163,7 +163,7 @@ inline void _fastInverseMM( const TCoeff *src, TCoeff *dst, int shift, int line,
   memset( dst, 0, reducedLine * uiTrSize * sizeof( TCoeff ) );
 
 #if ENABLE_SIMD_TRAFO
-  g_tCoeffOps.fastInvCore[Log2( line ) - 2]( iT, src, dst, line, reducedLine, cutoff );
+  g_tCoeffOps.fastInvCore[Log2( uiTrSize ) - 2]( iT, src, dst, line, reducedLine, cutoff );
   g_tCoeffOps.roundClip8( dst, uiTrSize, reducedLine, uiTrSize, outputMinimum, outputMaximum, rnd_factor, shift );
 #else
   for( int k = 0; k < cutoff; k++ )
