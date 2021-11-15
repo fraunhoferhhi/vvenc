@@ -138,10 +138,6 @@ public:
     }
     m_refCount -= 1;
     CHECK( m_refCount < 0, "PicShared invalid state" );
-    if( m_refCount == 0 )
-    {
-      m_filteredBuf.destroy();
-    }
   };
 
 private:
