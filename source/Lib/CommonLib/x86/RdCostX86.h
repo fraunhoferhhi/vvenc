@@ -2795,8 +2795,8 @@ static Distortion fixWeightedSSE_SIMD( const DistParam& rcDtParam, uint32_t fixe
     {
       for( int n = 0; n < iCols; n += 4 )
       {
-        __m128i xorg = _mm_loadu_si64( ( const __m128i* ) &piOrg[n] );
-        __m128i xcur = _mm_loadu_si64( ( const __m128i* ) &piCur[n] );
+        __m128i xorg = _mm_loadl_epi64( ( const __m128i* ) &piOrg[n] );
+        __m128i xcur = _mm_loadl_epi64( ( const __m128i* ) &piCur[n] );
 
         xcur = _mm_sub_epi16     ( xorg, xcur );
 
