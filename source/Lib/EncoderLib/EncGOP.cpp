@@ -238,7 +238,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
 
 
 EncGOP::EncGOP()
-  : m_recYuvBufCb        ( nullptr )
+  : m_recYuvBufFunc      ( nullptr )
   , m_recYuvBufCtx       ( nullptr )
   , m_threadPool         ( nullptr )
   , m_pcEncCfg           ( nullptr )
@@ -391,10 +391,10 @@ void EncGOP::picInitRateControl( Picture& pic, Slice* slice, EncPicture* picEnco
 // ====================================================================================================================
 
 
-void EncGOP::setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> cb )
+void EncGOP::setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> func )
 {
-  m_recYuvBufCtx = ctx;
-  m_recYuvBufCb  = cb;
+  m_recYuvBufCtx  = ctx;
+  m_recYuvBufFunc = func;
 }
 
 void EncGOP::initPicture( Picture* pic )
@@ -647,7 +647,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 
 void EncGOP::xOutputRecYuv( const PicList& picList )
 {
-  if( m_pcRateCtrl->rcIsFinalPass && m_recYuvBufCb )
+  if( m_pcRateCtrl->rcIsFinalPass && m_recYuvBufFunc )
   {
     CHECK( m_isPreAnalysis, "yuv output enabled for pre analysis" );
     // ordered YUV output
@@ -662,7 +662,7 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
       vvencYUVBuffer yuvBuffer;
       vvenc_YUVBuffer_default( &yuvBuffer );
       setupYuvBuffer( pic->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
-      m_recYuvBufCb( m_recYuvBufCtx, &yuvBuffer );
+      m_recYuvBufFunc( m_recYuvBufCtx, &yuvBuffer );
 
       m_pocRecOut += 1;
       pic->isNeededForOutput = false;

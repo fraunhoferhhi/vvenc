@@ -69,7 +69,7 @@ namespace vvenc {
 class SEI;
 class SEIDecodedPictureHash;
 class EncRCPic;
-class StageShared;
+class PicShared;
 
 typedef std::list<SEI*> SEIMessages;
 
@@ -122,7 +122,7 @@ struct Picture : public UnitArea
   void reset();
   void destroy( bool bPicHeader );
 
-  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], StageShared* shared );
+  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], PicShared* picShared );
   void releaseSharedBuffers();
 
   void createTempBuffers( unsigned _maxCUSize );
@@ -222,7 +222,7 @@ public:
   uint64_t                      cts;
   bool                          ctsValid;
 
-  StageShared*                  m_stageShared;
+  PicShared*                    m_picShared;
 
   PelStorage                    m_picBufs[ NUM_PIC_TYPES ];
   PelStorage*                   m_sharedBufs[ NUM_PIC_TYPES ];

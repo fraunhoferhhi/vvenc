@@ -68,7 +68,7 @@ namespace vvenc {
 
 
 EncLib::EncLib()
-  : m_recYuvBufCb    ( nullptr )
+  : m_recYuvBufFunc  ( nullptr )
   , m_recYuvBufCtx   ( nullptr )
   , m_encCfg         ()
   , m_orgCfg         ()
@@ -92,13 +92,13 @@ EncLib::~EncLib()
   }
 }
 
-void EncLib::setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback cb )
+void EncLib::setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func )
 {
-  m_recYuvBufCtx = ctx;
-  m_recYuvBufCb  = cb;
+  m_recYuvBufCtx  = ctx;
+  m_recYuvBufFunc = func;
   if( m_rateCtrl && m_rateCtrl->rcIsFinalPass && m_gopEncoder )
   {
-    m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufCb );
+    m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufFunc );
   }
 }
 
@@ -236,7 +236,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {
-    m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufCb );
+    m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufFunc );
   }
   m_encStages.push_back( m_gopEncoder );
 
@@ -258,7 +258,9 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // prepare prev shared data
   while( m_prevSharedQueue.size() < QPA_PREV_FRAMES )
+  {
     m_prevSharedQueue.push_back( nullptr );
+  }
 
   m_picsRcvd        = m_encCfg.m_vvencMCTF.MCTF ? -m_encCfg.m_vvencMCTF.MCTFNumLeadFrames : 0;
   m_passInitialized = pass;
@@ -289,11 +291,11 @@ void EncLib::xUninitLib()
   m_encStages.clear();
 
   // shared data
-  for( auto shared : m_sharedDataList )
+  for( auto picShared : m_picSharedList )
   {
-    delete shared;
+    delete picShared;
   }
-  m_sharedDataList.clear();
+  m_picSharedList.clear();
   m_prevSharedQueue.clear();
 
   // thread pool
@@ -387,12 +389,14 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // send new YUV input buffer to first encoder stage
   if( yuvInBuf )
   {
-    StageShared* shared = xGetFreeSharedData();
-    shared->reuse( m_picsRcvd, yuvInBuf );
+    PicShared* picShared = xGetFreePicShared();
+    picShared->reuse( m_picsRcvd, yuvInBuf );
     if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
-      xAssignPrevQpaBufs( shared );
-    xDetectScc( shared );
-    m_encStages[ 0 ]->addPicSorted( shared );
+    {
+      xAssignPrevQpaBufs( picShared );
+    }
+    xDetectScc( picShared );
+    m_encStages[ 0 ]->addPicSorted( picShared );
     m_picsRcvd += 1;
   }
 
@@ -400,10 +404,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   // trigger stages
   isQueueEmpty = true;
-  for( auto stage : m_encStages )
+  for( auto encStage : m_encStages )
   {
-    stage->runStage( flush, au );
-    isQueueEmpty &= stage->isStageDone();
+    encStage->runStage( flush, au );
+    isQueueEmpty &= encStage->isStageDone();
   }
 
   // reset output access unit, if not final pass
@@ -425,40 +429,42 @@ void EncLib::printSummary()
 // Protected member functions
 // ====================================================================================================================
 
-StageShared* EncLib::xGetFreeSharedData()
+PicShared* EncLib::xGetFreePicShared()
 {
-  StageShared* shared = nullptr;
-  for( auto itr : m_sharedDataList )
+  PicShared* picShared = nullptr;
+  for( auto itr : m_picSharedList )
   {
     if( ! itr->isUsed() )
     {
-      shared = itr;
+      picShared = itr;
       break;
     }
   }
 
-  if( ! shared )
+  if( ! picShared )
   {
-    shared = new StageShared();
-    shared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
-    m_sharedDataList.push_back( shared );
+    picShared = new PicShared();
+    picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
+    m_picSharedList.push_back( picShared );
   }
-  CHECK( shared == nullptr, "out of memory" );
+  CHECK( picShared == nullptr, "out of memory" );
 
-  return shared;
+  return picShared;
 }
 
-void EncLib::xAssignPrevQpaBufs( StageShared* shared )
+void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
 {
   for( int i = 0; i < QPA_PREV_FRAMES; i++ )
   {
-    shared->m_prevShared[ i ] = m_prevSharedQueue[ i ];
+    picShared->m_prevShared[ i ] = m_prevSharedQueue[ i ];
   }
   m_prevSharedQueue.pop_back();
-  m_prevSharedQueue.push_front( shared );
+  m_prevSharedQueue.push_front( picShared );
   // for very first frame link itself
-  if( shared->m_prevShared[ 0 ] == nullptr )
-    shared->m_prevShared[ 0 ] = shared;
+  if( picShared->m_prevShared[ 0 ] == nullptr )
+  {
+    picShared->m_prevShared[ 0 ] = picShared;
+  }
 }
 
 #if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && __GNUC__ == 5
@@ -466,10 +472,10 @@ void EncLib::xAssignPrevQpaBufs( StageShared* shared )
 #pragma GCC diagnostic ignored "-Wstrict-overflow"
 #endif
 
-void EncLib::xDetectScc( StageShared* shared )
+void EncLib::xDetectScc( PicShared* picShared )
 {
   Picture pic;
-  shared->shareData( &pic );
+  picShared->shareData( &pic );
   CPelUnitBuf yuvOrgBuf = pic.getOrigBuf();
 
   bool isSccWeak   = false;
@@ -554,10 +560,10 @@ void EncLib::xDetectScc( StageShared* shared )
   }
   isSccWeak = ((s * 100 / AmountBlock) > K_SC);
 
-  shared->m_isSccWeak   = isSccWeak;
-  shared->m_isSccStrong = isSccStrong;
+  picShared->m_isSccWeak   = isSccWeak;
+  picShared->m_isSccStrong = isSccStrong;
 
-  shared->releaseShared( &pic );
+  picShared->releaseShared( &pic );
 }
 
 #if FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED && defined( __GNUC__ ) && __GNUC__ == 5
