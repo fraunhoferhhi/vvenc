@@ -65,13 +65,13 @@ public:
   PicShared()
   : m_isSccWeak  ( false )
   , m_isSccStrong( false )
+  , m_cts        ( 0 )
   , m_maxFrames  ( -1 )
+  , m_poc        ( -1 )
+  , m_refCount   ( -1 )
   , m_isLead     ( false )
   , m_isTrail    ( false )
-  , m_poc        ( -1 )
-  , m_cts        ( 0 )
   , m_ctsValid   ( false )
-  , m_refCount   ( -1 )
   {
     std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
   };
@@ -79,7 +79,6 @@ public:
   ~PicShared() {};
 
   bool         isUsed()          const { return m_refCount > 0; }
-  bool         getPoc()          const { return m_poc; }
   bool         isLeadTrail()     const { return m_isLead || m_isTrail; }
   ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
   Size         getLumaSize()     const { return m_origBuf.Y(); }
@@ -104,12 +103,12 @@ public:
 
     m_isSccWeak   = false;
     m_isSccStrong = false;
+    m_cts         = yuvInBuf->cts;
+    m_poc         = poc;
+    m_refCount    = 0;
     m_isLead      = poc < 0;
     m_isTrail     = m_maxFrames > 0 && poc >= m_maxFrames;
-    m_poc         = poc;
-    m_cts         = yuvInBuf->cts;
     m_ctsValid    = yuvInBuf->ctsValid;
-    m_refCount    = 0;
     std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
   }
 
@@ -170,13 +169,13 @@ public:
 private:
   PelStorage m_origBuf;
   PelStorage m_filteredBuf;
+  uint64_t   m_cts;
   int        m_maxFrames;
+  int        m_poc;
+  int        m_refCount;
   bool       m_isLead;
   bool       m_isTrail;
-  int        m_poc;
-  uint64_t   m_cts;
   bool       m_ctsValid;
-  int        m_refCount;
 };
 
 // ====================================================================================================================
