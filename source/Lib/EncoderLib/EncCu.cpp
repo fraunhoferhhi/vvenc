@@ -376,16 +376,19 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] )
 {
   m_modeCtrl.initCTUEncoding( *cs.slice );
-
+  
   // init the partitioning manager
   Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
 
-  m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
-  bool tileCond = !m_pcEncCfg->m_tileParallelCtuEnc || (m_tileIdx == 0 || m_tileIdx == cs.pps->getTileIdx( area.lumaPos().offset(-1,-1) ));
+  const Position& lumaPos = area.lumaPos();
+  m_tileIdx = cs.pps->getTileIdx( lumaPos );
+  const bool leftSameTile  = lumaPos.x > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset(-1, 0) );
+  const bool aboveSameTile = lumaPos.y > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset( 0,-1) );
+  const bool tileCond = !m_pcEncCfg->m_tileParallelCtuEnc || (leftSameTile && aboveSameTile);
   m_EDO     = m_pcEncCfg->m_EDO && tileCond;
-
-  
+  m_TileBoundary = Position( leftSameTile  ? (lumaPos.x - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.x, 
+                             aboveSameTile ? (lumaPos.y - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.y); 
   if( m_pcEncCfg->m_IBCMode )
   {
     m_cInterSearch.resetCtuRecordIBC();
@@ -3287,8 +3290,8 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   const ChromaFormat format = cs.area.chromaFormat;
   CodingUnit*            cu = cs.getCU(partitioner.chType, partitioner.treeType);
   const Position    lumaPos = cu->Y().valid() ? cu->Y().pos() : recalcPosition( format, cu->chType, CH_L, cu->blocks[cu->chType].pos() );
-  bool    topEdgeAvai = lumaPos.y > 0 && ((lumaPos.y % 4) == 0);
-  bool   leftEdgeAvai = lumaPos.x > 0 && ((lumaPos.x % 4) == 0);
+  bool    topEdgeAvai = lumaPos.y > m_TileBoundary.y && ((lumaPos.y % 4) == 0);
+  bool   leftEdgeAvai = lumaPos.x > m_TileBoundary.x && ((lumaPos.x % 4) == 0);
 
   if( ! ( topEdgeAvai || leftEdgeAvai ))
   {
