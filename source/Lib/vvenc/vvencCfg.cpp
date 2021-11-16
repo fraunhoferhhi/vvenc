@@ -2705,7 +2705,7 @@ static bool checkCfgParameter( vvenc_config *c )
     if( c->m_alf )               { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
   }
 
-  if( c->m_picPartitionFlag )
+  if( c->m_picPartitionFlag || c->m_numTileConfigColumns > 1 || c->m_numTileConfigRows > 1 )
   {
     checkCfgPicPartitioningParameter( c );
   }
@@ -2732,6 +2732,8 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   //TileColumnWidthArray and TileRowHeightArray have to be not set
   if( c->m_numTileConfigColumns > 1 || c->m_numTileConfigRows > 1 )
   {
+    if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
+    
     vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther TileConfig or TileColumnWidthArray" );
     vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther TileConfig or TileRowHeightArray" );
     

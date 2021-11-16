@@ -402,6 +402,8 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
   IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
 
+  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileConfigColumns, &m_numTileConfigRows }, true, 'x' );
+
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<vvencDecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
@@ -463,6 +465,8 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
   ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
   ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
+  
+  ("tiles",             toNumTiles,                "Set number of tile columns and rows explicitly. " )
   ;
 
   opts.setSubSection("Profile, Level, Tier");
