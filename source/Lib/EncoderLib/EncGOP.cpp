@@ -446,7 +446,7 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList, int firstPassQP )
 {
   CHECK( picList.empty(), "empty input picture list given" );
 
@@ -461,11 +461,19 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
     if( m_numPicsCoded == 0 )
     {
+      if ( m_pcEncCfg->m_RCLookAhead )
+      {
+        m_pcRateCtrl->processFirstPassData( firstPassQP /*m_pcEncCfg->m_QP*/ );
+      }
       // very first RC GOP
       m_pcRateCtrl->initRCGOP( 1 );
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
+      if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
+      {
+        m_pcRateCtrl->processFirstPassData( firstPassQP /*m_pcEncCfg->m_QP*/ );
+      }
       m_pcRateCtrl->destroyRCGOP();
       const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
       m_pcRateCtrl->initRCGOP( std::min( m_pcEncCfg->m_GOPSize, rcGopSize ) );

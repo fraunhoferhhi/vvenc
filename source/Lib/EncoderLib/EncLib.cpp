@@ -178,7 +178,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 )
+    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
     {
       m_rateCtrl = new LegacyRateCtrl;
     }
@@ -232,7 +232,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // gop encoder
   m_gopEncoder = new EncGOP();
-  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize );
+  m_gopEncoder->initStage( m_encCfg.m_IntraPeriod /*+ m_firstPassCfg.m_GOPSize*/ + 1, false, false, m_encCfg.m_CTUSize );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -406,7 +406,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   isQueueEmpty = true;
   for( auto encStage : m_encStages )
   {
-    encStage->runStage( flush, au );
+    encStage->runStage( flush, au, m_firstPassCfg.m_QP );
     isQueueEmpty &= encStage->isStageDone();
   }
 

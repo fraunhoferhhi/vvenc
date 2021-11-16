@@ -195,7 +195,7 @@ Picture::Picture()
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
 {
-  std::fill_n( m_sharedBufs, NUM_PIC_TYPES, nullptr );
+  std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
 }
 
@@ -234,7 +234,7 @@ void Picture::reset()
   actualHeadBits      = 0;
   actualTotalBits     = 0;
 
-  std::fill_n( m_sharedBufs, NUM_PIC_TYPES, nullptr );
+  std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
 
   encTime.resetTimer();

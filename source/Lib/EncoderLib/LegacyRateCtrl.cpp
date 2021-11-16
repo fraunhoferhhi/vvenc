@@ -119,7 +119,7 @@ namespace vvenc {
   {
     destroy();
 
-    EncRCSeq::create( twoPassRC, totFrames, targetBitrate, frRate, intraPer, GOPSize, bitDepth, firstPassStats );
+    EncRCSeq::create( twoPassRC, false, targetBitrate, frRate, intraPer, GOPSize, bitDepth, firstPassStats ); //TO DO: check the second parameter
 
     twoPass = twoPassRC;
     totalFrames = totFrames;
