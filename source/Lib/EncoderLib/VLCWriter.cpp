@@ -1018,17 +1018,17 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
 
   if (pcSPS->ptlDpbHrdParamsPresent)
   {
-    WRITE_FLAG(pcSPS->hrdParametersPresent,               "sps_general_hrd_params_present_flag");
+    WRITE_FLAG(pcSPS->hrdParametersPresent,               "sps_timing_hrd_params_present_flag");
 
     if( pcSPS->hrdParametersPresent )
     {
-    codeGeneralHrdparameters(&pcSPS->generalHrdParams);
-    if ((pcSPS->maxTLayers - 1) > 0)
-    {
-      WRITE_FLAG(pcSPS->subLayerParametersPresent, "sps_sublayer_cpb_params_present_flag");
-    }
-    uint32_t firstSubLayer = pcSPS->subLayerParametersPresent ? 0 : (pcSPS->maxTLayers - 1);
-    codeOlsHrdParameters(&pcSPS->generalHrdParams, pcSPS->olsHrdParams, firstSubLayer, pcSPS->maxTLayers - 1);
+      codeGeneralHrdparameters(&pcSPS->generalHrdParams);
+      if ((pcSPS->maxTLayers - 1) > 0)
+      {
+        WRITE_FLAG(pcSPS->subLayerParametersPresent,      "sps_sublayer_cpb_params_present_flag");
+      }
+      uint32_t firstSubLayer = pcSPS->subLayerParametersPresent ? 0 : (pcSPS->maxTLayers - 1);
+      codeOlsHrdParameters(&pcSPS->generalHrdParams, pcSPS->olsHrdParams, firstSubLayer, pcSPS->maxTLayers - 1);
     }
   }
 
