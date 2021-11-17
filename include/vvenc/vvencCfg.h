@@ -720,8 +720,8 @@ typedef struct vvenc_config
   unsigned int        m_tileRowHeight[10];
   uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
-  uint32_t            m_numTileCols;                                                     // derived number of tile columns
-  uint32_t            m_numTileRows;                                                     // derived number of tile rows
+  uint32_t            m_numTileCols;                                                     // number of tile columns
+  uint32_t            m_numTileRows;                                                     // number of tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
   
   // decode bitstream options
