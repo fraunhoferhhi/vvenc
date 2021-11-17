@@ -62,6 +62,7 @@ VVENC_NAMESPACE_BEGIN
 
 static bool checkCfgParameter( vvenc_config *cfg );
 static void checkCfgPicPartitioningParameter( vvenc_config *c );
+static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid );
 static std::string vvenc_cfgString;
 
 static int vvenc_getQpValsSize( int QpVals[] )
@@ -637,8 +638,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_tileParallelCtuEnc                      = false;
 
   c->m_picPartitionFlag                        = false;
-  c->m_numTileConfigColumns                    = 1;
-  c->m_numTileConfigRows                       = 1;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );
   memset( c->m_tileRowHeight,   0, sizeof(c->m_tileRowHeight) );
   c->m_numExpTileCols                          = 1;
@@ -2705,8 +2704,10 @@ static bool checkCfgParameter( vvenc_config *c )
     if( c->m_alf )               { vvenc::msg( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" ); }
   }
 
-  if( c->m_picPartitionFlag || c->m_numTileConfigColumns > 1 || c->m_numTileConfigRows > 1 )
+  if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
+    if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
+
     checkCfgPicPartitioningParameter( c );
   }
 
@@ -2723,34 +2724,38 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   pps.picWidthInCtu          = ( pps.picWidthInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
   pps.picHeightInCtu         = ( pps.picHeightInLumaSamples + c->m_CTUSize - 1 ) / c->m_CTUSize;
 
+  int lastNonZeroColumn = -1, lastNonZeroRow = -1;
+  bool validCfg = true;
+  checkCfgInputArrays( c, lastNonZeroColumn, lastNonZeroRow, validCfg );
+  if( !validCfg ) return;
+
   int numTileColumnWidths, numTileRowHeights;
 
-  bool colWidth_all_zero  = std::all_of(c->m_tileColumnWidth, c->m_tileColumnWidth+9, [](int x) { return x==0; });
-  bool rowHeight_all_zero = std::all_of(c->m_tileRowHeight, c->m_tileRowHeight+9, [](int x) { return x==0; });
+  bool colWidth_all_zero  = lastNonZeroColumn == -1;
+  bool rowHeight_all_zero = lastNonZeroRow == -1;
 
   //number of tiles is set explicitly, e.g. TileConfig=2x2
   //TileColumnWidthArray and TileRowHeightArray have to be not set
-  if( c->m_numTileConfigColumns > 1 || c->m_numTileConfigRows > 1 )
+  if( c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
-    if( !c->m_picPartitionFlag ) c->m_picPartitionFlag = true;
-    
     vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther TileConfig or TileColumnWidthArray" );
     vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther TileConfig or TileRowHeightArray" );
+    if( !colWidth_all_zero || !rowHeight_all_zero ) return;
     
-    if( c->m_numTileConfigColumns > 1 )
+    if( c->m_numTileCols > 1 )
     {
-      unsigned int tileWidth = pps.picWidthInCtu / c->m_numTileConfigColumns;
-      if( tileWidth * c->m_numTileConfigColumns < pps.picWidthInCtu ) tileWidth++;
+      unsigned int tileWidth = pps.picWidthInCtu / c->m_numTileCols;
+      if( tileWidth * c->m_numTileCols < pps.picWidthInCtu ) tileWidth++;
       c->m_tileColumnWidth[0] = tileWidth;
     }
     else
     {
       c->m_tileColumnWidth[0] = pps.picWidthInCtu;
     }
-    if( c->m_numTileConfigRows > 1 )
+    if( c->m_numTileRows > 1 )
     {
-      unsigned int tileHeight = pps.picHeightInCtu / c->m_numTileConfigRows;
-      if( tileHeight * c->m_numTileConfigRows < pps.picHeightInCtu ) tileHeight++;
+      unsigned int tileHeight = pps.picHeightInCtu / c->m_numTileRows;
+      if( tileHeight * c->m_numTileRows < pps.picHeightInCtu ) tileHeight++;
       c->m_tileRowHeight[0] = tileHeight;
     }
     else
@@ -2776,18 +2781,12 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
     // remove any tile columns that can be specified implicitly
     if( c->m_tileColumnWidth[1] > 0 )
     {
-      int checkIdx = 2;
-      while( c->m_tileColumnWidth[checkIdx] != 0 )
+      while( lastNonZeroColumn > 0 && c->m_tileColumnWidth[lastNonZeroColumn-1] == c->m_tileColumnWidth[lastNonZeroColumn] )
       {
-        checkIdx++;
+        c->m_tileColumnWidth[lastNonZeroColumn] = 0;
+        lastNonZeroColumn--;
       }
-      int lastNonZeroIdx = checkIdx-1;
-      while( lastNonZeroIdx > 0 && c->m_tileColumnWidth[lastNonZeroIdx-1] == c->m_tileColumnWidth[lastNonZeroIdx] )
-      {
-        c->m_tileColumnWidth[lastNonZeroIdx] = 0;
-        lastNonZeroIdx--;
-      }
-      numTileColumnWidths = lastNonZeroIdx+1;
+      numTileColumnWidths = lastNonZeroColumn+1;
     }
     else
     {
@@ -2797,18 +2796,12 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
     // remove any tile rows that can be specified implicitly
     if( c->m_tileRowHeight[1] > 0 )
     {
-      int checkIdx = 2;
-      while( c->m_tileRowHeight[checkIdx] != 0 )
+      while( lastNonZeroRow > 0 && c->m_tileRowHeight[lastNonZeroRow-1] == c->m_tileRowHeight[lastNonZeroRow] )
       {
-        checkIdx++;
+        c->m_tileRowHeight[lastNonZeroRow] = 0;
+        lastNonZeroRow--;
       }
-      int lastNonZeroIdx = checkIdx-1;
-      while( lastNonZeroIdx > 0 && c->m_tileRowHeight[lastNonZeroIdx-1] == c->m_tileRowHeight[lastNonZeroIdx] )
-      {
-        c->m_tileRowHeight[lastNonZeroIdx] = 0;
-        lastNonZeroIdx--;
-      }
-      numTileRowHeights = lastNonZeroIdx+1;
+      numTileRowHeights = lastNonZeroRow+1;
     }
     else
     {
@@ -2860,6 +2853,50 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_tileParallelCtuEnc && c->m_EDO > 0, "EDO and tile parallelism are mutually exclusive!" );
+}
+
+static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid )
+{
+  int lastNonZeroIdx = -1;
+  for( int i = 9; i >= 0; i-- )
+  {
+    if( c->m_tileColumnWidth[i] != 0 )
+    {
+      lastNonZeroIdx = i;
+      break;
+    }
+  }
+  lastNonZeroCol = lastNonZeroIdx;
+  
+  lastNonZeroIdx = -1;
+
+  for( int i = 9; i >= 0; i-- )
+  {
+    if( c->m_tileRowHeight[i] != 0 )
+    {
+      lastNonZeroIdx = i;
+      break;
+    }
+  }
+  lastNonZeroRow = lastNonZeroIdx;
+
+  if( lastNonZeroCol > 0 )
+  {
+    for( int i = 0; i < lastNonZeroCol; i++ )
+    {
+      vvenc_confirmParameter( c, c->m_tileColumnWidth[i] == 0, "Tile column width cannot be 0! Check your TileColumnWidthArray" );
+      cfgIsValid = c->m_tileColumnWidth[i] != 0;
+    }
+  }
+  if( lastNonZeroRow > 0 )
+  {
+    for( int i = 0; i < lastNonZeroRow; i++ )
+    {
+      vvenc_confirmParameter( c, c->m_tileRowHeight[i] == 0, "Tile row height cannot be 0! Check your TileRowHeightArray" );
+      cfgIsValid = c->m_tileRowHeight[i] != 0;
+    }
+  }
+
 }
 
 VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )

@@ -716,14 +716,12 @@ typedef struct vvenc_config
   bool                m_tileParallelCtuEnc;
 
   bool                m_picPartitionFlag;
-  uint32_t            m_numTileConfigColumns;                                            // number of explicitly given uniform tile coulmns. The actual column widths will be calculated
-  uint32_t            m_numTileConfigRows;                                               // number of explicitly given uniform tile rows. The actual row heights will be calculated
   unsigned int        m_tileColumnWidth[10];
   unsigned int        m_tileRowHeight[10];
   uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
-  uint32_t            m_numTileCols;                                                     // derived number of tile columns
-  uint32_t            m_numTileRows;                                                     // derived number of tile rows
+  uint32_t            m_numTileCols;                                                     // number of tile columns
+  uint32_t            m_numTileRows;                                                     // number of tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
   
   // decode bitstream options

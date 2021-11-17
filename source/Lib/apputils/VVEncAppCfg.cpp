@@ -402,7 +402,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
   IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
 
-  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileConfigColumns, &m_numTileConfigRows }, true, 'x' );
+  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileCols, &m_numTileRows }, true, 'x' );
 
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<vvencDecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
@@ -589,7 +589,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   IStreamToArr<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth[0], 10 );
   IStreamToArr<unsigned int>        toTileRowHeight              ( &m_tileRowHeight[0], 10 );
-  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileConfigColumns, &m_numTileConfigRows }, true, 'x' );
+  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileCols, &m_numTileRows }, true, 'x' );
 
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
