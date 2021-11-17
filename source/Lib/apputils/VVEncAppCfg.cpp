@@ -466,7 +466,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
   ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
   
-  ("tiles",             toNumTiles,                "Set number of tile columns and rows explicitly. " )
+  ("tiles",             toNumTiles,               "Set number of tile columns and rows explicitly")
   ;
 
   opts.setSubSection("Profile, Level, Tier");
@@ -1056,7 +1056,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
   ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
   ("TileParallelCtuEnc",                              m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
-  ("TileConfig",                                      toNumTiles,                                       "Set number of tile columns and rows explicitly. ")
+  ("Tiles",                                           toNumTiles,                                       "Set number of tile columns and rows explicitly")
   ;
 
   opts.setSubSection("Coding tools");

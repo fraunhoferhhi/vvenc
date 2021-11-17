@@ -2734,12 +2734,12 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   bool colWidth_all_zero  = lastNonZeroColumn == -1;
   bool rowHeight_all_zero = lastNonZeroRow == -1;
 
-  //number of tiles is set explicitly, e.g. TileConfig=2x2
+  //number of tiles is set explicitly, e.g. Tiles=2x2
   //TileColumnWidthArray and TileRowHeightArray have to be not set
   if( c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
-    vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther TileConfig or TileColumnWidthArray" );
-    vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther TileConfig or TileRowHeightArray" );
+    vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther Tiles or TileColumnWidthArray" );
+    vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther Tiles or TileRowHeightArray" );
     if( !colWidth_all_zero || !rowHeight_all_zero ) return;
     
     if( c->m_numTileCols > 1 )
