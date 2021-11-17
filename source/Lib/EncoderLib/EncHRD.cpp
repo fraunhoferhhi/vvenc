@@ -117,15 +117,10 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
       generalHrdParams.numUnitsInTick = generalHrdParams.numUnitsInTick * temporalSubsampleRatio;
     }
   }
-#if 1
+
   generalHrdParams.generalNalHrdParamsPresent = false;
   generalHrdParams.generalVclHrdParamsPresent = false;
-#else
-  bool rateCnt = (bitRate > 0);
 
-  generalHrdParams.generalNalHrdParamsPresent = rateCnt;
-  generalHrdParams.generalVclHrdParamsPresent = rateCnt;
-#endif
   generalHrdParams.generalSamePicTimingInAllOlsFlag = true;
   useSubCpbParams &= (generalHrdParams.generalNalHrdParamsPresent || generalHrdParams.generalVclHrdParamsPresent);
   generalHrdParams.generalDecodingUnitHrdParamsPresent = useSubCpbParams;
