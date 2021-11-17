@@ -507,59 +507,59 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 }
 
-int EncCu::calcVarianz(const Pel* piOrg, const uint32_t  width, const uint32_t  height, const uint32_t  stride)
+int EncCu::calcVarianc(const Pel* piOrg, const uint32_t  width, const uint32_t  height, const uint32_t  stride)
 {
-  float mean=0;
-  float sum=0;
+  int64_t mean=0;
+  int64_t sum=0;
   for (int y=0;y<height;y++)
   {
     for (int x=0;x<width;x++)
     {    
-      mean+=(float)piOrg[y*stride+x];
+      mean+=piOrg[y*stride+x];
     }
   }
-  mean=mean/((float)width*(float)height);
+  mean=mean/(width*height);
   for (int y=0;y<height;y++)
   {
     for (int x=0;x<width;x++)
     {
-      sum+=pow ((float)piOrg[y*stride+x]-mean,2);
+      sum+=pow (piOrg[y*stride+x]-mean,2);
     }
   }
-  sum=sum/((float)width*(float)height);
-  return (round(sum));
+  sum=sum/(width*height);
+  return sum;
 }
 
-void  EncCu::CheckHorVerSplit(CPelBuf orgCb,CPelBuf orgCr,bool *splithor,bool *splitver)
+void  EncCu::CheckChromaHorVerSplit(CPelBuf orgCb,CPelBuf orgCr,bool *splithor,bool *splitver)
 {
   int varhu_cb,varhl_cb,varvl_cb,varvr_cb;
   // calc varianz hor upper
   const Pel* piOrg           = orgCb.buf;
-  varhu_cb=calcVarianz(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
+  varhu_cb=calcVarianc(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
   // calc varianz hor lower
   piOrg           = orgCb.buf+((orgCb.height>>1)*orgCb.stride);
-  varhl_cb=calcVarianz(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
+  varhl_cb=calcVarianc(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
   // calc varianz ver left
   piOrg           = orgCb.buf;
-  varvl_cb=calcVarianz(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
+  varvl_cb=calcVarianc(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
   // calc varianz ver right
   piOrg           = orgCb.buf+(orgCb.width>>1);
-  varvr_cb=calcVarianz(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
+  varvr_cb=calcVarianc(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
   varhu_cb+=varhl_cb;
   varvl_cb+=varvr_cb;
   int varhu_cr,varhl_cr,varvl_cr,varvr_cr;
   // calc varianz hor upper
   piOrg           = orgCr.buf;
-  varhu_cr=calcVarianz(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
+  varhu_cr=calcVarianc(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
   // calc varianz hor lower
   piOrg           = orgCr.buf+((orgCr.height>>1)*orgCr.stride);
-  varhl_cr=calcVarianz(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
+  varhl_cr=calcVarianc(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
   // calc varianz ver left
   piOrg           = orgCr.buf;
-  varvl_cr=calcVarianz(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
+  varvl_cr=calcVarianc(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
   // calc varianz ver right
   piOrg           = orgCr.buf+(orgCr.width>>1);
-  varvr_cr=calcVarianz(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
+  varvr_cr=calcVarianc(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
   varhu_cr+=varhl_cr;
   varvl_cr+=varvr_cr;
   if ((varhu_cr*FCBP_TH2<varvl_cr*100) && (varhu_cb*FCBP_TH2<varvl_cb*100))
@@ -572,7 +572,8 @@ void  EncCu::CheckHorVerSplit(CPelBuf orgCb,CPelBuf orgCr,bool *splithor,bool *s
   }
 }
 
-void EncCu::CheckCUsplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner,ComprCUCtx &cuECtx,bool *splithor,bool *splitver)
+
+void EncCu::CheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner,ComprCUCtx &cuECtx,bool *splithor,bool *splitver)
 {
   CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
   CodingStructure &cs   = *cu.cs;
@@ -596,7 +597,7 @@ void EncCu::CheckCUsplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,P
   {
     if ( (lumaw>>1) == orgCb.width )
     {
-      if ( (bestCS->cost/(orgCb.width*orgCb.height) < th1))
+      if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
       {
         *splitver=false;
         cuECtx.maxDepth=partitioner.currDepth;
@@ -604,7 +605,7 @@ void EncCu::CheckCUsplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,P
     }
     if ((lumah>>1) == orgCb.height )
     {
-      if ( (bestCS->cost/(orgCb.width*orgCb.height) < th1))
+      if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
       {
         *splithor=false;
         cuECtx.maxDepth=partitioner.currDepth;
@@ -613,10 +614,14 @@ void EncCu::CheckCUsplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,P
   }
   if ( orgCb.width==orgCb.height)
   {
-    CheckHorVerSplit(orgCb,orgCr,splithor,splitver);
+    //CheckChromaHorVerSplit(orgCb,orgCr,splithor,splitver);
+    //partitioner.CheckFastCuChromaSplitting(orgCb,orgCr,*splithor,*splitver);
   }
+  partitioner.CheckFastCuChromaSplitting(orgCb,orgCr,*splithor,*splitver);
 }
-
+static int number=0;
+static bool splithor;
+static bool splitver;
 void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner )
 {
   PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_COMPRESS_CU, tempCS, partitioner.chType );
@@ -627,6 +632,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   const SPS &sps      = *tempCS->sps;
   const uint32_t uiLPelX  = tempCS->area.Y().lumaPos().x;
   const uint32_t uiTPelY  = tempCS->area.Y().lumaPos().y;
+
+  splithor=true;
+  splitver=true;
+   number++;
+
 
   m_modeCtrl.initBlk( tempCS->area, slice.pic->poc );
 
@@ -739,7 +749,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 
   m_cInterSearch.resetSavedAffineMotion();
   {
-    ComprCUCtx &cuECtx      = *m_modeCtrl.comprCUCtx;
+   ComprCUCtx &cuECtx      = *m_modeCtrl.comprCUCtx;
     const CodingStructure& cs     = *tempCS;
     const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
     const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
@@ -875,11 +885,12 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
 #endif
     } //boundary
-    bool splithor=true;
-    bool splitver=true;
-    if ((m_pcEncCfg->m_IntraOnly) && (partitioner.chType==CH_C))
+
+    if (((m_pcEncCfg->m_IntraPeriod==1) || (m_pcEncCfg->m_framesToBeEncoded==1)) && (partitioner.chType==CH_C))
     {
-      CheckCUsplitting(tempCS,bestCS,partitioner,cuECtx,&splithor,&splitver);
+
+      CheckFastCuChromaSplitting(tempCS,bestCS,partitioner,cuECtx,&splithor,&splitver);
+
     }
     //////////////////////////////////////////////////////////////////////////
     // split modes
@@ -894,7 +905,19 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
+#if  0
+    if (partitioner.chType==CH_C)
+    {
+      bool test = partitioner.gethorflag();
+      if (splithor != test)
+        printf("hor Fehler  %d \n",number);
 
+      test = partitioner.getverflag();
+      if (splitver != test)
+        printf("ver Fehler  %d \n",number);
+
+     }
+#endif
     if(splithor &&  partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
     {
       // add split modes
@@ -906,6 +929,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
+    splitver=true;
+    splithor=true;
     if(splitver &&  partitioner.canSplit( CU_VERT_SPLIT, cs ) )
     {
       // add split modes
@@ -1012,6 +1037,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
   int signalModeConsVal = tempCS->signalModeCons( getPartSplit( encTestMode ), partitioner, modeTypeParent );
   int numRoundRdo = signalModeConsVal == LDT_MODE_TYPE_SIGNAL ? 2 : 1;
   bool skipInterPass = false;
+
   for( int i = 0; i < numRoundRdo; i++ )
   {
     //change cons modes

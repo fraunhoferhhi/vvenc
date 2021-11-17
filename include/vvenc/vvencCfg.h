@@ -741,7 +741,6 @@ typedef struct vvenc_config
   unsigned            m_summaryVerboseness;                                              // Specifies the level of the verboseness of the text output.
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
-  bool                m_IntraOnly;                                                       // Flag indicates Intra Only coding
 
 }vvenc_config;
 

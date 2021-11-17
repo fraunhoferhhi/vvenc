@@ -130,6 +130,10 @@ protected:
   UnitArea          m_partBuf[partBufSize];
   ptrdiff_t         m_partBufIdx;
 
+private:
+  bool horChromaSplit;
+  bool verChromaSplit;
+
 public:
   unsigned currDepth;
   unsigned currQtDepth;
@@ -186,6 +190,9 @@ public:
 #else
   void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const;
 #endif
+  void CheckFastCuChromaSplitting(CPelBuf orgCb,CPelBuf orgCr,const bool splithor,const bool splitver) ;
+  bool gethorflag();
+  bool getverflag();
 };
 
 //////////////////////////////////////////////////////////////////////////

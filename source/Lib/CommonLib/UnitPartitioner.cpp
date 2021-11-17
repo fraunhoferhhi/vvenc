@@ -333,6 +333,10 @@ void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, c
 
   treeType = TREE_D;
   modeType = MODE_TYPE_ALL;
+
+  horChromaSplit=true;
+  verChromaSplit=true;
+
 }
 
 void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& cs )
@@ -538,7 +542,85 @@ void Partitioner::canSplit( const CodingStructure &cs, bool& canNo, bool& canQt,
   if (areaC && (areaC->width * areaC->height <= MIN_DUALTREE_CHROMA_SIZE * 2 || areaC->width == 8))     canTv = false;
   if( modeType == MODE_TYPE_INTER && area.width * area.height == 64 )  canTv = canTh = false;
 }
+int calcVarianc(const Pel* piOrg, const uint32_t  width, const uint32_t  height, const uint32_t  stride)
+{
+  int64_t mean=0;
+  int64_t sum=0;
+  for (int y=0;y<height;y++)
+  {
+    for (int x=0;x<width;x++)
+    {
+      mean+=piOrg[y*stride+x];
+    }
+  }
+  mean=mean/(width*height);
+  for (int y=0;y<height;y++)
+  {
+    for (int x=0;x<width;x++)
+    {
+      sum+=pow (piOrg[y*stride+x]-mean,2);
+    }
+  }
+  sum=sum/(width*height);
+  return sum;
+}
 
+
+void Partitioner::CheckFastCuChromaSplitting(CPelBuf orgCb,CPelBuf orgCr,const bool splithor,const bool splitver)
+{
+  horChromaSplit=splithor;
+  verChromaSplit=splitver;
+  if ( orgCb.width==orgCb.height)
+  {
+    int varhu_cb,varhl_cb,varvl_cb,varvr_cb;
+    // calc varianz hor upper
+    const Pel* piOrg           = orgCb.buf;
+    varhu_cb=calcVarianc(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
+    // calc varianz hor lower
+    piOrg           = orgCb.buf+((orgCb.height>>1)*orgCb.stride);
+    varhl_cb=calcVarianc(piOrg,orgCb.width,orgCb.height>>1,orgCb.stride);
+    // calc varianz ver left
+    piOrg           = orgCb.buf;
+    varvl_cb=calcVarianc(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
+    // calc varianz ver right
+    piOrg           = orgCb.buf+(orgCb.width>>1);
+    varvr_cb=calcVarianc(piOrg,orgCb.width>>1,orgCb.height,orgCb.stride);
+    varhu_cb+=varhl_cb;
+    varvl_cb+=varvr_cb;
+    int varhu_cr,varhl_cr,varvl_cr,varvr_cr;
+    // calc varianz hor upper
+    piOrg           = orgCr.buf;
+    varhu_cr=calcVarianc(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
+    // calc varianz hor lower
+    piOrg           = orgCr.buf+((orgCr.height>>1)*orgCr.stride);
+
+    varhl_cr=calcVarianc(piOrg,orgCr.width,orgCr.height>>1,orgCr.stride);
+    // calc varianz ver left
+    piOrg           = orgCr.buf;
+    varvl_cr=calcVarianc(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
+    // calc varianz ver right
+    piOrg           = orgCr.buf+(orgCr.width>>1);
+    varvr_cr=calcVarianc(piOrg,orgCr.width>>1,orgCr.height,orgCr.stride);
+    varhu_cr+=varhl_cr;
+    varvl_cr+=varvr_cr;
+    if ((varhu_cr*FCBP_TH2<varvl_cr*100) && (varhu_cb*FCBP_TH2<varvl_cb*100))
+    {
+      verChromaSplit=false;
+    }
+    else if ((varvl_cr*FCBP_TH2<varhu_cr*100) && (varvl_cb*FCBP_TH2<varhu_cb*100))
+    {
+      horChromaSplit=false;
+    }
+  }
+}
+bool Partitioner::gethorflag()
+{
+  return horChromaSplit;
+}
+bool Partitioner::getverflag()
+{
+  return verChromaSplit;
+}
 bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
 {
   const CompArea area       = currArea().Y();
@@ -547,6 +629,17 @@ bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
   bool canNo, canQt, canBh, canTh, canBv, canTv;
 
   canSplit( cs, canNo, canQt, canBh, canBv, canTh, canTv );
+
+#if 1
+  if (chType==CH_C)
+  {
+    // Chroma Split Optimization
+    canBh = canBh && horChromaSplit;
+    canTh = canTh  && horChromaSplit;
+    canBv = canBv  && verChromaSplit;
+    canTv = canTv  && verChromaSplit;
+  }
+#endif
   switch( split )
   {
   case CTU_LEVEL:
