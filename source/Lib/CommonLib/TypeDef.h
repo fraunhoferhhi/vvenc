@@ -424,8 +424,10 @@ enum MvpDir
 enum TransformDirection
 {
   TRANSFORM_FORWARD              = 0,
-  TRANSFORM_INVERSE              = 1,
-  TRANSFORM_NUMBER_OF_DIRECTIONS = 2
+  TRANSFORM_INVERSE              = 0,
+  TRANSFORM_NUMBER_OF_DIRECTIONS = 1
+  //TRANSFORM_INVERSE              = 1,
+  //TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
 enum CoeffScanGroupType
