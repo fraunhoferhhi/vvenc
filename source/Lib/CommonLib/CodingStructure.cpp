@@ -453,6 +453,10 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
 
+#if CLEAR_AND_CHECK_TUIDX
+        CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
+
+#endif
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
       }
     }
@@ -1052,8 +1056,10 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 
 void CodingStructure::clearTUs( bool force )
 {
+#if CLEAR_AND_CHECK_TUIDX
   if( !m_numTUs && !force ) return;
 
+#endif
   int numCh = getNumberValidComponents( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
@@ -1071,8 +1077,10 @@ void CodingStructure::clearTUs( bool force )
 
   m_numTUs = 0;
 
+#if CLEAR_AND_CHECK_TUIDX
   if( !force ) return;
 
+#endif
   numCh = getNumberValidChannels( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
