@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Unit.h"
 #include "Slice.h"
 #include "InterpolationFilter.h"
+#include "math.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -578,6 +579,34 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
 #undef SUBS_OP
 #undef SUBS_INC
   }
+}
+
+template<>
+int AreaBuf<const Pel>::calcVariance( const AreaBuf<const Pel>& Org, const uint32_t  width, const uint32_t  height, const uint32_t  offset )
+{
+  int stride = Org.stride;
+  const Pel* piOrg           = Org.buf+offset;
+  //printf("calcVariance\n");
+
+ int64_t mean=0;
+  int64_t sum=0;
+  for (int y=0;y<height;y++)
+  {
+    for (int x=0;x<width;x++)
+    {
+      mean+=piOrg[y*stride+x];
+    }
+  }
+  mean=mean/(width*height);
+  for (int y=0;y<height;y++)
+  {
+    for (int x=0;x<width;x++)
+    {
+      sum+=pow (piOrg[y*stride+x]-mean,2);
+    }
+  }
+  sum=sum/(width*height);
+  return sum;
 }
 
 template<>

@@ -155,6 +155,8 @@ public:
   unsigned maxTtSize;
   unsigned minQtSize;
 
+  bool qtChromaSplit;
+
   const PartLevel& currPartLevel          () const { return m_partStack.back(); }
   const UnitArea&  currArea               () const { return currPartLevel().parts[currPartIdx()]; }
   const unsigned   currPartIdx            () const { return currPartLevel().idx; }
@@ -190,9 +192,7 @@ public:
 #else
   void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const;
 #endif
-  void CheckFastCuChromaSplitting(CPelBuf orgCb,CPelBuf orgCr,const bool splithor,const bool splitver) ;
-  bool gethorflag();
-  bool getverflag();
+  void CheckFastCuChromaSplitting(CPelBuf orgCb,CPelBuf orgCr,const bool splithor,const bool splitver,const bool qtsplit) ;
 };
 
 //////////////////////////////////////////////////////////////////////////

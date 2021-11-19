@@ -646,24 +646,20 @@ void EncModeCtrl::finishCULevel( Partitioner &partitioner )
   comprCUCtx = m_ComprCUCtxList.size() ? &m_ComprCUCtxList.back() : nullptr;
 }
 
-
-
 bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner, const EncTestMode& lastTestmode )
 {
   ComprCUCtx& cuECtx = *comprCUCtx;
 
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
   const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
-#if 0
+
   if (((m_pcEncCfg->m_IntraPeriod==1) || (m_pcEncCfg->m_framesToBeEncoded==1)) && (partitioner.chType==CH_C))
   {
-    bool splithor=true;
-    bool splitver=true;
-    const CodingStructure *bestCS      = cuECtx.bestCS;
-    CheckFastCuChromaSplitting(cs,bestCS,partitioner,cuECtx,&splithor,&splitver);
+    if (!partitioner. qtChromaSplit)
+    {
+      cuECtx.maxDepth=partitioner.currDepth;
+    }
   }
-#endif
-
 
   if( isBoundary )
   {
