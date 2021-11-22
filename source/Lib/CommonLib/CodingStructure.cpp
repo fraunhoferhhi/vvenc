@@ -453,8 +453,10 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
 
-        CHECKD( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
+#if CLEAR_AND_CHECK_TUIDX
+        CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
 
+#endif
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
       }
     }
@@ -1054,18 +1056,11 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 
 void CodingStructure::clearTUs( bool force )
 {
+#if CLEAR_AND_CHECK_TUIDX
   if( !m_numTUs && !force ) return;
 
-  int numCh = getNumberValidChannels( area.chromaFormat );
-  for( int i = 0; i < numCh; i++ )
-  {
-    size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
-
-    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
-
-  }
-
-  numCh = getNumberValidComponents( area.chromaFormat );
+#endif
+  int numCh = getNumberValidComponents( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
     m_offsets[i] = 0;
@@ -1081,6 +1076,18 @@ void CodingStructure::clearTUs( bool force )
   if ( m_unitCacheMutex ) m_unitCacheMutex->unlock();
 
   m_numTUs = 0;
+
+#if CLEAR_AND_CHECK_TUIDX
+  if( !force ) return;
+
+#endif
+  numCh = getNumberValidChannels( area.chromaFormat );
+  for( int i = 0; i < numCh; i++ )
+  {
+    size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
+
+    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
+  }
 }
 
 void CodingStructure::clearCUs( bool force )
