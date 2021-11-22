@@ -222,9 +222,10 @@ int main( int argc, char* argv[] )
 
   switch( vvencappCfg.m_FrameRate )
   {
-  case 23: temporalRate = 24000; temporalScale = 1001; break;
-  case 29: temporalRate = 30000; temporalScale = 1001; break;
-  case 59: temporalRate = 60000; temporalScale = 1001; break;
+  case 23:  temporalRate = 24000;  temporalScale = 1001; break;
+  case 29:  temporalRate = 30000;  temporalScale = 1001; break;
+  case 59:  temporalRate = 60000;  temporalScale = 1001; break;
+  case 119: temporalRate = 120000; temporalScale = 1001; break;
   default: break;
   }
 
