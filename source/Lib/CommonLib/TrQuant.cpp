@@ -173,9 +173,14 @@ template<int signedMode> void invTransformCbCr( PelBuf& resCb, PelBuf& resCr )
 TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
 {
   // allocate temporary buffers
-  m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
-  m_tmp         = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
-  m_blk         = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
+  m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  m_tmp         = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  m_blk         = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+
+  for( int i = 0; i < NUM_TRAFO_MODES_MTS; i++ )
+  {
+    m_mtsCoeffs[i] = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  }
 
   {
     m_invICT      = m_invICTMem + maxAbsIctMode;
@@ -222,6 +227,11 @@ TrQuant::~TrQuant()
   {
     xFree( m_tmp );
     m_tmp = nullptr;
+  }
+
+  for( int i = 0; i < NUM_TRAFO_MODES_MTS; i++ )
+  {
+     xFree( m_mtsCoeffs[i] );
   }
 }
 
