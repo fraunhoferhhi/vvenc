@@ -113,7 +113,6 @@ namespace vvenc {
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
     uint64_t        targetBitCnt[8];
-    double          lastIntraLambda;
     int             lastIntraQP;
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
@@ -161,9 +160,9 @@ namespace vvenc {
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
-    void processFirstPassData (const int secondPassBaseQP);
+    void processFirstPassData (const int secondPassBaseQP, const bool flush = false);
     void processGops (const int secondPassBaseQP);
-    void processGopsLookAhead( const int secondPassBaseQP );
+    void processGopsLookAhead( const int firstPassBaseQP );
     uint64_t getTotalBitsInFirstPass();
     void detectNewScene();
     void adaptToSceneChanges();

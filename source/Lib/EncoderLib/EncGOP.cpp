@@ -463,7 +463,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     {
       if ( m_pcEncCfg->m_RCLookAhead )
       {
-        m_pcRateCtrl->processFirstPassData( firstPassQP /*m_pcEncCfg->m_QP*/ );
+        m_pcRateCtrl->processFirstPassData( firstPassQP, flush );
       }
       // very first RC GOP
       m_pcRateCtrl->initRCGOP( 1 );
@@ -472,7 +472,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     {
       if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
       {
-        m_pcRateCtrl->processFirstPassData( firstPassQP /*m_pcEncCfg->m_QP*/ );
+        m_pcRateCtrl->processFirstPassData( firstPassQP, flush );
       }
       m_pcRateCtrl->destroyRCGOP();
       const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;

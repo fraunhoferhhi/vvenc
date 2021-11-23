@@ -105,7 +105,6 @@ namespace vvenc {
     std::memset( qpCorrection, 0, sizeof( qpCorrection ) );
     std::memset( actualBitCnt, 0, sizeof( actualBitCnt ) );
     std::memset( targetBitCnt, 0, sizeof( targetBitCnt ) );
-    lastIntraLambda = 0.0;
     lastIntraQP = 0;
     bitDepth = 0;
   }

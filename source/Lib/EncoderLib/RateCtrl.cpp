@@ -78,7 +78,6 @@ EncRCSeq::EncRCSeq()
   std::memset (qpCorrection, 0, sizeof (qpCorrection));
   std::memset (actualBitCnt, 0, sizeof (actualBitCnt));
   std::memset (targetBitCnt, 0, sizeof (targetBitCnt));
-  lastIntraLambda     = 0.0;
   lastIntraQP         = 0;
   bitDepth            = 0;
 }
@@ -516,18 +515,13 @@ void RateCtrl::readStatsFile()
 }
 #endif
 
-void RateCtrl::processFirstPassData (const int secondPassBaseQP)
+void RateCtrl::processFirstPassData (const int secondPassBaseQP, const bool flush /*= false*/)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
 
-  if ( m_pcEncCfg->m_RCLookAhead )
-  {
-    // store start POC of last chunk of pictures
-    flushPOC = m_pcEncCfg->m_framesToBeEncoded - 1 - std::max( 32, m_pcEncCfg->m_GOPSize );
-  }
-  else
+  if ( flush || !m_pcEncCfg->m_RCLookAhead )
   {
     // store start POC of last chunk of pictures
     flushPOC = m_listRCFirstPassStats.back().poc - std::max( 32, m_pcEncCfg->m_GOPSize );
@@ -538,7 +532,7 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP)
 
   if ( m_pcEncCfg->m_RCLookAhead )
   {
-    // process and scale GOP and frame bits using the data from the look-ahead pass
+    // process and scale GOP and frame bits using the data from the look-ahead pass (2nd-pass mQP equals 1st-pass mQP!)
     processGopsLookAhead( secondPassBaseQP );
   }
   else
@@ -547,7 +541,7 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP)
     processGops( secondPassBaseQP );
   }
 
-  // loop though the first pass data and update RC parameters when new scenes are detected
+  // loop though the first-pass data and update RC parameters when new scenes are detected
   adaptToSceneChanges();
 
   encRCSeq->firstPassData = m_listRCFirstPassStats;
@@ -609,10 +603,11 @@ void RateCtrl::processGops (const int secondPassBaseQP)
   }
 }
 
-void RateCtrl::processGopsLookAhead( const int secondPassBaseQP ) // actually first pass base QP
+void RateCtrl::processGopsLookAhead( const int firstPassBaseQP ) // actually first pass base QP
 {
   const unsigned fps = m_pcEncCfg->m_FrameRate;
   const int gopShift = int( 0.5 + log( (double)m_pcEncCfg->m_GOPSize ) / log( 2.0 ) );
+  const int secondPassBaseQP = firstPassBaseQP - ( std::max( 0, MAX_QP_PERCEPT_QPA - firstPassBaseQP ) >> 1 );
   const int qpOffset = Clip3( 0, 6, ( ( secondPassBaseQP + 1 ) >> 1 ) - 9 );
 
   const double power[ 6 ] = { 0.5, 0.75, 0.875, 0.9375, 0.96875, 0.984375 };
@@ -648,9 +643,10 @@ void RateCtrl::processGopsLookAhead( const int secondPassBaseQP ) // actually fi
   int framesInCurIp = 0;
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ ) // scaling, part 0, looping through intra periods
   {
+    const bool isLastPOC = ( flushPOC < 0 ? false : it->poc >= std::max( m_pcEncCfg->m_framesToBeEncoded - 1, flushPOC + std::max( 32, m_pcEncCfg->m_GOPSize ) ) );
     ipBits += uint64_t( it->isIntra ? it->numBits >> 1 : it->numBits ); // bits spent in intra period
     framesInCurIp++;
-    if ( it->poc > 0 && ( it->isIntra || it->poc == m_pcEncCfg->m_framesToBeEncoded - 1 ) )
+    if ( it->poc > 0 && ( it->isIntra || isLastPOC ) )
     {
       const double bp1pf = ( ipBits + prvSum ) / double( it->poc > m_pcEncCfg->m_IntraPeriod ? framesInCurIp + m_pcEncCfg->m_IntraPeriod : m_pcEncCfg->m_IntraPeriod ); // average bitrate per intra period
       prvSum = ipBits;
@@ -660,7 +656,7 @@ void RateCtrl::processGopsLookAhead( const int secondPassBaseQP ) // actually fi
       {
         ipBits = uint64_t( it->numBits >> 1 ); // reset with half weighting
       }
-      if ( it->poc == m_pcEncCfg->m_framesToBeEncoded - 1 )
+      if ( isLastPOC )
       {
         ratio[ 1 + ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod ] = ratio[ ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod ];
       }
@@ -811,7 +807,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
           }
           // try to hit target rate more aggressively in last coded frames, lambda/QP clipping below will ensure smooth value change
-          if ( it->poc >= flushPOC )
+          if ( it->poc >= flushPOC && flushPOC >= 0 )
           {
             if ( m_pcEncCfg->m_RCLookAhead && encRcSeq->bitsUsedIn1stPass > 0 )
             {
@@ -836,7 +832,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
           if ( it->isIntra ) // update history, for parameter clipping in subsequent key frames
           {
-            encRcSeq->lastIntraLambda = lambda;
             encRcSeq->lastIntraQP = sliceQP;
           }
           if ( m_pcEncCfg->m_RCLookAhead )
