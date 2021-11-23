@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Common.h"
 #include "MotionInfo.h"
 #include "HRD.h"
+#include "Utilities/Logger.h"
 
 #include "vvenc/vvencCfg.h"
 
@@ -1208,7 +1209,7 @@ struct PicHeader
 class Slice
 {
 
-  public:
+public:
   //  Bitstream writing
   bool                        saoEnabled[MAX_NUM_CH];
   int                         ppsId;               ///< picture parameter set ID
@@ -1294,7 +1295,7 @@ class Slice
   uint8_t*                    ccAlfFilterControl[2];
 
 public:
-                              Slice();
+                              Slice( Logger *logger = nullptr );
   virtual                     ~Slice();
   void                        resetSlicePart();
   void                        constructRefPicList(PicList& rcListPic, bool extBorder);
@@ -1350,6 +1351,8 @@ public:
   void                        setAlfApsIds( const std::vector<int>& ApsIDs);
 private:
   Picture*                    xGetLongTermRefPic(PicList& rcListPic, int poc, bool pocHasMsb);
+
+  Logger*                     m_logger;
 };// END CLASS DEFINITION Slice
 
 void calculateParameterSetChangedFlag(bool& bChanged, const std::vector<uint8_t>* pOldData, const std::vector<uint8_t>* pNewData);

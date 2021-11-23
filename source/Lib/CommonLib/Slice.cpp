@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-Slice::Slice()
+Slice::Slice( Logger *logger )
   : ppsId                               ( -1 )
 //  , picOutputFlag                       ( true )
   , poc                                 ( 0 )
@@ -117,6 +117,7 @@ Slice::Slice()
   , tileGroupCcAlfCrApsId               ( -1 )
   , disableSATDForRd                    ( 0 )
   , isLossless                          ( false )
+  , m_logger                            ( logger )
 {
   ::memset( saoEnabled,              0, sizeof( saoEnabled ) );
   ::memset( numRefIdx,               0, sizeof( numRefIdx ) );
@@ -1038,7 +1039,7 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
     {
       if (printErrors)
       {
-        msg(VVENC_ERROR, "\nCurrent picture: %d Long-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
+        m_logger->log(VVENC_ERROR, "\nCurrent picture: %d Long-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
       }
       return notPresentPoc;
     }
@@ -1069,7 +1070,7 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
     {
       if (printErrors)
       {
-        msg(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
+        m_logger->log(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
       }
       return notPresentPoc;
     }
@@ -1995,7 +1996,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
     int spsId = pps->spsId;
     if (!isIRAP && (spsId != m_activeSPSId ))
     {
-      msg( VVENC_WARNING, "Warning: tried to activate PPS referring to a inactive SPS at non-IDR.");
+      //msg( VVENC_WARNING, "Warning: tried to activate PPS referring to a inactive SPS at non-IDR.");
     }
     else
     {
@@ -2005,7 +2006,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
         int dciId = sps->dciId;
         if ((m_activeDCIId!=-1) && (dciId != m_activeDCIId ))
         {
-          msg( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!");
+          //msg( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!");
         }
         else
         {
@@ -2019,7 +2020,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
             }
             else
             {
-              msg( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI.");
+              //msg( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI.");
             }
           }
           else
@@ -2039,13 +2040,13 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
       }
       else
       {
-        msg( VVENC_WARNING, "Warning: tried to activate a PPS that refers to a non-existing SPS.");
+        //msg( VVENC_WARNING, "Warning: tried to activate a PPS that refers to a non-existing SPS.");
       }
     }
   }
   else
   {
-    msg( VVENC_WARNING, "Warning: tried to activate non-existing PPS.");
+    //msg( VVENC_WARNING, "Warning: tried to activate non-existing PPS.");
   }
 
   // Failed to activate if reach here.
@@ -2064,7 +2065,7 @@ bool ParameterSetManager::activateAPS(int apsId, int apsType)
   }
   else
   {
-    msg(VVENC_WARNING, "Warning: tried to activate non-existing APS.");
+    //msg(VVENC_WARNING, "Warning: tried to activate non-existing APS.");
   }
   return false;
 }

@@ -153,6 +153,8 @@ int VVEncImpl::init( const vvenc_config& config )
   // initialize the encoder
   m_pEncLib = new EncLib;
 
+  m_pEncLib->setLogger( &m_logger );
+
 #if HANDLE_EXCEPTION
   try
 #endif
@@ -162,7 +164,7 @@ int VVEncImpl::init( const vvenc_config& config )
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "\n%s\n", e.what() );
+    m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -195,7 +197,7 @@ int VVEncImpl::initPass( int pass, const char* statsFName )
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "\n%s\n", e.what() );
+      m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -223,7 +225,7 @@ int VVEncImpl::uninit()
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "\n%s\n", e.what() );
+      m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -366,7 +368,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "\n%s\n", e.what() );
+    m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -419,6 +421,17 @@ const char* VVEncImpl::getEncoderInfo() const
 const char* VVEncImpl::getLastError() const
 {
   return m_cErrorString.c_str();
+}
+
+int VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
+{
+  if ( msgFnc == nullptr )
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  this->m_logger.setCallback( ctx, msgFnc );
+  return VVENC_OK;
 }
 
 const char* VVEncImpl::getErrorMsg( int nRet )
@@ -641,14 +654,6 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
   return 0;
 }
 
-
-///< set message output function for encoder lib. if not set, no messages will be printed.
-void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
-{
-  g_msgFnc    = msgFnc;
-  m_msgFncCtx = ctx;
-}
-
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
 const char* VVEncImpl::setSIMDExtension( const char* simdId )
 {
@@ -694,12 +699,11 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
 #endif
   {
     ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
-    if( ret )  { msg( VVENC_ERROR, "decoding failed\n"); }
+    if( ret )  { return VVENC_ERR_UNSPECIFIED; }
   }
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "decoding failed: %s\n", e.what() );
     return VVENC_ERR_UNSPECIFIED;
   }
 #endif

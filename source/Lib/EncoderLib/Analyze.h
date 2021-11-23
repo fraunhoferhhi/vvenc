@@ -75,10 +75,20 @@ private:
   uint32_t  m_uiNumPic;
   double    m_dFrmRate; //--CFG_KDY
   double    m_MSEyuvframe[MAX_NUM_COMP]; // sum of MSEs
+  Logger*   m_logger;
 
 public:
   virtual ~Analyze()  {}
-  Analyze() { clear(); }
+  Analyze() 
+  { 
+    m_logger = nullptr;
+    clear(); 
+  }
+
+  void setLogger( Logger* logger )
+  {
+    m_logger = logger;
+  }
 
   void  addResult( double psnr[MAX_NUM_COMP], double bits, const double MSEyuvframe[MAX_NUM_COMP]
     , bool isEncodeLtRef
@@ -180,24 +190,24 @@ public:
       case CHROMA_400:
         if (printMSEBasedSNR)
         {
-          msg( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          m_logger->log( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
 
           if (printHexPsnr)
           {
-            msg(e_msg_level, "xY-PSNR           ");
+            m_logger->log(e_msg_level, "xY-PSNR           ");
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "    Y-MSE\n" );
+            m_logger->log( e_msg_level, "    Y-MSE\n" );
           }
           else
           {
-            msg( e_msg_level, "\n");
+            m_logger->log( e_msg_level, "\n");
           }
 
-          //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          msg( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+          m_logger->log( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / (double)getNumPic() );
@@ -212,43 +222,43 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            msg(e_msg_level, "   %16" PRIx64 " ", xPsnr);
+            m_logger->log(e_msg_level, "   %16" PRIx64 " ", xPsnr);
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            m_logger->log( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
           }
           else
           {
-            msg( e_msg_level, "\n");
+            m_logger->log( e_msg_level, "\n");
           }
 
-          msg( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
+          m_logger->log( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  MSEBasedSNR[COMP_Y] );
         }
         else
         {
-          msg( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          m_logger->log( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
 
           if (printHexPsnr)
           {
-            msg(e_msg_level, "xY-PSNR           ");
+            m_logger->log(e_msg_level, "xY-PSNR           ");
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "    Y-MSE\n" );
+            m_logger->log( e_msg_level, "    Y-MSE\n" );
           }
           else
           {
-            msg( e_msg_level, "\n");
+            m_logger->log( e_msg_level, "\n");
           }
 
-          //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          msg( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+          m_logger->log( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / (double)getNumPic() );
@@ -263,16 +273,16 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            msg(e_msg_level, "   %16" PRIx64 " ", xPsnr);
+            m_logger->log(e_msg_level, "   %16" PRIx64 " ", xPsnr);
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            m_logger->log( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
           }
           else
           {
-            msg( e_msg_level, "\n");
+            m_logger->log( e_msg_level, "\n");
           }
         }
         break;
@@ -287,24 +297,24 @@ public:
 
           if (printMSEBasedSNR)
           {
-            msg( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
+            m_logger->log( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
 
             if (printHexPsnr)
             {
-              msg(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              m_logger->log(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
             }
 
             if (printSequenceMSE)
             {
-              msg( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              m_logger->log( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
             }
             else
             {
-              msg( e_msg_level, "\n");
+              m_logger->log( e_msg_level, "\n");
             }
 
-            //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            msg( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+            m_logger->log( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
@@ -324,12 +334,12 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              msg(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              m_logger->log(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
             }
 
             if (printSequenceMSE)
             {
-              msg( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              m_logger->log( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
@@ -337,10 +347,10 @@ public:
             }
             else
             {
-              msg( e_msg_level, "\n");
+              m_logger->log( e_msg_level, "\n");
             }
 
-            msg( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+            m_logger->log( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    MSEBasedSNR[COMP_Y ],
@@ -350,23 +360,23 @@ public:
           }
           else
           {
-            msg( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
+            m_logger->log( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
 
             if (printHexPsnr)
             {
-              msg(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              m_logger->log(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
             }
             if (printSequenceMSE)
             {
-              msg( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              m_logger->log( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
             }
             else
             {
-              msg( e_msg_level, "\n");
+              m_logger->log( e_msg_level, "\n");
             }
 
-            //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            msg( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+            m_logger->log( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
@@ -387,11 +397,11 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              msg(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              m_logger->log(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
             }
             if (printSequenceMSE)
             {
-              msg( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              m_logger->log( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
@@ -399,13 +409,13 @@ public:
             }
             else
             {
-              msg( e_msg_level, "\n");
+              m_logger->log( e_msg_level, "\n");
             }
           }
         }
         break;
       default:
-        msg( VVENC_ERROR, "Unknown format during print out\n");
+        m_logger->log( VVENC_ERROR, "Unknown format during print out\n");
         exit(1);
         break;
     }
@@ -458,7 +468,7 @@ public:
         }
 
       default:
-          msg( VVENC_ERROR, "Unknown format during print out\n");
+          m_logger->log( VVENC_ERROR, "Unknown format during print out\n");
           exit(1);
           break;
     }

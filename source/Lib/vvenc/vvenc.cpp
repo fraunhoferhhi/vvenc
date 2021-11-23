@@ -181,7 +181,6 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create()
   vvenc::VVEncImpl* encCtx = new vvenc::VVEncImpl();
   if (!encCtx)
   {
-    vvenc::msg( VVENC_ERROR, "cannot allocate memory for VVdeC decoder\n" );
     return nullptr;
   }
 
@@ -191,23 +190,23 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create()
 
 VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
 {
-  if (nullptr == config)
-  {
-    vvenc::msg( VVENC_ERROR, "vvenc_config is null\n" );
-    return VVENC_ERR_PARAMETER;
-  }
-
   auto d = (vvenc::VVEncImpl*)enc;
   if (!d)
   {
     return VVENC_ERR_INITIALIZE;
   }
 
+  if (nullptr == config)
+  {
+    d->getLogger()->log( VVENC_ERROR, "vvenc_config is null\n" );
+    return VVENC_ERR_PARAMETER;
+  }
+
   int ret = d->init( *config );
   if (ret != 0)
   {
     // Error initializing the decoder
-    vvenc::msg( VVENC_ERROR, "cannot init the VVenC encoder\n" );
+    d->getLogger()->log( VVENC_ERROR, "cannot init the VVenC encoder\n" );
     return VVENC_ERR_INITIALIZE;
   }
 
@@ -364,10 +363,15 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet )
 }
 
 
-VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback )
+VVENC_DECL int vvenc_set_logging_callback( vvencEncoder *enc, void *ctx, vvencLoggingCallback callback )
 {
-  vvenc::VVEncImpl::registerMsgCbf ( ctx, callback );
-  return VVENC_OK;
+  auto d = (vvenc::VVEncImpl*)enc;
+  if (!d)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return d->registerMsgCbf( ctx, callback );
 }
 
 

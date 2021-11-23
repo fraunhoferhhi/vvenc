@@ -125,6 +125,8 @@ int EncApp::encode()
     return -1;
   }
 
+  vvenc_set_logging_callback( m_encCtx, nullptr, &::msgFnc );
+
   int iRet = vvenc_encoder_open( m_encCtx, &vvencCfg);
   if( 0 != iRet )
   {

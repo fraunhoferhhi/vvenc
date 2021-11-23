@@ -296,11 +296,14 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
     }
   }
 
-  msg( msgl, "[%s:%s,%s] ", hashType, hashToString(recon_digest, numChar).c_str(), ok);
+  (void)numChar;
+  (void)ok;
+  (void)hashType;
+  //msg( msgl, "[%s:%s,%s] ", hashType, hashToString(recon_digest, numChar).c_str(), ok);
 
   if (mismatch)
   {
-    msg( msgl, "[rx%s:%s] ", hashType, hashToString(pictureHashSEI->pictureHash, numChar).c_str());
+    //msg( msgl, "[rx%s:%s] ", hashType, hashToString(pictureHashSEI->pictureHash, numChar).c_str());
   }
   return mismatch;
 }

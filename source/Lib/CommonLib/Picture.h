@@ -265,7 +265,7 @@ public:
   std::vector<uint8_t>          m_alfCtuAlternative[ MAX_NUM_COMP ];
 
 public:
-  Slice*          allocateNewSlice();
+  Slice*          allocateNewSlice( Logger* logger );
   Slice*          swapSliceObject( Slice* p, uint32_t i );
 
   SAOBlkParam    *getSAO    (int id = 0)                     { return &m_sao[id][0]; };

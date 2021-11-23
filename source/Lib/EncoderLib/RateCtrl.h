@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "CommonLib/CommonDef.h"
+#include "Utilities/Logger.h"
 
 #include "vvenc/vvencCfg.h"
 
@@ -154,6 +155,7 @@ namespace vvenc {
     RateCtrl();
     virtual ~RateCtrl();
 
+    void setLogger(Logger* logger);
     virtual void init( const VVEncCfg& encCfg );
     virtual void destroy();
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
@@ -187,6 +189,7 @@ namespace vvenc {
     const VVEncCfg*         m_pcEncCfg;
 
   protected:
+    Logger*                 m_logger;
     void storeStatsData( const TRCPassStats& statsData );
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );

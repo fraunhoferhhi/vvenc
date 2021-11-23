@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
+#include "LegacyRateCtrl.h"
 #include "Utilities/NoMallocThreadPool.h"
 
 //! \ingroup EncoderLib
@@ -69,6 +70,7 @@ namespace vvenc {
 EncLib::EncLib()
   : m_cEncCfg       ()
   , m_cGOPEncoder   ( nullptr )
+  , m_logger        ( nullptr )
   , m_RecYUVBufferCallback     ( nullptr )
   , m_RecYUVBufferCallbackCtx  ( nullptr )
   , m_threadPool    ( nullptr )
@@ -77,6 +79,7 @@ EncLib::EncLib()
   , m_ppsMap        ( MAX_NUM_PPS )
 {
   xResetLib();
+  m_pcRateCtrl->setLogger( m_logger );
 }
 
 EncLib::~EncLib()
@@ -110,7 +113,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   {
     std::string sChannelsList;
     g_trace_ctx->getChannelsList( sChannelsList );
-    msg( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
+    //msg( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
   }
 #endif
 
@@ -216,7 +219,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
   m_cGOPEncoder = new EncGOP;
-  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, *m_pcRateCtrl, m_cEncHRD, m_threadPool );
+  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, *m_pcRateCtrl, m_cEncHRD, m_threadPool, m_logger );
 
   m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
   m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
@@ -270,6 +273,11 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
 
   m_numPassInitialized = pass;
+}
+
+void EncLib::setLogger( Logger *logger )
+{
+  m_logger = logger;
 }
 
 void EncLib::setRecYUVBufferCallback( void *ctx, vvencRecYUVBufferCallback callback )

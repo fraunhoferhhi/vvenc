@@ -311,9 +311,9 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   sliceDataNumBins = 0;
 }
 
-Slice* Picture::allocateNewSlice()
+Slice* Picture::allocateNewSlice( Logger* logger )
 {
-  slices.push_back( new Slice );
+  slices.push_back( new Slice( logger ) );
   Slice& slice = *slices.back();
 
   slice.pic     = this;

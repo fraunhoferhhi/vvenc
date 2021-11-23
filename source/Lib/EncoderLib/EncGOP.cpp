@@ -251,6 +251,7 @@ EncGOP::EncGOP()
   , m_pcRateCtrl         ( nullptr )
   , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
+  , m_Logger             ( nullptr )
   , m_threadPool         ( nullptr )
 {
 }
@@ -276,12 +277,18 @@ EncGOP::~EncGOP()
 }
 
 
-void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
+void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool, Logger* logger )
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;
   m_pcEncHRD   = &encHrd;
   m_threadPool = threadPool;
+  m_Logger     = logger;
+  
+  m_AnalyzeAll.setLogger(logger);
+  m_AnalyzeI.setLogger(logger);
+  m_AnalyzeP.setLogger(logger);
+  m_AnalyzeB.setLogger(logger);
 
   if( m_pcEncCfg->m_DecodingRefreshType == 4 )
   {
@@ -524,17 +531,17 @@ void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, c
   const ChromaFormat chFmt = m_pcEncCfg->m_internChromaFormat;
 
   //-- all
-  msg( VVENC_INFO, "\n" );
-  msg( VVENC_DETAILS,"\nSUMMARY --------------------------------------------------------\n" );
+  m_Logger->log( VVENC_INFO, "\n" );
+  m_Logger->log( VVENC_DETAILS,"\nSUMMARY --------------------------------------------------------\n" );
   m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths
                           );
-  msg( VVENC_DETAILS,"\n\nI Slices--------------------------------------------------------\n" );
+  m_Logger->log( VVENC_DETAILS,"\n\nI Slices--------------------------------------------------------\n" );
   m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
 
-  msg( VVENC_DETAILS,"\n\nP Slices--------------------------------------------------------\n" );
+  m_Logger->log( VVENC_DETAILS,"\n\nP Slices--------------------------------------------------------\n" );
   m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
 
-  msg( VVENC_DETAILS,"\n\nB Slices--------------------------------------------------------\n" );
+  m_Logger->log( VVENC_DETAILS,"\n\nB Slices--------------------------------------------------------\n" );
   m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
 
   if (m_pcEncCfg->m_summaryOutFilename[0] != '\0' )
@@ -756,7 +763,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   const int gopId       = pic.gopId;
   const int depth       = xGetSliceDepth( curPoc );
   memset( pic.cs->alfAps, 0, sizeof(pic.cs->alfAps));
-  Slice* slice          = pic.allocateNewSlice();
+  Slice* slice          = pic.allocateNewSlice( m_Logger );
   pic.cs->picHeader     = new PicHeader;
   const SPS& sps        = *(slice->sps);
   const int drtIPoffset = m_pcEncCfg->m_DecodingRefreshType == 4 ? 1 + (m_pcEncCfg->m_IntraPeriod - m_pcEncCfg->m_GOPSize) : 0;
@@ -1714,11 +1721,11 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
           zeroBytesPadding[ i * 3 + 2 ] = 3;  // 00 00 03
         }
         nalUnitData.write( reinterpret_cast<const char*>(&(zeroBytesPadding[ 0 ])), numberOfAdditionalCabacZeroBytes );
-        msg( VVENC_NOTICE, "Adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
+        m_Logger->log( VVENC_NOTICE, "Adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
       }
       else
       {
-        msg( VVENC_NOTICE, "Standard would normally require adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
+        m_Logger->log( VVENC_NOTICE, "Standard would normally require adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
       }
     }
   }
@@ -1786,7 +1793,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     uint32_t numRBSPBytes_nal = uint32_t((*it)->m_nalUnitData.str().size());
     if (m_pcEncCfg->m_summaryVerboseness > 0)
     {
-      msg( VVENC_NOTICE, "*** %s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
+      m_Logger->log( VVENC_NOTICE, "*** %s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
     }
     if( ( *it )->m_nalUnitType != VVENC_NAL_UNIT_PREFIX_SEI && ( *it )->m_nalUnitType != VVENC_NAL_UNIT_SUFFIX_SEI )
     {
@@ -1854,7 +1861,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
           accessUnit.InfoString.append( cInfo );
 
-          msg( VVENC_NOTICE, cInfo.c_str() );
+          m_Logger->log( VVENC_NOTICE, cInfo.c_str() );
     }
     else
     {
@@ -1871,8 +1878,8 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
       accessUnit.InfoString.append( cInfo );
       accessUnit.InfoString.append( cPSNR );
 
-      msg( VVENC_NOTICE, cInfo.c_str() );
-      msg( VVENC_NOTICE, cPSNR.c_str() );
+      m_Logger->log( VVENC_NOTICE, cInfo.c_str() );
+      m_Logger->log( VVENC_NOTICE, cPSNR.c_str() );
 
 
       if ( m_pcEncCfg->m_printHexPsnr )
@@ -1888,19 +1895,19 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
         std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
 
         accessUnit.InfoString.append( cPSNRHex );
-        msg(VVENC_NOTICE, cPSNRHex.c_str() );
+        m_Logger->log(VVENC_NOTICE, cPSNRHex.c_str() );
       }
 
       if( printFrameMSE )
       {
         std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
         accessUnit.InfoString.append( cFrameMSE );
-        msg(VVENC_NOTICE, cFrameMSE.c_str() );
+        m_Logger->log(VVENC_NOTICE, cFrameMSE.c_str() );
       }
 
       std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
       accessUnit.InfoString.append( cEncTime );
-      msg(VVENC_NOTICE, cEncTime.c_str() );
+      m_Logger->log(VVENC_NOTICE, cEncTime.c_str() );
 
       std::string cRefPics;
       for( int iRefList = 0; iRefList < 2; iRefList++ )
@@ -1915,7 +1922,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
         cRefPics.append( "]" );
       }
       accessUnit.InfoString.append( cRefPics );
-      msg(VVENC_NOTICE, cRefPics.c_str() );
+      m_Logger->log(VVENC_NOTICE, cRefPics.c_str() );
     }
   }
 }
@@ -1990,16 +1997,16 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     {
       if ( digestStr.empty() )
       {
-        msg( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), "?" );
+        m_Logger->log( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), "?" );
       }
       else
       {
-        msg( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
+        m_Logger->log( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
       }
     }
   }
 
-  msg( VVENC_NOTICE, "\n" );
+  m_Logger->log( VVENC_NOTICE, "\n" );
   fflush( stdout );
 }
 

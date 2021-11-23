@@ -73,8 +73,6 @@ int main( int argc, char* argv[] )
 
   int maxFrames = 8;  // max frames to encode
 
-  vvenc_set_logging_callback( NULL, msgFnc );
-
   // init default settings
   vvenc_config vvencCfg;
   vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
@@ -86,6 +84,8 @@ int main( int argc, char* argv[] )
     printf("cannot create encoder\n");
     return -1;
   }
+
+  vvenc_set_logging_callback( enc, NULL, msgFnc );
 
   // initialize the encoder
   iRet = vvenc_encoder_open( enc, &vvencCfg );

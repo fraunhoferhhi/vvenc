@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/MCTF.h"
 #include "CommonLib/Nal.h"
 #include "vvenc/vvencCfg.h"
+#include "Utilities/Logger.h"
 
 #include <mutex>
 
@@ -88,6 +89,7 @@ private:
   EncHRD                    m_cEncHRD;
   MCTF                      m_MCTF;
   PicList                   m_cListPic;
+  Logger*                   m_logger;
 
   std::function<void( void*, vvencYUVBuffer* )> m_RecYUVBufferCallback;
   void*                     m_RecYUVBufferCallbackCtx;
@@ -112,6 +114,7 @@ public:
 
   void     initEncoderLib      ( const VVEncCfg& encCfg );
   void     initPass            ( int pass, const char* statsFName );
+  void     setLogger           ( Logger *logger );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
