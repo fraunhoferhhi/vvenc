@@ -109,12 +109,11 @@ private:
   std::vector<int>          m_nextPocOffset;
 
 public:
-  EncLib();
+  EncLib( Logger* logger = nullptr );
   virtual ~EncLib();
 
   void     initEncoderLib      ( const VVEncCfg& encCfg );
   void     initPass            ( int pass, const char* statsFName );
-  void     setLogger           ( Logger *logger );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();

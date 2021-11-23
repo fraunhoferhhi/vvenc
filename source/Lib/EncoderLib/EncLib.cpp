@@ -67,10 +67,10 @@ namespace vvenc {
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
 
-EncLib::EncLib()
+EncLib::EncLib( Logger* pLogger )
   : m_cEncCfg       ()
   , m_cGOPEncoder   ( nullptr )
-  , m_logger        ( nullptr )
+  , m_logger        ( pLogger )
   , m_RecYUVBufferCallback     ( nullptr )
   , m_RecYUVBufferCallbackCtx  ( nullptr )
   , m_threadPool    ( nullptr )
@@ -79,7 +79,6 @@ EncLib::EncLib()
   , m_ppsMap        ( MAX_NUM_PPS )
 {
   xResetLib();
-  m_pcRateCtrl->setLogger( m_logger );
 }
 
 EncLib::~EncLib()
@@ -108,7 +107,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   initPass( 0, nullptr );
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( m_cEncCfg.m_traceFile, m_cEncCfg.m_traceRule );
+  g_trace_ctx = tracing_init( m_cEncCfg.m_traceFile, m_cEncCfg.m_traceRule, m_logger );
   if( g_trace_ctx && m_cEncCfg.m_listTracingChannels )
   {
     std::string sChannelsList;
@@ -177,6 +176,8 @@ void EncLib::initPass( int pass, const char* statsFName )
     {
       m_pcRateCtrl = new RateCtrl;
     }
+
+    m_pcRateCtrl->setLogger( m_logger );
   }
 
   // set rate control pass
@@ -218,8 +219,8 @@ void EncLib::initPass( int pass, const char* statsFName )
                m_cEncCfg.m_internChromaFormat, m_cEncCfg.m_QP, m_cEncCfg.m_vvencMCTF, m_cEncCfg.m_framesToBeEncoded, m_threadPool );
 
   CHECK( m_cGOPEncoder != nullptr, "encoder library already initialised" );
-  m_cGOPEncoder = new EncGOP;
-  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, *m_pcRateCtrl, m_cEncHRD, m_threadPool, m_logger );
+  m_cGOPEncoder = new EncGOP( m_logger );
+  m_cGOPEncoder->init( m_cEncCfg, sps0, pps0, *m_pcRateCtrl, m_cEncHRD, m_threadPool );
 
   m_pocToGopId.resize( m_cEncCfg.m_GOPSize, -1 );
   m_nextPocOffset.resize( m_cEncCfg.m_GOPSize, 0 );
@@ -273,11 +274,6 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
 
   m_numPassInitialized = pass;
-}
-
-void EncLib::setLogger( Logger *logger )
-{
-  m_logger = logger;
 }
 
 void EncLib::setRecYUVBufferCallback( void *ctx, vvencRecYUVBufferCallback callback )

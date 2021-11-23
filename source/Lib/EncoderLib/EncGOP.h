@@ -162,10 +162,10 @@ public:
   std::list<Picture*>       m_gopEncListOutput;
 
 public:
-  EncGOP();
+  EncGOP( Logger* pLogger = nullptr );
   virtual ~EncGOP();
 
-  void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool, Logger* logger );
+  void init               ( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool );
   void encodePictures     ( const std::vector<Picture*>& encList, PicList& picList, AccessUnitList& au, bool isEncodeLtRef );
   void printOutSummary    ( int numAllPicCoded, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );

@@ -151,9 +151,7 @@ int VVEncImpl::init( const vvenc_config& config )
   m_cEncoderInfo += m_sEncoderCapabilities;
 
   // initialize the encoder
-  m_pEncLib = new EncLib;
-
-  m_pEncLib->setLogger( &m_logger );
+  m_pEncLib = new EncLib ( &m_logger );
 
 #if HANDLE_EXCEPTION
   try
@@ -683,7 +681,7 @@ const char* VVEncImpl::getCompileInfoString()
 }
 
 ///< decode bitstream with limited build in decoder
-int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule)
+int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule )
 {
   int ret = 0;
   FFwdDecoder ffwdDecoder;
@@ -699,7 +697,10 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
 #endif
   {
     ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
-    if( ret )  { return VVENC_ERR_UNSPECIFIED; }
+    if( ret )  
+    { 
+      return VVENC_ERR_UNSPECIFIED; 
+    }
   }
 #if HANDLE_EXCEPTION
   catch( std::exception& e )

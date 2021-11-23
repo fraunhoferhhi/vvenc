@@ -235,7 +235,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
 // ====================================================================================================================
 // Constructor / destructor / initialization / destroy
 // ====================================================================================================================
-EncGOP::EncGOP()
+EncGOP::EncGOP( Logger* logger )
   : m_bFirstInit         ( true )
   , m_bFirstWrite        ( true )
   , m_bRefreshPending    ( false )
@@ -251,7 +251,7 @@ EncGOP::EncGOP()
   , m_pcRateCtrl         ( nullptr )
   , m_pcEncHRD           ( nullptr )
   , m_gopApsMap          ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
-  , m_Logger             ( nullptr )
+  , m_Logger             ( logger )
   , m_threadPool         ( nullptr )
 {
 }
@@ -277,18 +277,17 @@ EncGOP::~EncGOP()
 }
 
 
-void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool, Logger* logger )
+void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateCtrl& rateCtrl, EncHRD& encHrd, NoMallocThreadPool* threadPool )
 {
   m_pcEncCfg   = &encCfg;
   m_pcRateCtrl = &rateCtrl;
   m_pcEncHRD   = &encHrd;
   m_threadPool = threadPool;
-  m_Logger     = logger;
   
-  m_AnalyzeAll.setLogger(logger);
-  m_AnalyzeI.setLogger(logger);
-  m_AnalyzeP.setLogger(logger);
-  m_AnalyzeB.setLogger(logger);
+  m_AnalyzeAll.setLogger(m_Logger);
+  m_AnalyzeI.setLogger(m_Logger);
+  m_AnalyzeP.setLogger(m_Logger);
+  m_AnalyzeB.setLogger(m_Logger);
 
   if( m_pcEncCfg->m_DecodingRefreshType == 4 )
   {
