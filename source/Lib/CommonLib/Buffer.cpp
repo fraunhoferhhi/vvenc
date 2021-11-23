@@ -588,19 +588,19 @@ int AreaBuf<const Pel>::calcVariance( const AreaBuf<const Pel>& Org, const uint3
   float mean=0;
   int64_t sum=0;
   int64_t sum_sqr=0;
-   int n =0;
-   for (int y=0;y<height;y++)
-   {
-     for (int x=0;x<width;x++)
-     {
-       sum+=piOrg[y*stride+x];
-       sum_sqr = sum_sqr + (piOrg[y*stride+x]*piOrg[y*stride+x]);
-       n++;
-     }
-   }
-   mean=(float)sum/n;
-   variance =  (float)sum_sqr/n - (mean*mean);
-   return (int)(variance+0.5);
+  int n =0;
+  for (int y=0;y<height;y++)
+  {
+    for (int x=0;x<width;x++)
+    {
+      sum+=piOrg[y*stride+x];
+      sum_sqr = sum_sqr + (piOrg[y*stride+x]*piOrg[y*stride+x]);
+      n++;
+    }
+  }
+  mean=(float)sum/n;
+  variance =  (float)sum_sqr/n - (mean*mean);
+  return (int)(variance+0.5);
 }
 
 template<>
