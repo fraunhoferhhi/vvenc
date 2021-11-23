@@ -262,13 +262,13 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
 
   if( !sTracingFile.empty() || !sTracingRule.empty() )
   {
-    //msg( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
+    m_Logger->log( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
   }
 
   CDTrace *pDtrace = new CDTrace( sTracingFile, sTracingRule, channels );
   if( pDtrace->getLastError() )
   {
-    //msg( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
+   m_Logger->log( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
     //return NULL;
   }
 

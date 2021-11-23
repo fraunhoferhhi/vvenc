@@ -687,8 +687,11 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
 
+  Logger logger;
+
+
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( trcFile, trcRule );
+  g_trace_ctx = tracing_init( trcFile, trcRule, &logger );
 #endif
 
   std::string filename(FileName );
@@ -696,7 +699,7 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   try
 #endif
   {
-    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
+    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false, &logger );
     if( ret )  
     { 
       return VVENC_ERR_UNSPECIFIED; 
