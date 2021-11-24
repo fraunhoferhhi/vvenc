@@ -61,15 +61,18 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+#if ENABLE_TIME_PROFILING_MT_MODE
+thread_local std::unique_ptr<TProfiler> ptls;
+#endif
 
-NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName )
+NoMallocThreadPool::NoMallocThreadPool( int numThreads, const char * threadPoolName, const VVEncCfg* encCfg )
   : m_poolName( threadPoolName )
   , m_threads ( numThreads < 0 ? std::thread::hardware_concurrency() : numThreads )
 {
   int tid = 0;
   for( auto& t: m_threads )
   {
-    t = std::thread( &NoMallocThreadPool::threadProc, this, tid++ );
+    t = std::thread( &NoMallocThreadPool::threadProc, this, tid++, *encCfg );
   }
 }
 
@@ -137,13 +140,21 @@ void NoMallocThreadPool::waitForThreads()
   }
 }
 
-void NoMallocThreadPool::threadProc( int threadId )
+void NoMallocThreadPool::threadProc( int threadId, const VVEncCfg& encCfg )
 {
 #if __linux
   if( !m_poolName.empty() )
   {
     std::string threadName( m_poolName + std::to_string( threadId ) );
     pthread_setname_np( pthread_self(), threadName.c_str() );
+  }
+#endif
+#if ENABLE_TIME_PROFILING_MT_MODE
+  ptls.reset( timeProfilerCreate( encCfg ) );
+  {
+    std::unique_lock< std::mutex > lock( m_nextFillSlotMutex );
+    TProfiler *tp = ptls.get();
+    profilers.push_back( tp );
   }
 #endif
 

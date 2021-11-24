@@ -159,6 +159,7 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
 
   // Derive counters that contains the data
   std::vector<T> cntAccum;
+  std::vector<T> cntAccumDimVer( xDim );
   for( int cntIdx = 0; cntIdx < totalNumCnt; cntIdx++ )
   {
     cntAccum.push_back( cntSet[cntIdx].total() );
@@ -217,6 +218,7 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
               OUTSTRF( numSymbolsInMantissa, 1, val );
             }
           }
+          cntAccumDimVer[i] += cntSet[cntIdx][j][i];
         }
         else
         {
@@ -228,6 +230,20 @@ std::ostream& StatCounters::report2D( std::ostream& os, const StatCounter2DSet<T
     // Empty line to separate heights
     OUTSTR( 0, "\r\n" );
   }
+
+  // Total over y-axis
+  OUTSTR( 12, "   " );
+  OUTSTR( maxCntNameLen, std::left << "Total" << std::internal );
+  OUTSTR( 2, " " );
+  for( int i = firstSizeIdx; i < xDim; i++ )
+  {
+    OUTSTR( 0, " " );
+    OUTSTR( numSymbolsInMantissa, (int)(cntAccumDimVer[i] / (double)scalingFactor) );
+    OUTSTR( numSymbolsInExp, "." );
+  }
+
+  OUTSTR( 0, "\r\n" );
+
 
   os << m_str.str();
   return os;

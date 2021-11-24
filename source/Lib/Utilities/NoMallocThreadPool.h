@@ -58,6 +58,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <array>
 
 #include "CommonLib/CommonDef.h"
+#if ENABLE_TIME_PROFILING_MT_MODE
+#include "CommonLib/TimeProfiler.h"
+#endif
 
 //! \ingroup Utilities
 //! \{
@@ -381,7 +384,7 @@ class NoMallocThreadPool
 
 
 public:
-  NoMallocThreadPool( int numThreads = 1, const char *threadPoolName = nullptr );
+  NoMallocThreadPool( int numThreads = 1, const char *threadPoolName = nullptr, const VVEncCfg* encCfg = nullptr );
   ~NoMallocThreadPool();
 
   template<class TParam>
@@ -475,6 +478,9 @@ public:
   void waitForThreads();
 
   int numThreads() const { return (int)m_threads.size(); }
+#if ENABLE_TIME_PROFILING_MT_MODE
+  const std::vector< TProfiler* >& getProfilers() { return profilers; }
+#endif
 
 private:
 
@@ -494,9 +500,12 @@ private:
 #if ENABLE_VALGRIND_CODE
   std::mutex               m_extraMutex;
 #endif
+#if ENABLE_TIME_PROFILING_MT_MODE
+  std::vector< TProfiler* > profilers;
+#endif
 
   // internal functions
-  void         threadProc  ( int threadId );
+  void         threadProc  ( int threadId, const VVEncCfg& encCfg );
   TaskIterator findNextTask( int threadId, TaskIterator startSearch );
   bool         processTask ( int threadId, Slot& task );
 };

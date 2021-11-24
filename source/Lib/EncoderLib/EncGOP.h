@@ -184,7 +184,6 @@ private:
   void xInitFirstSlice                ( Picture& pic, PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
   void xUpdateRPRtmvp                 ( PicHeader* picHeader, Slice* slice );
-  void xUpdateRPRToolCtrl             ( PicHeader* picHeader, Slice* slice );
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
   void xInitLMCS                      ( Picture& pic );
   void xSelectReferencePictureList    ( Slice* slice, int curPoc, int gopId, int ltPoc );

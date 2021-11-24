@@ -288,6 +288,7 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   else
   {
     cs = new CodingStructure( unitCache, mutex );
+    cs->pps = &pps;
     cs->sps = &sps;
     cs->vps = &_vps;
     cs->create( UnitArea( chromaFormatIDC, Area( 0, 0, iWidth, iHeight )), true, pps.pcv );
@@ -296,7 +297,6 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   cs->picture   = this;
   cs->refCS     = cs;
   cs->slice     = nullptr;  // the slices for this picture have not been set at this point. update cs->slice after swapSliceObject()
-  cs->pps       = &pps;
   cs->picHeader = picHeader;
   if ( alfAps )
   {
