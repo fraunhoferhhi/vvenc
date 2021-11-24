@@ -117,12 +117,13 @@ private:
   DepQuant* m_quant;          //!< Quantizer
   TCoeff    m_tempInMatrix[48];
   TCoeff    m_tempOutMatrix[48];
+  TCoeff   *m_mtsCoeffs[NUM_TRAFO_MODES_MTS];
+
   static const int maxAbsIctMode = 3;
   void                      (*m_invICTMem[1+2*maxAbsIctMode])(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(*m_fwdICTMem[1+2*maxAbsIctMode])(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
   void                      (**m_invICT)(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(**m_fwdICT)(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
-  TCoeff    m_mtsCoeffs[NUM_TRAFO_MODES_MTS][MAX_TB_SIZEY * MAX_TB_SIZEY];
 
   uint32_t xGetLFNSTIntraMode( const Area& tuArea, const uint32_t dirMode );
   bool     xGetTransposeFlag(uint32_t intraMode);

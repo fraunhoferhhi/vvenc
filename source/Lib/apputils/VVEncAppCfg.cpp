@@ -402,11 +402,12 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<vvencSegmentMode>   toSegment                    ( &m_SegmentMode,                 &SegmentToEnumMap      );
   IStreamToEnum<vvencHDRMode>       toHDRMode                    ( &m_HdrMode,                     &HdrModeToIntMap       );
 
+  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileCols, &m_numTileRows }, true, 'x' );
+
   IStreamToFunc<BitDepthAndColorSpace> toInputFormatBitdepth( setInputBitDepthAndColorSpace, this, &BitColorSpaceToIntMap, YUV420_8);
   IStreamToEnum<vvencDecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>                toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>                toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
   IStreamToEnum<bool>               toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
   IStreamToArr<char>                toTraceRule                  ( &m_traceRule[0], VVENC_MAX_STRING_LEN  );
@@ -463,6 +464,8 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("refreshtype,-rt",   toDecRefreshType,         "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
   ("refreshsec,-rs",    m_IntraPeriodSec,         "Intra period/refresh in seconds")
   ("intraperiod,-ip",   m_IntraPeriod,            "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
+  
+  ("tiles",             toNumTiles,               "Set number of tile columns and rows explicitly")
   ;
 
   opts.setSubSection("Profile, Level, Tier");
@@ -487,7 +490,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("internal-bitdepth",         m_internalBitDepth[0], "internal bitdepth (8,10)")
   ("accessunitdelimiter,-aud",  toAud,                 "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
   ("vuiparameterspresent,-vui", toVui,                 "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
-  ("hrdparameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
+  ("hrdparameterspresent,-hrd", m_hrdParametersPresent,"Emit VUI HRD information (0: off, 1: on; default: 1)")
   ("decodedpicturehash,-dph",   toHashType,            "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
   ;
 
@@ -585,6 +588,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
 
   IStreamToArr<unsigned int>        toTileColumnWidth            ( &m_tileColumnWidth[0], 10 );
   IStreamToArr<unsigned int>        toTileRowHeight              ( &m_tileRowHeight[0], 10 );
+  IStreamToRefVec<uint32_t>         toNumTiles                   ( { &m_numTileCols, &m_numTileRows }, true, 'x' );
 
   IStreamToArr<int>                 toMCTFFrames                 ( &m_vvencMCTF.MCTFFrames[0], VVENC_MAX_MCTF_FRAMES   );
   IStreamToArr<double>              toMCTFStrengths              ( &m_vvencMCTF.MCTFStrengths[0], VVENC_MAX_MCTF_FRAMES);
@@ -601,7 +605,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>                toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>                toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
   IStreamToArr<char>                toTraceRule                   ( &m_traceRule[0], VVENC_MAX_STRING_LEN  );
@@ -935,7 +938,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("EnableDecodingParameterSet",                      m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
   ("AccessUnitDelimiter,-aud",                        toAud,                                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)" , true)
   ("VuiParametersPresent,-vui",                       toVui,                                            "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)", true)
-  ("HrdParametersPresent,-hrd",                       toHrd,                                            "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)", true)
+  ("HrdParametersPresent,-hrd",                       m_hrdParametersPresent,                           "Enable generation of hrd_parameters(), (0: off, 1: on; default: 1)")
   ("AspectRatioInfoPresent",                          m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
   ("AspectRatioIdc",                                  m_aspectRatioIdc,                                 "aspect_ratio_idc")
   ("SarWidth",                                        m_sarWidth,                                       "horizontal size of the sample aspect ratio")
@@ -1051,6 +1054,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("TileColumnWidthArray",                            toTileColumnWidth,                                "Tile column widths in units of CTUs. Last column width in list will be repeated uniformly to cover any remaining picture width")
   ("TileRowHeightArray",                              toTileRowHeight,                                  "Tile row heights in units of CTUs. Last row height in list will be repeated uniformly to cover any remaining picture height")
   ("TileParallelCtuEnc",                              m_tileParallelCtuEnc,                             "Allow parallel CTU block search in different tiles")
+  ("Tiles",                                           toNumTiles,                                       "Set number of tile columns and rows explicitly")
   ;
 
   opts.setSubSection("Coding tools");

@@ -67,18 +67,15 @@ struct TCoeffOps
   void _initTCoeffOpsX86();
 
 #endif
-  void( *cpyResi8 )       ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
-  void( *cpyResi4 )       ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
-  void( *cpyCoeff8 )      ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
-  void( *cpyCoeff4 )      ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
-  void( *fastInvCore4 )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned rows );
-  void( *fastInvCore8 )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned rows );
-  void( *fastFwdCore4_2D )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
-  void( *fastFwdCore8_2D )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
-  void( *fastFwdCore4_1D )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
-  void( *fastFwdCore8_1D )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned trSize, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
-  void( *roundClip4 )  (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
-  void( *roundClip8 )  (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
+  void( *cpyResi8 )         ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
+  void( *cpyResi4 )         ( const TCoeff*      src,        Pel*    dst, ptrdiff_t stride, unsigned width, unsigned height );
+  void( *cpyCoeff8 )        ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
+  void( *cpyCoeff4 )        ( const Pel*         src, ptrdiff_t stride,   TCoeff* dst, unsigned width, unsigned height );
+  void( *fastInvCore[5] )   ( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned rows );
+  void( *fastFwdCore_2D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
+  void( *fastFwdCore_1D[5] )( const TMatrixCoeff* it,  const TCoeff* src, TCoeff* dst, unsigned lines, unsigned reducedLines, unsigned cutoff, int shift );
+  void( *roundClip4 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
+  void( *roundClip8 )       (                                             TCoeff *dst, unsigned width, unsigned height, unsigned stride, const TCoeff outputMin, const TCoeff outputMax, const TCoeff round, const TCoeff shift );
 };
 
 extern TCoeffOps g_tCoeffOps;

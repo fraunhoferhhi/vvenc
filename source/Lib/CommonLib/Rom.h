@@ -128,7 +128,7 @@ extern const int g_quantScales   [2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIS
 extern const int g_invQuantScales[2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // IQ(QP%6)
 
 static const int g_numTransformMatrixSizes = 6;
-static const int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = {  6, 6 };
+static const int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = {  6/*, 6 */ };
 
 
 // ====================================================================================================================

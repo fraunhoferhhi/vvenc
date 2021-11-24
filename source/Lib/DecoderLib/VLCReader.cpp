@@ -1493,7 +1493,7 @@ void HLSyntaxReader::parseSPS(SPS* pcSPS)
   if(pcSPS->ptlDpbHrdParamsPresent)
   {
 
-    READ_FLAG( pcSPS->hrdParametersPresent, "sps_general_hrd_params_present_flag");
+    READ_FLAG( pcSPS->hrdParametersPresent, "sps_timing_hrd_params_present_flag");
     if( pcSPS->hrdParametersPresent )
     {
       parseGeneralHrdParameters(&pcSPS->generalHrdParams);
