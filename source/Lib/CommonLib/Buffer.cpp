@@ -598,8 +598,8 @@ int AreaBuf<const Pel>::calcVariance( const AreaBuf<const Pel>& Org, const uint3
       sum_sqr+= data*data;
     }
   }
-  mean=(float)sum/(width*height);
-  variance =  (float)sum_sqr/(width*height) - (mean*mean);
+  mean=(double)sum/(width*height);
+  variance =  (double)sum_sqr/(width*height) - (mean*mean);
   return (int)(variance+0.5);
 }
 

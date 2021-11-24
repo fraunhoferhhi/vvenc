@@ -653,7 +653,7 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
   const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
 
-  if (((m_pcEncCfg->m_IntraPeriod==1) || (m_pcEncCfg->m_framesToBeEncoded==1)) && (partitioner.chType==CH_C))
+  if ((m_pcEncCfg->m_IntraPeriod==1) && (partitioner.chType==CH_C))
   {
     if (!partitioner. qtChromaSplit)
     {
