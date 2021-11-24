@@ -106,6 +106,7 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
       generalHrdParams.numUnitsInTick = generalHrdParams.numUnitsInTick * temporalSubsampleRatio;
     }
   }
+
   bool rateCnt = (bitRate > 0);
 
   generalHrdParams.generalNalHrdParamsPresent = rateCnt;

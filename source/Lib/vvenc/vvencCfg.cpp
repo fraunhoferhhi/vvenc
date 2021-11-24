@@ -589,7 +589,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_decodingParameterSetEnabled             = false;
   c->m_vuiParametersPresent                    = -1;
-  c->m_hrdParametersPresent                    = -1;
+  c->m_hrdParametersPresent                    = true;
   c->m_aspectRatioInfoPresent                  = false;
   c->m_aspectRatioIdc                          = 0;
   c->m_sarWidth                                = 0;
@@ -724,7 +724,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( 0 == c->m_RCTargetBitrate )
    {
-     vvenc_confirmParameter( c, c->m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
      vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
      vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
@@ -1022,11 +1021,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if ( c->m_vuiParametersPresent < 0 )
   {
     c->m_vuiParametersPresent = 0;
-  }
-
-  if ( c->m_hrdParametersPresent < 0 )
-  {
-    c->m_hrdParametersPresent = 0;
   }
 
   switch ( c->m_conformanceWindowMode)
@@ -2159,7 +2153,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
   vvenc_confirmParameter( c, c->m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
-  vvenc_confirmParameter( c, c->m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
 
   if( c->m_DepQuantEnabled )
   {
@@ -2427,9 +2420,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_maxNumAffineMergeCand > vvenc::AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  vvenc_confirmParameter(c, (c->m_hrdParametersPresent>0) && (0 == c->m_RCTargetBitrate),  "HrdParametersPresent requires RateControl enabled");
-  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (c->m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (c->m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (!c->m_hrdParametersPresent), "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (!c->m_hrdParametersPresent),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = c->m_CTUSize;
