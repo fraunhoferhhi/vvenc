@@ -107,8 +107,10 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
     }
   }
 
-  generalHrdParams.generalNalHrdParamsPresent = false;
-  generalHrdParams.generalVclHrdParamsPresent = false;
+  bool rateCnt = (bitRate > 0);
+
+  generalHrdParams.generalNalHrdParamsPresent = rateCnt;
+  generalHrdParams.generalVclHrdParamsPresent = rateCnt;
 
   generalHrdParams.generalSamePicTimingInAllOlsFlag = true;
   useSubCpbParams &= (generalHrdParams.generalNalHrdParamsPresent || generalHrdParams.generalVclHrdParamsPresent);
