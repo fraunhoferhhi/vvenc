@@ -986,7 +986,6 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
   int signalModeConsVal = tempCS->signalModeCons( getPartSplit( encTestMode ), partitioner, modeTypeParent );
   int numRoundRdo = signalModeConsVal == LDT_MODE_TYPE_SIGNAL ? 2 : 1;
   bool skipInterPass = false;
-
   for( int i = 0; i < numRoundRdo; i++ )
   {
     //change cons modes
