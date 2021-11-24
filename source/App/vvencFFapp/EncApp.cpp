@@ -165,17 +165,6 @@ int EncApp::encode()
   vvenc_accessUnit_alloc_payload( &au, auSizeScale * vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight + 1024 );
 
   // main loop
-  int tempRate  = vvencCfg.m_FrameRate;
-  int tempScale = 1;
-  switch( vvencCfg.m_FrameRate )
-  {
-    case 23:  tempRate = 24000;  tempScale = 1001; break;
-    case 29:  tempRate = 30000;  tempScale = 1001; break;
-    case 59:  tempRate = 60000;  tempScale = 1001; break;
-    case 119: tempRate = 120000; tempScale = 1001; break;
-    default: break;
-  }
-
   int framesRcvd  = 0;
   const int start = vvencCfg.m_RCPass > 0 ? vvencCfg.m_RCPass - 1 : 0;
   const int end   = vvencCfg.m_RCPass > 0 ? vvencCfg.m_RCPass     : vvencCfg.m_RCNumPasses;
@@ -239,7 +228,7 @@ int EncApp::encode()
         {
           if( vvencCfg.m_FrameRate > 0 )
           {
-            yuvInBuf.cts      = framesRcvd * vvencCfg.m_TicksPerSecond * tempScale / tempRate;
+            yuvInBuf.cts      = framesRcvd * vvencCfg.m_TicksPerSecond * vvencCfg.m_FrameScale / vvencCfg.m_FrameRate;
             yuvInBuf.ctsValid = true;
           }
           framesRcvd += 1;
@@ -355,7 +344,8 @@ void EncApp::printRateSummary( int framesRcvd )
 {
   vvenc_print_summary( m_encCtx );
 
-  double time = (double) framesRcvd / m_cEncAppCfg.m_FrameRate * m_cEncAppCfg.m_temporalSubsampleRatio;
+  int fps = m_cEncAppCfg.m_FrameRate/m_cEncAppCfg.m_FrameScale;
+  double time = (double) framesRcvd / fps * m_cEncAppCfg.m_temporalSubsampleRatio;
   msgApp( VVENC_DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
   if( m_cEncAppCfg.m_summaryVerboseness > 0 )
   {
