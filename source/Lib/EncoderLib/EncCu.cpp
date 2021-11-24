@@ -507,7 +507,7 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 }
 
-void CheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner)
+void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner)
 {
   CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
   CodingStructure &cs   = *cu.cs;
@@ -549,7 +549,47 @@ void CheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& bestC
       }
     }
   }
-  partitioner.CheckFastCuChromaSplitting(orgCb,orgCr,splithor,splitver,qtSplitChroma);
+  partitioner.horChromaSplit=splithor;
+  partitioner.verChromaSplit=splitver;
+  partitioner.qtChromaSplit=qtSplitChroma;
+
+  if ( orgCb.width==orgCb.height)
+  {
+    int varhu_cb,varhl_cb,varvl_cb,varvr_cb;
+    // calc varianz hor upper
+    varhu_cb=orgCb.calcVariance(orgCb,orgCb.width,orgCb.height>>1,0);
+    // calc varianz hor lower
+    varhl_cb=orgCb.calcVariance(orgCb,orgCb.width,orgCb.height>>1,(orgCb.height>>1)*orgCb.stride);
+    // calc varianz ver left
+    varvl_cb=orgCb.calcVariance(orgCb,orgCb.width>>1,orgCb.height,0);
+    // calc varianz ver right
+    varvr_cb=orgCb.calcVariance(orgCb,orgCb.width>>1,orgCb.height,orgCb.width>>1);
+
+    varhu_cb+=varhl_cb;
+    varvl_cb+=varvr_cb;
+    int varhu_cr,varhl_cr,varvl_cr,varvr_cr;
+    // calc varianz hor upper
+    varhu_cr=orgCr.calcVariance(orgCr,orgCr.width,orgCr.height>>1,0);
+    // calc varianz hor lower
+    varhl_cr=orgCr.calcVariance(orgCr,orgCr.width,orgCr.height>>1,(orgCr.height>>1)*orgCr.stride);
+    // calc varianz ver left
+    varvl_cr=orgCr.calcVariance(orgCr,orgCr.width>>1,orgCr.height,0);
+    // calc varianz ver right
+    varvr_cr=orgCr.calcVariance(orgCr,orgCr.width>>1,orgCr.height,orgCr.width>>1);
+
+    varhu_cr+=varhl_cr;
+    varvl_cr+=varvr_cr;
+    if ((varhu_cr*FCBP_TH2<varvl_cr*100) && (varhu_cb*FCBP_TH2<varvl_cb*100))
+    {
+      partitioner.verChromaSplit=false;
+    }
+    else if ((varvl_cr*FCBP_TH2<varhu_cr*100) && (varvl_cb*FCBP_TH2<varhu_cb*100))
+    {
+      partitioner.horChromaSplit=false;
+    }
+  }
+
+
 }
 
 void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner )
@@ -811,9 +851,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
 #endif
     } //boundary
 
-    if (((m_pcEncCfg->m_IntraPeriod==1) || (m_pcEncCfg->m_framesToBeEncoded==1)) && (partitioner.chType==CH_C))
+    if ((m_pcEncCfg->m_IntraPeriod==1)  && (partitioner.chType==CH_C))
     {
-      CheckFastCuChromaSplitting(tempCS,bestCS,partitioner);
+      xCheckFastCuChromaSplitting(tempCS,bestCS,partitioner);
     }
     //////////////////////////////////////////////////////////////////////////
     // split modes
@@ -828,7 +868,8 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
-    if(partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
+
+    if( partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_BT_H, ETO_STANDARD, qp, false } );
@@ -839,7 +880,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if(partitioner.canSplit( CU_VERT_SPLIT, cs ) )
+    if( partitioner.canSplit( CU_VERT_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_BT_V, ETO_STANDARD, qp, false } );
@@ -850,7 +891,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if(partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
+    if( partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_TT_H, ETO_STANDARD, qp, false } );
@@ -861,7 +902,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     }
 
-    if(partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
+    if( partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
     {
       // add split modes
       EncTestMode encTestMode( { ETM_SPLIT_TT_V, ETO_STANDARD, qp, false } );

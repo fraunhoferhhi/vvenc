@@ -543,48 +543,6 @@ void Partitioner::canSplit( const CodingStructure &cs, bool& canNo, bool& canQt,
   if( modeType == MODE_TYPE_INTER && area.width * area.height == 64 )  canTv = canTh = false;
 }
 
-void Partitioner::CheckFastCuChromaSplitting(CPelBuf orgCb,CPelBuf orgCr,const bool splithor,const bool splitver,const bool qtsplit)
-{
-  horChromaSplit=splithor;
-  verChromaSplit=splitver;
-  qtChromaSplit=qtsplit;
-
-  if ( orgCb.width==orgCb.height)
-  {
-    int varhu_cb,varhl_cb,varvl_cb,varvr_cb;
-    // calc varianz hor upper
-    varhu_cb=orgCb.calcVariance(orgCb,orgCb.width,orgCb.height>>1,0);
-    // calc varianz hor lower
-    varhl_cb=orgCb.calcVariance(orgCb,orgCb.width,orgCb.height>>1,(orgCb.height>>1)*orgCb.stride);
-    // calc varianz ver left
-    varvl_cb=orgCb.calcVariance(orgCb,orgCb.width>>1,orgCb.height,0);
-    // calc varianz ver right
-    varvr_cb=orgCb.calcVariance(orgCb,orgCb.width>>1,orgCb.height,orgCb.width>>1);
-
-    varhu_cb+=varhl_cb;
-    varvl_cb+=varvr_cb;
-    int varhu_cr,varhl_cr,varvl_cr,varvr_cr;
-    // calc varianz hor upper
-    varhu_cr=orgCr.calcVariance(orgCr,orgCr.width,orgCr.height>>1,0);
-    // calc varianz hor lower
-    varhl_cr=orgCr.calcVariance(orgCr,orgCr.width,orgCr.height>>1,(orgCr.height>>1)*orgCr.stride);
-    // calc varianz ver left
-    varvl_cr=orgCr.calcVariance(orgCr,orgCr.width>>1,orgCr.height,0);
-    // calc varianz ver right
-    varvr_cr=orgCr.calcVariance(orgCr,orgCr.width>>1,orgCr.height,orgCr.width>>1);
-
-    varhu_cr+=varhl_cr;
-    varvl_cr+=varvr_cr;
-    if ((varhu_cr*FCBP_TH2<varvl_cr*100) && (varhu_cb*FCBP_TH2<varvl_cb*100))
-    {
-      verChromaSplit=false;
-    }
-    else if ((varvl_cr*FCBP_TH2<varhu_cr*100) && (varvl_cb*FCBP_TH2<varhu_cb*100))
-    {
-      horChromaSplit=false;
-    }
-  }
-}
 
 bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
 {
