@@ -349,7 +349,7 @@ void EncLib::xEnableRCCfg()
     const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
 
     // estimate near-optimal base QP for PPS in second RC pass
-    const unsigned fps = m_encCfg.m_FrameRate;
+    const unsigned fps = m_encCfg.m_FrameRate/m_encCfg.m_FrameScale;
     uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
     std::list<TRCPassStats>& firstPassData = m_rateCtrl->getFirstPassStats();
     std::list<TRCPassStats>::iterator it;
