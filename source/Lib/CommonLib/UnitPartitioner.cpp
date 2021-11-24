@@ -543,7 +543,6 @@ void Partitioner::canSplit( const CodingStructure &cs, bool& canNo, bool& canQt,
   if( modeType == MODE_TYPE_INTER && area.width * area.height == 64 )  canTv = canTh = false;
 }
 
-
 bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
 {
   const CompArea area       = currArea().Y();
