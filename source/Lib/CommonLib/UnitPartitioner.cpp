@@ -556,9 +556,9 @@ bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
   {
     // Chroma Split Optimization
     canBh = canBh && horChromaSplit;
-    canTh = canTh  && horChromaSplit;
-    canBv = canBv  && verChromaSplit;
-    canTv = canTv  && verChromaSplit;
+    canTh = canTh && horChromaSplit;
+    canBv = canBv && verChromaSplit;
+    canTv = canTv && verChromaSplit;
   }
   switch( split )
   {
