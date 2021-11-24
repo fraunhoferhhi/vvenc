@@ -100,7 +100,7 @@ private:
   // encoder configuration
   const VVEncCfg*              m_pcEncCfg;                           ///< encoder configuration class
 
-  std::vector<PerThreadRsrc*>  m_CtuTaskRsrc;
+  std::vector<PerThreadRsrc*>  m_ThreadRsrc;
   std::vector<TileLineEncRsrc*>m_TileLineEncRsrc;
   NoMallocThreadPool*          m_threadPool;
   WaitCounter*                 m_ctuTasksDoneCounter;
