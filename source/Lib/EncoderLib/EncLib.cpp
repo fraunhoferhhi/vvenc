@@ -232,7 +232,14 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // gop encoder
   m_gopEncoder = new EncGOP();
-  m_gopEncoder->initStage( m_encCfg.m_IntraPeriod /*+ m_firstPassCfg.m_GOPSize*/ + 1, false, false, m_encCfg.m_CTUSize );
+  if ( m_encCfg.m_RCLookAhead )
+  {
+    m_gopEncoder->initStage( m_encCfg.m_IntraPeriod /*+ m_firstPassCfg.m_GOPSize*/ + 1, false, false, m_encCfg.m_CTUSize );
+  }
+  else
+  {
+    m_gopEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize );
+  }
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {

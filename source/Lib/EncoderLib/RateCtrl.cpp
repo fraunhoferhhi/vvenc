@@ -611,33 +611,11 @@ void RateCtrl::processGopsLookAhead( const int firstPassBaseQP ) // actually fir
   const int qpOffset = Clip3( 0, 6, ( ( secondPassBaseQP + 1 ) >> 1 ) - 9 );
 
   const double power[ 6 ] = { 0.5, 0.75, 0.875, 0.9375, 0.96875, 0.984375 };
-  //const double rp[ 6 ] = { pow( ratio, 0.5 ), pow( ratio, 0.75 ), pow( ratio, 0.875 ), pow( ratio, 0.9375 ), pow( ratio, 0.96875 ), pow( ratio, 0.984375 ) };
   std::list<TRCPassStats>::iterator it;
   std::vector<uint32_t> gopBits( 2 + ( m_listRCFirstPassStats.size() - 1 ) / m_pcEncCfg->m_GOPSize ); // +2 for the first I frame (GOP) and a potential last incomplete GOP
   std::vector<uint32_t> tgtBits( 2 + ( m_listRCFirstPassStats.size() - 1 ) / m_pcEncCfg->m_GOPSize );
   std::vector<double> ratio( 2 + (int)m_listRCFirstPassStats.size() / m_pcEncCfg->m_IntraPeriod );
-#if 0
-  std::vector<uint32_t> ipBits( 1 + (int)m_listRCFirstPassStats.size() / m_pcEncCfg->m_IntraPeriod );
-  std::vector<double> ratio( 1 + (int)m_listRCFirstPassStats.size() / m_pcEncCfg->m_IntraPeriod );
 
-  for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ ) // scaling, part 0, looping through intra periods
-  {
-    const int ipIdx = std::max( 0, it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod;
-
-    ipBits[ ipIdx ] += (uint32_t)it->numBits; //( it->isIntra ? (uint32_t)( it->numBits >> 1 ) : (uint32_t)it->numBits ); // bits spent in intra period
-
-    if ( it->poc > 0 && ( it->isIntra || it->poc == m_listRCFirstPassStats.size() - 1 ) )
-    {
-      const double bp1pf = ipBits[ ipIdx ] / (double)( it->poc - lastIP + 1 ); // average bitrate per intra period
-      ratio[ ipIdx ] = (double)encRCSeq->targetRate / ( fps * bp1pf );  // ratio of second and first pass
-      lastIP = it->poc;
-      if ( it->isIntra && it->poc != m_listRCFirstPassStats.size() - 1 )
-      {
-        ipBits[ ipIdx + 1 ] += (uint32_t)it->numBits; //(uint32_t)( it->numBits >> 1 );
-      }
-    }
-  }
-#else
   uint64_t ipBits = 0;
   uint64_t prvSum = 0;
   int framesInCurIp = 0;
@@ -652,7 +630,7 @@ void RateCtrl::processGopsLookAhead( const int firstPassBaseQP ) // actually fir
       prvSum = ipBits;
       ratio[ ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod ] = (double)encRCSeq->targetRate / ( fps * bp1pf ); // ratio between 2nd and first pass
       framesInCurIp = 0;
-      if ( it->isIntra ) // && it->poc != m_listRCFirstPassStats.size() - 1 )
+      if ( it->isIntra )
       {
         ipBits = uint64_t( it->numBits >> 1 ); // reset with half weighting
       }
@@ -662,16 +640,11 @@ void RateCtrl::processGopsLookAhead( const int firstPassBaseQP ) // actually fir
       }
     }
   }
-#endif
 
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ ) // scaling, part 1
   {
     const int vecIdx = 1 + ( ( it->poc - 1 ) >> gopShift );
-#if 0
-    const int ipIdx = it->poc / m_pcEncCfg->m_IntraPeriod;
-#else
     const int ipIdx = ( it->poc /*+ m_pcEncCfg->m_GOPSize*/ - 1 ) / m_pcEncCfg->m_IntraPeriod;
-#endif
 
     it->targetBits = std::max( 0, int( 0.5 + it->numBits * ( it->tempLayer + qpOffset < 6 ? pow( ratio[ ipIdx ], power[ it->tempLayer + qpOffset ] ) : ratio[ ipIdx ] ) ) );
     gopBits[ vecIdx ] += (uint32_t)it->targetBits; // similar to g in VCIP paper
@@ -815,7 +788,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               const double ratio = (double)encRCSeq->targetRate / ( encRCSeq->frameRate * bp1pf );  // targeted 2nd-to-1st pass ratio
               d = std::max( 0.0, d - ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * 0.5 * it->frameInGopRatio ); // -old change
               d = std::max( 1.0, d + ( encRCSeq->bitsUsedIn1stPass * ratio - encRCSeq->bitsUsed ) * it->frameInGopRatio ); // +new change
-
             }
             else
             {
