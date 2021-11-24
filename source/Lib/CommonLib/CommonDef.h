@@ -467,6 +467,7 @@ static const int NTAPS_CHROMA             =                         4; ///< Numb
 static const int NTAPS_BILINEAR           =                         2; ///< Number of taps for bilinear filter
 
 static const int ATMVP_SUB_BLOCK_SIZE =                             3; ///< sub-block size for ATMVP
+
 static const int GEO_MAX_NUM_UNI_CANDS =                            6;
 static const int GEO_MAX_NUM_CANDS = GEO_MAX_NUM_UNI_CANDS * (GEO_MAX_NUM_UNI_CANDS - 1);
 static const int GEO_MIN_CU_LOG2 =                                  3;
