@@ -257,16 +257,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_cEncCfg.m_FrameRate )
   {
-    int iTempRate = m_cEncCfg.m_FrameRate;
-    int iTempScale = 1;
-    switch( m_cEncCfg.m_FrameRate )
-    {
-    case 23: iTempRate = 24000; iTempScale = 1001; break;
-    case 29: iTempRate = 30000; iTempScale = 1001; break;
-    case 59: iTempRate = 60000; iTempScale = 1001; break;
-    default: break;
-    }
-    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
+    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)m_cEncCfg.m_FrameScale/(int64_t)m_cEncCfg.m_FrameRate);
   }
 
   m_numPassInitialized = pass;
@@ -353,7 +344,7 @@ void EncLib::xSetRCEncCfg( int pass )
   }
   else // estimate near-optimal base QP for PPS in second RC pass
   {
-    const unsigned fps = m_cEncCfg.m_FrameRate;
+    const unsigned fps = m_cEncCfg.m_FrameRate/m_cEncCfg.m_FrameScale;
     uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
     std::list<TRCPassStats>& firstPassData = m_pcRateCtrl->getFirstPassStats();
     std::list<TRCPassStats>::iterator it;
