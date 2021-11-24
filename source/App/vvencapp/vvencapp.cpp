@@ -135,7 +135,7 @@ int main( int argc, char* argv[] )
 
   // default encoder configuration
   apputils::VVEncAppCfg vvencappCfg;
-  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 1, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )
@@ -216,19 +216,6 @@ int main( int argc, char* argv[] )
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
-  // calc temp. rate/scale
-  int temporalRate  = vvencappCfg.m_FrameRate;
-  int temporalScale = 1;
-
-  switch( vvencappCfg.m_FrameRate )
-  {
-  case 23:  temporalRate = 24000;  temporalScale = 1001; break;
-  case 29:  temporalRate = 30000;  temporalScale = 1001; break;
-  case 59:  temporalRate = 60000;  temporalScale = 1001; break;
-  case 119: temporalRate = 120000; temporalScale = 1001; break;
-  default: break;
-  }
-
   unsigned int uiFrames = 0;
   const int start       = vvencappCfg.m_RCPass > 0 ? vvencappCfg.m_RCPass - 1 : 0;
   const int end         = vvencappCfg.m_RCPass > 0 ? vvencappCfg.m_RCPass     : vvencappCfg.m_RCNumPasses;
@@ -288,7 +275,7 @@ int main( int argc, char* argv[] )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
-          cYUVInputBuffer.cts             = iSeqNumber * vvencappCfg.m_TicksPerSecond * temporalScale / temporalRate;
+          cYUVInputBuffer.cts             = iSeqNumber * vvencappCfg.m_TicksPerSecond * vvencappCfg.m_FrameScale / vvencappCfg.m_FrameRate;
           cYUVInputBuffer.ctsValid        = true;
           ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;

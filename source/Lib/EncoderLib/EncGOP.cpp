@@ -516,10 +516,11 @@ void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, c
 
   //--CFG_KDY
   const int rateMultiplier = 1;
-  m_AnalyzeAll.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeI.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeP.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeB.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
+  int fps = m_pcEncCfg->m_FrameRate/m_pcEncCfg->m_FrameScale;
+  m_AnalyzeAll.setFrmRate( fps*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
+  m_AnalyzeI.setFrmRate( fps*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
+  m_AnalyzeP.setFrmRate( fps*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
+  m_AnalyzeB.setFrmRate( fps*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
 
   const ChromaFormat chFmt = m_pcEncCfg->m_internChromaFormat;
 

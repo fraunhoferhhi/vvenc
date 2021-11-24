@@ -158,7 +158,7 @@ void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = 
   rcEncCfg.m_IntraPeriod                = 32;                  // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
   rcEncCfg.m_verbosity                  = VVENC_SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
-//rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
+  rcEncCfg.m_FrameScale                 = 1;                   // temporal scale (fps)
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
   rcEncCfg.m_usePerceptQPA              = true;                // perceptual QP adaptation (false: off, true: on)
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
@@ -175,7 +175,7 @@ void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = 
 
 void defaultSDKInit( vvenc_config& rcEncCfg, int targetBitrate, bool callInitCfgParameter = false )
 {
-  vvenc_init_default( &rcEncCfg, 176,144,60, targetBitrate, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &rcEncCfg, 176,144,60,1, targetBitrate, 32, vvencPresetMode::VVENC_MEDIUM );
 
   if( callInitCfgParameter )
   {

@@ -424,7 +424,8 @@ typedef struct vvenc_config
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity
   int                 m_framesToBeEncoded;                                               // number of encoded frames
 
-  int                 m_FrameRate;                                                       // source frame-rates (Hz)
+  int                 m_FrameRate;                                                       // source frame-rates (Hz) Numerator
+  int                 m_FrameScale;                                                      // source frame-rates (Hz) Denominator
   int                 m_FrameSkip;                                                       // number of skipped frames from the beginning
   int                 m_SourceWidth;                                                     // source width in pixel
   int                 m_SourceHeight;                                                    // source height in pixel (when interlaced = field height)
@@ -751,7 +752,7 @@ VVENC_DECL void vvenc_config_default( vvenc_config *cfg );
 
 VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
 
-VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset );
+VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int framerate, int framescale, int targetbitrate, int qp, vvencPresetMode preset );
 
 VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *cfg );
 

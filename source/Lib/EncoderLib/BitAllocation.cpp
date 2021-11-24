@@ -337,7 +337,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
     const CPelBuf     picPrv2 = pic->getOrigBufPrev (compID, true );
 
     hpEner[comp] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                      picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate,
+                                                      picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
                                                       bitDepth, isHighResolution && (isLuma (compID) || pic->chromaFormat == CHROMA_444));
     if (isChroma (compID))
     {
@@ -412,7 +412,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       const CPelBuf  picPrv2   = pic->getOrigBufPrev (fltArea, true );
 
       hpEnerPic = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                     picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate,
+                                                     picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
                                                      bitDepth, isHighResolution);
       hpEnerAvg += hpEnerPic;
       pic->ctuQpaLambda[ctuRsAddr] = hpEnerPic; // temporary backup of CTU mean visual activity
@@ -601,7 +601,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   const CPelBuf     picPrv2   = pic->getOrigBufPrev (fltArea, true );
 
   hpEnerSub = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                                 picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate,
+                                                 picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
                                                  bitDepth, isHighResolution);
   hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, 0,
                                                (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
@@ -671,7 +671,7 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
   const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, true );
 
   return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate,
+                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
                                             slice->sps->bitDepths[CH_L], isHighRes);
 }
 
