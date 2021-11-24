@@ -135,7 +135,7 @@ int main( int argc, char* argv[] )
 
   // default encoder configuration
   apputils::VVEncAppCfg vvencappCfg;
-  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 1, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg ) )

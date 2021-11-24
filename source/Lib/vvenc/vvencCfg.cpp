@@ -2883,7 +2883,7 @@ static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &last
 
 }
 
-VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int framescale, int targetbitrate, int qp, vvencPresetMode preset )
+VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int framerate, int targetbitrate, int qp, vvencPresetMode preset )
 {
   int iRet = 0;
   vvenc_config_default(c);
@@ -2891,7 +2891,16 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_SourceHeight        = height;                   // luminance height of input picture
 
   c->m_FrameRate           = framerate;                // temporal rate (fps num)
-  c->m_FrameScale          = framescale;               // temporal scale (fps denum)
+  c->m_FrameScale          = 1;                        // temporal scale (fps denum)
+
+  switch( framerate )
+  {
+    case 23:  c->m_FrameRate = 24000;  c->m_FrameScale = 1001; break;
+    case 29:  c->m_FrameRate = 30000;  c->m_FrameScale = 1001; break;
+    case 59:  c->m_FrameRate = 60000;  c->m_FrameScale = 1001; break;
+    case 119: c->m_FrameRate = 120000; c->m_FrameScale = 1001; break;
+    default: break;
+  }
 
   c->m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
 
