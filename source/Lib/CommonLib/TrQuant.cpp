@@ -173,9 +173,14 @@ template<int signedMode> void invTransformCbCr( PelBuf& resCb, PelBuf& resCr )
 TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
 {
   // allocate temporary buffers
-  m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
-  m_tmp         = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
-  m_blk         = ( TCoeff* ) xMalloc( TCoeff, MAX_CU_SIZE * MAX_CU_SIZE );
+  m_plTempCoeff = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  m_tmp         = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  m_blk         = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+
+  for( int i = 0; i < NUM_TRAFO_MODES_MTS; i++ )
+  {
+    m_mtsCoeffs[i] = ( TCoeff* ) xMalloc( TCoeff, MAX_TB_SIZEY * MAX_TB_SIZEY );
+  }
 
   {
     m_invICT      = m_invICTMem + maxAbsIctMode;
@@ -223,6 +228,11 @@ TrQuant::~TrQuant()
     xFree( m_tmp );
     m_tmp = nullptr;
   }
+
+  for( int i = 0; i < NUM_TRAFO_MODES_MTS; i++ )
+  {
+     xFree( m_mtsCoeffs[i] );
+  }
 }
 
 void TrQuant::xDeQuant(const TransformUnit& tu,
@@ -230,7 +240,7 @@ void TrQuant::xDeQuant(const TransformUnit& tu,
                        const ComponentID   &compID,
                        const QpParam       &cQP)
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_QUANT );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_QUANT );
   m_quant->dequant( tu, dstCoeff, compID, cQP );
 }
 
@@ -444,7 +454,7 @@ void TrQuant::xSetTrTypes( const TransformUnit& tu, const ComponentID compID, co
 
 void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelBuf& resi, CoeffBuf& dstCoeff, const int width, const int height )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_TRAFO );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_TRAFO );
 
   const unsigned maxLog2TrDynamicRange  = tu.cs->sps->getMaxLog2TrDynamicRange( toChannelType( compID ) );
   const unsigned bitDepth               = tu.cs->sps->bitDepths[               toChannelType( compID ) ];
@@ -530,7 +540,7 @@ void TrQuant::xT( const TransformUnit& tu, const ComponentID compID, const CPelB
 
 void TrQuant::xIT( const TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pCoeff, PelBuf& pResidual )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_TRAFO );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_TRAFO );
 
   const int      width                  = pCoeff.width;
   const int      height                 = pCoeff.height;
@@ -642,7 +652,7 @@ void TrQuant::xITransformSkip(const CCoeffBuf& pCoeff,
 
 void TrQuant::xQuant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& pSrc, TCoeff &uiAbsSum, const QpParam& cQP, const Ctx& ctx)
 {
-  PROFILER_SCOPE_AND_STAGE_EXT( 1, g_timeProfiler, P_QUANT, tu.cs, toChannelType(compID) );
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_QUANT );
   m_quant->quant( tu, compID, pSrc, uiAbsSum, cQP, ctx );
 #if ENABLE_MEASURE_SEARCH_SPACE
 

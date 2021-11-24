@@ -169,9 +169,10 @@ int EncApp::encode()
   int tempScale = 1;
   switch( vvencCfg.m_FrameRate )
   {
-    case 23: tempRate = 24000; tempScale = 1001; break;
-    case 29: tempRate = 30000; tempScale = 1001; break;
-    case 59: tempRate = 60000; tempScale = 1001; break;
+    case 23:  tempRate = 24000;  tempScale = 1001; break;
+    case 29:  tempRate = 30000;  tempScale = 1001; break;
+    case 59:  tempRate = 60000;  tempScale = 1001; break;
+    case 119: tempRate = 120000; tempScale = 1001; break;
     default: break;
   }
 

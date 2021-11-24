@@ -228,8 +228,8 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams, false );
 
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4 } );
-  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,5 }, true );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { 1, 2, 4, 5 } );
+  testParamList( "DecodingRefreshType",                    vvencParams.m_DecodingRefreshType,        vvencParams, { -1,0,3,6 }, true );
 
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 16,32,35,48,51,64,67,80,83,86,96,99,102,255 } );
   testParamList( "Level",                                  vvencParams.m_level,                      vvencParams, { 15,31,256, }, true );
@@ -303,6 +303,9 @@ int testLibParameterRanges()
 
   fillEncoderParameters( vvencParams, false );
 
+  testParamList( "RPR",                                    vvencParams.m_rprEnabledFlag,             vvencParams, { -1, 0, 1 } );
+  testParamList( "RPR",                                    vvencParams.m_rprEnabledFlag,             vvencParams, { -2, 2, 3 }, true );
+
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { 0,1,2,64 } );
 //  testParamList( "ThreadCount",                            vvencParams.m_ThreadCount,                vvencParams, { -1,65 }, true );
 
@@ -310,7 +313,7 @@ int testLibParameterRanges()
   testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 0;
-  testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 1 }, true );
+  testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 0, 1 } );
   testParamList<bool, bool>( "useBufferingPeriodSEIEnabled",  vvencParams.m_bufferingPeriodSEIEnabled,  vvencParams, { true }, true );
   testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.m_pictureTimingSEIEnabled,    vvencParams, { true }, true );
 

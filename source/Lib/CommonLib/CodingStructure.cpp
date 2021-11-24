@@ -453,8 +453,10 @@ TransformUnit& CodingStructure::addTU( const UnitArea& unit, const ChannelType c
         const Area scaledBlk   = isIspTu ? scale.scale( tu->cu->blocks[i] ) : scale.scale( _blk );
         TransformUnit **tuPtr  = m_tuPtr[i] + rsAddr( scaledBlk.pos(), scaledSelf.pos(), scaledSelf.width );
 
-        CHECKD( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
+#if CLEAR_AND_CHECK_TUIDX
+        CHECK( *tuPtr, "Overwriting a pre-existing value, should be '0'!" );
 
+#endif
         g_pelBufOP.fillPtrMap( ( void** ) tuPtr, scaledSelf.width, scaledBlk.width, scaledBlk.height, ( void* ) tu );
       }
     }
@@ -638,7 +640,7 @@ void CodingStructure::createInternals( const UnitArea& _unit, const bool isTopLa
 
   if( isTopLayer )
   {
-    motionLutBuf.resize( pcv->heightInCtus );
+    motionLutBuf.resize( pps->getNumTileLineIds() );
   }
   else
   {
@@ -800,8 +802,9 @@ void CodingStructure::initSubStructure( CodingStructure& subStruct, const Channe
 
   if( nullptr == parent )
   {
-    int ctuPosY = subArea.ly() >> pcv->maxCUSizeLog2;
-    subStruct.motionLut = motionLutBuf[ctuPosY];
+    const int ctuPosX = subArea.lx() >> pcv->maxCUSizeLog2;
+    const int ctuPosY = subArea.ly() >> pcv->maxCUSizeLog2;
+    subStruct.motionLut = motionLutBuf[pps->getTileLineId( ctuPosX, ctuPosY )];
   }
   else
   {
@@ -850,8 +853,9 @@ void CodingStructure::useSubStructure( CodingStructure& subStruct, const Channel
 
     if( nullptr == parent )
     {
-      int ctuPosY = subStruct.area.ly() >> pcv->maxCUSizeLog2;
-      motionLutBuf[ctuPosY] = subStruct.motionLut;
+      const int ctuPosX = subStruct.area.lx() >> pcv->maxCUSizeLog2;
+      const int ctuPosY = subStruct.area.ly() >> pcv->maxCUSizeLog2;
+      motionLutBuf[pps->getTileLineId( ctuPosX, ctuPosY )] = subStruct.motionLut;
     }
     else
     {
@@ -1052,18 +1056,11 @@ void CodingStructure::initStructData( const int QP, const bool skipMotBuf, const
 
 void CodingStructure::clearTUs( bool force )
 {
+#if CLEAR_AND_CHECK_TUIDX
   if( !m_numTUs && !force ) return;
 
-  int numCh = getNumberValidChannels( area.chromaFormat );
-  for( int i = 0; i < numCh; i++ )
-  {
-    size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
-
-    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
-
-  }
-
-  numCh = getNumberValidComponents( area.chromaFormat );
+#endif
+  int numCh = getNumberValidComponents( area.chromaFormat );
   for( int i = 0; i < numCh; i++ )
   {
     m_offsets[i] = 0;
@@ -1079,6 +1076,18 @@ void CodingStructure::clearTUs( bool force )
   if ( m_unitCacheMutex ) m_unitCacheMutex->unlock();
 
   m_numTUs = 0;
+
+#if CLEAR_AND_CHECK_TUIDX
+  if( !force ) return;
+
+#endif
+  numCh = getNumberValidChannels( area.chromaFormat );
+  for( int i = 0; i < numCh; i++ )
+  {
+    size_t _area = ( area.blocks[i].area() >> unitScale[i].area );
+
+    memset( m_tuPtr[i], 0, sizeof( *m_tuPtr[0] ) * _area );
+  }
 }
 
 void CodingStructure::clearCUs( bool force )
@@ -1250,28 +1259,36 @@ const CPelUnitBuf CodingStructure::getBuf( const UnitArea& unit, const PictureTy
 
 const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const CodingUnit& curCu, const ChannelType _chType ) const
 {
-  const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, curCu.chromaFormat );
-  const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, curCu.chromaFormat );
+  const int csx    = getChannelTypeScaleX( _chType, area.chromaFormat );
+  const int csy    = getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int xshift = pcv->maxCUSizeLog2 - csx;
+  const int yshift = pcv->maxCUSizeLog2 - csy;
   const int ydiff  = ( pos.y >> yshift ) - ( curCu.blocks[_chType].y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curCu.blocks[_chType].x >> xshift );
 
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
+  if( pos.x < 0 || pos.y < 0 || ( pos.x << csx ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
+
   const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
 
   return ( cu && CU::isSameSliceAndTile( *cu, curCu ) && ( cu->cs != curCu.cs || cu->idx <= curCu.idx ) ) ? cu : nullptr;
 }
 
-const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
+const CodingUnit *CodingStructure::getCURestricted( const Position &pos, const Position curPos, const unsigned curSliceIdx, const unsigned curTileIdx, const ChannelType _chType, const TreeType _treeType ) const
 {
-  const int xshift = pcv->maxCUSizeLog2 - getChannelTypeScaleX( _chType, area.chromaFormat );
-  const int yshift = pcv->maxCUSizeLog2 - getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int csx    = getChannelTypeScaleX( _chType, area.chromaFormat );
+  const int csy    = getChannelTypeScaleY( _chType, area.chromaFormat );
+  const int xshift = pcv->maxCUSizeLog2 - csx;
+  const int yshift = pcv->maxCUSizeLog2 - csy;
   const int ydiff  = ( pos.y >> yshift ) - ( curPos.y >> yshift );
   const int xdiff  = ( pos.x >> xshift ) - ( curPos.x >> xshift );
 
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
+
+  if( pos.x < 0 || pos.y < 0 || ( pos.x << csx ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curTileIdx ) return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, _treeType );
 
