@@ -341,16 +341,7 @@ void EncGOP::init( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPoo
 
   if( m_pcEncCfg->m_FrameRate )
   {
-    int iTempRate = m_pcEncCfg->m_FrameRate;
-    int iTempScale = 1;
-    switch( m_pcEncCfg->m_FrameRate )
-    {
-    case 23: iTempRate = 24000; iTempScale = 1001; break;
-    case 29: iTempRate = 30000; iTempScale = 1001; break;
-    case 59: iTempRate = 60000; iTempScale = 1001; break;
-    default: break;
-    }
-    m_ticksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_pcEncCfg->m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
+    m_ticksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_pcEncCfg->m_TicksPerSecond * (int64_t)m_pcEncCfg->m_FrameScale/(int64_t)m_pcEncCfg->m_FrameRate);
   }
 
   m_pocToGopId.resize( m_pcEncCfg->m_GOPSize, -1 );
@@ -710,11 +701,12 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
   }
 
   //--CFG_KDY
-  const int rateMultiplier = 1;
-  m_AnalyzeAll.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeI.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeP.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeB.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
+  //const int rateMultiplier = 1;
+  double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale / (double)m_pcEncCfg->m_temporalSubsampleRatio;
+  m_AnalyzeAll.setFrmRate( fps );
+  m_AnalyzeI.setFrmRate( fps );
+  m_AnalyzeP.setFrmRate( fps );
+  m_AnalyzeB.setFrmRate( fps );
 
   const ChromaFormat chFmt = m_pcEncCfg->m_internChromaFormat;
 

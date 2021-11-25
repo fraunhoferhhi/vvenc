@@ -109,6 +109,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
     // treat all whitespaces and commas as valid separators
     if( toVec.sep == 'x')
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
+    else if( toVec.sep == '/')
+      replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == '/'; }, ' ' );
     else
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
     std::stringstream tokenStream( line );

@@ -424,7 +424,8 @@ typedef struct vvenc_config
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity
   int                 m_framesToBeEncoded;                                               // number of encoded frames
 
-  int                 m_FrameRate;                                                       // source frame-rates (Hz)
+  int                 m_FrameRate;                                                       // source frame-rates (Hz) Numerator
+  int                 m_FrameScale;                                                      // source frame-rates (Hz) Denominator
   int                 m_FrameSkip;                                                       // number of skipped frames from the beginning
   int                 m_SourceWidth;                                                     // source width in pixel
   int                 m_SourceHeight;                                                    // source height in pixel (when interlaced = field height)
