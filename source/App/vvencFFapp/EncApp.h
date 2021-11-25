@@ -72,14 +72,23 @@ void msgApp( int level, const char* fmt, ... );
 typedef struct vvencEncApp vvencEncApp;
 //extern vvencEncApp *g_vvencEncApp;
 
+
 class EncApp
 {
 private:
-  apputils::VVEncAppCfg m_cEncAppCfg;                      ///< encoder configuration
+
+static void changePreset( vvenc_config* c, vvencPresetMode preset )
+{
+  if( c ) vvenc_init_preset( c, (vvencPresetMode)preset );
+}
+
+private:
+  apputils::VVEncAppCfg m_cEncAppCfg;                     ///< encoder application configuration
+  vvenc_config          m_vvenc_config;
   vvencEncoder         *m_encCtx;                         ///< encoder library class
-  apputils::YuvFileIO   m_yuvInputFile;                    ///< input YUV file
-  apputils::YuvFileIO   m_yuvReconFile;                    ///< output YUV reconstruction file
-  std::fstream          m_bitstream;                       ///< output bitstream file
+  apputils::YuvFileIO   m_yuvInputFile;                   ///< input YUV file
+  apputils::YuvFileIO   m_yuvReconFile;                   ///< output YUV reconstruction file
+  std::fstream          m_bitstream;                      ///< output bitstream file
   unsigned              m_essentialBytes;
   unsigned              m_totalBytes;
 
@@ -88,6 +97,10 @@ public:
     : m_essentialBytes( 0 )
     , m_totalBytes    ( 0 )
   {
+    vvenc_config_default( &m_vvenc_config );
+
+    m_cEncAppCfg.setPresetChangeCallback(changePreset);
+
   }
 
   virtual ~EncApp()
