@@ -555,35 +555,15 @@ void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& best
 
   if ( orgCb.width==orgCb.height)
   {
-    int varhu_cb,varhl_cb,varvl_cb,varvr_cb;
-    // calc varianz hor upper
-    varhu_cb=orgCb.calcVariance(orgCb,orgCb.width,orgCb.height>>1,0);
-    // calc varianz hor lower
-    varhl_cb=orgCb.calcVariance(orgCb,orgCb.width,orgCb.height>>1,(orgCb.height>>1)*orgCb.stride);
-    // calc varianz ver left
-    varvl_cb=orgCb.calcVariance(orgCb,orgCb.width>>1,orgCb.height,0);
-    // calc varianz ver right
-    varvr_cb=orgCb.calcVariance(orgCb,orgCb.width>>1,orgCb.height,orgCb.width>>1);
-
-    varhu_cb+=varhl_cb;
-    varvl_cb+=varvr_cb;
-    int varhu_cr,varhl_cr,varvl_cr,varvr_cr;
-    // calc varianz hor upper
-    varhu_cr=orgCr.calcVariance(orgCr,orgCr.width,orgCr.height>>1,0);
-    // calc varianz hor lower
-    varhl_cr=orgCr.calcVariance(orgCr,orgCr.width,orgCr.height>>1,(orgCr.height>>1)*orgCr.stride);
-    // calc varianz ver left
-    varvl_cr=orgCr.calcVariance(orgCr,orgCr.width>>1,orgCr.height,0);
-    // calc varianz ver right
-    varvr_cr=orgCr.calcVariance(orgCr,orgCr.width>>1,orgCr.height,orgCr.width>>1);
-
-    varhu_cr+=varhl_cr;
-    varvl_cr+=varvr_cr;
-    if ((varhu_cr*FCBP_TH2<varvl_cr*100) && (varhu_cb*FCBP_TH2<varvl_cb*100))
+    int varh_cb,varv_cb;
+    int varh_cr,varv_cr;
+    orgCb.calcVarianceSplit(orgCb,orgCb.width,&varh_cb,&varv_cb);
+    orgCr.calcVarianceSplit(orgCr,orgCr.width,&varh_cr,&varv_cr);
+    if ((varh_cr*FCBP_TH2<varv_cr*100) && (varh_cb*FCBP_TH2<varv_cb*100))
     {
       partitioner.verChromaSplit=false;
     }
-    else if ((varvl_cr*FCBP_TH2<varhu_cr*100) && (varvl_cb*FCBP_TH2<varhu_cb*100))
+    else if ((varv_cr*FCBP_TH2<varh_cr*100) && (varv_cb*FCBP_TH2<varh_cb*100))
     {
       partitioner.horChromaSplit=false;
     }

@@ -602,6 +602,69 @@ int AreaBuf<const Pel>::calcVariance( const AreaBuf<const Pel>& Org, const uint3
   variance =  (double)sum_sqr/(width*height) - (mean*mean);
   return (int)(variance+0.5);
 }
+template<>
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int *varh,int *varv)
+{
+  int stride = Org.stride;
+  const Pel* piOrg   = Org.buf;
+  Pel data;
+  double variance=0;
+  double mean=0;
+  int64_t sum[4]={0,0,0,0};
+  int64_t sum_sqr[4]={0,0,0,0};
+
+  for (int y=0;y<(size>>1);y++)
+  {
+    for (int x=0;x<size;x++)
+    {
+      data=piOrg[y*stride+x];
+      if (x<(size>>1))
+      {
+        sum[0]+=data;
+        sum_sqr[0]+= data*data;
+      }
+      else
+      {
+        sum[1]+=data;
+        sum_sqr[1]+= data*data;
+      }
+    }
+  }
+  for (int y=(size>>1);y<size;y++)
+  {
+    for (int x=0;x<size;x++)
+    {
+      data=piOrg[y*stride+x];
+      if (x<(size>>1))
+      {
+        sum[2]+=data;
+        sum_sqr[2]+= data*data;
+      }
+      else
+      {
+        sum[3]+=data;
+        sum_sqr[3]+= data*data;
+      }
+    }
+  }
+  int num=size*(size>>1);
+  // varhu
+  mean=(double)(sum[0]+sum[1])/(num);
+  variance =  (double)(sum_sqr[0]+sum_sqr[1])/(num) - (mean*mean);
+  *varh =(int)(variance+0.5);
+  // varhl
+  mean=(double)(sum[2]+sum[3])/(num);
+  variance =  (double)(sum_sqr[2]+sum_sqr[3])/(num) - (mean*mean);
+  *varh +=(int)(variance+0.5);
+  // varvl
+  mean=(double)(sum[0]+sum[2])/(num);
+  variance =  (double)(sum_sqr[0]+sum_sqr[2])/(num) - (mean*mean);
+  *varv =(int)(variance+0.5);
+  // varvr
+  mean=(double)(sum[1]+sum[3])/(num);
+  variance =  (double)(sum_sqr[1]+sum_sqr[3])/(num) - (mean*mean);
+  *varv +=(int)(variance+0.5);
+}
 
 template<>
 void AreaBuf<Pel>::copyClip( const AreaBuf<const Pel>& src, const ClpRng& clpRng )
