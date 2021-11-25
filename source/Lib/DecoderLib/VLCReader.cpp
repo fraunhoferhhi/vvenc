@@ -3493,8 +3493,9 @@ void HLSyntaxReader::parseRemainingBytes( bool noTrailingBytesExpected )
       uint32_t trailingNullByte=m_pcBitstream->readByte();
       if (trailingNullByte!=0)
       {
-        //msg( VVENC_ERROR, "Trailing byte should be 0, but has value %02x\n", trailingNullByte);
-        THROW("Invalid trailing '0' byte");
+        std::stringstream css;
+        css << "Invalid trailing '0' byte - trailing byte should be 0, but has value " << std::setfill('0') << std::setw(2) << trailingNullByte << std::endl;
+        THROW( css.str() );
       }
     }
   }

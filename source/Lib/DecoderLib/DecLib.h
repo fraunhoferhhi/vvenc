@@ -73,7 +73,7 @@ namespace vvenc {
 class InputNALUnit;
 struct FFwdDecoder;
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true  );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true, Logger* logger = nullptr  );
 
 // Class definition
 // ====================================================================================================================
@@ -82,6 +82,7 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 class DecLib
 {
 private:
+  Logger*                 m_logger;
   int                     m_iMaxRefPicNum;
 
   vvencNalUnitType        m_associatedIRAPType; ///< NAL unit type of the associated IRAP picture
@@ -157,7 +158,7 @@ private:
 public:
   int                     m_targetSubPicIdx;
 public:
-  DecLib();
+  DecLib( Logger* logger = nullptr );
   virtual ~DecLib();
 
   void  create  ();

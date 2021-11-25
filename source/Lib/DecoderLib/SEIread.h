@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 class InputBitstream;
-
+class Logger;
 
 class SEIReader: public VLCReader
 {
@@ -69,7 +69,7 @@ public:
   void parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId,const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream);
 
 protected:
-  void xReadSEImessage                        (SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream);
+  void xReadSEImessage                        (SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream, Logger* logger = nullptr);
   void xParseSEIuserDataUnregistered          (SEIuserDataUnregistered &sei,          uint32_t payloadSize,                     std::ostream *pDecodedMessageOutputStream);
   void xParseSEIDecodingUnitInfo              (SEIDecodingUnitInfo& sei,              uint32_t payloadSize, const SEIBufferingPeriod& bp, const uint32_t temporalId, std::ostream *pDecodedMessageOutputStream);
   void xParseSEIDecodedPictureHash            (SEIDecodedPictureHash& sei,            uint32_t payloadSize,                     std::ostream *pDecodedMessageOutputStream);

@@ -88,7 +88,7 @@ static_assert( sizeof(Pel)  == sizeof(*(vvencYUVPlane::ptr)),   "internal bits p
 
 // ====================================================================================================================
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true, Logger* logger = nullptr );
 
 VVEncImpl::VVEncImpl()
 {

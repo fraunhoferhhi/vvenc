@@ -48,6 +48,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "PicYuvMD5.h"
 #include "Picture.h"
 #include "MD5.h"
+#include "Utilities/Logger.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -245,7 +246,7 @@ std::string hashToString(const PictureHash &digest, int numChar)
   return result;
 }
 
-int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl)
+int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl, Logger* logger )
 {
   /* calculate MD5sum for entire reconstructed picture */
   PictureHash recon_digest;
@@ -296,14 +297,11 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
     }
   }
 
-  (void)numChar;
-  (void)ok;
-  (void)hashType;
-  //msg( msgl, "[%s:%s,%s] ", hashType, hashToString(recon_digest, numChar).c_str(), ok);
+  if( logger ) logger->log( msgl, "[%s:%s,%s] ", hashType, hashToString(recon_digest, numChar).c_str(), ok);
 
   if (mismatch)
   {
-    //msg( msgl, "[rx%s:%s] ", hashType, hashToString(pictureHashSEI->pictureHash, numChar).c_str());
+    if( logger ) logger->log( msgl, "[rx%s:%s] ", hashType, hashToString(pictureHashSEI->pictureHash, numChar).c_str());
   }
   return mismatch;
 }

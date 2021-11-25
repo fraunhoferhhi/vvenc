@@ -745,6 +745,7 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
+  void*               m_logger;                                                          // opaque handler of the logger
 
 }vvenc_config;
 

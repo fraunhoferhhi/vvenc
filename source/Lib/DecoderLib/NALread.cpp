@@ -56,6 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
+#include "Utilities/Logger.h"
 #include <vector>
 #include <algorithm>
 #include <ostream>
@@ -66,8 +67,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-static void convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstream *bitstream, bool isVclNalUnit)
+static int convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstream *bitstream, bool isVclNalUnit)
 {
+  int cabac_zero_word = 0;
   uint32_t zeroCount = 0;
   std::vector<uint8_t>::iterator it_read, it_write;
 
@@ -101,16 +103,13 @@ static void convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstrea
     while (it_write[-1] == 0x00)
     {
       it_write--;
-      n++;
-    }
-
-    if (n > 0)
-    {
-      //msg( VVENC_NOTICE, "\nDetected %d instances of cabac_zero_word\n", n/2);
+      cabac_zero_word++;
     }
   }
 
   nalUnitBuf.resize(it_write - nalUnitBuf.begin());
+
+  return cabac_zero_word;
 }
 
 #if ENABLE_TRACING
@@ -155,12 +154,16 @@ void readNalUnitHeader(InputNALUnit& nalu)
  * create a NALunit structure with given header values and storage for
  * a bitstream
  */
-void read(InputNALUnit& nalu)
+void read(InputNALUnit& nalu, Logger* logger )
 {
   InputBitstream &bitstream = nalu.getBitstream();
   std::vector<uint8_t>& nalUnitBuf=bitstream.getFifo();
   // perform anti-emulation prevention
-  convertPayloadToRBSP(nalUnitBuf, &bitstream, (nalUnitBuf[0] & 64) == 0);
+  int cabac_zero_word = convertPayloadToRBSP(nalUnitBuf, &bitstream, (nalUnitBuf[0] & 64) == 0);
+  if( cabac_zero_word > 0 && logger != nullptr )
+  {
+    logger->log( VVENC_NOTICE, "\nDetected %d instances of cabac_zero_word\n", cabac_zero_word/2);
+  }
   bitstream.resetToStart();
   readNalUnitHeader(nalu);
 }

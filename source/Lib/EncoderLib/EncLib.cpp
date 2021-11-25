@@ -112,7 +112,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   {
     std::string sChannelsList;
     g_trace_ctx->getChannelsList( sChannelsList );
-    //msg( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
+    m_logger->log( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
   }
 #endif
 
