@@ -328,7 +328,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
   c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
 
-  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz)
+  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
+  c->m_FrameScale                              = 1;             ///< source frame-rates (Hz) Denominator
   c->m_FrameSkip                               = 0;             ///< number of skipped frames from the beginning
   c->m_SourceWidth                             = 0;             ///< source width in pixel
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
@@ -589,7 +590,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_decodingParameterSetEnabled             = false;
   c->m_vuiParametersPresent                    = -1;
-  c->m_hrdParametersPresent                    = -1;
+  c->m_hrdParametersPresent                    = true;
   c->m_aspectRatioInfoPresent                  = false;
   c->m_aspectRatioIdc                          = 0;
   c->m_sarWidth                                = 0;
@@ -693,21 +694,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_internalBitDepth[0] != 8 && c->m_internalBitDepth[0] != 10,                  "Internal bitdepth must be 8 or 10 bit" );
 
   vvenc_confirmParameter( c, c->m_FrameRate <= 0,                                                        "Frame rate must be greater than 0" );
+  vvenc_confirmParameter( c, c->m_FrameScale <= 0,                                                       "Frame scale must be greater than 0" );
   vvenc_confirmParameter( c, c->m_TicksPerSecond <= 0 || c->m_TicksPerSecond > 27000000,                 "TicksPerSecond must be in range from 1 to 27000000" );
-
-  int temporalRate   = c->m_FrameRate;
-  int temporalScale  = 1;
-
-  switch( c->m_FrameRate )
-  {
-  case 23:  temporalRate = 24000;  temporalScale = 1001; break;
-  case 29:  temporalRate = 30000;  temporalScale = 1001; break;
-  case 59:  temporalRate = 60000;  temporalScale = 1001; break;
-  case 119: temporalRate = 120000; temporalScale = 1001; break;
-  default: break;
-  }
-
-  vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*temporalScale)%temporalRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
+  vvenc_confirmParameter( c, (c->m_TicksPerSecond < 90000) && (c->m_TicksPerSecond*c->m_FrameScale)%c->m_FrameRate, "TicksPerSecond should be a multiple of FrameRate/Framscale" );
 
   vvenc_confirmParameter( c, c->m_numThreads < -1 || c->m_numThreads > 256,              "Number of threads out of range (-1 <= t <= 256)");
 
@@ -724,7 +713,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( 0 == c->m_RCTargetBitrate )
    {
-     vvenc_confirmParameter( c, c->m_hrdParametersPresent > 0,          "hrdParameters present requires rate control" );
      vvenc_confirmParameter( c, c->m_bufferingPeriodSEIEnabled,         "bufferingPeriod SEI enabled requires rate control" );
      vvenc_confirmParameter( c, c->m_pictureTimingSEIEnabled,           "pictureTiming SEI enabled requires rate control" );
    }
@@ -772,7 +760,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_level == vvencLevel::VVENC_LEVEL_AUTO )
   {
-    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, temporalRate, temporalScale, c->m_RCTargetBitrate );
+    c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
   }
 
   if ( c->m_InputQueueSize <= 0 )
@@ -1024,11 +1012,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_vuiParametersPresent = 0;
   }
 
-  if ( c->m_hrdParametersPresent < 0 )
-  {
-    c->m_hrdParametersPresent = 0;
-  }
-
   switch ( c->m_conformanceWindowMode)
   {
   case 0:
@@ -1150,9 +1133,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   c->m_log2DiffMaxMinCodingBlockSize = c->m_MaxCodingDepth;
 
-  c->m_reshapeCW.rspFps     = c->m_FrameRate;
+  int fps = c->m_FrameRate/c->m_FrameScale;
+
+  c->m_reshapeCW.rspFps     = fps;
   c->m_reshapeCW.rspPicSize = c->m_PadSourceWidth*c->m_PadSourceHeight;
-  c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_FrameRate /16.0)));
+  c->m_reshapeCW.rspFpsToIp = std::max(16, 16 * (int)(round((double)c->m_reshapeCW.rspFps/16.0)));
   c->m_reshapeCW.rspBaseQP  = c->m_QP;
   c->m_reshapeCW.updateCtrl = c->m_updateCtrl;
   c->m_reshapeCW.adpOption  = c->m_adpOption;
@@ -1175,13 +1160,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     
   if( c->m_IntraPeriod == 0 &&  c->m_IntraPeriodSec > 0 )
   {
-    if ( c->m_FrameRate % c->m_GOPSize == 0 )
+    if ( fps % c->m_GOPSize == 0 )
     {
-      c->m_IntraPeriod = c->m_FrameRate * c->m_IntraPeriodSec;
+      c->m_IntraPeriod = fps * c->m_IntraPeriodSec;
     }
     else
     {
-      int iIDRPeriod  = (c->m_FrameRate * c->m_IntraPeriodSec);
+      int iIDRPeriod  = (fps * c->m_IntraPeriodSec);
       if( iIDRPeriod < c->m_GOPSize )
       {
         iIDRPeriod = c->m_GOPSize;
@@ -2159,7 +2144,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_AccessUnitDelimiter < 0,   "AccessUnitDelimiter must be >= 0" );
   vvenc_confirmParameter( c, c->m_vuiParametersPresent < 0,  "vuiParametersPresent must be >= 0" );
-  vvenc_confirmParameter( c, c->m_hrdParametersPresent < 0,  "hrdParametersPresent must be >= 0" );
 
   if( c->m_DepQuantEnabled )
   {
@@ -2427,9 +2411,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter(c, c->m_maxNumAffineMergeCand > vvenc::AFFINE_MRG_MAX_NUM_CANDS, "MaxNumAffineMergeCand must be no more than AFFINE_MRG_MAX_NUM_CANDS." );
 
 
-  vvenc_confirmParameter(c, (c->m_hrdParametersPresent>0) && (0 == c->m_RCTargetBitrate),  "HrdParametersPresent requires RateControl enabled");
-  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (c->m_hrdParametersPresent<1), "BufferingPeriodSEI requires HrdParametersPresent enabled");
-  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (c->m_hrdParametersPresent<1),   "PictureTimingSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_bufferingPeriodSEIEnabled && (!c->m_hrdParametersPresent), "BufferingPeriodSEI requires HrdParametersPresent enabled");
+  vvenc_confirmParameter(c, c->m_pictureTimingSEIEnabled && (!c->m_hrdParametersPresent),   "PictureTimingSEI requires HrdParametersPresent enabled");
 
   // max CU width and height should be power of 2
   uint32_t ui = c->m_CTUSize;
@@ -2907,7 +2890,18 @@ VVENC_DECL int vvenc_init_default( vvenc_config *c, int width, int height, int f
   c->m_SourceWidth         = width;                    // luminance width of input picture
   c->m_SourceHeight        = height;                   // luminance height of input picture
 
-  c->m_FrameRate           = framerate;                // temporal rate (fps)
+  c->m_FrameRate           = framerate;                // temporal rate (fps num)
+  c->m_FrameScale          = 1;                        // temporal scale (fps denum)
+
+  switch( framerate )
+  {
+    case 23:  c->m_FrameRate = 24000;  c->m_FrameScale = 1001; break;
+    case 29:  c->m_FrameRate = 30000;  c->m_FrameScale = 1001; break;
+    case 59:  c->m_FrameRate = 60000;  c->m_FrameScale = 1001; break;
+    case 119: c->m_FrameRate = 120000; c->m_FrameScale = 1001; break;
+    default: break;
+  }
+
   c->m_TicksPerSecond      = 90000;                    // ticks per second e.g. 90000 for dts generation
 
   c->m_inputBitDepth[0]    = 8;                        // input bitdepth
@@ -3488,8 +3482,8 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   if( eMsgLevel >= VVENC_DETAILS )
   {
   css << "Real     Format                        : " << c->m_PadSourceWidth - c->m_confWinLeft - c->m_confWinRight << "x" << c->m_PadSourceHeight - c->m_confWinTop - c->m_confWinBottom << " " <<
-                                                        (double)c->m_FrameRate / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
-  css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
+                                                        (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz " << getDynamicRangeStr(c->m_HdrMode) << "\n";
+  css << "Internal Format                        : " << c->m_PadSourceWidth << "x" << c->m_PadSourceHeight << " " <<  (double)c->m_FrameRate/c->m_FrameScale / c->m_temporalSubsampleRatio << "Hz "  << getDynamicRangeStr(c->m_HdrMode) << "\n";
   css << "Sequence PSNR output                   : " << (c->m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") << "\n";
   css << "Hexadecimal PSNR output                : " << (c->m_printHexPsnr ? "Enabled" : "Disabled") << "\n";
   css << "Sequence MSE output                    : " << (c->m_printSequenceMSE ? "Enabled" : "Disabled") << "\n";

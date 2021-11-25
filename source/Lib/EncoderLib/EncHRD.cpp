@@ -83,17 +83,9 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
 
   CHECK(!(cpbSize != 0), "Unspecified error");  // CPB size may not be equal to zero. ToDo: have a better default and check for level constraints
 
-  generalHrdParams.timeScale = encCfg.m_FrameRate;
-  generalHrdParams.numUnitsInTick = 1;
-  switch( encCfg.m_FrameRate )
-  {
-    case 23:  generalHrdParams.timeScale = 24000;  generalHrdParams.numUnitsInTick = 1001; break;
-    case 29:  generalHrdParams.timeScale = 30000;  generalHrdParams.numUnitsInTick = 1001; break;
-    case 59:  generalHrdParams.timeScale = 60000;  generalHrdParams.numUnitsInTick = 1001; break;
-    case 119: generalHrdParams.timeScale = 120000; generalHrdParams.numUnitsInTick = 1001; break;
-    default:  break;
-  }
-
+  generalHrdParams.timeScale      = encCfg.m_FrameRate;
+  generalHrdParams.numUnitsInTick = encCfg.m_FrameScale;
+  
   if (encCfg.m_temporalSubsampleRatio > 1)
   {
     uint32_t temporalSubsampleRatio = encCfg.m_temporalSubsampleRatio;
@@ -106,6 +98,7 @@ void EncHRD::initHRDParameters(const VVEncCfg& encCfg, const SPS& sps)
       generalHrdParams.numUnitsInTick = generalHrdParams.numUnitsInTick * temporalSubsampleRatio;
     }
   }
+
   bool rateCnt = (bitRate > 0);
 
   generalHrdParams.generalNalHrdParamsPresent = rateCnt;

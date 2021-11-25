@@ -345,7 +345,7 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   m_pcEncCfg = &encCfg;
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_framesToBeEncoded, m_pcEncCfg->m_RCTargetBitrate, (int)( (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[ CH_L ], getFirstPassStats() );
+  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_framesToBeEncoded, m_pcEncCfg->m_RCTargetBitrate, (int)( (double)(m_pcEncCfg->m_FrameRate/m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[ CH_L ], getFirstPassStats() );
 }
 
 void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* statsFName)

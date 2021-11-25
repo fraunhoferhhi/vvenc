@@ -424,7 +424,8 @@ typedef struct vvenc_config
   vvencMsgLevel       m_verbosity;                                                       // encoder verbosity
   int                 m_framesToBeEncoded;                                               // number of encoded frames
 
-  int                 m_FrameRate;                                                       // source frame-rates (Hz)
+  int                 m_FrameRate;                                                       // source frame-rates (Hz) Numerator
+  int                 m_FrameScale;                                                      // source frame-rates (Hz) Denominator
   int                 m_FrameSkip;                                                       // number of skipped frames from the beginning
   int                 m_SourceWidth;                                                     // source width in pixel
   int                 m_SourceHeight;                                                    // source height in pixel (when interlaced = field height)
@@ -664,7 +665,7 @@ typedef struct vvenc_config
 
   bool                m_decodingParameterSetEnabled;                                     // enable decoding parameter set
   int                 m_vuiParametersPresent;                                            // enable generation of VUI parameters; -1 auto enable, 0: off 1: enable
-  int                 m_hrdParametersPresent;                                            // enable generation or HRD parameters; -1 auto enable, 0: off 1: enable
+  bool                m_hrdParametersPresent;                                            // enable generation or HRD parameters; 0: off 1: enable
   bool                m_aspectRatioInfoPresent;                                          // Signals whether aspect_ratio_idc is present
   int                 m_aspectRatioIdc;                                                  // aspect_ratio_idc
   int                 m_sarWidth;                                                        // horizontal size of the sample aspect ratio

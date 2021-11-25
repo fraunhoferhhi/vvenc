@@ -1126,8 +1126,8 @@ namespace vvenc {
         bitsRatio[ i ] = 2;
       }
     }
-
-    double bpp = (double)( m_pcEncCfg->m_RCTargetBitrate / (double)( ( (int)( (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ) ) * m_pcEncCfg->m_PadSourceWidth * m_pcEncCfg->m_PadSourceHeight ) );
+    int fps = m_pcEncCfg->m_FrameRate/m_pcEncCfg->m_FrameScale;
+    double bpp = (double)( m_pcEncCfg->m_RCTargetBitrate / (double)( ( (int)( (double)fps / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ) ) * m_pcEncCfg->m_PadSourceWidth * m_pcEncCfg->m_PadSourceHeight ) );
     if ( m_pcEncCfg->m_GOPSize == 4 && isLowdelay )
     {
       if ( bpp > 0.2 )
@@ -1268,7 +1268,7 @@ namespace vvenc {
     }
 
     encRCSeq = new LegacyEncRCSeq;
-    encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_framesToBeEncoded, m_pcEncCfg->m_RCTargetBitrate, (int)( (double)m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_CTUSize, m_pcEncCfg->m_CTUSize, numberOfLevel, adaptiveBit, m_pcEncCfg->m_internalBitDepth[ CH_L ], getFirstPassStats() );
+    encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_framesToBeEncoded, m_pcEncCfg->m_RCTargetBitrate, (int)( (double)fps/ m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_PadSourceWidth, m_pcEncCfg->m_PadSourceHeight, m_pcEncCfg->m_CTUSize, m_pcEncCfg->m_CTUSize, numberOfLevel, adaptiveBit, m_pcEncCfg->m_internalBitDepth[ CH_L ], getFirstPassStats() );
     encRCSeq->initBitsRatio( bitsRatio );
     encRCSeq->initGOPID2Level( GOPID2Level );
     encRCSeq->bitDepth = m_pcEncCfg->m_internalBitDepth[ CH_L ];

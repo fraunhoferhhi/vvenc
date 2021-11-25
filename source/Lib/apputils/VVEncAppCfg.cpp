@@ -395,6 +395,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &m_verbosity,   &MsgLevelToEnumMap );
   IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
   IStreamToRefVec<int>              toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
+  IStreamToRefVec<int>              toFps                        ( { &m_FrameRate, &m_FrameScale }, true, '/' );
 
   IStreamToEnum<vvencProfile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
   IStreamToEnum<vvencTier>          toLevelTier                  ( &m_levelTier,                   &TierToEnumMap         );
@@ -408,7 +409,6 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   IStreamToEnum<vvencDecodingRefreshType>   toDecRefreshType     ( &m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>                toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>                toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
   IStreamToEnum<bool>               toQPA                        ( &m_usePerceptQPA,                   &QPAToIntMap );
   IStreamToArr<char>                toTraceRule                  ( &m_traceRule[0], VVENC_MAX_STRING_LEN  );
@@ -434,7 +434,10 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("size,s",            toSourceSize,             "specify input resolution (WidthxHeight)")
   ("format,c",          toInputFormatBitdepth,    "set input format (yuv420, yuv420_10, yuv420_10_packed)")
 
-  ("framerate,r",       m_FrameRate,              "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
+  ("framerate,r",       m_FrameRate,              "temporal rate (framerate numerator) e.g. 25,30, 30000, 50,60, 60000 ")
+  ("framescale",        m_FrameScale,             "temporal scale (framerate denominator) e.g. 1, 1001 ")
+  ("fps",               toFps,                    "Framerate as fraction (num/denom) ")
+
   ("tickspersec",       m_TicksPerSecond,         "Ticks Per Second for dts generation, (1..27000000)")
 
   ("frames,f",          m_framesToBeEncoded,      "max. frames to encode [all]")
@@ -491,7 +494,7 @@ bool VVEncAppCfg::parseCfg( int argc, char* argv[] )
   ("internal-bitdepth",         m_internalBitDepth[0], "internal bitdepth (8,10)")
   ("accessunitdelimiter,-aud",  toAud,                 "Emit Access Unit Delimiter NALUs  (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
   ("vuiparameterspresent,-vui", toVui,                 "Emit VUI information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)", true)
-  ("hrdparameterspresent,-hrd", toHrd,                 "Emit VUI HRD information (auto(-1),off(0),on(1); default: auto - only if needed by dependent options)",  true)
+  ("hrdparameterspresent,-hrd", m_hrdParametersPresent,"Emit VUI HRD information (0: off, 1: on; default: 1)")
   ("decodedpicturehash,-dph",   toHashType,            "Control generation of decode picture hash SEI messages, (0:off, 1:md5, 2:crc, 3:checksum)")
   ;
 
@@ -570,6 +573,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<vvencMsgLevel>      toMsgLevel                   ( &m_verbosity,                   &MsgLevelToEnumMap      );
   IStreamToFunc<vvencPresetMode>    toPreset                     ( setPresets, this, &PresetToEnumMap,vvencPresetMode::VVENC_MEDIUM);
   IStreamToRefVec<int>              toSourceSize                 ( { &m_SourceWidth, &m_SourceHeight }, true, 'x' );
+  IStreamToRefVec<int>              toFps                        ( { &m_FrameRate, &m_FrameScale }, true, '/' );
   IStreamToRefVec<double>           toLambdaModifier             ( { &m_adLambdaModifier[0], &m_adLambdaModifier[1], &m_adLambdaModifier[2], &m_adLambdaModifier[3], &m_adLambdaModifier[4], &m_adLambdaModifier[5], &m_adLambdaModifier[6] }, false );
 
   IStreamToEnum<vvencProfile>       toProfile                    ( &m_profile,                     &ProfileToEnumMap      );
@@ -606,7 +610,6 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &m_DecodingRefreshType, &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &m_AccessUnitDelimiter,             &FlagToIntMap );
-  IStreamToEnum<int>                toHrd                        ( &m_hrdParametersPresent,            &FlagToIntMap );
   IStreamToEnum<int>                toVui                        ( &m_vuiParametersPresent,            &FlagToIntMap );
 
   IStreamToArr<char>                toTraceRule                   ( &m_traceRule[0], VVENC_MAX_STRING_LEN  );
@@ -636,7 +639,9 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("Size,s",                                          toSourceSize,                                     "Input resolution (WidthxHeight)")
   ("InputBitDepth",                                   m_inputBitDepth[ 0 ],                             "Bit-depth of input file")
   ("FramesToBeEncoded,f",                             m_framesToBeEncoded,                              "Number of frames to be encoded (default=all)")
-  ("FrameRate,-fr",                                   m_FrameRate,                                      "Frame rate")
+  ("FrameRate,-fr",                                   m_FrameRate,                                      "Frame rate (numerator)")
+  ("FrameScale",                                      m_FrameScale,                                     "Frame scale (denominator)")
+  ("fps",                                             toFps,                                            "Framerate as fraction (num/denom) ")
   ("FrameSkip,-fs",                                   m_FrameSkip,                                      "Number of frames to skip at start of input YUV")
   ("TicksPerSecond",                                  m_TicksPerSecond,                                 "Ticks Per Second for dts generation, ( 1..27000000)")
 
@@ -940,7 +945,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("EnableDecodingParameterSet",                      m_decodingParameterSetEnabled,                    "Enable writing of Decoding Parameter Set")
   ("AccessUnitDelimiter,-aud",                        toAud,                                            "Enable Access Unit Delimiter NALUs, (default: auto - enable only if needed by dependent options)" , true)
   ("VuiParametersPresent,-vui",                       toVui,                                            "Enable generation of vui_parameters(), (default: auto - enable only if needed by dependent options)", true)
-  ("HrdParametersPresent,-hrd",                       toHrd,                                            "Enable generation of hrd_parameters(), (default: auto - enable only if needed by dependent options)", true)
+  ("HrdParametersPresent,-hrd",                       m_hrdParametersPresent,                           "Enable generation of hrd_parameters(), (0: off, 1: on; default: 1)")
   ("AspectRatioInfoPresent",                          m_aspectRatioInfoPresent,                         "Signals whether aspect_ratio_idc is present")
   ("AspectRatioIdc",                                  m_aspectRatioIdc,                                 "aspect_ratio_idc")
   ("SarWidth",                                        m_sarWidth,                                       "horizontal size of the sample aspect ratio")
