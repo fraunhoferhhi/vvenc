@@ -136,6 +136,8 @@ namespace vvenc {
 #define INTRA_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 #define INTER_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 
+#define CLEAR_AND_CHECK_TUIDX                             0 ///< add additional checks to tu-map management (not accessing the map when dirty)
+
 // This can be enabled by the makefile
 #ifndef RExt__HIGH_BIT_DEPTH_SUPPORT
 #define RExt__HIGH_BIT_DEPTH_SUPPORT                      0 ///< 0 (default) use data type definitions for 8-10 bit video, 1 = use larger data types to allow for up to 16-bit video (originally developed as part of N0188)
@@ -426,8 +428,10 @@ enum MvpDir
 enum TransformDirection
 {
   TRANSFORM_FORWARD              = 0,
-  TRANSFORM_INVERSE              = 1,
-  TRANSFORM_NUMBER_OF_DIRECTIONS = 2
+  TRANSFORM_INVERSE              = 0,
+  TRANSFORM_NUMBER_OF_DIRECTIONS = 1
+  //TRANSFORM_INVERSE              = 1,
+  //TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
 enum CoeffScanGroupType

@@ -158,7 +158,7 @@ void fillEncoderParameters( vvenc_config& rcEncCfg, bool callInitCfgParameter = 
   rcEncCfg.m_IntraPeriod                = 32;                  // intra period for IDR/CDR intra refresh/RAP flag (should be a factor of m_iGopSize)
   rcEncCfg.m_verbosity                  = VVENC_SILENT;              // log level > 4 (VERBOSE) enables psnr/rate output
   rcEncCfg.m_FrameRate                  = 60;                  // temporal rate (fps)
-//rcEncCfg.temporalScale                = 1;                   // temporal scale (fps)
+  rcEncCfg.m_FrameScale                 = 1;                   // temporal scale (fps)
   rcEncCfg.m_numThreads                 = 0;                   // number of worker threads (should not exceed the number of physical cpu's)
   rcEncCfg.m_usePerceptQPA              = true;                // perceptual QP adaptation (false: off, true: on)
   rcEncCfg.m_inputBitDepth[0]           = 8;                   // 8bit input
@@ -313,7 +313,7 @@ int testLibParameterRanges()
   testParamList( "TicksPerSecond",                         vvencParams.m_TicksPerSecond,             vvencParams, { -1,0, 50, 27000001 }, true );
 
   vvencParams.m_RCTargetBitrate = 0;
-  testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 1 }, true );
+  testParamList( "useHrdParametersPresent",                   vvencParams.m_hrdParametersPresent,       vvencParams, { 0, 1 } );
   testParamList<bool, bool>( "useBufferingPeriodSEIEnabled",  vvencParams.m_bufferingPeriodSEIEnabled,  vvencParams, { true }, true );
   testParamList<bool, bool>( "usePictureTimingSEIEnabled",    vvencParams.m_pictureTimingSEIEnabled,    vvencParams, { true }, true );
 

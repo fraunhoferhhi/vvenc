@@ -368,81 +368,81 @@ namespace vvenc {
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P2[TRANSFORM_NUMBER_OF_DIRECTIONS][2][2] ) =
 {
   DEFINE_DCT2_P2_MATRIX(64),
-  DEFINE_DCT2_P2_MATRIX(64)
+  //DEFINE_DCT2_P2_MATRIX(64)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] ) =
 {
   DEFINE_DCT2_P4_MATRIX(64,    83,    36),
-  DEFINE_DCT2_P4_MATRIX(64,    83,    36)
+  //DEFINE_DCT2_P4_MATRIX(64,    83,    36)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P8[TRANSFORM_NUMBER_OF_DIRECTIONS][8][8] ) =
 {
   DEFINE_DCT2_P8_MATRIX(64,    83,    36,    89,    75,    50,    18),
-  DEFINE_DCT2_P8_MATRIX(64,    83,    36,    89,    75,    50,    18)
+  //DEFINE_DCT2_P8_MATRIX(64,    83,    36,    89,    75,    50,    18)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P16[TRANSFORM_NUMBER_OF_DIRECTIONS][16][16] ) =
 {
   DEFINE_DCT2_P16_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9),
-  DEFINE_DCT2_P16_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9)
+  //DEFINE_DCT2_P16_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P32[TRANSFORM_NUMBER_OF_DIRECTIONS][32][32] ) =
 {
   DEFINE_DCT2_P32_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4),
-  DEFINE_DCT2_P32_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4)
+  //DEFINE_DCT2_P32_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4)
 };
 
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT2P64[TRANSFORM_NUMBER_OF_DIRECTIONS][64][64] ) =
 {
   DEFINE_DCT2_P64_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4,    91,    90,    90,    90,    88,    87,    86,    84,    83,    81,    79,    77,    73,    71,    69,    65,    62,    59,    56,    52,    48,    44,    41,    37,    33,    28,    24,    20,    15,    11,     7,     2),
-  DEFINE_DCT2_P64_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4,    91,    90,    90,    90,    88,    87,    86,    84,    83,    81,    79,    77,    73,    71,    69,    65,    62,    59,    56,    52,    48,    44,    41,    37,    33,    28,    24,    20,    15,    11,     7,     2)
+  //DEFINE_DCT2_P64_MATRIX(64,    83,    36,    89,    75,    50,    18,    90,    87,    80,    70,    57,    43,    25,     9,    90,    90,    88,    85,    82,    78,    73,    67,    61,    54,    46,    38,    31,    22,    13,     4,    91,    90,    90,    90,    88,    87,    86,    84,    83,    81,    79,    77,    73,    71,    69,    65,    62,    59,    56,    52,    48,    44,    41,    37,    33,    28,    24,    20,    15,    11,     7,     2)
 };
 
 // DCT-8
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] ) =
 {
   DEFINE_DCT8_P4_MATRIX(84,     74,     55,     29),
-  DEFINE_DCT8_P4_MATRIX(84,     74,     55,     29)
+  //DEFINE_DCT8_P4_MATRIX(84,     74,     55,     29)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P8[TRANSFORM_NUMBER_OF_DIRECTIONS][8][8] ) =
 {
   DEFINE_DCT8_P8_MATRIX(86,     85,     78,     71,     60,     46,     32,     17),
-  DEFINE_DCT8_P8_MATRIX(86,     85,     78,     71,     60,     46,     32,     17)
+  //DEFINE_DCT8_P8_MATRIX(86,     85,     78,     71,     60,     46,     32,     17)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P16[TRANSFORM_NUMBER_OF_DIRECTIONS][16][16] ) =
 {
   DEFINE_DCT8_P16_MATRIX(88,     88,     87,     85,     81,     77,     73,     68,     62,     55,     48,     40,     33,     25,     17,      8),
-  DEFINE_DCT8_P16_MATRIX(88,     88,     87,     85,     81,     77,     73,     68,     62,     55,     48,     40,     33,     25,     17,      8)
+  //DEFINE_DCT8_P16_MATRIX(88,     88,     87,     85,     81,     77,     73,     68,     62,     55,     48,     40,     33,     25,     17,      8)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDCT8P32[TRANSFORM_NUMBER_OF_DIRECTIONS][32][32] ) =
 {
   DEFINE_DCT8_P32_MATRIX(90,     90,     89,     88,     87,     86,     85,     84,     82,     80,     78,     77,     74,     72,     68,     66,     63,     60,     56,     53,     50,     46,     42,     38,     34,     30,     26,     21,     17,     13,      9,      4),
-  DEFINE_DCT8_P32_MATRIX(90,     90,     89,     88,     87,     86,     85,     84,     82,     80,     78,     77,     74,     72,     68,     66,     63,     60,     56,     53,     50,     46,     42,     38,     34,     30,     26,     21,     17,     13,      9,      4)
+  //DEFINE_DCT8_P32_MATRIX(90,     90,     89,     88,     87,     86,     85,     84,     82,     80,     78,     77,     74,     72,     68,     66,     63,     60,     56,     53,     50,     46,     42,     38,     34,     30,     26,     21,     17,     13,      9,      4)
 };
 
 // DST-7
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] ) =
 {
   DEFINE_DST7_P4_MATRIX(29,    55,    74,    84),
-  DEFINE_DST7_P4_MATRIX(29,    55,    74,    84)
+  //DEFINE_DST7_P4_MATRIX(29,    55,    74,    84)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P8[TRANSFORM_NUMBER_OF_DIRECTIONS][8][8] ) =
 {
   DEFINE_DST7_P8_MATRIX(17,    32,    46,    60,    71,    78,    85,    86),
-  DEFINE_DST7_P8_MATRIX(17,    32,    46,    60,    71,    78,    85,    86)
+  //DEFINE_DST7_P8_MATRIX(17,    32,    46,    60,    71,    78,    85,    86)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P16[TRANSFORM_NUMBER_OF_DIRECTIONS][16][16] ) =
 {
   DEFINE_DST7_P16_MATRIX(8,    17,    25,    33,    40,    48,    55,    62,    68,    73,    77,    81,    85,    87,    88,    88),
-  DEFINE_DST7_P16_MATRIX(8,    17,    25,    33,    40,    48,    55,    62,    68,    73,    77,    81,    85,    87,    88,    88)
+  //DEFINE_DST7_P16_MATRIX(8,    17,    25,    33,    40,    48,    55,    62,    68,    73,    77,    81,    85,    87,    88,    88)
 };
 ALIGN_DATA( MEMORY_ALIGN_DEF_SIZE, const TMatrixCoeff g_trCoreDST7P32[TRANSFORM_NUMBER_OF_DIRECTIONS][32][32] ) =
 {
   DEFINE_DST7_P32_MATRIX(4,     9,    13,    17,    21,    26,    30,    34,    38,    42,    46,    50,    53,    56,    60,    63,    66,    68,    72,    74,    77,    78,    80,    82,    84,    85,    86,    87,    88,    89,    90,    90),
-  DEFINE_DST7_P32_MATRIX(4,     9,    13,    17,    21,    26,    30,    34,    38,    42,    46,    50,    53,    56,    60,    63,    66,    68,    72,    74,    77,    78,    80,    82,    84,    85,    86,    87,    88,    89,    90,    90)
+  //DEFINE_DST7_P32_MATRIX(4,     9,    13,    17,    21,    26,    30,    34,    38,    42,    46,    50,    53,    56,    60,    63,    66,    68,    72,    74,    77,    78,    80,    82,    84,    85,    86,    87,    88,    89,    90,    90)
 };
 
 //--------------------------------------------------------------------------------------------------
