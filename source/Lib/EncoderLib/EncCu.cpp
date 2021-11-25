@@ -963,6 +963,7 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
   const TreeType treeTypeParent  = partitioner.treeType;
   const ChannelType chTypeParent = partitioner.chType;
 
+  
   int signalModeConsVal = tempCS->signalModeCons( getPartSplit( encTestMode ), partitioner, modeTypeParent );
   int numRoundRdo = signalModeConsVal == LDT_MODE_TYPE_SIGNAL ? 2 : 1;
   bool skipInterPass = false;
