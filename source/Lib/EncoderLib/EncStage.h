@@ -275,7 +275,7 @@ public:
     initPicture( pic );
   }
 
-  void runStage( bool flush, AccessUnitList& auList, int firstPassQP )
+  void runStage( bool flush, AccessUnitList& auList )
   {
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )
@@ -287,7 +287,7 @@ public:
         // process pictures
         PicList doneList;
         PicList freeList;
-        processPictures( m_procList, flush, auList, doneList, freeList, firstPassQP );
+        processPictures( m_procList, flush, auList, doneList, freeList );
 
         // send processed/finalized pictures to next stage
         if( m_nextStage )
@@ -314,7 +314,7 @@ public:
 
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
-  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList, int firstPassQP ) = 0;
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
 
 private:
   EncStage* m_nextStage;

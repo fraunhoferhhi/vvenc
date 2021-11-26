@@ -155,14 +155,14 @@ namespace vvenc {
     RateCtrl();
     virtual ~RateCtrl();
 
-    virtual void init( const VVEncCfg& encCfg );
+    virtual void init( const VVEncCfg& encCfg, int baseQP );
     virtual void destroy();
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
-    void processFirstPassData (const int secondPassBaseQP, const bool flush = false);
-    void processGops (const int secondPassBaseQP);
-    void processGopsLookAhead( const int firstPassBaseQP );
+    void processFirstPassData(const bool flush);
+    void processGops();
+    void processGopsLookAhead();
     uint64_t getTotalBitsInFirstPass();
     void detectNewScene();
     void adaptToSceneChanges();
@@ -184,6 +184,7 @@ namespace vvenc {
     EncRCPic*   encRCPic;
     std::mutex  rcMutex;
     int         flushPOC;
+    int         rcBaseQP;
     int         rcPass;
     bool        rcIsFinalPass;
     const VVEncCfg*         m_pcEncCfg;

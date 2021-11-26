@@ -178,7 +178,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
+    if( m_encCfg.m_RCNumPasses == 1 && ! m_encCfg.m_RCLookAhead )
     {
       m_rateCtrl = new LegacyRateCtrl;
     }
@@ -250,10 +250,11 @@ void EncLib::initPass( int pass, const char* statsFName )
   // rate control
   if( m_encCfg.m_RCTargetBitrate > 0 )
   {
-    m_rateCtrl->init( m_encCfg );
+    const int rcBaseQP = ( pass == 1 ) ? m_encCfg.m_QP : m_firstPassCfg.m_QP;
+    m_rateCtrl->init( m_encCfg, rcBaseQP );
     if( pass == 1 )
     {
-      m_rateCtrl->processFirstPassData( m_encCfg.m_QP );
+      m_rateCtrl->processFirstPassData( false );
     }
   }
 
@@ -407,7 +408,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   isQueueEmpty = true;
   for( auto encStage : m_encStages )
   {
-    encStage->runStage( flush, au, m_firstPassCfg.m_QP );
+    encStage->runStage( flush, au );
     isQueueEmpty &= encStage->isStageDone();
   }
 

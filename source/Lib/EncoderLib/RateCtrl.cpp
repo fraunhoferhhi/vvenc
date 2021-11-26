@@ -286,6 +286,7 @@ RateCtrl::RateCtrl()
   encRCSeq      = NULL;
   encRCPic      = NULL;
   flushPOC      = -1;
+  rcBaseQP      = -1;
   rcPass        = 0;
   rcIsFinalPass = true;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
@@ -321,11 +322,12 @@ void RateCtrl::destroy()
 #endif
 }
 
-void RateCtrl::init( const VVEncCfg& encCfg )
+void RateCtrl::init( const VVEncCfg& encCfg, int baseQP )
 {
   destroy();
 
   m_pcEncCfg = &encCfg;
+  rcBaseQP   = baseQP;
 
   encRCSeq = new EncRCSeq;
   encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_RCLookAhead, m_pcEncCfg->m_RCTargetBitrate, (int)( (double)(m_pcEncCfg->m_FrameRate/m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[ CH_L ], getFirstPassStats() );
@@ -515,7 +517,7 @@ void RateCtrl::readStatsFile()
 }
 #endif
 
-void RateCtrl::processFirstPassData (const int secondPassBaseQP, const bool flush /*= false*/)
+void RateCtrl::processFirstPassData(const bool flush)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
@@ -533,12 +535,12 @@ void RateCtrl::processFirstPassData (const int secondPassBaseQP, const bool flus
   if ( m_pcEncCfg->m_RCLookAhead )
   {
     // process and scale GOP and frame bits using the data from the look-ahead pass (2nd-pass mQP equals 1st-pass mQP!)
-    processGopsLookAhead( secondPassBaseQP );
+    processGopsLookAhead();
   }
   else
   {
     // process and scale GOP and frame bits using the data from the first pass to account for different target bitrates
-    processGops( secondPassBaseQP );
+    processGops();
   }
 
   // loop though the first-pass data and update RC parameters when new scenes are detected
@@ -574,11 +576,11 @@ void RateCtrl::detectNewScene()
   }
 }
 
-void RateCtrl::processGops (const int secondPassBaseQP)
+void RateCtrl::processGops()
 {
   const unsigned fps = encRCSeq->frameRate;
   const int gopShift = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0));
-  const int qpOffset = Clip3 (0, 6, ((secondPassBaseQP + 1) >> 1) - 9);
+  const int qpOffset = Clip3 (0, 6, ((rcBaseQP + 1) >> 1) - 9);
   const double bp1pf = getTotalBitsInFirstPass() / (double) m_listRCFirstPassStats.size(); // first pass
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
@@ -603,11 +605,11 @@ void RateCtrl::processGops (const int secondPassBaseQP)
   }
 }
 
-void RateCtrl::processGopsLookAhead( const int firstPassBaseQP ) // actually first pass base QP
+void RateCtrl::processGopsLookAhead() // actually first pass base QP
 {
   const unsigned fps = m_pcEncCfg->m_FrameRate;
   const int gopShift = int( 0.5 + log( (double)m_pcEncCfg->m_GOPSize ) / log( 2.0 ) );
-  const int secondPassBaseQP = firstPassBaseQP - ( std::max( 0, MAX_QP_PERCEPT_QPA - firstPassBaseQP ) >> 1 );
+  const int secondPassBaseQP = rcBaseQP - ( std::max( 0, MAX_QP_PERCEPT_QPA - rcBaseQP ) >> 1 );
   const int qpOffset = Clip3( 0, 6, ( ( secondPassBaseQP + 1 ) >> 1 ) - 9 );
 
   const double power[ 6 ] = { 0.5, 0.75, 0.875, 0.9375, 0.96875, 0.984375 };
