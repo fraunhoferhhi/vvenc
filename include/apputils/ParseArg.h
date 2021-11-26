@@ -299,6 +299,7 @@ namespace df
       NamesMap opt_short_map;
 
       int setSubSection(std::string subSection);
+      void setLowerCaseOnly() { useLowerNamesOnly = true; }
 
       typedef std::list<std::string> subSectionsPtrList;
       subSectionsPtrList subSections_list;
@@ -306,6 +307,8 @@ namespace df
       
       typedef std::map<std::string, std::list<std::string> > SubSectionNamesListMap;
       SubSectionNamesListMap sub_section_namelist_map;
+
+      bool useLowerNamesOnly = false; // if true, option names are always set to lower case
     };
 
     /* Class with templated overloaded operator(), for use by Options::addOptions() */

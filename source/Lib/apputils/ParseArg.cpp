@@ -96,6 +96,11 @@ namespace df
       names->opt = opt;
       std::string& opt_string = opt->opt_string;
 
+      if( useLowerNamesOnly )
+      {
+        std::transform( opt_string.begin(), opt_string.end(), opt_string.begin(), ::tolower );
+      }
+
       size_t opt_start = 0;
       for (size_t opt_end = 0; opt_end != std::string::npos;)
       {
@@ -684,7 +689,7 @@ namespace df
       /* a list for anything that didn't get handled as an option */
       std::list<const char*> non_option_arguments;
 
-      for(unsigned i = 1; i < argc; i++)
+      for(unsigned i = 0; i < argc; i++)
       {
         if (argv[i][0] != '-')
         {

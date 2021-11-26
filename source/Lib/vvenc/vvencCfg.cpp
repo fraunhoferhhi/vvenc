@@ -60,6 +60,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <math.h>
 #include <thread>
 
+#include "apputils/VVEncAppCfg.h"
+
+
 VVENC_NAMESPACE_BEGIN
 
 static bool checkCfgParameter( vvenc_config *cfg );
@@ -323,21 +326,31 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 {
   int i = 0;
 
-  //basic params
+  // internal params
+  c->m_configDone                              = false;         ///< state variable, Private context used for internal data ( do not change )
+  c->m_confirmFailed                           = false;         ///< state variable, Private context used for internal data ( do not change )
   c->m_logger                                  = nullptr;
-  c->m_configDone                              = false;
-  c->m_confirmFailed                           = false;         ///< state variable
 
-  c->m_verbosity                               = VVENC_VERBOSE;       ///< encoder verbosity
-  c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
-
-  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
-  c->m_FrameScale                              = 1;             ///< source frame-rates (Hz) Denominator
-  c->m_FrameSkip                               = 0;             ///< number of skipped frames from the beginning
+  //core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
+  c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
+  c->m_FrameScale                              = 1;             ///< source frame-rates (Hz) Denominator
   c->m_TicksPerSecond                          = 90000;         ///< ticks per second e.g. 90000 for dts generation (1..27000000)
 
+  c->m_framesToBeEncoded                       = 0;             ///< number of encoded frames
+
+  c->m_inputBitDepth[0]                        =8;             ///< bit-depth of input
+  c->m_inputBitDepth[1]                        =0;
+
+  c->m_numThreads                              = 0;             ///< number of worker threads
+
+  c->m_QP                                      = 32;            ///< QP value of key-picture (integer)
+  c->m_RCTargetBitrate                         = 0;
+
+  c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
+
+  //basic params
   c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
   c->m_levelTier                               = vvencTier::VVENC_TIER_MAIN ;
   c->m_level                                   = vvencLevel::VVENC_LEVEL_AUTO;
@@ -347,19 +360,13 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
   c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
 
-  c->m_QP                                      = 32;            ///< QP value of key-picture (integer)
   c->m_usePerceptQPA                           = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
 
-  c->m_RCTargetBitrate                         = 0;
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
-  c->m_numThreads                              = 0;             ///< number of worker threads
-
-  c->m_inputBitDepth[0]                        =8;             ///< bit-depth of input file
-  c->m_inputBitDepth[1]                        =0;
   c->m_internalBitDepth[0]                     =10;                                 ///< bit-depth codec operates at (input/output files will be converted)
   c->m_internalBitDepth[1]                     =0;
 
@@ -671,6 +678,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_numIntraModesFullRD = -1;
   c->m_reduceIntraChromaModesFullRD = false;
 
+  memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
+  memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
+  memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
@@ -834,7 +844,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     if( c->m_RCPass > 0 )
       c->m_RCNumPasses = 2;
     else
-      c->m_RCNumPasses = c->m_RCTargetBitrate > 0 ? 2 : 1;
+      c->m_RCNumPasses = 1; // single passs per default (sdk usage)
   }
 
   // threading
@@ -3713,6 +3723,67 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   vvenc_cfgString = css.str();
   return vvenc_cfgString.c_str();
 }
+
+
+VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *value)
+{
+  if ( !name )
+  {
+    return VVENC_PARAM_BAD_NAME;
+  }
+
+  bool bError = false;
+
+  std::string n(name);
+  std::string v(value);
+  std::transform( n.begin(), n.end(), n.begin(), ::tolower );
+  std::transform( v.begin(), v.end(), v.begin(), ::tolower );
+
+  if ( name[0] == '-'  || name[1] == '-' ) // name prefix given - not supported
+  {
+    return VVENC_PARAM_BAD_NAME;
+  }
+  else
+  {
+    std::string namePrefix="--";  // add long option name prefix
+    n = namePrefix;
+    n.append(name);
+  }
+
+  if (!value)
+  {
+    v = "true";
+  }
+  else if (value[0] == '=')
+  {
+    value += 1;
+    v = value;
+  }
+
+  char *argv[2];
+  argv[0]=(char*)n.c_str();
+  argv[1]=(char*)v.c_str();
+
+  int ret = vvenc_set_param_list ( c, 2, argv);
+  if( ret != 0 )
+  {
+    return ret;
+  }
+
+  return bError ? VVENC_PARAM_BAD_VALUE : 0;
+}
+
+VVENC_DECL int vvenc_set_param_list( vvenc_config *c, int argc, char* argv[] )
+{
+  if ( !argc || !c )
+  {
+    return -1;
+  }
+
+  apputils::VVEncAppCfg cVVEncAppCfg;
+  return cVVEncAppCfg.parse( argc, argv, c );
+}
+
 
 VVENC_NAMESPACE_END
 

@@ -279,7 +279,7 @@ VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *, void * ctx
 /* vvenc_init_pass
   This method initializes the encoder instance in dependency to the encoder pass.
  \param[in]  vvencEncoder pointer to opaque handler
- \param[in]  pass number of current pass to init
+ \param[in]  pass number of current pass to init (0: first pass, 1: second pass )
  \param[in]  rate control statistics file name
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        None
