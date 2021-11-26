@@ -89,7 +89,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
       CHECK( !*ffwdDecoder.bitstreamFile, "failed to open bitstream file " << bitstreamFileName.c_str() << " for reading" ) ;
       // create decoder class
-      ffwdDecoder.pcDecLib = new DecLib;
+      ffwdDecoder.pcDecLib = new DecLib(logger);
       ffwdDecoder.pcDecLib->create();
 
       // initialize decoder class

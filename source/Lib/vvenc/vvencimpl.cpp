@@ -683,8 +683,6 @@ const char* VVEncImpl::getCompileInfoString()
 ///< decode bitstream with limited build in decoder
 int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule )
 {
-  if( !m_bInitialized ) { return VVENC_ERR_INITIALIZE; }
-
   int ret = 0;
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
