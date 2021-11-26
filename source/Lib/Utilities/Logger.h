@@ -58,6 +58,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+static std::mutex m_msgMutex;
+
 class Logger
 {
 public:
@@ -80,10 +82,9 @@ public:
 }
 
 private:
+   
   std::function<void( void*, int, const char*, va_list )> m_msgFnc{};
   void *m_msgFncCtx{};
-
-  std::mutex m_msgMutex;
 };
 
 } // namespace vvenc

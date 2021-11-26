@@ -329,8 +329,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   // internal params
   c->m_configDone                              = false;         ///< state variable, Private context used for internal data ( do not change )
   c->m_confirmFailed                           = false;         ///< state variable, Private context used for internal data ( do not change )
-  c->m_logger                                  = nullptr;
-
+  c->m_logCallback                             = nullptr;
+  c->m_msgFncCtx                               = nullptr;
+  
   //core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
@@ -686,16 +687,24 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
 
+void msgConf( vvencLoggingCallback callback, void* ctx, int level, const char* fmt, ... )
+{
+   if( callback )
+   {
+    va_list args;
+    va_start( args, fmt );
+    callback( ctx, level, fmt, args );
+    va_end( args );
+   }
+}
+
 static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
 
-  if( c->m_logger )
-  {
-    vvenc::Logger* l = (vvenc::Logger*)c->m_logger;
-    l->log( VVENC_ERROR, "Parameter Check Error: %s\n", message  );
-  }
+  msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR, "Parameter Check Error: %s\n", message );
+
   c->m_confirmFailed = true;
   return true;
 }
@@ -750,8 +759,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   //
   // set a lot of dependent parameters
   //
-
-  vvenc::Logger* logger = (  c->m_logger != nullptr) ? (vvenc::Logger*)c->m_logger : nullptr;
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -1067,13 +1074,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        if( logger )
-          logger->log(  VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        if( logger )
-          logger->log(  VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
@@ -1222,7 +1227,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
-    if( logger ) logger->log( VVENC_WARNING, "disable MCTF for QP < 17\n" );
+    msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "disable MCTF for QP < 17\n" );
     c->m_vvencMCTF.MCTF = 0;
   }
   if( c->m_vvencMCTF.MCTF )
@@ -1716,7 +1721,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
     if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      if( logger ) logger->log( VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n" );
+      msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n" );
       errorGOP = true;
     }
     else
@@ -1752,7 +1757,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
           }
           if (!found)
           {
-            if( logger ) logger->log( VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -2030,7 +2035,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
-    if( logger ) logger->log( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
+    msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
     c->m_allowDisFracMMVD = false;
   }
 
@@ -2077,8 +2082,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
 static bool checkCfgParameter( vvenc_config *c )
 {
-  vvenc::Logger* logger = (  c->m_logger != nullptr) ? (vvenc::Logger*)c->m_logger : nullptr;
-
   // run base check first
   vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "can not determin auto profile");
   vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10 
@@ -2113,11 +2116,11 @@ static bool checkCfgParameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        if( logger ) logger->log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        if( logger ) logger->log( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       break;
   }
@@ -2355,12 +2358,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if (c->m_usePerceptQPA && c->m_dualITree && (c->m_internChromaFormat != VVENC_CHROMA_400) && (c->m_chromaCbQpOffsetDualTree != 0 || c->m_chromaCrQpOffsetDualTree != 0 || c->m_chromaCbCrQpOffsetDualTree != 0))
   {
-    if( logger )
-    {
-      logger->log(VVENC_WARNING, "***************************************************************************\n");
-      logger->log(VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
-      logger->log(VVENC_WARNING, "***************************************************************************\n");
-    } 
+    msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "***************************************************************************\n");
+    msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
+    msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "***************************************************************************\n");
   }
 
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
@@ -2517,7 +2517,7 @@ static bool checkCfgParameter( vvenc_config *c )
     int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
     if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      if( logger ) logger->log(VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      msgConf( c->m_logCallback, c->m_msgFncCtx,VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
       errorGOP = true;
     }
     else
@@ -2543,7 +2543,7 @@ static bool checkCfgParameter( vvenc_config *c )
           }
           if (!found)
           {
-            if( logger ) logger->log(VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            msgConf( c->m_logCallback, c->m_msgFncCtx,VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -2703,7 +2703,7 @@ static bool checkCfgParameter( vvenc_config *c )
   {
     if( c->m_vvencMCTF.MCTFFrames[0] == 0 )
     {
-      if( logger ) logger->log(VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
+      msgConf( c->m_logCallback, c->m_msgFncCtx,VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
     }
 
     vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
@@ -2711,8 +2711,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if( c->m_fastForwardToPOC != -1 )
   {
-    if( c->m_cabacInitPresent && logger ) logger->log(VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
-    if( c->m_alf && logger )              logger->log(VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
+    if( c->m_cabacInitPresent ) msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
+    if( c->m_alf )              msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
   }
 
   if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )
@@ -3722,6 +3722,15 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
 
   vvenc_cfgString = css.str();
   return vvenc_cfgString.c_str();
+}
+
+VVENC_DECL void vvenc_config_set_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback )
+{
+  if( cfg )
+  {
+    cfg->m_msgFncCtx   = ctx;
+    cfg->m_logCallback = callback;
+  }
 }
 
 

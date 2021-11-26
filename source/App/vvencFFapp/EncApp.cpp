@@ -90,6 +90,8 @@ void msgApp( int level, const char* fmt, ... )
 
 bool EncApp::parseCfg( int argc, char* argv[])
 {
+  vvenc_config_set_callback( &m_vvenc_config, this, &::msgFnc );
+
   try
   {
     if( argc )
@@ -187,7 +189,7 @@ int EncApp::encode()
     return -1;
   }
 
-  vvenc_set_logging_callback( m_encCtx, nullptr, &::msgFnc );
+  vvenc_set_logging_callback( m_encCtx, this, &::msgFnc );
 
   if( appCfg.m_decode )
   {
