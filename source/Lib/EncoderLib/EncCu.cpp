@@ -375,13 +375,13 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
 void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] )
 {
-  m_modeCtrl.initCTUEncoding( *cs.slice );
+  m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
+
+  m_modeCtrl.initCTUEncoding( *cs.slice, m_tileIdx );
 
   // init the partitioning manager
   Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
-
-  m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
   
   if( m_pcEncCfg->m_IBCMode )
   {
