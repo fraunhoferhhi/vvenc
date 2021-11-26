@@ -92,6 +92,7 @@ namespace vvenc {
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
     void clipRcAlpha( double& alpha );
 
+    int             totalFrames;
     int             fppParFrames;
     int             picWidth;
     int             picHeight;
@@ -99,7 +100,6 @@ namespace vvenc {
     int             lcuHeight;
     int             numberOfPixel;
     int             numberOfLCU;
-    int             framesCoded;
     int             averageBits;
     int             framesLeft;
     int             adaptiveBits;

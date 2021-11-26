@@ -686,6 +686,7 @@ bool VVEncAppCfg::parseCfgFF( int argc, char* argv[] )
   ("Pass",                                            m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
   ("RCStatsFile",                                     m_RCStatsFileName,                                "rate control statistics file" )
   ("TargetBitrate",                                   m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
+  ("LookAhead",                                       m_RCLookAhead,                                    "Rate control with look-ahead pass" )
 
   ("PerceptQPA,-qpa",                                 m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
   ;

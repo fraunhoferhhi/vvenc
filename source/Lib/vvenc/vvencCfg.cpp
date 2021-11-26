@@ -816,7 +816,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     else
       c->m_RCNumPasses = c->m_RCTargetBitrate > 0 ? 2 : 1;
   }
-  c->m_RCLookAhead = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ) ? true : false;
+  //c->m_RCLookAhead = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ) ? true : false;
 
   // threading
   if( c->m_numThreads < 0 )
@@ -2290,7 +2290,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
   vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
-  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_RCNumPasses != 1,          "Rate control look ahead encoding only for single pass encoding supported" );
+  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_RCNumPasses != 1,          "Rate control look-ahead encoding only for single-pass encoding supported" );
+  const int periodLimit = ( c->m_SourceWidth * c->m_SourceHeight > 2048 * 1200 ? ( c->m_SourceWidth * c->m_SourceHeight > 2560 * 1536 ? 64 : 128 ) : 256 );
+  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_IntraPeriod > periodLimit, "Specified Intra period is too large for rate control encoding with look-ahead" );
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)

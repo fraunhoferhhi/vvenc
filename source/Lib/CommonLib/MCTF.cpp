@@ -237,7 +237,7 @@ void MCTF::initPicture( Picture* pic )
   pic->setSccFlags( m_encCfg );
 }
 
-void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList, int firstPassQP )
 {
   // filter one picture (either all or up to frames to be encoded)
   if( picList.size()
