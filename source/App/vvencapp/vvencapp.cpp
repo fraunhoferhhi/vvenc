@@ -201,7 +201,7 @@ int main( int argc, char* argv[] )
   vvenc_config vvenccfg;
   vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
-  vvenc_config_set_callback( &vvenccfg, nullptr, &::msgFnc );
+  vvenc_set_logging_callback( &vvenccfg, nullptr, &::msgFnc );
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg, vvenccfg ) )

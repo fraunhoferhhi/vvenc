@@ -423,17 +423,6 @@ const char* VVEncImpl::getLastError() const
   return m_cErrorString.c_str();
 }
 
-int VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
-{
-  if ( msgFnc == nullptr )
-  {
-    return VVENC_ERR_UNSPECIFIED;
-  }
-
-  this->m_logger.setCallback( ctx, msgFnc );
-  return VVENC_OK;
-}
-
 const char* VVEncImpl::getErrorMsg( int nRet )
 {
   switch( nRet )
