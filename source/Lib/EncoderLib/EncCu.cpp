@@ -386,11 +386,11 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   const bool leftSameTile  = lumaPos.x > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset(-1, 0) );
   const bool aboveSameTile = lumaPos.y > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset( 0,-1) );
   const bool tileCond = !m_pcEncCfg->m_tileParallelCtuEnc || (leftSameTile && aboveSameTile);
-  m_EDO     = m_pcEncCfg->m_EDO;
-//  m_TileBoundary = Position(0,0);
-//  m_EDO     = m_pcEncCfg->m_EDO && tileCond;
-  m_TileBoundary = Position( !m_pcEncCfg->m_tileParallelCtuEnc || leftSameTile  ? (lumaPos.x - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.x, 
-                             !m_pcEncCfg->m_tileParallelCtuEnc || aboveSameTile ? (lumaPos.y - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.y); 
+//    m_EDO     = m_pcEncCfg->m_EDO;
+  m_TileBoundary = Position(0,0);
+  m_EDO     = m_pcEncCfg->m_EDO && tileCond;
+//  m_TileBoundary = Position( !m_pcEncCfg->m_tileParallelCtuEnc || leftSameTile  ? (lumaPos.x - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.x, 
+//                             !m_pcEncCfg->m_tileParallelCtuEnc || aboveSameTile ? (lumaPos.y - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.y); 
   if( m_pcEncCfg->m_IBCMode )
   {
     m_cInterSearch.resetCtuRecordIBC();
@@ -3312,7 +3312,8 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   int verOffset = lumaPos.y > 7 ? 8 : 4;
   int horOffset = lumaPos.x > 7 ? 8 : 4;
 
-  LoopFilter::calcFilterStrengths( *cu, true, &m_TileBoundary );
+//  LoopFilter::calcFilterStrengths( *cu, true, &m_TileBoundary );
+  LoopFilter::calcFilterStrengths( *cu, true );
 
   if( m_EDO == 2 && CS::isDualITree( cs ) && isLuma( partitioner.chType ) )
   {
