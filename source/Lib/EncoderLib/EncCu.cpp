@@ -530,23 +530,20 @@ void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& best
   CPelBuf orgCb  = cs.getOrgBuf (COMP_Cb);
   CPelBuf orgCr  = cs.getOrgBuf (COMP_Cr);
   int th1=FCBP_TH1;
-  if (th1>0)
+  if ( (lumaw>>1) == orgCb.width )
   {
-    if ( (lumaw>>1) == orgCb.width )
+    if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
     {
-      if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
-      {
-        splitver=false;
-        qtSplitChroma=false;
-      }
+      splitver=false;
+      qtSplitChroma=false;
     }
-    if ((lumah>>1) == orgCb.height )
+  }
+  if ((lumah>>1) == orgCb.height )
+  {
+    if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
     {
-      if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
-      {
-        splithor=false;
-        qtSplitChroma=false;
-      }
+      splithor=false;
+      qtSplitChroma=false;
     }
   }
   partitioner.horChromaSplit=splithor;
