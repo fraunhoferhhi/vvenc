@@ -53,6 +53,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDef.h"
 #include "Rom.h"
 
+#include "Utilities/Logger.h"
+
 #include <cmath>
 
 //! \ingroup CommonLib
@@ -262,13 +264,13 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
 
   if( !sTracingFile.empty() || !sTracingRule.empty() )
   {
-    m_Logger->log( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
+    logger->log( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
   }
 
   CDTrace *pDtrace = new CDTrace( sTracingFile, sTracingRule, channels );
   if( pDtrace->getLastError() )
   {
-   m_Logger->log( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
+   logger->log( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
     //return NULL;
   }
 

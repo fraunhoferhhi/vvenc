@@ -679,7 +679,7 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   Picture cPicture; cPicture.poc=-8000;
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( trcFile, trcRule, &logger );
+  g_trace_ctx = tracing_init( trcFile, trcRule, &m_logger );
 #endif
 
   std::string filename(FileName );
