@@ -189,8 +189,6 @@ int EncApp::encode()
     return -1;
   }
 
-  //vvenc_set_logging_callback( m_encCtx, this, &::msgFnc ); // already set via vvenc_config
-
   if( appCfg.m_decode )
   {
     int ret = vvenc_decode_bitstream( m_encCtx, appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );

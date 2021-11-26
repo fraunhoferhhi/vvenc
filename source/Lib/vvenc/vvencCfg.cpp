@@ -3724,7 +3724,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   return vvenc_cfgString.c_str();
 }
 
-VVENC_DECL void vvenc_config_set_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback )
+VVENC_DECL void vvenc_set_logging_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback )
 {
   if( cfg )
   {

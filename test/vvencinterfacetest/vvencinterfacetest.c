@@ -76,6 +76,7 @@ int main( int argc, char* argv[] )
   // init default settings
   vvenc_config vvencCfg;
   vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
+  vvenc_config_set_callback( &vvencCfg, nullptr, &::msgFnc );
 
   // create the encoder
   enc = vvenc_encoder_create();
@@ -84,8 +85,6 @@ int main( int argc, char* argv[] )
     printf("cannot create encoder\n");
     return -1;
   }
-
-  vvenc_set_logging_callback( enc, NULL, msgFnc );
 
   // initialize the encoder
   iRet = vvenc_encoder_open( enc, &vvencCfg );

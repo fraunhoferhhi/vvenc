@@ -82,11 +82,6 @@ VVENC_NAMESPACE_BEGIN
  * opaque handler for the decoder */
 typedef struct vvencEncoder vvencEncoder;
 
-/* vvdecLoggingCallback:
-   callback function to receive messages of the encoder library
-*/
-typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
-
 /*
   \enum ErrorCodes
   The enum ErrorCodes enumerates error codes returned by the encoder.
@@ -377,16 +372,6 @@ VVENC_DECL int vvenc_print_summary( vvencEncoder * );
  \retval[ ]  const char*  empty string for no error
 */
 VVENC_DECL const char* vvenc_get_error_msg( int nRet );
-
-/* vvenc_set_logging_callback
- This method registers a log message callback function to the encoder instance.
- If no such function has been registered, the library will omit all messages.
- \param[in]  vvencEncoder pointer to opaque handler
- \param[in]  ctx pointer of the caller, if not needed set it to null
- \paramin]   Log message callback function.
- \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
-*/
-VVENC_DECL int vvenc_set_logging_callback( vvencEncoder * , void * ctx, vvencLoggingCallback callback );
 
 /* vvenc_get_compile_info_string
  creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).

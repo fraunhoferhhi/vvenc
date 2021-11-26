@@ -228,8 +228,6 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  //vvenc_set_logging_callback( enc, nullptr, &::msgFnc );  // already set via vvenc_config
-
   int iRet = vvenc_encoder_open( enc, &vvenccfg );
   if( 0 != iRet )
   {

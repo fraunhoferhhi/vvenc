@@ -65,6 +65,14 @@ extern "C" {
 
 VVENC_NAMESPACE_BEGIN
 
+/* vvdecLoggingCallback:
+   callback function to receive messages of the encoder library
+  \param[in]  void* caller contex
+  \param[in]  int log level
+  \param[in]  const char* fmt
+  \param[in]  va_list args
+  \retval     none
+*/
 typedef void (*vvencLoggingCallback)(void*, int, const char*, va_list);
 
 
@@ -788,16 +796,15 @@ VVENC_DECL int vvenc_init_default( vvenc_config *cfg, int width, int height, int
 VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
 
 
-/* vvenc_set_callback
- This method registers a log message callback function that will log error and warning during 
- config initialization.
+/* vvenc_set_logging_callback
+ This method registers a log message callback function.
+ Thhis callback is automatically used when calling vvenc_encoder_open().
  If no such function has been registered, the library will omit all messages.
- \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
  \param[in]  ctx pointer of the caller, if not needed set it to null
  \paramin]   Log message callback function.
  \retval     none
 */
-VVENC_DECL void vvenc_config_set_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback );
+VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback );
 
 /* vvenc_init_config_parameter (optional)
   This method initialize the encoder parameter and sets all parameter the are not initialized yet.

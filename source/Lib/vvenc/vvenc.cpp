@@ -363,18 +363,6 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet )
 }
 
 
-VVENC_DECL int vvenc_set_logging_callback( vvencEncoder *enc, void *ctx, vvencLoggingCallback callback )
-{
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
-  {
-    return VVENC_ERR_UNSPECIFIED;
-  }
-
-  return d->registerMsgCbf( ctx, callback );
-}
-
-
 VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId )
 {
   return vvenc::VVEncImpl::setSIMDExtension( simdId );

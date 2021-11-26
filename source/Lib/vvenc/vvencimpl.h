@@ -123,7 +123,6 @@ public:
 
   const char* getLastError() const;
 
-  int     registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );
   Logger* getLogger() { return &m_logger; }
 
   int decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
