@@ -97,7 +97,7 @@ public:
   void loopFilterCTU                  ( CodingStructure& cs, const ChannelType chType, const int ctuCol, const int ctuLine, const int offset = 0, DeblockEdgeDir edgeDir = NUM_EDGE_DIR ) const;
   static void calcFilterStrengthsCTU  ( CodingStructure& cs, const UnitArea& ctuArea, const bool clearLFP );
 
-  static void calcFilterStrengths     ( const CodingUnit& cu, bool clearLF = false );
+  static void calcFilterStrengths     ( const CodingUnit& cu, bool clearLF = false, const Position* const pcBoundaryOverride = nullptr );
 
   static void getMaxFilterLength      ( const CodingUnit& cu, int& maxFilterLenghtLumaHor, int& maxFilterLenghtLumaVer );
 

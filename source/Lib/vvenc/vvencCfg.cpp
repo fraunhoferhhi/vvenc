@@ -2836,7 +2836,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
 
-  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_tileParallelCtuEnc && c->m_EDO > 0, "EDO and tile parallelism are mutually exclusive!" );
+//  vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_tileParallelCtuEnc && c->m_EDO > 0, "EDO and tile parallelism are mutually exclusive!" );
 }
 
 static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid )

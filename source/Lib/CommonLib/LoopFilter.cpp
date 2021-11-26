@@ -747,9 +747,6 @@ template<> inline SizeType perpSize<EDGE_HOR>( const Size& size ) { return size.
 template<> inline SizeType parlSize<EDGE_VER>( const Size& size ) { return size.height; }
 template<> inline SizeType perpSize<EDGE_VER>( const Size& size ) { return size.width; }
 
-// set / get functions
-LFCUParam xGetLoopfilterParam( const CodingUnit& cu );
-
 // filtering functions
 template<DeblockEdgeDir edgeDir>
 void xGetBoundaryStrengthSingle             ( LoopFilterParam& lfp, const CodingUnit& cu, const Position &localPos, const CodingUnit &cuP );
@@ -762,12 +759,12 @@ template<DeblockEdgeDir edgeDir>
 void xSetMaxFilterLengthPQForCodingSubBlocks( const CodingUnit& cu );
 
 
-LFCUParam xGetLoopfilterParam               ( const CodingUnit& cu );
+LFCUParam xGetLoopfilterParam               ( const CodingUnit& cu, const Position* const pcBoundaryOverride = nullptr );
   
 bool isCrossedByVirtualBoundaries           ( const SPS* pps, const Area& area, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[] );
 void xDeriveEdgefilterParam                 ( const Position pos, const int numVerVirBndry, const int numHorVirBndry, const int verVirBndryPos[], const int horVirBndryPos[], bool& verEdgeFilter, bool& horEdgeFilter );
 
-void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
+void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF, const Position* const pcBoundaryOverride )
 {
   if( cu.slice->deblockingFilterDisable )
   {
@@ -821,7 +818,8 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
   
 
   static constexpr int subBlockSize = 8;
-  LFCUParam stLFCUParam         { xGetLoopfilterParam( cu ) };
+  LFCUParam stLFCUParam = xGetLoopfilterParam( cu, pcBoundaryOverride );
+
   const UnitScale scaling       = cu.cs->getScaling( UnitScale::LF_PARAM_MAP, cu.chType );
   // for SUBPU ATMVP and Affine, more PU deblocking needs to be found, for ISP the chroma block will be deferred to the last luma block,
   // so the processing order is different. For all other cases the boundary strenght can be directly obtained in the TU loop.
@@ -845,8 +843,8 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
                               verEdgeFilter,  horEdgeFilter );
     }
 
-    xSetMaxFilterLengthPQFromTransformSizes<EDGE_VER>( cu, *currTU, verEdgeFilter, !refineBs );
-    xSetMaxFilterLengthPQFromTransformSizes<EDGE_HOR>( cu, *currTU, horEdgeFilter, !refineBs );
+    if(verEdgeFilter) { xSetMaxFilterLengthPQFromTransformSizes<EDGE_VER>( cu, *currTU, verEdgeFilter, !refineBs ); }
+    if(horEdgeFilter) { xSetMaxFilterLengthPQFromTransformSizes<EDGE_HOR>( cu, *currTU, horEdgeFilter, !refineBs ); }
   }
 
   if( !refineBs ) return;
@@ -1468,7 +1466,7 @@ void xGetBoundaryStrengthSingle( LoopFilterParam& lfp, const CodingUnit& cuQ, co
   lfp.bs |= ( ( ( abs( mvQ0.hor - mvP0.hor ) >= nThreshold ) || ( abs( mvQ0.ver - mvP0.ver ) >= nThreshold ) ) ? ( tmpBs + 1 ) : tmpBs ) & bsMask;
 }
 
-LFCUParam xGetLoopfilterParam( const CodingUnit& cu )
+LFCUParam xGetLoopfilterParam( const CodingUnit& cu, const Position* const pcBoundaryOverride )
 {
   const Slice& slice = *cu.slice;
   if( slice.deblockingFilterDisable )
@@ -1476,9 +1474,16 @@ LFCUParam xGetLoopfilterParam( const CodingUnit& cu )
     return LFCUParam{/*false,*/ false, false};
   }
 
-  const Position pos = cu.blocks[cu.chType].pos();
-
   LFCUParam stLFCUParam;                   ///< status structure
+  if( pcBoundaryOverride )
+  {
+    const Position pos = cu.lumaPos();
+    stLFCUParam.leftEdge     = ( pcBoundaryOverride->x < pos.x ) && isAvailable ( cu, *CU::getLeft ( cu ), !slice.pps->loopFilterAcrossSlicesEnabled, !slice.pps->loopFilterAcrossTilesEnabled );
+    stLFCUParam.topEdge      = ( pcBoundaryOverride->y < pos.y ) && isAvailable ( cu, *CU::getAbove( cu ), !slice.pps->loopFilterAcrossSlicesEnabled, !slice.pps->loopFilterAcrossTilesEnabled );
+    return stLFCUParam;
+  }
+
+  const Position pos = cu.blocks[cu.chType].pos();
   stLFCUParam.leftEdge     = ( 0 < pos.x ) && isAvailable ( cu, *CU::getLeft ( cu ), !slice.pps->loopFilterAcrossSlicesEnabled, !slice.pps->loopFilterAcrossTilesEnabled );
   stLFCUParam.topEdge      = ( 0 < pos.y ) && isAvailable ( cu, *CU::getAbove( cu ), !slice.pps->loopFilterAcrossSlicesEnabled, !slice.pps->loopFilterAcrossTilesEnabled );
   return stLFCUParam;

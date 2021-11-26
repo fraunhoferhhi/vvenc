@@ -389,8 +389,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   m_EDO     = m_pcEncCfg->m_EDO;
 //  m_TileBoundary = Position(0,0);
 //  m_EDO     = m_pcEncCfg->m_EDO && tileCond;
-  m_TileBoundary = Position( leftSameTile  ? (lumaPos.x - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.x, 
-                             aboveSameTile ? (lumaPos.y - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.y); 
+  m_TileBoundary = Position( !m_pcEncCfg->m_tileParallelCtuEnc || leftSameTile  ? (lumaPos.x - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.x, 
+                             !m_pcEncCfg->m_tileParallelCtuEnc || aboveSameTile ? (lumaPos.y - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.y); 
   if( m_pcEncCfg->m_IBCMode )
   {
     m_cInterSearch.resetCtuRecordIBC();
@@ -3312,7 +3312,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   int verOffset = lumaPos.y > 7 ? 8 : 4;
   int horOffset = lumaPos.x > 7 ? 8 : 4;
 
-  LoopFilter::calcFilterStrengths( *cu, true );
+  LoopFilter::calcFilterStrengths( *cu, true, &m_TileBoundary );
 
   if( m_EDO == 2 && CS::isDualITree( cs ) && isLuma( partitioner.chType ) )
   {
