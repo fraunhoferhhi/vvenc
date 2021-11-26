@@ -142,6 +142,8 @@ int VVEncImpl::init( const vvenc_config& config )
     return VVENC_ERR_INITIALIZE;
   }
 
+  this->m_logger.setCallback( config.m_msgFncCtx, config.m_logCallback );
+
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();

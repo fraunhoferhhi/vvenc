@@ -79,10 +79,10 @@ void msgFnc( void*, int level, const char* fmt, va_list args )
 
 void msgApp( void* ctx, int level, const char* fmt, ... )
 {
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( ctx, level, fmt, args );
-    va_end( args );
+  va_list args;
+  va_start( args, fmt );
+  msgFnc( ctx, level, fmt, args );
+  va_end( args );
 }
 
 void changePreset( vvenc_config* c, vvencPresetMode preset )
@@ -228,7 +228,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  vvenc_set_logging_callback( enc, nullptr, &::msgFnc );
+  //vvenc_set_logging_callback( enc, nullptr, &::msgFnc );  // already set via vvenc_config
 
   int iRet = vvenc_encoder_open( enc, &vvenccfg );
   if( 0 != iRet )

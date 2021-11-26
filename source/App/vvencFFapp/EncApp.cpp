@@ -189,7 +189,7 @@ int EncApp::encode()
     return -1;
   }
 
-  vvenc_set_logging_callback( m_encCtx, this, &::msgFnc );
+  //vvenc_set_logging_callback( m_encCtx, this, &::msgFnc ); // already set via vvenc_config
 
   if( appCfg.m_decode )
   {
