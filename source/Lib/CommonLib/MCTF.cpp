@@ -255,6 +255,8 @@ void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
   m_QP                    = qp;
   m_chromaFormatIDC       = inputChromaFormatIDC;
 
+  m_FilterFrames.clear();
+  m_FilterStrengths.clear();
   for( int i = 0; i < MCTFCfg.numFrames; i++ )
   {
     m_FilterFrames.push_back( MCTFCfg.MCTFFrames[i] );
