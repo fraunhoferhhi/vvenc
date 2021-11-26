@@ -656,12 +656,13 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   if ((m_pcEncCfg->m_IntraPeriod==1) && (partitioner.chType==CH_C))
   {
-    partitioner.horChromaSplit=true;
-    partitioner.verChromaSplit=true;
   
     if (!partitioner. qtChromaSplit)
     {
       cuECtx.maxDepth=partitioner.currDepth;
+      partitioner.horChromaSplit=true;
+      partitioner.verChromaSplit=true;
+
     }
   }
 

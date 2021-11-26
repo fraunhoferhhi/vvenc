@@ -579,71 +579,31 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
 #undef SUBS_INC
   }
 }
+
 template<>
-int AreaBuf<const Pel>::calcVariance( const AreaBuf<const Pel>& Org, const uint32_t  width, const uint32_t  height, const uint32_t  offset )
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int& varv)
 {
   int stride = Org.stride;
-  const Pel* piOrg   = Org.buf+offset;
-  Pel data;
-  double variance=0;
-  double mean=0;
-  int64_t sum=0;
-  int64_t sum_sqr=0;
-  for (int y=0;y<height;y++)
-  {
-    for (int x=0;x<width;x++)
-    {
-      data=piOrg[y*stride+x];
-      sum+=data;
-      sum_sqr+= data*data;
-    }
-  }
-  mean=(double)sum/(width*height);
-  variance =  (double)sum_sqr/(width*height) - (mean*mean);
-  return (int)(variance+0.5);
-}
-template<>
-void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int *varh,int *varv)
-{
-  int stride = Org.stride;
-  const Pel* piOrg   = Org.buf;
+  const Pel* src;
   Pel data;
   double variance=0;
   double mean=0;
   int64_t sum[4]={0,0,0,0};
   int64_t sum_sqr[4]={0,0,0,0};
+  uint32_t halfsize =size>>1;
+  uint32_t off[4]={0,halfsize,size*halfsize,size*halfsize+halfsize};
+  int n,x,y;
 
-  for (int y=0;y<(size>>1);y++)
+  for( n = 0; n < 4; n++)
   {
-    for (int x=0;x<size;x++)
+    src = Org.buf+off[n];
+    for( y = 0; y < halfsize; y++)
     {
-      data=piOrg[y*stride+x];
-      if (x<(size>>1))
+      for(x = 0; x < halfsize; x++)
       {
-        sum[0]+=data;
-        sum_sqr[0]+= data*data;
-      }
-      else
-      {
-        sum[1]+=data;
-        sum_sqr[1]+= data*data;
-      }
-    }
-  }
-  for (int y=(size>>1);y<size;y++)
-  {
-    for (int x=0;x<size;x++)
-    {
-      data=piOrg[y*stride+x];
-      if (x<(size>>1))
-      {
-        sum[2]+=data;
-        sum_sqr[2]+= data*data;
-      }
-      else
-      {
-        sum[3]+=data;
-        sum_sqr[3]+= data*data;
+        data=src[y*stride+x];
+        sum[n]+=data;
+        sum_sqr[n]+= data*data;
       }
     }
   }
@@ -651,19 +611,19 @@ void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const
   // varhu
   mean=(double)(sum[0]+sum[1])/(num);
   variance =  (double)(sum_sqr[0]+sum_sqr[1])/(num) - (mean*mean);
-  *varh =(int)(variance+0.5);
+  varh =(int)(variance+0.5);
   // varhl
   mean=(double)(sum[2]+sum[3])/(num);
   variance =  (double)(sum_sqr[2]+sum_sqr[3])/(num) - (mean*mean);
-  *varh +=(int)(variance+0.5);
+  varh +=(int)(variance+0.5);
   // varvl
   mean=(double)(sum[0]+sum[2])/(num);
   variance =  (double)(sum_sqr[0]+sum_sqr[2])/(num) - (mean*mean);
-  *varv =(int)(variance+0.5);
+  varv =(int)(variance+0.5);
   // varvr
   mean=(double)(sum[1]+sum[3])/(num);
   variance =  (double)(sum_sqr[1]+sum_sqr[3])/(num) - (mean*mean);
-  *varv +=(int)(variance+0.5);
+  varv +=(int)(variance+0.5);
 }
 
 template<>

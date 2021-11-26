@@ -557,8 +557,8 @@ void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& best
   {
     int varh_cb,varv_cb;
     int varh_cr,varv_cr;
-    orgCb.calcVarianceSplit(orgCb,orgCb.width,&varh_cb,&varv_cb);
-    orgCr.calcVarianceSplit(orgCr,orgCr.width,&varh_cr,&varv_cr);
+    orgCb.calcVarianceSplit(orgCb,orgCb.width,varh_cb,varv_cb);
+    orgCr.calcVarianceSplit(orgCr,orgCr.width,varh_cr,varv_cr);
     if ((varh_cr*FCBP_TH2<varv_cr*100) && (varh_cb*FCBP_TH2<varv_cb*100))
     {
       partitioner.verChromaSplit=false;
@@ -568,8 +568,6 @@ void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& best
       partitioner.horChromaSplit=false;
     }
   }
-
-
 }
 
 void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner )
@@ -963,7 +961,6 @@ void EncCu::xCheckModeSplit(CodingStructure *&tempCS, CodingStructure *&bestCS, 
   const TreeType treeTypeParent  = partitioner.treeType;
   const ChannelType chTypeParent = partitioner.chType;
 
-  
   int signalModeConsVal = tempCS->signalModeCons( getPartSplit( encTestMode ), partitioner, modeTypeParent );
   int numRoundRdo = signalModeConsVal == LDT_MODE_TYPE_SIGNAL ? 2 : 1;
   bool skipInterPass = false;
