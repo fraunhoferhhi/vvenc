@@ -2731,7 +2731,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   //TileColumnWidthArray and TileRowHeightArray have to be not set
   if( c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
-    vvenc_confirmParameter( c, !colWidth_all_zero  && ( lastNonZeroColumn + 1 ) != c->m_numTileCols, "Explicit number of tile columns and column widths are given, but not consisntent!" );
+    vvenc_confirmParameter( c, !colWidth_all_zero  && ( lastNonZeroColumn + 1 ) != c->m_numTileCols, "Explicit number of tile columns and column widths are given, but not consistent!" );
     vvenc_confirmParameter( c, !rowHeight_all_zero && ( lastNonZeroRow    + 1 ) != c->m_numTileRows, "Explicit number of tile rows and column heights are given, but not consistent!" );
 
     if( !colWidth_all_zero || !rowHeight_all_zero ) return;
