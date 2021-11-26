@@ -2731,8 +2731,9 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   //TileColumnWidthArray and TileRowHeightArray have to be not set
   if( c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
-    vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther Tiles or TileColumnWidthArray" );
-    vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther Tiles or TileRowHeightArray" );
+    vvenc_confirmParameter( c, !colWidth_all_zero  && ( lastNonZeroColumn + 1 ) != c->m_numTileCols, "Explicit number of tile columns and column widths are given, but not consistent!" );
+    vvenc_confirmParameter( c, !rowHeight_all_zero && ( lastNonZeroRow    + 1 ) != c->m_numTileRows, "Explicit number of tile rows and column heights are given, but not consistent!" );
+
     if( !colWidth_all_zero || !rowHeight_all_zero ) return;
     
     if( c->m_numTileCols > 1 )
@@ -2755,6 +2756,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
     {
       c->m_tileRowHeight[0] = pps.picHeightInCtu;
     }
+
     numTileColumnWidths = 1;
     numTileRowHeights   = 1;
   }
@@ -2842,6 +2844,9 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   vvenc_confirmParameter( c, pps.numTileRows > maxTileRows, "Number of tile rows exceeds maximum number allowed according to specified level" );
   c->m_numTileCols = pps.numTileCols;
   c->m_numTileRows = pps.numTileRows;
+
+  for( int col = 0; col < pps.numTileCols; col++ ) c->m_tileColumnWidth[col] = pps.tileColWidth [col];
+  for( int row = 0; row < pps.numTileRows; row++ ) c->m_tileRowHeight  [row] = pps.tileRowHeight[row];
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
 
