@@ -190,7 +190,7 @@ namespace vvenc {
     LegacyRateCtrl();
     ~LegacyRateCtrl();
 
-    void init( const VVEncCfg& encCfg );
+    void init( const VVEncCfg& encCfg, int baseQP );
     void destroy();
     void initRCGOP( const int numberOfPictures );
     void destroyRCGOP();
