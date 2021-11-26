@@ -283,11 +283,6 @@ void EncGOP::init( const VVEncCfg& encCfg, const SPS& sps, const PPS& pps, RateC
   m_pcRateCtrl = &rateCtrl;
   m_pcEncHRD   = &encHrd;
   m_threadPool = threadPool;
-  
-  m_AnalyzeAll.setLogger(m_Logger);
-  m_AnalyzeI.setLogger(m_Logger);
-  m_AnalyzeP.setLogger(m_Logger);
-  m_AnalyzeB.setLogger(m_Logger);
 
   if( m_pcEncCfg->m_DecodingRefreshType == 4 )
   {
@@ -531,18 +526,23 @@ void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, c
   const ChromaFormat chFmt = m_pcEncCfg->m_internChromaFormat;
 
   //-- all
+  const char* summary = nullptr;
   m_Logger->log( VVENC_INFO, "\n" );
   m_Logger->log( VVENC_DETAILS,"\nSUMMARY --------------------------------------------------------\n" );
-  m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths
-                          );
+  summary = m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  m_Logger->log( VVENC_INFO,summary );
+
   m_Logger->log( VVENC_DETAILS,"\n\nI Slices--------------------------------------------------------\n" );
-  m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  summary = m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  m_Logger->log( VVENC_DETAILS,summary );
 
   m_Logger->log( VVENC_DETAILS,"\n\nP Slices--------------------------------------------------------\n" );
-  m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  summary = m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  m_Logger->log( VVENC_DETAILS,summary );
 
   m_Logger->log( VVENC_DETAILS,"\n\nB Slices--------------------------------------------------------\n" );
-  m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  summary = m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  m_Logger->log( VVENC_DETAILS,summary );
 
   if (m_pcEncCfg->m_summaryOutFilename[0] != '\0' )
   {

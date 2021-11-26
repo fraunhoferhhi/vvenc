@@ -75,19 +75,13 @@ private:
   uint32_t  m_uiNumPic;
   double    m_dFrmRate; //--CFG_KDY
   double    m_MSEyuvframe[MAX_NUM_COMP]; // sum of MSEs
-  Logger*   m_logger;
+  char      m_buf [VVENC_MAX_STRING_LEN];
 
 public:
   virtual ~Analyze()  {}
   Analyze() 
   { 
-    m_logger = nullptr;
     clear(); 
-  }
-
-  void setLogger( Logger* logger )
-  {
-    m_logger = logger;
   }
 
   void  addResult( double psnr[MAX_NUM_COMP], double bits, const double MSEyuvframe[MAX_NUM_COMP]
@@ -158,11 +152,14 @@ public:
     PSNRyuv = (MSEyuv == 0) ? 999.99 : 10.0 * log10((maxval * maxval) / MSEyuv);
   }
 
-  void    printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
+  const char* printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
   {
     vvencMsgLevel e_msg_level = cDelim == 'a' ? VVENC_INFO: VVENC_DETAILS;
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
+    
+    char buf [VVENC_MAX_STRING_LEN];
+    int n=0;
 
     double MSEBasedSNR[MAX_NUM_COMP];
     if (printMSEBasedSNR)
@@ -190,24 +187,24 @@ public:
       case CHROMA_400:
         if (printMSEBasedSNR)
         {
-          m_logger->log( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
 
           if (printHexPsnr)
           {
-            m_logger->log(e_msg_level, "xY-PSNR           ");
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           " );
           }
 
           if (printSequenceMSE)
           {
-            m_logger->log( e_msg_level, "    Y-MSE\n" );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "    Y-MSE\n" );
           }
           else
           {
-            m_logger->log( e_msg_level, "\n");
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n" );
           }
 
-          //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          m_logger->log( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+           n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / (double)getNumPic() );
@@ -222,43 +219,43 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            m_logger->log(e_msg_level, "   %16" PRIx64 " ", xPsnr);
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n,  "   %16" PRIx64 " ", xPsnr );
           }
 
           if (printSequenceMSE)
           {
-            m_logger->log( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
           }
           else
           {
-            m_logger->log( e_msg_level, "\n");
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
           }
 
-          m_logger->log( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
+          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  MSEBasedSNR[COMP_Y] );
         }
         else
         {
-          m_logger->log( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
 
           if (printHexPsnr)
           {
-            m_logger->log(e_msg_level, "xY-PSNR           ");
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           ");
           }
 
           if (printSequenceMSE)
           {
-            m_logger->log( e_msg_level, "    Y-MSE\n" );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "    Y-MSE\n" );
           }
           else
           {
-            m_logger->log( e_msg_level, "\n");
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
           }
 
-          //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          m_logger->log( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / (double)getNumPic() );
@@ -273,16 +270,16 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            m_logger->log(e_msg_level, "   %16" PRIx64 " ", xPsnr);
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "   %16" PRIx64 " ", xPsnr);
           }
 
           if (printSequenceMSE)
           {
-            m_logger->log( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
           }
           else
           {
-            m_logger->log( e_msg_level, "\n");
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
           }
         }
         break;
@@ -297,24 +294,24 @@ public:
 
           if (printMSEBasedSNR)
           {
-            m_logger->log( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
 
             if (printHexPsnr)
             {
-              m_logger->log(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
             }
 
             if (printSequenceMSE)
             {
-              m_logger->log( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
             }
             else
             {
-              m_logger->log( e_msg_level, "\n");
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
             }
 
-            //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            m_logger->log( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
@@ -334,12 +331,12 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              m_logger->log(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
             }
 
             if (printSequenceMSE)
             {
-              m_logger->log( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
@@ -347,10 +344,10 @@ public:
             }
             else
             {
-              m_logger->log( e_msg_level, "\n");
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
             }
 
-            m_logger->log( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    MSEBasedSNR[COMP_Y ],
@@ -360,23 +357,23 @@ public:
           }
           else
           {
-            m_logger->log( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
 
             if (printHexPsnr)
             {
-              m_logger->log(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
             }
             if (printSequenceMSE)
             {
-              m_logger->log( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
             }
             else
             {
-              m_logger->log( e_msg_level, "\n");
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
             }
 
-            //m_logger->log( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            m_logger->log( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
@@ -397,11 +394,11 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              m_logger->log(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
             }
             if (printSequenceMSE)
             {
-              m_logger->log( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
@@ -409,16 +406,17 @@ public:
             }
             else
             {
-              m_logger->log( e_msg_level, "\n");
+              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
             }
           }
         }
         break;
       default:
-        m_logger->log( VVENC_ERROR, "Unknown format during print out\n");
-        exit(1);
+        n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "Unknown format during print out\n");
         break;
     }
+
+    return &m_buf[0];
   }
 
 
@@ -468,8 +466,7 @@ public:
         }
 
       default:
-          m_logger->log( VVENC_ERROR, "Unknown format during print out\n");
-          exit(1);
+          fprintf(pFile, "Unknown format during print out\n");
           break;
     }
 
