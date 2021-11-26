@@ -126,12 +126,13 @@ public:
   int     registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );
   Logger* getLogger() { return &m_logger; }
 
+  int decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
+
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
 
   static const char* setSIMDExtension( const char* simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
   static const char* getCompileInfoString();
-  static int         decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
 private:
   int xGetAccessUnitsSize( const vvenc::AccessUnitList& rcAuList );

@@ -683,12 +683,11 @@ const char* VVEncImpl::getCompileInfoString()
 ///< decode bitstream with limited build in decoder
 int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule )
 {
+  if( !m_bInitialized ) { return VVENC_ERR_INITIALIZE; }
+
   int ret = 0;
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
-
-  Logger logger;
-
 
 #if ENABLE_TRACING
   g_trace_ctx = tracing_init( trcFile, trcRule, &logger );
@@ -699,7 +698,7 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   try
 #endif
   {
-    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false, &logger );
+    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false, &m_logger );
     if( ret )  
     { 
       return VVENC_ERR_UNSPECIFIED; 
