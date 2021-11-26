@@ -69,9 +69,10 @@ extern CDTrace* g_trace_ctx;
 #endif
 
 #if ENABLE_TIME_PROFILING
-extern TimeProfiler *g_timeProfiler;
-#elif ENABLE_TIME_PROFILING_EXTENDED
-extern TimeProfiler2D *g_timeProfiler;
+extern TProfiler *g_timeProfiler;
+#if ENABLE_TIME_PROFILING_MT_MODE
+extern thread_local std::unique_ptr<TProfiler> ptls;
+#endif
 #endif
 
 // ====================================================================================================================
@@ -127,7 +128,7 @@ extern const int g_quantScales   [2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIS
 extern const int g_invQuantScales[2/*0=4^n blocks, 1=2*4^n blocks*/][SCALING_LIST_REM_NUM];          // IQ(QP%6)
 
 static const int g_numTransformMatrixSizes = 6;
-static const int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = {  6, 6 };
+static const int g_transformMatrixShift[TRANSFORM_NUMBER_OF_DIRECTIONS] = {  6/*, 6 */ };
 
 
 // ====================================================================================================================

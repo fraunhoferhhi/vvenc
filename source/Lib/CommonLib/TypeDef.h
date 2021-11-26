@@ -104,6 +104,12 @@ namespace vvenc {
 #ifndef ENABLE_TIME_PROFILING
 #define ENABLE_TIME_PROFILING                             0 // DISABLED by default (can be enabled by project configuration or make command)
 #endif
+#ifndef ENABLE_TIME_PROFILING_MT_MODE
+#define ENABLE_TIME_PROFILING_MT_MODE                   ( 0 && ENABLE_TIME_PROFILING )
+#endif
+#ifndef ENABLE_TIME_PROFILING_TL
+#define ENABLE_TIME_PROFILING_TL                          0 // DISABLED by default (can be enabled by project configuration or make command)
+#endif
 #ifndef ENABLE_TIME_PROFILING_PIC_TYPES
 #define ENABLE_TIME_PROFILING_PIC_TYPES                   0 // DISABLED by default (can be enabled by project configuration or make command)
 #endif
@@ -112,8 +118,8 @@ namespace vvenc {
 #endif
 #ifndef ENABLE_TIME_PROFILING_CU_SHAPES
 #define ENABLE_TIME_PROFILING_CU_SHAPES                   0 // DISABLED by default (can be enabled by project configuration or make command)
-#endif
-#define ENABLE_TIME_PROFILING_EXTENDED                    ( ENABLE_TIME_PROFILING_PIC_TYPES || ENABLE_TIME_PROFILING_CTUS_IN_PIC || ENABLE_TIME_PROFILING_CU_SHAPES )
+#endif  
+#define ENABLE_TIME_PROFILING_EXTENDED                    ( ENABLE_TIME_PROFILING_PIC_TYPES || ENABLE_TIME_PROFILING_TL || ENABLE_TIME_PROFILING_CTUS_IN_PIC || ENABLE_TIME_PROFILING_CU_SHAPES )
 
 #ifndef ENABLE_CU_MODE_COUNTERS
 #define ENABLE_CU_MODE_COUNTERS                           0
@@ -127,6 +133,8 @@ namespace vvenc {
 
 #define INTRA_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
 #define INTER_FULL_SEARCH                                 0 ///< enables full mode search for intra estimation
+
+#define CLEAR_AND_CHECK_TUIDX                             0 ///< add additional checks to tu-map management (not accessing the map when dirty)
 
 // This can be enabled by the makefile
 #ifndef RExt__HIGH_BIT_DEPTH_SUPPORT
@@ -418,8 +426,10 @@ enum MvpDir
 enum TransformDirection
 {
   TRANSFORM_FORWARD              = 0,
-  TRANSFORM_INVERSE              = 1,
-  TRANSFORM_NUMBER_OF_DIRECTIONS = 2
+  TRANSFORM_INVERSE              = 0,
+  TRANSFORM_NUMBER_OF_DIRECTIONS = 1
+  //TRANSFORM_INVERSE              = 1,
+  //TRANSFORM_NUMBER_OF_DIRECTIONS = 2
 };
 
 enum CoeffScanGroupType
@@ -897,6 +907,8 @@ struct XUCache
   CUCache cuCache;
   TUCache tuCache;
 };
+
+
 
 } // namespace vvenc
 

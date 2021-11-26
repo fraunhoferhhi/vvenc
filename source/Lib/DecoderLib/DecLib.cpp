@@ -1178,18 +1178,17 @@ void DecLib::xCheckParameterSetConstraints(const int layerId)
   const int minCuSize = 1 << sps->log2MinCodingBlockSize;
   CHECK( ( pps->picWidthInLumaSamples % ( std::max( 8, minCuSize) ) ) != 0, "Coded frame width must be a multiple of Max(8, the minimum unit size)" );
   CHECK( ( pps->picHeightInLumaSamples % ( std::max( 8, minCuSize) ) ) != 0, "Coded frame height must be a multiple of Max(8, the minimum unit size)" );
-  if( !sps->rprEnabled )
+  if( !sps->resChangeInClvsEnabled )
   {
     CHECK( pps->picWidthInLumaSamples != sps->maxPicWidthInLumaSamples, "When res_change_in_clvs_allowed_flag equal to 0, the value of pic_width_in_luma_samples shall be equal to pic_width_max_in_luma_samples." );
     CHECK( pps->picHeightInLumaSamples != sps->maxPicHeightInLumaSamples, "When res_change_in_clvs_allowed_flag equal to 0, the value of pic_height_in_luma_samples shall be equal to pic_height_max_in_luma_samples." );
   }
-  if( sps->rprEnabled )
+  if( sps->resChangeInClvsEnabled )
   {
     CHECK( sps->subPicInfoPresent != 0, "When res_change_in_clvs_allowed_flag is equal to 1, the value of subpic_info_present_flag shall be equal to 0." );
   }
-  CHECK( !sps->rprEnabled && pps->scalingWindow.enabledFlag, "When res_change_in_clvs_allowed_flag is equal to 0, the value of scaling_window_flag shall be equal to 0." );
 
-  CHECK(sps->rprEnabled && sps->virtualBoundariesEnabled, "when the value of res_change_in_clvs_allowed_flag is equal to 1, the value of sps_virtual_boundaries_present_flag shall be equal to 0");
+  CHECK(sps->resChangeInClvsEnabled && sps->virtualBoundariesEnabled, "when the value of res_change_in_clvs_allowed_flag is equal to 1, the value of sps_virtual_boundaries_present_flag shall be equal to 0");
 
   if( sps->CTUSize + 2 * ( 1 << sps->log2MinCodingBlockSize ) > pps->picWidthInLumaSamples )
   {

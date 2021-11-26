@@ -1392,7 +1392,7 @@ void EncAdaptiveLoopFilter::xSetupCcAlfAPS( CodingStructure &cs )
 
 void EncAdaptiveLoopFilter::getStatisticsCTU( Picture& pic, CodingStructure& cs, PelUnitBuf& recYuv, const int ctuRsAddr )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
 
   if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
   {
@@ -1563,7 +1563,7 @@ void EncAdaptiveLoopFilter::getStatisticsFrame( Picture& pic, CodingStructure& c
 
 void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, const double* lambdas )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_STATS );
 
   if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
   {
@@ -1669,7 +1669,7 @@ void EncAdaptiveLoopFilter::deriveFilter( Picture& pic, CodingStructure& cs, con
 
 void EncAdaptiveLoopFilter::reconstructCTU_MT( Picture& pic, CodingStructure& cs, int ctuRsAddr )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_ALF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
 
   if( cs.sps->maxTLayers > 1 && cs.sps->maxTLayers - m_encCfg->m_alfSpeed <= pic.TLayer )
   {
@@ -1911,7 +1911,7 @@ void EncAdaptiveLoopFilter::reconstructCTU( Picture& pic, CodingStructure& cs, c
 
 void EncAdaptiveLoopFilter::alfReconstructor( CodingStructure& cs )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_REC );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_REC );
   if( !cs.slice->tileGroupAlfEnabled[COMP_Y] )
   {
     return;
@@ -2085,7 +2085,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
 
 void EncAdaptiveLoopFilter::alfEncoder( CodingStructure& cs, AlfParam& alfParam, const ChannelType channel, const double lambdaChromaWeight )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_ENC );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_ENC );
   const TempCtx  ctxStart( m_CtxCache, AlfCtx( m_CABACEstimator->getCtx() ) );
   TempCtx        ctxBest( m_CtxCache );
 
@@ -2617,7 +2617,7 @@ int EncAdaptiveLoopFilter::lengthUvlc( int uiCode )
 
 double EncAdaptiveLoopFilter::deriveFilterCoeffs( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, double errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_DERIVE_COEF );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_DERIVE_COEF );
   double error = 0.0;
   AlfCovariance& tmpCov = covMerged[MAX_NUM_ALF_CLASSES];
 
@@ -2737,7 +2737,7 @@ void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, doub
 
 void EncAdaptiveLoopFilter::mergeClasses( const AlfFilterShape& alfShape, AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], const int numClasses, short filterIndices[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES] )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_MERGE );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_MERGE );
   int       tmpClip          [MAX_NUM_ALF_LUMA_COEFF];
   int       bestMergeClip    [MAX_NUM_ALF_LUMA_COEFF];
   double    err              [MAX_NUM_ALF_CLASSES];
@@ -4047,7 +4047,7 @@ void  EncAdaptiveLoopFilter::initDistortionCcalf()
 
 void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfParamNewFilters, const double lambdaChromaWeight )
 {
-  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_ALF_ENC_CTB );
+  PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_ENC_CTB );
   TempCtx   ctxStart       ( m_CtxCache, AlfCtx(m_CABACEstimator->getCtx()));
   TempCtx   ctxBest        ( m_CtxCache );
   TempCtx   ctxTempStart   ( m_CtxCache );

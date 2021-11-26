@@ -61,7 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Quant.h"
 
 #ifdef TARGET_SIMD_X86
-#include "CommonDefX86.h"
+#include "x86/CommonDefX86.h"
 #endif
 
 namespace vvenc {
@@ -388,7 +388,7 @@ LoopFilter::~LoopFilter()
  */
 void LoopFilter::loopFilterPic( CodingStructure& cs, bool calcFilterStrength ) const
 {
-  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_DEBLOCK_FILTER );
+  PROFILER_SCOPE_AND_STAGE( 0, g_timeProfiler, P_DEBLOCK_FILTER );
   const PreCalcValues& pcv = *cs.pcv;
 
 

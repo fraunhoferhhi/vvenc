@@ -109,6 +109,8 @@ inline std::istream& operator >> ( std::istream& in, IStreamToRefVec<T>& toVec )
     // treat all whitespaces and commas as valid separators
     if( toVec.sep == 'x')
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == 'x'; }, ' ' );
+    else if( toVec.sep == '/')
+      replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == '/'; }, ' ' );
     else
       replace_if( line.begin(), line.end(), []( int c ){ return isspace( c ) || c == ','; }, ' ' );
     std::stringstream tokenStream( line );
@@ -241,14 +243,15 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 // ====================================================================================================================
 
 
-typedef void (*setParamFunc) (VVEncAppCfg*, int);
+typedef void (*setParamFunc) (VVEncAppCfg*, vvenc_config*, int);
 
 template<typename E>
 class APPUTILS_DECL IStreamToFunc
 {
   public:
-    IStreamToFunc( setParamFunc func, VVEncAppCfg* encCfg, const std::vector<SVPair<E>>* m, const E _default )
+    IStreamToFunc( setParamFunc func, VVEncAppCfg* appCfg, vvenc_config* encCfg, const std::vector<SVPair<E>>* m, const E _default )
       : mfunc( func )
+      , mappCfg ( appCfg )
       , mencCfg( encCfg )
       , toMap( m )
       , dstVal( _default )
@@ -272,7 +275,8 @@ class APPUTILS_DECL IStreamToFunc
 
   private:
     setParamFunc                  mfunc;
-    VVEncAppCfg*                  mencCfg;
+    VVEncAppCfg*                  mappCfg;
+    vvenc_config*                 mencCfg;
     const std::vector<SVPair<E>>* toMap;
     E                             dstVal;
 };
@@ -288,7 +292,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToFunc<E>& toEnum )
     if ( str == map.str )
     {
       toEnum.dstVal = map.value;
-      toEnum.mfunc(toEnum.mencCfg, map.value);
+      toEnum.mfunc( toEnum.mappCfg, toEnum.mencCfg, map.value);
       return in;
     }
   }

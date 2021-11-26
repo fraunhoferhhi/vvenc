@@ -492,7 +492,9 @@ void IntraPrediction::initPredIntraParams(const CodingUnit& cu, const CompArea a
   }
 }
 
-#include "CommonDefX86.h"
+#ifdef TARGET_SIMD_X86
+#include "x86/CommonDefX86.h"
+#endif
 
 
 /** Function for deriving the simplified angular intra predictions.

@@ -117,28 +117,13 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
 #if ENABLE_TIME_PROFILING
   if( g_timeProfiler == nullptr )
   {
-    g_timeProfiler = new TimeProfiler();
-  }
-#elif ENABLE_TIME_PROFILING_EXTENDED
-  if( g_timeProfiler == nullptr )
-  {
-#if ENABLE_TIME_PROFILING_PIC_TYPES
-    g_timeProfiler = new TimeProfiler2D( 3, 1 );
-#elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
-    int   widthInCTU  = ( m_cEncCfg.m_PadSourceWidth % m_cEncCfg.m_CTUSize )  ? m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize  + 1 : m_cEncCfg.m_PadSourceWidth/m_cEncCfg.m_CTUSize;
-    int   heightInCTU = ( m_cEncCfg.m_PadSourceHeight % m_cEncCfg.m_CTUSize ) ? m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize + 1 : m_cEncCfg.m_PadSourceHeight/m_cEncCfg.m_CTUSize;
-    g_timeProfiler = new TimeProfiler2D( widthInCTU, heightInCTU, 2 );
-#elif ENABLE_TIME_PROFILING_CU_SHAPES
-    g_timeProfiler = new TimeProfiler2D( Log2(m_cEncCfg.m_CTUSize) + 1, Log2(m_cEncCfg.m_CTUSize) + 1, 2 );
-#endif
+    g_timeProfiler = timeProfilerCreate( encCfg );
   }
 #endif
 }
 
 void EncLib::uninitEncoderLib()
 {
-  xUninitLib();
-
 #if ENABLE_TRACING
   if ( g_trace_ctx )
   {
@@ -164,57 +149,15 @@ void EncLib::uninitEncoderLib()
 #endif
 
 #if ENABLE_TIME_PROFILING
-  if( g_timeProfiler )
+#if ENABLE_TIME_PROFILING_MT_MODE
+  for( auto& p : m_threadPool->getProfilers() )
   {
-    std::cout << *g_timeProfiler;
-    delete g_timeProfiler;
-    g_timeProfiler = nullptr;
-  }
-#elif ENABLE_TIME_PROFILING_EXTENDED
-  if( g_timeProfiler )
-  {
-#if ENABLE_TIME_PROFILING_PIC_TYPES
-    std::cout << std::endl;
-    std::cout << "Run-time of selected encoder stages across picture types (0:Intra, 1:Inter)" << std::endl;
-    for( int j = 0; j < g_timeProfiler->getCountersSet()[0].getNumCntTypes(); j++ )
-    {
-      g_timeProfiler->getCountersSet()[0][j][0][2] += g_timeProfiler->getCountersSet()[0][j][0][0] + g_timeProfiler->getCountersSet()[0][j][0][1];
-    }
-    StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[0], false, true, false, true, true, -1 );
-#endif
-
-#if ENABLE_TIME_PROFILING_CTUS_IN_PIC
-    for( int i = 0; i < g_timeProfiler->getCountersSet().size(); i++ )
-    {
-      std::cout << "Run-time of selected encoder stages across CTUs of all pictures " << "(" << ( i == 0 ? "Intra": "Inter" << ")" ) << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[i], false, true, false, true, true, -1 );
-      if( i > 0 )
-        g_timeProfiler->getCountersSet()[0] += g_timeProfiler->getCountersSet()[i];
-    }
-    if( g_timeProfiler->getCountersSet().size() > 1 )
-    {
-      std::cout << "Run-time of selected encoder stages across CTUs of all pictures (total)" << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[0], false, true, false, true, true, -1 );
-    }
-#endif
-
-#if ENABLE_TIME_PROFILING_CU_SHAPES
-    for( int i = 0; i < g_timeProfiler->getCountersSet().size(); i++ )
-    {
-      std::cout << "Run-time of selected encoder stages across CU block shapes of all pictures " << "(" << ( i == 0 ? "Intra": "Inter" ) << ")"  << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[i],  true, true, false, true, true, -1 );
-      if( i > 0 ) g_timeProfiler->getCountersSet()[0] += g_timeProfiler->getCountersSet()[i];
-    }
-    if( g_timeProfiler->getCountersSet().size() > 1 )
-    {
-      std::cout << "Run-time of selected encoder stages across CU block shapes of all pictures (total)" << std::endl;
-      StatCounters::report2D( std::cout, g_timeProfiler->getCountersSet()[0],  true, true, false, true, true, -1 );
-    }
-#endif
-    delete g_timeProfiler;
-    g_timeProfiler = nullptr;
+    *g_timeProfiler += *p;
   }
 #endif
+  timeProfilerResults( g_timeProfiler );
+#endif
+  xUninitLib();
 }
 
 void EncLib::initPass( int pass, const char* statsFName )
@@ -265,7 +208,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   // thread pool
   if( m_cEncCfg.m_numThreads > 0 )
   {
-    m_threadPool = new NoMallocThreadPool( m_cEncCfg.m_numThreads, "EncSliceThreadPool" );
+    m_threadPool = new NoMallocThreadPool( m_cEncCfg.m_numThreads, "EncSliceThreadPool", &m_cEncCfg );
   }
 
   m_MCTF.init( m_cEncCfg.m_internalBitDepth, m_cEncCfg.m_PadSourceWidth, m_cEncCfg.m_PadSourceHeight, sps0.CTUSize,
@@ -314,16 +257,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_cEncCfg.m_FrameRate )
   {
-    int iTempRate = m_cEncCfg.m_FrameRate;
-    int iTempScale = 1;
-    switch( m_cEncCfg.m_FrameRate )
-    {
-    case 23: iTempRate = 24000; iTempScale = 1001; break;
-    case 29: iTempRate = 30000; iTempScale = 1001; break;
-    case 59: iTempRate = 60000; iTempScale = 1001; break;
-    default: break;
-    }
-    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)iTempScale/(int64_t)iTempRate);
+    m_TicksPerFrameMul4 = (int)((int64_t)4 *(int64_t)m_cEncCfg.m_TicksPerSecond * (int64_t)m_cEncCfg.m_FrameScale/(int64_t)m_cEncCfg.m_FrameRate);
   }
 
   m_numPassInitialized = pass;
@@ -410,7 +344,7 @@ void EncLib::xSetRCEncCfg( int pass )
   }
   else // estimate near-optimal base QP for PPS in second RC pass
   {
-    const unsigned fps = m_cEncCfg.m_FrameRate;
+    const unsigned fps = m_cEncCfg.m_FrameRate/m_cEncCfg.m_FrameScale;
     uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
     std::list<TRCPassStats>& firstPassData = m_pcRateCtrl->getFirstPassStats();
     std::list<TRCPassStats>::iterator it;
@@ -440,7 +374,7 @@ void EncLib::xSetRCEncCfg( int pass )
 
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
-  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_PIC_LEVEL );
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
 
   // clear output access unit
   au.clearAu();
@@ -479,6 +413,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       xDetectScreenC(*pic, pic->getOrigBuf());
       m_numPicsRcvd    += 1;
       m_numPicsInQueue += 1;
+      PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
     }
   }
   else
@@ -916,7 +851,7 @@ void EncLib::xInitConstraintInfo(ConstraintInfo &ci) const
   ci.noRaslConstraintFlag                         = m_cEncCfg.m_IntraPeriod == 1 || !hasLeadingPictures;
   ci.noRadlConstraintFlag                         = m_cEncCfg.m_IntraPeriod == 1 || !hasLeadingPictures;
   ci.noIdrConstraintFlag                          = false;
-  ci.noCraConstraintFlag                          = m_cEncCfg.m_DecodingRefreshType != 1;
+  ci.noCraConstraintFlag                          = (m_cEncCfg.m_DecodingRefreshType != 1 && m_cEncCfg.m_DecodingRefreshType != 5);
   ci.noGdrConstraintFlag                          = false;
   ci.noApsConstraintFlag                          = ( !m_cEncCfg.m_alf && m_cEncCfg.m_lumaReshapeEnable == 0 /*&& m_useScalingListId == SCALING_LIST_OFF*/);
 }
@@ -1148,6 +1083,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
   pps.outputFlagPresent                 = false;
   pps.deblockingFilterOverrideEnabled   = !m_cEncCfg.m_loopFilterOffsetInPPS;
   pps.deblockingFilterDisabled          = m_cEncCfg.m_bLoopFilterDisable;
+  pps.dbfInfoInPh                       = m_cEncCfg.m_picPartitionFlag && !m_cEncCfg.m_loopFilterOffsetInPPS && !m_cEncCfg.m_bLoopFilterDisable;
 
   if (! pps.deblockingFilterDisabled)
   {
@@ -1212,6 +1148,7 @@ void EncLib::xInitPPS(PPS &pps, const SPS &sps) const
 
   pps.noPicPartition = !m_cEncCfg.m_picPartitionFlag;
   pps.ctuSize        = sps.CTUSize;
+  pps.log2CtuSize    = Log2( sps.CTUSize );
 
   xInitPPSforTiles( pps, sps );
 
@@ -1319,7 +1256,6 @@ void EncLib::xInitPPSforTiles(PPS &pps,const SPS &sps) const
   }
   else
   {
-    pps.log2CtuSize    = vvenc::ceilLog2( sps.CTUSize );
     for( int i = 0; i < pps.numExpTileCols; i++ )
     {
       pps.tileColWidth.push_back( m_cEncCfg.m_tileColumnWidth[i] );

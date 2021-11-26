@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/UnitTools.h"
 #include "CommonLib/dtrace_codingstruct.h"
 #include "CommonLib/dtrace_buffer.h"
+#include "CommonLib/TimeProfiler.h"
 #include "CommonLib/MD5.h"
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
@@ -368,6 +369,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
   // encode one picture in serial mode / multiple pictures in FPP mode
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
   while( true )
   {
     Picture* pic           = nullptr;
@@ -463,6 +465,7 @@ void EncGOP::encodePictures( const std::vector<Picture*>& encList, PicList& picL
 
   CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
   CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
 
   // AU output
   Picture* outPic = m_gopEncListOutput.front();
@@ -512,11 +515,12 @@ void EncGOP::printOutSummary( int numAllPicCoded, const bool printMSEBasedSNR, c
   }
 
   //--CFG_KDY
-  const int rateMultiplier = 1;
-  m_AnalyzeAll.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeI.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeP.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
-  m_AnalyzeB.setFrmRate( m_pcEncCfg->m_FrameRate*rateMultiplier / (double)m_pcEncCfg->m_temporalSubsampleRatio);
+  //const int rateMultiplier = 1;
+  double fps = m_pcEncCfg->m_FrameRate/(double)m_pcEncCfg->m_FrameScale / (double)m_pcEncCfg->m_temporalSubsampleRatio;
+  m_AnalyzeAll.setFrmRate( fps );
+  m_AnalyzeI.setFrmRate( fps );
+  m_AnalyzeP.setFrmRate( fps );
+  m_AnalyzeB.setFrmRate( fps );
 
   const ChromaFormat chFmt = m_pcEncCfg->m_internChromaFormat;
 
@@ -595,9 +599,9 @@ vvencNalUnitType EncGOP::xGetNalUnitType( int pocCurr, int lastIDR ) const
   {
     return VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL;
   }
-  if (m_pcEncCfg->m_DecodingRefreshType < 3 && pocCurr % m_pcEncCfg->m_IntraPeriod == 0)
+  if ((m_pcEncCfg->m_DecodingRefreshType < 3 || m_pcEncCfg->m_DecodingRefreshType == 5) && pocCurr % m_pcEncCfg->m_IntraPeriod == 0)
   {
-    if (m_pcEncCfg->m_DecodingRefreshType == 1)
+    if (m_pcEncCfg->m_DecodingRefreshType == 1 || m_pcEncCfg->m_DecodingRefreshType == 5)
     {
       return VVENC_NAL_UNIT_CODED_SLICE_CRA;
     }
@@ -819,7 +823,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
 
   // reference list
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, false ) != -2 || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, false ) != -2 )
+  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, false ) || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, false ) )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
@@ -858,10 +862,23 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   slice->picHeader->picInterSliceAllowed = sliceType != VVENC_I_SLICE;
   slice->picHeader->picIntraSliceAllowed = sliceType == VVENC_I_SLICE;
 
-  for( int comp = 0; comp < MAX_NUM_COMP; comp++)
+  const vvencGOPEntry& gopEntry = m_pcEncCfg->m_GOPList[pic.gopId];
+  slice->deblockingFilterOverride = sliceType != VVENC_I_SLICE && (gopEntry.m_betaOffsetDiv2 || gopEntry.m_tcOffsetDiv2);
+  if( slice->deblockingFilterOverride )
   {
-    slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = slice->pps->deblockingFilterTcOffsetDiv2[comp];
-    slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = slice->pps->deblockingFilterBetaOffsetDiv2[comp];
+    for( int comp = 0; comp < MAX_NUM_COMP; comp++)
+    {
+      slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = gopEntry.m_tcOffsetDiv2   + m_pcEncCfg->m_loopFilterTcOffsetDiv2[comp];
+      slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = gopEntry.m_betaOffsetDiv2 +   m_pcEncCfg->m_loopFilterBetaOffsetDiv2[comp];
+    }
+  }
+  else
+  {
+    for( int comp = 0; comp < MAX_NUM_COMP; comp++)
+    {
+      slice->deblockingFilterTcOffsetDiv2[comp]    = slice->picHeader->deblockingFilterTcOffsetDiv2[comp]   = slice->pps->deblockingFilterTcOffsetDiv2[comp];
+      slice->deblockingFilterBetaOffsetDiv2[comp]  = slice->picHeader->deblockingFilterBetaOffsetDiv2[comp] = slice->pps->deblockingFilterBetaOffsetDiv2[comp];
+    }
   }
 
   if (slice->pps->useDQP)
@@ -889,13 +906,8 @@ void EncGOP::xInitFirstSlice( Picture& pic, PicList& picList, bool isEncodeLtRef
   if( slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
     slice->lmChromaCheckDisable = true;
-    if( sliceType == VVENC_B_SLICE )
-    {
-      pic.cs->picHeader->disDmvrFlag = true;
-
-      xUpdateRPRtmvp( pic.cs->picHeader, slice );
-      xUpdateRPRToolCtrl( pic.cs->picHeader, slice );
-    }
+    pic.cs->picHeader->disDmvrFlag = true;
+    xUpdateRPRtmvp( pic.cs->picHeader, slice );
   }
 
   // update RAS
@@ -1072,33 +1084,6 @@ void EncGOP::xUpdateRPRtmvp( PicHeader* picHeader, Slice* slice )
     else
     {
       picHeader->enableTMVP = false;
-    }
-  }
-}
-
-void EncGOP::xUpdateRPRToolCtrl( PicHeader* picHeader, Slice* slice )
-{
-  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_0]; refIdx++ )
-  {
-    if( slice->getRefPic( REF_PIC_LIST_0, refIdx )->poc <= m_pocCRA &&
-        slice->getRefPic( REF_PIC_LIST_0, refIdx )->slices[0]->nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_RASL )
-    {
-      picHeader->disBdofFlag = true;
-      picHeader->disProfFlag = true;
-
-      return;
-    }
-}
-
-  for( int refIdx = 0; refIdx < slice->numRefIdx[REF_PIC_LIST_1]; refIdx++ )
-  {
-    if( slice->getRefPic( REF_PIC_LIST_1, refIdx )->poc <= m_pocCRA &&
-        slice->getRefPic( REF_PIC_LIST_1, refIdx )->slices[0]->nalUnitType != VVENC_NAL_UNIT_CODED_SLICE_RASL )
-    {
-      picHeader->disBdofFlag = true;
-      picHeader->disProfFlag = true;
-
-      return;
     }
   }
 }
