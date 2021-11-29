@@ -599,8 +599,6 @@ inline void msg( int level, const char* fmt, ... )
 {
   if ( g_msgFnc )
   {
-    static std::mutex _msgMutex;
-    std::unique_lock<std::mutex> _lock( _msgMutex );
     va_list args;
     va_start( args, fmt );
     g_msgFnc( g_msgFncCtx, level, fmt, args );
