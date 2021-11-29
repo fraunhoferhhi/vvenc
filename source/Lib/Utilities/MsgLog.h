@@ -44,8 +44,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
-  \file    Logger.h
-  \brief   A very simple logger for the logging callback function
+  \file    MsgLog.h
+  \brief   A logger for the logging callback function
 */
 
 #pragma once
