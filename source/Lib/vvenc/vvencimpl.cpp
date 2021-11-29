@@ -705,13 +705,14 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
     ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, msg, false, cPicture.poc, false );
     if( ret )  
     { 
+      msg.log( VVENC_ERROR, "decoding failed\n");
       return VVENC_ERR_UNSPECIFIED; 
     }
   }
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    (void)e;
+    msg.log( VVENC_ERROR, "decoding failed: %s\n", e.what() );
     return VVENC_ERR_UNSPECIFIED;
   }
 #endif
