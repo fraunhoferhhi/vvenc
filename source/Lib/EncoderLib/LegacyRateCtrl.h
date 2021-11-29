@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur FÃ¶rderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -190,7 +190,7 @@ namespace vvenc {
     LegacyRateCtrl();
     ~LegacyRateCtrl();
 
-    void init( const VVEncCfg& encCfg, int baseQP );
+    void init( const VVEncCfg& encCfg );
     void destroy();
     void initRCGOP( const int numberOfPictures );
     void destroyRCGOP();

@@ -106,7 +106,6 @@ public:
 private:
   void     xUninitLib          ();
   void     xInitRCCfg          ();
-  void     xEnableRCCfg        ();
 
   PicShared* xGetFreePicShared();
   void     xAssignPrevQpaBufs( PicShared* picShared );

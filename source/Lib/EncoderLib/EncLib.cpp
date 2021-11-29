@@ -178,7 +178,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 && ! m_encCfg.m_RCLookAhead )
+    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
     {
       m_rateCtrl = new LegacyRateCtrl;
     }
@@ -199,9 +199,19 @@ void EncLib::initPass( int pass, const char* statsFName )
   xUninitLib();
 
   // enable encoder config based on rate control pass
-  if( m_encCfg.m_RCNumPasses > 1 )
+  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
   {
-    xEnableRCCfg();
+    if (!m_rateCtrl->rcIsFinalPass)
+    {
+      // set encoder config for 1st rate control pass
+      const_cast<VVEncCfg&>(m_encCfg) = m_firstPassCfg;
+    }
+    else
+    {
+      // restore encoder config for final 2nd RC pass
+      const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
+      const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+    }
   }
 
   // thread pool
@@ -250,8 +260,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   // rate control
   if( m_encCfg.m_RCTargetBitrate > 0 )
   {
-    const int rcBaseQP = ( pass == 1 ) ? m_encCfg.m_QP : m_firstPassCfg.m_QP;
-    m_rateCtrl->init( m_encCfg, rcBaseQP );
+    m_rateCtrl->init( m_encCfg );
     if( pass == 1 )
     {
       m_rateCtrl->processFirstPassData( false );
@@ -335,43 +344,6 @@ void EncLib::xInitRCCfg()
   if( m_firstPassCfg.m_CTUSize < 128 && ( m_firstPassCfg.m_PadSourceWidth > 1024 || m_firstPassCfg.m_PadSourceHeight > 640 ) )
   {
     m_firstPassCfg.m_cuQpDeltaSubdiv = 0;
-  }
-}
-
-void EncLib::xEnableRCCfg()
-{
-  if( ! m_rateCtrl->rcIsFinalPass )
-  {
-    // set encoder config for rate control first pass
-    const_cast<VVEncCfg&>(m_encCfg) = m_firstPassCfg;
-  }
-  else
-  {
-    // restore encoder configuration for second rate control passes
-    const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
-
-    // estimate near-optimal base QP for PPS in second RC pass
-    const unsigned fps = m_encCfg.m_FrameRate/m_encCfg.m_FrameScale;
-    uint64_t sumFrBits = 0, sumVisAct = 0; // for first-pass data
-    std::list<TRCPassStats>& firstPassData = m_rateCtrl->getFirstPassStats();
-    std::list<TRCPassStats>::iterator it;
-
-    for( auto& stats : firstPassData )
-    {
-      sumFrBits += stats.numBits;
-      sumVisAct += stats.visActY;
-    }
-    if( firstPassData.size() > 0 && fps > 0 )
-    {
-      double d = (3840.0 * 2160.0) / double (m_encCfg.m_SourceWidth * m_encCfg.m_SourceHeight);
-      const int firstPassBaseQP  = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_encCfg.m_RCTargetBitrate) / 500000.0)));
-      const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_encCfg.m_SourceHeight)) / log (2.0)) - 7;
-
-      d = (double) m_encCfg.m_RCTargetBitrate * (double) firstPassData.size() / double (fps * sumFrBits);
-      d = firstPassBaseQP - (105.0 / 128.0) * sqrt ((double) std::max (1, firstPassBaseQP)) * log (d) / log (2.0);
-      const_cast<VVEncCfg&>(m_encCfg).m_QP = int (0.5 + d + 0.125 * log2HeightMinus7 * std::max (0.0, 24.0 + 0.001/*log2HeightMinus7*/ * (log ((double) sumVisAct / firstPassData.size()) / log (2.0) - 0.5 * m_encCfg.m_internalBitDepth[CH_L] - 3.0) - d));
-      const_cast<VVEncCfg&>(m_encCfg).m_QP = Clip3 (17, MAX_QP, m_encCfg.m_QP);
-    }
   }
 }
 
