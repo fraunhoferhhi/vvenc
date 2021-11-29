@@ -196,6 +196,7 @@ static const int MAX_NUM_REF =                                     16; ///< max.
 static const int MAX_QP =                                          63;
 static const int MAX_QP_PERCEPT_QPA =                              42; ///< max. base QP up to which CTU or sub-CTU QPA is used instead of frame QPA
 static const int NOT_VALID =                                       -1;
+static const int QPA_PREV_FRAMES =                                  2;
 
 
 static const int AMVP_MAX_NUM_CANDS =                               2; ///< AMVP: advanced motion vector prediction - max number of final candidates
@@ -450,6 +451,10 @@ static const double MRG_FAST_RATIOMYV[4] =                        { 1.15, 1.1, 1
 static const int    NUM_AMAXBT_LAYER =                             10;
 static const double AMAXBT_TH32 =                                  15.0;
 static const double AMAXBT_TH64 =                                  30.0;
+
+// Threshholds for Fast Chroma Block Partitoning. Only used in Intra Only Coding
+static const int    FCBP_TH1 =                                     18000;
+static const int    FCBP_TH2 =                                     105;
 
 // need to know for static memory allocation
 static const int MAX_DELTA_QP   =                                   7;      ///< maximum supported delta QP value

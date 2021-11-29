@@ -253,8 +253,6 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
   CodingStructure& cs = *(pic.cs);
   Slice* slice        = pic.slices[ 0 ];
 
-  pic.getFilteredOrigBuffer().destroy();
-
   if( slice->sps->saoEnabled )
   {
     m_SliceEncoder.saoDisabledRate( cs, pic.getSAO( 1 ) );

@@ -135,6 +135,15 @@ build_mingw_ubuntu2004:
    tags:
       - ubuntu2004
 
+build_vc191x:
+   extends: .build_only_template
+   tags:
+      - vc191x
+
+build_vc192x:
+   extends: .build_only_template
+   tags:
+      - vc192x
 
 test_ubuntu1804:
    extends: .build_test_template

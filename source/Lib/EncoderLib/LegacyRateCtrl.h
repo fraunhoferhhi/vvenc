@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur FÃ¶rderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -92,6 +92,7 @@ namespace vvenc {
     int  getLeftAverageBits() { CHECK( !( framesLeft > 0 ), "No frames left" ); return (int)( bitsLeft / framesLeft ); }
     void clipRcAlpha( double& alpha );
 
+    int             totalFrames;
     int             fppParFrames;
     int             picWidth;
     int             picHeight;
@@ -99,7 +100,6 @@ namespace vvenc {
     int             lcuHeight;
     int             numberOfPixel;
     int             numberOfLCU;
-    int             framesCoded;
     int             averageBits;
     int             framesLeft;
     int             adaptiveBits;

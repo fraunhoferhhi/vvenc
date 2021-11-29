@@ -194,196 +194,105 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
   return error;
 }
 
-MCTF::MCTF() :  m_chromaFormatIDC(NUM_CHROMA_FORMAT)
+MCTF::MCTF()
+  : m_encCfg    ( nullptr )
+  , m_threadPool( nullptr )
+  , m_filterPoc ( 0 )
 {
   m_motionErrorLumaIntX  = motionErrorLumaInt;
   m_motionErrorLumaInt8  = motionErrorLumaInt;
   m_motionErrorLumaFracX = motionErrorLumaFrac;
   m_motionErrorLumaFrac8 = motionErrorLumaFrac;
-  m_threadPool = nullptr;
-#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
 
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
   initMCTF_X86();
 #endif
 }
 
 MCTF::~MCTF()
 {
-  uninit();
 }
 
-
-void MCTF::uninit()
+void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
 {
-  m_picFifo.clear();
-  for ( auto& picItr : m_leadFifo )
-  {
-    Picture* pic = picItr;
-    pic->destroy();
-    delete pic;
-    pic = nullptr;
-  }
-  m_leadFifo.clear();
-  for ( auto& picItr : m_trailFifo )
-  {
-    Picture* pic = picItr;
-    pic->destroy();
-    delete pic;
-    pic = nullptr;
-  }
-  m_trailFifo.clear();
-}
+  CHECK( encCfg.m_vvencMCTF.numFrames != encCfg.m_vvencMCTF.numStrength, "should have been checked before" );
 
-void MCTF::init( const int internalBitDepth[MAX_NUM_CH],
-                 const int width,
-                 const int height,
-                 const int ctuSize,
-                 const ChromaFormat inputChromaFormatIDC,
-                 const int qp,
-                 const vvencMCTF MCTFCfg,
-                 const int framesToBeEncoded,
-                 NoMallocThreadPool* threadPool)
-{
-  CHECK( MCTFCfg.numFrames != MCTFCfg.numStrength, "should have been checked before" );
-  for (int i = 0; i < MAX_NUM_CH; i++)
-  {
-    m_internalBitDepth[i] = internalBitDepth[i];
-  }
+  m_encCfg     = &encCfg;
+  m_threadPool = threadPool;
+  m_area       = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
+  m_filterPoc  = 0;
 
-  m_area                  = Area(0, 0, width, height);
-  m_ctuSize               = ctuSize;
-  m_QP                    = qp;
-  m_chromaFormatIDC       = inputChromaFormatIDC;
-
-  for( int i = 0; i < MCTFCfg.numFrames; i++ )
-  {
-    m_FilterFrames.push_back( MCTFCfg.MCTFFrames[i] );
-    m_FilterStrengths.push_back( MCTFCfg.MCTFStrengths[i] );
-  }
-  m_filterFutureReference = MCTFCfg.MCTFFutureReference;
-  m_input_cnt             = 0;
-  m_cur_delay             = 0;
-  m_MCTFMode              = MCTFCfg.MCTF;
-  m_numLeadFrames         = MCTFCfg.MCTFNumLeadFrames;
-  m_numTrailFrames        = MCTFCfg.MCTFNumTrailFrames;
-  m_framesToBeEncoded     = framesToBeEncoded;
-  m_threadPool            = threadPool;
-
-  const uint8_t             acMCTFSpeedVal[] = {0, 5, 6, 22, 26 }; 
-  m_MCTFSpeedVal          = acMCTFSpeedVal[MCTFCfg.MCTFSpeed];
+  const uint8_t acMCTFSpeedVal[] = {0, 5, 6, 22, 26 };
+  m_MCTFSpeedVal = acMCTFSpeedVal[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
 }
 
 // ====================================================================================================================
 // Public member functions
 // ====================================================================================================================
 
-Picture* MCTF::createLeadTrailPic( const vvencYUVBuffer& yuvInBuf, const int poc )
+
+void MCTF::initPicture( Picture* pic )
 {
-  Picture* pic = new Picture;
-  pic->create( m_chromaFormatIDC, m_area, m_ctuSize, m_ctuSize + 16, false, m_padding );
-
-  copyPadToPelUnitBuf( pic->getOrigBuf(), yuvInBuf, m_chromaFormatIDC );
-
-//  PelUnitBuf yuvOrgBuf;
-//  setupPelUnitBuf( yuvInBuf, yuvOrgBuf, m_chromaFormatIDC );
-//  pic->getOrigBuf().copyFrom( yuvOrgBuf );
-  pic->getOrigBuf().extendBorderPel( m_padding, true );
-
-  pic->poc = poc;
-
-  return pic;
+  pic->getOrigBuf().extendBorderPel( MCTF_PADDING, MCTF_PADDING );
+  pic->setSccFlags( m_encCfg );
 }
 
-void MCTF::addLeadFrame( const vvencYUVBuffer& yuvInBuf )
+void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
-  const int poc = m_leadFifo.size() ? m_leadFifo.back()->poc + 1 : 0 - m_numLeadFrames;
-
-  CHECK( getNumLeadFrames() >= m_numLeadFrames, "receive more then the configured number of mctf lead frames" );
-  CHECK( m_picFifo.size() != m_leadFifo.size(), "receive mctf lead frame but mctf already started" );
-  CHECK( poc > 0,                               "try to add regular frame to mctf lead queue" );
-
-  Picture* pic = createLeadTrailPic( yuvInBuf, poc );
-  m_leadFifo.push_back( pic );
-  m_picFifo.push_back( pic );
-}
-
-void MCTF::addTrailFrame( const vvencYUVBuffer& yuvInBuf )
-{
-  const int poc = m_trailFifo.size() ? m_trailFifo.back()->poc + 1 : m_framesToBeEncoded;
-
-  CHECK( getNumTrailFrames() >= m_numTrailFrames, "receive more then the configured number of mctf trail frames" );
-  CHECK( m_picFifo.size() == 0,                   "receive mctf trail frame but mctf hasn't been started" );
-  CHECK( poc < m_framesToBeEncoded,               "try to add regular frame to mctf trail queue" );
-  CHECK( m_picFifo.back()->poc + 1 != poc,        "mctf filter requires input pictures with increasing poc values" );
-
-  Picture* pic = createLeadTrailPic( yuvInBuf, poc );
-  m_trailFifo.push_back( pic );
-  m_picFifo.push_back( pic );
-}
-
-void MCTF::assignQpaBufs( Picture* pic )
-{
-  if ( pic == nullptr ) return;
-
-  // set pointers to previous pictures for QP adaptation
-  pic->m_bufsOrigPrev[0] = &pic->m_bufs[PIC_ORIGINAL];
-  pic->m_bufsOrigPrev[1] = nullptr;
-  // and optimize if MCTF related pictures are available
-  if ( m_picFifo.size() > 0 )
+  // filter one picture (either all or up to frames to be encoded)
+  if( picList.size()
+      && m_filterPoc <= picList.back()->poc
+      && ( m_encCfg->m_framesToBeEncoded <= 0 || m_filterPoc < m_encCfg->m_framesToBeEncoded ) )
   {
-    auto it_end = m_picFifo.rbegin();
-    pic->m_bufsOrigPrev[0] = &(*it_end)->m_bufs[PIC_ORIGINAL];
-    if ( m_picFifo.size() > 1 )
+    // setup fifo of pictures to be filtered
+    std::deque<Picture*> picFifo;
+    int filterIdx = 0;
+    for( auto pic : picList )
     {
-      it_end++;
-      pic->m_bufsOrigPrev[1] = &(*it_end)->m_bufs[PIC_ORIGINAL];
+      const int minPoc = m_filterPoc - VVENC_MCTF_RANGE;
+      const int maxPoc = m_encCfg->m_vvencMCTF.MCTFFutureReference ? m_filterPoc + VVENC_MCTF_RANGE : m_filterPoc;
+      if( pic->poc >= minPoc && pic->poc <= maxPoc )
+      {
+        picFifo.push_back( pic );
+        if( pic->poc < m_filterPoc )
+        {
+          filterIdx += 1;
+        }
+      }
     }
+    CHECK( picFifo.empty(), "MCTF: no pictures to be filtered found" );
+    CHECK( filterIdx >= (int)picFifo.size(), "MCTF: picture filter error" );
+    CHECK( picFifo[ filterIdx ]->poc != m_filterPoc, "MCTF: picture filter error" );
+    // filter picture (when more than 1 picture is available for processing)
+    if( picFifo.size() > 1 )
+    {
+      filter( picFifo, filterIdx );
+    }
+    // set picture done
+    doneList.push_back( picFifo[ filterIdx ] );
   }
+
+  // mark pictures not needed anymore
+  for( auto pic : picList )
+  {
+    if( pic->poc > m_filterPoc - VVENC_MCTF_RANGE )
+      break;
+    freeList.push_back( pic );
+  }
+  m_filterPoc += 1;
 }
 
-void MCTF::filter( Picture* pic )
+
+void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
-  CHECK( m_picFifo.size() > 0 && pic && m_picFifo.back()->poc + 1 != pic->poc, "mctf filter requires input pictures with increasing poc values" );
-  CHECK( pic && m_numLeadFrames != m_leadFifo.size(),                          "leading mctf frames missing" );
-
-  // store picture in mctf fifo and extend border of original yuv
-  if ( pic )
-  {
-    pic->getOrigBuf().extendBorderPel( m_padding, true );
-    m_picFifo.push_back( pic );
-  }
-
-  // update current process poc
-  const int process_poc = m_filterFutureReference ? m_input_cnt - ( m_numLeadFrames + m_range ) : m_input_cnt - ( m_numLeadFrames + m_range - 1 );
-  m_input_cnt += 1;
-
-  // update resulting delay
-  m_cur_delay = m_picFifo.size() ? m_picFifo.back()->poc - process_poc : 0;
-  m_cur_delay = std::max<int>( m_cur_delay, 0 );
-
-  if ( process_poc < 0 || ( m_framesToBeEncoded > 0 && process_poc >= m_framesToBeEncoded ) || m_picFifo.empty() )
-  {
-    return;
-  }
-  if ( process_poc < m_picFifo.front()->poc || process_poc > m_picFifo.back()->poc )
-  {
-    return;
-  }
-
-  // remove obsolete pictures from fifo
-  while ( m_picFifo.front()->poc < process_poc - m_range )
-  {
-    m_picFifo.pop_front();
-  }
-
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
-  int idx = (int)m_FilterFrames.size() - 1;
+  int idx = (int)m_encCfg->m_vvencMCTF.numFrames - 1;
   for( ; idx >= 0; idx-- )
   {
-    if ( process_poc % m_FilterFrames[ idx ] == 0 )
+    if ( m_filterPoc % m_encCfg->m_vvencMCTF.MCTFFrames[ idx ] == 0 )
     {
-      overallStrength   = m_FilterStrengths[ idx ];
+      overallStrength   = m_encCfg->m_vvencMCTF.MCTFStrengths[ idx ];
       isFilterThisFrame = true;
       break;
     }
@@ -396,38 +305,28 @@ void MCTF::filter( Picture* pic )
     // for m_FiterFrames.size() > 3, this is not a problem, since less important frames will be sped-up for
     // low values for idx, and keyframe in idx == 3 or higher will get threshold == 0, i.e. full filtering
     // for m_FiterFrames.size() < 3 (e.g. GOP16), the value of idx has to shifted so that keyframe is at idx == 2
-    if( m_FilterFrames.size() < 3 ) idx += ( 3 - ( int ) m_FilterFrames.size() );
+    if( m_encCfg->m_vvencMCTF.numFrames < 3 ) idx += ( 3 - ( int ) m_encCfg->m_vvencMCTF.numFrames );
 
     int threshold     = ( m_MCTFSpeedVal >> ( idx * 2 ) ) & 3;
     isFilterThisFrame =   threshold < 2;
     dropFrames        = ( threshold & 1 ) << 1;
   }
 
-  Picture* fltrPic = nullptr;
-  for( idx = 0; idx < m_picFifo.size(); idx++ )
-  {
-    if( m_picFifo[idx]->poc == process_poc )
-    {
-      fltrPic = m_picFifo[ idx ];
-      break;
-    }
-  }
-
   const int filterFrames = VVENC_MCTF_RANGE - dropFrames;
 
-  int dropFramesFront = std::min( std::max(                                            idx - filterFrames, 0 ), dropFrames );
-  int dropFramesBack  = std::min( std::max( static_cast<int>( m_picFifo.size() ) - 1 - idx - filterFrames, 0 ), dropFrames );
+  int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
+  int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  if( !fltrPic->useScMCTF )
+  Picture* pic = picFifo[ filterIdx ];
+  if( ! pic->useScMCTF )
   {
     isFilterThisFrame = false;
   }
-  CHECK( fltrPic == nullptr || fltrPic->poc != process_poc, "error: picture not found in fifo" );
 
   if ( isFilterThisFrame )
   {
-    const PelStorage& origBuf = fltrPic->m_bufs[ PIC_ORIGINAL ];
-          PelStorage& fltrBuf = fltrPic->m_bufs[ PIC_ORIGINAL_RSP ];
+    const PelStorage& origBuf = pic->getOrigBuffer();
+          PelStorage& fltrBuf = pic->getFilteredOrigBuffer();
 
     // subsample original picture so it only needs to be done once
     PelStorage origSubsampled2;
@@ -437,10 +336,10 @@ void MCTF::filter( Picture* pic )
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
-    for ( idx = dropFramesFront; idx < m_picFifo.size() - dropFramesBack; idx++ )
+    for ( int i = dropFramesFront; i < picFifo.size() - dropFramesBack; i++ )
     {
-      Picture* curPic = m_picFifo[ idx ];
-      if ( curPic->poc == process_poc )
+      Picture* curPic = picFifo[ i ];
+      if ( curPic->poc == m_filterPoc )
       {
         continue;
       }
@@ -471,18 +370,16 @@ void MCTF::filter( Picture* pic )
       }
 
 #if JVET_V0056_MCTF
-      srcPic.index = std::min(3, std::abs(curPic->poc - process_poc) - 1);
+      srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
 #else
-      srcPic.index = std::min(1, std::abs(curPic->poc - process_poc) - 1);
+      srcPic.index = std::min(1, std::abs(curPic->poc - m_filterPoc) - 1);
 #endif
     }
 
     // filter
-    fltrBuf.create( m_chromaFormatIDC, m_area, 0, m_padding );
+    fltrBuf.create( m_encCfg->m_internChromaFormat, m_area, 0, m_padding );
     bilateralFilter( origBuf, srcFrameInfo, fltrBuf, overallStrength );
   }
-
-  fltrPic->isMctfProcessed = true;
 }
 
 // ====================================================================================================================
@@ -552,11 +449,11 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 
     if( bs & 7 )
     {
-      return m_motionErrorLumaFracX( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, xFilter, yFilter, m_internalBitDepth[CH_L], besterror );
+      return m_motionErrorLumaFracX( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
     }
     else
     {
-      return m_motionErrorLumaFrac8( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, xFilter, yFilter, m_internalBitDepth[CH_L], besterror );
+      return m_motionErrorLumaFrac8( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
     }
   }
   return error;
@@ -799,13 +696,13 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
   static const int lumaBlockSize=8;
 
   const ComponentID compID=(ComponentID)comp;
-  const int csx=getComponentScaleX(compID, m_chromaFormatIDC);
-  const int csy=getComponentScaleY(compID, m_chromaFormatIDC);
+  const int csx=getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
+  const int csy=getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
   const int blockSizeX = lumaBlockSize>>csx;
   const int blockSizeY = lumaBlockSize>>csy;
   const int width  = input.bufs[compID].width;
   int y = blockNumY*blockSizeY;
-  const Pel maxValue = (1<<m_internalBitDepth[toChannelType(compID)])-1;
+  const Pel maxValue = (1<<m_encCfg->m_internalBitDepth[toChannelType(compID)])-1;
 
   const Pel* srcImage = input.bufs[compID].buf;
   const int srcStride  = input.bufs[compID].stride;
@@ -906,7 +803,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
   }
 
 #endif
-  for(int c=0; c< getNumberValidComponents(m_chromaFormatIDC); c++)
+  for(int c=0; c< getNumberValidComponents(m_encCfg->m_internChromaFormat); c++)
   {
     for (int i = 0; i < numRefs; i++)
     {
@@ -925,13 +822,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
 #else
     const std::vector<double>& refStrength = refStrengthCh[ toChannelType( compID) ];
 #endif
-    const Pel maxSampleValue = (1<<m_internalBitDepth[ toChannelType( compID) ])-1;
+    const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ toChannelType( compID) ])-1;
 
-    const int blkSizeY = 8 >> getComponentScaleY(compID, m_chromaFormatIDC);
+    const int blkSizeY = 8 >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
 #if JVET_V0056_MCTF
-    const int blkSizeX = 8 >> getComponentScaleX(compID, m_chromaFormatIDC);
+    const int blkSizeX = 8 >> getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
 #endif
-    int yOut = yStart >> getComponentScaleY(compID, m_chromaFormatIDC);
+    int yOut = yStart >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
     const Pel* srcPelRow = orgPic.bufs[c].buf + yOut * srcStride;
     Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
     for (int y = yOut; y < std::min(yOut+blkSizeY,height); y++, srcPelRow+=srcStride, dstPelRow+=dstStride)
@@ -1051,17 +948,17 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
   }
 
 #endif
-  const double lumaSigmaSq = (m_QP - m_sigmaZeroPoint) * (m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
+  const double lumaSigmaSq = (m_encCfg->m_QP - m_sigmaZeroPoint) * (m_encCfg->m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
   const double chromaSigmaSq = 30 * 30;
 
 #if !JVET_V0056_MCTF
   std::vector<double> refStrengthCh[MAX_NUM_CH];
 #endif
   double sigmaSqCh[MAX_NUM_CH];
-  for(int c=0; c< getNumberValidChannels(m_chromaFormatIDC); c++)
+  for(int c=0; c< getNumberValidChannels(m_encCfg->m_internChromaFormat); c++)
   {
     const ChannelType ch=(ChannelType)c;
-    const Pel maxSampleValue = (1<<m_internalBitDepth[ch])-1;
+    const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ch])-1;
     const double bitDepthDiffWeighting=1024.0 / (maxSampleValue+1);
     sigmaSqCh[ch] = (isChroma(ch)? chromaSigmaSq : lumaSigmaSq)/(bitDepthDiffWeighting*bitDepthDiffWeighting);
 #if !JVET_V0056_MCTF
@@ -1079,7 +976,7 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
   std::vector<PelStorage> correctedPics(numRefs);
   for (int i = 0; i < numRefs; i++)
   {
-    correctedPics[i].create(m_chromaFormatIDC, m_area, 0, m_padding);
+    correctedPics[i].create(m_encCfg->m_internChromaFormat, m_area, 0, m_padding);
   }
 
   if( m_threadPool )

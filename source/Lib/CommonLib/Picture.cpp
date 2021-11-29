@@ -156,7 +156,6 @@ Picture::Picture()
     , vps               ( nullptr )
     , dci               ( nullptr )
     , picApsMap         ( MAX_NUM_APS * MAX_NUM_APS_TYPE )
-    , isMctfProcessed   ( false )
     , isInitDone        ( false )
     , isReconstructed   ( false )
     , isBorderExtended  ( false )
@@ -177,9 +176,11 @@ Picture::Picture()
     , sliceDataNumBins  ( 0 )
     , cts               ( 0 )
     , ctsValid          ( false )
-    , m_bufsOrigPrev    { nullptr, nullptr }
+    , m_picShared       ( nullptr )
     , picInitialQP      ( 0 )
     , picVisActY        ( 0.0 )
+    , isSccWeak         ( false )
+    , isSccStrong       ( false )
     , useScME           ( false )
     , useScMCTF         ( false )
     , useScTS           ( false )
@@ -194,34 +195,63 @@ Picture::Picture()
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
 {
+  std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
+  std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
 }
 
-void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder, int _padding )
+void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder )
 {
   UnitArea::operator=( UnitArea( _chromaFormat, Area( Position{ 0, 0 }, size ) ) );
   margin            =  _margin;
-  const Area a      = Area( Position(), size );
-  m_bufs[ PIC_RECONSTRUCTION ].create( _chromaFormat, a, _maxCUSize, _margin, MEMORY_ALIGN_DEF_SIZE );
 
   if( _decoder )
   {
-    m_bufs[ PIC_RESIDUAL ].create( _chromaFormat, Area( 0, 0, _maxCUSize, _maxCUSize ) );
-    m_bufs[PIC_PREDICTION].create( _chromaFormat, Area( 0, 0, _maxCUSize, _maxCUSize ) );
-  }
-  else
-  {
-    m_bufs[ PIC_ORIGINAL ].create( _chromaFormat, a, 0, _padding );
+    m_picBufs[ PIC_RESIDUAL   ].create( _chromaFormat, Area( 0, 0, _maxCUSize, _maxCUSize ) );
+    m_picBufs[ PIC_PREDICTION ].create( _chromaFormat, Area( 0, 0, _maxCUSize, _maxCUSize ) );
   }
 }
 
-void Picture::destroy()
+void Picture::reset()
+{
+  // reset picture
+  isInitDone          = false;
+  isReconstructed     = false;
+  isBorderExtended    = false;
+  isReferenced        = true;
+  isNeededForOutput   = true;
+  isFinished          = false;
+  isLongTerm          = false;
+  encPic              = false;
+  writePic            = false;
+  precedingDRAP       = false;
+
+  refCounter          = 0;
+  poc                 = -1;
+  gopId               = 0;
+  rcIdxInGop          = 0;
+  TLayer              = std::numeric_limits<uint32_t>::max();
+
+  actualHeadBits      = 0;
+  actualTotalBits     = 0;
+
+  std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
+  std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
+
+  encTime.resetTimer();
+}
+
+void Picture::destroy( bool bPicHeader )
 {
   for (uint32_t t = 0; t < NUM_PIC_TYPES; t++)
   {
-    m_bufs[  t ].destroy();
+    m_picBufs[  t ].destroy();
   }
   if( cs )
   {
+    if( bPicHeader && cs->picHeader )
+    {
+      delete cs->picHeader;
+    }
     cs->picHeader = nullptr;
     cs->destroy();
     delete cs;
@@ -239,21 +269,36 @@ void Picture::destroy()
     delete psei;
   }
   SEIs.clear();
+}
 
+void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], PicShared* picShared )
+{
+  m_picShared                      = picShared;
+  m_sharedBufs[ PIC_ORIGINAL ]     = origBuf;
+  m_sharedBufs[ PIC_ORIGINAL_RSP ] = filteredBuf;
+  for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+    m_bufsOrigPrev[ i ] = prevOrigBufs[ i ];
+}
+
+void Picture::releaseSharedBuffers()
+{
+  m_picShared                      = nullptr;
+  m_sharedBufs[ PIC_ORIGINAL ]     = nullptr;
+  m_sharedBufs[ PIC_ORIGINAL_RSP ] = nullptr;
 }
 
 void Picture::createTempBuffers( unsigned _maxCUSize )
 {
   CHECK( !cs, "Coding structure is required a this point!" );
 
-  m_bufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
+  m_picBufs[PIC_SAO_TEMP].create( chromaFormat, Y(), cs->pcv->maxCUSize, 0, MEMORY_ALIGN_DEF_SIZE );
 
   if( cs ) cs->rebindPicBufs();
 }
 
 void Picture::destroyTempBuffers()
 {
-  m_bufs[PIC_SAO_TEMP].destroy();
+  m_picBufs[PIC_SAO_TEMP].destroy();
 
   if( cs ) cs->rebindPicBufs();
 }
@@ -282,7 +327,7 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
 
   if( cs )
   {
-    CHECK( cs->sps != &sps, "picture initialization error: sps changed" );
+    CHECK( cs->sps != &sps,  "picture initialization error: sps changed" );
     CHECK( cs->vps != &_vps, "picture initialization error: vps changed" );
   }
   else
@@ -307,8 +352,30 @@ void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHea
   vps         = &_vps;
   dci         = nullptr;
 
+  if( ! m_picBufs[ PIC_RECONSTRUCTION ].valid() )
+  {
+    m_picBufs[ PIC_RECONSTRUCTION ].create( chromaFormat, Area( lumaPos(), lumaSize() ), sps.CTUSize, margin, MEMORY_ALIGN_DEF_SIZE );
+  }
+
   sliceDataStreams.clear();
   sliceDataNumBins = 0;
+}
+
+void Picture::setSccFlags( const VVEncCfg* encCfg )
+{
+  useScME    = encCfg->m_motionEstimationSearchMethodSCC > 0                          && isSccStrong;
+  useScTS    = encCfg->m_TS == 1                || ( encCfg->m_TS == 2                && isSccWeak );
+  useScBDPCM = encCfg->m_useBDPCM == 1          || ( encCfg->m_useBDPCM == 2          && isSccWeak );
+  useScMCTF  = encCfg->m_vvencMCTF.MCTF == 1    || ( encCfg->m_vvencMCTF.MCTF == 2    && ! isSccStrong );
+  useScLMCS  = encCfg->m_lumaReshapeEnable == 1 || ( encCfg->m_lumaReshapeEnable == 2 && ! isSccStrong );
+  useScIBC   = encCfg->m_IBCMode == 1           || ( encCfg->m_IBCMode == 2           && isSccStrong );
+#if QTBTT_SPEED3
+  useQtbttSpeedUpMode = encCfg->m_qtbttSpeedUpMode;
+  if( ( encCfg->m_qtbttSpeedUpMode & 2 ) && isSccStrong )
+  {
+    useQtbttSpeedUpMode &= ~1;
+  }
+#endif
 }
 
 Slice* Picture::allocateNewSlice()
@@ -360,7 +427,7 @@ void Picture::extendPicBorder()
   for(int comp=0; comp<getNumberValidComponents( cs->area.chromaFormat ); comp++)
   {
     ComponentID compID = ComponentID( comp );
-    PelBuf p = m_bufs[ PIC_RECONSTRUCTION ].get( compID );
+    PelBuf p = m_picBufs[ PIC_RECONSTRUCTION ].get( compID );
     Pel* piTxt = p.bufAt(0,0);
     int xmargin = margin >> getComponentScaleX( compID, cs->area.chromaFormat );
     int ymargin = margin >> getComponentScaleY( compID, cs->area.chromaFormat );
@@ -396,8 +463,8 @@ void Picture::extendPicBorder()
     // reference picture with horizontal wrapped boundary
     if (cs->sps->wrapAroundEnabled)
     {
-      p = m_bufs[ PIC_RECON_WRAP ].get( compID );
-      p.copyFrom(m_bufs[ PIC_RECONSTRUCTION ].get( compID ));
+      p = m_picBufs[ PIC_RECON_WRAP ].get( compID );
+      p.copyFrom(m_picBufs[ PIC_RECONSTRUCTION ].get( compID ));
       piTxt = p.bufAt(0,0);
       pi = piTxt;
       int xoffset = cs->pps->wrapAroundOffset >> getComponentScaleX( compID, cs->area.chromaFormat );
@@ -434,34 +501,52 @@ void Picture::extendPicBorder()
   isBorderExtended = true;
 }
 
-PelUnitBuf Picture::getBuf( const UnitArea& unit, const PictureType type )
+PelUnitBuf Picture::getPicBuf( const UnitArea& unit, const PictureType type )
 {
   if( chromaFormat == CHROMA_400 )
   {
-    return PelUnitBuf( chromaFormat, getBuf( unit.Y(), type ) );
+    return PelUnitBuf( chromaFormat, getPicBuf( unit.Y(), type ) );
   }
   else
   {
-    return PelUnitBuf( chromaFormat, getBuf( unit.Y(), type ), getBuf( unit.Cb(), type ), getBuf( unit.Cr(), type ) );
+    return PelUnitBuf( chromaFormat, getPicBuf( unit.Y(), type ), getPicBuf( unit.Cb(), type ), getPicBuf( unit.Cr(), type ) );
   }
 }
 
-const CPelUnitBuf Picture::getBuf( const UnitArea& unit, const PictureType type ) const
+const CPelUnitBuf Picture::getPicBuf( const UnitArea& unit, const PictureType type ) const
 {
   if( chromaFormat == CHROMA_400 )
   {
-    return CPelUnitBuf( chromaFormat, getBuf( unit.Y(), type ) );
+    return CPelUnitBuf( chromaFormat, getPicBuf( unit.Y(), type ) );
   }
   else
   {
-    return CPelUnitBuf( chromaFormat, getBuf( unit.Y(), type ), getBuf( unit.Cb(), type ), getBuf( unit.Cr(), type ) );
+    return CPelUnitBuf( chromaFormat, getPicBuf( unit.Y(), type ), getPicBuf( unit.Cb(), type ), getPicBuf( unit.Cr(), type ) );
   }
 }
 
-Pel* Picture::getOrigin( const PictureType& type, const ComponentID compID ) const
+PelUnitBuf Picture::getSharedBuf( const UnitArea& unit, const PictureType type )
 {
-  return m_bufs[ type ].getOrigin( compID );
+  if( chromaFormat == CHROMA_400 )
+  {
+    return PelUnitBuf( chromaFormat, getSharedBuf( unit.Y(), type ) );
+  }
+  else
+  {
+    return PelUnitBuf( chromaFormat, getSharedBuf( unit.Y(), type ), getSharedBuf( unit.Cb(), type ), getSharedBuf( unit.Cr(), type ) );
+  }
+}
 
+const CPelUnitBuf Picture::getSharedBuf( const UnitArea& unit, const PictureType type ) const
+{
+  if( chromaFormat == CHROMA_400 )
+  {
+    return CPelUnitBuf( chromaFormat, getSharedBuf( unit.Y(), type ) );
+  }
+  else
+  {
+    return CPelUnitBuf( chromaFormat, getSharedBuf( unit.Y(), type ), getSharedBuf( unit.Cb(), type ), getSharedBuf( unit.Cr(), type ) );
+  }
 }
 
 void Picture::resizeAlfCtuBuffers( int numEntries )
