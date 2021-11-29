@@ -451,6 +451,10 @@ static const int    NUM_AMAXBT_LAYER =                             10;
 static const double AMAXBT_TH32 =                                  15.0;
 static const double AMAXBT_TH64 =                                  30.0;
 
+// Threshholds for Fast Chroma Block Partitoning. Only used in Intra Only Coding
+static const int    FCBP_TH1 =                                     18000;
+static const int    FCBP_TH2 =                                     105;
+
 // need to know for static memory allocation
 static const int MAX_DELTA_QP   =                                   7;      ///< maximum supported delta QP value
 static const int MAX_TESTED_QPs =   ( 1 + 1 + ( MAX_DELTA_QP << 1 ) );      ///< dqp=0 +- max_delta_qp + lossless mode
