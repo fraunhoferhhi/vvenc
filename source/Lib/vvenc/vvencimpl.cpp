@@ -142,8 +142,13 @@ int VVEncImpl::init( const vvenc_config& config )
     return VVENC_ERR_INITIALIZE;
   }
 
-  this->m_logger.setCallback( config.m_msgFncCtx, config.m_logCallback );
-
+  if( config.m_logCallback )
+  { 
+    this->m_logger.setCallback( config.m_msgFncCtx, config.m_logCallback );
+    g_msgFnc    = nullptr;
+    g_msgFncCtx = nullptr;
+  }
+  
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
@@ -641,6 +646,15 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
   }
 
   return 0;
+}
+
+
+///< set message output function for encoder lib. if not set, no messages will be printed.
+void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
+{
+  // DEPRECATED
+  g_msgFnc    = msgFnc;
+  g_msgFncCtx = ctx;
 }
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.

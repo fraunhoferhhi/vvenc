@@ -129,8 +129,8 @@ public:
 
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
-
-  static const char* setSIMDExtension( const char* simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+  static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );  ///< deprecated, this method uses the deprecated global logger and will be removed
+  static const char* setSIMDExtension( const char* simdId );                     ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
   static const char* getCompileInfoString();
 
 private:

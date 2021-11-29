@@ -703,7 +703,14 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
   if ( ! bflag )
     return false;
 
-  msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR, "Parameter Check Error: %s\n", message );
+  if( c->m_logCallback )
+  {
+    msgConf( c->m_logCallback, c->m_msgFncCtx, VVENC_ERROR, "Parameter Check Error: %s\n", message );
+  }
+  else if ( vvenc::g_msgFnc ) //  deprecated global logger
+  {
+    vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+  }
 
   c->m_confirmFailed = true;
   return true;
@@ -3724,7 +3731,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   return vvenc_cfgString.c_str();
 }
 
-VVENC_DECL void vvenc_set_logging_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback )
+VVENC_DECL void vvenc_log_set_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback )
 {
   if( cfg )
   {

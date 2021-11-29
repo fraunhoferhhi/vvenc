@@ -363,6 +363,14 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet )
 }
 
 
+VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback )
+{
+ // DEPRECATED
+  vvenc::VVEncImpl::registerMsgCbf ( ctx, callback );
+  return VVENC_OK;
+}
+
+
 VVENC_DECL const char* vvenc_set_SIMD_extension( const char* simdId )
 {
   return vvenc::VVEncImpl::setSIMDExtension( simdId );

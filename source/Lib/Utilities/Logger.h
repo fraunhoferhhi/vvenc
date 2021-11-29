@@ -79,6 +79,15 @@ public:
       m_msgFnc( m_msgFncCtx, level, fmt, args );
       va_end( args );
     }
+    else if ( g_msgFnc)
+    {
+      // global log (deprecated)
+      std::unique_lock<std::mutex> _lock( m_msgMutex );
+      va_list args;
+      va_start( args, fmt );
+      g_msgFnc( g_msgFncCtx, level, fmt, args );
+      va_end( args );
+    }
 }
 
 private:

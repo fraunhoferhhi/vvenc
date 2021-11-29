@@ -804,7 +804,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *cfg, vvencPresetMode preset );
  \paramin]   Log message callback function.
  \retval     none
 */
-VVENC_DECL void vvenc_set_logging_callback( vvenc_config *cfg, void * ctx, vvencLoggingCallback callback );
+VVENC_DECL void vvenc_log_set_callback( vvenc_config *cfg, void * ctx, vvencLoggingCallback callback );
 
 /* vvenc_init_config_parameter (optional)
   This method initialize the encoder parameter and sets all parameter the are not initialized yet.
