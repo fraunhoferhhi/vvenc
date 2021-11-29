@@ -50,6 +50,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "CommonLib/Unit.h"
+#include "EncoderLib/EncStage.h"
 #include <sstream>
 #include <map>
 #include <deque>
@@ -124,35 +125,21 @@ struct TemporalFilterSourcePicInfo
 
 struct Picture;
 
-class MCTF
+class MCTF : public EncStage
 {
 public:
   MCTF();
-  ~MCTF();
+  virtual ~MCTF();
 
-  void init( const int internalBitDepth[MAX_NUM_CH],
-             const int width,
-             const int height,
-             const int ctuSize,
-             const ChromaFormat inputChroma,
-             const int qp,
-             const vvencMCTF MCTFCfg,
-             const int framesToBeEncoded,
-             NoMallocThreadPool* threadPool );
-  void uninit();
+  void init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool );
 
-  void addLeadFrame ( const vvencYUVBuffer& yuvInBuf );
-  void addTrailFrame( const vvencYUVBuffer& yuvInBuf );
+protected:
+  virtual void initPicture    ( Picture* pic );
+  virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 
-  int getNumLeadFrames()  const { return (int)m_leadFifo.size(); };
-  int getNumTrailFrames() const { return (int)m_trailFifo.size(); };
-
-  int getCurDelay() const { return m_cur_delay; }
-
-  void assignQpaBufs( Picture* pic );
-  void filter( Picture* pic );
- 
 private:
+  void filter( const std::deque<Picture*>& picFifo, int filterIdx );
+
 #ifdef TARGET_SIMD_X86
   void initMCTF_X86();
   template <X86_VEXT vext>
@@ -161,12 +148,11 @@ private:
 
   int ( *m_motionErrorLumaIntX )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror );
   int ( *m_motionErrorLumaInt8 )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror );
-  
+
   int ( *m_motionErrorLumaFracX )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
   int ( *m_motionErrorLumaFrac8 )( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror );
 
 private:
-  // Private static member variables
   static const double   m_chromaFactor;
   static const double   m_sigmaMultiplier;
   static const double   m_sigmaZeroPoint;
@@ -180,30 +166,12 @@ private:
   static const double   m_refStrengths[3][2];
 #endif
 
-  // Private member variables
-  int64_t               m_input_cnt;
-  int                   m_cur_delay;
-  int                   m_internalBitDepth[MAX_NUM_CH];
-  ChromaFormat          m_chromaFormatIDC;
-  int                   m_QP;
-  std::vector<int>      m_FilterFrames;
-  std::vector<double>   m_FilterStrengths;
-  Area                  m_area;
-  int                   m_ctuSize;
-  bool                  m_filterFutureReference;
-  int                   m_MCTFMode;
-  int                   m_numLeadFrames;
-  int                   m_numTrailFrames;
-  int                   m_framesToBeEncoded;
-  int                   m_MCTFSpeedVal;
+  const VVEncCfg*       m_encCfg;
   NoMallocThreadPool*   m_threadPool;
+  int                   m_filterPoc;
+  Area                  m_area;
+  int                   m_MCTFSpeedVal;
 
-  std::deque<Picture*>  m_picFifo;
-  std::deque<Picture*>  m_leadFifo;
-  std::deque<Picture*>  m_trailFifo;
-
-  // Private functions
-  Picture* createLeadTrailPic( const vvencYUVBuffer& yuvInBuf, const int poc );
   void subsampleLuma(const PelStorage &input, PelStorage &output, const int factor = 2) const;
 
   int motionErrorLuma(const PelStorage &orig, const PelStorage &buffer, const int x, const int y, int dx, int dy, const int bs, const int besterror) const;
@@ -216,12 +184,12 @@ private:
 
 #if JVET_V0056_MCTF
   void bilateralFilter(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
-  
+
   void xFinalizeBlkLine(const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
     std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrenght) const;
 #else
   void bilateralFilter(const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const;
-  
+
   void xFinalizeBlkLine(const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
     std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], const std::vector<double> refStrengthCh[MAX_NUM_CH]) const;
 #endif
