@@ -75,7 +75,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, Logger* logger, bool bDecodeUntilPocFound /* = false */, int debugPOC /* = -1*/, bool copyToEnc /* = true */ )
+bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& msg, bool bDecodeUntilPocFound /* = false */, int debugPOC /* = -1*/, bool copyToEnc /* = true */ )
 {
   PicList* pcListPic = NULL;
   bool     bRet      = false;
@@ -89,7 +89,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 
       CHECK( !*ffwdDecoder.bitstreamFile, "failed to open bitstream file " << bitstreamFileName.c_str() << " for reading" ) ;
       // create decoder class
-      ffwdDecoder.pcDecLib = new DecLib(logger);
+      ffwdDecoder.pcDecLib = new DecLib(msg);
       ffwdDecoder.pcDecLib->create();
 
       // initialize decoder class
@@ -100,7 +100,7 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
       ffwdDecoder.pcDecLib->setDecodedPictureHashSEIEnabled( true );
       if(apsMap) ffwdDecoder.pcDecLib->setAPSMapEnc        ( apsMap );
 
-      logger->log( VVENC_INFO, "start to decode %s \n", bitstreamFileName.c_str() );
+      msg.log( VVENC_INFO, "start to decode %s \n", bitstreamFileName.c_str() );
     }
 
     bool goOn = true;
@@ -132,11 +132,11 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
            *  - two back-to-back start_code_prefixes
            *  - start_code_prefix immediately followed by EOF
            */
-          logger->log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n" );
+          msg.log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n" );
         }
         else
         {
-          read( nalu );
+          read( nalu, msg );
           int iSkipFrame = 0;
           pcDecLib->decode( nalu, iSkipFrame, ffwdDecoder.iPOCLastDisplay, 0 );
         }
@@ -375,8 +375,8 @@ bool tryDecodePicture( Picture* pcEncPic, const int expectedPoc, const std::stri
 //! \ingroup DecoderLib
 //! \{
 
-DecLib::DecLib( Logger* logger )
-  : m_logger ( logger )
+DecLib::DecLib( MsgLog& logger )
+  : msg ( logger )
   , m_iMaxRefPicNum(0)
   , m_associatedIRAPType(VVENC_NAL_UNIT_INVALID)
   , m_pocCRA(0)
@@ -639,19 +639,19 @@ void DecLib::finishPicture(int& poc, PicList*& rpcListPic, vvencMsgLevel msgl )
   if (slice->isDRAP) c = 'D';
 
   //-- For time output for each slice
-  m_logger->log( msgl, "POC %4d TId: %1d ( %c-SLICE, QP%3d ) ", slice->poc,
-          slice->TLayer,
-          c,
-          slice->sliceQp );
+  msg.log( msgl, "POC %4d TId: %1d ( %c-SLICE, QP%3d ) ", slice->poc,
+         slice->TLayer,
+         c,
+         slice->sliceQp );
 
   for (int iRefList = 0; iRefList < 2; iRefList++)
   {
-    m_logger->log( msgl, "[L%d ", iRefList);
+    msg.log( msgl, "[L%d ", iRefList);
     for (int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++)
     {
-      m_logger->log( msgl, "%d ", slice->getRefPOC(RefPicList(iRefList), iRefIndex));
+      msg.log( msgl, "%d ", slice->getRefPOC(RefPicList(iRefList), iRefIndex));
     }
-    m_logger->log( msgl, "] ");
+    msg.log( msgl, "] ");
   }
 
   if (m_decodedPictureHashSEIEnabled)
@@ -660,12 +660,12 @@ void DecLib::finishPicture(int& poc, PicList*& rpcListPic, vvencMsgLevel msgl )
     const SEIDecodedPictureHash *hash = ( pictureHashes.size() > 0 ) ? (SEIDecodedPictureHash*) *(pictureHashes.begin()) : NULL;
     if (pictureHashes.size() > 1)
     {
-      m_logger->log( VVENC_WARNING, "Warning: Got multiple decoded picture hash SEI messages. Using first.");
+      msg.log( VVENC_WARNING, "Warning: Got multiple decoded picture hash SEI messages. Using first.");
     }
-    m_numberOfChecksumErrorsDetected += calcAndPrintHashStatus(((const Picture*) m_pic)->getRecoBuf(), hash, slice->sps->bitDepths, msgl, m_logger);
+    m_numberOfChecksumErrorsDetected += calcAndPrintHashStatus(((const Picture*) m_pic)->getRecoBuf(), hash, slice->sps->bitDepths, msgl, msg);
   }
 
-  m_logger->log( msgl, "\n");
+  msg.log( msgl, "\n");
 
   m_pic->isNeededForOutput = slice->picHeader->picOutputFlag;
   m_pic->isReconstructed   = true;
@@ -719,7 +719,7 @@ void DecLib::xUpdateRasInit(Slice* slice)
 
 void DecLib::xCreateLostPicture( int iLostPoc )
 {
-  m_logger->log( VVENC_INFO, "\ninserting lost poc : %d\n",iLostPoc);
+  msg.log( VVENC_INFO, "\ninserting lost poc : %d\n",iLostPoc);
   Picture *cFillPic = xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), 0);
 
   CHECK( !cFillPic->slices.size(), "No slices in picture" );
@@ -742,7 +742,7 @@ void DecLib::xCreateLostPicture( int iLostPoc )
     Picture *pic = *(iterPic++);
     if(abs(pic->getPOC() -iLostPoc)==closestPoc&&pic->getPOC()!=m_apcSlicePilot->poc)
     {
-      m_logger->log( VVENC_INFO, "copying picture %d to %d (%d)\n",pic->getPOC() ,iLostPoc,m_apcSlicePilot->poc);
+      msg.log( VVENC_INFO, "copying picture %d to %d (%d)\n",pic->getPOC() ,iLostPoc,m_apcSlicePilot->poc);
       cFillPic->getRecoBuf().copyFrom( pic->getRecoBuf() );
       break;
     }
@@ -816,7 +816,7 @@ void activateAPS(PicHeader* picHeader, Slice* pSlice, ParameterSetManager& param
         apss[apsId] = aps;
         if (false == parameterSetManager.activateAPS(apsId, ALF_APS))
         {
-          THROW("APS activation failed");
+          THROW("APS activation failed!");
         }
 
         CHECK( aps->temporalId > pSlice->TLayer, "TemporalId shall be less than or equal to the TemporalId of the coded slice NAL unit" );
@@ -966,11 +966,11 @@ void DecLib::xActivateParameterSets( const int layerId)
     {
       switch(retPPS)
       {
-        case ParameterSetManager::PPS_ERR_INACTIVE_SPS: m_logger->log( VVENC_ERROR,   "Warning: tried to activate PPS referring to a inactive SPS at non-IDR."); break;
-        case ParameterSetManager::PPS_ERR_NO_SPS:       m_logger->log( VVENC_ERROR,   "Warning: tried to activate a PPS that refers to a non-existing SPS."); break;
-        case ParameterSetManager::PPS_ERR_NO_PPS:       m_logger->log( VVENC_ERROR,   "Warning: tried to activate non-existing PPS."); break;
-        case ParameterSetManager::PPS_WARN_DCI_ID:      m_logger->log( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!"); break;
-        case ParameterSetManager::PPS_WARN_NO_DCI:      m_logger->log( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI."); break;
+        case ParameterSetManager::PPS_ERR_INACTIVE_SPS: msg.log( VVENC_ERROR,   "Warning: tried to activate PPS referring to a inactive SPS at non-IDR."); break;
+        case ParameterSetManager::PPS_ERR_NO_SPS:       msg.log( VVENC_ERROR,   "Warning: tried to activate a PPS that refers to a non-existing SPS."); break;
+        case ParameterSetManager::PPS_ERR_NO_PPS:       msg.log( VVENC_ERROR,   "Warning: tried to activate non-existing PPS."); break;
+        case ParameterSetManager::PPS_WARN_DCI_ID:      msg.log( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!"); break;
+        case ParameterSetManager::PPS_WARN_NO_DCI:      msg.log( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI."); break;
         default: break;
       }
 
@@ -1033,7 +1033,7 @@ void DecLib::xActivateParameterSets( const int layerId)
     m_pic->cs->createTempBuffers( true );
     m_pic->cs->initStructData( MAX_INT, false, nullptr, true );
 
-    m_pic->allocateNewSlice( m_logger );
+    m_pic->allocateNewSlice();
     // make the slice-pilot a real slice, and set up the slice-pilot for the next slice
     CHECK(m_pic->slices.size() != (m_uiSliceSegmentIdx + 1), "Invalid number of slices");
     m_apcSlicePilot = m_pic->swapSliceObject(m_apcSlicePilot, m_uiSliceSegmentIdx);
@@ -1093,7 +1093,7 @@ void DecLib::xActivateParameterSets( const int layerId)
   else
   {
     // make the slice-pilot a real slice, and set up the slice-pilot for the next slice
-    m_pic->allocateNewSlice( m_logger );
+    m_pic->allocateNewSlice();
     CHECK(m_pic->slices.size() != (size_t)(m_uiSliceSegmentIdx + 1), "Invalid number of slices");
     m_apcSlicePilot = m_pic->swapSliceObject(m_apcSlicePilot, m_uiSliceSegmentIdx);
 
@@ -1262,7 +1262,7 @@ void DecLib::xParsePrefixSEIsForUnknownVCLNal()
   while (!m_prefixSEINALUs.empty())
   {
     // do nothing?
-    m_logger->log( VVENC_NOTICE, "Discarding Prefix SEI associated with unknown VCL NAL unit.\n");
+    msg.log( VVENC_NOTICE, "Discarding Prefix SEI associated with unknown VCL NAL unit.\n");
     delete m_prefixSEINALUs.front();
   }
   // TODO: discard following suffix SEIs as well?
@@ -1274,7 +1274,7 @@ void DecLib::xParsePrefixSEImessages()
   while (!m_prefixSEINALUs.empty())
   {
     InputNALUnit &nalu=*m_prefixSEINALUs.front();
-    m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream );
+    m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream, msg );
     delete m_prefixSEINALUs.front();
     m_prefixSEINALUs.pop_front();
   }
@@ -1450,7 +1450,7 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   //we should only get a different poc for a new picture (with CTU address==0)
   if(m_apcSlicePilot->poc != m_prevPOC && !m_bFirstSliceInSequence && (m_apcSlicePilot->sliceMap.ctuAddrInSlice[0] != 0))
   {
-    m_logger->log( VVENC_WARNING, "Warning, the first slice of a picture might have been lost!\n");
+    msg.log( VVENC_WARNING, "Warning, the first slice of a picture might have been lost!\n");
   }
   m_prevLayerID = nalu.m_nuhLayerId;
 
@@ -1478,11 +1478,17 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
 
   //detect lost reference picture and insert copy of earlier frame.
   {
-    int lostPoc;
-    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[0], 0, true)) > 0)
+    int lostPoc, poc;
+    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[0], 0, poc)) > 0)
+    {
+      msg.log(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
-    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[1], 1, true)) > 0)
+    }
+    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[1], 1, poc)) > 0)
+    {
+      msg.log(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
+    }
   }
 
     m_prevPOC = m_apcSlicePilot->poc;
@@ -1706,11 +1712,11 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
     case VVENC_NAL_UNIT_SUFFIX_SEI:
       if (m_pic)
       {
-        m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_pic->SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream );
+        m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_pic->SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream, msg );
       }
       else
       {
-        m_logger->log( VVENC_NOTICE, "Note: received suffix SEI but no picture currently active.\n");
+        msg.log( VVENC_NOTICE, "Note: received suffix SEI but no picture currently active.\n");
       }
       return false;
 
@@ -1749,7 +1755,7 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
 
     case VVENC_NAL_UNIT_RESERVED_IRAP_VCL_11:
     case VVENC_NAL_UNIT_RESERVED_IRAP_VCL_12:
-      m_logger->log( VVENC_NOTICE, "Note: found reserved VCL NAL unit.\n");
+      msg.log( VVENC_NOTICE, "Note: found reserved VCL NAL unit.\n");
       xParsePrefixSEIsForUnknownVCLNal();
       return false;
     case VVENC_NAL_UNIT_RESERVED_VCL_4:
@@ -1757,13 +1763,13 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
     case VVENC_NAL_UNIT_RESERVED_VCL_6:
     case VVENC_NAL_UNIT_RESERVED_NVCL_26:
     case VVENC_NAL_UNIT_RESERVED_NVCL_27:
-      m_logger->log( VVENC_NOTICE, "Note: found reserved NAL unit.\n");
+      msg.log( VVENC_NOTICE, "Note: found reserved NAL unit.\n");
       return false;
     case VVENC_NAL_UNIT_UNSPECIFIED_28:
     case VVENC_NAL_UNIT_UNSPECIFIED_29:
     case VVENC_NAL_UNIT_UNSPECIFIED_30:
     case VVENC_NAL_UNIT_UNSPECIFIED_31:
-      m_logger->log( VVENC_NOTICE, "Note: found unspecified NAL unit.\n");
+      msg.log( VVENC_NOTICE, "Note: found unspecified NAL unit.\n");
       return false;
     default:
       THROW( "Invalid NAL unit type" );
@@ -1805,7 +1811,7 @@ bool DecLib::isRandomAccessSkipPicture( int& iSkipFrame, int& iPOCLastDisplay )
     {
       if(!m_warningMessageSkipPicture)
       {
-        m_logger->log( VVENC_WARNING, "\nWarning: this is not a valid random access point and the data is discarded until the first CRA picture");
+        msg.log( VVENC_WARNING, "\nWarning: this is not a valid random access point and the data is discarded until the first CRA picture");
         m_warningMessageSkipPicture = true;
       }
       return true;
@@ -1891,12 +1897,12 @@ bool DecLib::isNewPicture(std::ifstream *bitstreamFile, class InputByteStream *b
     byteStreamNALUnit(*bytestream, nalu.getBitstream().getFifo(), stats);
     if (nalu.getBitstream().getFifo().empty())
     {
-      m_logger->log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n");
+      msg.log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n");
     }
     else
     {
       // get next NAL unit type
-      read(nalu);
+      read(nalu, msg);
       switch( nalu.m_nalUnitType ) {
 
         // NUT that indicate the start of a new picture
@@ -1987,12 +1993,12 @@ bool DecLib::isNewAccessUnit( bool newPicture, std::ifstream *bitstreamFile, cla
     byteStreamNALUnit(*bytestream, nalu.getBitstream().getFifo(), stats);
     if (nalu.getBitstream().getFifo().empty())
     {
-      m_logger->log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n");
+      msg.log( VVENC_ERROR, "Warning: Attempt to decode an empty NAL unit\n");
     }
     else
     {
       // get next NAL unit type
-      read(nalu);
+      read(nalu,msg);
       switch( nalu.m_nalUnitType ) {
 
         // AUD always indicates the start of a new access unit

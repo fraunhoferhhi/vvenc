@@ -55,14 +55,13 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Picture.h"
 #include "UnitTools.h"
 #include "dtrace_next.h"
-#include "Utilities/Logger.h"
 
 //! \ingroup CommonLib
 //! \{
 
 namespace vvenc {
 
-Slice::Slice( Logger *logger )
+Slice::Slice()
   : ppsId                               ( -1 )
 //  , picOutputFlag                       ( true )
   , poc                                 ( 0 )
@@ -118,7 +117,6 @@ Slice::Slice( Logger *logger )
   , tileGroupCcAlfCrApsId               ( -1 )
   , disableSATDForRd                    ( 0 )
   , isLossless                          ( false )
-  , m_logger                            ( logger )
 {
   ::memset( saoEnabled,              0, sizeof( saoEnabled ) );
   ::memset( numRefIdx,               0, sizeof( numRefIdx ) );
@@ -970,7 +968,7 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
   }
 }
 
-int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors) const
+int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, int &rCurPoc ) const
 {
   Picture* pic;
   int isAvailable = 0;
@@ -1038,10 +1036,7 @@ int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const Refer
     }
     if (!isAvailable)
     {
-      if (printErrors)
-      {
-        m_logger->log(VVENC_ERROR, "\nCurrent picture: %d Long-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
-      }
+      rCurPoc = poc;
       return notPresentPoc;
     }
   }
@@ -1069,10 +1064,7 @@ int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const Refer
     //report that a picture is lost if it is in the Reference Picture List but not in the DPB
     if (isAvailable == 0 && pRPL->numberOfShorttermPictures > 0)
     {
-      if (printErrors)
-      {
-        m_logger->log(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
-      }
+      rCurPoc = poc;
       return notPresentPoc;
     }
   }

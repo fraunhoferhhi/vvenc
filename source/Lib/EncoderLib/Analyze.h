@@ -75,14 +75,11 @@ private:
   uint32_t  m_uiNumPic;
   double    m_dFrmRate; //--CFG_KDY
   double    m_MSEyuvframe[MAX_NUM_COMP]; // sum of MSEs
-  char      m_buf [VVENC_MAX_STRING_LEN];
+  char      m_buf [VVENC_MAX_STRING_LEN]; // buffer for analyse results
 
 public:
   virtual ~Analyze()  {}
-  Analyze() 
-  { 
-    clear(); 
-  }
+  Analyze() { clear(); }
 
   void  addResult( double psnr[MAX_NUM_COMP], double bits, const double MSEyuvframe[MAX_NUM_COMP]
     , bool isEncodeLtRef

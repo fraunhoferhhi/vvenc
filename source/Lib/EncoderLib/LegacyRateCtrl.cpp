@@ -1048,11 +1048,10 @@ namespace vvenc {
     beta = beta + diffLambda / lnbpp;
   }
 
-  LegacyRateCtrl::LegacyRateCtrl()
+  LegacyRateCtrl::LegacyRateCtrl( MsgLog& msg )
+  : RateCtrl(msg)
   {
-    RateCtrl();
-
-    encRCSeq = NULL;
+      encRCSeq = NULL;
     encRCGOP = NULL;
     encRCPic = NULL;
     flushPOC = -1;
@@ -1232,7 +1231,7 @@ namespace vvenc {
     }
     else
     {
-      m_logger->log( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
+      msg.log( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
     }
 
     int* GOPID2Level = new int[ m_pcEncCfg->m_GOPSize ];

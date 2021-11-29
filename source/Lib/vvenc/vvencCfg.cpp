@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/ProfileLevelTier.h"
-#include "Utilities/Logger.h"
+#include "Utilities/MsgLog.h"
 
 
 #include <math.h>

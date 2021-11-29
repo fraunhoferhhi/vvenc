@@ -54,7 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 #include "EncoderLib/EncLib.h"
-#include "Utilities/Logger.h"
+#include "Utilities/MsgLog.h"
 
 namespace vvenc {
 
@@ -123,7 +123,7 @@ public:
 
   const char* getLastError() const;
 
-  Logger* getLogger() { return &m_logger; }
+  MsgLog* getMsgLog() { return &msg; }
 
   int decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
@@ -150,7 +150,7 @@ private:
 
   EncLib*                m_pEncLib = nullptr;
 
-  Logger                 m_logger;
+  MsgLog                 msg;
 };
 
 

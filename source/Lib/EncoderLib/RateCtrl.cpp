@@ -280,9 +280,9 @@ void EncRCPic::updateAfterPicture( int actualTotalBits, double averageQP, bool i
   }
 }
 
-RateCtrl::RateCtrl()
+RateCtrl::RateCtrl(MsgLog& logger)
+: msg ( logger )
 {
-  m_logger      = nullptr;
   m_pcEncCfg    = nullptr;
   encRCSeq      = NULL;
   encRCPic      = NULL;
@@ -320,11 +320,6 @@ void RateCtrl::destroy()
   }
   m_pqpaStatsWritten = 0;
 #endif
-}
-
-void RateCtrl::setLogger(Logger* logger)
-{
-  m_logger = logger;
 }
 
 void RateCtrl::init( const VVEncCfg& encCfg )
@@ -449,12 +444,12 @@ void RateCtrl::readStatsHeader()
   {
     THROW( "header line in rate control statistics file not recognized" );
   }
-  if( header[ "version" ]      != VVENC_VERSION )              m_logger->log( VVENC_WARNING, "WARNING: wrong version in rate control statistics file\n" );
-  if( header[ "SourceWidth" ]  != m_pcEncCfg->m_SourceWidth )  m_logger->log( VVENC_WARNING, "WARNING: wrong frame width in rate control statistics file\n" );
-  if( header[ "SourceHeight" ] != m_pcEncCfg->m_SourceHeight ) m_logger->log( VVENC_WARNING, "WARNING: wrong frame height in rate control statistics file\n" );
-  if( header[ "CTUSize" ]      != m_pcEncCfg->m_CTUSize )      m_logger->log( VVENC_WARNING, "WARNING: wrong CTU size in rate control statistics file\n" );
-  if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      m_logger->log( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
-  if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  m_logger->log( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
+  if( header[ "version" ]      != VVENC_VERSION )              msg.log( VVENC_WARNING, "WARNING: wrong version in rate control statistics file\n" );
+  if( header[ "SourceWidth" ]  != m_pcEncCfg->m_SourceWidth )  msg.log( VVENC_WARNING, "WARNING: wrong frame width in rate control statistics file\n" );
+  if( header[ "SourceHeight" ] != m_pcEncCfg->m_SourceHeight ) msg.log( VVENC_WARNING, "WARNING: wrong frame height in rate control statistics file\n" );
+  if( header[ "CTUSize" ]      != m_pcEncCfg->m_CTUSize )      msg.log( VVENC_WARNING, "WARNING: wrong CTU size in rate control statistics file\n" );
+  if( header[ "GOPSize" ]      != m_pcEncCfg->m_GOPSize )      msg.log( VVENC_WARNING, "WARNING: wrong GOP size in rate control statistics file\n" );
+  if( header[ "IntraPeriod" ]  != m_pcEncCfg->m_IntraPeriod )  msg.log( VVENC_WARNING, "WARNING: wrong intra period in rate control statistics file\n" );
 }
 #endif
 

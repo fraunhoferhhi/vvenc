@@ -53,7 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonDef.h"
 #include "Rom.h"
 
-#include "Utilities/Logger.h"
+#include "Utilities/MsgLog.h"
 
 #include <cmath>
 
@@ -217,7 +217,7 @@ void dtrace_frame_blockwise( CDTrace *trace_ctx, DTRACE_CHANNEL channel, Tsrc *b
 #define DTRACE_FRAME_BLOCKWISE(...)          dtrace_frame_blockwise(__VA_ARGS__)
 #define DTRACE_GET_COUNTER(ctx,channel)      ctx->getChannelCounter(channel)
 
-inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string& sTracingRule, Logger* logger )
+inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string& sTracingRule, MsgLog& msg )
 {
   dtrace_channel next_channels[] =
   {
@@ -264,13 +264,13 @@ inline CDTrace* tracing_init( const std::string& sTracingFile, const std::string
 
   if( !sTracingFile.empty() || !sTracingRule.empty() )
   {
-    logger->log( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
+    msg.log( VVENC_VERBOSE, "\nTracing is enabled: %s : %s\n", sTracingFile.c_str(), sTracingRule.c_str() );
   }
 
   CDTrace *pDtrace = new CDTrace( sTracingFile, sTracingRule, channels );
   if( pDtrace->getLastError() )
   {
-   logger->log( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
+   msg.log( VVENC_WARNING, "%s\n", pDtrace->getErrMessage().c_str() );
     //return NULL;
   }
 

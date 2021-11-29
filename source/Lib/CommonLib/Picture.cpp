@@ -378,9 +378,9 @@ void Picture::setSccFlags( const VVEncCfg* encCfg )
 #endif
 }
 
-Slice* Picture::allocateNewSlice( Logger* logger )
+Slice* Picture::allocateNewSlice()
 {
-  slices.push_back( new Slice( logger ) );
+  slices.push_back( new Slice );
   Slice& slice = *slices.back();
 
   slice.pic     = this;

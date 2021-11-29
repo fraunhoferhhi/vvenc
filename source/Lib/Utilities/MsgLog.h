@@ -60,7 +60,7 @@ namespace vvenc {
 
 static std::mutex m_msgMutex;
 
-class Logger
+class MsgLog
 {
 public:
   void setCallback( void *ctx, vvencLoggingCallback callback )

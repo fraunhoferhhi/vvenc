@@ -58,7 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "SEIread.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/dtrace_next.h"
-#include "Utilities/Logger.h"
+#include "Utilities/MsgLog.h"
 #include <iomanip>
 
 
@@ -131,7 +131,7 @@ static inline void output_sei_message_header(SEI &sei, std::ostream *pDecodedMes
  * unmarshal a single SEI message from bitstream bs
  */
  // note: for independent parsing no parameter set should not be required here
-void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
+void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream, MsgLog& msg)
 {
   SEIMessages   seiListInCurNalu;
   setBitstream(bs);
@@ -139,7 +139,7 @@ void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vve
 
   do
   {
-    xReadSEImessage(seis, nalUnitType, nuh_layer_id, temporalId, vps, sps, hrd, pDecodedMessageOutputStream);
+    xReadSEImessage(seis, nalUnitType, nuh_layer_id, temporalId, vps, sps, hrd, pDecodedMessageOutputStream, msg );
     seiListInCurNalu.push_back(seis.back());
     /* SEI messages are an integer number of bytes, something has failed
     * in the parsing if bitstream not byte-aligned */
@@ -153,7 +153,7 @@ void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vve
   xReadRbspTrailingBits();
 }
 
-void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream, Logger* logger )
+void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream, MsgLog& msg )
 {
   DTRACE( g_trace_ctx, D_HEADER, "=========== SEI message ===========\n" );
 
@@ -200,7 +200,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
       bp = &hrd.bufferingPeriodSEI;
       if (!bp)
       {
-        if(logger) logger->log( VVENC_WARNING, "Warning: Found Decoding unit information SEI message, but no active buffering period is available. Ignoring.");
+        msg.log( VVENC_WARNING, "Warning: Found Decoding unit information SEI message, but no active buffering period is available. Ignoring.");
       }
       else
       {
@@ -218,7 +218,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
         bp = &hrd.bufferingPeriodSEI;
         if (!bp)
         {
-          if(logger) logger->log( VVENC_WARNING, "Warning: Found Picture timing SEI message, but no active buffering period is available. Ignoring.");
+          msg.log( VVENC_WARNING, "Warning: Found Picture timing SEI message, but no active buffering period is available. Ignoring.");
         }
         else
         {
@@ -230,7 +230,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
       break;
     case SEI::SCALABLE_NESTING:
       sei = new SEIScalableNesting;
-      xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream);
+      xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream, msg);
       break;
     case SEI::FRAME_FIELD_INFO:
       sei = new SEIFrameFieldInfo;
@@ -311,7 +311,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
         uint32_t seiByte;
         sei_read_code (NULL, 8, seiByte, "unknown prefix SEI payload byte");
       }
-      if(logger) logger->log( VVENC_WARNING, "Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
+      msg.log( VVENC_WARNING, "Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
       if (pDecodedMessageOutputStream)
       {
         (*pDecodedMessageOutputStream) << "Unknown prefix SEI message (payloadType = " << payloadType << ") was found!\n";
@@ -333,7 +333,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
         break;
       case SEI::SCALABLE_NESTING:
         sei = new SEIScalableNesting;
-        xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream);
+        xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream, msg);
         break;
       default:
         for (uint32_t i = 0; i < payloadSize; i++)
@@ -341,7 +341,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
           uint32_t seiByte;
           sei_read_code( NULL, 8, seiByte, "unknown suffix SEI payload byte");
         }
-        if(logger) logger->log( VVENC_WARNING, "Unknown suffix SEI message (payloadType = %d) was found!\n", payloadType);
+        msg.log( VVENC_WARNING, "Unknown suffix SEI message (payloadType = %d) was found!\n", payloadType);
         if (pDecodedMessageOutputStream)
         {
           (*pDecodedMessageOutputStream) << "Unknown suffix SEI message (payloadType = " << payloadType << ") was found!\n";
@@ -485,7 +485,7 @@ void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, uint32_t
   }
 }
 
-void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNalUnitType nalUnitType, const uint32_t nuhLayerId, uint32_t payloadSize, const VPS *vps, const SPS *sps, std::ostream *decodedMessageOutputStream)
+void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNalUnitType nalUnitType, const uint32_t nuhLayerId, uint32_t payloadSize, const VPS *vps, const SPS *sps, std::ostream *decodedMessageOutputStream, MsgLog& msg)
 {
   uint32_t symbol;
   SEIMessages seis;
@@ -565,7 +565,7 @@ void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNal
   for (int32_t i=0; i<sei.snNumSEIs; i++)
   {
     SEIMessages tmpSEIs;
-    xReadSEImessage(tmpSEIs, nalUnitType, nuhLayerId, 0, vps, sps, m_nestedHrd, decodedMessageOutputStream);
+    xReadSEImessage(tmpSEIs, nalUnitType, nuhLayerId, 0, vps, sps, m_nestedHrd, decodedMessageOutputStream, msg);
     if (tmpSEIs.front()->payloadType() == SEI::BUFFERING_PERIOD)
     {
       SEIBufferingPeriod *bp = (SEIBufferingPeriod*) tmpSEIs.front();

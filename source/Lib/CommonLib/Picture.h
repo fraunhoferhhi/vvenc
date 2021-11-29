@@ -89,6 +89,7 @@ struct StopClock
 
 
 struct Picture;
+struct MsgLog;
 
 class BlkStat
 {
@@ -256,7 +257,7 @@ public:
   std::vector<uint8_t>          m_alfCtuAlternative[ MAX_NUM_COMP ];
 
 public:
-  Slice*          allocateNewSlice( Logger* logger );
+  Slice*          allocateNewSlice();
   Slice*          swapSliceObject( Slice* p, uint32_t i );
 
   SAOBlkParam    *getSAO    (int id = 0)                     { return &m_sao[id][0]; };
@@ -266,7 +267,7 @@ public:
   void            resizeAlfCtuBuffers( int numEntries );
 };
 
-int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl, Logger* logger = nullptr );
+int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl, MsgLog& logger );
 
 typedef std::list<Picture*> PicList;
 

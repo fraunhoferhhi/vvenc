@@ -74,7 +74,6 @@ struct  Picture;
 class   Pic;
 class   TrQuant;
 class   PreCalcValues;
-class   Logger;
 typedef std::list<Picture*> PicList;
 
 // ====================================================================================================================
@@ -1209,7 +1208,7 @@ struct PicHeader
 class Slice
 {
 
-public:
+  public:
   //  Bitstream writing
   bool                        saoEnabled[MAX_NUM_CH];
   int                         ppsId;               ///< picture parameter set ID
@@ -1295,7 +1294,7 @@ public:
   uint8_t*                    ccAlfFilterControl[2];
 
 public:
-                              Slice( Logger *logger = nullptr );
+                              Slice();
   virtual                     ~Slice();
   void                        resetSlicePart();
   void                        constructRefPicList(const PicList& rcListPic, bool extBorder);
@@ -1333,7 +1332,7 @@ public:
   void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
   bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic )                                           const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic )                          const;
-  int                         checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors)                const;
+  int                         checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, int &rCurPoc)                const;
   void                        createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
@@ -1351,7 +1350,6 @@ public:
   void                        setAlfApsIds( const std::vector<int>& ApsIDs);
 private:
   Picture*                    xGetLongTermRefPic(const PicList& rcListPic, int poc, bool pocHasMsb);
-  Logger*                     m_logger;
 };// END CLASS DEFINITION Slice
 
 void calculateParameterSetChangedFlag(bool& bChanged, const std::vector<uint8_t>* pOldData, const std::vector<uint8_t>* pNewData);

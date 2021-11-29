@@ -83,7 +83,7 @@ namespace vvenc {
 class InputByteStream;
 class DecLib;
 class EncHRD;
-class Logger;
+class MsgLog;
 
 struct FFwdDecoder
 {
@@ -122,6 +122,8 @@ struct FinishTaskParam {
 class EncGOP : public EncStage
 {
 private:
+  MsgLog&                   msg;
+
   Analyze                   m_AnalyzeAll;
   Analyze                   m_AnalyzeI;
   Analyze                   m_AnalyzeP;
@@ -169,7 +171,6 @@ private:
   int                       m_appliedSwitchDQQ;
   int                       m_associatedIRAPPOC;
   vvencNalUnitType          m_associatedIRAPType;
-  Logger*                   m_Logger;
 
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
@@ -180,7 +181,7 @@ private:
   std::vector<int>          m_globalCtuQpVector;
 
 public:
-  EncGOP( Logger* pLogger = nullptr );
+  EncGOP( MsgLog& msglog );
   virtual ~EncGOP();
 
   void setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> func );

@@ -56,7 +56,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/dtrace_next.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
-#include "Utilities/Logger.h"
+#include "Utilities/MsgLog.h"
 #include <vector>
 #include <algorithm>
 #include <ostream>
@@ -98,8 +98,6 @@ static int convertPayloadToRBSP(std::vector<uint8_t>& nalUnitBuf, InputBitstream
   if (isVclNalUnit)
   {
     // Remove cabac_zero_word from payload if present
-    int n = 0;
-
     while (it_write[-1] == 0x00)
     {
       it_write--;
@@ -154,15 +152,15 @@ void readNalUnitHeader(InputNALUnit& nalu)
  * create a NALunit structure with given header values and storage for
  * a bitstream
  */
-void read(InputNALUnit& nalu, Logger* logger )
+void read(InputNALUnit& nalu, MsgLog& msg )
 {
   InputBitstream &bitstream = nalu.getBitstream();
   std::vector<uint8_t>& nalUnitBuf=bitstream.getFifo();
   // perform anti-emulation prevention
   int cabac_zero_word = convertPayloadToRBSP(nalUnitBuf, &bitstream, (nalUnitBuf[0] & 64) == 0);
-  if( cabac_zero_word > 0 && logger != nullptr )
+  if( cabac_zero_word > 0 )
   {
-    logger->log( VVENC_NOTICE, "\nDetected %d instances of cabac_zero_word\n", cabac_zero_word/2);
+    msg.log( VVENC_NOTICE, "\nDetected %d instances of cabac_zero_word\n", cabac_zero_word/2);
   }
   bitstream.resetToStart();
   readNalUnitHeader(nalu);

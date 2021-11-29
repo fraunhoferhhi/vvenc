@@ -198,7 +198,7 @@ VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
 
   if (nullptr == config)
   {
-    d->getLogger()->log( VVENC_ERROR, "vvenc_config is null\n" );
+    d->getMsgLog()->log( VVENC_ERROR, "vvenc_config is null\n" );
     return VVENC_ERR_PARAMETER;
   }
 
@@ -206,7 +206,7 @@ VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
   if (ret != 0)
   {
     // Error initializing the decoder
-    d->getLogger()->log( VVENC_ERROR, "cannot init the VVenC encoder\n" );
+    d->getMsgLog()->log( VVENC_ERROR, "cannot init the VVenC encoder\n" );
     return VVENC_ERR_INITIALIZE;
   }
 

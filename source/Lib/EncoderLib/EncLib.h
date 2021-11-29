@@ -68,12 +68,14 @@ namespace vvenc {
 
 
 class NoMallocThreadPool;
-class Logger;
+class MsgLog;
 
 /// encoder class
 class EncLib
 {
 private:
+  MsgLog&                msg;
+
   std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
   void*                                         m_recYuvBufCtx;
 
@@ -93,10 +95,8 @@ private:
   int                    m_picsRcvd;
   int                    m_passInitialized;
 
-  Logger*                m_logger;
-
 public:
-  EncLib( Logger* logger = nullptr );
+  EncLib( MsgLog& logger );
   virtual ~EncLib();
 
   void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func );

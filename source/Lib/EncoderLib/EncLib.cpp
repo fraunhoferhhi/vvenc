@@ -55,7 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
 #include "Utilities/NoMallocThreadPool.h"
-#include "Utilities/Logger.h"
+#include "Utilities/MsgLog.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -67,8 +67,9 @@ namespace vvenc {
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
 
-EncLib::EncLib( Logger* pLogger )
-  : m_recYuvBufFunc  ( nullptr )
+EncLib::EncLib( MsgLog& logger )
+  : msg             ( logger )
+  , m_recYuvBufFunc  ( nullptr )
   , m_recYuvBufCtx   ( nullptr )
   , m_encCfg         ()
   , m_orgCfg         ()
@@ -80,7 +81,6 @@ EncLib::EncLib( Logger* pLogger )
   , m_threadPool     ( nullptr )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
-  , m_logger        ( pLogger )
 {
 }
 
@@ -181,14 +181,12 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
     {
-      m_rateCtrl = new LegacyRateCtrl;
+      m_rateCtrl = new LegacyRateCtrl(msg);
     }
     else
     {
-      m_rateCtrl = new RateCtrl;
+      m_rateCtrl = new RateCtrl(msg);
     }
-
-    m_rateCtrl->setLogger( m_logger );
   }
 
   m_rateCtrl->setRCPass( m_encCfg, pass, statsFName );
@@ -237,14 +235,14 @@ void EncLib::initPass( int pass, const char* statsFName )
   // pre analysis encoder
   if( m_encCfg.m_RCLookAhead )
   {
-    m_preEncoder = new EncGOP( m_logger );
+    m_preEncoder = new EncGOP( msg );
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
   }
 
   // gop encoder
-  m_gopEncoder = new EncGOP( m_logger );
+  m_gopEncoder = new EncGOP( msg );
   const int encDelay = m_encCfg.m_RCLookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
   m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );

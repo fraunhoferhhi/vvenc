@@ -88,7 +88,7 @@ static_assert( sizeof(Pel)  == sizeof(*(vvencYUVPlane::ptr)),   "internal bits p
 
 // ====================================================================================================================
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, Logger* logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 VVEncImpl::VVEncImpl()
 {
@@ -144,7 +144,7 @@ int VVEncImpl::init( const vvenc_config& config )
 
   if( config.m_logCallback )
   { 
-    this->m_logger.setCallback( config.m_msgFncCtx, config.m_logCallback );
+    this->msg.setCallback( config.m_msgFncCtx, config.m_logCallback );
     g_msgFnc    = nullptr;
     g_msgFncCtx = nullptr;
   }
@@ -158,7 +158,7 @@ int VVEncImpl::init( const vvenc_config& config )
   m_cEncoderInfo += m_sEncoderCapabilities;
 
   // initialize the encoder
-  m_pEncLib = new EncLib ( &m_logger );
+  m_pEncLib = new EncLib ( msg );
 
 #if HANDLE_EXCEPTION
   try
@@ -169,7 +169,7 @@ int VVEncImpl::init( const vvenc_config& config )
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -202,7 +202,7 @@ int VVEncImpl::initPass( int pass, const char* statsFName )
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
+      msg.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -230,7 +230,7 @@ int VVEncImpl::uninit()
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
+      msg.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -373,7 +373,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    m_logger.log( VVENC_ERROR, "\n%s\n", e.what() );
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -693,7 +693,7 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   Picture cPicture; cPicture.poc=-8000;
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( trcFile, trcRule, &m_logger );
+  g_trace_ctx = tracing_init( trcFile, trcRule, msg );
 #endif
 
   std::string filename(FileName );
@@ -701,7 +701,7 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   try
 #endif
   {
-    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, &m_logger, false, cPicture.poc, false );
+    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, msg, false, cPicture.poc, false );
     if( ret )  
     { 
       return VVENC_ERR_UNSPECIFIED; 
@@ -710,6 +710,7 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
+    (void)e;
     return VVENC_ERR_UNSPECIFIED;
   }
 #endif

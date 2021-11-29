@@ -60,6 +60,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+  struct MsgLog;
+
   struct LegacyTRCLCU
   {
     double  lambda;
@@ -187,7 +189,7 @@ namespace vvenc {
   class LegacyRateCtrl : public RateCtrl
   {
   public:
-    LegacyRateCtrl();
+    LegacyRateCtrl( MsgLog& msg);
     ~LegacyRateCtrl();
 
     void init( const VVEncCfg& encCfg );

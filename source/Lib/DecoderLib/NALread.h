@@ -59,7 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-class Logger;
+class MsgLog;
 
 /**
  * A convenience wrapper to NALUnit that also provides a
@@ -78,7 +78,7 @@ class InputNALUnit : public NALUnit
           InputBitstream &getBitstream()       { return m_Bitstream; }
 };
 
-void read(InputNALUnit& nalu, Logger* logger = nullptr );
+void read(InputNALUnit& nalu, MsgLog& logger );
 void readNalUnitHeader(InputNALUnit& nalu);
 bool checkPictureHeaderInSliceHeaderFlag(InputNALUnit & nalu);
 
