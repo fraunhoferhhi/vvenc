@@ -70,6 +70,7 @@ class SEI;
 class SEIDecodedPictureHash;
 class EncRCPic;
 class PicShared;
+class MsgLog;
 
 typedef std::list<SEI*> SEIMessages;
 
@@ -89,7 +90,6 @@ struct StopClock
 
 
 struct Picture;
-struct MsgLog;
 
 class BlkStat
 {
