@@ -154,11 +154,9 @@ public:
 
   const char* printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
   {
-    vvencMsgLevel e_msg_level = cDelim == 'a' ? VVENC_INFO: VVENC_DETAILS;
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
-    
-    char buf [VVENC_MAX_STRING_LEN];
+   
     int n=0;
 
     double MSEBasedSNR[MAX_NUM_COMP];
