@@ -811,14 +811,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       {
         case VVENC_SEG_FIRST:
           c->m_vvencMCTF.MCTFNumLeadFrames  = 0;
-          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
           break;
         case VVENC_SEG_MID:
           c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
           break;
         case VVENC_SEG_LAST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = c->m_vvencMCTF.MCTFNumLeadFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
           c->m_vvencMCTF.MCTFNumTrailFrames = 0;
           break;
         default:
