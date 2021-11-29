@@ -594,17 +594,6 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
 // global logger message callback function - DEPRECATED - will be removed in next major version
 extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
 extern void * g_msgFncCtx;
-
-inline void msg( int level, const char* fmt, ... )
-{
-  if ( g_msgFnc )
-  {
-    va_list args;
-    va_start( args, fmt );
-    g_msgFnc( g_msgFncCtx, level, fmt, args );
-    va_end( args );
-  }
-}
 // end global logger 
 
 

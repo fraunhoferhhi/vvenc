@@ -690,14 +690,17 @@ void msgConf( vvenc_config *c, int level, const char* fmt, ... )
 {
    if( c->m_logCallback )
    {
-    va_list args;
-    va_start( args, fmt );
-    c->m_logCallback ( c->m_msgFncCtx, level, fmt, args );
-    va_end( args );
+     va_list args;
+     va_start( args, fmt );
+     c->m_logCallback ( c->m_msgFncCtx, level, fmt, args );
+     va_end( args );
    }
-   else
+   else if ( vvenc::g_msgFnc ) //  deprecated global logger
    {
-    vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+     va_list args;
+     va_start( args, fmt );
+     vvenc::g_msgFnc( vvenc::g_msgFncCtx, level, fmt, args );
+     va_end( args );
    }
 }
 
