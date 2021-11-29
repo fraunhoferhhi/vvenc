@@ -97,7 +97,7 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const vvenc_config& rcVVEncCfg );
+  int init( vvenc_config* config );
 
   int initPass( int pass, const char* statsFName );
   int uninit();
@@ -122,8 +122,6 @@ public:
   const char* getEncoderInfo() const;
 
   const char* getLastError() const;
-
-  MsgLog* getMsgLog() { return &msg; }
 
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();

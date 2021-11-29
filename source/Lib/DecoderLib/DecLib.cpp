@@ -1481,12 +1481,12 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
     int lostPoc, poc;
     while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[0], 0, poc)) > 0)
     {
-      msg.log(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
+      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
     }
     while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[1], 1, poc)) > 0)
     {
-      msg.log(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
+      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
     }
   }
