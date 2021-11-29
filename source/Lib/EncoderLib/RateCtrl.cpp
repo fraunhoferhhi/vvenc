@@ -286,7 +286,6 @@ RateCtrl::RateCtrl()
   encRCSeq      = NULL;
   encRCPic      = NULL;
   flushPOC      = -1;
-  rcBaseQP      = -1;
   rcPass        = 0;
   rcIsFinalPass = true;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
@@ -322,15 +321,45 @@ void RateCtrl::destroy()
 #endif
 }
 
-void RateCtrl::init( const VVEncCfg& encCfg, int baseQP )
+void RateCtrl::init( const VVEncCfg& encCfg )
 {
   destroy();
 
   m_pcEncCfg = &encCfg;
-  rcBaseQP   = baseQP;
 
   encRCSeq = new EncRCSeq;
   encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_RCLookAhead, m_pcEncCfg->m_RCTargetBitrate, (int)( (double)(m_pcEncCfg->m_FrameRate/m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5 ), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[ CH_L ], getFirstPassStats() );
+}
+
+int RateCtrl::getBaseQP()
+{
+  // estimate near-optimal base QP for PPS in second RC pass
+  double d = (3840.0 * 2160.0) / double (m_pcEncCfg->m_SourceWidth * m_pcEncCfg->m_SourceHeight);
+  const int firstPassBaseQP = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + sqrt ((d * m_pcEncCfg->m_RCTargetBitrate) / 500000.0)));
+  const unsigned fps = m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale;
+  std::list<TRCPassStats>& firstPassData = m_listRCFirstPassStats;
+  int baseQP = MAX_QP;
+
+  if (firstPassData.size() > 0 && fps > 0)
+  {
+    const int log2HeightMinus7 = int (0.5 + log ((double) std::max (128, m_pcEncCfg->m_SourceHeight)) / log (2.0)) - 7;
+    uint64_t sumFrBits = 0, sumVisAct = 0; // first-pass data
+
+    for (auto& stats : firstPassData)
+    {
+      sumFrBits += stats.numBits;
+      sumVisAct += stats.visActY;
+    }
+    d = (double) m_pcEncCfg->m_RCTargetBitrate * (double) firstPassData.size() / double (fps * sumFrBits);
+    d = firstPassBaseQP - (105.0 / 128.0) * sqrt ((double) std::max (1, firstPassBaseQP)) * log (d) / log (2.0);
+    baseQP = int (0.5 + d + 0.125 * log2HeightMinus7 * std::max (0.0, 24.0 + 0.001/*log2HeightMinus7*/ * (log ((double) sumVisAct / firstPassData.size()) / log (2.0) - 0.5 * m_pcEncCfg->m_internalBitDepth[CH_L] - 3.0) - d));
+  }
+  else if (m_pcEncCfg->m_RCLookAhead)
+  {
+    baseQP = firstPassBaseQP - (std::max (0, MAX_QP_PERCEPT_QPA - firstPassBaseQP) >> 1);
+  }
+
+  return Clip3 (17, MAX_QP, baseQP);
 }
 
 void RateCtrl::setRCPass(const VVEncCfg& encCfg, const int pass, const char* statsFName)
@@ -517,7 +546,7 @@ void RateCtrl::readStatsFile()
 }
 #endif
 
-void RateCtrl::processFirstPassData(const bool flush)
+void RateCtrl::processFirstPassData (const bool flush)
 {
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
@@ -580,7 +609,7 @@ void RateCtrl::processGops()
 {
   const unsigned fps = encRCSeq->frameRate;
   const int gopShift = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0));
-  const int qpOffset = Clip3 (0, 6, ((rcBaseQP + 1) >> 1) - 9);
+  const int qpOffset = Clip3 (0, 6, ((m_pcEncCfg->m_QP + 1) >> 1) - 9);
   const double bp1pf = getTotalBitsInFirstPass() / (double) m_listRCFirstPassStats.size(); // first pass
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
@@ -605,12 +634,11 @@ void RateCtrl::processGops()
   }
 }
 
-void RateCtrl::processGopsLookAhead() // actually first pass base QP
+void RateCtrl::processGopsLookAhead()
 {
   const unsigned fps = m_pcEncCfg->m_FrameRate;
   const int gopShift = int( 0.5 + log( (double)m_pcEncCfg->m_GOPSize ) / log( 2.0 ) );
-  const int secondPassBaseQP = rcBaseQP - ( std::max( 0, MAX_QP_PERCEPT_QPA - rcBaseQP ) >> 1 );
-  const int qpOffset = Clip3( 0, 6, ( ( secondPassBaseQP + 1 ) >> 1 ) - 9 );
+  const int qpOffset = Clip3( 0, 6, ( ( m_pcEncCfg->m_QP + 1 ) >> 1 ) - 9 );
 
   const double power[ 6 ] = { 0.5, 0.75, 0.875, 0.9375, 0.96875, 0.984375 };
   std::list<TRCPassStats>::iterator it;
@@ -629,8 +657,10 @@ void RateCtrl::processGopsLookAhead() // actually first pass base QP
     if ( it->poc > 0 && ( it->isIntra || isLastPOC ) )
     {
       const double bp1pf = ( ipBits + prvSum ) / double( it->poc > m_pcEncCfg->m_IntraPeriod ? framesInCurIp + m_pcEncCfg->m_IntraPeriod : m_pcEncCfg->m_IntraPeriod ); // average bitrate per intra period
+      const int ipIdx = ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod;
+
       prvSum = ipBits;
-      ratio[ ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod ] = (double)encRCSeq->targetRate / ( fps * bp1pf ); // ratio between 2nd and first pass
+      ratio[ ipIdx ] = (double)encRCSeq->targetRate / ( fps * bp1pf ); // ratio between 2nd and first pass
       framesInCurIp = 0;
       if ( it->isIntra )
       {
@@ -638,7 +668,7 @@ void RateCtrl::processGopsLookAhead() // actually first pass base QP
       }
       if ( isLastPOC )
       {
-        ratio[ 1 + ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod ] = ratio[ ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod ];
+        ratio[ ipIdx + 1 ] = ratio[ ipIdx ];
       }
     }
   }
@@ -646,7 +676,7 @@ void RateCtrl::processGopsLookAhead() // actually first pass base QP
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ ) // scaling, part 1
   {
     const int vecIdx = 1 + ( ( it->poc - 1 ) >> gopShift );
-    const int ipIdx = ( it->poc /*+ m_pcEncCfg->m_GOPSize*/ - 1 ) / m_pcEncCfg->m_IntraPeriod;
+    const int ipIdx  = ( it->poc - 1 ) / m_pcEncCfg->m_IntraPeriod;
 
     it->targetBits = std::max( 0, int( 0.5 + it->numBits * ( it->tempLayer + qpOffset < 6 ? pow( ratio[ ipIdx ], power[ it->tempLayer + qpOffset ] ) : ratio[ ipIdx ] ) ) );
     gopBits[ vecIdx ] += (uint32_t)it->targetBits; // similar to g in VCIP paper

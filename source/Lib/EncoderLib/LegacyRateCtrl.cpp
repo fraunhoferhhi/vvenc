@@ -1087,13 +1087,13 @@ namespace vvenc {
     }
   }
 
-  void LegacyRateCtrl::init( const VVEncCfg& encCfg, int baseQP )
+  void LegacyRateCtrl::init( const VVEncCfg& encCfg )
   {
     destroy();
 
     m_pcEncCfg = &encCfg;
 
-    RateCtrl::init( encCfg, baseQP );
+    RateCtrl::init( encCfg );
 
     bool isLowdelay = true;
     for ( int i = 0; i < m_pcEncCfg->m_GOPSize - 1; i++ )
