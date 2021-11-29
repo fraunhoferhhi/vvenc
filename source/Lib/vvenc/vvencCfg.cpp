@@ -365,6 +365,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
+  c->m_RCLookAhead                             = false;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
@@ -399,7 +400,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_bitDepthConstraintValue                 = 10;
   c->m_intraOnlyConstraintFlag                 = false;
 
-  c->m_InputQueueSize                          = 0;                                     ///< Size of frame input queue
   c->m_rewriteParamSets                        = true;                                 ///< Flag to enable rewriting of parameter sets at random access points
   c->m_idrRefParamList                         = false;                                 ///< indicates if reference picture list syntax elements are present in slice headers of IDR pictures
   for( i = 0; i < VVENC_MAX_GOP; i++ )
@@ -797,16 +797,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_level = vvenc::LevelTierFeatures::getLevelForInput( c->m_SourceWidth, c->m_SourceHeight, c->m_levelTier, c->m_FrameRate, c->m_FrameScale, c->m_RCTargetBitrate );
   }
 
-  if ( c->m_InputQueueSize <= 0 )
-  {
-    c->m_InputQueueSize = c->m_GOPSize;
-
-    if ( c->m_vvencMCTF.MCTF )
-    {
-      c->m_InputQueueSize += vvenc::MCTF_ADD_QUEUE_DELAY;
-    }
-  }
-
   if( !c->m_configDone )
   {
     if( c->m_temporalSubsampleRatio )
@@ -836,14 +826,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       {
         case VVENC_SEG_FIRST:
           c->m_vvencMCTF.MCTFNumLeadFrames  = 0;
-          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
           break;
         case VVENC_SEG_MID:
           c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = c->m_vvencMCTF.MCTFNumTrailFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
           break;
         case VVENC_SEG_LAST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = c->m_vvencMCTF.MCTFNumLeadFrames == 0 ? VVENC_MCTF_RANGE : c->m_vvencMCTF.MCTFNumTrailFrames;
+          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
           c->m_vvencMCTF.MCTFNumTrailFrames = 0;
           break;
         default:
@@ -860,6 +850,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     else
       c->m_RCNumPasses = 1; // single passs per default (sdk usage)
   }
+  //c->m_RCLookAhead = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ) ? true : false;
 
   // threading
   if( c->m_numThreads < 0 )
@@ -879,9 +870,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
     if( c->m_RCTargetBitrate > 0
         && c->m_RCNumPasses == 1
-        && c->m_maxParallelFrames > 2 )
+        && ! c->m_RCLookAhead )
     {
-      c->m_maxParallelFrames = 2;
+      c->m_maxParallelFrames = std::min( c->m_numThreads, 2 );
     }
   }
 
@@ -2230,8 +2221,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
   vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
-  vvenc_confirmParameter( c, c->m_InputQueueSize < c->m_GOPSize ,                                              "Input queue size must be greater or equal to gop size" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_InputQueueSize < c->m_GOPSize + vvenc::MCTF_ADD_QUEUE_DELAY , "Input queue size must be greater or equal to gop size + N frames for MCTF" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                     "Decoding Refresh Type must be comprised between 0 and 5 included" );
   vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2335,6 +2324,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
   vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
+  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_RCNumPasses != 1,          "Rate control look-ahead encoding only for single-pass encoding supported" );
+  const int periodLimit = ( c->m_SourceWidth * c->m_SourceHeight > 2048 * 1200 ? ( c->m_SourceWidth * c->m_SourceHeight > 2560 * 1536 ? 64 : 128 ) : 256 );
+  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_IntraPeriod > periodLimit, "Specified Intra period is too large for rate control encoding with look-ahead" );
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
@@ -2429,7 +2421,7 @@ static bool checkCfgParameter( vvenc_config *c )
 #if ENABLE_TRACING
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
-    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_InputQueueSize, "Max parallel frames should be less than size of input queue" );
+    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize, "Max parallel frames should be less then GOP size" );
   }
 
   vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
@@ -2756,8 +2748,9 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   //TileColumnWidthArray and TileRowHeightArray have to be not set
   if( c->m_numTileCols > 1 || c->m_numTileRows > 1 )
   {
-    vvenc_confirmParameter( c, !colWidth_all_zero, "Explicit number of tile columns and column widths are given! Set eigther Tiles or TileColumnWidthArray" );
-    vvenc_confirmParameter( c, !rowHeight_all_zero, "Explicit number of tile rows and column heights are given! Set eigther Tiles or TileRowHeightArray" );
+    vvenc_confirmParameter( c, !colWidth_all_zero  && ( lastNonZeroColumn + 1 ) != c->m_numTileCols, "Explicit number of tile columns and column widths are given, but not consistent!" );
+    vvenc_confirmParameter( c, !rowHeight_all_zero && ( lastNonZeroRow    + 1 ) != c->m_numTileRows, "Explicit number of tile rows and column heights are given, but not consistent!" );
+
     if( !colWidth_all_zero || !rowHeight_all_zero ) return;
     
     if( c->m_numTileCols > 1 )
@@ -2780,6 +2773,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
     {
       c->m_tileRowHeight[0] = pps.picHeightInCtu;
     }
+
     numTileColumnWidths = 1;
     numTileRowHeights   = 1;
   }
@@ -2867,6 +2861,9 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   vvenc_confirmParameter( c, pps.numTileRows > maxTileRows, "Number of tile rows exceeds maximum number allowed according to specified level" );
   c->m_numTileCols = pps.numTileCols;
   c->m_numTileRows = pps.numTileRows;
+
+  for( int col = 0; col < pps.numTileCols; col++ ) c->m_tileColumnWidth[col] = pps.tileColWidth [col];
+  for( int row = 0; row < pps.numTileRows; row++ ) c->m_tileRowHeight  [row] = pps.tileRowHeight[row];
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
 
@@ -3543,7 +3540,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
   css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
   css << "GOP size                               : " << c->m_GOPSize << "\n";
-  css << "Input queue size                       : " << c->m_InputQueueSize << "\n";
   css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
   css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
   css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";
@@ -3710,6 +3706,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     css << "Passes:" << c->m_RCNumPasses << " ";
     css << "Pass:" << c->m_RCPass << " ";
+    css << "LookAhead:" << c->m_RCLookAhead << " ";
     css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
     css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";

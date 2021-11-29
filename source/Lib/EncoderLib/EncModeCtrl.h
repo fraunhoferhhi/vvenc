@@ -356,6 +356,7 @@ protected:
         RdCost*         m_pcRdCost;
   static_vector<ComprCUCtx, ( MAX_CU_DEPTH << 2 )> m_ComprCUCtxList;
   unsigned              m_skipThresholdE0023FastEnc;
+  unsigned              m_tileIdx;
 
 public:
   ComprCUCtx*           comprCUCtx;
@@ -364,7 +365,7 @@ public:
 
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
-  void initCTUEncoding    ( const Slice &slice );
+  void initCTUEncoding    ( const Slice &slice, int tileIdx );
 #if QTBTT_SPEED3
   void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag );
 #else

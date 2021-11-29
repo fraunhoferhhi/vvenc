@@ -724,11 +724,11 @@ void CodingStructure::rebindPicBufs()
 {
   CHECK( parent, "rebindPicBufs can only be used for the top level CodingStructure" );
 
-  if( !picture->m_bufs[ PIC_RECONSTRUCTION ].bufs.empty() ) m_reco.createFromBuf( picture->m_bufs[ PIC_RECONSTRUCTION ] );
+  if( !picture->m_picBufs[ PIC_RECONSTRUCTION ].bufs.empty() ) m_reco.createFromBuf( picture->m_picBufs[ PIC_RECONSTRUCTION ] );
   else                                                         m_reco.destroy();
-  if( !picture->m_bufs[ PIC_PREDICTION     ].bufs.empty() ) m_pred.createFromBuf( picture->m_bufs[ PIC_PREDICTION ] );
+  if( !picture->m_picBufs[ PIC_PREDICTION     ].bufs.empty() ) m_pred.createFromBuf( picture->m_picBufs[ PIC_PREDICTION ] );
   else                                                         m_pred.destroy();
-  if( !picture->m_bufs[ PIC_RESIDUAL       ].bufs.empty() ) m_resi.createFromBuf( picture->m_bufs[ PIC_RESIDUAL ] );
+  if( !picture->m_picBufs[ PIC_RESIDUAL       ].bufs.empty() ) m_resi.createFromBuf( picture->m_picBufs[ PIC_RESIDUAL ] );
   else                                                         m_resi.destroy();
 }
 

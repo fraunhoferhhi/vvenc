@@ -50,11 +50,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "EncGOP.h"
-#include "EncHRD.h"
+#include "EncStage.h"
 #include "CommonLib/MCTF.h"
-#include "CommonLib/Nal.h"
 #include "vvenc/vvencCfg.h"
-#include "Utilities/Logger.h"
 
 #include <mutex>
 
@@ -63,88 +61,59 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
 // ====================================================================================================================
 // Class definition
 // ====================================================================================================================
 
-class YUVWriterIf;
+
 class NoMallocThreadPool;
+class Logger;
 
 /// encoder class
 class EncLib
 {
 private:
-  int                       m_numPicsRcvd;
-  int                       m_numPicsInQueue;
-  int                       m_numPicsCoded;
-  int                       m_pocEncode;
-  int                       m_pocRecOut;
-  int                       m_GOPSizeLog2;
-  int                       m_TicksPerFrameMul4;
-  int                       m_numPassInitialized;
+  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
+  void*                                         m_recYuvBufCtx;
 
-  const VVEncCfg            m_cEncCfg;
-  VVEncCfg                  m_cBckCfg;
-  EncGOP*                   m_cGOPEncoder;
-  EncHRD                    m_cEncHRD;
-  MCTF                      m_MCTF;
-  PicList                   m_cListPic;
-  Logger*                   m_logger;
+  const VVEncCfg         m_encCfg;
+  const VVEncCfg         m_orgCfg;
+  VVEncCfg               m_firstPassCfg;
+  RateCtrl*              m_rateCtrl;
+  MCTF*                  m_MCTF;
+  EncGOP*                m_preEncoder;
+  EncGOP*                m_gopEncoder;
+  std::vector<EncStage*> m_encStages;
+  std::list<PicShared*>  m_picSharedList;
+  std::deque<PicShared*> m_prevSharedQueue;
 
-  std::function<void( void*, vvencYUVBuffer* )> m_RecYUVBufferCallback;
-  void*                     m_RecYUVBufferCallbackCtx;
+  NoMallocThreadPool*    m_threadPool;
 
-  NoMallocThreadPool*       m_threadPool;
-  RateCtrl*                 m_pcRateCtrl;                          ///< Rate control class
+  int                    m_picsRcvd;
+  int                    m_passInitialized;
 
-  VPS                       m_cVPS;
-  DCI                       m_cDCI;
-  ParameterSetMap<SPS>      m_spsMap;
-  ParameterSetMap<PPS>      m_ppsMap;
-
-  XUCache                   m_shrdUnitCache;
-  std::mutex                m_unitCacheMutex;
-
-  std::vector<int>          m_pocToGopId;
-  std::vector<int>          m_nextPocOffset;
+  Logger*                m_logger;
 
 public:
   EncLib( Logger* logger = nullptr );
   virtual ~EncLib();
 
+  void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func );
   void     initEncoderLib      ( const VVEncCfg& encCfg );
   void     initPass            ( int pass, const char* statsFName );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
 
-  void     setRecYUVBufferCallback( void *, vvencRecYUVBufferCallback );
-
 private:
   void     xUninitLib          ();
-  void     xResetLib           ();
-  void     xSetRCEncCfg        ( int pass );
+  void     xInitRCCfg          ();
 
-  int      xGetGopIdFromPoc    ( int poc ) const { return m_pocToGopId[ poc % m_cEncCfg.m_GOPSize ]; }
-  int      xGetNextPocICO      ( int poc, bool flush, int max, bool altGOP ) const;
-  int      xGetFirstEncPOC     ( int max ) const;
-  void     xCreateCodingOrder  ( int start, int max, int numInQueue, bool flush, std::vector<Picture*>& encList, bool altGOP );
-  void     xInitPicture        ( Picture& pic, int picNum, const PPS& pps, const SPS& sps, const VPS& vps, const DCI& dci );
-  void     xDeletePicBuffer    ();
-  Picture* xGetNewPicBuffer    ( const PPS& pps, const SPS& sps );            ///< get picture buffer which will be processed. If ppsId<0, then the ppsMap will be queried for the first match.
-  Picture* xGetPictureBuffer   ( int poc );
+  PicShared* xGetFreePicShared();
+  void     xAssignPrevQpaBufs( PicShared* picShared );
 
-  void     xInitVPS            ( VPS &vps )                                  const; ///< initialize VPS from encoder options
-  void     xInitDCI            ( DCI &dci, const SPS &sps, const int dciId ) const; ///< initialize DCI from encoder options
-  void     xInitConstraintInfo ( ConstraintInfo &ci )                        const;  ///< initialize SPS from encoder options
-  void     xInitSPS            ( SPS &sps )                                  const; ///< initialize SPS from encoder options
-  void     xInitPPS            ( PPS &pps, const SPS &sps )                  const;  ///< initialize PPS from encoder options
-  void     xInitPPSforTiles    ( PPS &pps, const SPS &sps ) const;
-
-  void     xInitRPL            ( SPS &sps ) const;
-  void     xInitHrdParameters  ( SPS &sps );
-  void     xOutputRecYuv       ();
-  void     xDetectScreenC      ( Picture& pic, PelUnitBuf yuvOrgBuf );
+  void     xDetectScc          ( PicShared* picShared );
 };
 
 } // namespace vvenc

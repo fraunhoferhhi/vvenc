@@ -55,7 +55,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Common.h"
 #include "MotionInfo.h"
 #include "HRD.h"
-#include "Utilities/Logger.h"
 
 #include "vvenc/vvencCfg.h"
 
@@ -75,6 +74,7 @@ struct  Picture;
 class   Pic;
 class   TrQuant;
 class   PreCalcValues;
+class   Logger;
 typedef std::list<Picture*> PicList;
 
 // ====================================================================================================================
@@ -1298,7 +1298,7 @@ public:
                               Slice( Logger *logger = nullptr );
   virtual                     ~Slice();
   void                        resetSlicePart();
-  void                        constructRefPicList(PicList& rcListPic, bool extBorder);
+  void                        constructRefPicList(const PicList& rcListPic, bool extBorder);
   void                        updateRefPicCounter( int step );
   bool                        checkRefPicsReconstructed() const;
   void                        setRefPOCList();
@@ -1315,7 +1315,7 @@ public:
   bool                        isIRAP() const { return (nalUnitType >= VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) && (nalUnitType <= VVENC_NAL_UNIT_CODED_SLICE_CRA); }
   bool                        isIDRorBLA() const { return (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) || (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP); }
   void                        checkCRA(const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, int& pocCRA, vvencNalUnitType& associatedIRAPType, PicList& rcListPic);
-  void                        setDecodingRefreshMarking(int& pocCRA, bool& bRefreshPending, PicList& rcListPic);
+  void                        setDecodingRefreshMarking(int& pocCRA, bool& bRefreshPending, const PicList& rcListPic);
 
   bool                        isIntra() const                                        { return sliceType == VVENC_I_SLICE; }
   bool                        isInterB() const                                       { return sliceType == VVENC_B_SLICE; }
@@ -1329,12 +1329,12 @@ public:
 
   void                        copySliceInfo( const Slice* slice, bool cpyAlmostAll = true);
 
-  void                        checkLeadingPictureRestrictions( PicList& rcListPic )                                         const;
-  void                        applyReferencePictureListBasedMarking( PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
+  void                        checkLeadingPictureRestrictions( const PicList& rcListPic )                                         const;
+  void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
   bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic )                                           const;
-  bool                        isStepwiseTemporalLayerSwitchingPointCandidate( PicList& rcListPic )                          const;
-  int                         checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors)                const;
-  void                        createExplicitReferencePictureSetFromReference(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
+  bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic )                          const;
+  int                         checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors)                const;
+  void                        createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
   void                        resetWpScaling();
@@ -1350,8 +1350,7 @@ public:
   bool                        isPocRestrictedByDRAP( int poc, bool precedingDRAPInDecodingOrder ) const;
   void                        setAlfApsIds( const std::vector<int>& ApsIDs);
 private:
-  Picture*                    xGetLongTermRefPic(PicList& rcListPic, int poc, bool pocHasMsb);
-
+  Picture*                    xGetLongTermRefPic(const PicList& rcListPic, int poc, bool pocHasMsb);
   Logger*                     m_logger;
 };// END CLASS DEFINITION Slice
 

@@ -456,6 +456,7 @@ typedef struct vvenc_config
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
+  bool                m_RCLookAhead;                                                     // enable pre-analysis in single pass rate control encoding
 
   int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
@@ -466,7 +467,7 @@ typedef struct vvenc_config
 
   uint32_t            m_numTileCols;                                                     // number of tile columns
   uint32_t            m_numTileRows;                                                     // number of tile rows
-  
+
   // expert config params
   int                 m_conformanceWindowMode;
   int                 m_confWinLeft;
@@ -493,7 +494,6 @@ typedef struct vvenc_config
   unsigned            m_bitDepthConstraintValue;
   bool                m_intraOnlyConstraintFlag;
 
-  int                 m_InputQueueSize;                                                  // Size of frame input queue
   bool                m_rewriteParamSets;                                                // Flag to enable rewriting of parameter sets at random access points
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
   vvencRPLEntry       m_RPLList0[ VVENC_MAX_GOP ];                                       // the RPL entries from the config file

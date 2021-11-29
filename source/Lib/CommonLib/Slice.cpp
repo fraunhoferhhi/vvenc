@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "Picture.h"
 #include "UnitTools.h"
 #include "dtrace_next.h"
+#include "Utilities/Logger.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -232,9 +233,9 @@ void  Slice::sortPicList        (PicList& rcListPic)
 }
 
 
-Picture* Slice::xGetLongTermRefPic( PicList& rcListPic, int poc, bool pocHasMsb)
+Picture* Slice::xGetLongTermRefPic( const PicList& rcListPic, int poc, bool pocHasMsb)
 {
-  PicList::iterator  iterPic = rcListPic.begin();
+  PicList::const_iterator  iterPic = rcListPic.begin();
   Picture*           picCand = *(iterPic);
   Picture*           pcStPic = picCand;
 
@@ -383,7 +384,7 @@ void Slice::setList1IdxToList0Idx()
   }
 }
 
-void Slice::constructRefPicList(PicList& rcListPic, bool extBorder)
+void Slice::constructRefPicList(const PicList& rcListPic, bool extBorder)
 {
   ::memset(isUsedAsLongTerm, 0, sizeof(isUsedAsLongTerm));
   if (sliceType == VVENC_I_SLICE)
@@ -406,7 +407,7 @@ void Slice::constructRefPicList(PicList& rcListPic, bool extBorder)
       {
         int poc_ = poc + rpl[eRefList]->refPicIdentifier[ii];
 
-        PicList::iterator  iterPic = rcListPic.begin();
+        PicList::const_iterator  iterPic = rcListPic.begin();
         pcRefPic   = *(iterPic);
 
         while ( iterPic != rcListPic.end() )
@@ -551,7 +552,7 @@ void Slice::checkCRA(const ReferencePictureList* pRPL0, const ReferencePictureLi
  * Note that the current picture is already placed in the reference list and its marking is not changed.
  * If the current picture has a nal_ref_idc that is not 0, it will remain marked as "used for reference".
  */
-void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicList& rcListPic )
+void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, const PicList& rcListPic )
 {
   const bool bEfficientFieldIRAPEnabled = true;
   Picture* rpcPic;
@@ -561,7 +562,7 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
     || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP)  // IDR picture
   {
     // mark all pictures as not used for reference
-    PicList::iterator        iterPic       = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     while (iterPic != rcListPic.end())
     {
       rpcPic = *(iterPic);
@@ -582,7 +583,7 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
     {
       if (bRefreshPending==true && pocCurr > lastIDR) // IDR reference marking pending
       {
-        PicList::iterator        iterPic       = rcListPic.begin();
+        PicList::const_iterator iterPic = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
@@ -599,7 +600,7 @@ void Slice::setDecodingRefreshMarking( int& pocCRA, bool& bRefreshPending, PicLi
     {
       if (bRefreshPending==true && pocCurr > pocCRA) // CRA reference marking pending
       {
-        PicList::iterator iterPic = rcListPic.begin();
+        PicList::const_iterator iterPic = rcListPic.begin();
         while (iterPic != rcListPic.end())
         {
           rpcPic = *(iterPic);
@@ -745,9 +746,9 @@ bool Slice::isTemporalLayerSwitchingPoint(PicList& rcListPic) const
 
 /** Function for checking if this is a STSA candidate
  */
-bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) const
+bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(const PicList& rcListPic) const
 {
-  PicList::iterator iterPic = rcListPic.begin();
+  PicList::const_iterator iterPic = rcListPic.begin();
   while ( iterPic != rcListPic.end())
   {
     const Picture* pic = *(iterPic++);
@@ -763,7 +764,7 @@ bool Slice::isStepwiseTemporalLayerSwitchingPointCandidate(PicList& rcListPic) c
 }
 
 
-void Slice::checkLeadingPictureRestrictions(PicList& rcListPic) const
+void Slice::checkLeadingPictureRestrictions(const PicList& rcListPic) const
 {
   // When a picture is a leading picture, it shall be a RADL or RASL picture.
   if(associatedIRAP > poc && !pps->mixedNaluTypesInPic)
@@ -802,7 +803,7 @@ void Slice::checkLeadingPictureRestrictions(PicList& rcListPic) const
   }
 
   // loop through all pictures in the reference picture buffer
-  PicList::iterator iterPic = rcListPic.begin();
+  PicList::const_iterator iterPic = rcListPic.begin();
   while ( iterPic != rcListPic.end())
   {
     Picture* pic = *(iterPic++);
@@ -870,7 +871,7 @@ void Slice::checkLeadingPictureRestrictions(PicList& rcListPic) const
 
 
 //Function for applying picture marking based on the Reference Picture List
-void Slice::applyReferencePictureListBasedMarking(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps ) const
+void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps ) const
 {
   int i, isReference;
   checkLeadingPictureRestrictions(rcListPic);
@@ -878,7 +879,7 @@ void Slice::applyReferencePictureListBasedMarking(PicList& rcListPic, const Refe
   bool isNeedToCheck = (nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP || nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL) ? false : true;
 
   // loop through all pictures in the reference picture buffer
-  PicList::iterator iterPic = rcListPic.begin();
+  PicList::const_iterator iterPic = rcListPic.begin();
   while (iterPic != rcListPic.end())
   {
     Picture* pic = *(iterPic++);
@@ -969,7 +970,7 @@ void Slice::applyReferencePictureListBasedMarking(PicList& rcListPic, const Refe
   }
 }
 
-int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors) const
+int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors) const
 {
   Picture* pic;
   int isAvailable = 0;
@@ -988,7 +989,7 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
 
     notPresentPoc = pRPL->refPicIdentifier[ii];
     isAvailable = 0;
-    PicList::iterator iterPic = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     while (iterPic != rcListPic.end())
     {
       pic = *(iterPic++);
@@ -1055,7 +1056,7 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
 
     notPresentPoc = poc + pRPL->refPicIdentifier[ii];
     isAvailable = 0;
-    PicList::iterator iterPic = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     while (iterPic != rcListPic.end())
     {
       pic = *(iterPic++);
@@ -1078,7 +1079,7 @@ int Slice::checkThatAllRefPicsAreAvailable(PicList& rcListPic, const ReferencePi
   return 0;
 }
 
-void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1)
+void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1)
 {
   Picture* picCand;;
   int pocCycle = 0;
@@ -1096,7 +1097,7 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   for (int ii = 0; ii < numOfRefPic; ii++)
   {
     // loop through all pictures in the reference picture buffer
-    PicList::iterator iterPic = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     bool isAvailable = false;
 
     pocCycle = 1 << (sps->bitsForPOC);
@@ -1161,7 +1162,7 @@ void Slice::createExplicitReferencePictureSetFromReference(PicList& rcListPic, c
   for (int ii = 0; ii < numOfRefPic; ii++)
   {
     // loop through all pictures in the reference picture buffer
-    PicList::iterator iterPic = rcListPic.begin();
+    PicList::const_iterator iterPic = rcListPic.begin();
     bool isAvailable = false;
     pocCycle = 1 << sps->bitsForPOC;
     while (iterPic != rcListPic.end())

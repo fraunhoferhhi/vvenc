@@ -555,6 +555,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("NumPasses",                                       c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Passes",                                          c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
+    ("LookAhead",                                       c->m_RCLookAhead,                                    "Rate control with look-ahead pass" )
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
@@ -580,7 +581,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("hdr",                                             toHDRMode,                                           "set HDR mode (+SEI messages) + BT.709 or BT.2020 color space. "
                                                                                                              "use: off, pq|hdr10, pq_2020|hdr10_2020, hlg, hlg_2020")
     ;
-
   }
   else
   {
@@ -609,7 +609,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
   }
 
   // ---------------------------------------------------
-
 
   opts.setSubSection("General Options");
   opts.addOptions()
@@ -673,7 +672,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     // Coding structure paramters
     opts.setSubSection("Coding structure paramters");
     opts.addOptions()
-    ("InputQueueSize",                                  c->m_InputQueueSize,                                 "Size of input frames queue (use gop size)")
     ("ReWriteParamSets",                                c->m_rewriteParamSets,                               "Enable rewriting of Parameter sets before every (intra) random access point")
     ("IDRRefParamList",                                 c->m_idrRefParamList,                                "Enable indication of reference picture list syntax elements in slice headers of IDR pictures")
     ;

@@ -206,8 +206,8 @@ public:
 protected:
   void      xUpdateRasInit(Slice* slice);
 
-  Picture * xGetNewPicBuffer(const SPS &sps, const PPS &pps, const uint32_t temporalLayer, const int layerId);
-  void      xCreateLostPicture (int iLostPOC, const int layerId);
+  Picture * xGetNewPicBuffer(const SPS &sps, const PPS &pps, const uint32_t temporalLayer);
+  void      xCreateLostPicture (int iLostPOC);
   void      xActivateParameterSets( const int layerId );
   void      xCheckParameterSetConstraints( const int layerId );
   void      xDecodePicHeader( InputNALUnit& nalu );
