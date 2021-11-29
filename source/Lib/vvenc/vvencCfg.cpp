@@ -695,6 +695,10 @@ void msgConf( vvenc_config *c, int level, const char* fmt, ... )
     c->m_logCallback ( c->m_msgFncCtx, level, fmt, args );
     va_end( args );
    }
+   else
+   {
+    vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
+   }
 }
 
 static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* message )
@@ -702,14 +706,7 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
   if ( ! bflag )
     return false;
 
-  if( c->m_logCallback )
-  {
-    msgConf( c, VVENC_ERROR, "Parameter Check Error: %s\n", message );
-  }
-  else if ( vvenc::g_msgFnc ) //  deprecated global logger
-  {
-    vvenc::msg( VVENC_ERROR, "Parameter Check Error: %s\n", message );
-  }
+  msgConf( c, VVENC_ERROR, "Parameter Check Error: %s\n", message );
 
   c->m_confirmFailed = true;
   return true;
