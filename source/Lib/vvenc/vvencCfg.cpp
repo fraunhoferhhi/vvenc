@@ -642,7 +642,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_maxParallelFrames                       = -1;
   c->m_ensureWppBitEqual                       = -1;
-  c->m_tileParallelCtuEnc                      = false;
+  c->m_tileParallelCtuEnc                      = true;
 
   c->m_picPartitionFlag                        = false;
   memset( c->m_tileColumnWidth, 0, sizeof(c->m_tileColumnWidth) );

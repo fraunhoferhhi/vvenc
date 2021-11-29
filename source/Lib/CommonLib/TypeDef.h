@@ -73,8 +73,6 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define MOVE_IBC_TO_THE_RIGHT_PLACE 1
-
 #define FASTTT_TH                                         1
 
 #define JVET_V0056_MCTF                                   1 // JVET-V0056: Changes to MCTF

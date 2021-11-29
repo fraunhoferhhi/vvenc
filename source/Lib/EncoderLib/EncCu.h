@@ -219,7 +219,6 @@ private:
 #endif
   int                   m_tileIdx;
   int                   m_EDO;
-  Position              m_TileBoundary;
 public:
   EncCu();
   virtual ~EncCu();

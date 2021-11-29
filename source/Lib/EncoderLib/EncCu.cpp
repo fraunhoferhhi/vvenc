@@ -387,11 +387,8 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   const bool leftSameTile  = lumaPos.x > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset(-1, 0) );
   const bool aboveSameTile = lumaPos.y > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset( 0,-1) );
   const bool tileCond = !m_pcEncCfg->m_tileParallelCtuEnc || (leftSameTile && aboveSameTile);
-  m_EDO     = m_pcEncCfg->m_EDO;
-//  m_TileBoundary = Position(0,0);
-//  m_EDO     = m_pcEncCfg->m_EDO && tileCond;
-  m_TileBoundary = Position( !m_pcEncCfg->m_tileParallelCtuEnc || leftSameTile  ? (lumaPos.x - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.x, 
-                             !m_pcEncCfg->m_tileParallelCtuEnc || aboveSameTile ? (lumaPos.y - (int)m_pcEncCfg->m_CTUSize ) : lumaPos.y); 
+  m_EDO = m_pcEncCfg->m_EDO && tileCond;
+
   if( m_pcEncCfg->m_IBCMode )
   {
     m_cInterSearch.resetCtuRecordIBC();
@@ -772,7 +769,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             }
           }
         }
-#if MOVE_IBC_TO_THE_RIGHT_PLACE        
+
         if (checkIbc && !partitioner.isConsInter())
         {
           EncTestMode encTestModeIBCMerge = { ETM_IBC_MERGE, ETO_STANDARD, qp, lossless };
@@ -787,28 +784,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             xCheckRDCostIBCMode(tempCS, bestCS, partitioner, encTestModeIBC);
           }
         }
-#endif
         if( m_EDO && bestCS->cost != MAX_DOUBLE )
         {
           xCalDebCost(*bestCS, partitioner);
         }
 
-#if ! MOVE_IBC_TO_THE_RIGHT_PLACE        
-        if (checkIbc && !partitioner.isConsInter())
-        {
-          EncTestMode encTestModeIBCMerge = { ETM_IBC_MERGE, ETO_STANDARD, qp, lossless };
-          if ((m_pcEncCfg->m_IBCFastMethod < 4) && (partitioner.chType == CH_L) && m_modeCtrl.tryMode(encTestModeIBCMerge, cs, partitioner))
-          {
-            xCheckRDCostIBCModeMerge2Nx2N(tempCS, bestCS, partitioner, encTestModeIBCMerge);
-          }
-
-          EncTestMode encTestModeIBC = { ETM_IBC, ETO_STANDARD, qp, lossless };
-          if (m_modeCtrl.tryMode(encTestModeIBC, cs, partitioner))
-          {
-            xCheckRDCostIBCMode(tempCS, bestCS, partitioner, encTestModeIBC);
-          }
-        }
-#endif
         // add intra modes
         EncTestMode encTestMode( {ETM_INTRA, ETO_STANDARD, qp, lossless} );
         if( !partitioner.isConsInter() && m_modeCtrl.tryMode( encTestMode, cs, partitioner ) )
@@ -2880,13 +2860,6 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       }
     }
   }
-
-#if !MOVE_IBC_TO_THE_RIGHT_PLACE
-  if( m_EDO && bestCS->cost != MAX_DOUBLE)  //th check this why do we need edo call here
-  {
-    xCalDebCost(*bestCS, partitioner);
-  }
-#endif
 }
 
 void EncCu::xCheckRDCostIBCMode(CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner,
@@ -2942,12 +2915,6 @@ void EncCu::xCheckRDCostIBCMode(CodingStructure*& tempCS, CodingStructure*& best
 
     xEncodeDontSplit(*tempCS, partitioner);
     xCheckDQP(*tempCS, partitioner);
-#if !MOVE_IBC_TO_THE_RIGHT_PLACE
-    if( m_EDO )
-    {
-      xCalDebCost(*tempCS, partitioner);
-    }
-#endif
     xCheckBestMode(tempCS, bestCS, partitioner, encTestMode);
   } // bValid
   else
@@ -3357,8 +3324,8 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   const ChromaFormat format = cs.area.chromaFormat;
   CodingUnit*            cu = cs.getCU(partitioner.chType, partitioner.treeType);
   const Position    lumaPos = cu->Y().valid() ? cu->Y().pos() : recalcPosition( format, cu->chType, CH_L, cu->blocks[cu->chType].pos() );
-  bool    topEdgeAvai = lumaPos.y > m_TileBoundary.y && ((lumaPos.y % 4) == 0);
-  bool   leftEdgeAvai = lumaPos.x > m_TileBoundary.x && ((lumaPos.x % 4) == 0);
+  bool    topEdgeAvai = lumaPos.y > 0 && ((lumaPos.y % 4) == 0);
+  bool   leftEdgeAvai = lumaPos.x > 0 && ((lumaPos.x % 4) == 0);
 
   if( ! ( topEdgeAvai || leftEdgeAvai ))
   {
@@ -3377,8 +3344,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
   int verOffset = lumaPos.y > 7 ? 8 : 4;
   int horOffset = lumaPos.x > 7 ? 8 : 4;
 
-  LoopFilter::calcFilterStrengths( *cu, true, &m_TileBoundary );
-//  LoopFilter::calcFilterStrengths( *cu, true );
+  LoopFilter::calcFilterStrengths( *cu, true );
 
   if( m_EDO == 2 && CS::isDualITree( cs ) && isLuma( partitioner.chType ) )
   {
