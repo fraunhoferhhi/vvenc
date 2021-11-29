@@ -428,13 +428,13 @@ VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat chFmt, co
 VVENC_DECL bool  vvenc_is_tracing_enabled( void );
 
 /* vvenc_decode_bitstream
- \param[in]  vvencEncoder pointer to opaque handler
  \param[in]  FileName of bitstream that should be decoded
  \param[in]  trcFile filename of a trace rule file
  \param[in]  trcRule trace rules
  \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
 */
-VVENC_DECL int vvenc_decode_bitstream( vvencEncoder *enc, const char* FileName, const char* trcFile, const char* trcRule);
+VVENC_DECL int   vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule);
+
 
 VVENC_NAMESPACE_END
 

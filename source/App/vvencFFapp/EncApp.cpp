@@ -182,18 +182,16 @@ int EncApp::encode()
   apputils::VVEncAppCfg& appCfg   = m_cEncAppCfg;
   vvenc_config&          vvencCfg = m_vvenc_config;
 
+  if( appCfg.m_decode )
+  {
+    return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
+  }
+
   // initialize encoder lib
   m_encCtx = vvenc_encoder_create();
   if( nullptr == m_encCtx )
   {
     return -1;
-  }
-
-  if( appCfg.m_decode )
-  {
-    int ret = vvenc_decode_bitstream( m_encCtx, appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
-    vvenc_encoder_close( m_encCtx );
-    return ret;
   }
 
   int iRet = vvenc_encoder_open( m_encCtx, &vvencCfg);
