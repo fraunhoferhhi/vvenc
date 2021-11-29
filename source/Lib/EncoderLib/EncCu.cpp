@@ -378,11 +378,11 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
   m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
 
   m_modeCtrl.initCTUEncoding( *cs.slice, m_tileIdx );
-  
+
   // init the partitioning manager
   Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
-
+  
   const Position& lumaPos = area.lumaPos();
   const bool leftSameTile  = lumaPos.x > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset(-1, 0) );
   const bool aboveSameTile = lumaPos.y > 0 && m_tileIdx == cs.pps->getTileIdx( lumaPos.offset( 0,-1) );
