@@ -56,7 +56,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/ProfileLevelTier.h"
 #include "Utilities/MsgLog.h"
 
-
 #include <math.h>
 #include <thread>
 

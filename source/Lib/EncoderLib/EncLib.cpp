@@ -118,12 +118,12 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   initPass( 0, nullptr );
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( m_encCfg.m_traceFile, m_encCfg.m_traceRule, m_logger );
+  g_trace_ctx = tracing_init( m_encCfg.m_traceFile, m_encCfg.m_traceRule, msg );
   if( g_trace_ctx && m_encCfg.m_listTracingChannels )
   {
     std::string sChannelsList;
     g_trace_ctx->getChannelsList( sChannelsList );
-    m_logger->log( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
+    msg.log( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
   }
 #endif
 
