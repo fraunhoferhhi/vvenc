@@ -60,11 +60,7 @@ if( VVENC_ENABLE_THIRDPARTY_JSON )
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVVENC_ENABLE_THIRDPARTY_JSON" )
 endif()
 
-if( TARGET INTEL_ITT)
-  target_link_libraries( ${LIB_NAME} INTEL_ITT Threads::Threads vvenc )
-else()
-  target_link_libraries( ${LIB_NAME} Threads::Threads vvenc )
-endif()
+#target_link_libraries( ${LIB_NAME} PRIVATE Threads::Threads )
 
 # set the folder where to place the projects
 set_target_properties( ${LIB_NAME} PROPERTIES FOLDER lib )

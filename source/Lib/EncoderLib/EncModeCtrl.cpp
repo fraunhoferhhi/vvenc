@@ -542,7 +542,7 @@ void EncModeCtrl::destroy()
   BestEncInfoCache::destroy();
 }
 
-void EncModeCtrl::initCTUEncoding( const Slice &slice )
+void EncModeCtrl::initCTUEncoding( const Slice &slice, int tileIdx )
 {
   CacheBlkInfoCtrl::init( slice );
   BestEncInfoCache::init( slice );
@@ -557,6 +557,8 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   {
     m_skipThresholdE0023FastEnc = SKIP_DEPTH;
   }
+
+  m_tileIdx = tileIdx;
 }
 
 #if QTBTT_SPEED3
@@ -581,8 +583,8 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
   comprCUCtx = &m_ComprCUCtxList.back();
 
-  const CodingUnit* cuLeft  = cs.getCU( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), partitioner.chType, partitioner.treeType );
-  const CodingUnit* cuAbove = cs.getCU( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), partitioner.chType, partitioner.treeType );
+  const CodingUnit* cuLeft  = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
+  const CodingUnit* cuAbove = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
 
   const bool qtBeforeBt = ( (  cuLeft  &&  cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth && cuAbove->qtDepth > partitioner.currQtDepth )
                          || (  cuLeft  && !cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth )
@@ -652,6 +654,13 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
   const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
+
+  if ((m_pcEncCfg->m_IntraPeriod==1) && (partitioner.chType==CH_C) && (!partitioner. qtChromaSplit))
+  {
+    cuECtx.maxDepth=partitioner.currDepth;
+    partitioner.horChromaSplit=true;
+    partitioner.verChromaSplit=true;
+  }
 
   if( isBoundary )
   {

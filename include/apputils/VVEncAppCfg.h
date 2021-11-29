@@ -51,6 +51,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/apputilsDecl.h"
 #include "vvenc/vvencCfg.h"
 #include <string>
+#include <vector>
+#include <tuple>
+#include <functional>
 
 namespace apputils {
 
@@ -61,17 +64,19 @@ namespace apputils {
 // Class definition
 // ====================================================================================================================
 
-/// encoder configuration class
-class APPUTILS_DECL VVEncAppCfg : public vvenc_config
+/// application params and parser class for app+lib options
+class APPUTILS_DECL VVEncAppCfg
 {
 public:
-  //vvenc_config conf;
+  typedef std::function<void( vvenc_config*, vvencPresetMode ) > presetChangeCallback;
 
+public:
   std::string  m_inputFileName;                                ///< source file name
   std::string  m_bitstreamFileName;                            ///< output bitstream file
   std::string  m_reconFileName;                                ///< output reconstruction file
   std::string  m_RCStatsFileName;                              ///< rate control statistics file
   vvencChromaFormat m_inputFileChromaFormat    = VVENC_CHROMA_420;
+  int          m_FrameSkip                    = 0;             ///< number of skipped frames from the beginning
   bool         m_bClipInputVideoToRec709Range  = false;
   bool         m_bClipOutputVideoToRec709Range = false;
   bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )
@@ -79,24 +84,45 @@ public:
   bool         m_decode                        = false;
   bool         m_showVersion                   = false;
 
+  std::string  m_additionalSettings;                           ///< set additional settings (always parsed and set after other params are set)
+                                                               ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
+                                                               ///< values that are not arbitrary must be quoted "\"values\""
+                                                               ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
+private:
+  const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
+
+  presetChangeCallback  m_changePresetCallback = nullptr;
 public:
 
-  VVEncAppCfg()
+  VVEncAppCfg( bool easyMode = false )
+  : m_easyMode (easyMode )
   {
-    vvenc_config_default( this );
+
+  }
+  virtual ~VVEncAppCfg(){}
+
+  void setPresetChangeCallback( presetChangeCallback callback )
+  {
+    m_changePresetCallback = callback;
   }
 
-  virtual ~VVEncAppCfg();
+  presetChangeCallback getPresetChangeCallback( )
+  {
+    return m_changePresetCallback ;
+  }
 
 public:
-  bool parseCfg( int argc, char* argv[] );                     ///< parse configuration fill member variables (simple app)
-  bool parseCfgFF( int argc, char* argv[] );                   ///< parse configuration fill member variables for FullFeature set (expert app)
-  bool checkCfg();
+  int parse( int argc, char* argv[], vvenc_config* c );
 
-  virtual std::string getConfigAsString( vvencMsgLevel eMsgLevel ) const;
+  bool checkCfg( vvenc_config* c );
+  virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const;
+
+  std::vector <std::tuple<std::string, std::string>> getAdditionalSettingList();
 
 private:
-  bool xCheckCfg();
+  bool xCheckCfg( vvenc_config* c );
+
+  std::vector<std::string> tokenize(std::string str, char delimiter );
 };
 
 } // namespace
