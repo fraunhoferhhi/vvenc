@@ -60,7 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-  struct MsgLog;
+  class MsgLog;
 
   struct LegacyTRCLCU
   {
