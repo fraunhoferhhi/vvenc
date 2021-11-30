@@ -243,9 +243,7 @@ public:
   bool                          useScBDPCM;
   bool                          useScIBC;
   bool                          useScLMCS;
-#if QTBTT_SPEED3
   int                           useQtbttSpeedUpMode;
-#endif
   int                           seqBaseQp;
   int                           actualHeadBits;
   int                           actualTotalBits;

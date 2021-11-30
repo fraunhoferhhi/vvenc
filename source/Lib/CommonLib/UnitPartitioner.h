@@ -185,11 +185,7 @@ public:
   bool isConsInter                        () { return modeType == MODE_TYPE_INTER; }
   bool isConsIntra                        () { return modeType == MODE_TYPE_INTRA; }
 
-#if QTBTT_SPEED3
   void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, int QtbttSpeedUp, bool MergeFlag ) const;
-#else
-  void setMaxMinDepth                     ( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const;
-#endif
 };
 
 //////////////////////////////////////////////////////////////////////////
