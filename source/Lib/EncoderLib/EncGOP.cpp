@@ -713,23 +713,28 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
 
   const BitDepths& bitDepths = m_spsMap.getFirstPS()->bitDepths;
   //-- all
-  const char* summary = nullptr;
-  msg.log( VVENC_INFO, "\n" );
-  msg.log( VVENC_DETAILS,"\nSUMMARY --------------------------------------------------------\n" );
-  summary = m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
-  msg.log( VVENC_INFO,summary );
+  std::string summary = "\n";
+  if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
+    summary.append("\nSUMMARY --------------------------------------------------------\n");
+  
+  summary.append( m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-  msg.log( VVENC_DETAILS,"\n\nI Slices--------------------------------------------------------\n" );
-  summary = m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
-  msg.log( VVENC_DETAILS,summary );
+  if( m_pcEncCfg->m_verbosity < VVENC_DETAILS )
+  {
+    msg.log( VVENC_INFO,summary.c_str() );
+  }
+  else
+  {
+    summary.append( "\n\nI Slices--------------------------------------------------------\n" );
+    summary.append( m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-  msg.log( VVENC_DETAILS,"\n\nP Slices--------------------------------------------------------\n" );
-  summary = m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
-  msg.log( VVENC_DETAILS,summary );
-
-  msg.log( VVENC_DETAILS,"\n\nB Slices--------------------------------------------------------\n" );
-  summary = m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
-  msg.log( VVENC_DETAILS,summary );
+    summary.append( "\n\nP Slices--------------------------------------------------------\n" );
+    summary.append( m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
+    
+    summary.append( "\n\nB Slices--------------------------------------------------------\n" );
+    summary.append( m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
+    msg.log( VVENC_DETAILS,summary.c_str() );
+  }
 
   if (m_pcEncCfg->m_summaryOutFilename[0] != '\0' )
   {
