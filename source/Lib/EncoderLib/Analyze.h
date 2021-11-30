@@ -154,7 +154,8 @@ public:
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
    
-    int n=0;
+    int       n = 0;                     // cur. string pos
+    const int s = VVENC_MAX_STRING_LEN;  // max string length
 
     double MSEBasedSNR[MAX_NUM_COMP];
     if (printMSEBasedSNR)
@@ -176,30 +177,31 @@ public:
         }
       }
     }
+    #define MSGADD n+=snprintf
 
     switch (chFmt)
     {
       case CHROMA_400:
         if (printMSEBasedSNR)
         {
-          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          MSGADD ( m_buf+n, s-n, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
 
           if (printHexPsnr)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           " );
+            MSGADD( m_buf+n, s-n, "xY-PSNR           " );
           }
 
           if (printSequenceMSE)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "    Y-MSE\n" );
+            MSGADD( m_buf+n, s-n, "    Y-MSE\n" );
           }
           else
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n" );
+            MSGADD( m_buf+n, s-n, "\n" );
           }
 
-          //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-           n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //MSGADD( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+           MSGADD( m_buf+n, s-n, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / (double)getNumPic() );
@@ -214,43 +216,43 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n,  "   %16" PRIx64 " ", xPsnr );
+            MSGADD( m_buf+n, s-n,  "   %16" PRIx64 " ", xPsnr );
           }
 
           if (printSequenceMSE)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            MSGADD( m_buf+n, s-n, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
           }
           else
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+            MSGADD( m_buf+n, s-n, "\n");
           }
 
-          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
+          MSGADD( m_buf+n, s-n, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  MSEBasedSNR[COMP_Y] );
         }
         else
         {
-          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          MSGADD( m_buf+n, s-n, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
 
           if (printHexPsnr)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           ");
+            MSGADD( m_buf+n, s-n, "xY-PSNR           ");
           }
 
           if (printSequenceMSE)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "    Y-MSE\n" );
+            MSGADD( m_buf+n, s-n, "    Y-MSE\n" );
           }
           else
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+            MSGADD( m_buf+n, s-n, "\n");
           }
 
-          //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //MSGADD( m_buf+n, s-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+          MSGADD( m_buf+n, s-n, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
                  getPsnr(COMP_Y) / (double)getNumPic() );
@@ -265,16 +267,16 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "   %16" PRIx64 " ", xPsnr);
+            MSGADD( m_buf+n, s-n, "   %16" PRIx64 " ", xPsnr);
           }
 
           if (printSequenceMSE)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            MSGADD( m_buf+n, s-n, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
           }
           else
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+            MSGADD( m_buf+n, s-n, "\n");
           }
         }
         break;
@@ -289,24 +291,24 @@ public:
 
           if (printMSEBasedSNR)
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
+            MSGADD( m_buf+n, s-n, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
 
             if (printHexPsnr)
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              MSGADD( m_buf+n, s-n, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
             }
 
             if (printSequenceMSE)
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              MSGADD( m_buf+n, s-n, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
             }
             else
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+              MSGADD( m_buf+n, s-n, "\n");
             }
 
-            //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //MSGADD( m_buf+n, s-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+            MSGADD( m_buf+n, s-n, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
@@ -326,12 +328,12 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              MSGADD( m_buf+n, s-n, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
             }
 
             if (printSequenceMSE)
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              MSGADD( m_buf+n, s-n, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
@@ -339,10 +341,10 @@ public:
             }
             else
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+              MSGADD( m_buf+n, s-n, "\n");
             }
 
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+            MSGADD( m_buf+n, s-n, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    MSEBasedSNR[COMP_Y ],
@@ -352,23 +354,23 @@ public:
           }
           else
           {
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
+            MSGADD( m_buf+n, s-n, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
 
             if (printHexPsnr)
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              MSGADD( m_buf+n, s-n, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
             }
             if (printSequenceMSE)
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              MSGADD( m_buf+n, s-n, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
             }
             else
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+              MSGADD( m_buf+n, s-n, "\n");
             }
 
-            //n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //MSGADD( m_buf+n, s-n, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
+            MSGADD( m_buf+n, s-n, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
@@ -389,11 +391,11 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              MSGADD( m_buf+n, s-n, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
             }
             if (printSequenceMSE)
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              MSGADD( m_buf+n, s-n, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
@@ -401,15 +403,17 @@ public:
             }
             else
             {
-              n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "\n");
+              MSGADD( m_buf+n, s-n, "\n");
             }
           }
         }
         break;
       default:
-        n += snprintf ( m_buf+n, VVENC_MAX_STRING_LEN-n, "Unknown format during print out\n");
+        MSGADD( m_buf+n, s-n, "Unknown format during print out\n");
         break;
     }
+
+    #undef MSGADD
 
     return &m_buf[0];
   }
