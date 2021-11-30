@@ -883,6 +883,8 @@ int testStringApiInterface()
 int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {
   vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -1003,6 +1005,8 @@ int invalidInputInvalidChromaStride( )
 int invalidldInputBuf( )
 {
   vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();

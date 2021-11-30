@@ -181,7 +181,6 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create()
   vvenc::VVEncImpl* encCtx = new vvenc::VVEncImpl();
   if (!encCtx)
   {
-    vvenc::msg( VVENC_ERROR, "cannot allocate memory for VVdeC decoder\n" );
     return nullptr;
   }
 
@@ -191,23 +190,16 @@ VVENC_DECL vvencEncoder* vvenc_encoder_create()
 
 VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
 {
-  if (nullptr == config)
-  {
-    vvenc::msg( VVENC_ERROR, "vvenc_config is null\n" );
-    return VVENC_ERR_PARAMETER;
-  }
-
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  int ret = d->init( *config );
+  int ret = e->init( config );
   if (ret != 0)
   {
     // Error initializing the decoder
-    vvenc::msg( VVENC_ERROR, "cannot init the VVenC encoder\n" );
     return VVENC_ERR_INITIALIZE;
   }
 
@@ -216,140 +208,140 @@ VVENC_DECL int vvenc_encoder_open( vvencEncoder *enc, vvenc_config* config )
 
 VVENC_DECL int vvenc_encoder_close(vvencEncoder *enc)
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  int ret = d->uninit();
-  delete d;
+  int ret = e->uninit();
+  delete e;
 
   return ret;
 }
 
 VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *enc, void * ctx, vvencRecYUVBufferCallback callback )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  d->setRecYUVBufferCallback( ctx, callback );
+  e->setRecYUVBufferCallback( ctx, callback );
   return VVENC_OK;
 }
 
 VVENC_DECL int vvenc_init_pass( vvencEncoder *enc, int pass, const char * statsFName )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  return d->initPass( pass, statsFName );
+  return e->initPass( pass, statsFName );
 }
 
 
 VVENC_DECL int vvenc_encode( vvencEncoder *enc, vvencYUVBuffer* YUVBuffer, vvencAccessUnit* accessUnit, bool* encodeDone )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_INITIALIZE;
   }
 
-  return d->encode( YUVBuffer, accessUnit, encodeDone );
+  return e->encode( YUVBuffer, accessUnit, encodeDone );
 }
 
 VVENC_DECL int vvenc_get_config( vvencEncoder *enc, vvenc_config* cfg )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  return d->getConfig( *cfg );
+  return e->getConfig( *cfg );
 }
 
 
 VVENC_DECL int vvenc_reconfig( vvencEncoder *enc, const vvenc_config *cfg )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  return d->reconfig( *cfg );
+  return e->reconfig( *cfg );
 }
 
 VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const vvenc_config *cfg )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  return d->checkConfig( *cfg );
+  return e->checkConfig( *cfg );
 }
 
 VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return NULL;
   }
 
-  return d->getLastError();
+  return e->getLastError();
 }
 
 VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder *enc )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return NULL;
   }
 
-  return d->getEncoderInfo();
+  return e->getEncoderInfo();
 }
 
 VVENC_DECL int vvenc_get_num_lead_frames( vvencEncoder *enc )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  return d->getNumLeadFrames();
+  return e->getNumLeadFrames();
 }
 
 VVENC_DECL int vvenc_get_num_trail_frames( vvencEncoder *enc )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  return d->getNumTrailFrames();
+  return e->getNumTrailFrames();
 }
 
 VVENC_DECL int vvenc_print_summary( vvencEncoder *enc )
 {
-  auto d = (vvenc::VVEncImpl*)enc;
-  if (!d)
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
   {
     return VVENC_ERR_UNSPECIFIED;
   }
 
-  return d->printSummary();
+  return e->printSummary();
 }
 
 
@@ -366,6 +358,7 @@ VVENC_DECL const char* vvenc_get_error_msg( int nRet )
 
 VVENC_DECL int vvenc_set_logging_callback( void * ctx, vvencLoggingCallback callback )
 {
+ // DEPRECATED
   vvenc::VVEncImpl::registerMsgCbf ( ctx, callback );
   return VVENC_OK;
 }

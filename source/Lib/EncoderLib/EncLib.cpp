@@ -55,6 +55,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/TimeProfiler.h"
 #include "CommonLib/Rom.h"
 #include "Utilities/NoMallocThreadPool.h"
+#include "Utilities/MsgLog.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -66,9 +67,9 @@ namespace vvenc {
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
 
-
-EncLib::EncLib()
-  : m_recYuvBufFunc  ( nullptr )
+EncLib::EncLib( MsgLog& logger )
+  : msg             ( logger )
+  , m_recYuvBufFunc  ( nullptr )
   , m_recYuvBufCtx   ( nullptr )
   , m_encCfg         ()
   , m_orgCfg         ()
@@ -117,12 +118,12 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   initPass( 0, nullptr );
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( m_encCfg.m_traceFile, m_encCfg.m_traceRule );
+  g_trace_ctx = tracing_init( m_encCfg.m_traceFile, m_encCfg.m_traceRule, msg );
   if( g_trace_ctx && m_encCfg.m_listTracingChannels )
   {
     std::string sChannelsList;
     g_trace_ctx->getChannelsList( sChannelsList );
-    msg( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
+    msg.log( VVENC_INFO, "\n Using tracing channels:\n\n%s\n", sChannelsList.c_str() );
   }
 #endif
 
@@ -180,11 +181,11 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
     {
-      m_rateCtrl = new LegacyRateCtrl;
+      m_rateCtrl = new LegacyRateCtrl(msg);
     }
     else
     {
-      m_rateCtrl = new RateCtrl;
+      m_rateCtrl = new RateCtrl(msg);
     }
   }
 
@@ -234,14 +235,14 @@ void EncLib::initPass( int pass, const char* statsFName )
   // pre analysis encoder
   if( m_encCfg.m_RCLookAhead )
   {
-    m_preEncoder = new EncGOP();
+    m_preEncoder = new EncGOP( msg );
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
   }
 
   // gop encoder
-  m_gopEncoder = new EncGOP();
+  m_gopEncoder = new EncGOP( msg );
   const int encDelay = m_encCfg.m_RCLookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
   m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );

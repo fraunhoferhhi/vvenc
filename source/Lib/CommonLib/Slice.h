@@ -1332,7 +1332,7 @@ public:
   void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
   bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic )                                           const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic )                          const;
-  int                         checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors)                const;
+  int                         checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, int &rCurPoc)                const;
   void                        createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
@@ -1537,6 +1537,17 @@ private:
 class ParameterSetManager
 {
 public:
+  enum PPSErrCodes
+  {
+    PPS_OK    = 0,
+    PPS_ERR_INACTIVE_SPS = -1,
+    PPS_ERR_NO_SPS       = -2,
+    PPS_ERR_NO_PPS       = -3,
+    PPS_WARN_DCI_ID      = 1,
+    PPS_WARN_NO_DCI      = 2,    
+  };
+  
+public:
                  ParameterSetManager();
   virtual        ~ParameterSetManager();
   void           storeVPS(VPS *vps, const std::vector<uint8_t> &naluData)    { m_vpsMap.storePS(vps->vpsId, vps, &naluData); }
@@ -1557,7 +1568,7 @@ public:
   void           clearPPSChangedFlag(int ppsId)                              { m_ppsMap.clearChangedFlag(ppsId); }
   PPS*           getFirstPPS()                                               { return m_ppsMap.getFirstPS(); };
 
-  bool           activatePPS(int ppsId, bool isIRAP);
+  PPSErrCodes    activatePPS(int ppsId, bool isIRAP);
   APS**          getAPSs() { return &m_apss[0]; }
   ParameterSetMap<APS>* getApsMap() { return &m_apsMap; }
   void           storeAPS(APS *aps, const std::vector<uint8_t> &naluData)    { m_apsMap.storePS((aps->apsId << NUM_APS_TYPE_LEN) + aps->apsType, aps, &naluData); };

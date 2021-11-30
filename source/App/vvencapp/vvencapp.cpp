@@ -79,10 +79,10 @@ void msgFnc( void*, int level, const char* fmt, va_list args )
 
 void msgApp( void* ctx, int level, const char* fmt, ... )
 {
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( ctx, level, fmt, args );
-    va_end( args );
+  va_list args;
+  va_start( args, fmt );
+  msgFnc( ctx, level, fmt, args );
+  va_end( args );
 }
 
 void changePreset( vvenc_config* c, vvencPresetMode preset )
@@ -195,13 +195,15 @@ int main( int argc, char* argv[] )
     cAppname = cAppname.substr(iPos+1 );
   }
 
-  vvenc_set_logging_callback( nullptr, msgFnc );
+  vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
 
   // default encoder configuration
   apputils::VVEncAppCfg vvencappCfg = apputils::VVEncAppCfg(true); // init config in easy mode
   vvencappCfg.setPresetChangeCallback(changePreset);
   vvenc_config vvenccfg;
   vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+
+  vvenc_set_msg_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg, vvenccfg ) )

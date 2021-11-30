@@ -591,23 +591,13 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
+// global logger message callback function - DEPRECATED - will be removed in next major version
 extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
-extern void * m_msgFncCtx;
+extern void * g_msgFncCtx;
+// end global logger 
 
-inline void msg( int level, const char* fmt, ... )
-{
-  if ( g_msgFnc )
-  {
-    static std::mutex _msgMutex;
-    std::unique_lock<std::mutex> _lock( _msgMutex );
-    va_list args;
-    va_start( args, fmt );
-    g_msgFnc( m_msgFncCtx, level, fmt, args );
-    va_end( args );
-  }
-}
 
-inline std::string print( const char* fmt, ...)
+inline std::string prnt( const char* fmt, ...)
 {
   va_list argptr;
 

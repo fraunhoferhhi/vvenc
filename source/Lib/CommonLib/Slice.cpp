@@ -968,7 +968,7 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
   }
 }
 
-int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, bool printErrors) const
+int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, int &rCurPoc ) const
 {
   Picture* pic;
   int isAvailable = 0;
@@ -1036,10 +1036,7 @@ int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const Refer
     }
     if (!isAvailable)
     {
-      if (printErrors)
-      {
-        msg(VVENC_ERROR, "\nCurrent picture: %d Long-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
-      }
+      rCurPoc = poc;
       return notPresentPoc;
     }
   }
@@ -1067,10 +1064,7 @@ int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const Refer
     //report that a picture is lost if it is in the Reference Picture List but not in the DPB
     if (isAvailable == 0 && pRPL->numberOfShorttermPictures > 0)
     {
-      if (printErrors)
-      {
-        msg(VVENC_ERROR, "\nCurrent picture: %d Short-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, notPresentPoc);
-      }
+      rCurPoc = poc;
       return notPresentPoc;
     }
   }
@@ -1987,15 +1981,17 @@ ParameterSetManager::~ParameterSetManager()
 
 //! activate a PPS and depending on isIDR parameter also SPS
 //! \returns true, if activation is successful
-bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
+ParameterSetManager::PPSErrCodes ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
 {
+  PPSErrCodes ret=PPS_OK;
+
   PPS *pps = m_ppsMap.getPS(ppsId);
   if (pps)
   {
     int spsId = pps->spsId;
     if (!isIRAP && (spsId != m_activeSPSId ))
     {
-      msg( VVENC_WARNING, "Warning: tried to activate PPS referring to a inactive SPS at non-IDR.");
+      ret=PPS_ERR_INACTIVE_SPS;
     }
     else
     {
@@ -2005,7 +2001,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
         int dciId = sps->dciId;
         if ((m_activeDCIId!=-1) && (dciId != m_activeDCIId ))
         {
-          msg( VVENC_WARNING, "Warning: tried to activate DCI with different ID than the currently active DCI. This should not happen within the same bitstream!");
+          ret=PPS_WARN_DCI_ID;
         }
         else
         {
@@ -2019,7 +2015,7 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
             }
             else
             {
-              msg( VVENC_WARNING, "Warning: tried to activate PPS that refers to a non-existing DCI.");
+              ret=PPS_WARN_NO_DCI;
             }
           }
           else
@@ -2035,23 +2031,23 @@ bool ParameterSetManager::activatePPS(int ppsId, bool isIRAP)
         m_activeSPSId = spsId;
         m_ppsMap.clearActive();
         m_ppsMap.setActive(ppsId);
-        return true;
+        return ret;
       }
       else
       {
-        msg( VVENC_WARNING, "Warning: tried to activate a PPS that refers to a non-existing SPS.");
+        ret=PPS_ERR_NO_SPS;
       }
     }
   }
   else
   {
-    msg( VVENC_WARNING, "Warning: tried to activate non-existing PPS.");
+    ret=PPS_ERR_NO_PPS;
   }
 
   // Failed to activate if reach here.
   m_activeSPSId=-1;
   m_activeDCIId=-1;
-  return false;
+  return ret;
 }
 
 bool ParameterSetManager::activateAPS(int apsId, int apsType)
@@ -2062,10 +2058,7 @@ bool ParameterSetManager::activateAPS(int apsId, int apsType)
     m_apsMap.setActive((apsId << NUM_APS_TYPE_LEN) + apsType);
     return true;
   }
-  else
-  {
-    msg(VVENC_WARNING, "Warning: tried to activate non-existing APS.");
-  }
+
   return false;
 }
 

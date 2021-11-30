@@ -70,6 +70,7 @@ class SEI;
 class SEIDecodedPictureHash;
 class EncRCPic;
 class PicShared;
+class MsgLog;
 
 typedef std::list<SEI*> SEIMessages;
 
@@ -266,7 +267,7 @@ public:
   void            resizeAlfCtuBuffers( int numEntries );
 };
 
-int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl);
+int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, const vvencMsgLevel msgl, MsgLog& logger );
 
 typedef std::list<Picture*> PicList;
 

@@ -60,6 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "DecoderLib/DecLib.h"
 #include "BitAllocation.h"
 #include "EncHRD.h"
+#include "Utilities/MsgLog.h"
 
 #include <list>
 
@@ -128,7 +129,7 @@ bool isPicEncoded( int targetPoc, int curPoc, int curTLayer, int gopSize, int in
   return curTLayer <= tarTL && curId == 0;
 }
 
-void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap )
+void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Picture* pic, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>& apsMap, MsgLog& msg )
 {
   // check if we should decode a leading bitstream
   if( cfg.m_decodeBitstreams[0][0] != '\0' )
@@ -137,7 +138,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
     {
       if( cfg.m_forceDecodeBitstream1 )
       {
-        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, false ) ) )
+        if( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, msg, false ) ) )
         {
           decPic = ffwdDecoder.bDecode1stPart;
         }
@@ -145,7 +146,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
       else
       {
         // update decode decision
-        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, false, cfg.m_switchPOC ) ) ) )
+        if( (0 != ( ffwdDecoder.bDecode1stPart = ( cfg.m_switchPOC != pic->getPOC() )  )) && ( 0 != ( ffwdDecoder.bDecode1stPart = tryDecodePicture( pic, pic->getPOC(), cfg.m_decodeBitstreams[ 0 ], ffwdDecoder, &apsMap, msg, false, cfg.m_switchPOC ) ) ) )
         {
           decPic = ffwdDecoder.bDecode1stPart;
           return;
@@ -153,7 +154,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
         else if( pic->getPOC() )
         {
           // reset decoder if used and not required any further
-          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, &apsMap );
+          tryDecodePicture( NULL, 0, std::string( "" ), ffwdDecoder, &apsMap, msg );
         }
       }
     }
@@ -178,7 +179,7 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
       expectedPoc = pic->getPOC() - iRestartIntraPOC;
       slice0.copySliceInfo( pic->slices[ 0 ], false );
     }
-    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, &apsMap, true )) ))
+    if( bDecode2ndPart && (0 != (bDecode2ndPart = tryDecodePicture( pic, expectedPoc, cfg.m_decodeBitstreams[ 1 ], ffwdDecoder, &apsMap, msg, true )) ))
     {
       decPic = bDecode2ndPart;
       if ( cfg.m_bs2ModPOCAndType )
@@ -236,9 +237,9 @@ void trySkipOrDecodePicture( bool& decPic, bool& encPic, const VVEncCfg& cfg, Pi
 // Constructor / destructor / initialization / destroy
 // ====================================================================================================================
 
-
-EncGOP::EncGOP()
-  : m_recYuvBufFunc      ( nullptr )
+EncGOP::EncGOP( MsgLog& logger )
+  : msg                  ( logger )
+  , m_recYuvBufFunc      ( nullptr )
   , m_recYuvBufCtx       ( nullptr )
   , m_threadPool         ( nullptr )
   , m_pcEncCfg           ( nullptr )
@@ -271,7 +272,7 @@ EncGOP::~EncGOP()
   if( m_pcEncCfg && ( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' || m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' ) )
   {
     // reset potential decoder resources
-    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap );
+    tryDecodePicture( NULL, 0, std::string(""), m_ffwdDecoder, &m_gopApsMap, msg );
   }
 
   freePicList();
@@ -552,7 +553,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     bool decPic = false;
     bool encPic = false;
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap );
+    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
@@ -713,18 +714,28 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
 
   const BitDepths& bitDepths = m_spsMap.getFirstPS()->bitDepths;
   //-- all
-  msg( VVENC_INFO, "\n" );
-  msg( VVENC_DETAILS,"\nSUMMARY --------------------------------------------------------\n" );
-  m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths
-                          );
-  msg( VVENC_DETAILS,"\n\nI Slices--------------------------------------------------------\n" );
-  m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  std::string summary = "\n";
+  if( m_pcEncCfg->m_verbosity >= VVENC_DETAILS )
+    summary.append("\nSUMMARY --------------------------------------------------------\n");
+  
+  summary.append( m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-  msg( VVENC_DETAILS,"\n\nP Slices--------------------------------------------------------\n" );
-  m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+  if( m_pcEncCfg->m_verbosity < VVENC_DETAILS )
+  {
+    msg.log( VVENC_INFO,summary.c_str() );
+  }
+  else
+  {
+    summary.append( "\n\nI Slices--------------------------------------------------------\n" );
+    summary.append( m_AnalyzeI.printOut('i', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
 
-  msg( VVENC_DETAILS,"\n\nB Slices--------------------------------------------------------\n" );
-  m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths);
+    summary.append( "\n\nP Slices--------------------------------------------------------\n" );
+    summary.append( m_AnalyzeP.printOut('p', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
+    
+    summary.append( "\n\nB Slices--------------------------------------------------------\n" );
+    summary.append( m_AnalyzeB.printOut('b', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
+    msg.log( VVENC_DETAILS,summary.c_str() );
+  }
 
   if (m_pcEncCfg->m_summaryOutFilename[0] != '\0' )
   {
@@ -1665,8 +1676,9 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   }
 
   // reference list
+  int poc;
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, false ) || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, false ) )
+  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
@@ -2543,11 +2555,11 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
           zeroBytesPadding[ i * 3 + 2 ] = 3;  // 00 00 03
         }
         nalUnitData.write( reinterpret_cast<const char*>(&(zeroBytesPadding[ 0 ])), numberOfAdditionalCabacZeroBytes );
-        msg( VVENC_NOTICE, "Adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
+        msg.log( VVENC_NOTICE, "Adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
       }
       else
       {
-        msg( VVENC_NOTICE, "Standard would normally require adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
+        msg.log( VVENC_NOTICE, "Standard would normally require adding %d bytes of padding\n", numberOfAdditionalCabacZeroWords * 3 );
       }
     }
   }
@@ -2604,7 +2616,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     uint32_t numRBSPBytes_nal = uint32_t((*it)->m_nalUnitData.str().size());
     if (m_pcEncCfg->m_summaryVerboseness > 0)
     {
-      msg( VVENC_NOTICE, "*** %s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
+      msg.log( VVENC_NOTICE, "*** %s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
     }
     if( ( *it )->m_nalUnitType != VVENC_NAL_UNIT_PREFIX_SEI && ( *it )->m_nalUnitType != VVENC_NAL_UNIT_SUFFIX_SEI )
     {
@@ -2672,18 +2684,16 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   {
     if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
     {
-      std::string cInfo = print("RC pass %d/%d, analyze poc %4d",
+      std::string cInfo = prnt("RC pass %d/%d, analyze poc %4d",
           m_pcRateCtrl->rcPass + 1,
           m_pcEncCfg->m_RCNumPasses,
           slice->poc );
 
           accessUnit.InfoString.append( cInfo );
-
-          msg( VVENC_NOTICE, cInfo.c_str() );
     }
     else
     {
-      std::string cInfo = print("POC %4d TId: %1d (%10s, %c-SLICE, QP %d ) %10d bits",
+      std::string cInfo = prnt("POC %4d TId: %1d (%10s, %c-SLICE, QP %d ) %10d bits",
           slice->poc,
           slice->TLayer,
           nalUnitTypeToString( slice->nalUnitType ),
@@ -2691,14 +2701,10 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
           slice->sliceQp,
           uibits );
 
-      std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+      std::string cPSNR = prnt(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
 
       accessUnit.InfoString.append( cInfo );
       accessUnit.InfoString.append( cPSNR );
-
-      msg( VVENC_NOTICE, cInfo.c_str() );
-      msg( VVENC_NOTICE, cPSNR.c_str() );
-
 
       if ( m_pcEncCfg->m_printHexPsnr )
       {
@@ -2710,37 +2716,33 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
               reinterpret_cast<uint8_t *>(&xPsnr[i]));
         }
 
-        std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+        std::string cPSNRHex = prnt(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
 
         accessUnit.InfoString.append( cPSNRHex );
-        msg(VVENC_NOTICE, cPSNRHex.c_str() );
       }
 
       if( printFrameMSE )
       {
-        std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
+        std::string cFrameMSE = prnt( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
         accessUnit.InfoString.append( cFrameMSE );
-        msg(VVENC_NOTICE, cFrameMSE.c_str() );
       }
 
-      std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
+      std::string cEncTime = prnt(" [ET %5d ]", pic->encTime.getTimerInSec() );
       accessUnit.InfoString.append( cEncTime );
-      msg(VVENC_NOTICE, cEncTime.c_str() );
 
       std::string cRefPics;
       for( int iRefList = 0; iRefList < 2; iRefList++ )
       {
-        std::string tmp = print(" [L%d ", iRefList);
+        std::string tmp = prnt(" [L%d ", iRefList);
         cRefPics.append( tmp );
         for( int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++ )
         {
-          tmp = print("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
+          tmp = prnt("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
           cRefPics.append( tmp );
         }
         cRefPics.append( "]" );
       }
       accessUnit.InfoString.append( cRefPics );
-      msg(VVENC_NOTICE, cRefPics.c_str() );
     }
   }
 }
@@ -2811,18 +2813,15 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
 
     if ( modeName.length() )
     {
-      if ( digestStr.empty() )
-      {
-        msg( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), "?" );
-      }
-      else
-      {
-        msg( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
-      }
+      std::string cDigist = prnt(" [%s:%s]", modeName.c_str(), digestStr.empty() ? "?" : digestStr.c_str() );
+      accessUnit.InfoString.append( cDigist );
     }
   }
+   
+  std::string cPicInfo = accessUnit.InfoString;
+  cPicInfo.append("\n");
 
-  msg( VVENC_NOTICE, "\n" );
+  msg.log( VVENC_NOTICE, cPicInfo.c_str() );
   fflush( stdout );
 }
 

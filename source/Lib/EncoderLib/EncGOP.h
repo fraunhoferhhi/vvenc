@@ -83,6 +83,7 @@ namespace vvenc {
 class InputByteStream;
 class DecLib;
 class EncHRD;
+class MsgLog;
 
 struct FFwdDecoder
 {
@@ -121,6 +122,8 @@ struct FinishTaskParam {
 class EncGOP : public EncStage
 {
 private:
+  MsgLog&                   msg;
+
   Analyze                   m_AnalyzeAll;
   Analyze                   m_AnalyzeI;
   Analyze                   m_AnalyzeP;
@@ -178,7 +181,7 @@ private:
   std::vector<int>          m_globalCtuQpVector;
 
 public:
-  EncGOP();
+  EncGOP( MsgLog& msglog );
   virtual ~EncGOP();
 
   void setRecYUVBufferCallback( void* ctx, std::function<void( void*, vvencYUVBuffer* )> func );

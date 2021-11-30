@@ -44,45 +44,65 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------------------------- */
 /**
- \file     NALread.h
- \brief    reading functionality for NAL units
- */
+  \file    MsgLog.h
+  \brief   A logger for the logging callback function
+*/
 
 #pragma once
 
-#include "CommonLib/Nal.h"
-#include "CommonLib/CommonDef.h"
-#include "CommonLib/BitStream.h"
+#include <functional>
+#include <stdarg.h>
+#include <mutex>
 
-//! \ingroup DecoderLib
-//! \{
+#include "vvenc/vvenc.h"
 
 namespace vvenc {
 
-class MsgLog;
+static std::mutex m_msgMutex;
 
-/**
- * A convenience wrapper to NALUnit that also provides a
- * bitstream object.
- */
-class InputNALUnit : public NALUnit
+class MsgLog
 {
-  private:
-    InputBitstream m_Bitstream;
+public:
 
-  public:
-    InputNALUnit(const InputNALUnit &src) : NALUnit(src), m_Bitstream(src.m_Bitstream) {};
-    InputNALUnit() : m_Bitstream() {};
-    virtual ~InputNALUnit() { }
-    const InputBitstream &getBitstream() const { return m_Bitstream; }
-          InputBitstream &getBitstream()       { return m_Bitstream; }
+  MsgLog(){}
+  MsgLog(void *msgCtx, vvencLoggingCallback msgFnc)
+  {
+    m_msgCtx = msgCtx;
+    m_msgFnc = msgFnc;
+  }
+
+  ~MsgLog() {};
+
+  void setCallback( void *msgCtx, vvencLoggingCallback msgFnc )
+  {
+    m_msgCtx = msgCtx;
+    m_msgFnc = msgFnc;
+  }
+
+  void log( int level, const char* fmt, ... )
+  {
+    if ( this->m_msgFnc )
+    {
+      std::unique_lock<std::mutex> _lock( m_msgMutex );
+      va_list args;
+      va_start( args, fmt );
+      m_msgFnc( m_msgCtx, level, fmt, args );
+      va_end( args );
+    }
+    else if ( g_msgFnc)
+    {
+      // global log (deprecated)
+      std::unique_lock<std::mutex> _lock( m_msgMutex );
+      va_list args;
+      va_start( args, fmt );
+      g_msgFnc( g_msgFncCtx, level, fmt, args );
+      va_end( args );
+    }
+}
+
+private: 
+  std::function<void( void*, int, const char*, va_list )> m_msgFnc{};
+  void *m_msgCtx{};
 };
 
-void read(InputNALUnit& nalu, MsgLog& logger );
-void readNalUnitHeader(InputNALUnit& nalu);
-bool checkPictureHeaderInSliceHeaderFlag(InputNALUnit & nalu);
-
 } // namespace vvenc
-
-//! \}
-

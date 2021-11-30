@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/BitStream.h"
 #include "CommonLib/Slice.h"
 #include "CommonLib/SampleAdaptiveOffset.h"
+#include "Utilities/MsgLog.h"
 
 //! \ingroup DecoderLib
 //! \{
@@ -87,9 +88,12 @@ namespace vvenc {
 class VLCReader
 {
 protected:
-  InputBitstream*   m_pcBitstream;
+  InputBitstream*   m_pcBitstream = nullptr;
+  MsgLog&           msg;
 
-  VLCReader() : m_pcBitstream (NULL) {};
+  VLCReader(MsgLog& logger)
+  : msg ( logger )
+  {};
   virtual ~VLCReader() {};
 
   void  xReadCode    ( uint32_t   length, uint32_t& val );
@@ -120,7 +124,10 @@ protected:
 class AUDReader: public VLCReader
 {
 public:
-  AUDReader() {};
+  AUDReader(MsgLog& logger)
+  : VLCReader ( logger )
+  {}
+  
   virtual ~AUDReader() {};
   void parseAccessUnitDelimiter(InputBitstream* bs, uint32_t &audIrapOrGdrAuFlag, uint32_t &picType);
 };
@@ -131,7 +138,7 @@ public:
 class HLSyntaxReader : public VLCReader
 {
 public:
-  HLSyntaxReader();
+  HLSyntaxReader(MsgLog& msg);
   virtual ~HLSyntaxReader();
 
 protected:

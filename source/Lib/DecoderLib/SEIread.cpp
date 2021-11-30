@@ -58,6 +58,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "SEIread.h"
 #include "CommonLib/Picture.h"
 #include "CommonLib/dtrace_next.h"
+#include "Utilities/MsgLog.h"
 #include <iomanip>
 
 
@@ -199,7 +200,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
       bp = &hrd.bufferingPeriodSEI;
       if (!bp)
       {
-        msg( VVENC_WARNING, "Warning: Found Decoding unit information SEI message, but no active buffering period is available. Ignoring.");
+        msg.log( VVENC_WARNING, "Warning: Found Decoding unit information SEI message, but no active buffering period is available. Ignoring.");
       }
       else
       {
@@ -217,7 +218,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
         bp = &hrd.bufferingPeriodSEI;
         if (!bp)
         {
-          msg( VVENC_WARNING, "Warning: Found Picture timing SEI message, but no active buffering period is available. Ignoring.");
+          msg.log( VVENC_WARNING, "Warning: Found Picture timing SEI message, but no active buffering period is available. Ignoring.");
         }
         else
         {
@@ -310,7 +311,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
         uint32_t seiByte;
         sei_read_code (NULL, 8, seiByte, "unknown prefix SEI payload byte");
       }
-      msg( VVENC_WARNING, "Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
+      msg.log( VVENC_WARNING, "Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
       if (pDecodedMessageOutputStream)
       {
         (*pDecodedMessageOutputStream) << "Unknown prefix SEI message (payloadType = " << payloadType << ") was found!\n";
@@ -340,7 +341,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
           uint32_t seiByte;
           sei_read_code( NULL, 8, seiByte, "unknown suffix SEI payload byte");
         }
-        msg( VVENC_WARNING, "Unknown suffix SEI message (payloadType = %d) was found!\n", payloadType);
+        msg.log( VVENC_WARNING, "Unknown suffix SEI message (payloadType = %d) was found!\n", payloadType);
         if (pDecodedMessageOutputStream)
         {
           (*pDecodedMessageOutputStream) << "Unknown suffix SEI message (payloadType = " << payloadType << ") was found!\n";

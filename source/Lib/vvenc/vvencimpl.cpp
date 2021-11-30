@@ -88,7 +88,7 @@ static_assert( sizeof(Pel)  == sizeof(*(vvencYUVPlane::ptr)),   "internal bits p
 
 // ====================================================================================================================
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 VVEncImpl::VVEncImpl()
 {
@@ -125,23 +125,34 @@ int VVEncImpl::checkConfig( const vvenc_config& config )
   return VVENC_OK;
 }
 
-int VVEncImpl::init( const vvenc_config& config )
+int VVEncImpl::init( vvenc_config* config )
 {
   if( m_bInitialized ){ return VVENC_ERR_INITIALIZE; }
+
+  if (nullptr == config)
+  {
+    msg.log( VVENC_ERROR, "vvenc_config is null\n" );
+    return VVENC_ERR_PARAMETER;
+  }
 
   // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
   std::string curSimd;
   const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
   pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
 
-  m_cVVEncCfgExt = config;
-  m_cVVEncCfg    = config;
+  m_cVVEncCfgExt = *config;
+  m_cVVEncCfg    = *config;
 
   if ( vvenc_init_config_parameter(&m_cVVEncCfg) ) // init auto/dependent options
   {
     return VVENC_ERR_INITIALIZE;
   }
 
+  if( config->m_msgFnc )
+  { 
+    msg.setCallback( config->m_msgCtx, config->m_msgFnc );
+  }
+  
   std::stringstream cssCap;
   cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
   m_sEncoderCapabilities = cssCap.str();
@@ -151,7 +162,7 @@ int VVEncImpl::init( const vvenc_config& config )
   m_cEncoderInfo += m_sEncoderCapabilities;
 
   // initialize the encoder
-  m_pEncLib = new EncLib;
+  m_pEncLib = new EncLib ( msg );
 
 #if HANDLE_EXCEPTION
   try
@@ -162,7 +173,7 @@ int VVEncImpl::init( const vvenc_config& config )
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "\n%s\n", e.what() );
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -195,7 +206,7 @@ int VVEncImpl::initPass( int pass, const char* statsFName )
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "\n%s\n", e.what() );
+      msg.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -223,7 +234,7 @@ int VVEncImpl::uninit()
 #if HANDLE_EXCEPTION
     catch( std::exception& e )
     {
-      msg( VVENC_ERROR, "\n%s\n", e.what() );
+      msg.log( VVENC_ERROR, "\n%s\n", e.what() );
       m_cErrorString = e.what();
       return VVENC_ERR_UNSPECIFIED;
     }
@@ -366,7 +377,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "\n%s\n", e.what() );
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
     m_cErrorString = e.what();
     return VVENC_ERR_UNSPECIFIED;
   }
@@ -645,8 +656,9 @@ int VVEncImpl::xCopyAu( vvencAccessUnit& rcAccessUnit, const vvenc::AccessUnitLi
 ///< set message output function for encoder lib. if not set, no messages will be printed.
 void VVEncImpl::registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc )
 {
+  // DEPRECATED
   g_msgFnc    = msgFnc;
-  m_msgFncCtx = ctx;
+  g_msgFncCtx = ctx;
 }
 
 ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
@@ -683,9 +695,10 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   int ret = 0;
   FFwdDecoder ffwdDecoder;
   Picture cPicture; cPicture.poc=-8000;
+  MsgLog msg;
 
 #if ENABLE_TRACING
-  g_trace_ctx = tracing_init( trcFile, trcRule );
+  g_trace_ctx = tracing_init( trcFile, trcRule, msg );
 #endif
 
   std::string filename(FileName );
@@ -693,13 +706,17 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   try
 #endif
   {
-    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, false, cPicture.poc, false );
-    if( ret )  { msg( VVENC_ERROR, "decoding failed\n"); }
+    ret = tryDecodePicture( &cPicture, -1, filename, ffwdDecoder, nullptr, msg, false, cPicture.poc, false );
+    if( ret )  
+    { 
+      msg.log( VVENC_ERROR, "decoding failed\n");
+      return VVENC_ERR_UNSPECIFIED; 
+    }
   }
 #if HANDLE_EXCEPTION
   catch( std::exception& e )
   {
-    msg( VVENC_ERROR, "decoding failed: %s\n", e.what() );
+    msg.log( VVENC_ERROR, "decoding failed: %s\n", e.what() );
     return VVENC_ERR_UNSPECIFIED;
   }
 #endif
