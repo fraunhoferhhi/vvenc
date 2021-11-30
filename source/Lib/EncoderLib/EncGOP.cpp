@@ -2684,8 +2684,6 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
           slice->poc );
 
           accessUnit.InfoString.append( cInfo );
-
-          msg.log( VVENC_NOTICE, cInfo.c_str() );
     }
     else
     {
@@ -2702,10 +2700,6 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
       accessUnit.InfoString.append( cInfo );
       accessUnit.InfoString.append( cPSNR );
 
-      msg.log( VVENC_NOTICE, cInfo.c_str() );
-      msg.log( VVENC_NOTICE, cPSNR.c_str() );
-
-
       if ( m_pcEncCfg->m_printHexPsnr )
       {
         uint64_t xPsnr[MAX_NUM_COMP];
@@ -2719,19 +2713,16 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
         std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
 
         accessUnit.InfoString.append( cPSNRHex );
-        msg.log(VVENC_NOTICE, cPSNRHex.c_str() );
       }
 
       if( printFrameMSE )
       {
         std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
         accessUnit.InfoString.append( cFrameMSE );
-        msg.log(VVENC_NOTICE, cFrameMSE.c_str() );
       }
 
       std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
       accessUnit.InfoString.append( cEncTime );
-      msg.log(VVENC_NOTICE, cEncTime.c_str() );
 
       std::string cRefPics;
       for( int iRefList = 0; iRefList < 2; iRefList++ )
@@ -2746,7 +2737,6 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
         cRefPics.append( "]" );
       }
       accessUnit.InfoString.append( cRefPics );
-      msg.log(VVENC_NOTICE, cRefPics.c_str() );
     }
   }
 }
@@ -2817,18 +2807,15 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
 
     if ( modeName.length() )
     {
-      if ( digestStr.empty() )
-      {
-        msg.log( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), "?" );
-      }
-      else
-      {
-        msg.log( VVENC_NOTICE, " [%s:%s]", modeName.c_str(), digestStr.c_str() );
-      }
+      std::string cDigist = print(" [%s:%s]", modeName.c_str(), digestStr.empty() ? "?" : digestStr.c_str() );
+      accessUnit.InfoString.append( cDigist );
     }
   }
+   
+  std::string cPicInfo = accessUnit.InfoString;
+  cPicInfo.append("\n");
 
-  msg.log( VVENC_NOTICE, "\n" );
+  msg.log( VVENC_NOTICE, cPicInfo.c_str() );
   fflush( stdout );
 }
 
