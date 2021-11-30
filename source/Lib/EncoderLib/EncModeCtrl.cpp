@@ -604,7 +604,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
   
 
-  if( m_pcEncCfg->m_contentBasedFastQtbt )
+  if( m_pcEncCfg->m_contentBasedFastQtbt && (cs.pcv->getMaxMTTDepth(*cs.slice, partitioner.chType)!=0))
   {
     const CompArea& currArea = partitioner.currArea().Y();
     int cuHeight  = currArea.height;
