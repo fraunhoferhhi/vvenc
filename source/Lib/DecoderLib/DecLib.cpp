@@ -391,8 +391,8 @@ DecLib::DecLib( MsgLog& logger )
   , m_cTrQuant()
   , m_cSliceDecoder()
   , m_cCuDecoder()
-  , m_HLSReader()
-  , m_seiReader()
+  , m_HLSReader(logger)
+  , m_seiReader(logger)
   , m_cLoopFilter()
   , m_cSAO()
   , m_cReshaper()
@@ -1274,7 +1274,7 @@ void DecLib::xParsePrefixSEImessages()
   while (!m_prefixSEINALUs.empty())
   {
     InputNALUnit &nalu=*m_prefixSEINALUs.front();
-    m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream, msg );
+    m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream );
     delete m_prefixSEINALUs.front();
     m_prefixSEINALUs.pop_front();
   }
@@ -1712,7 +1712,7 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
     case VVENC_NAL_UNIT_SUFFIX_SEI:
       if (m_pic)
       {
-        m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_pic->SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream, msg );
+        m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_pic->SEIs, nalu.m_nalUnitType, nalu.m_nuhLayerId, nalu.m_temporalId, m_parameterSetManager.getActiveVPS(), m_parameterSetManager.getActiveSPS(), m_HRD, m_pDecodedSEIOutputStream );
       }
       else
       {
@@ -1743,7 +1743,7 @@ bool DecLib::decode(InputNALUnit& nalu, int& iSkipFrame, int& iPOCLastDisplay, i
 
     case VVENC_NAL_UNIT_ACCESS_UNIT_DELIMITER:
       {
-        AUDReader audReader;
+        AUDReader audReader(msg);
         uint32_t picType;
         uint32_t audIrapOrGdrAuFlag;
         audReader.parseAccessUnitDelimiter(&(nalu.getBitstream()),audIrapOrGdrAuFlag,picType);

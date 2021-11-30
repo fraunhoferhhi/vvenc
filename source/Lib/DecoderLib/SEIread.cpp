@@ -131,7 +131,7 @@ static inline void output_sei_message_header(SEI &sei, std::ostream *pDecodedMes
  * unmarshal a single SEI message from bitstream bs
  */
  // note: for independent parsing no parameter set should not be required here
-void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream, MsgLog& msg)
+void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
 {
   SEIMessages   seiListInCurNalu;
   setBitstream(bs);
@@ -139,7 +139,7 @@ void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vve
 
   do
   {
-    xReadSEImessage(seis, nalUnitType, nuh_layer_id, temporalId, vps, sps, hrd, pDecodedMessageOutputStream, msg );
+    xReadSEImessage(seis, nalUnitType, nuh_layer_id, temporalId, vps, sps, hrd, pDecodedMessageOutputStream);
     seiListInCurNalu.push_back(seis.back());
     /* SEI messages are an integer number of bytes, something has failed
     * in the parsing if bitstream not byte-aligned */
@@ -153,7 +153,7 @@ void SEIReader::parseSEImessage(InputBitstream* bs, SEIMessages& seis, const vve
   xReadRbspTrailingBits();
 }
 
-void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream, MsgLog& msg )
+void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUnitType, const uint32_t nuh_layer_id, const uint32_t temporalId, const VPS *vps, const SPS *sps, HRD &hrd, std::ostream *pDecodedMessageOutputStream)
 {
   DTRACE( g_trace_ctx, D_HEADER, "=========== SEI message ===========\n" );
 
@@ -230,7 +230,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
       break;
     case SEI::SCALABLE_NESTING:
       sei = new SEIScalableNesting;
-      xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream, msg);
+      xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream);
       break;
     case SEI::FRAME_FIELD_INFO:
       sei = new SEIFrameFieldInfo;
@@ -333,7 +333,7 @@ void SEIReader::xReadSEImessage(SEIMessages& seis, const vvencNalUnitType nalUni
         break;
       case SEI::SCALABLE_NESTING:
         sei = new SEIScalableNesting;
-        xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream, msg);
+        xParseSEIScalableNesting((SEIScalableNesting&)*sei, nalUnitType, nuh_layer_id, payloadSize, vps, sps, pDecodedMessageOutputStream);
         break;
       default:
         for (uint32_t i = 0; i < payloadSize; i++)
@@ -485,7 +485,7 @@ void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, uint32_t
   }
 }
 
-void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNalUnitType nalUnitType, const uint32_t nuhLayerId, uint32_t payloadSize, const VPS *vps, const SPS *sps, std::ostream *decodedMessageOutputStream, MsgLog& msg)
+void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNalUnitType nalUnitType, const uint32_t nuhLayerId, uint32_t payloadSize, const VPS *vps, const SPS *sps, std::ostream *decodedMessageOutputStream)
 {
   uint32_t symbol;
   SEIMessages seis;
@@ -565,7 +565,7 @@ void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const vvencNal
   for (int32_t i=0; i<sei.snNumSEIs; i++)
   {
     SEIMessages tmpSEIs;
-    xReadSEImessage(tmpSEIs, nalUnitType, nuhLayerId, 0, vps, sps, m_nestedHrd, decodedMessageOutputStream, msg);
+    xReadSEImessage(tmpSEIs, nalUnitType, nuhLayerId, 0, vps, sps, m_nestedHrd, decodedMessageOutputStream);
     if (tmpSEIs.front()->payloadType() == SEI::BUFFERING_PERIOD)
     {
       SEIBufferingPeriod *bp = (SEIBufferingPeriod*) tmpSEIs.front();

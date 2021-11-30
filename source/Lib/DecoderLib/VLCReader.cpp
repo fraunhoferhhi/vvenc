@@ -244,7 +244,8 @@ void HLSyntaxReader::parseFillerData(InputBitstream* bs, uint32_t &fdSize)
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
 
-HLSyntaxReader::HLSyntaxReader()
+HLSyntaxReader::HLSyntaxReader(MsgLog& msg)
+: VLCReader(msg)
 {
 }
 
