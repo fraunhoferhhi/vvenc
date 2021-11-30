@@ -76,7 +76,7 @@ int main( int argc, char* argv[] )
   // init default settings
   vvenc_config vvencCfg;
   vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
-  vvenc_log_set_callback( &vvencCfg, NULL, &msgFnc );
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
 
   // create the encoder
   enc = vvenc_encoder_create();

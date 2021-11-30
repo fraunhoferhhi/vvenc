@@ -90,7 +90,7 @@ void msgApp( int level, const char* fmt, ... )
 
 bool EncApp::parseCfg( int argc, char* argv[])
 {
-  vvenc_log_set_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
+  vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
 
   try
   {

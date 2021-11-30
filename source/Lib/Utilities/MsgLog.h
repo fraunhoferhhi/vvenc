@@ -65,18 +65,18 @@ class MsgLog
 public:
 
   MsgLog(){}
-  MsgLog(void *ctx, vvencLoggingCallback callback)
+  MsgLog(void *msgCtx, vvencLoggingCallback msgFnc)
   {
-    m_msgFncCtx = ctx;
-    m_msgFnc = callback;
+    m_msgCtx = msgCtx;
+    m_msgFnc = msgFnc;
   }
 
   ~MsgLog() {};
 
-  void setCallback( void *ctx, vvencLoggingCallback callback )
+  void setCallback( void *msgCtx, vvencLoggingCallback msgFnc )
   {
-    m_msgFncCtx = ctx;
-    m_msgFnc = callback;
+    m_msgCtx = msgCtx;
+    m_msgFnc = msgFnc;
   }
 
   void log( int level, const char* fmt, ... )
@@ -86,7 +86,7 @@ public:
       std::unique_lock<std::mutex> _lock( m_msgMutex );
       va_list args;
       va_start( args, fmt );
-      m_msgFnc( m_msgFncCtx, level, fmt, args );
+      m_msgFnc( m_msgCtx, level, fmt, args );
       va_end( args );
     }
     else if ( g_msgFnc)
@@ -100,10 +100,9 @@ public:
     }
 }
 
-private:
-   
+private: 
   std::function<void( void*, int, const char*, va_list )> m_msgFnc{};
-  void *m_msgFncCtx{};
+  void *m_msgCtx{};
 };
 
 } // namespace vvenc

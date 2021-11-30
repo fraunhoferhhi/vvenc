@@ -203,7 +203,7 @@ int main( int argc, char* argv[] )
   vvenc_config vvenccfg;
   vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
 
-  vvenc_log_set_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
+  vvenc_set_msg_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
 
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg, vvenccfg ) )

@@ -148,11 +148,9 @@ int VVEncImpl::init( vvenc_config* config )
     return VVENC_ERR_INITIALIZE;
   }
 
-  if( config->m_logCallback )
+  if( config->m_msgFnc )
   { 
-    this->msg.setCallback( config->m_msgFncCtx, config->m_logCallback );
-    g_msgFnc    = nullptr;
-    g_msgFncCtx = nullptr;
+    msg.setCallback( config->m_msgCtx, config->m_msgFnc );
   }
   
   std::stringstream cssCap;

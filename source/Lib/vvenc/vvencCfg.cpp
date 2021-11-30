@@ -328,8 +328,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   // internal params
   c->m_configDone                              = false;         ///< state variable, Private context used for internal data ( do not change )
   c->m_confirmFailed                           = false;         ///< state variable, Private context used for internal data ( do not change )
-  c->m_logCallback                             = nullptr;
-  c->m_msgFncCtx                               = nullptr;
+  c->m_msgFnc                                  = nullptr;
+  c->m_msgCtx                                  = nullptr;
   
   //core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
@@ -691,7 +691,7 @@ static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* me
   if ( ! bflag )
     return false;
 
-  vvenc::MsgLog msg(c->m_msgFncCtx,c->m_logCallback);
+  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
   msg.log( VVENC_ERROR, "Parameter Check Error: %s\n", message );
 
   c->m_confirmFailed = true;
@@ -749,7 +749,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // set a lot of dependent parameters
   //
 
-  vvenc::MsgLog msg(c->m_msgFncCtx,c->m_logCallback);
+  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -2083,7 +2083,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
 
-  vvenc::MsgLog msg(c->m_msgFncCtx,c->m_logCallback);
+  vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
 
   switch ( c->m_conformanceWindowMode)
   {
@@ -3714,12 +3714,12 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   return vvenc_cfgString.c_str();
 }
 
-VVENC_DECL void vvenc_log_set_callback( vvenc_config *cfg, void *ctx, vvencLoggingCallback callback )
+VVENC_DECL void vvenc_set_msg_callback( vvenc_config *cfg, void *msgCtx, vvencLoggingCallback msgFnc )
 {
   if( cfg )
   {
-    cfg->m_msgFncCtx   = ctx;
-    cfg->m_logCallback = callback;
+    cfg->m_msgCtx = msgCtx;
+    cfg->m_msgFnc = msgFnc;
   }
 }
 
