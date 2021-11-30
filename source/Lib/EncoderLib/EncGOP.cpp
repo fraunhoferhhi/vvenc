@@ -714,7 +714,7 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
   const BitDepths& bitDepths = m_spsMap.getFirstPS()->bitDepths;
   //-- all
   std::string summary = "\n";
-  if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
+  if( m_pcEncCfg->m_verbosity >= VVENC_DETAILS )
     summary.append("\nSUMMARY --------------------------------------------------------\n");
   
   summary.append( m_AnalyzeAll.printOut('a', chFmt, printMSEBasedSNR, printSequenceMSE, printHexPsnr, bitDepths));
