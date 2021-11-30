@@ -469,7 +469,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       }
       m_pcRateCtrl->destroyRCGOP();
       const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
-      m_pcRateCtrl->initRCGOP( std::min( m_pcEncCfg->m_GOPSize, rcGopSize ) );
+      m_pcRateCtrl->initRCGOP( rcGopSize );
     }
   }
 
@@ -2817,12 +2817,13 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
       accessUnit.InfoString.append( cDigist );
     }
   }
-   
+
   std::string cPicInfo = accessUnit.InfoString;
   cPicInfo.append("\n");
 
-  msg.log( VVENC_NOTICE, cPicInfo.c_str() );
-  fflush( stdout );
+  const vvencMsgLevel msgLevel = m_isPreAnalysis ? VVENC_DETAILS : VVENC_NOTICE;
+  msg.log( msgLevel, cPicInfo.c_str() );
+  if( m_pcEncCfg->m_verbosity >= msgLevel ) fflush( stdout );
 }
 
 } // namespace vvenc

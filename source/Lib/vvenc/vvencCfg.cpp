@@ -834,7 +834,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     else
       c->m_RCNumPasses = 1; // single passs per default (sdk usage)
   }
-  //c->m_RCLookAhead = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ) ? true : false;
 
   // threading
   if( c->m_numThreads < 0 )
