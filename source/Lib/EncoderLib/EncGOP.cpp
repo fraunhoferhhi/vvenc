@@ -2683,7 +2683,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   {
     if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
     {
-      std::string cInfo = print("RC pass %d/%d, analyze poc %4d",
+      std::string cInfo = prnt("RC pass %d/%d, analyze poc %4d",
           m_pcRateCtrl->rcPass + 1,
           m_pcEncCfg->m_RCNumPasses,
           slice->poc );
@@ -2692,7 +2692,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
     }
     else
     {
-      std::string cInfo = print("POC %4d TId: %1d (%10s, %c-SLICE, QP %d ) %10d bits",
+      std::string cInfo = prnt("POC %4d TId: %1d (%10s, %c-SLICE, QP %d ) %10d bits",
           slice->poc,
           slice->TLayer,
           nalUnitTypeToString( slice->nalUnitType ),
@@ -2700,7 +2700,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
           slice->sliceQp,
           uibits );
 
-      std::string cPSNR = print(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
+      std::string cPSNR = prnt(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", dPSNR[COMP_Y], dPSNR[COMP_Cb], dPSNR[COMP_Cr] );
 
       accessUnit.InfoString.append( cInfo );
       accessUnit.InfoString.append( cPSNR );
@@ -2715,28 +2715,28 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
               reinterpret_cast<uint8_t *>(&xPsnr[i]));
         }
 
-        std::string cPSNRHex = print(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+        std::string cPSNRHex = prnt(" [xY %16" PRIx64 " xU %16" PRIx64 " xV %16" PRIx64 "]", xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
 
         accessUnit.InfoString.append( cPSNRHex );
       }
 
       if( printFrameMSE )
       {
-        std::string cFrameMSE = print( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
+        std::string cFrameMSE = prnt( " [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", MSEyuvframe[COMP_Y], MSEyuvframe[COMP_Cb], MSEyuvframe[COMP_Cr]);
         accessUnit.InfoString.append( cFrameMSE );
       }
 
-      std::string cEncTime = print(" [ET %5d ]", pic->encTime.getTimerInSec() );
+      std::string cEncTime = prnt(" [ET %5d ]", pic->encTime.getTimerInSec() );
       accessUnit.InfoString.append( cEncTime );
 
       std::string cRefPics;
       for( int iRefList = 0; iRefList < 2; iRefList++ )
       {
-        std::string tmp = print(" [L%d ", iRefList);
+        std::string tmp = prnt(" [L%d ", iRefList);
         cRefPics.append( tmp );
         for( int iRefIndex = 0; iRefIndex < slice->numRefIdx[ iRefList ]; iRefIndex++ )
         {
-          tmp = print("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
+          tmp = prnt("%d ", slice->getRefPOC( RefPicList( iRefList ), iRefIndex));
           cRefPics.append( tmp );
         }
         cRefPics.append( "]" );
@@ -2812,7 +2812,7 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
 
     if ( modeName.length() )
     {
-      std::string cDigist = print(" [%s:%s]", modeName.c_str(), digestStr.empty() ? "?" : digestStr.c_str() );
+      std::string cDigist = prnt(" [%s:%s]", modeName.c_str(), digestStr.empty() ? "?" : digestStr.c_str() );
       accessUnit.InfoString.append( cDigist );
     }
   }
