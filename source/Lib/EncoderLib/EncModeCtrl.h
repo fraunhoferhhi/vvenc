@@ -183,9 +183,7 @@ struct ComprCUCtx
     , bestTU        ( nullptr    )
     , bestMode      ()
     , bestInterCost             ( MAX_DOUBLE )
-#if FASTTT_TH
     , bestCostBeforeSplit       ( MAX_DOUBLE )
-#endif
     , bestCostVertSplit     (MAX_DOUBLE)
     , bestCostHorzSplit     (MAX_DOUBLE)
     , bestCostTriVertSplit  (MAX_DOUBLE)
@@ -221,9 +219,7 @@ struct ComprCUCtx
   TransformUnit*    bestTU;
   EncTestMode       bestMode;
   double            bestInterCost;
-#if FASTTT_TH
   double            bestCostBeforeSplit;
-#endif
   double            bestCostVertSplit;
   double            bestCostHorzSplit;
   double            bestCostTriVertSplit;
@@ -264,9 +260,7 @@ struct CodedCUInfo
   bool isIntra;
   bool isSkip;
   bool isMMVDSkip;
-#if QTBTT_SPEED3
   int  isMergeSimple;
-#endif
   bool isIBC;
   uint8_t BcwIdx;
   int  ctuRsAddr, poc;
@@ -366,11 +360,7 @@ public:
   void init               ( const VVEncCfg& encCfg, RdCost *pRdCost );
   void destroy            ();
   void initCTUEncoding    ( const Slice &slice, int tileIdx );
-#if QTBTT_SPEED3
   void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag );
-#else
-  void initCULevel        ( Partitioner &partitioner, const CodingStructure& cs );
-#endif
   void finishCULevel      ( Partitioner &partitioner );
 
   bool tryMode            ( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner );

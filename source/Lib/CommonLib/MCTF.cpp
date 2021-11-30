@@ -94,7 +94,6 @@ const int16_t MCTF::m_interpolationFilter[16][8] =
   {   0,   0,  -2,   4,  64,  -3,   1,   0 }    //15-->-->
 };
 
-#if JVET_V0056_MCTF
 const double MCTF::m_refStrengths[3][4] =
 { // abs(POC offset)
   //  1,    2     3     4
@@ -102,15 +101,6 @@ const double MCTF::m_refStrengths[3][4] =
   {1.13, 0.97, 0.81, 0.57},  // m_range
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
-#else
-const double MCTF::m_refStrengths[3][2] =
-{ // abs(POC offset)
-  //  1,    2
-  {0.85, 0.60},  // m_range * 2
-  {1.20, 1.00},  // m_range
-  {0.30, 0.30}   // otherwise
-};
-#endif
 
 int motionErrorLumaInt( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror )
 {
@@ -369,11 +359,7 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
         motionEstimationLuma(srcPic.mvs, origBuf, srcPic.picBuffer, 8, &mv_2, 1, true);
       }
 
-#if JVET_V0056_MCTF
       srcPic.index = std::min(3, std::abs(curPic->poc - m_filterPoc) - 1);
-#else
-      srcPic.index = std::min(1, std::abs(curPic->poc - m_filterPoc) - 1);
-#endif
     }
 
     // filter
@@ -465,19 +451,11 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
-#if JVET_V0056_MCTF
   for( int blockX = blockX_.load(); blockX + blockSize <= origWidth; blockX += stepSize, blockX_.store( blockX) )
-#else
-  for( int blockX = blockX_.load(); blockX + blockSize < origWidth; blockX += stepSize, blockX_.store( blockX ) )
-#endif
   {
     if( prevLineX && blockX >= prevLineX->load() ) return false;
 
-#if JVET_V0056_MCTF
     int range = doubleRes ? 0 : 5;
-#else
-    int range = 5;
-#endif
     const int stepSize = blockSize;
 
     MotionVector best;
@@ -488,20 +466,12 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     }
     else
     {
-#if JVET_V0056_MCTF
       for( int py = -1; py <= 1; py++ )
-#else
-      for( int py = -2; py <= 2; py++ )
-#endif
       {
         int testy = blockY / (2 * blockSize) + py;
         if( (testy >= 0) && (testy < previous->h()) )
         {
-#if JVET_V0056_MCTF
           for (int px = -1; px <= 1; px++)
-#else
-          for( int px = -2; px <= 2; px++ )
-#endif
           {
             int testx = blockX / (2 * blockSize) + px;
             if ((testx >= 0) && (testx < previous->w()) )
@@ -516,14 +486,12 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
           }
         }
       }
-#if JVET_V0056_MCTF
 
       int error = motionErrorLuma( orig, buffer, blockX, blockY, 0, 0, blockSize, best.error );
       if( error < best.error )
       {
         best.set( 0, 0, error );
       }
-#endif
     }
     MotionVector prevBest = best;
     for (int y2 = prevBest.y / m_motionVectorFactor - range; y2 <= prevBest.y / m_motionVectorFactor + range; y2++)
@@ -567,7 +535,6 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
         }
       }
     } 
-#if JVET_V0056_MCTF
     if( blockY > 0 )
     {
       MotionVector aboveMV = mvs.get( blockX / stepSize, ( blockY - stepSize ) / stepSize );
@@ -609,7 +576,6 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
     }
     best.error = ( int ) ( 20 * ( ( best.error + 5.0 ) / ( variance + 5.0 ) ) + ( best.error / ( blockSize * blockSize ) ) / 50 );
-#endif
 
     mvs.get(blockX / stepSize, blockY / stepSize) = best;
   }
@@ -643,11 +609,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
 
     WaitCounter taskCounter;
 
-#if JVET_V0056_MCTF
     for( int n = 0, blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize, n++ )
-#else
-    for (int n = 0, blockY = 0; blockY + blockSize < origHeight; blockY += stepSize, n++)
-#endif
     {
       static auto task = []( int tId, EstParams* params)
       {
@@ -678,11 +640,7 @@ void MCTF::motionEstimationLuma(Array2D<MotionVector> &mvs, const PelStorage &or
   }
   else
   {
-#if JVET_V0056_MCTF
     for( int blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize )
-#else
-    for( int n = 0, blockY = 0; blockY + blockSize < origHeight; blockY += stepSize, n++ )
-#endif
     {
       std::atomic_int blockX( 0 ), prevBlockX( orig.Y().width + stepSize );
       estimateLumaLn( blockX, blockY ? &prevBlockX : nullptr, mvs, orig, buffer, blockSize, previous, factor, doubleRes, blockY );
@@ -771,7 +729,6 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
 }
 
 
-#if JVET_V0056_MCTF
 inline static double fastExp( double x )
 {
   // using the e^x ~= ( 1 + x/n )^n for n -> inf
@@ -784,14 +741,9 @@ inline static double fastExp( double x )
 
 void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
   std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
-#else
-void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
-  std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], const std::vector<double> refStrengthCh[MAX_NUM_CH] ) const
-#endif
 {
   const int numRefs = int(srcFrameInfo.size());
 
-#if JVET_V0056_MCTF
   int refStrengthRow = 2;
   if( numRefs == m_range * 2 )
   {
@@ -802,7 +754,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
     refStrengthRow = 1;
   }
 
-#endif
   for(int c=0; c< getNumberValidComponents(m_encCfg->m_internChromaFormat); c++)
   {
     for (int i = 0; i < numRefs; i++)
@@ -817,42 +768,29 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
     const int dstStride = newOrgPic.bufs[c].stride;
 
     const double sigmaSq = sigmaSqCh[ toChannelType( compID) ];
-#if JVET_V0056_MCTF
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
-#else
-    const std::vector<double>& refStrength = refStrengthCh[ toChannelType( compID) ];
-#endif
     const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ toChannelType( compID) ])-1;
 
     const int blkSizeY = 8 >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-#if JVET_V0056_MCTF
     const int blkSizeX = 8 >> getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
-#endif
     int yOut = yStart >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
     const Pel* srcPelRow = orgPic.bufs[c].buf + yOut * srcStride;
     Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
     for (int y = yOut; y < std::min(yOut+blkSizeY,height); y++, srcPelRow+=srcStride, dstPelRow+=dstStride)
     {
-#if JVET_V0056_MCTF
       const int yBlkAddr = y / blkSizeY;
 
-#endif
       const Pel* srcPel=srcPelRow;
       Pel* dstPel=dstPelRow;
 
-#if JVET_V0056_MCTF
       double minError = 9999999;
 
-#endif
       for (int x = 0; x < width; x++, srcPel++, dstPel++)
       {
-#if JVET_V0056_MCTF
         const int xBlkAddr = x / blkSizeX;
-#endif
         const int orgVal = (int) *srcPel;
         double temporalWeightSum = 1.0;
         double newVal = (double) orgVal;
-#if JVET_V0056_MCTF
         if( ( y % blkSizeY == 0 ) && ( x % blkSizeX == 0 ) )
         {
           for( int i = 0; i < numRefs; i++ )
@@ -890,21 +828,17 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
             minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error );
           }
         }
-#endif
 
         for (int i = 0; i < numRefs; i++)
         {
-#if JVET_V0056_MCTF
           const MotionVector& mv = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr );
           const int error = mv.error;
           const int noise = mv.noise;
-#endif
           const Pel*   pCorrectedPelPtr=correctedPics[i].bufs[c].buf+(y*correctedPics[i].bufs[c].stride+x);
           const int    refVal = (int) *pCorrectedPelPtr;
           const double diff   = (double)(refVal - orgVal);
           const double diffSq = diff * diff;
 
-#if JVET_V0056_MCTF
           double ww = 1, sw = 1;
           ww *= ( noise < 25 ) ? 1.0 : 0.6;
           sw *= ( noise < 25 ) ? 1.0 : 0.8;
@@ -913,9 +847,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
           ww *= ( ( minError + 1 ) / ( error + 1 ) );
           const int index = srcFrameInfo[i].index;
           double weight = weightScaling * m_refStrengths[refStrengthRow][index] * ww * fastExp( -diffSq / ( 2 * sw * sigmaSq ) );
-#else
-          const double weight = refStrength[i] * exp(-diffSq / (2 * sigmaSq));
-#endif
           newVal += weight * refVal;
           temporalWeightSum  += weight;
         }
@@ -928,32 +859,13 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, const std::deque<Temporal
   }
 }
 
-#if JVET_V0056_MCTF
 void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSourcePicInfo>& srcFrameInfo, PelStorage& newOrgPic, double overallStrength) const
-#else
-void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic, double overallStrength) const
-#endif
 {
   const int numRefs = int(srcFrameInfo.size());
 
-#if !JVET_V0056_MCTF
-  int refStrengthRow = 2;
-  if (numRefs == m_range*2)
-  {
-    refStrengthRow = 0;
-  }
-  else if (numRefs == m_range)
-  {
-    refStrengthRow = 1;
-  }
-
-#endif
   const double lumaSigmaSq = (m_encCfg->m_QP - m_sigmaZeroPoint) * (m_encCfg->m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
   const double chromaSigmaSq = 30 * 30;
 
-#if !JVET_V0056_MCTF
-  std::vector<double> refStrengthCh[MAX_NUM_CH];
-#endif
   double sigmaSqCh[MAX_NUM_CH];
   for(int c=0; c< getNumberValidChannels(m_encCfg->m_internChromaFormat); c++)
   {
@@ -961,15 +873,6 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
     const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ch])-1;
     const double bitDepthDiffWeighting=1024.0 / (maxSampleValue+1);
     sigmaSqCh[ch] = (isChroma(ch)? chromaSigmaSq : lumaSigmaSq)/(bitDepthDiffWeighting*bitDepthDiffWeighting);
-#if !JVET_V0056_MCTF
-
-    refStrengthCh[ch].resize( numRefs );
-    const double weightScaling = overallStrength * (isChroma(ch) ? m_chromaFactor : 0.4);
-    for (int i = 0; i < numRefs; i++)
-    {
-      refStrengthCh[ch][i] = weightScaling * m_refStrengths[refStrengthRow][srcFrameInfo[i].index];
-    }
-#endif
   }
 
 #
@@ -984,19 +887,11 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
     struct FltParams
     {
       const PelStorage *orgPic; 
-#if JVET_V0056_MCTF
       std::deque<TemporalFilterSourcePicInfo> *srcFrameInfo; 
-#else
-      const std::deque<TemporalFilterSourcePicInfo>* srcFrameInfo;
-#endif
       PelStorage *newOrgPic;
       std::vector<PelStorage>* correctedPics;
       const double *sigmaSqCh;
-#if JVET_V0056_MCTF
       double overallStrength;
-#else
-      const std::vector<double> *refStrengthCh;
-#endif
       const MCTF* mctf;
       int yStart; 
     };
@@ -1011,11 +906,7 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
       {
         ITT_TASKSTART( itt_domain_MCTF_flt, itt_handle_flt );
 
-#if JVET_V0056_MCTF
         params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, *params->correctedPics, params->yStart, params->sigmaSqCh, params->overallStrength );
-#else
-        params->mctf->xFinalizeBlkLine( *params->orgPic, *params->srcFrameInfo, *params->newOrgPic, *params->correctedPics, params->yStart, params->sigmaSqCh, params->refStrengthCh );
-#endif
 
         ITT_TASKEND( itt_domain_MCTF_flt, itt_handle_flt );
         return true;
@@ -1027,11 +918,7 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
       cFltParams.newOrgPic = &newOrgPic;
       cFltParams.correctedPics = &correctedPics;
       cFltParams.sigmaSqCh = sigmaSqCh;
-#if JVET_V0056_MCTF
       cFltParams.overallStrength = overallStrength;
-#else
-      cFltParams.refStrengthCh = refStrengthCh;
-#endif
       cFltParams.mctf = this;
       cFltParams.yStart = yStart;
 
@@ -1043,11 +930,7 @@ void MCTF::bilateralFilter(const PelStorage &orgPic,  const std::deque<TemporalF
   {
     for (int yStart = 0; yStart < orgPic.Y().height; yStart += 8)
     {
-#if JVET_V0056_MCTF
       xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, correctedPics, yStart, sigmaSqCh, overallStrength );
-#else
-      xFinalizeBlkLine( orgPic, srcFrameInfo, newOrgPic, correctedPics, yStart, sigmaSqCh, refStrengthCh );
-#endif
     }
   }
 }

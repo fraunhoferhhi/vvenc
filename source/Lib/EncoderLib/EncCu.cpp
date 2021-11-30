@@ -243,9 +243,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   if( encCfg.m_EDO )
     m_dbBuffer.create( chromaFormat, Area( 0, 0, uiMaxSize, uiMaxSize ), 0, 8 );
 
-#if QTBTT_SPEED3
   m_MergeSimpleFlag = 0;
-#endif
   m_tileIdx = 0;
 }
 
@@ -643,15 +641,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
   }
 
-#if QTBTT_SPEED3
   if (partitioner.currQtDepth == 0)
   {
     m_MergeSimpleFlag = 0;
   }
   m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
-#else
-  m_modeCtrl.initCULevel( partitioner, *tempCS );
-#endif
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
@@ -803,7 +797,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         m_cInterSearch.loadGlobalUniMvs( lumaArea, *pps.pcv );
       }
 
-#if QTBTT_SPEED3
       if (!cs.slice->isIntra() && (partitioner.chType == CH_L) && ( m_pcEncCfg->m_qtbttSpeedUpMode & 2) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
       {
         int flagDbefore = (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo) ? 1 : 0;
@@ -817,7 +810,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           m_MergeSimpleFlag = (flagDbefore << partitioner.currQtDepth) | (m_MergeSimpleFlag & markFlag);
         }
       }
-#endif
     } //boundary
 
     if ((m_pcEncCfg->m_IntraPeriod==1)  && (partitioner.chType==CH_C))

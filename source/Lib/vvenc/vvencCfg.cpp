@@ -635,12 +635,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_quantThresholdVal                       = -1;
   c->m_qtbttSpeedUp                            = 1;
-#if 1//QTBTT_SPEED3
   c->m_qtbttSpeedUpMode                        = 0;
-#endif 
-#if FASTTT_TH
   c->m_fastTTSplit                             = 0;
-#endif
 
   c->m_fastLocalDualTreeMode                   = 0;
 
@@ -1217,7 +1213,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     {
       if( c->m_GOPSize == 32 )
       {
-#if JVET_V0056_MCTF
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
         c->m_vvencMCTF.MCTFFrames[2] = 32;
@@ -1226,34 +1221,15 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
         c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
-#else
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-        c->m_vvencMCTF.MCTFFrames[2] = 32;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.28125;     //  9/32
-        c->m_vvencMCTF.MCTFStrengths[1] = 0.5625;      // 18/32
-        c->m_vvencMCTF.MCTFStrengths[2] = 0.84375;     // 27/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
-#endif
       }
       else if( c->m_GOPSize == 16 )
       {
-#if JVET_V0056_MCTF
         c->m_vvencMCTF.MCTFFrames[0] = 8;
         c->m_vvencMCTF.MCTFFrames[1] = 16;
 
         c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
         c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
         c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
-#else
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.4;     // ~12.75/32
-        c->m_vvencMCTF.MCTFStrengths[1] = 0.8;     // ~25.50/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
-#endif
       }
       else if( c->m_GOPSize == 8 )
       {
@@ -2266,14 +2242,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IBCFastMethod < 0 ||  c->m_IBCFastMethod > 6,"IBCFastMethod out of range [0..6]");
   vvenc_confirmParameter( c, c->m_BCW < 0 || c->m_BCW > 2,                     "BCW out of range [0..2]");
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
-#if QTBTT_SPEED3
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
-#else
-  vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 3,   "QtbttExtraFast out of range [0..3]");
-#endif
-#if FASTTT_TH
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
-#endif
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
@@ -2284,15 +2254,11 @@ static bool checkCfgParameter( vvenc_config *c )
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
 
-#if QTBTT_SPEED3
   c->m_qtbttSpeedUpMode = (c->m_qtbttSpeedUp > 2) ? (c->m_qtbttSpeedUp - 2) : 0;
   const int QTBTSMModeMap[] = { 0, 1, 3, 4, 5, 7 };
   c->m_qtbttSpeedUpMode = QTBTSMModeMap[c->m_qtbttSpeedUpMode];
-#endif
-#if FASTTT_TH
   static const float TT_THRESHOLDS[7] = { 1.1f, 1.075f, 1.05f, 1.025f, 1.0f,  0.975f, 0.95f };
   c->m_fastTT_th = c->m_fastTTSplit ? TT_THRESHOLDS[c->m_fastTTSplit - 1] : 0;
-#endif
 
   if( c->m_alf )
   {
@@ -3031,9 +2997,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3083,9 +3047,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups
       c->m_qtbttSpeedUp                    = 7;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
@@ -3137,9 +3099,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
@@ -3203,9 +3163,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 3;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3274,9 +3232,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 5;
-#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3348,9 +3304,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 1;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 1;
-#endif
       c->m_contentBasedFastQtbt            = 0;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 1;
@@ -3424,9 +3378,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
 
       // speedups                          
       c->m_qtbttSpeedUp                    = 2;
-#if FASTTT_TH
       c->m_fastTTSplit                     = 0;
-#endif
       c->m_contentBasedFastQtbt            = 1;
       c->m_usePbIntraFast                  = 1;
       c->m_useFastMrg                      = 2;
@@ -3662,9 +3614,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "IntegerET:" << c->m_bIntegerET << " ";
   css << "FastSubPel:" << c->m_fastSubPel << " ";
   css << "QtbttExtraFast:" << c->m_qtbttSpeedUp << " ";
-#if FASTTT_TH
   css << "FastTTSplit:" << c->m_fastTTSplit << " ";
-#endif
   if( c->m_IBCMode )
   {
     css << "IBCFastMethod:" << c->m_IBCFastMethod << " ";
