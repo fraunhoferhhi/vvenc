@@ -686,30 +686,13 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
 
-void msgConf( vvenc_config *c, int level, const char* fmt, ... )
-{
-   if( c->m_logCallback )
-   {
-     va_list args;
-     va_start( args, fmt );
-     c->m_logCallback ( c->m_msgFncCtx, level, fmt, args );
-     va_end( args );
-   }
-   else if ( vvenc::g_msgFnc ) //  deprecated global logger
-   {
-     va_list args;
-     va_start( args, fmt );
-     vvenc::g_msgFnc( vvenc::g_msgFncCtx, level, fmt, args );
-     va_end( args );
-   }
-}
-
 static bool vvenc_confirmParameter ( vvenc_config *c, bool bflag, const char* message )
 {
   if ( ! bflag )
     return false;
 
-  msgConf( c, VVENC_ERROR, "Parameter Check Error: %s\n", message );
+  vvenc::MsgLog msg(c->m_msgFncCtx,c->m_logCallback);
+  msg.log( VVENC_ERROR, "Parameter Check Error: %s\n", message );
 
   c->m_confirmFailed = true;
   return true;
@@ -765,6 +748,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   //
   // set a lot of dependent parameters
   //
+
+  vvenc::MsgLog msg(c->m_msgFncCtx,c->m_logCallback);
 
   if ( c->m_internChromaFormat < 0 || c->m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
   {
@@ -1071,11 +1056,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msgConf( c, VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msgConf( c, VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_ERROR,  "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       c->m_aiPad[1] = c->m_aiPad[0] = 0;
       break;
@@ -1224,7 +1209,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( c->m_vvencMCTF.MCTF && c->m_QP < 17 )
   {
-    msgConf( c, VVENC_WARNING, "disable MCTF for QP < 17\n" );
+    msg.log( VVENC_WARNING, "disable MCTF for QP < 17\n" );
     c->m_vvencMCTF.MCTF = 0;
   }
   if( c->m_vvencMCTF.MCTF )
@@ -1718,7 +1703,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
     if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      msgConf( c, VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n" );
+      msg.log( VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n" );
       errorGOP = true;
     }
     else
@@ -1754,7 +1739,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
           }
           if (!found)
           {
-            msgConf( c, VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            msg.log( VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -2032,7 +2017,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if ( ! c->m_MMVD && c->m_allowDisFracMMVD )
   {
-    msgConf( c, VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
+    msg.log( VVENC_WARNING, "MMVD disabled, thus disable AllowDisFracMMVD too\n" );
     c->m_allowDisFracMMVD = false;
   }
 
@@ -2098,6 +2083,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_motionEstimationSearchMethodSCC < 0 || c->m_motionEstimationSearchMethodSCC > 3,                           "Error: FastSearchSCC parameter out of range" );
   vvenc_confirmParameter( c, c->m_internChromaFormat > VVENC_CHROMA_420,                                                                     "Intern chroma format must be either 400, 420" );
 
+  vvenc::MsgLog msg(c->m_msgFncCtx,c->m_logCallback);
+
   switch ( c->m_conformanceWindowMode)
   {
   case 0:
@@ -2113,11 +2100,11 @@ static bool checkCfgParameter( vvenc_config *c )
       // conformance
       if ((c->m_confWinLeft == 0) && (c->m_confWinRight == 0) && (c->m_confWinTop == 0) && (c->m_confWinBottom == 0))
       {
-        msgConf( c, VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
+        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n" );
       }
       if ((c->m_aiPad[1] != 0) || (c->m_aiPad[0]!=0))
       {
-        msgConf( c, VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
+        msg.log( VVENC_ERROR, "Warning: Conformance window enabled, padding parameters will be ignored\n" );
       }
       break;
   }
@@ -2356,9 +2343,9 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if (c->m_usePerceptQPA && c->m_dualITree && (c->m_internChromaFormat != VVENC_CHROMA_400) && (c->m_chromaCbQpOffsetDualTree != 0 || c->m_chromaCrQpOffsetDualTree != 0 || c->m_chromaCbCrQpOffsetDualTree != 0))
   {
-    msgConf( c, VVENC_WARNING, "***************************************************************************\n");
-    msgConf( c, VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
-    msgConf( c, VVENC_WARNING, "***************************************************************************\n");
+    msg.log( VVENC_WARNING, "***************************************************************************\n");
+    msg.log( VVENC_WARNING, "** WARNING: chroma QPA on, ignoring nonzero dual-tree chroma QP offsets! **\n");
+    msg.log( VVENC_WARNING, "***************************************************************************\n");
   }
 
   vvenc_confirmParameter(c, c->m_usePerceptQPATempFiltISlice > 2,                                                    "PerceptQPATempFiltIPic out of range, must be 2 or less" );
@@ -2515,7 +2502,7 @@ static bool checkCfgParameter( vvenc_config *c )
     int curPOC = ((checkGOP - 1) / c->m_GOPSize)*c->m_GOPSize * multipleFactor + c->m_RPLList0[curGOP].m_POC;
     if (c->m_RPLList0[curGOP].m_POC < 0 || c->m_RPLList1[curGOP].m_POC < 0)
     {
-      msgConf( c,VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
+      msg.log( VVENC_WARNING, "\nError: found fewer Reference Picture Sets than GOPSize\n");
       errorGOP = true;
     }
     else
@@ -2541,7 +2528,7 @@ static bool checkCfgParameter( vvenc_config *c )
           }
           if (!found)
           {
-            msgConf( c,VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
+            msg.log( VVENC_WARNING, "\nError: ref pic %d is not available for GOP frame %d\n", c->m_RPLList0[curGOP].m_deltaRefPics[i], curGOP + 1);
             errorGOP = true;
           }
         }
@@ -2701,7 +2688,7 @@ static bool checkCfgParameter( vvenc_config *c )
   {
     if( c->m_vvencMCTF.MCTFFrames[0] == 0 )
     {
-      msgConf( c,VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
+      msg.log( VVENC_WARNING, "no MCTF frames selected, MCTF will be inactive!\n");
     }
 
     vvenc_confirmParameter(c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength, "MCTFFrames and MCTFStrengths do not match");
@@ -2709,8 +2696,8 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if( c->m_fastForwardToPOC != -1 )
   {
-    if( c->m_cabacInitPresent ) msgConf( c, VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
-    if( c->m_alf )              msgConf( c, VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
+    if( c->m_cabacInitPresent ) msg.log( VVENC_WARNING, "WARNING usage of FastForwardToPOC and CabacInitPresent might cause different behaviour\n\n" );
+    if( c->m_alf )              msg.log( VVENC_WARNING, "WARNING usage of FastForwardToPOC and ALF might cause different behaviour\n\n" );
   }
 
   if( c->m_picPartitionFlag || c->m_numTileCols > 1 || c->m_numTileRows > 1 )

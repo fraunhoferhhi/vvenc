@@ -63,6 +63,16 @@ static std::mutex m_msgMutex;
 class MsgLog
 {
 public:
+
+  MsgLog(){}
+  MsgLog(void *ctx, vvencLoggingCallback callback)
+  {
+    m_msgFncCtx = ctx;
+    m_msgFnc = callback;
+  }
+
+  ~MsgLog() {};
+
   void setCallback( void *ctx, vvencLoggingCallback callback )
   {
     m_msgFncCtx = ctx;
