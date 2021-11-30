@@ -368,12 +368,13 @@ void EncGOP::init( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPoo
 
 void EncGOP::picInitRateControl( Picture& pic, Slice* slice, EncPicture* picEncoder )
 {
-  int sliceQP = MAX_QP;
+  int sliceQP   = MAX_QP;
   double lambda = m_pcRateCtrl->encRCSeq->maxEstLambda;
-  m_pcRateCtrl->initRateControlPic( pic, slice, sliceQP, lambda);
+
+  m_pcRateCtrl->initRateControlPic (pic, slice, sliceQP, lambda);
 
   picEncoder->getEncSlice()->resetQP (&pic, sliceQP, lambda);
-  m_pcRateCtrl->setFinalLambda(lambda);
+  m_pcRateCtrl->setFinalLambda (lambda);
 }
 
 
@@ -1162,7 +1163,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled     |= (m_pcEncCfg->m_usePerceptQPA || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
+    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || m_pcEncCfg->m_RCLookAhead || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
     if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400) )
     {
       bChromaDeltaQPEnabled = (m_pcEncCfg->m_chromaCbQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCrQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCbCrQpOffsetDualTree != 0);
