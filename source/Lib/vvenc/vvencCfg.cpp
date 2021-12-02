@@ -1280,6 +1280,12 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     }
   }
 
+  if( c->m_IntraPeriod == 1 )
+  {
+    if( c->m_GOPSize != 1)    c->m_GOPSize = 1;
+    if( c->m_numThreads > 0 ) c->m_maxParallelFrames = 1;
+  }
+  
   if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
 
   /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
