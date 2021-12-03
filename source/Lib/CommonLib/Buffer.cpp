@@ -581,8 +581,9 @@ void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<co
 }
 
 template<>
-void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int& varv)
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int& varv) const
 {
+  CHECK( Org.width != Org.height, "Incompatible size!" );
   int stride = Org.stride;
   const Pel* src;
   Pel data;
