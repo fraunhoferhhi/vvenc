@@ -1596,7 +1596,7 @@ void transposeNxN_SSE( const Pel* src, int srcStride, Pel* dst, int dstStride )
 template<X86_VEXT vext>
 void applyLut_SIMD( const Pel* src, const ptrdiff_t srcStride, Pel* dst, const ptrdiff_t dstStride, int width, int height, const Pel* lut )
 {
-#if USE_AVX2
+#if USE_AVX2 && ! ENABLE_VALGRIND_CODE
   // this implementation is only faster on modern CPUs
   if( ( width & 15 ) == 0 && ( height & 1 ) == 0 )
   {
