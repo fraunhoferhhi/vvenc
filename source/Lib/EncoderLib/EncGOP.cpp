@@ -562,7 +562,9 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
-
+#if DEBUG_PRINT
+    DPRINT( "#%d           compress: %2d <t%2d>\n", stageId(), pic->getPOC(), pic->TLayer );
+#endif
     // compress next picture
     if( pic->encPic )
     {

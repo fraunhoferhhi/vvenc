@@ -269,6 +269,25 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
 
 typedef std::list<Picture*> PicList;
 
+#if DEBUG_PRINT
+inline void debug_print_pic_list( PicList& m_list, std::string listName )
+{
+  if( !m_list.empty() )
+  {
+    printf( "%s: ", listName.c_str() );
+    for( auto p : m_list )
+    {
+      //printf( "%2d <t%2d>  ", p->getPOC(), p->TLayer );
+      printf( "%2d ", p->getPOC() );
+    }
+    printf( "\n" );
+  }
+}
+#define DPRINT(...) printf(__VA_ARGS__)
+#else
+#define DPRINT(...)
+#endif
+
 } // namespace vvenc
 
 //! \}

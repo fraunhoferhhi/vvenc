@@ -323,6 +323,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
     PelStorage origSubsampled4;
     subsampleLuma( origBuf,         origSubsampled2 );
     subsampleLuma( origSubsampled2, origSubsampled4 );
+#if DEBUG_PRINT
+    DPRINT("#%d filter: %d\n", stageId(), pic->poc );
+#endif
 
     // determine motion vectors
     std::deque<TemporalFilterSourcePicInfo> srcFrameInfo;
@@ -333,6 +336,9 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
       {
         continue;
       }
+#if DEBUG_PRINT
+      DPRINT("#%d useref: %d\n", stageId(), curPic->poc );
+#endif
       srcFrameInfo.push_back( TemporalFilterSourcePicInfo() );
       TemporalFilterSourcePicInfo &srcPic = srcFrameInfo.back();
 

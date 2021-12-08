@@ -274,9 +274,18 @@ public:
     // call first picture init
     initPicture( pic );
   }
-
   void runStage( bool flush, AccessUnitList& auList )
   {
+#if DEBUG_PRINT
+    if( !m_procList.empty() )
+    {
+      printf( "#%d %2d ", stageId(), m_minQueueSize );
+      debug_print_pic_list( m_procList, "ProcList" );
+
+      _CASE( stageId() == 1 && m_procList.back()->poc == 96 )
+        _BREAK;
+    }
+#endif
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )
         || ( m_procList.size() && flush ) )
@@ -315,6 +324,9 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
+#if DEBUG_PRINT
+  virtual int stageId() = 0;
+#endif
 
 private:
   EncStage* m_nextStage;
