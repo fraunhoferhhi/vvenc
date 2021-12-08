@@ -81,6 +81,9 @@ EncLib::EncLib( MsgLog& logger )
   , m_threadPool     ( nullptr )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
+#if HIGH_LEVEL_MT_OPT
+  , m_maxNumPicShared( MAX_INT )
+#endif
 {
 }
 
@@ -236,15 +239,31 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_RCLookAhead )
   {
     m_preEncoder = new EncGOP( msg );
+#if 0 //HIGH_LEVEL_MT_OPT
+    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize, m_encCfg.m_numThreads > 0 );
+#else
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
+#endif
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
+#if HIGH_LEVEL_MT_OPT
+    if( m_encCfg.m_numThreads > 0 )
+    {
+      m_maxNumPicShared = m_firstPassCfg.m_GOPSize + m_encCfg.m_IntraPeriod;
+      if( m_encCfg.m_vvencMCTF.MCTF )
+        m_maxNumPicShared += VVENC_MCTF_RANGE + 1;
+    }
+#endif
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
   const int encDelay = m_encCfg.m_RCLookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
+#if HIGH_LEVEL_MT_OPT
+  m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize, m_encCfg.m_numThreads > 0 );
+#else
   m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
+#endif
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -351,6 +370,32 @@ void EncLib::xInitRCCfg()
 // ====================================================================================================================
 // Public member functions
 // ====================================================================================================================
+#if HIGH_LEVEL_MT_OPT
+void EncLib::xRunStageInThread( EncStage *encStage, bool flush, AccessUnitList& auList )
+{
+  struct StageTaskParam {
+    EncLib*         encLib;
+    EncStage*       encStage;
+    bool            flush;
+    AccessUnitList* au;
+    StageTaskParam()                                                        : encLib( nullptr ), encStage( nullptr ), flush( false ), au( nullptr ) {}
+    StageTaskParam( EncLib* _e, EncStage* _s, bool _f, AccessUnitList* _a ) : encLib( _e ),      encStage( _s ),      flush( _f ),    au( _a )      {}
+  };
+  static auto runStageTask = []( int, StageTaskParam* param ) 
+  {
+    param->encStage->runStage( param->flush, *param->au );
+    {
+      std::lock_guard<std::mutex> lock( param->encLib->m_stagesMutex );
+      param->encLib->m_stagesCond.notify_one();
+    }
+    delete param;
+    return true;
+  };
+  StageTaskParam* param = new StageTaskParam( this, encStage, flush, &auList );
+  encStage->m_inUse = true;
+  m_threadPool->addBarrierTask<StageTaskParam>( runStageTask, param );
+}
+#endif
 
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
@@ -361,10 +406,29 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // clear output access unit
   au.clearAu();
 
+#if HIGH_LEVEL_MT_OPT
+  // Current requirement: The input yuv-frame must be passed to the encoding process (1.Stage)
+  // Non-Blocking Stages Model (NBSM):
+  // 1. The stages are non-blocking
+  // 2. The number of used picture units in encoder is limited
+  // 3. The stages have different throughput, last stage is the slowest
+  // 4. It possible that here at the input we will run out of picture units that is needed for the next input frame
+  // 5. Then we have to wait for the next available picture unit so the input frame can be passed to the 1.stage
+
+  PicShared* picShared = nullptr;
+  do
+  {
+#endif
   // send new YUV input buffer to first encoder stage
   if( yuvInBuf )
   {
+#if HIGH_LEVEL_MT_OPT
+    picShared = xGetFreePicShared();
+    if( picShared )
+    {
+#else
     PicShared* picShared = xGetFreePicShared();
+#endif
     picShared->reuse( m_picsRcvd, yuvInBuf );
     if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
     {
@@ -373,17 +437,47 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     xDetectScc( picShared );
     m_encStages[ 0 ]->addPicSorted( picShared );
     m_picsRcvd += 1;
+#if HIGH_LEVEL_MT_OPT
+    }
+#endif
   }
 
   PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
   // trigger stages
   isQueueEmpty = true;
+#if HIGH_LEVEL_MT_OPT
+  bool stageInUse = false;
+#endif
   for( auto encStage : m_encStages )
   {
+#if HIGH_LEVEL_MT_OPT
+    // Check if cur. stage can be invoked
+    if( !encStage->canRunStage( flush, stageInUse ) )
+      continue;
+
+    if( m_encCfg.m_numThreads > 0 && encStage->isNonBlocking() )
+    {
+      if( !encStage->m_inUse )
+        xRunStageInThread( encStage, flush, au );
+    }
+    else
+      encStage->runStage( flush, au );
+#else
     encStage->runStage( flush, au );
+#endif
     isQueueEmpty &= encStage->isStageDone();
   }
+#if HIGH_LEVEL_MT_OPT
+  // If no any stages can start, wait here for signal to proceed further
+  if( m_encCfg.m_numThreads > 0 && yuvInBuf && picShared && stageInUse )
+  {
+    std::unique_lock<std::mutex> lock( m_stagesMutex );
+    m_stagesCond.wait( lock );
+  }
+
+  }while( yuvInBuf && !picShared );
+#endif
 
   // reset output access unit, if not final pass
   if( ! m_rateCtrl->rcIsFinalPass )
@@ -418,6 +512,11 @@ PicShared* EncLib::xGetFreePicShared()
 
   if( ! picShared )
   {
+#if HIGH_LEVEL_MT_OPT
+  if( m_encCfg.m_numThreads > 0 && m_picSharedList.size() >= m_maxNumPicShared )
+    return nullptr;
+#endif
+
     picShared = new PicShared();
     picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
     m_picSharedList.push_back( picShared );

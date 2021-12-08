@@ -94,6 +94,11 @@ private:
 
   int                    m_picsRcvd;
   int                    m_passInitialized;
+#if HIGH_LEVEL_MT_OPT
+  int                    m_maxNumPicShared;
+  std::mutex                m_stagesMutex;
+  std::condition_variable   m_stagesCond;
+#endif
 
 public:
   EncLib( MsgLog& logger );
@@ -114,7 +119,10 @@ private:
   void     xAssignPrevQpaBufs( PicShared* picShared );
 
   void     xDetectScc          ( PicShared* picShared );
-};
+#if HIGH_LEVEL_MT_OPT
+  void xRunStageInThread       ( EncStage *encStage, bool flush, AccessUnitList& auList );
+#endif
+ };
 
 } // namespace vvenc
 

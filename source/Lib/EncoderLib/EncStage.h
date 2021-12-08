@@ -191,6 +191,10 @@ public:
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
   , m_ctuSize         ( MAX_CU_SIZE )
+#if HIGH_LEVEL_MT_OPT
+  , m_isNonBlocking   ( false )
+  , m_inUse           ( false )
+#endif
   {
   };
 
@@ -217,12 +221,19 @@ public:
 
   bool isStageDone() const { return m_procList.empty(); }
 
+#if HIGH_LEVEL_MT_OPT
+  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool isNonBlocking = false )
+#else
   void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize )
+#endif
   {
     m_minQueueSize     = minQueueSize;
     m_flushAll         = flushAll;
     m_processLeadTrail = processLeadTrail;
     m_ctuSize          = ctuSize;
+#if HIGH_LEVEL_MT_OPT
+    m_isNonBlocking    = isNonBlocking;
+#endif
   }
 
   void linkNextStage( EncStage* nextStage )
@@ -286,6 +297,9 @@ public:
         _BREAK;
     }
 #endif
+//#if HIGH_LEVEL_MT_OPT
+//    m_inUse = true;
+//#endif
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )
         || ( m_procList.size() && flush ) )
@@ -319,13 +333,26 @@ public:
         }
       } while( m_flushAll && flush && m_procList.size() );
     }
+#if HIGH_LEVEL_MT_OPT
+    m_inUse = false;
+#endif
   }
 
+#if HIGH_LEVEL_MT_OPT
+  bool isNonBlocking() { return m_isNonBlocking; }
+  virtual bool canRunStage( bool flush, bool& stageInUse )
+  {
+    bool canStart = ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
+    stageInUse |= m_inUse;
+    return canStart;
+    //return !m_inUse;
+  }
+#endif
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
 #if DEBUG_PRINT
-  virtual int stageId() = 0;
+  virtual int  stageId() = 0;
 #endif
 
 private:
@@ -336,6 +363,11 @@ private:
   bool      m_flushAll;
   bool      m_processLeadTrail;
   int       m_ctuSize;
+#if HIGH_LEVEL_MT_OPT
+  bool      m_isNonBlocking;
+public:
+  std::atomic<bool> m_inUse;
+#endif
 };
 
 } // namespace vvenc
