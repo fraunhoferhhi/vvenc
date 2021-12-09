@@ -290,9 +290,10 @@ public:
 #if DEBUG_PRINT
     if( !m_procList.empty() )
     {
-      printf( "#%d %2d ", stageId(), m_minQueueSize );
+#if 0
+      DPRINT( "#%d %2d ", stageId(), m_minQueueSize );
       debug_print_pic_list( m_procList, "ProcList" );
-
+#endif
       _CASE( stageId() == 1 && m_procList.back()->poc == 96 )
         _BREAK;
     }
@@ -339,13 +340,20 @@ public:
   }
 
 #if HIGH_LEVEL_MT_OPT
+  int  minQueueSize()  { return m_minQueueSize; }
   bool isNonBlocking() { return m_isNonBlocking; }
-  virtual bool canRunStage( bool flush, bool& stageInUse )
+  bool isStageInUse()  { return m_inUse; }
+  virtual bool canRunStage( bool flush, bool picSharedAvail )
   {
+    if( m_inUse )
+      return false;
     bool canStart = ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
-    stageInUse |= m_inUse;
-    return canStart;
-    //return !m_inUse;
+#if NBSM_RELAX_LOOK_AHEAD
+    // Just a dirty hack first
+    return canStart && ( m_minQueueSize > 16 ? true: ( picSharedAvail || flush ) );
+#else
+    return canStart && ( m_isNonBlocking ? true: ( picSharedAvail || flush ) );
+#endif
   }
 #endif
 protected:

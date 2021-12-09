@@ -270,20 +270,21 @@ int calcAndPrintHashStatus(const CPelUnitBuf& pic, const SEIDecodedPictureHash* 
 typedef std::list<Picture*> PicList;
 
 #if DEBUG_PRINT
+#define DPRINT(...) printf(__VA_ARGS__);fflush(stdout);
+//#define DPRINT(...)  g_msgFnc g_msgFncCtx, VVENC_VERBOSE,__VA_ARGS__)
 inline void debug_print_pic_list( PicList& m_list, std::string listName )
 {
   if( !m_list.empty() )
   {
-    printf( "%s: ", listName.c_str() );
+    DPRINT( "%s: ", listName.c_str() );
     for( auto p : m_list )
     {
       //printf( "%2d <t%2d>  ", p->getPOC(), p->TLayer );
       printf( "%2d ", p->getPOC() );
     }
-    printf( "\n" );
+    DPRINT( "\n" );
   }
 }
-#define DPRINT(...) printf(__VA_ARGS__)
 #else
 #define DPRINT(...)
 #endif

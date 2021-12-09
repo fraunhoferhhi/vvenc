@@ -446,6 +446,14 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // create list of pictures ordered in coding order and ready to be encoded
   std::vector<Picture*> encList;
   xCreateCodingOrder( picList, flush, encList );
+#if HIGH_LEVEL_MT_OPT
+  _CASE( encList.empty() )
+    _BREAK;
+#if NBSM_RELAX_LOOK_AHEAD
+  if( encList.empty() )
+    return;
+#endif
+#endif
   CHECK( encList.empty(), "no pictures to be encoded found" );
 
   // init rate control GOP
@@ -806,6 +814,12 @@ void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector
     }
 
     Picture* pic = xFindPicture( picList, poc );
+#if DEBUG_PRINT
+    if( !pic && encList.size() == 0 )
+    {
+      DPRINT( "\nNext pic to encode not found %d\n", poc );
+    }
+#endif
     if( ! pic )
       break;
     encList.push_back( pic );

@@ -197,6 +197,7 @@ protected:
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
 #if DEBUG_PRINT
   virtual int stageId() { return m_isPreAnalysis ? 1: 2; };
+  //virtual bool canRunStage( bool flush, bool picSharedAvail ) { return EncStage::canRunStage( flush, picSharedAvail ) && ( m_isPreAnalysis ? picSharedAvail || flush: true ); }
 #endif
 
 private:

@@ -62,7 +62,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-
+#if DEBUG_PRINT
+MsgLog* gMsg = nullptr;
+#endif
 // ====================================================================================================================
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
@@ -246,14 +248,6 @@ void EncLib::initPass( int pass, const char* statsFName )
 #endif
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
-#if HIGH_LEVEL_MT_OPT
-    if( m_encCfg.m_numThreads > 0 )
-    {
-      m_maxNumPicShared = m_firstPassCfg.m_GOPSize + m_encCfg.m_IntraPeriod;
-      if( m_encCfg.m_vvencMCTF.MCTF )
-        m_maxNumPicShared += VVENC_MCTF_RANGE + 1;
-    }
-#endif
   }
 
   // gop encoder
@@ -276,6 +270,17 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_encStages[ i ]->linkNextStage( m_encStages[ i + 1 ] );
   }
+#if HIGH_LEVEL_MT_OPT
+  if( m_encCfg.m_numThreads > 0 )
+  {
+    m_maxNumPicShared = 0;
+    for( auto encStage : m_encStages )
+    {
+      m_maxNumPicShared += encStage->minQueueSize();
+    }
+    m_maxNumPicShared += 4;
+  }
+#endif
 
   // rate control
   if( m_encCfg.m_RCTargetBitrate > 0 )
@@ -409,7 +414,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 #if HIGH_LEVEL_MT_OPT
   // Current requirement: The input yuv-frame must be passed to the encoding process (1.Stage)
   // Non-Blocking Stages Model (NBSM):
-  // 1. The stages are non-blocking
+  // 1. The stages can be non-blocking
   // 2. The number of used picture units in encoder is limited
   // 3. The stages have different throughput, last stage is the slowest
   // 4. It possible that here at the input we will run out of picture units that is needed for the next input frame
@@ -446,34 +451,45 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   // trigger stages
   isQueueEmpty = true;
-#if HIGH_LEVEL_MT_OPT
-  bool stageInUse = false;
-#endif
+
   for( auto encStage : m_encStages )
   {
 #if HIGH_LEVEL_MT_OPT
     // Check if cur. stage can be invoked
-    if( !encStage->canRunStage( flush, stageInUse ) )
-      continue;
-
-    if( m_encCfg.m_numThreads > 0 && encStage->isNonBlocking() )
+    if( encStage->canRunStage( flush, ( yuvInBuf && picShared ) ) )
     {
-      if( !encStage->m_inUse )
-        xRunStageInThread( encStage, flush, au );
+      if( encStage->isNonBlocking() )
+      {
+        if( m_cAu.size() > 0 )
+        {
+          au = m_cAu;
+          m_cAu.clearAu( true );
+        }
+        xRunStageInThread( encStage, flush, m_cAu );
+      }
+      else
+      {
+        encStage->runStage( flush, au );
+      }
     }
-    else
-      encStage->runStage( flush, au );
 #else
     encStage->runStage( flush, au );
 #endif
     isQueueEmpty &= encStage->isStageDone();
   }
+
 #if HIGH_LEVEL_MT_OPT
-  // If no any stages can start, wait here for signal to proceed further
-  if( m_encCfg.m_numThreads > 0 && yuvInBuf && picShared && stageInUse )
+  // If we have not got picture-unit for a new picture, we have to wait for stages to finish
+  if( m_encCfg.m_numThreads > 0 && yuvInBuf && !picShared )
   {
     std::unique_lock<std::mutex> lock( m_stagesMutex );
-    m_stagesCond.wait( lock );
+    bool stageInUse = false;
+    for( auto encStage : m_encStages )
+    {
+      stageInUse |= encStage->m_inUse;
+    }
+    if( stageInUse )
+      m_stagesCond.wait( lock );
   }
 
   }while( yuvInBuf && !picShared );
@@ -520,6 +536,7 @@ PicShared* EncLib::xGetFreePicShared()
     picShared = new PicShared();
     picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
     m_picSharedList.push_back( picShared );
+    DPRINT( "picsharedlist %d\n", (int)m_picSharedList.size() );
   }
   CHECK( picShared == nullptr, "out of memory" );
 

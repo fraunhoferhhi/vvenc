@@ -98,6 +98,7 @@ private:
   int                    m_maxNumPicShared;
   std::mutex                m_stagesMutex;
   std::condition_variable   m_stagesCond;
+  AccessUnitList         m_cAu;
 #endif
 
 public:

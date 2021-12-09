@@ -596,7 +596,6 @@ extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
 extern void * g_msgFncCtx;
 // end global logger 
 
-
 inline std::string prnt( const char* fmt, ...)
 {
   va_list argptr;
