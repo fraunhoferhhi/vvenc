@@ -16,16 +16,16 @@ tag 1.3.0
 
 * vvencapp:
   - added command line parameters:
-    - tiles: set number of tiles columns and rows to be used for encoding.
+    - tiles: set number of tile columns and tile rows
     - framescale: defines the denominator of the framerate to enable fractional rate sepcification (before framerate 59 automatically used 60000/1001)
-    - fps: Fractional framerate/framescale specification as single parameter (e.g. 60 or 60000/1001 )
+    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1 or 60000/1001 )
     - additional: set parameter using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
 
 * vvencFFapp:
   - added command line parameters:
-    - Tiles: set number of tiles columns and rows to be used for encoding.
+    - Tiles: set number of tile columns and tile rows
     - FrameScale: defines the denominator of the framerate to enable fractional rate sepcification (before framerate 59 automatically used 60000/1001)
-    - fps: Fractional framerate/framescale specification as single parameter (e.g. 60 or 60000/1001 )
+    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1, 60000/1001 )
     - additional: set parameter using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
     - LookAhead: enable pre-analysis in single pass rate control
   - removed command line parameters:

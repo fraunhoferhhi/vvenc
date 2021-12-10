@@ -44,7 +44,7 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --size,-s \<wxh\>        | 1920x1080                        | Input file resolution (width x height)                                                               |
 | --framerate,-r \<int\>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. <br> Also recommended with perceptual QP adaptation (see `--qpa` option below). |
 | --framescale \<int\>     | 1                                | The denominator of the framerate to enable fractional rate sepcification. |
-| --fps <r\/s>             | 60/1                             | Fractional framerate specification, setting `--framerate` and `--framescale` using a single parameter with a fraction syntax (denominator defaults to `1` if not present). |
+| --fps <r\/s>             | 60/1                             | framerate specification, setting `--framerate` and `--framescale` using a single parameter as integer or fraction (denominator defaults to `1` if not present). |
 | --format,-c \<str\>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
 | --output,-o \<str\>      | not set                          | Bit-stream output file                                                                               |
 | --preset \<str\>         | medium                           | Preset for specific encoding setting (faster, fast, medium, slow, slower)                            |
@@ -55,8 +55,8 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --rcstatsfile \<str\>    | not set                          | Rate control statistics file, to store or load first pass rate control statistics data.              |
 | --qpa \<int\>            | 1                                | Perceptual QP adaptation (QPA) to improve subjective video quality (0: off, 1: on)                   |
 | --refreshsec,-rs \<int\> | 1                                | Intra period/refresh in seconds                                                                      |
-| --tiles \<cxr\>          | 1x1                              | Number of tiles columns and rows to be used for encoding. |
-| --threads,-t \<int\>     | size >= 1280x720: <br> 8, else: 4  | Number of threads (1-N)                                                                              |
+| --tiles \<cxr\>          | 1x1                              | Set number of tile columns and tile rows                                                                 |
+| --threads,-t \<int\>     | size >= 1280x720: <br> 8, else: 4  | Number of threads (1-N)                                                                            |
 | --hdr \<str\>            | off                              | HDR mode (+ SEI messages) + BT.709 or BT.2020 color space (off, pq, pq_2020, hlg, hlg_2020)          |
 
 **Example usage:** Given a YUV 4:2:0 input file with a bit-depth of 8bit and a resolution of 176x144 pixels, the following call will encode the input file with the medium speedup preset:

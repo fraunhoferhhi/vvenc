@@ -530,7 +530,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "Intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
-    ("tiles",                                           toNumTiles,                                          "Set number of tile columns and rows explicitly")
+    ("tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
   }
   else
@@ -539,7 +539,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     opts.addOptions()
     ("Threads,t",                                       c->m_numThreads,                                     "Number of threads")
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
-    ("Tiles",                                           toNumTiles,                                         "Set number of tile columns and rows explicitly")
+    ("Tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
 
     opts.setSubSection("Slice decision options");
