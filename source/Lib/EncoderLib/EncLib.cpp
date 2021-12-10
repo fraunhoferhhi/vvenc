@@ -402,6 +402,48 @@ void EncLib::xRunStageInThread( EncStage *encStage, bool flush, AccessUnitList& 
 }
 #endif
 
+#if 1
+void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
+{
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
+
+  CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
+
+  // clear output access unit
+  au.clearAu();
+
+  // send new YUV input buffer to first encoder stage
+  if( yuvInBuf )
+  {
+    PicShared* picShared = xGetFreePicShared();
+    picShared->reuse( m_picsRcvd, yuvInBuf );
+    if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
+    {
+      xAssignPrevQpaBufs( picShared );
+    }
+    xDetectScc( picShared );
+    m_encStages[ 0 ]->addPicSorted( picShared );
+    m_picsRcvd += 1;
+  }
+
+  PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
+
+  // trigger stages
+  isQueueEmpty = true;
+
+  for( auto encStage : m_encStages )
+  {
+    encStage->runStage( flush, au );
+    isQueueEmpty &= encStage->isStageDone();
+  }
+
+  // reset output access unit, if not final pass
+  if( ! m_rateCtrl->rcIsFinalPass )
+  {
+    au.clearAu();
+  }
+}
+#else
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
@@ -505,6 +547,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     au.clearAu();
   }
 }
+#endif
 
 void EncLib::printSummary()
 {
