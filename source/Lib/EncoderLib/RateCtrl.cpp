@@ -672,6 +672,9 @@ void RateCtrl::processGopsLookAhead()
         ratio[ ipIdx + 1 ] = ratio[ ipIdx ];
       }
     }
+#if DEBUG_PRINT
+    DPRINT( "POC=%d, bits=%d\n", it->poc, it->numBits );
+#endif
   }
 
   for ( it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++ ) // scaling, part 1

@@ -408,8 +408,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
 
+#if !HIGH_LEVEL_MT_OPT
   // clear output access unit
   au.clearAu();
+#endif
 
 #if HIGH_LEVEL_MT_OPT
   // Current requirement: The input yuv-frame must be passed to the encoding process (1.Stage)
@@ -423,6 +425,8 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   PicShared* picShared = nullptr;
   do
   {
+  // clear output access unit
+  au.clearAu();
 #endif
   // send new YUV input buffer to first encoder stage
   if( yuvInBuf )
