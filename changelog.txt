@@ -12,6 +12,7 @@ tag 1.3.0
   - add look ahead analysis for single pass rate control
   - HRD timing information are always written into bitstream per default (signal fps)
   - perceptual QPA improvements for lower bitrates
+  - added tile support including tile parallelism
   - mingw support added
   - various cleanups, bugfixes and reducing memory usage
 
