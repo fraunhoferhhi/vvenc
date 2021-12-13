@@ -333,54 +333,40 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
     else iQP = (int) dQP; // revert to unadapted slice QP
   }
 
-  if ( slice->pps->sliceChromaQpFlag )
+  int cbQP = 0, crQP = 0, cbCrQP = 0;
+
+  if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && !m_pcEncCfg->m_usePerceptQPA && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
+  {
+    const int rateCtrlQpOffset = (m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead ? 1 : 0);
+
+    cbQP = m_pcEncCfg->m_chromaCbQpOffsetDualTree + rateCtrlQpOffset; // set QP offets for dual-tree
+    crQP = m_pcEncCfg->m_chromaCrQpOffsetDualTree + rateCtrlQpOffset;
+    cbCrQP = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree + rateCtrlQpOffset;
+  }
+  else if (slice->pps->sliceChromaQpFlag)
   {
     const bool bUseIntraOrPeriodicOffset = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
-    int cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 0 ] : gopList[ gopId ].m_CbQPoffset;
-    int crQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 1 ] : gopList[ gopId ].m_CrQPoffset;
-    int cbCrQP = (cbQP + crQP) >> 1; // use floor of average chroma QP offset for joint-Cb/Cr coding
 
-    cbQP = Clip3( -12, 12, cbQP + slice->pps->chromaQpOffset[COMP_Cb] ) - slice->pps->chromaQpOffset[COMP_Cb];
-    crQP = Clip3( -12, 12, crQP + slice->pps->chromaQpOffset[COMP_Cr] ) - slice->pps->chromaQpOffset[COMP_Cr];
-    slice->sliceChromaQpDelta[COMP_Cb] = Clip3( -12, 12, cbQP);
-    CHECK(!(slice->sliceChromaQpDelta[COMP_Cb]+slice->pps->chromaQpOffset[COMP_Cb]<=12 && slice->sliceChromaQpDelta[COMP_Cb]+slice->pps->chromaQpOffset[COMP_Cb]>=-12), "Unspecified error");
-    slice->sliceChromaQpDelta[COMP_Cr] = Clip3( -12, 12, crQP);
-    CHECK(!(slice->sliceChromaQpDelta[COMP_Cr]+slice->pps->chromaQpOffset[COMP_Cr]<=12 && slice->sliceChromaQpDelta[COMP_Cr]+slice->pps->chromaQpOffset[COMP_Cr]>=-12), "Unspecified error");
-    if (slice->sps->jointCbCr)
-    {
-      cbCrQP = Clip3 (-12, 12, cbCrQP + slice->pps->chromaQpOffset[COMP_JOINT_CbCr]) - slice->pps->chromaQpOffset[COMP_JOINT_CbCr];
-      slice->sliceChromaQpDelta[COMP_JOINT_CbCr] = Clip3 (-12, 12, cbCrQP);
-    }
+    cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 0 ] : gopList[ gopId ].m_CbQPoffset;
+    crQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 1 ] : gopList[ gopId ].m_CrQPoffset;
+    cbCrQP = (cbQP + crQP) >> 1; // use floor of average CbCr chroma QP offset for joint-CbCr coding
+
+    cbQP = Clip3 (-12, 12, cbQP + slice->pps->chromaQpOffset[COMP_Cb]) - slice->pps->chromaQpOffset[COMP_Cb];
+    crQP = Clip3 (-12, 12, crQP + slice->pps->chromaQpOffset[COMP_Cr]) - slice->pps->chromaQpOffset[COMP_Cr];
+    cbCrQP = Clip3 (-12, 12, cbCrQP + slice->pps->chromaQpOffset[COMP_JOINT_CbCr]) - slice->pps->chromaQpOffset[COMP_JOINT_CbCr];
   }
-  else
-  {
-    slice->sliceChromaQpDelta[COMP_Cb] = 0;
-    slice->sliceChromaQpDelta[COMP_Cr] = 0;
-    slice->sliceChromaQpDelta[COMP_JOINT_CbCr] = 0;
-  }
+
+  slice->sliceChromaQpDelta[COMP_Cb] = Clip3 (-12, 12, cbQP);
+  slice->sliceChromaQpDelta[COMP_Cr] = Clip3 (-12, 12, crQP);
+  slice->sliceChromaQpDelta[COMP_JOINT_CbCr] = (slice->sps->jointCbCr ? Clip3 (-12, 12, cbCrQP) : 0);
 
   for( auto& thrRsc : m_ThreadRsrc )
   {
     thrRsc->m_encCu.setUpLambda( *slice, dLambda, iQP, true, true );
   }
 
-  slice->sliceQp       = iQP;
-  slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen>0;
-
-  if (slice->pps->sliceChromaQpFlag && CS::isDualITree (*slice->pic->cs) && (!m_pcEncCfg->m_usePerceptQPA) && (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity == 0))
-  {
-    // overwrite chroma qp offset for dual tree
-    slice->sliceChromaQpDelta[ COMP_Cb ] = m_pcEncCfg->m_chromaCbQpOffsetDualTree;
-    slice->sliceChromaQpDelta[ COMP_Cr ] = m_pcEncCfg->m_chromaCrQpOffsetDualTree;
-    if ( slice->sps->jointCbCr )
-    {
-      slice->sliceChromaQpDelta[ COMP_JOINT_CbCr ] = m_pcEncCfg->m_chromaCbCrQpOffsetDualTree;
-    }
-    for( auto& thrRsc : m_ThreadRsrc )
-    {
-      thrRsc->m_encCu.setUpLambda( *slice, slice->getLambdas()[0], slice->sliceQp, true, false );
-    }
-  }
+  slice->sliceQp            = iQP;
+  slice->chromaQpAdjEnabled = slice->pps->chromaQpOffsetListLen > 0;
 }
 
 void EncSlice::resetQP( Picture* pic, int sliceQP, double& lambda )
@@ -731,9 +717,6 @@ void EncSlice::finishCompressSlice( Picture* pic, Slice& slice )
   }
 
   CS::setRefinedMotionField( cs );
-
-  // cleanup
-  pic->getFilteredOrigBuffer().destroy();
 }
 
 void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr )

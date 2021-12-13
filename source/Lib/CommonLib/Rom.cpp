@@ -79,8 +79,10 @@ StatCounters::StatCounter2DSet<int64_t> g_cuCounters1D( std::vector<std::string>
 StatCounters::StatCounter2DSet<int64_t> g_cuCounters2D( std::vector<std::string> { g_cuCounterIdNames, std::end( g_cuCounterIdNames ) }, MAX_CU_SIZE_IDX, MAX_CU_SIZE_IDX );
 #endif
 
+// global logger message callback function - DEPRECATED - will be removed in next major version
 std::function<void( void*, int, const char*, va_list )> g_msgFnc = nullptr;
-void * m_msgFncCtx = nullptr;
+void * g_msgFncCtx = nullptr;
+// end global loger
 
 // ====================================================================================================================
 // LFNST Tables

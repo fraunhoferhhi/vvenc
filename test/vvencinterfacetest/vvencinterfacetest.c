@@ -73,11 +73,10 @@ int main( int argc, char* argv[] )
 
   int maxFrames = 8;  // max frames to encode
 
-  vvenc_set_logging_callback( NULL, msgFnc );
-
   // init default settings
   vvenc_config vvencCfg;
   vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
 
   // create the encoder
   enc = vvenc_encoder_create();

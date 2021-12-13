@@ -90,9 +90,18 @@ void msgApp( int level, const char* fmt, ... )
 
 bool EncApp::parseCfg( int argc, char* argv[])
 {
+  vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
+
   try
   {
-    if( ! m_cEncAppCfg.parseCfgFF( argc, argv ) )
+    if( argc )
+    {
+      // remove application name
+      argc--;
+      argv++;
+    }
+
+    if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config ) )
     {
       return false;
     }
@@ -102,8 +111,67 @@ bool EncApp::parseCfg( int argc, char* argv[])
     msgApp( VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-  g_verbosity = m_cEncAppCfg.m_verbosity;
-  return true;
+  g_verbosity = m_vvenc_config.m_verbosity;
+
+  bool ret = true;
+
+  if( !m_cEncAppCfg.m_additionalSettings.empty() )
+  {
+    std::vector <std::tuple<std::string, std::string>> dict = m_cEncAppCfg.getAdditionalSettingList();
+
+    if( dict.empty() )
+    {
+      msgApp( VVENC_ERROR, "Error parsing additional option string \"%s\"\n",m_cEncAppCfg.m_additionalSettings.c_str() );
+      return false;
+    }
+
+    for( auto & d : dict )
+    {
+      std::string key = std::get<0>(d);
+      std::string value = std::get<1>(d);
+      int parse_ret = vvenc_set_param( &m_vvenc_config, key.c_str(), value.c_str() );
+      switch (parse_ret)
+      {
+        case VVENC_PARAM_BAD_NAME:
+            msgApp( VVENC_ERROR, "additional params: unknown option\"%s\" \n", key.c_str() );
+            ret = false;
+            break;
+        case VVENC_PARAM_BAD_VALUE:
+          msgApp( VVENC_ERROR, "additional params: invalid value for key \"%s\": \"%s\" \n", key.c_str(), value.c_str() );
+            ret = false;
+            break;
+        default:
+            break;
+      }
+    }
+  }
+
+  if ( m_vvenc_config.m_internChromaFormat < 0 || m_vvenc_config.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
+  {
+    m_vvenc_config.m_internChromaFormat = m_cEncAppCfg.m_inputFileChromaFormat;
+  }
+
+  if( m_vvenc_config.m_RCNumPasses < 0 && ( m_vvenc_config.m_RCPass > 0 || m_vvenc_config.m_RCTargetBitrate > 0 ) )
+  {
+    m_vvenc_config.m_RCNumPasses = 2;
+  }
+
+  if( m_cEncAppCfg.m_decode )
+  {
+    return ret;
+  }
+
+  if( vvenc_init_config_parameter( &m_vvenc_config ) )
+  {
+    ret = false;
+  }
+
+  if(  m_cEncAppCfg.checkCfg( &m_vvenc_config ))
+  {
+    ret = false;
+  }
+
+  return ret;
 }
 
 /**
@@ -111,11 +179,12 @@ bool EncApp::parseCfg( int argc, char* argv[])
  */
 int EncApp::encode()
 {
-  apputils::VVEncAppCfg& vvencCfg = m_cEncAppCfg;
+  apputils::VVEncAppCfg& appCfg   = m_cEncAppCfg;
+  vvenc_config&          vvencCfg = m_vvenc_config;
 
-  if( vvencCfg.m_decode )
+  if( appCfg.m_decode )
   {
-    return vvenc_decode_bitstream( vvencCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
+    return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
   }
 
   // initialize encoder lib
@@ -135,9 +204,15 @@ int EncApp::encode()
 
   // get the adapted config
   vvenc_get_config( m_encCtx, &vvencCfg);
-  msgApp( VVENC_INFO, "%s", vvencCfg.getConfigAsString( vvencCfg.m_verbosity ).c_str() );
+
+  std::stringstream css;
+  css << appCfg.getAppConfigAsString( vvencCfg.m_verbosity );
+  css << vvenc_get_config_as_string( &vvencCfg, vvencCfg.m_verbosity);
+  css << std::endl;
+
+  msgApp( VVENC_INFO, "%s", css.str().c_str() );
   printChromaFormat();
-  if( ! strcmp( vvencCfg.m_inputFileName.c_str(), "-" )  )
+  if( ! strcmp( appCfg.m_inputFileName.c_str(), "-" )  )
   {
     msgApp( VVENC_INFO, " trying to read from stdin" );
   }
@@ -148,7 +223,7 @@ int EncApp::encode()
     return -1;
   }
 
-  if( ! vvencCfg.m_reconFileName.empty() )
+  if( ! appCfg.m_reconFileName.empty() )
   {
     vvenc_encoder_set_RecYUVBufferCallback( m_encCtx, &this->m_yuvReconFile, outputYuv );
   }
@@ -172,8 +247,8 @@ int EncApp::encode()
   {
     // open input YUV
 
-    if( m_yuvInputFile.open( vvencCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
-                             vvencCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, vvencCfg.m_bClipInputVideoToRec709Range, vvencCfg.m_packedYUVInput ))
+    if( m_yuvInputFile.open( appCfg.m_inputFileName, false, vvencCfg.m_inputBitDepth[0], vvencCfg.m_MSBExtendedBitDepth[0], vvencCfg.m_internalBitDepth[0],
+                             appCfg.m_inputFileChromaFormat, vvencCfg.m_internChromaFormat, appCfg.m_bClipInputVideoToRec709Range, appCfg.m_packedYUVInput ))
     {
       msgApp( VVENC_ERROR, "open input file failed: %s\n", m_yuvInputFile.getLastError().c_str() );
       vvenc_encoder_close( m_encCtx );
@@ -183,14 +258,14 @@ int EncApp::encode()
       return -1;
     }
 
-    const int skipFrames = vvencCfg.m_FrameSkip - vvencCfg.m_vvencMCTF.MCTFNumLeadFrames;
+    const int skipFrames = appCfg.m_FrameSkip - vvencCfg.m_vvencMCTF.MCTFNumLeadFrames;
     if( skipFrames > 0 )
     {
       m_yuvInputFile.skipYuvFrames( skipFrames, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
     }
 
     // initialize encoder pass
-    iRet = vvenc_init_pass( m_encCtx, pass, vvencCfg.m_RCStatsFileName.c_str() );
+    iRet = vvenc_init_pass( m_encCtx, pass, appCfg.m_RCStatsFileName.c_str() );
     if( iRet != 0 )
     {
       msgApp( VVENC_ERROR, "init pass failed: %s\n", vvenc_get_last_error(m_encCtx) );
@@ -310,8 +385,8 @@ bool EncApp::openFileIO()
   // output YUV
   if( ! m_cEncAppCfg.m_reconFileName.empty() )
   {
-    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_outputBitDepth[0], m_cEncAppCfg.m_internalBitDepth[0],
-                             m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVOutput ))
+    if( m_yuvReconFile.open( m_cEncAppCfg.m_reconFileName, true, m_vvenc_config.m_outputBitDepth[0], m_vvenc_config.m_outputBitDepth[0], m_vvenc_config.m_internalBitDepth[0],
+                             m_vvenc_config.m_internChromaFormat, m_vvenc_config.m_internChromaFormat, m_cEncAppCfg.m_bClipOutputVideoToRec709Range, m_cEncAppCfg.m_packedYUVOutput ))
     {
       msgApp( VVENC_ERROR, "open reconstruction file failed: %s\n", m_yuvReconFile.getLastError().c_str() );
       return false;
@@ -344,10 +419,10 @@ void EncApp::printRateSummary( int framesRcvd )
 {
   vvenc_print_summary( m_encCtx );
 
-  int fps = m_cEncAppCfg.m_FrameRate/m_cEncAppCfg.m_FrameScale;
-  double time = (double) framesRcvd / fps * m_cEncAppCfg.m_temporalSubsampleRatio;
+  int fps = m_vvenc_config.m_FrameRate/m_vvenc_config.m_FrameScale;
+  double time = (double) framesRcvd / fps * m_vvenc_config.m_temporalSubsampleRatio;
   msgApp( VVENC_DETAILS,"Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time );
-  if( m_cEncAppCfg.m_summaryVerboseness > 0 )
+  if( m_vvenc_config.m_summaryVerboseness > 0 )
   {
     msgApp( VVENC_DETAILS, "Bytes for SPS/PPS/APS/Slice (Incl. Annex B): %u (%.3f kbps)\n", m_essentialBytes, 0.008 * m_essentialBytes / time );
   }
@@ -355,7 +430,7 @@ void EncApp::printRateSummary( int framesRcvd )
 
 void EncApp::printChromaFormat()
 {
-  if( m_cEncAppCfg.m_verbosity >= VVENC_DETAILS )
+  if( m_vvenc_config.m_verbosity >= VVENC_DETAILS )
   {
     std::stringstream ssOut;
     ssOut << std::setw(43) << "Input ChromaFormat = ";
@@ -371,7 +446,7 @@ void EncApp::printChromaFormat()
     ssOut << std::endl;
 
     ssOut << std::setw(43) << "Output (intern) ChromaFormat = ";
-    switch( m_cEncAppCfg.m_internChromaFormat )
+    switch( m_vvenc_config.m_internChromaFormat )
     {
       case VVENC_CHROMA_400:  ssOut << "  400"; break;
       case VVENC_CHROMA_420:  ssOut << "  420"; break;

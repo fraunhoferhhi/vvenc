@@ -57,6 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <fstream>
 #include <cstring>
 #include <vector>
+#include <tuple>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -73,6 +74,7 @@ int testLibCallingOrder();     // check invalid caling order
 int testLibParameterRanges();  // single parameter rangewew checks 
 int testInvalidInputParams();  // input Buffer does not match
 int testSDKDefaultBehaviour(); // check default behaviour when using in sdk
+int testStringApiInterface(); // check behaviour when using in sdk by using string api
 
 int main( int argc, char* argv[] )
 {
@@ -87,12 +89,12 @@ int main( int argc, char* argv[] )
     else
     {
       testId = atoi(argv[1]);
-      printHelp = ( testId < 1 || testId > 4 );
+      printHelp = ( testId < 1 || testId > 5 );
     }
 
     if( printHelp )
     {
-      printf( "venclibtest <test> [1..4]\n");
+      printf( "venclibtest <test> [1..5]\n");
       return -1;
     }
   }
@@ -123,11 +125,17 @@ int main( int argc, char* argv[] )
     testSDKDefaultBehaviour();
     break;
   }
+  case 5:
+  {
+    testStringApiInterface();
+    break;
+  }
   default:
     testLibParameterRanges();
     testLibCallingOrder();
     testInvalidInputParams();
     testSDKDefaultBehaviour();
+    testStringApiInterface();
     break;
   }
 
@@ -781,6 +789,68 @@ int checkSDKDefaultBehaviourRC()
   return 0;
 }
 
+int checkSDKStringApiDefault()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 176,144,60, 500000, 32, vvencPresetMode::VVENC_MEDIUM );
+
+  std::vector <std::tuple<std::string, std::string>> settings;
+  settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176x144") );
+  settings.push_back(std::make_tuple( VVENC_OPT_WIDTH,        "176") );
+  settings.push_back(std::make_tuple( VVENC_OPT_HEIGHT,       "144") );
+  settings.push_back(std::make_tuple( VVENC_OPT_FRAMERATE,    "60") );
+  settings.push_back(std::make_tuple( VVENC_OPT_FRAMESCALE,   "1") );
+  settings.push_back(std::make_tuple( VVENC_OPT_FPS,          "60/1") );
+  settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000") );
+  settings.push_back(std::make_tuple( VVENC_OPT_INPUTBITDEPTH,"10") );
+  settings.push_back(std::make_tuple( VVENC_OPT_FRAMES,       "2") );
+  settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "MEDIUM") );
+  settings.push_back(std::make_tuple( VVENC_OPT_THREADS,      "1") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000000") );
+  settings.push_back(std::make_tuple( VVENC_OPT_QP,           "32") );
+  settings.push_back(std::make_tuple( VVENC_OPT_TILES,        "1x0") );
+  settings.push_back(std::make_tuple( VVENC_OPT_VERBOSITY,    "verbose") );
+
+  settings.push_back(std::make_tuple( VVENC_OPT_PROFILE,      "auto") );
+  settings.push_back(std::make_tuple( VVENC_OPT_LEVEL,        "auto") );
+  settings.push_back(std::make_tuple( VVENC_OPT_TIER,         "main") );
+
+  settings.push_back(std::make_tuple( VVENC_OPT_INTRAPERIOD,         "0") );
+  settings.push_back(std::make_tuple( VVENC_OPT_REFRESHDSEC,         "1") );
+  settings.push_back(std::make_tuple( VVENC_OPT_DECODINGREFRESHTYPE, "cra") );
+  settings.push_back(std::make_tuple( VVENC_OPT_GOPSIZE,              "32") );
+
+  settings.push_back(std::make_tuple( VVENC_OPT_QPA,              "off") );
+  settings.push_back(std::make_tuple( VVENC_OPT_RCPASSES,         "2") );
+  settings.push_back(std::make_tuple( VVENC_OPT_RCPASS,           "1") );
+  settings.push_back(std::make_tuple( VVENC_OPT_INTERNALBITDEPTH, "10") );
+  settings.push_back(std::make_tuple( VVENC_OPT_HDR,              "off") );
+  settings.push_back(std::make_tuple( VVENC_OPT_SEGMENT,          "off") );
+
+  for( auto & d : settings )
+  {
+    std::string key = std::get<0>(d);
+    std::string value = std::get<1>(d);
+    int parse_ret = vvenc_set_param( &c, key.c_str(), value.c_str() );
+    switch (parse_ret)
+    {
+      case VVENC_PARAM_BAD_NAME:
+        return -1;
+      case VVENC_PARAM_BAD_VALUE:
+        return -1;
+      default:
+        break;
+    }
+  }
+
+  if( vvenc_init_config_parameter( &c ) )
+  {
+    return -1;
+  }
+
+  return 0;
+}
+
 
 int testLibCallingOrder()
 {
@@ -803,9 +873,18 @@ int testSDKDefaultBehaviour()
   return 0;
 }
 
+
+int testStringApiInterface()
+{
+  testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
+  return 0;
+}
+
 int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 {
   vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -840,7 +919,7 @@ int inputBufTest( vvencYUVBuffer* pcYuvPicture )
 }
 
 
-int invaildInputUninitialzedInputPic( )
+int invalidInputUninitialzedInputPic( )
 {
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
   if( 0 != inputBufTest( pcYuvPicture ))
@@ -854,7 +933,7 @@ int invaildInputUninitialzedInputPic( )
   return 0;
 }
 
-int invaildInputInvalidPicSize( )
+int invalidInputInvalidPicSize( )
 {
   int16_t dummy = 0;
 
@@ -874,7 +953,7 @@ int invaildInputInvalidPicSize( )
   return 0;
 }
 
-int invaildInputInvalidLumaStride( )
+int invalidInputInvalidLumaStride( )
 {
   int16_t dummy = 0;
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
@@ -897,7 +976,7 @@ int invaildInputInvalidLumaStride( )
 }
 
 
-int invaildInputInvalidChromaStride( )
+int invalidInputInvalidChromaStride( )
 {
   int16_t dummy = 0;
   vvencYUVBuffer *pcYuvPicture = vvenc_YUVBuffer_alloc();
@@ -923,9 +1002,11 @@ int invaildInputInvalidChromaStride( )
 }
 
 
-int invaildInputBuf( )
+int invalidldInputBuf( )
 {
   vvenc_config vvencParams;
+  vvenc_config_default( &vvencParams );
+
   fillEncoderParameters( vvencParams );
 
   vvencEncoder *enc = vvenc_encoder_create();
@@ -963,12 +1044,12 @@ int invaildInputBuf( )
 
 int testInvalidInputParams()
 {
-  testfunc( "invaildInputUninitialzedInputPic",              &invaildInputUninitialzedInputPic,         true );
-  testfunc( "invaildInputInvalidPicSize",                    &invaildInputInvalidPicSize,               true );
+  testfunc( "invalidInputUninitialzedInputPic",              &invalidInputUninitialzedInputPic,         true );
+  testfunc( "invalidInputInvalidPicSize",                    &invalidInputInvalidPicSize,               true );
 
-  testfunc( "invaildInputInvalidPicSize",                    &invaildInputInvalidPicSize,               true );
-  testfunc( "invaildInputInvalidLumaStride",                 &invaildInputInvalidLumaStride,            true );
-  testfunc( "invaildInputInvalidChromaStride",               &invaildInputInvalidChromaStride,          true );
+  testfunc( "invalidInputInvalidPicSize",                    &invalidInputInvalidPicSize,               true );
+  testfunc( "invalidInputInvalidLumaStride",                 &invalidInputInvalidLumaStride,            true );
+  testfunc( "invalidInputInvalidChromaStride",               &invalidInputInvalidChromaStride,          true );
  
   return 0;
 }

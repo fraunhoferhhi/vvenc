@@ -542,7 +542,7 @@ void EncModeCtrl::destroy()
   BestEncInfoCache::destroy();
 }
 
-void EncModeCtrl::initCTUEncoding( const Slice &slice )
+void EncModeCtrl::initCTUEncoding( const Slice &slice, int tileIdx )
 {
   CacheBlkInfoCtrl::init( slice );
   BestEncInfoCache::init( slice );
@@ -557,32 +557,25 @@ void EncModeCtrl::initCTUEncoding( const Slice &slice )
   {
     m_skipThresholdE0023FastEnc = SKIP_DEPTH;
   }
+
+  m_tileIdx = tileIdx;
 }
 
-#if QTBTT_SPEED3
 void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs, int  MergeSimpleFlag)
-#else
-void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& cs )
-#endif
 {
   // Min/max depth
   unsigned minDepth = 0;
   unsigned maxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, partitioner.chType );
   if( m_pcEncCfg->m_useFastLCTU )
   {
-#if QTBTT_SPEED3
     partitioner.setMaxMinDepth(minDepth, maxDepth, cs, cs.picture->useQtbttSpeedUpMode, MergeSimpleFlag);
-#else
-    bool refineMinMax = ((m_pcEncCfg->m_qtbttSpeedUp==3) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)));
-    partitioner.setMaxMinDepth( minDepth, maxDepth, cs, refineMinMax );
-#endif
   }
 
   m_ComprCUCtxList.push_back( ComprCUCtx( cs, minDepth, maxDepth ) );
   comprCUCtx = &m_ComprCUCtxList.back();
 
-  const CodingUnit* cuLeft  = cs.getCU( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), partitioner.chType, partitioner.treeType );
-  const CodingUnit* cuAbove = cs.getCU( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), partitioner.chType, partitioner.treeType );
+  const CodingUnit* cuLeft  = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( -1, 0 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
+  const CodingUnit* cuAbove = cs.getCURestricted( cs.area.blocks[partitioner.chType].pos().offset( 0, -1 ), cs.area.blocks[partitioner.chType].pos(), cs.slice->independentSliceIdx, m_tileIdx, partitioner.chType, partitioner.treeType );
 
   const bool qtBeforeBt = ( (  cuLeft  &&  cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth && cuAbove->qtDepth > partitioner.currQtDepth )
                          || (  cuLeft  && !cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth )
@@ -602,7 +595,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
   
 
-  if( m_pcEncCfg->m_contentBasedFastQtbt )
+  if( m_pcEncCfg->m_contentBasedFastQtbt && cs.pcv->getMaxMTTDepth(*cs.slice, partitioner.chType))
   {
     const CompArea& currArea = partitioner.currArea().Y();
     int cuHeight  = currArea.height;
@@ -652,6 +645,13 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
 
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
   const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
+
+  if ((m_pcEncCfg->m_IntraPeriod==1) && (partitioner.chType==CH_C) && (!partitioner. qtChromaSplit))
+  {
+    cuECtx.maxDepth=partitioner.currDepth;
+    partitioner.horChromaSplit=true;
+    partitioner.verChromaSplit=true;
+  }
 
   if( isBoundary )
   {
@@ -818,7 +818,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         return false;
       }
 
-#if FASTTT_TH
       if (m_pcEncCfg->m_fastTTSplit && cuECtx.bestCostHorzSplit < MAX_DOUBLE)
       {
         if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostHorzSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
@@ -830,7 +829,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
           return false;
         }
       }
-#endif
       break;
     case CU_TRIV_SPLIT:
       if( cuECtx.didVertSplit && bestCU && bestCU->btDepth == partitioner.currBtDepth && !bestCU->rootCbf )
@@ -852,7 +850,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         return false;
       }
 
-#if FASTTT_TH
       if (m_pcEncCfg->m_fastTTSplit && cuECtx.bestCostVertSplit < MAX_DOUBLE)
       {
         if (cuECtx.bestCostBeforeSplit < MAX_DOUBLE && (cuECtx.bestCostVertSplit > m_pcEncCfg->m_fastTT_th * cuECtx.bestCostBeforeSplit))
@@ -864,7 +861,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
           return false;
         }
       }
-#endif
       break;
     default:
       THROW( "Only CU split modes are governed by the EncModeCtrl" );
@@ -1085,12 +1081,10 @@ void EncModeCtrl::beforeSplit( Partitioner& partitioner )
   CodedCUInfo    &relatedCU   = getBlkInfo( partitioner.currArea() );
   const CodingUnit&  bestCU   = *cuECtx.bestCU;
 
-#if FASTTT_TH
   if (m_pcEncCfg->m_fastTTSplit)
   {
     cuECtx.bestCostBeforeSplit = cuECtx.bestCS->cost;
   }
-#endif
 
   setFromCs( *cuECtx.bestCS, cuECtx.bestMode, partitioner );
 

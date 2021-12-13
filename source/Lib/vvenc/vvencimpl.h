@@ -54,6 +54,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "vvenc/vvencCfg.h"
 #include "vvenc/vvenc.h"
 #include "EncoderLib/EncLib.h"
+#include "Utilities/MsgLog.h"
 
 namespace vvenc {
 
@@ -96,7 +97,7 @@ public:
   VVEncImpl();
   virtual ~VVEncImpl();
 
-  int init( const vvenc_config& rcVVEncCfg );
+  int init( vvenc_config* config );
 
   int initPass( int pass, const char* statsFName );
   int uninit();
@@ -124,9 +125,8 @@ public:
 
   static const char* getErrorMsg( int nRet );
   static const char* getVersionNumber();
-
-  static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );            ///< set message output function for encoder lib. if not set, no messages will be printed.
-  static const char* setSIMDExtension( const char* simdId );                               ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
+  static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );  ///< deprecated, this method uses the deprecated global logger and will be removed
+  static const char* setSIMDExtension( const char* simdId );                     ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
   static const char* getCompileInfoString();
   static int         decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
@@ -146,6 +146,8 @@ private:
   std::string            m_sEncoderCapabilities;
 
   EncLib*                m_pEncLib = nullptr;
+
+  MsgLog                 msg;
 };
 
 

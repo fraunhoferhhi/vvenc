@@ -105,7 +105,6 @@ namespace vvenc {
     std::memset( qpCorrection, 0, sizeof( qpCorrection ) );
     std::memset( actualBitCnt, 0, sizeof( actualBitCnt ) );
     std::memset( targetBitCnt, 0, sizeof( targetBitCnt ) );
-    lastIntraLambda = 0.0;
     lastIntraQP = 0;
     bitDepth = 0;
   }
@@ -119,7 +118,7 @@ namespace vvenc {
   {
     destroy();
 
-    EncRCSeq::create( twoPassRC, totFrames, targetBitrate, frRate, intraPer, GOPSize, bitDepth, firstPassStats );
+    EncRCSeq::create( twoPassRC, false, targetBitrate, frRate, intraPer, GOPSize, bitDepth, firstPassStats ); //TO DO: check the second parameter
 
     twoPass = twoPassRC;
     totalFrames = totFrames;
@@ -1049,11 +1048,10 @@ namespace vvenc {
     beta = beta + diffLambda / lnbpp;
   }
 
-  LegacyRateCtrl::LegacyRateCtrl()
+  LegacyRateCtrl::LegacyRateCtrl( MsgLog& msg )
+  : RateCtrl(msg)
   {
-    RateCtrl();
-
-    encRCSeq = NULL;
+      encRCSeq = NULL;
     encRCGOP = NULL;
     encRCPic = NULL;
     flushPOC = -1;
@@ -1233,7 +1231,7 @@ namespace vvenc {
     }
     else
     {
-      msg( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
+      msg.log( VVENC_WARNING, "\n hierarchical bit allocation is not currently supported for the specified coding structure.\n" );
     }
 
     int* GOPID2Level = new int[ m_pcEncCfg->m_GOPSize ];

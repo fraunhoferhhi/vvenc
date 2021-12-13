@@ -279,7 +279,7 @@ VVENC_DECL int vvenc_encoder_set_RecYUVBufferCallback(vvencEncoder *, void * ctx
 /* vvenc_init_pass
   This method initializes the encoder instance in dependency to the encoder pass.
  \param[in]  vvencEncoder pointer to opaque handler
- \param[in]  pass number of current pass to init
+ \param[in]  pass number of current pass to init (0: first pass, 1: second pass )
  \param[in]  rate control statistics file name
  \retval     int if non-zero an error occurred (see ErrorCodes), otherwise VVENC_OK indicates success.
  \pre        None
@@ -378,9 +378,11 @@ VVENC_DECL int vvenc_print_summary( vvencEncoder * );
 */
 VVENC_DECL const char* vvenc_get_error_msg( int nRet );
 
-/* vvenc_set_logging_callback
- This method registers a log message callback function to the encoder library.
+/* vvenc_set_logging_callback *deprecated*
+ This method registers a global log message callback function to the encoder library.
  If no such function has been registered, the library will omit all messages.
+ *deprecated* - This method is deprecated since it uses a global logger and will be removed in the next major version.
+                Please use the method vvenc_set_logging_callback(vvenc_config,void *,vvencLoggingCallback) to register a thread safe local looger
  \param[in]  ctx pointer of the caller, if not needed set it to null
  \paramin]   Log message callback function.
  \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
@@ -426,8 +428,10 @@ VVENC_DECL int  vvenc_get_height_of_component( const vvencChromaFormat chFmt, co
 VVENC_DECL bool  vvenc_is_tracing_enabled( void );
 
 /* vvenc_decode_bitstream
- * set filename of a bitstream that should be decoded
- \retval[ ] const char* file name of bitstream
+ \param[in]  FileName of bitstream that should be decoded
+ \param[in]  trcFile filename of a trace rule file
+ \param[in]  trcRule trace rules
+ \retval     int VVENC_ERR_INITIALIZE indicates the encoder was not successfully initialized in advance, otherwise the return value VVENC_OK indicates success.
 */
 VVENC_DECL int   vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule);
 

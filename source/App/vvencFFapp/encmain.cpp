@@ -69,7 +69,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 int main(int argc, char* argv[])
 {
-  vvenc_set_logging_callback( nullptr, msgFnc );
+  vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
 
   std::string simdOpt;
   apputils::df::program_options_lite::Options opts;

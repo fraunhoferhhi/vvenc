@@ -148,11 +148,11 @@ public:
     PSNRyuv = (MSEyuv == 0) ? 999.99 : 10.0 * log10((maxval * maxval) / MSEyuv);
   }
 
-  void    printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
+  std::string printOut ( char cDelim, const ChromaFormat chFmt, const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr, const BitDepths &bitDepths )
   {
-    vvencMsgLevel e_msg_level = cDelim == 'a' ? VVENC_INFO: VVENC_DETAILS;
     double dFps     =   m_dFrmRate; //--CFG_KDY
     double dScale   = dFps / 1000 / (double)m_uiNumPic;
+    std::string info;
 
     double MSEBasedSNR[MAX_NUM_COMP];
     if (printMSEBasedSNR)
@@ -180,27 +180,27 @@ public:
       case CHROMA_400:
         if (printMSEBasedSNR)
         {
-          msg( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
-
+          info.append(prnt("         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR" ) );
+          
           if (printHexPsnr)
           {
-            msg(e_msg_level, "xY-PSNR           ");
+            info.append(prnt("xY-PSNR           " ));
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "    Y-MSE\n" );
+            info.append(prnt("    Y-MSE\n" ));
           }
           else
           {
-            msg( e_msg_level, "\n");
+            info.append(prnt("\n" ));
           }
 
-          //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          msg( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
+           info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 getPsnr(COMP_Y) / (double)getNumPic() );
+                 getPsnr(COMP_Y) / (double)getNumPic() ));
 
           if (printHexPsnr)
           {
@@ -212,46 +212,46 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            msg(e_msg_level, "   %16" PRIx64 " ", xPsnr);
+            info.append(prnt( "   %16" PRIx64 " ", xPsnr ));
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            info.append(prnt("  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() ));
           }
           else
           {
-            msg( e_msg_level, "\n");
+            info.append(prnt("\n"));
           }
 
-          msg( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
+          info.append(prnt("From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 MSEBasedSNR[COMP_Y] );
+                 MSEBasedSNR[COMP_Y] ));
         }
         else
         {
-          msg( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" );
+          info.append(prnt("\tTotal Frames |   "   "Bitrate     "  "Y-PSNR" ));
 
           if (printHexPsnr)
           {
-            msg(e_msg_level, "xY-PSNR           ");
+            info.append(prnt("xY-PSNR           "));
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "    Y-MSE\n" );
+            info.append(prnt("    Y-MSE\n" ));
           }
           else
           {
-            msg( e_msg_level, "\n");
+            info.append(prnt("\n"));
           }
 
-          //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-          msg( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf",
+          //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
+          info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf",
                  getNumPic(), cDelim,
                  getBits() * dScale,
-                 getPsnr(COMP_Y) / (double)getNumPic() );
+                 getPsnr(COMP_Y) / (double)getNumPic() ));
 
           if (printHexPsnr)
           {
@@ -263,16 +263,16 @@ public:
               reinterpret_cast<uint8_t *>(&dPsnr) + sizeof(dPsnr),
               reinterpret_cast<uint8_t *>(&xPsnr));
 
-            msg(e_msg_level, "   %16" PRIx64 " ", xPsnr);
+            info.append(prnt("   %16" PRIx64 " ", xPsnr));
           }
 
           if (printSequenceMSE)
           {
-            msg( e_msg_level, "  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() );
+            info.append(prnt("  %8.4lf\n", m_MSEyuvframe[COMP_Y] / (double)getNumPic() ));
           }
           else
           {
-            msg( e_msg_level, "\n");
+            info.append(prnt("\n"));
           }
         }
         break;
@@ -287,30 +287,30 @@ public:
 
           if (printMSEBasedSNR)
           {
-            msg( e_msg_level, "         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " );
+            info.append(prnt("         \tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR " ));
 
             if (printHexPsnr)
             {
-              msg(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              info.append(prnt("xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           "));
             }
 
             if (printSequenceMSE)
             {
-              msg( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" ));
             }
             else
             {
-              msg( e_msg_level, "\n");
+              info.append(prnt("\n"));
             }
 
-            //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            msg( e_msg_level, "Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
+            info.append(prnt("Average: \t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
                    getPsnr(COMP_Cb) / (double)getNumPic(),
                    getPsnr(COMP_Cr) / (double)getNumPic(),
-                   PSNRyuv );
+                   PSNRyuv ));
 
             if (printHexPsnr)
             {
@@ -324,55 +324,55 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              msg(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              info.append(prnt("   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64, xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]));
             }
 
             if (printSequenceMSE)
             {
-              msg( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
-                     MSEyuv );
+                     MSEyuv ));
             }
             else
             {
-              msg( e_msg_level, "\n");
+              info.append(prnt("\n"));
             }
 
-            msg( e_msg_level, "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+            info.append(prnt("From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    MSEBasedSNR[COMP_Y ],
                    MSEBasedSNR[COMP_Cb],
                    MSEBasedSNR[COMP_Cr],
-                   PSNRyuv );
+                   PSNRyuv ));
           }
           else
           {
-            msg( e_msg_level, "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " );
+            info.append(prnt("\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR   " ));
 
             if (printHexPsnr)
             {
-              msg(e_msg_level, "xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           ");
+              info.append(prnt("xY-PSNR           "  "xU-PSNR           "  "xV-PSNR           "));
             }
             if (printSequenceMSE)
             {
-              msg( e_msg_level, " Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" );
+              info.append(prnt(" Y-MSE     "  "U-MSE     "  "V-MSE    "  "YUV-MSE \n" ));
             }
             else
             {
-              msg( e_msg_level, "\n");
+              info.append(prnt("\n"));
             }
 
-            //msg( e_msg_level, "\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" );
-            msg( e_msg_level, "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
+            //info.append(prnt("\t------------ "  " ----------"   " -------- "  " -------- "  " --------\n" ));
+            info.append(prnt("\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf",
                    getNumPic(), cDelim,
                    getBits() * dScale,
                    getPsnr(COMP_Y ) / (double)getNumPic(),
                    getPsnr(COMP_Cb) / (double)getNumPic(),
                    getPsnr(COMP_Cr) / (double)getNumPic(),
-                   PSNRyuv );
+                   PSNRyuv ));
 
 
             if (printHexPsnr)
@@ -387,28 +387,28 @@ public:
                   reinterpret_cast<uint8_t *>(&dPsnr[i]) + sizeof(dPsnr[i]),
                   reinterpret_cast<uint8_t *>(&xPsnr[i]));
               }
-              msg(e_msg_level, "   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]);
+              info.append(prnt("   %16" PRIx64 "  %16" PRIx64 "  %16" PRIx64 , xPsnr[COMP_Y], xPsnr[COMP_Cb], xPsnr[COMP_Cr]));
             }
             if (printSequenceMSE)
             {
-              msg( e_msg_level, "  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+              info.append(prnt("  %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
                      m_MSEyuvframe[COMP_Y ] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cb] / (double)getNumPic(),
                      m_MSEyuvframe[COMP_Cr] / (double)getNumPic(),
-                     MSEyuv );
+                     MSEyuv ));
             }
             else
             {
-              msg( e_msg_level, "\n");
+              info.append(prnt("\n"));
             }
           }
         }
         break;
       default:
-        msg( VVENC_ERROR, "Unknown format during print out\n");
-        exit(1);
+        info.append(prnt("Unknown format during print out\n"));
         break;
     }
+    return info;
   }
 
 
@@ -458,8 +458,7 @@ public:
         }
 
       default:
-          msg( VVENC_ERROR, "Unknown format during print out\n");
-          exit(1);
+          fprintf(pFile, "Unknown format during print out\n");
           break;
     }
 

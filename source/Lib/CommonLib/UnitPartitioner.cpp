@@ -164,11 +164,7 @@ void Partitioner::copyState( const Partitioner& other )
 #endif
 }
 
-#if QTBTT_SPEED3
 void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, int QtbttSpeedUp, bool MergeFlag) const
-#else
-void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const CodingStructure& cs, bool refineMinMax ) const
-#endif
 {
   unsigned          stdMinDepth = 0;
   unsigned          stdMaxDepth = cs.pcv->getMaxDepth( cs.slice->sliceType, chType );
@@ -230,11 +226,7 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
 
   minDepth = ( minDepth >= 1 ? minDepth - 1 : 0 );
   maxDepth = std::min<unsigned>( stdMaxDepth, maxDepth + 1 );
-#if QTBTT_SPEED3
   if((QtbttSpeedUp >> 2) && (cs.slice->TLayer > 0) && ((cs.area.Y().width >= 8) || (cs.area.Y().height >= 8)))
-#else
-  if( refineMinMax )
-#endif
   {
     int minDepthCur = stdMaxDepth;
     int maxDepthCur = stdMinDepth;
@@ -257,7 +249,7 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
       minDepth = std::max<unsigned>(minDepthCur, minDepth);
     }
   }
-#if QTBTT_SPEED3
+
   if (!cs.slice->isIntra() && (QtbttSpeedUp & 3))
   {
     bool doMin_SCC = !(((QtbttSpeedUp & 3) == 2) && (cs.area.Y().width < cs.pcv->maxCUSize));
@@ -296,7 +288,6 @@ void Partitioner::setMaxMinDepth( unsigned& minDepth, unsigned& maxDepth, const 
       minDepth = (minDepth == 3)? 2: minDepth;
     }
   }
-#endif
 }
 
 void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, const Slice& slice )
@@ -333,6 +324,10 @@ void Partitioner::initCtu( const UnitArea& ctuArea, const ChannelType _chType, c
 
   treeType = TREE_D;
   modeType = MODE_TYPE_ALL;
+
+  horChromaSplit=true;
+  verChromaSplit=true;
+  qtChromaSplit=true;
 }
 
 void Partitioner::splitCurrArea( const PartSplit split, const CodingStructure& cs )
@@ -547,6 +542,15 @@ bool Partitioner::canSplit( const PartSplit split, const CodingStructure &cs )
   bool canNo, canQt, canBh, canTh, canBv, canTv;
 
   canSplit( cs, canNo, canQt, canBh, canBv, canTh, canTv );
+
+  if (chType==CH_C)
+  {
+    // Chroma Split Optimization
+    canBh = canBh && horChromaSplit;
+    canTh = canTh && horChromaSplit;
+    canBv = canBv && verChromaSplit;
+    canTv = canTv && verChromaSplit;
+  }
   switch( split )
   {
   case CTU_LEVEL:
