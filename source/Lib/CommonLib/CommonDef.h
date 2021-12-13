@@ -196,6 +196,7 @@ static const int MAX_NUM_REF =                                     16; ///< max.
 static const int MAX_QP =                                          63;
 static const int MAX_QP_PERCEPT_QPA =                              42; ///< max. base QP up to which CTU or sub-CTU QPA is used instead of frame QPA
 static const int NOT_VALID =                                       -1;
+static const int QPA_PREV_FRAMES =                                  2;
 
 
 static const int AMVP_MAX_NUM_CANDS =                               2; ///< AMVP: advanced motion vector prediction - max number of final candidates
@@ -451,6 +452,10 @@ static const int    NUM_AMAXBT_LAYER =                             10;
 static const double AMAXBT_TH32 =                                  15.0;
 static const double AMAXBT_TH64 =                                  30.0;
 
+// Threshholds for Fast Chroma Block Partitoning. Only used in Intra Only Coding
+static const int    FCBP_TH1 =                                     18000;
+static const int    FCBP_TH2 =                                     105;
+
 // need to know for static memory allocation
 static const int MAX_DELTA_QP   =                                   7;      ///< maximum supported delta QP value
 static const int MAX_TESTED_QPs =   ( 1 + 1 + ( MAX_DELTA_QP << 1 ) );      ///< dqp=0 +- max_delta_qp + lossless mode
@@ -586,23 +591,13 @@ template <typename T> inline void Check3( T minVal, T maxVal, T a)
   CHECK( ( a > maxVal ) || ( a < minVal ), "ERROR: Range check " << minVal << " >= " << a << " <= " << maxVal << " failed" );
 }  ///< general min/max clip
 
+// global logger message callback function - DEPRECATED - will be removed in next major version
 extern std::function<void( void*, int, const char*, va_list )> g_msgFnc;
-extern void * m_msgFncCtx;
+extern void * g_msgFncCtx;
+// end global logger 
 
-inline void msg( int level, const char* fmt, ... )
-{
-  if ( g_msgFnc )
-  {
-    static std::mutex _msgMutex;
-    std::unique_lock<std::mutex> _lock( _msgMutex );
-    va_list args;
-    va_start( args, fmt );
-    g_msgFnc( m_msgFncCtx, level, fmt, args );
-    va_end( args );
-  }
-}
 
-inline std::string print( const char* fmt, ...)
+inline std::string prnt( const char* fmt, ...)
 {
   va_list argptr;
 

@@ -747,9 +747,6 @@ template<> inline SizeType perpSize<EDGE_HOR>( const Size& size ) { return size.
 template<> inline SizeType parlSize<EDGE_VER>( const Size& size ) { return size.height; }
 template<> inline SizeType perpSize<EDGE_VER>( const Size& size ) { return size.width; }
 
-// set / get functions
-LFCUParam xGetLoopfilterParam( const CodingUnit& cu );
-
 // filtering functions
 template<DeblockEdgeDir edgeDir>
 void xGetBoundaryStrengthSingle             ( LoopFilterParam& lfp, const CodingUnit& cu, const Position &localPos, const CodingUnit &cuP );

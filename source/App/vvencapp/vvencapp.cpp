@@ -79,10 +79,15 @@ void msgFnc( void*, int level, const char* fmt, va_list args )
 
 void msgApp( void* ctx, int level, const char* fmt, ... )
 {
-    va_list args;
-    va_start( args, fmt );
-    msgFnc( ctx, level, fmt, args );
-    va_end( args );
+  va_list args;
+  va_start( args, fmt );
+  msgFnc( ctx, level, fmt, args );
+  va_end( args );
+}
+
+void changePreset( vvenc_config* c, vvencPresetMode preset )
+{
+  if( c ) vvenc_init_preset( c, (vvencPresetMode)preset );
 }
 
 void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage, int code, const std::string cErr )
@@ -103,11 +108,17 @@ void printVVEncErrorMsg( const std::string cAppname, const std::string cMessage,
 }
 
 
-bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
+bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vvenc_config &vvenccfg )
 {
   try
   {
-    if( ! rcVVEncAppCfg.parseCfg( argc, argv ) )
+    if( argc )
+    {
+      // remove application name
+      argc--;
+      argv++;
+    }
+    if( 0 != rcVVEncAppCfg.parse( argc, argv, &vvenccfg ) )
     {
       return false;
     }
@@ -117,9 +128,62 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg )
     msgApp( nullptr, VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-  g_verbosity = rcVVEncAppCfg.m_verbosity;
+  g_verbosity = vvenccfg.m_verbosity;
 
-  return true;
+  bool ret = true;
+
+  if( !rcVVEncAppCfg.m_additionalSettings.empty() )
+  {
+    std::vector <std::tuple<std::string, std::string>> dict = rcVVEncAppCfg.getAdditionalSettingList();
+
+    if( dict.empty() )
+    {
+      msgApp( nullptr, VVENC_ERROR, "Error parsing additional option string \"%s\"\n",rcVVEncAppCfg.m_additionalSettings.c_str() );
+      return false;
+    }
+
+    for( auto & d : dict )
+    {
+      std::string key = std::get<0>(d);
+      std::string value = std::get<1>(d);
+      int parse_ret = vvenc_set_param( &vvenccfg, key.c_str(), value.c_str() );
+      switch (parse_ret)
+      {
+        case VVENC_PARAM_BAD_NAME:
+            msgApp( nullptr, VVENC_ERROR, "additional params: unknown option\"%s\" \n", key.c_str() );
+            ret = false;
+            break;
+        case VVENC_PARAM_BAD_VALUE:
+          msgApp( nullptr, VVENC_ERROR, "additional params: invalid value for key \"%s\": \"%s\" \n", key.c_str(), value.c_str() );
+            ret = false;
+            break;
+        default:
+            break;
+      }
+    }
+  }
+
+  if ( vvenccfg.m_internChromaFormat < 0 || vvenccfg.m_internChromaFormat >= VVENC_NUM_CHROMA_FORMAT )
+  {
+    vvenccfg.m_internChromaFormat = rcVVEncAppCfg.m_inputFileChromaFormat;
+  }
+
+  if( vvenccfg.m_RCNumPasses < 0 && ( vvenccfg.m_RCPass > 0 || vvenccfg.m_RCTargetBitrate > 0 ) )
+  {
+    vvenccfg.m_RCNumPasses = 2;
+  }
+
+  if( vvenc_init_config_parameter( &vvenccfg ) )
+  {
+    ret = false;
+  }
+
+  if( rcVVEncAppCfg.checkCfg( &vvenccfg ))
+  {
+    ret = false;
+  }
+
+  return ret;
 }
 
 int main( int argc, char* argv[] )
@@ -131,24 +195,28 @@ int main( int argc, char* argv[] )
     cAppname = cAppname.substr(iPos+1 );
   }
 
-  vvenc_set_logging_callback( nullptr, msgFnc );
+  vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
 
   // default encoder configuration
-  apputils::VVEncAppCfg vvencappCfg;
-  vvenc_init_default( &vvencappCfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+  apputils::VVEncAppCfg vvencappCfg = apputils::VVEncAppCfg(true); // init config in easy mode
+  vvencappCfg.setPresetChangeCallback(changePreset);
+  vvenc_config vvenccfg;
+  vvenc_init_default( &vvenccfg, 1920, 1080, 60, 0, 32, vvencPresetMode::VVENC_MEDIUM );
+
+  vvenc_set_msg_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
 
   // parse configuration
-  if ( ! parseCfg( argc, argv, vvencappCfg ) )
+  if ( ! parseCfg( argc, argv, vvencappCfg, vvenccfg ) )
   {
     return 1;
   }
 
   // assign verbosity used for encoder output
-  g_verbosity = vvencappCfg.m_verbosity;
+  g_verbosity = vvenccfg.m_verbosity;
 
   // show version
   if( vvencappCfg.m_showVersion
-      || ( vvencappCfg.m_verbosity > VVENC_SILENT && vvencappCfg.m_verbosity < VVENC_NOTICE ) )
+      || ( vvenccfg.m_verbosity > VVENC_SILENT && vvenccfg.m_verbosity < VVENC_NOTICE ) )
   {
     std::cout << cAppname  << " version " << vvenc_get_version()<< std::endl;
     if( vvencappCfg.m_showVersion )
@@ -162,7 +230,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  int iRet = vvenc_encoder_open( enc, &vvencappCfg );
+  int iRet = vvenc_encoder_open( enc, &vvenccfg );
   if( 0 != iRet )
   {
     printVVEncErrorMsg( cAppname, "cannot create encoder", iRet, vvenc_get_last_error( enc ) );
@@ -171,16 +239,19 @@ int main( int argc, char* argv[] )
   }
 
   // get the adapted config
-  vvenc_get_config( enc, &vvencappCfg );
-  if( vvencappCfg.m_verbosity >= VVENC_INFO )
+  vvenc_get_config( enc, &vvenccfg );
+  if( vvenccfg.m_verbosity >= VVENC_INFO )
   {
     std::cout << cAppname << ": " << vvenc_get_enc_information( enc ) << std::endl;
   }
-  if( vvencappCfg.m_verbosity >= VVENC_INFO )
+  if( vvenccfg.m_verbosity >= VVENC_INFO )
   {
-    std::cout << vvencappCfg.getConfigAsString( vvencappCfg.m_verbosity ) << std::endl;
+    std::stringstream css;
+    css << vvencappCfg.getAppConfigAsString( vvenccfg.m_verbosity );
+    css << vvenc_get_config_as_string( &vvenccfg, vvenccfg.m_verbosity);
+    std::cout << css.str() << std::endl;
   }
-  if( vvencappCfg.m_verbosity >= VVENC_INFO && ! strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
+  if( vvenccfg.m_verbosity >= VVENC_INFO && ! strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
   {
     std::cout << cAppname << " trying to read from stdin" << std::endl;
   }
@@ -200,25 +271,25 @@ int main( int argc, char* argv[] )
   // --- allocate memory for output packets
   vvencAccessUnit AU;
   vvenc_accessUnit_default( &AU );
-  const int auSizeScale = vvencappCfg.m_internChromaFormat <= VVENC_CHROMA_420 ? 2 : 3;
-  vvenc_accessUnit_alloc_payload( &AU, auSizeScale * vvencappCfg.m_SourceWidth * vvencappCfg.m_SourceHeight + 1024 );
+  const int auSizeScale = vvenccfg.m_internChromaFormat <= VVENC_CHROMA_420 ? 2 : 3;
+  vvenc_accessUnit_alloc_payload( &AU, auSizeScale * vvenccfg.m_SourceWidth * vvenccfg.m_SourceHeight + 1024 );
 
   // --- allocate memory for YUV input picture
   vvencYUVBuffer cYUVInputBuffer;
   vvenc_YUVBuffer_default( &cYUVInputBuffer );
-  vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencappCfg.m_internChromaFormat, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight );
+  vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvenccfg.m_internChromaFormat, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight );
 
   // --- start timer
   std::chrono::steady_clock::time_point cTPStartRun = std::chrono::steady_clock::now();
-  if( vvencappCfg.m_verbosity > VVENC_WARNING )
+  if( vvenccfg.m_verbosity > VVENC_WARNING )
   {
     std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
   }
 
   unsigned int uiFrames = 0;
-  const int start       = vvencappCfg.m_RCPass > 0 ? vvencappCfg.m_RCPass - 1 : 0;
-  const int end         = vvencappCfg.m_RCPass > 0 ? vvencappCfg.m_RCPass     : vvencappCfg.m_RCNumPasses;
+  const int start       = vvenccfg.m_RCPass > 0 ? vvenccfg.m_RCPass - 1 : 0;
+  const int end         = vvenccfg.m_RCPass > 0 ? vvenccfg.m_RCPass     : vvenccfg.m_RCNumPasses;
   for( int pass = start; pass < end; pass++ )
   {
     // initialize the encoder pass
@@ -234,8 +305,8 @@ int main( int argc, char* argv[] )
 
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
-    if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvencappCfg.m_inputBitDepth[0], vvencappCfg.m_MSBExtendedBitDepth[0], vvencappCfg.m_internalBitDepth[0],
-                                 vvencappCfg.m_inputFileChromaFormat, vvencappCfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput ) )
+    if( 0 != cYuvFileInput.open( vvencappCfg.m_inputFileName, false, vvenccfg.m_inputBitDepth[0], vvenccfg.m_MSBExtendedBitDepth[0], vvenccfg.m_internalBitDepth[0],
+                                 vvencappCfg.m_inputFileChromaFormat, vvenccfg.m_internChromaFormat, vvencappCfg.m_bClipOutputVideoToRec709Range, vvencappCfg.m_packedYUVInput ) )
     {
       std::cout << cAppname  << " [error]: failed to open input file " << vvencappCfg.m_inputFileName << std::endl;
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
@@ -245,7 +316,7 @@ int main( int argc, char* argv[] )
     }
 
     const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - vvenc_get_num_lead_frames(enc), 0 );
-    const int64_t iMaxFrames  = vvencappCfg.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
+    const int64_t iMaxFrames  = vvenccfg.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     bool          bEncodeDone = false;
@@ -254,7 +325,7 @@ int main( int argc, char* argv[] )
 
     if( iFrameSkip )
     {
-      cYuvFileInput.skipYuvFrames(iFrameSkip, vvencappCfg.m_SourceWidth, vvencappCfg.m_SourceHeight);
+      cYuvFileInput.skipYuvFrames(iFrameSkip, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight);
       iSeqNumber=iFrameSkip;
     }
 
@@ -275,13 +346,13 @@ int main( int argc, char* argv[] )
         {
           // set sequence number and cts
           cYUVInputBuffer.sequenceNumber  = iSeqNumber;
-          cYUVInputBuffer.cts             = iSeqNumber * vvencappCfg.m_TicksPerSecond * vvencappCfg.m_FrameScale / vvencappCfg.m_FrameRate;
+          cYUVInputBuffer.cts             = iSeqNumber * vvenccfg.m_TicksPerSecond * vvenccfg.m_FrameScale / vvenccfg.m_FrameRate;
           cYUVInputBuffer.ctsValid        = true;
           ptrYUVInputBuffer               = &cYUVInputBuffer;
           iSeqNumber++;
           //std::cout << "process picture " << cYUVInputBuffer.m_uiSequenceNumber << " cts " << cYUVInputBuffer.m_uiCts << std::endl;
         }
-        else if( vvencappCfg.m_verbosity > VVENC_ERROR && vvencappCfg.m_verbosity < VVENC_NOTICE )
+        else if( vvenccfg.m_verbosity > VVENC_ERROR && vvenccfg.m_verbosity < VVENC_NOTICE )
         {
           std::cout << "EOF reached" << std::endl;
         }
@@ -343,9 +414,9 @@ int main( int argc, char* argv[] )
     std::cout << "no frames encoded" << std::endl;
   }
 
-  if( uiFrames && vvencappCfg.m_verbosity > VVENC_SILENT )
+  if( uiFrames && vvenccfg.m_verbosity > VVENC_SILENT )
   {
-    if( vvencappCfg.m_verbosity > VVENC_WARNING )
+    if( vvenccfg.m_verbosity > VVENC_WARNING )
     {
       std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
       std::cout  << "finished @ " << std::ctime(&endTime2)  << std::endl;

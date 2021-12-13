@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include "CommonLib/CommonDef.h"
+#include "Utilities/MsgLog.h"
 
 #include "vvenc/vvencCfg.h"
 
@@ -94,24 +95,25 @@ namespace vvenc {
     EncRCSeq();
     virtual ~EncRCSeq();
 
-    void create( bool twoPass, int totFrames, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
+    void create( bool twoPass, bool lookAhead, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
     virtual void destroy();
     virtual void updateAfterPic( int bits, int tgtBits );
     void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
     bool            twoPass;
-    int             totalFrames;
+    bool            isLookAhead;
+    int             framesCoded;
     int             targetRate;
     int             frameRate;
     int             gopSize;
     int             intraPeriod;
     int             bitDepth;
     int64_t         bitsUsed;
+    int64_t         bitsUsedIn1stPass;
     int64_t         estimatedBitUsage;
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
     uint64_t        targetBitCnt[8];
-    double          lastIntraLambda;
     int             lastIntraQP;
     std::list<TRCPassStats> firstPassData;
     double          minEstLambda;
@@ -151,16 +153,18 @@ namespace vvenc {
   class RateCtrl
   {
   public:
-    RateCtrl();
+    RateCtrl(MsgLog& logger);
     virtual ~RateCtrl();
 
     virtual void init( const VVEncCfg& encCfg );
     virtual void destroy();
+    int  getBaseQP();
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
-    void processFirstPassData (const int secondPassBaseQP);
-    void processGops (const int secondPassBaseQP);
+    void processFirstPassData (const bool flush);
+    void processGops();
+    void processGopsLookAhead();
     uint64_t getTotalBitsInFirstPass();
     void detectNewScene();
     void adaptToSceneChanges();
@@ -187,6 +191,7 @@ namespace vvenc {
     const VVEncCfg*         m_pcEncCfg;
 
   protected:
+    MsgLog&                 msg;
     void storeStatsData( const TRCPassStats& statsData );
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     void openStatsFile( const std::string& name );

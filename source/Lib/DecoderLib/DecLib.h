@@ -73,7 +73,7 @@ namespace vvenc {
 class InputNALUnit;
 struct FFwdDecoder;
 
-bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true  );
+bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& bitstreamFileName, FFwdDecoder& ffwdDecoder, ParameterSetMap<APS>* apsMap, MsgLog& logger, bool bDecodeUntilPocFound = false, int debugPOC = -1, bool copyToEnc = true );
 
 // Class definition
 // ====================================================================================================================
@@ -82,6 +82,7 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 class DecLib
 {
 private:
+  MsgLog&                 msg;
   int                     m_iMaxRefPicNum;
 
   vvencNalUnitType        m_associatedIRAPType; ///< NAL unit type of the associated IRAP picture
@@ -157,7 +158,7 @@ private:
 public:
   int                     m_targetSubPicIdx;
 public:
-  DecLib();
+  DecLib( MsgLog& logger);
   virtual ~DecLib();
 
   void  create  ();
@@ -205,8 +206,8 @@ public:
 protected:
   void      xUpdateRasInit(Slice* slice);
 
-  Picture * xGetNewPicBuffer(const SPS &sps, const PPS &pps, const uint32_t temporalLayer, const int layerId);
-  void      xCreateLostPicture (int iLostPOC, const int layerId);
+  Picture * xGetNewPicBuffer(const SPS &sps, const PPS &pps, const uint32_t temporalLayer);
+  void      xCreateLostPicture (int iLostPOC);
   void      xActivateParameterSets( const int layerId );
   void      xCheckParameterSetConstraints( const int layerId );
   void      xDecodePicHeader( InputNALUnit& nalu );

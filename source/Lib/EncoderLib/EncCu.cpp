@@ -243,9 +243,7 @@ void EncCu::init( const VVEncCfg& encCfg, const SPS& sps, std::vector<int>* cons
   if( encCfg.m_EDO )
     m_dbBuffer.create( chromaFormat, Area( 0, 0, uiMaxSize, uiMaxSize ), 0, 8 );
 
-#if QTBTT_SPEED3
   m_MergeSimpleFlag = 0;
-#endif
   m_tileIdx = 0;
 }
 
@@ -375,13 +373,18 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
 
 void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsigned ctuRsAddr, const int prevQP[] )
 {
-  m_modeCtrl.initCTUEncoding( *cs.slice );
+  m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
+
+  m_modeCtrl.initCTUEncoding( *cs.slice, m_tileIdx );
 
   // init the partitioning manager
   Partitioner *partitioner = &m_partitioner;
   partitioner->initCtu( area, CH_L, *cs.slice );
-
-  m_tileIdx = cs.pps->getTileIdx( area.lumaPos() );
+  
+  const Position& lumaPos = area.lumaPos();
+  const bool leftSameTile  = lumaPos.x == 0 || m_tileIdx == cs.pps->getTileIdx( lumaPos.offset(-1, 0) );
+  const bool aboveSameTile = lumaPos.y == 0 || m_tileIdx == cs.pps->getTileIdx( lumaPos.offset( 0,-1) );
+  m_EDO = (!m_pcEncCfg->m_tileParallelCtuEnc || (leftSameTile && aboveSameTile)) ? m_pcEncCfg->m_EDO : 0;
   
   if( m_pcEncCfg->m_IBCMode )
   {
@@ -497,6 +500,66 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 }
 
+void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner)
+{
+  CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
+  CodingStructure &cs   = *cu.cs;
+  const uint32_t uiLPelX  = tempCS->area.Cb().lumaPos().x;
+  const uint32_t uiTPelY  = tempCS->area.Cb().lumaPos().y;
+  int lumaw=0,lumah=0;
+  bool splitver=true;
+  bool splithor=true;
+  bool qtSplitChroma=true;
+  if (partitioner.isSepTree (*tempCS) && isChroma (partitioner.chType))
+  {
+    Position lumaRefPos (uiLPelX ,uiTPelY);
+    CodingUnit* colLumaCu = bestCS->refCS->getCU (lumaRefPos, CH_L, TREE_D);
+    if (colLumaCu)
+    {
+      lumah=colLumaCu->Y().height;
+      lumaw=colLumaCu->Y().width;
+    }
+  }
+  CPelBuf orgCb  = cs.getOrgBuf (COMP_Cb);
+  CPelBuf orgCr  = cs.getOrgBuf (COMP_Cr);
+  int th1=FCBP_TH1;
+  if ( (lumaw>>1) == orgCb.width )
+  {
+    if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
+    {
+      splitver=false;
+      qtSplitChroma=false;
+    }
+  }
+  if ((lumah>>1) == orgCb.height )
+  {
+    if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
+    {
+      splithor=false;
+      qtSplitChroma=false;
+    }
+  }
+  partitioner.horChromaSplit=splithor;
+  partitioner.verChromaSplit=splitver;
+  partitioner.qtChromaSplit=qtSplitChroma;
+
+  if ( orgCb.width==orgCb.height)
+  {
+    int varh_cb,varv_cb;
+    int varh_cr,varv_cr;
+    orgCb.calcVarianceSplit(orgCb,orgCb.width,varh_cb,varv_cb);
+    orgCr.calcVarianceSplit(orgCr,orgCr.width,varh_cr,varv_cr);
+    if ((varh_cr*FCBP_TH2<varv_cr*100) && (varh_cb*FCBP_TH2<varv_cb*100))
+    {
+      partitioner.verChromaSplit=false;
+    }
+    else if ((varv_cr*FCBP_TH2<varh_cr*100) && (varv_cb*FCBP_TH2<varh_cb*100))
+    {
+      partitioner.horChromaSplit=false;
+    }
+  }
+}
+
 void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner )
 {
   const Area& lumaArea = tempCS->area.Y();
@@ -578,15 +641,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
     }
   }
 
-#if QTBTT_SPEED3
   if (partitioner.currQtDepth == 0)
   {
     m_MergeSimpleFlag = 0;
   }
   m_modeCtrl.initCULevel(partitioner, *tempCS, m_MergeSimpleFlag);
-#else
-  m_modeCtrl.initCULevel( partitioner, *tempCS );
-#endif
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
   m_CurrCtx->start = m_CABACEstimator->getCtx();
@@ -703,10 +762,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
             }
           }
         }
-        if( m_pcEncCfg->m_EDO && bestCS->cost != MAX_DOUBLE )
-        {
-          xCalDebCost(*bestCS, partitioner);
-        }
 
         if (checkIbc && !partitioner.isConsInter())
         {
@@ -721,6 +776,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           {
             xCheckRDCostIBCMode(tempCS, bestCS, partitioner, encTestModeIBC);
           }
+        }
+        if( m_EDO && bestCS->cost != MAX_DOUBLE )
+        {
+          xCalDebCost(*bestCS, partitioner);
         }
 
         // add intra modes
@@ -738,7 +797,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         m_cInterSearch.loadGlobalUniMvs( lumaArea, *pps.pcv );
       }
 
-#if QTBTT_SPEED3
       if (!cs.slice->isIntra() && (partitioner.chType == CH_L) && ( m_pcEncCfg->m_qtbttSpeedUpMode & 2) && (partitioner.currQtDepth < 3) && bestCS->cus.size())
       {
         int flagDbefore = (bestCS->cus[0]->mergeFlag && !bestCS->cus[0]->mmvdMergeFlag && !bestCS->cus[0]->ispMode && !bestCS->cus[0]->geo) ? 1 : 0;
@@ -752,9 +810,12 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           m_MergeSimpleFlag = (flagDbefore << partitioner.currQtDepth) | (m_MergeSimpleFlag & markFlag);
         }
       }
-#endif
     } //boundary
 
+    if ((m_pcEncCfg->m_IntraPeriod==1)  && (partitioner.chType==CH_C))
+    {
+      xCheckFastCuChromaSplitting(tempCS,bestCS,partitioner);
+    }
     //////////////////////////////////////////////////////////////////////////
     // split modes
     EncTestMode lastTestMode;
@@ -1265,7 +1326,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   }
 
   // RD check for sub partitioned coding structure.
-  xCheckBestMode( tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO );
+  xCheckBestMode( tempCS, bestCS, partitioner, encTestMode, m_EDO );
 
   if( isAffMVInfoSaved)
   {
@@ -1413,13 +1474,13 @@ void EncCu::xCheckRDCostIntra( CodingStructure *&tempCS, CodingStructure *&bestC
 
   xCheckDQP(*tempCS, partitioner);
 
-  if (m_pcEncCfg->m_EDO)
+  if( m_EDO )
   {
     xCalDebCost(*tempCS, partitioner);
   }
 
   DTRACE_MODE_COST(*tempCS, m_cRdCost.getLambda(true));
-  xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_pcEncCfg->m_EDO);
+  xCheckBestMode(tempCS, bestCS, partitioner, encTestMode, m_EDO);
 
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L, g_cuCounters1D[CU_MODES_TESTED][0][!tempCS->slice->isIntra() + tempCS->slice->depth] );
   STAT_COUNT_CU_MODES( partitioner.chType == CH_L && !tempCS->slice->isIntra(), g_cuCounters2D[CU_MODES_TESTED][Log2( tempCS->area.lheight() )][Log2( tempCS->area.lwidth() )] );
@@ -2790,10 +2851,6 @@ void EncCu::xCheckRDCostIBCModeMerge2Nx2N(CodingStructure*& tempCS, CodingStruct
       }
     }
   }
-  if (m_pcEncCfg->m_EDO && bestCS->cost != MAX_DOUBLE)
-  {
-    xCalDebCost(*bestCS, partitioner);
-  }
 }
 
 void EncCu::xCheckRDCostIBCMode(CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner& partitioner,
@@ -2849,10 +2906,6 @@ void EncCu::xCheckRDCostIBCMode(CodingStructure*& tempCS, CodingStructure*& best
 
     xEncodeDontSplit(*tempCS, partitioner);
     xCheckDQP(*tempCS, partitioner);
-    if (m_pcEncCfg->m_EDO )
-    {
-      xCalDebCost(*tempCS, partitioner);
-    }
     xCheckBestMode(tempCS, bestCS, partitioner, encTestMode);
   } // bValid
   else
@@ -3284,7 +3337,7 @@ void EncCu::xCalDebCost( CodingStructure &cs, Partitioner &partitioner )
 
   LoopFilter::calcFilterStrengths( *cu, true );
 
-  if( m_pcEncCfg->m_EDO == 2 && CS::isDualITree( cs ) && isLuma( partitioner.chType ) )
+  if( m_EDO == 2 && CS::isDualITree( cs ) && isLuma( partitioner.chType ) )
   {
     m_cLoopFilter.getMaxFilterLength( *cu, verOffset, horOffset );
 
@@ -3460,7 +3513,7 @@ Distortion EncCu::xGetDistortionDb(CodingStructure &cs, CPelBuf& org, CPelBuf& r
       }
       dist = m_cRdCost.getDistPart( org, tmpReco, cs.sps->bitDepths[CH_L], compID, DF_SSE_WTD, &org );
     }
-    else if( m_pcEncCfg->m_EDO == 2)
+    else if( m_EDO == 2)
     {
       // use the correct luma area to scale chroma
       const int csx = getComponentScaleX( compID, cs.area.chromaFormat );
@@ -3881,7 +3934,7 @@ void EncCu::xReuseCachedResult( CodingStructure *&tempCS, CodingStructure *&best
 
   xEncodeDontSplit( *tempCS,         partitioner );
   xCheckDQP       ( *tempCS,         partitioner );
-  xCheckBestMode  (  tempCS, bestCS, partitioner, cachedMode, m_pcEncCfg->m_EDO );
+  xCheckBestMode  (  tempCS, bestCS, partitioner, cachedMode, m_EDO );
 }
 
 bool EncCu::xCheckSATDCostAffineMerge(CodingStructure*& tempCS, CodingUnit& cu, AffineMergeCtx affineMergeCtx, MergeCtx& mrgCtx, SortedPelUnitBufs<SORTED_BUFS>& sortedPelBuffer
