@@ -2,37 +2,41 @@
 tag 1.3.0
 
 * libvvenc:
+  - introducing params setting using a string api (vvencCfg.h): 
+    int vvenc_set_param     (vvenc_config *cfg, const char *name, const char *value);
+    int vvenc_set_param_list(vvenc_config *c, int argc, char* argv[]);
+  - logger interface changed to support multiple encoder instances. use: vvenc_set_msg_callback(vvenc_config *, void* , vvencLoggingCallback)
+  - deprecated: vvenc_set_logging_callback(void * ctx, vvencLoggingCallback)  (please use: vvenc_set_msg_callback)
+  - added CRA with constrained RASL encoding refresh type (cra_cre)
   - presets redefined for codec improvements
   - add look ahead analysis for single pass rate control
-  - introducing setting params by using string api (vvencCfg.h): 
-    int vvenc_set_param     (vvenc_config *cfg, const char *name, const char *value);
-    int vvenc_set_param_list(vvenc_config *c, int argc, char* argv[] );
-  - logger interface changed to support multiple encoder instances. use: vvenc_set_msg_callback(vvenc_config *, void* , vvencLoggingCallback)
-  - deprecated: vvenc_set_logging_callback(void * ctx, vvencLoggingCallback)  ( please use: vvenc_set_msg_callback)
-  - HRD timing information are always written into bitstream per default (signalize fps)
-  - perceptual qpa improvements for lower bitrates
+  - HRD timing information are always written into bitstream per default (signal fps)
+  - perceptual QPA improvements for lower bitrates
+  - added tile support including tile parallelism
   - mingw support added
-  - various cleanups, bugfixes and reducing global memory
+  - various cleanups, bugfixes and reducing memory usage
 
 * vvencapp:
   - added command line parameters:
     - tiles: set number of tile columns and tile rows
     - framescale: defines the denominator of the framerate to enable fractional rate sepcification (before framerate 59 automatically used 60000/1001)
-    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1 or 60000/1001 )
-    - additional: set parameter using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
+    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1 or 60000/1001)
+    - additional: set parameters using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
+    - rt/refreshtype now supports cra_cre (previously set using --RPR=2 in full-featured app)
 
 * vvencFFapp:
   - added command line parameters:
     - Tiles: set number of tile columns and tile rows
     - FrameScale: defines the denominator of the framerate to enable fractional rate sepcification (before framerate 59 automatically used 60000/1001)
-    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1, 60000/1001 )
+    - fps: framerate/framescale in a single parameter as integer or fraction (e.g. 60, 60/1, 60000/1001)
     - additional: set parameter using the string api by using a space separated list of key=value parameters (e.g. "bitrate=1000000 passes=2")
     - LookAhead: enable pre-analysis in single pass rate control
+    - DecodingRefreshType/dr now supports value '5' (cra_cre), previously set using --RPR=2)
   - removed command line parameters:
     - InputQueueSize
-  - removed unused/legacy command line parameters (legacy vtm parameter):
+  - removed unused/legacy command line parameters (legacy VTM parameter):
     - EnablePictureHeaderInSliceHeader
-    - CropOffsetLeft CropOffsetTop CropOffsetRight CropOffsetBottom
+    - CropOffsetLeft, CropOffsetTop, CropOffsetRight, CropOffsetBottom
     - CalculateHdrMetrics
     - SignalledIdFlag
     - SignalledSliceIdLengthMinus1
