@@ -43,7 +43,7 @@ The standard encoder (**vvencapp**) can be used in one of five predefined preset
 | --input,-i \<str\>       | -                                | Raw yuv input file or '-' for reading from stdin                                                                                   |
 | --size,-s \<wxh\>        | 1920x1080                        | Input file resolution (width x height)                                                               |
 | --framerate,-r \<int\>   | 60                               | Temporal rate of input file. Required for VBR encoding and calculation of output bit-rate. <br> Also recommended with perceptual QP adaptation (see `--qpa` option below). |
-| --framescale \<int\>     | 1                                | The denominator of the framerate to enable fractional rate sepcification. |
+| --framescale \<int\>     | 1                                | The denominator of the framerate to enable fractional rate specification. |
 | --fps <r\/s>             | 60/1                             | framerate specification, setting `--framerate` and `--framescale` using a single parameter as integer or fraction (denominator defaults to `1` if not present). |
 | --format,-c \<str\>      | yuv420                           | Set input format to YUV 4:2:0 8bit (yuv420) or YUV 4:2:0 10bit (yuv420_10)                           |
 | --output,-o \<str\>      | not set                          | Bit-stream output file                                                                               |
