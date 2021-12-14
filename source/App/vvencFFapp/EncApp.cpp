@@ -103,7 +103,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
 
     if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config ) )
     {
-      return false;
+      return (m_cEncAppCfg.m_showVersion) ? true : false;
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )

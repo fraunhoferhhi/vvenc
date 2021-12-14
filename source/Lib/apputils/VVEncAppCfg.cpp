@@ -1039,12 +1039,12 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
   if ( do_help || argc == 0 )
   {
     cout <<  easyOpts.str();
-    return 1;
+    return -1;
   }
   else if ( do_full_help )
   {
     cout <<  fullOpts.str();
-    return 1;
+    return -1;
   }
 
   if( !m_easyMode && !writeCfg.empty() )
@@ -1054,7 +1054,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     if( !cfgFile.is_open() )
     {
       std::cerr << " [error]: failed to open output config file " << writeCfg << std::endl;
-      return false;
+      return -1;
     }
     else
     {
@@ -1083,7 +1083,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
 
   if ( m_showVersion )
   {
-    return 2;
+    return 1;
   }
 
   for( auto& a : argv_unhandled )
