@@ -544,6 +544,9 @@ typedef struct vvenc_config
   bool                m_entropyCodingSyncEnabled;
   bool                m_entryPointsPresent;
 
+  int                 m_treatAsSubPic;
+  int                 m_apsIdOffset;
+  
   unsigned            m_CTUSize;
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
   unsigned            m_maxMTTDepth;
