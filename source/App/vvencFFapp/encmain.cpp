@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
 
   // print information
   msgApp( VVENC_INFO, "\n");
-  msgApp( VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc_get_version() );
+  msgApp( VVENC_INFO, "vvencFFapp: Fraunhofer VVC Encoder ver. %s ", vvenc_get_version() );
   msgApp( VVENC_INFO, "%s", vvenc_get_compile_info_string() );
   msgApp( VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
   if ( vvenc_is_tracing_enabled() )
@@ -108,11 +108,6 @@ int main(int argc, char* argv[])
   if ( ! pcEncApp->parseCfg( argc, argv ) )
   {
     return 1;
-  }
-
-  if( pcEncApp->isShowVersion() )
-  {
-    return 0;
   }
 
   // starting time
