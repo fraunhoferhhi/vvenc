@@ -724,7 +724,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("WaveFrontSynchro",                                c->m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
     ("EntryPointsPresent",                              c->m_entryPointsPresent,                             "Enable entry points in slice header")
     
-    ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "APS index offset for LMCS and ALS APS for subPic merging")
+    ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS and alfTempPred and set ALF APS id")
     ;
 
     opts.setSubSection("Quad-Tree size and depth");
