@@ -292,16 +292,16 @@ int main( int argc, char* argv[] )
   const int end         = vvenccfg.m_RCPass > 0 ? vvenccfg.m_RCPass     : vvenccfg.m_RCNumPasses;
   for( int pass = start; pass < end; pass++ )
   {
-    // initialize the encoder pass
-    // iRet = vvenc_init_pass( enc, pass, vvencappCfg.m_RCStatsFileName.c_str() );
-    // if( 0 != iRet )
-    // {
-    //   printVVEncErrorMsg( cAppname, "init pass failed", iRet, vvenc_get_last_error( enc ) );
-    //   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-    //   vvenc_accessUnit_free_payload( &AU );
-    //   vvenc_encoder_close( enc );
-    //   return iRet;
-    // }
+     initialize the encoder pass
+     iRet = vvenc_init_pass( enc, pass, vvencappCfg.m_RCStatsFileName.c_str() );
+     if( 0 != iRet )
+     {
+       printVVEncErrorMsg( cAppname, "init pass failed", iRet, vvenc_get_last_error( enc ) );
+       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+       vvenc_accessUnit_free_payload( &AU );
+       vvenc_encoder_close( enc );
+       return iRet;
+     }
 
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
