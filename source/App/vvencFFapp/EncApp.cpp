@@ -57,6 +57,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdio.h>
 #include <fcntl.h>
 #include <iomanip>
+#include <chrono>
 
 #include "vvenc/vvenc.h"
 #include "apputils/ParseArg.h"
@@ -182,8 +183,24 @@ int EncApp::encode()
   apputils::VVEncAppCfg& appCfg   = m_cEncAppCfg;
   vvenc_config&          vvencCfg = m_vvenc_config;
 
+  std::time_t startTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+  std::string curSimd;
+  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
+  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
+
+  std::stringstream cssInfo;
+  cssInfo << "vvencFFapp: Fraunhofer VVC Encoder ver. " << vvenc_get_version() << " " << vvenc_get_compile_info_string();
+  cssInfo << "[SIMD=" << curSimd << "]";
+  if ( vvenc_is_tracing_enabled() )
+  {
+    cssInfo << "[ENABLE_TRACING]";
+  }
+
   if( appCfg.m_decode )
   {
+    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
+    msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime) );
     return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
   }
 
@@ -191,16 +208,24 @@ int EncApp::encode()
   m_encCtx = vvenc_encoder_create();
   if( nullptr == m_encCtx )
   {
+    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
     return -1;
   }
 
   int iRet = vvenc_encoder_open( m_encCtx, &vvencCfg);
   if( 0 != iRet )
   {
+    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
     msgApp( VVENC_ERROR, "open encoder failed: %s\n", vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
     return iRet;
   }
+
+  if( vvencCfg.m_verbosity >= VVENC_INFO )
+  {
+    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
+  }
+  msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime) );
 
   // get the adapted config
   vvenc_get_config( m_encCtx, &vvencCfg);

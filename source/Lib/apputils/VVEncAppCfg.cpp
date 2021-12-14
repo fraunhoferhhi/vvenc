@@ -1030,10 +1030,13 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ;
   }
 
+  std::stringstream cssInfo;
+  cssInfo << "Encoder Version " << vvenc_get_version() << " " << vvenc_get_compile_info_string() << "\n";
   //
   // parse command line parameters and read configuration files
   //
   po::ErrorReporter err;
+  err.m_generalInfo = cssInfo.str();
   const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
 
   if ( do_help || argc == 0 )
@@ -1092,7 +1095,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ret = -1;
   }
 
-  if( err.is_errored )
+  if( err.m_is_errored )
   {
     if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
     else            return -1;

@@ -90,17 +90,6 @@ int main(int argc, char* argv[])
   const char* pSimd = vvenc_set_SIMD_extension( simdOpt.c_str() );
   pSimd == nullptr ? simdOpt = "NA" : simdOpt = pSimd;
 
-  // print information
-  msgApp( VVENC_INFO, "\n");
-  msgApp( VVENC_INFO, "vvencFFapp: Fraunhofer VVC Encoder ver. %s ", vvenc_get_version() );
-  msgApp( VVENC_INFO, "%s", vvenc_get_compile_info_string() );
-  msgApp( VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
-  if ( vvenc_is_tracing_enabled() )
-  {
-    msgApp( VVENC_INFO, "[ENABLE_TRACING]" );
-  }
-  msgApp( VVENC_INFO, "\n" );
-
   EncApp* pcEncApp = new EncApp;
   //g_vvencEncApp = (vvencEncApp*)pcEncApp;
 
@@ -112,8 +101,6 @@ int main(int argc, char* argv[])
 
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
-  std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime2) );
   clock_t startClock = clock();
 
   // call encoding function

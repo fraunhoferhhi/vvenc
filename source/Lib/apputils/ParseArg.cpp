@@ -71,14 +71,27 @@ namespace df
 
     std::ostream& ErrorReporter::error(const std::string& where)
     {
-      is_errored = 1;
-      std::cerr << where << " error: ";
+      std::string info;
+      if( m_first_print )
+      {
+        if( !m_generalInfo.empty()) info = m_generalInfo;
+        m_first_print  = false;
+      }
+
+      m_is_errored = 1;
+      std::cerr << info <<  where << " error: ";
       return std::cerr;
     }
 
     std::ostream& ErrorReporter::warn(const std::string& where)
     {
-      std::cerr << where << " warning: ";
+      std::string info;
+      if( m_first_print )
+      {
+        if( !m_generalInfo.empty()) info = m_generalInfo;
+        m_first_print  = false;
+      }
+      std::cerr << info << where << " warning: ";
       return std::cerr;
     }
 
