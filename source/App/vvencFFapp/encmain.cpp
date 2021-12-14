@@ -72,12 +72,20 @@ int main(int argc, char* argv[])
   vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
 
   std::string simdOpt;
+  bool bShowVersion = false;
   apputils::df::program_options_lite::Options opts;
   opts.addOptions()
     ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
-    ( "SIMD",        simdOpt,         "" );
+    ( "SIMD",        simdOpt,         "" )
+    ( "version",     bShowVersion,    "show version ");
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
+
+  if( bShowVersion )
+  {
+    msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version() );
+    return 0;
+  }
 
   const char* pSimd = vvenc_set_SIMD_extension( simdOpt.c_str() );
   pSimd == nullptr ? simdOpt = "NA" : simdOpt = pSimd;
