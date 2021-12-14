@@ -120,7 +120,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
     }
     if( 0 != rcVVEncAppCfg.parse( argc, argv, &vvenccfg ) )
     {
-      return false;
+      return (rcVVEncAppCfg.m_showVersion) ? true : false;
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
@@ -293,15 +293,15 @@ int main( int argc, char* argv[] )
   for( int pass = start; pass < end; pass++ )
   {
     // initialize the encoder pass
-    iRet = vvenc_init_pass( enc, pass, vvencappCfg.m_RCStatsFileName.c_str() );
-    if( 0 != iRet )
-    {
-      printVVEncErrorMsg( cAppname, "init pass failed", iRet, vvenc_get_last_error( enc ) );
-      vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
-      vvenc_accessUnit_free_payload( &AU );
-      vvenc_encoder_close( enc );
-      return iRet;
-    }
+    // iRet = vvenc_init_pass( enc, pass, vvencappCfg.m_RCStatsFileName.c_str() );
+    // if( 0 != iRet )
+    // {
+    //   printVVEncErrorMsg( cAppname, "init pass failed", iRet, vvenc_get_last_error( enc ) );
+    //   vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+    //   vvenc_accessUnit_free_payload( &AU );
+    //   vvenc_encoder_close( enc );
+    //   return iRet;
+    // }
 
     // open the input file
     apputils::YuvFileIO cYuvFileInput;
