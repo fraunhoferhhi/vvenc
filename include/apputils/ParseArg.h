@@ -86,7 +86,8 @@ namespace df
       virtual std::string error(const std::string& where);
       virtual std::string warn(const std::string& where);
       bool is_errored = false;
-      MsgLog* msg = nullptr;
+      bool is_warning = false;
+      std::stringstream outstr;
     };
 
     extern ErrorReporter default_error_reporter;

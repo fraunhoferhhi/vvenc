@@ -111,6 +111,8 @@ void printVVEncErrorMsg( const std::string cMessage, int code, const std::string
 
 bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vvenc_config &vvenccfg )
 {
+  std::string cParseStr;
+
   try
   {
     if( argc )
@@ -121,10 +123,24 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
     }
 
     msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
-
-    if( 0 != rcVVEncAppCfg.parse( argc, argv, &vvenccfg ) )
+    
+    int ret =  rcVVEncAppCfg.parse( argc, argv, &vvenccfg, cParseStr );
+    if( 0 != ret )
     {
-      return (rcVVEncAppCfg.m_showVersion) ? true : false;
+      if( !cParseStr.empty() )
+      {
+        if( ret < 0 )
+          msgApp( nullptr, VVENC_ERROR, "%s\n", cParseStr.c_str() );
+        else
+          msgApp( nullptr, VVENC_WARNING, "%s\n", cParseStr.c_str() );
+      }
+
+      return (rcVVEncAppCfg.m_showVersion || ret > 0) ? true : false;
+    }
+
+    if( !cParseStr.empty() )
+    {
+      msgApp( nullptr, VVENC_INFO, "%s\n", cParseStr.c_str() );      
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
@@ -182,8 +198,10 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
     ret = false;
   }
 
-  if( rcVVEncAppCfg.checkCfg( &vvenccfg ))
+  cParseStr.clear();
+  if( rcVVEncAppCfg.checkCfg( &vvenccfg, cParseStr ))
   {
+    msgApp( nullptr, VVENC_ERROR, "%s\n", cParseStr.c_str() );      
     ret = false;
   }
 
@@ -242,15 +260,6 @@ int main( int argc, char* argv[] )
   // assign verbosity used for encoder output
   g_verbosity = vvenccfg.m_verbosity;
 
-  // show version
-  if( vvencappCfg.m_showVersion
-      || ( vvenccfg.m_verbosity > VVENC_SILENT && vvenccfg.m_verbosity < VVENC_NOTICE ) )
-  {
-    std::cout << "vvencapp version " << vvenc_get_version()<< std::endl;
-    if( vvencappCfg.m_showVersion )
-      return 0;
-  }
-
   // initialize the encoder
   vvencEncoder *enc = vvenc_encoder_create();
   if( nullptr == enc )
@@ -268,20 +277,17 @@ int main( int argc, char* argv[] )
 
   // get the adapted config
   vvenc_get_config( enc, &vvenccfg );
-  // if( vvenccfg.m_verbosity >= VVENC_INFO )
-  // {
-  //   std::cout << cAppname << "vvencapp : " << vvenc_get_enc_information( enc ) << std::endl;
-  // }
+
   if( vvenccfg.m_verbosity >= VVENC_INFO )
   {
     std::stringstream css;
     css << vvencappCfg.getAppConfigAsString( vvenccfg.m_verbosity );
     css << vvenc_get_config_as_string( &vvenccfg, vvenccfg.m_verbosity);
-    std::cout << css.str() << std::endl;
+    msgApp( nullptr, VVENC_INFO,"%s\n", css.str().c_str() );
   }
-  if( vvenccfg.m_verbosity >= VVENC_INFO && ! strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
+  if( !strcmp( vvencappCfg.m_inputFileName.c_str(), "-" )  )
   {
-    std::cout << "vvencapp trying to read from stdin" << std::endl;
+    msgApp( nullptr, VVENC_INFO,"vvencapp trying to read from stdin\n" );
   }
 
   // open output file
@@ -312,7 +318,7 @@ int main( int argc, char* argv[] )
   if( vvenccfg.m_verbosity > VVENC_WARNING )
   {
     std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::cout  << "started @ " << std::ctime(&startTime2)  << std::endl;
+    msgApp( nullptr, VVENC_INFO, "started @ %s\n", std::ctime(&startTime2) );
   }
 
   unsigned int uiFrames = 0;

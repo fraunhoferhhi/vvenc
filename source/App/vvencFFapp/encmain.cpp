@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
 
   if( std::isdigit(verbosity[0]))
   {
-    g_verbosity = (vvencMsgLevel)std::atoi ( verbosity.c_str() );
+    g_verbosity = (vvencMsgLevel)std::atoi( verbosity.c_str() );
   }
   else
   {
