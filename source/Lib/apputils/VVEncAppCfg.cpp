@@ -530,7 +530,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("refreshtype,-rt",                                 toDecRefreshType,                                    "intra refresh type (idr,cra,idr2,cra_cre - CRA with constrained encoding for RASL pictures)")
     ("refreshsec,-rs",                                  c->m_IntraPeriodSec,                                 "Intra period/refresh in seconds")
     ("intraperiod,-ip",                                 c->m_IntraPeriod,                                    "Intra period in frames (0: use intra period in seconds (refreshsec), else: n*gopsize)")
-    ("tiles",                                           toNumTiles,                                          "Set number of tile columns and rows explicitly")
+    ("tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
   }
   else
@@ -539,7 +539,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     opts.addOptions()
     ("Threads,t",                                       c->m_numThreads,                                     "Number of threads")
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
-    ("Tiles",                                           toNumTiles,                                         "Set number of tile columns and rows explicitly")
+    ("Tiles",                                           toNumTiles,                                          "Set number of tile columns and rows")
     ;
 
     opts.setSubSection("Slice decision options");
@@ -555,7 +555,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("NumPasses",                                       c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Passes",                                          c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
-    ("LookAhead",                                       c->m_RCLookAhead,                                    "Rate control with look-ahead pass" )
+    ("LookAhead",                                       c->m_RCLookAhead,                                    "enable pre-analysis in single pass rate control" )
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
@@ -1039,12 +1039,12 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
   if ( do_help || argc == 0 )
   {
     cout <<  easyOpts.str();
-    return 1;
+    return -1;
   }
   else if ( do_full_help )
   {
     cout <<  fullOpts.str();
-    return 1;
+    return -1;
   }
 
   if( !m_easyMode && !writeCfg.empty() )
@@ -1054,7 +1054,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     if( !cfgFile.is_open() )
     {
       std::cerr << " [error]: failed to open output config file " << writeCfg << std::endl;
-      return false;
+      return -1;
     }
     else
     {
@@ -1083,7 +1083,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
 
   if ( m_showVersion )
   {
-    return 2;
+    return 1;
   }
 
   for( auto& a : argv_unhandled )

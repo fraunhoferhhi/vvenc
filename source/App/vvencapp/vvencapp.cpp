@@ -120,7 +120,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
     }
     if( 0 != rcVVEncAppCfg.parse( argc, argv, &vvenccfg ) )
     {
-      return false;
+      return (rcVVEncAppCfg.m_showVersion) ? true : false;
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
