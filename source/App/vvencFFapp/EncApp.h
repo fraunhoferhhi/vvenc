@@ -63,6 +63,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 // ====================================================================================================================
 
+extern vvencMsgLevel g_verbosity;
 void msgFnc( void*, int level, const char* fmt, va_list args );
 void msgApp( int level, const char* fmt, ... );
 

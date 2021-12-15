@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <chrono>
 #include <ctime>
+#include <ctype.h>
 
 #include "../vvencFFapp/EncApp.h"
 #include "apputils/ParseArg.h"
@@ -72,12 +73,15 @@ int main(int argc, char* argv[])
   vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
 
   std::string simdOpt;
+  std::string verbosity = std::to_string(VVENC_VERBOSE);
   bool bShowVersion = false;
   apputils::df::program_options_lite::Options opts;
   opts.addOptions()
     ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
     ( "SIMD",        simdOpt,         "" )
-    ( "version",     bShowVersion,    "show version ");
+    ( "version",     bShowVersion,    "show version ")
+    ( "Verbosity,v", verbosity,       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)");
+
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
@@ -85,6 +89,21 @@ int main(int argc, char* argv[])
   {
     msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version() );
     return 0;
+  }
+
+  if( std::isdigit(verbosity[0]))
+  {
+    g_verbosity = (vvencMsgLevel)std::atoi ( verbosity.c_str() );
+  }
+  else
+  {
+    if     ( verbosity == "silent")  g_verbosity = VVENC_SILENT;
+    else if( verbosity == "error")   g_verbosity = VVENC_ERROR;
+    else if( verbosity == "warning") g_verbosity = VVENC_WARNING;
+    else if( verbosity == "info")    g_verbosity = VVENC_INFO;
+    else if( verbosity == "notice")  g_verbosity = VVENC_NOTICE;
+    else if( verbosity == "verbose") g_verbosity = VVENC_VERBOSE;
+    else if( verbosity == "debug")   g_verbosity = VVENC_DETAILS;
   }
 
   vvenc_set_SIMD_extension( simdOpt.c_str() );
