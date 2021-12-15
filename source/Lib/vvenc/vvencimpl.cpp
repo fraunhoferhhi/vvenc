@@ -92,7 +92,7 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 
 VVEncImpl::VVEncImpl()
 {
-
+  m_cEncoderInfo = setAndgetEncoderInfoStr();
 }
 
 VVEncImpl::~VVEncImpl()
@@ -135,11 +135,6 @@ int VVEncImpl::init( vvenc_config* config )
     return VVENC_ERR_PARAMETER;
   }
 
-  // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
-  std::string curSimd;
-  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
-  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
-
   m_cVVEncCfgExt = *config;
   m_cVVEncCfg    = *config;
 
@@ -153,14 +148,6 @@ int VVEncImpl::init( vvenc_config* config )
     msg.setCallback( config->m_msgCtx, config->m_msgFnc );
   }
   
-  std::stringstream cssCap;
-  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
-  m_sEncoderCapabilities = cssCap.str();
-
-  m_cEncoderInfo  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
-  m_cEncoderInfo += " ";
-  m_cEncoderInfo += m_sEncoderCapabilities;
-
   // initialize the encoder
   m_pEncLib = new EncLib ( msg );
 
@@ -689,6 +676,25 @@ const char* VVEncImpl::getCompileInfoString()
   return VVencCompileInfo.c_str();
 }
 
+std::string VVEncImpl::setAndgetEncoderInfoStr()
+{
+  std::string cInfoStr;
+
+    // Set SIMD extension in case if it hasn't been done before, otherwise it simply reuses the current state
+  std::string curSimd;
+  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
+  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
+
+  std::stringstream cssCap;
+  cssCap << getCompileInfoString() << "[SIMD=" << curSimd <<"]";
+
+  cInfoStr  = "Fraunhofer VVC Encoder ver. " VVENC_VERSION;
+  cInfoStr += " ";
+  cInfoStr += cssCap.str();
+
+  return cInfoStr;
+}
+
 ///< decode bitstream with limited build in decoder
 int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule)
 {
@@ -726,6 +732,5 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
 #endif
   return ret;
 }
-
 
 } // namespace

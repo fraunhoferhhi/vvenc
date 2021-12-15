@@ -305,7 +305,10 @@ VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder *enc )
   auto e = (vvenc::VVEncImpl*)enc;
   if (!e)
   {
-    return NULL;
+    std::string info = vvenc::VVEncImpl::setAndgetEncoderInfoStr();
+    char* defaultInfo = (char*)malloc(info.size()+1);
+    strcpy(defaultInfo,info.c_str());
+    return defaultInfo;
   }
 
   return e->getEncoderInfo();
