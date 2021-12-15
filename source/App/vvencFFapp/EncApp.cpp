@@ -134,7 +134,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
       switch (parse_ret)
       {
         case VVENC_PARAM_BAD_NAME:
-            msgApp( VVENC_ERROR, "additional params: unknown option\"%s\" \n", key.c_str() );
+            msgApp( VVENC_ERROR, "additional params: unknown option \"%s\" \n", key.c_str() );
             ret = false;
             break;
         case VVENC_PARAM_BAD_VALUE:
@@ -185,21 +185,9 @@ int EncApp::encode()
 
   std::time_t startTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-  std::string curSimd;
-  const char* pSimd = vvenc_set_SIMD_extension( curSimd.c_str() );
-  pSimd == nullptr ? curSimd = "NA" : curSimd = pSimd;
-
-  std::stringstream cssInfo;
-  cssInfo << "vvencFFapp: Fraunhofer VVC Encoder ver. " << vvenc_get_version() << " " << vvenc_get_compile_info_string();
-  cssInfo << "[SIMD=" << curSimd << "]";
-  if ( vvenc_is_tracing_enabled() )
-  {
-    cssInfo << "[ENABLE_TRACING]";
-  }
-
   if( appCfg.m_decode )
   {
-    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
+    msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
     msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime) );
     return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
   }
@@ -208,23 +196,20 @@ int EncApp::encode()
   m_encCtx = vvenc_encoder_create();
   if( nullptr == m_encCtx )
   {
-    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
+    msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
     return -1;
   }
 
   int iRet = vvenc_encoder_open( m_encCtx, &vvencCfg);
   if( 0 != iRet )
   {
-    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
+    msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
     msgApp( VVENC_ERROR, "open encoder failed: %s\n", vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
     return iRet;
   }
 
-  if( vvencCfg.m_verbosity >= VVENC_INFO )
-  {
-    msgApp( VVENC_INFO, "%s\n", cssInfo.str().c_str() );
-  }
+  msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
   msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime) );
 
   // get the adapted config

@@ -150,7 +150,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
       switch (parse_ret)
       {
         case VVENC_PARAM_BAD_NAME:
-            msgApp( nullptr, VVENC_ERROR, "additional params: unknown option\"%s\" \n", key.c_str() );
+            msgApp( nullptr, VVENC_ERROR, "additional params: unknown option \"%s\" \n", key.c_str() );
             ret = false;
             break;
         case VVENC_PARAM_BAD_VALUE:

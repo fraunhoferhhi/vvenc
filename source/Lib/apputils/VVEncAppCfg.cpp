@@ -1031,7 +1031,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
   }
 
   std::stringstream cssInfo;
-  cssInfo << "Encoder Version " << vvenc_get_version() << " " << vvenc_get_compile_info_string() << "\n";
+  cssInfo << "vvenc Encoder Version " << vvenc_get_version() << " " << vvenc_get_compile_info_string() << "\n";
   //
   // parse command line parameters and read configuration files
   //
