@@ -73,12 +73,6 @@ public:
 
   ~MsgLog() {};
 
-  void setCallback( void *msgCtx, vvencLoggingCallback msgFnc )
-  {
-    m_msgCtx = msgCtx;
-    m_msgFnc = msgFnc;
-  }
-
   void log( int level, const char* fmt, ... )
   {
     if ( this->m_msgFnc )
