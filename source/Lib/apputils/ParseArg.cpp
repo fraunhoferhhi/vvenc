@@ -561,8 +561,7 @@ namespace df
       if (!found)
       {
         error_reporter.outstr << error_reporter.error(where())
-           << "Unknown option `" << name << "' (value:`" << value << "')\n";
-
+          << "Unknown option `" << name << "' (value:`" << value << "')\n";
         return false;
       }
 

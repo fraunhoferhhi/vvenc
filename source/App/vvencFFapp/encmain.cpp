@@ -53,7 +53,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <chrono>
 #include <ctime>
-#include <ctype.h>
 
 #include "../vvencFFapp/EncApp.h"
 #include "apputils/ParseArg.h"

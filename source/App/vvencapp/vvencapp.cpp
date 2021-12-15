@@ -111,7 +111,7 @@ void printVVEncErrorMsg( const std::string cMessage, int code, const std::string
 
 bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vvenc_config &vvenccfg )
 {
-  std::string cParseStr;
+  std::string cParserStr;
 
   try
   {
@@ -124,23 +124,23 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
 
     msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
     
-    int ret =  rcVVEncAppCfg.parse( argc, argv, &vvenccfg, cParseStr );
+    int ret =  rcVVEncAppCfg.parse( argc, argv, &vvenccfg, cParserStr );
     if( 0 != ret )
     {
-      if( !cParseStr.empty() )
+      if( !cParserStr.empty() )
       {
         if( ret < 0 )
-          msgApp( nullptr, VVENC_ERROR, "%s\n", cParseStr.c_str() );
+          msgApp( nullptr, VVENC_ERROR, "%s\n", cParserStr.c_str() );
         else
-          msgApp( nullptr, VVENC_WARNING, "%s\n", cParseStr.c_str() );
+          msgApp( nullptr, VVENC_WARNING, "%s\n", cParserStr.c_str() );
       }
 
       return (rcVVEncAppCfg.m_showVersion || ret > 0) ? true : false;
     }
 
-    if( !cParseStr.empty() )
+    if( !cParserStr.empty() )
     {
-      msgApp( nullptr, VVENC_INFO, "%s\n", cParseStr.c_str() );      
+      msgApp( nullptr, VVENC_INFO, "%s\n", cParserStr.c_str() );      
     }
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
@@ -198,10 +198,10 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
     ret = false;
   }
 
-  cParseStr.clear();
-  if( rcVVEncAppCfg.checkCfg( &vvenccfg, cParseStr ))
+  cParserStr.clear();
+  if( rcVVEncAppCfg.checkCfg( &vvenccfg, cParserStr ))
   {
-    msgApp( nullptr, VVENC_ERROR, "%s\n", cParseStr.c_str() );      
+    msgApp( nullptr, VVENC_ERROR, "%s\n", cParserStr.c_str() );      
     ret = false;
   }
 

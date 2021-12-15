@@ -60,7 +60,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/IStreamIO.h"
 #include "apputils/ParseArg.h"
 #include "apputils/VVEncAppCfg.h"
-
 #include "vvenc/vvenc.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
@@ -1086,7 +1085,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
 
   if ( m_showVersion )
   {
-    rcOutputStr.append( cssInfo.str() );
     return 1;
   }
 

@@ -58,7 +58,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace apputils {
 
-class MsgLog;
 namespace df
 {
   namespace program_options_lite
