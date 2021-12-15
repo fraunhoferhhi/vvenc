@@ -90,7 +90,7 @@ public:
                                                                ///< e.b. "bitrate=1000000 passes=1 QpInValCb=\"17 22 34 42\"" 
 private:
   const bool   m_easyMode                      = false;        ///< internal state flag, if expert or easy mode
-  std::string  m_cInfoStr;
+
   presetChangeCallback  m_changePresetCallback = nullptr;
 public:
 
@@ -112,7 +112,7 @@ public:
   }
 
 public:
-  int parse( int argc, char* argv[], vvenc_config* c, const char* encInfo = NULL );
+  int parse( int argc, char* argv[], vvenc_config* c );
 
   bool checkCfg( vvenc_config* c );
   virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const;

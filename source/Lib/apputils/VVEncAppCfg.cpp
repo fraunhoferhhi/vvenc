@@ -381,11 +381,9 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
 // Public member functions
 // ====================================================================================================================
 
-int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* encInfo )
+int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
 {
   int ret = 0;
-
-  m_cInfoStr = nullptr == encInfo ? "" : encInfo;
 
   //
   // setup configuration parameters
@@ -1039,19 +1037,16 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* enc
   // parse command line parameters and read configuration files
   //
   po::ErrorReporter err;
-  err.m_generalInfo = m_cInfoStr;
   err.msg = &msg;
   const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
 
   if ( do_help || argc == 0 )
   {
-    msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
     msg.log( VVENC_INFO, "%s\n", easyOpts.str().c_str() );
     return -1;
   }
   else if ( do_full_help )
   {
-    msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
     msg.log( VVENC_INFO, "%s\n", fullOpts.str().c_str() );
     return -1;
   }
@@ -1062,7 +1057,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* enc
     cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
     if( !cfgFile.is_open() )
     {
-      msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
       msg.log( VVENC_ERROR, "[error]: failed to open output config file `%s'\n", writeCfg.c_str() );
       return -1;
     }
@@ -1096,18 +1090,13 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* enc
     return 1;
   }
 
-  if( !argv_unhandled.empty() )
+  for( auto& a : argv_unhandled )
   {
-    msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
-
-    for( auto& a : argv_unhandled )
-    {
-      msg.log( VVENC_ERROR, "Unhandled argument ignored: `%s'\n", a );
-      ret = -1;
-    }
+    msg.log( VVENC_ERROR, "Unhandled argument ignored: `%s'\n", a );
+    ret = -1;
   }
 
-  if( err.m_is_errored )
+  if( err.is_errored )
   {
     if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
     else            return -1;
@@ -1141,7 +1130,6 @@ bool VVEncAppCfg::checkCfg( vvenc_config* c )
     if ( !(c->m_RCPass == 1 && !m_RCStatsFileName.empty()) )
     {
       MsgLog msg(c->m_msgCtx,c->m_msgFnc);
-      msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
       msg.log( VVENC_ERROR, "error: bitstream file name must be specified (--output=bit.266)\n");
       ret = true;
     }

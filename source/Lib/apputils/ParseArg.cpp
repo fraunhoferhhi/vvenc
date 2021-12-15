@@ -74,28 +74,15 @@ namespace df
     std::string ErrorReporter::error(const std::string& where)
     {
       std::stringstream cssErr;
-      std::string info;
-      if( m_first_print )
-      {
-        if( !m_generalInfo.empty()) {info = m_generalInfo; info.append("\n");}
-        m_first_print  = false;
-      }
-
-      m_is_errored = 1;
-      cssErr << info <<  where << " error: ";
+      is_errored = 1;
+      cssErr << where << " error: ";
       return cssErr.str();
     }
 
     std::string ErrorReporter::warn(const std::string& where)
     {
       std::stringstream cssErr;
-      std::string info;
-      if( m_first_print )
-      {
-        if( !m_generalInfo.empty()) {info = m_generalInfo; info.append("\n");}
-        m_first_print  = false;
-      }
-      cssErr << info << where << " warning: ";
+      cssErr << where << " warning: ";
       return cssErr.str();
     }
 
@@ -574,9 +561,9 @@ namespace df
 
       if (!found)
       {
+          std::string err = error_reporter.error(where());
         if( error_reporter.msg )
         {
-          std::string err = error_reporter.error(where());
           error_reporter.msg->log(VVENC_ERROR, "%s Unknown option '%s' (value: '%s')\n", err.c_str(), name.c_str(), value.c_str() );
         }
 
@@ -793,16 +780,18 @@ namespace df
       if (start == std::string::npos)
       {
         /* error: badly formatted line */
+        std::string warn = error_reporter.warn( where() );
         if( error_reporter.msg )
-          error_reporter.msg->log(VVENC_WARNING, "%s line formatting error\n", error_reporter.warn(where()).c_str());
+          error_reporter.msg->log(VVENC_WARNING, "%s line formatting error\n", warn.c_str(), option.c_str());
         
         return;
       }
       if (line[start] != ':')
       {
         /* error: badly formatted line */
+        std::string warn = error_reporter.warn( where() );
         if( error_reporter.msg )
-          error_reporter.msg->log(VVENC_WARNING, "%s line formatting error\n", error_reporter.warn(where()).c_str());
+          error_reporter.msg->log(VVENC_WARNING, "%s line formatting error\n", warn.c_str(), option.c_str());
         return;
       }
 
@@ -811,8 +800,9 @@ namespace df
       if (start == std::string::npos)
       {
         /* error: badly formatted line */
+        std::string warn = error_reporter.warn( where() );
         if( error_reporter.msg )
-          error_reporter.msg->log(VVENC_WARNING, "%s line formatting error\n", error_reporter.warn(where()).c_str());
+          error_reporter.msg->log(VVENC_WARNING, "%s line formatting error\n", warn.c_str(), option.c_str());
         return;
       }
 
@@ -843,8 +833,9 @@ namespace df
       else
       {
         /* error: no value */
+        std::string warn = error_reporter.warn( where() );
         if( error_reporter.msg )
-          error_reporter.msg->log(VVENC_WARNING, "%s no value found for option %s\n", error_reporter.warn(where()).c_str(), option.c_str());
+          error_reporter.msg->log(VVENC_WARNING, "%sno value found for option %s\n", warn.c_str(), option.c_str());
         return;
       }
 
@@ -884,8 +875,10 @@ namespace df
       std::ifstream cfgstream(filename.c_str(), std::ifstream::in);
       if (!cfgstream)
       {
+        std::string err = error_reporter.error( filename );
         if( error_reporter.msg )
-          error_reporter.msg->log(VVENC_ERROR, "Failed to open config file\n");
+          error_reporter.msg->log(VVENC_ERROR, "%sFailed to open config file\n", err.c_str());
+
         return;
       }
       CfgStreamParser csp(filename, opts, error_reporter);

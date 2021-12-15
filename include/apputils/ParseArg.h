@@ -85,9 +85,7 @@ namespace df
       virtual ~ErrorReporter() {}
       virtual std::string error(const std::string& where);
       virtual std::string warn(const std::string& where);
-      bool m_is_errored  = false;
-      bool m_first_print = true;  // when error/warning occurse the m_generalInfo string is printed before printing the error/warning
-      std::string m_generalInfo;
+      bool is_errored = false;
       MsgLog* msg = nullptr;
     };
 

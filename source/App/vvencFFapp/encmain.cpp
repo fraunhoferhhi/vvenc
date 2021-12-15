@@ -88,20 +88,21 @@ int main(int argc, char* argv[])
   }
 
   vvenc_set_SIMD_extension( simdOpt.c_str() );
-  std::stringstream cssInfo;
-  cssInfo << "vvencFFapp: " << vvenc_get_enc_information( nullptr );
+  msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr) );
 
   EncApp* pcEncApp = new EncApp;
   //g_vvencEncApp = (vvencEncApp*)pcEncApp;
 
   // parse configuration
-  if ( ! pcEncApp->parseCfg( argc, argv, cssInfo.str().c_str() ) )
+  if ( ! pcEncApp->parseCfg( argc, argv ) )
   {
     return 1;
   }
 
   // starting time
   auto startTime  = std::chrono::steady_clock::now();
+  std::time_t startTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+  msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime2) );
   clock_t startClock = clock();
 
   // call encoding function

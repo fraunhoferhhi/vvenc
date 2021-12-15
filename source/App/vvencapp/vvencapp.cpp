@@ -119,9 +119,9 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
       argv++;
     }
 
-    std::stringstream cssInfo;
-    cssInfo << "vvencapp: " << vvenc_get_enc_information( nullptr );
-    if( 0 != rcVVEncAppCfg.parse( argc, argv, &vvenccfg, cssInfo.str().c_str() ) )
+    msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
+
+    if( 0 != rcVVEncAppCfg.parse( argc, argv, &vvenccfg ) )
     {
       return (rcVVEncAppCfg.m_showVersion) ? true : false;
     }

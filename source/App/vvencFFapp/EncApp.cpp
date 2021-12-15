@@ -89,7 +89,7 @@ void msgApp( int level, const char* fmt, ... )
 
 // ====================================================================================================================
 
-bool EncApp::parseCfg( int argc, char* argv[], const char* encInfo )
+bool EncApp::parseCfg( int argc, char* argv[])
 {
   vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
 
@@ -102,7 +102,7 @@ bool EncApp::parseCfg( int argc, char* argv[], const char* encInfo )
       argv++;
     }
 
-    if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, encInfo ) )
+    if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config ) )
     {
       return (m_cEncAppCfg.m_showVersion) ? true : false;
     }
@@ -183,12 +183,8 @@ int EncApp::encode()
   apputils::VVEncAppCfg& appCfg   = m_cEncAppCfg;
   vvenc_config&          vvencCfg = m_vvenc_config;
 
-  std::time_t startTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
   if( appCfg.m_decode )
   {
-    msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
-    msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime) );
     return vvenc_decode_bitstream( appCfg.m_bitstreamFileName.c_str(), vvencCfg.m_traceFile, vvencCfg.m_traceRule );
   }
 
@@ -196,21 +192,16 @@ int EncApp::encode()
   m_encCtx = vvenc_encoder_create();
   if( nullptr == m_encCtx )
   {
-    msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
     return -1;
   }
 
   int iRet = vvenc_encoder_open( m_encCtx, &vvencCfg);
   if( 0 != iRet )
   {
-    msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
     msgApp( VVENC_ERROR, "open encoder failed: %s\n", vvenc_get_last_error( m_encCtx ) );
     vvenc_encoder_close( m_encCtx );
     return iRet;
   }
-
-  msgApp( VVENC_INFO, "vvencFFapp: %s\n",  vvenc_get_enc_information( m_encCtx ) );
-  msgApp( VVENC_INFO, " started @ %s", std::ctime(&startTime) );
 
   // get the adapted config
   vvenc_get_config( m_encCtx, &vvencCfg);
