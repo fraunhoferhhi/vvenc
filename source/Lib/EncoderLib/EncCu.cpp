@@ -906,7 +906,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   }
   else
   {
-  bestCS->prevQP[partitioner.chType] = bestCS->cus.back()->qp;
+    bestCS->prevQP[partitioner.chType] = bestCS->cus.back()->qp;
   }
   if ((!slice.isIntra() || slice.sps->IBC)
     && partitioner.chType == CH_L
