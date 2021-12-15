@@ -92,7 +92,7 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 
 VVEncImpl::VVEncImpl()
 {
-  m_cEncoderInfo = setAndgetEncoderInfoStr();
+  m_cEncoderInfo = createEncoderInfoStr(); 
 }
 
 VVEncImpl::~VVEncImpl()
@@ -676,7 +676,7 @@ const char* VVEncImpl::getCompileInfoString()
   return VVencCompileInfo.c_str();
 }
 
-std::string VVEncImpl::setAndgetEncoderInfoStr()
+std::string VVEncImpl::createEncoderInfoStr()
 {
   std::string cInfoStr;
 

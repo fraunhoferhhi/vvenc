@@ -128,7 +128,7 @@ public:
   static void        registerMsgCbf( void * ctx, vvencLoggingCallback msgFnc );  ///< deprecated, this method uses the deprecated global logger and will be removed
   static const char* setSIMDExtension( const char* simdId );                     ///< tries to set given simd extensions used. if not supported by cpu, highest possible extension level will be set and returned.
   static const char* getCompileInfoString();
-  static std::string setAndgetEncoderInfoStr();
+  static std::string createEncoderInfoStr();
   static int         decodeBitstream( const char* FileName, const char* trcFile, const char* trcRule);
 
 private:
