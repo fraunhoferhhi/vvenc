@@ -226,7 +226,7 @@ int main( int argc, char* argv[] )
   apputils::df::program_options_lite::Options opts;
   opts.addOptions()
     ( "version",     bShowVersion,    "show version ")
-    ( "Verbosity,v", verbosity,       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)");
+    ( "verbosity,v", verbosity,       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)");
 
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
