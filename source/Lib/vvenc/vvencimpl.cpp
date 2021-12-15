@@ -733,4 +733,5 @@ int VVEncImpl::decodeBitstream( const char* FileName, const char* trcFile, const
   return ret;
 }
 
+
 } // namespace
