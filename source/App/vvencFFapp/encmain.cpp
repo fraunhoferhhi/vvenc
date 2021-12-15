@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
 
   vvenc_set_SIMD_extension( simdOpt.c_str() );
   std::stringstream cssInfo;
-  cssInfo << "vvencFFapp: " << vvenc_get_enc_information( nullptr ) << std::endl;
+  cssInfo << "vvencFFapp: " << vvenc_get_enc_information( nullptr );
 
   EncApp* pcEncApp = new EncApp;
   //g_vvencEncApp = (vvencEncApp*)pcEncApp;

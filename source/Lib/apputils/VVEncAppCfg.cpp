@@ -1034,23 +1034,23 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* enc
     ;
   }
 
+  MsgLog msg(c->m_msgCtx,c->m_msgFnc);
   //
   // parse command line parameters and read configuration files
   //
   po::ErrorReporter err;
   err.m_generalInfo = m_cInfoStr;
+  err.msg = &msg;
   const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
 
   if ( do_help || argc == 0 )
   {
-    MsgLog msg(c->m_msgCtx,c->m_msgFnc);
     msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
     msg.log( VVENC_INFO, "%s\n", easyOpts.str().c_str() );
     return -1;
   }
   else if ( do_full_help )
   {
-    MsgLog msg(c->m_msgCtx,c->m_msgFnc);
     msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
     msg.log( VVENC_INFO, "%s\n", fullOpts.str().c_str() );
     return -1;
@@ -1062,7 +1062,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* enc
     cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
     if( !cfgFile.is_open() )
     {
-      MsgLog msg(c->m_msgCtx,c->m_msgFnc);
       msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
       msg.log( VVENC_ERROR, "[error]: failed to open output config file `%s'\n", writeCfg.c_str() );
       return -1;
@@ -1097,9 +1096,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* enc
     return 1;
   }
 
-  if( c->m_msgFnc && !argv_unhandled.empty() )
+  if( !argv_unhandled.empty() )
   {
-    MsgLog msg(c->m_msgCtx,c->m_msgFnc);
     msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
 
     for( auto& a : argv_unhandled )
