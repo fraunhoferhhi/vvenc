@@ -60,6 +60,8 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/IStreamIO.h"
 #include "apputils/ParseArg.h"
 #include "apputils/VVEncAppCfg.h"
+#include "MsgLog.h"
+
 #include "vvenc/vvenc.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
@@ -379,9 +381,11 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
 // Public member functions
 // ====================================================================================================================
 
-int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
+int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, const char* encInfo )
 {
   int ret = 0;
+
+  m_cInfoStr = nullptr == encInfo ? "" : encInfo;
 
   //
   // setup configuration parameters
@@ -1030,23 +1034,25 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ;
   }
 
-  std::stringstream cssInfo;
-  cssInfo << "vvenc Encoder Version " << vvenc_get_version() << " " << vvenc_get_compile_info_string() << "\n";
   //
   // parse command line parameters and read configuration files
   //
   po::ErrorReporter err;
-  err.m_generalInfo = cssInfo.str();
+  err.m_generalInfo = m_cInfoStr;
   const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
 
   if ( do_help || argc == 0 )
   {
-    cout <<  easyOpts.str();
+    MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+    msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
+    msg.log( VVENC_INFO, "%s\n", easyOpts.str().c_str() );
     return -1;
   }
   else if ( do_full_help )
   {
-    cout <<  fullOpts.str();
+    MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+    msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
+    msg.log( VVENC_INFO, "%s\n", fullOpts.str().c_str() );
     return -1;
   }
 
@@ -1056,7 +1062,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
     if( !cfgFile.is_open() )
     {
-      std::cerr << " [error]: failed to open output config file " << writeCfg << std::endl;
+      MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+      msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
+      msg.log( VVENC_ERROR, "[error]: failed to open output config file `%s'\n", writeCfg.c_str() );
       return -1;
     }
     else
@@ -1089,10 +1097,16 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     return 1;
   }
 
-  for( auto& a : argv_unhandled )
+  if( c->m_msgFnc && !argv_unhandled.empty() )
   {
-    cout << "Unhandled argument ignored: `" << a << "'\n";
-    ret = -1;
+    MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+    msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
+
+    for( auto& a : argv_unhandled )
+    {
+      msg.log( VVENC_ERROR, "Unhandled argument ignored: `%s'\n", a );
+      ret = -1;
+    }
   }
 
   if( err.m_is_errored )
@@ -1128,7 +1142,9 @@ bool VVEncAppCfg::checkCfg( vvenc_config* c )
     // if rc statsfile is defined and in 1st pass, bitstream file is not needed
     if ( !(c->m_RCPass == 1 && !m_RCStatsFileName.empty()) )
     {
-      cout << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
+      MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+      msg.log( VVENC_INFO, "%s\n", m_cInfoStr.c_str() );
+      msg.log( VVENC_ERROR, "error: bitstream file name must be specified (--output=bit.266)\n");
       ret = true;
     }
   }

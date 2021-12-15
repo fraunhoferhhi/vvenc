@@ -89,7 +89,7 @@ void msgApp( int level, const char* fmt, ... )
 
 // ====================================================================================================================
 
-bool EncApp::parseCfg( int argc, char* argv[])
+bool EncApp::parseCfg( int argc, char* argv[], const char* encInfo )
 {
   vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
 
@@ -102,7 +102,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
       argv++;
     }
 
-    if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config ) )
+    if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, encInfo ) )
     {
       return (m_cEncAppCfg.m_showVersion) ? true : false;
     }

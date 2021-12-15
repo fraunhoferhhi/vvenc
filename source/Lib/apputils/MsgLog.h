@@ -43,82 +43,57 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-
-
-/** \file     encmain.cpp
-    \brief    Encoder application main
+/**
+  \file    MsgLog.h
+  \brief   A logger for the logging callback function
 */
 
-#include <time.h>
-#include <iostream>
-#include <chrono>
-#include <ctime>
+#pragma once
 
-#include "../vvencFFapp/EncApp.h"
-#include "apputils/ParseArg.h"
+#include <functional>
+#include <stdarg.h>
+#include <mutex>
 
-#include "vvenc/vvenc.h"
+#include "vvenc/vvencCfg.h"
 
-//! \ingroup EncoderApp
-//! \{
+namespace apputils {
 
-// ====================================================================================================================
-// Main function
-// ====================================================================================================================
+static std::mutex m_msgMutex;
 
-
-int main(int argc, char* argv[])
+class MsgLog
 {
-  vvenc_set_logging_callback( nullptr, msgFnc ); // register global log callback ( deprecated, will be removed)
+public:
 
-  std::string simdOpt;
-  bool bShowVersion = false;
-  apputils::df::program_options_lite::Options opts;
-  opts.addOptions()
-    ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
-    ( "SIMD",        simdOpt,         "" )
-    ( "version",     bShowVersion,    "show version ");
-  apputils::df::program_options_lite::SilentReporter err;
-  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
-
-  if( bShowVersion )
+  MsgLog(){}
+  MsgLog(void *msgCtx, vvencLoggingCallback msgFnc)
   {
-    msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version() );
-    return 0;
+    m_msgCtx = msgCtx;
+    m_msgFnc = msgFnc;
   }
 
-  vvenc_set_SIMD_extension( simdOpt.c_str() );
-  std::stringstream cssInfo;
-  cssInfo << "vvencFFapp: " << vvenc_get_enc_information( nullptr ) << std::endl;
+  ~MsgLog() {};
 
-  EncApp* pcEncApp = new EncApp;
-  //g_vvencEncApp = (vvencEncApp*)pcEncApp;
-
-  // parse configuration
-  if ( ! pcEncApp->parseCfg( argc, argv, cssInfo.str().c_str() ) )
+  void setCallback( void *msgCtx, vvencLoggingCallback msgFnc )
   {
-    return 1;
+    m_msgCtx = msgCtx;
+    m_msgFnc = msgFnc;
   }
 
-  // starting time
-  auto startTime  = std::chrono::steady_clock::now();
-  clock_t startClock = clock();
-
-  // call encoding function
-  int ret = pcEncApp->encode();
-
-  // ending time
-  clock_t endClock = clock();
-  auto endTime = std::chrono::steady_clock::now();
-  std::time_t endTime2 = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-  auto encTime = std::chrono::duration_cast<std::chrono::milliseconds>( endTime - startTime).count();
-
-  delete pcEncApp;
-
-  msgApp( VVENC_INFO, "\n finished @ %s", std::ctime(&endTime2) );
-  msgApp( VVENC_INFO, " Total Time: %12.3f sec. [user] %12.3f sec. [elapsed]\n", (endClock - startClock) * 1.0 / CLOCKS_PER_SEC, encTime / 1000.0);
-
-  return ret;
+  void log( int level, const char* fmt, ... )
+  {
+    if ( this->m_msgFnc )
+    {
+      std::unique_lock<std::mutex> _lock( m_msgMutex );
+      va_list args;
+      va_start( args, fmt );
+      m_msgFnc( m_msgCtx, level, fmt, args );
+      va_end( args );
+    }
 }
 
-//! \}
+private: 
+  std::function<void( void*, int, const char*, va_list )> m_msgFnc{};
+  void *m_msgCtx{};
+};
+
+} // namespace vvenc

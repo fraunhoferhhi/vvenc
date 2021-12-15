@@ -107,7 +107,7 @@ public:
   {
   }
 
-  bool  parseCfg( int argc, char* argv[] );           ///< parse configuration file to fill member variables
+  bool  parseCfg( int argc, char* argv[], const char* encInfo );           ///< parse configuration file to fill member variables
   int   encode();                                     ///< main encoding function
   void  outputAU ( const vvencAccessUnit& au );            ///< write encoded access units to bitstream
   static void outputYuv( void*, vvencYUVBuffer* );      ///< write reconstructed yuv output

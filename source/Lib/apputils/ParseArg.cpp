@@ -79,6 +79,7 @@ namespace df
       }
 
       m_is_errored = 1;
+
       std::cerr << info <<  where << " error: ";
       return std::cerr;
     }
