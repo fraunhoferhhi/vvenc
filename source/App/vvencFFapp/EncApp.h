@@ -63,7 +63,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 // ====================================================================================================================
 
-extern vvencMsgLevel g_verbosity;
 void msgFnc( void*, int level, const char* fmt, va_list args );
 void msgApp( int level, const char* fmt, ... );
 
@@ -111,14 +110,6 @@ public:
   int   encode();                                     ///< main encoding function
   void  outputAU ( const vvencAccessUnit& au );            ///< write encoded access units to bitstream
   static void outputYuv( void*, vvencYUVBuffer* );      ///< write reconstructed yuv output
-
-  void msgFnc( int level, const char* fmt, va_list args )
-  {
-    if ( g_verbosity >= level )
-    {
-      vfprintf( level == 1 ? stderr : stdout, fmt, args );
-    }
-  }
 
   bool isShowVersion()
   {
