@@ -59,6 +59,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <algorithm>
 #include <cstdarg>
+#include <cctype>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
