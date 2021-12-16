@@ -1156,7 +1156,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 costrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
@@ -1284,6 +1284,22 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
+
+  if( c->m_treatAsSubPic )
+  {
+    if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    c->m_alfTempPred       = 0;
+    c->m_JointCbCrMode     = false;
+    c->m_lumaReshapeEnable = 0;
+    c->m_reshapeSignalType = 0;
+    c->m_updateCtrl        = 0;
+    c->m_adpOption         = 0;
+    c->m_initialCW         = 0;
+    c->m_LMCSOffset        = 0;
+    vvenc_ReshapeCW_default( &c->m_reshapeCW );
+  }
 
   /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
    * This permits the ability to omit a GOP structure specification */
@@ -2379,19 +2395,6 @@ static bool checkCfgParameter( vvenc_config *c )
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
-
-  if( c->m_treatAsSubPic )
-  {
-    c->m_alfTempPred       = 0;
-    c->m_JointCbCrMode     = false;
-    c->m_lumaReshapeEnable = 0;
-    c->m_reshapeSignalType = 0;
-    c->m_updateCtrl        = 0;
-    c->m_adpOption         = 0;
-    c->m_initialCW         = 0;
-    c->m_LMCSOffset        = 0;
-    vvenc_ReshapeCW_default( &c->m_reshapeCW );
-  }
 
   vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
   vvenc_confirmParameter(c,((c->m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
