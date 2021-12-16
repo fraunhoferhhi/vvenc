@@ -1110,7 +1110,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   }
   catch( df::program_options_lite::ParseFailure &e )
   {
-    rcOstr << "Error parsing option \"" << e.arg << "\" with argument \"" << e.val << "\.\n";
+    rcOstr << "Error parsing option \"" << e.arg << "\" with argument \"" << e.val << "\".\n";
     ret = -1;
   }
 
