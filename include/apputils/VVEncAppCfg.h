@@ -113,15 +113,15 @@ public:
   }
 
 public:
-  int parse( int argc, char* argv[], vvenc_config* c, std::stringstream& rcOstr );
+  int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr );
 
-  bool checkCfg( vvenc_config* c, std::stringstream& rcOstr );
+  bool checkCfg( vvenc_config* c, std::ostream& rcOstr );
   virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const;
 
   std::vector <std::tuple<std::string, std::string>> getAdditionalSettingList();
 
 private:
-  bool xCheckCfg( vvenc_config* c, std::stringstream& rcOstr );
+  bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr );
 
   std::vector<std::string> tokenize(std::string str, char delimiter );
 };

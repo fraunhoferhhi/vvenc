@@ -379,7 +379,7 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
 // Public member functions
 // ====================================================================================================================
 
-int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::stringstream& rcOstr )
+int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr )
 {
   int ret = 0;
 
@@ -1123,7 +1123,7 @@ std::string VVEncAppCfg::getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
   return css.str();
 }
 
-bool VVEncAppCfg::checkCfg( vvenc_config* c, std::stringstream& rcOstr )
+bool VVEncAppCfg::checkCfg( vvenc_config* c, std::ostream& rcOstr )
 {
   bool ret = false;
 
@@ -1184,7 +1184,7 @@ int get_height_of_component( const vvencChromaFormat chFmt, const int frameHeigh
   return h;
 }
 
-bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::stringstream& rcOstr )
+bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
 {
   bool ret = true;
 
