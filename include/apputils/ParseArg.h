@@ -84,7 +84,9 @@ namespace df
       virtual ~ErrorReporter() {}
       virtual std::ostream& error(const std::string& where);
       virtual std::ostream& warn(const std::string& where);
-      bool is_errored;
+      bool is_errored = false;
+      bool is_warning = false;
+      std::stringstream outstr;
     };
 
     extern ErrorReporter default_error_reporter;

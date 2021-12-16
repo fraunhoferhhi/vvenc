@@ -3727,7 +3727,8 @@ VVENC_DECL int vvenc_set_param_list( vvenc_config *c, int argc, char* argv[] )
   }
 
   apputils::VVEncAppCfg cVVEncAppCfg;
-  return cVVEncAppCfg.parse( argc, argv, c );
+  std::stringstream cssO;
+  return cVVEncAppCfg.parse( argc, argv, c, cssO );
 }
 
 

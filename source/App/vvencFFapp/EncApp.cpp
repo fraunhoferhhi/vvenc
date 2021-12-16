@@ -91,29 +91,43 @@ void msgApp( int level, const char* fmt, ... )
 bool EncApp::parseCfg( int argc, char* argv[])
 {
   vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
-
-  try
-  {
-    if( argc )
-    {
-      // remove application name
-      argc--;
-      argv++;
-    }
-
-    if( 0 != m_cEncAppCfg.parse( argc, argv, &m_vvenc_config ) )
-    {
-      return (m_cEncAppCfg.m_showVersion) ? true : false;
-    }
-  }
-  catch( apputils::df::program_options_lite::ParseFailure &e )
-  {
-    msgApp( VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
-    return false;
-  }
-  g_verbosity = m_vvenc_config.m_verbosity;
+  std::stringstream cParserStr;
 
   bool ret = true;
+
+  if( argc )
+  {
+    // remove application name
+    argc--;
+    argv++;
+  }
+
+  int parserRes = m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, cParserStr);
+  if( parserRes != 0 )
+  {
+    if( m_cEncAppCfg.m_showHelp )
+    {
+      msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
+      if( !cParserStr.str().empty() )
+        msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
+      return true;
+    }
+    else if( m_cEncAppCfg.m_showVersion)
+    {
+      msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version());
+      if( !cParserStr.str().empty() )
+        msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
+      return true;
+    }
+  }
+
+  if(  parserRes >= 0 )  g_verbosity = m_vvenc_config.m_verbosity;
+  else ret = false;
+
+  msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
+
+  if( !cParserStr.str().empty() )
+    msgApp( (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.str().c_str() );
 
   if( !m_cEncAppCfg.m_additionalSettings.empty() )
   {
@@ -133,7 +147,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
       switch (parse_ret)
       {
         case VVENC_PARAM_BAD_NAME:
-            msgApp( VVENC_ERROR, "additional params: unknown option\"%s\" \n", key.c_str() );
+            msgApp( VVENC_ERROR, "additional params: unknown option \"%s\" \n", key.c_str() );
             ret = false;
             break;
         case VVENC_PARAM_BAD_VALUE:
@@ -166,8 +180,11 @@ bool EncApp::parseCfg( int argc, char* argv[])
     ret = false;
   }
 
-  if(  m_cEncAppCfg.checkCfg( &m_vvenc_config ))
+  cParserStr.str("");
+  cParserStr.clear();
+  if(  m_cEncAppCfg.checkCfg( &m_vvenc_config, cParserStr ))
   {
+    msgApp( VVENC_ERROR, "%s", cParserStr.str().c_str() );      
     ret = false;
   }
 
