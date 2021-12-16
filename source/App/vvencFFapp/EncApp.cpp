@@ -95,49 +95,39 @@ bool EncApp::parseCfg( int argc, char* argv[])
 
   bool ret = true;
 
-  try
+  if( argc )
   {
-    if( argc )
-    {
-      // remove application name
-      argc--;
-      argv++;
-    }
-
-    int parserRes = m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, cParserStr);
-    if( parserRes != 0 )
-    {
-      if( m_cEncAppCfg.m_showHelp )
-      {
-        msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
-        if( !cParserStr.str().empty() )
-          msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
-        return true;
-      }
-      else if( m_cEncAppCfg.m_showVersion)
-      {
-        msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version());
-        if( !cParserStr.str().empty() )
-          msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
-        return true;
-      }
-    }
-
-    if(  parserRes >= 0 )  g_verbosity = m_vvenc_config.m_verbosity;
-    else ret = false;
-
-    msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
-
-    if( !cParserStr.str().empty() )
-      msgApp( (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.str().c_str() );
-
+    // remove application name
+    argc--;
+    argv++;
   }
-  catch( apputils::df::program_options_lite::ParseFailure &e )
+
+  int parserRes = m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, cParserStr);
+  if( parserRes != 0 )
   {
-    msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
-    msgApp( VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
-    return false;
+    if( m_cEncAppCfg.m_showHelp )
+    {
+      msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
+      if( !cParserStr.str().empty() )
+        msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
+      return true;
+    }
+    else if( m_cEncAppCfg.m_showVersion)
+    {
+      msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version());
+      if( !cParserStr.str().empty() )
+        msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
+      return true;
+    }
   }
+
+  if(  parserRes >= 0 )  g_verbosity = m_vvenc_config.m_verbosity;
+  else ret = false;
+
+  msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
+
+  if( !cParserStr.str().empty() )
+    msgApp( (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.str().c_str() );
 
   if( !m_cEncAppCfg.m_additionalSettings.empty() )
   {

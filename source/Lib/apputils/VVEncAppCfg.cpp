@@ -1033,77 +1033,85 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   //
   // parse command line parameters and read configuration files
   //
-  po::ErrorReporter err;
-  const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
+  try
+  {
+    po::ErrorReporter err;
+    const std::list<const char*>& argv_unhandled = po::scanArgv( opts, argc, (const char**) argv, err );
 
-  if ( do_help || argc == 0 )
-  {
-    m_showHelp = true;
-    rcOstr << easyOpts.str();
-    return 1;
-  }
-  else if ( do_full_help )
-  {
-    m_showHelp = true;
-    rcOstr << fullOpts.str();
-    return 1;
-  }
-
-  if( !m_easyMode && !writeCfg.empty() )
-  {
-    std::ofstream cfgFile;
-    cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
-    if( !cfgFile.is_open() )
+    if ( do_help || argc == 0 )
     {
-      rcOstr << " [error]: failed to open output config file " << writeCfg << std::endl;
-      return -1;
+      m_showHelp = true;
+      rcOstr << easyOpts.str();
+      return 1;
     }
-    else
+    else if ( do_full_help )
     {
-      std::list<std::string> ignoreParamsLst;
-      ignoreParamsLst.push_back( "help" );
-      ignoreParamsLst.push_back( "longhelp" );
-      ignoreParamsLst.push_back( "fullhelp" );
-      ignoreParamsLst.push_back( "WriteConfig" );
-      ignoreParamsLst.push_back( "configfile" );
-      ignoreParamsLst.push_back( "c" );
+      m_showHelp = true;
+      rcOstr << fullOpts.str();
+      return 1;
+    }
 
-      ignoreParamsLst.push_back( "decode" );
-      for ( int i = 0; i < VVENC_MAX_GOP; i++ )
+    if( !m_easyMode && !writeCfg.empty() )
+    {
+      std::ofstream cfgFile;
+      cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
+      if( !cfgFile.is_open() )
       {
-        std::ostringstream cOSS;
-        cOSS << "Frame" << i+1;
-        ignoreParamsLst.push_back( cOSS.str() );
+        rcOstr << " [error]: failed to open output config file " << writeCfg << std::endl;
+        return -1;
       }
+      else
+      {
+        std::list<std::string> ignoreParamsLst;
+        ignoreParamsLst.push_back( "help" );
+        ignoreParamsLst.push_back( "longhelp" );
+        ignoreParamsLst.push_back( "fullhelp" );
+        ignoreParamsLst.push_back( "WriteConfig" );
+        ignoreParamsLst.push_back( "configfile" );
+        ignoreParamsLst.push_back( "c" );
 
-      std::ostringstream cfgStream;
-      po::saveConfig( cfgStream, opts, ignoreParamsLst );
-      cfgFile << cfgStream.str() << std::endl;
-      cfgFile.close();
+        ignoreParamsLst.push_back( "decode" );
+        for ( int i = 0; i < VVENC_MAX_GOP; i++ )
+        {
+          std::ostringstream cOSS;
+          cOSS << "Frame" << i+1;
+          ignoreParamsLst.push_back( cOSS.str() );
+        }
+
+        std::ostringstream cfgStream;
+        po::saveConfig( cfgStream, opts, ignoreParamsLst );
+        cfgFile << cfgStream.str() << std::endl;
+        cfgFile.close();
+      }
+    }
+
+    if ( m_showVersion )
+    {
+      return 1;
+    }
+
+    for( auto& a : argv_unhandled )
+    {
+      rcOstr << "Unknown argument: '" << a << "'\n";
+      ret = -1;
+    }
+
+    if( err.is_errored )
+    {
+      rcOstr << err.outstr.str();
+      if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
+      else            return -1;
+    }
+    else if( err.is_warning )
+    {
+      rcOstr << err.outstr.str();
+      return 2;
     }
   }
-
-  if ( m_showVersion )
+  catch( df::program_options_lite::ParseFailure &e )
   {
-    return 1;
-  }
-
-  for( auto& a : argv_unhandled )
-  {
-    rcOstr << "Unknown argument: '" << a << "'\n";
+    rcOstr << "Error parsing option \"" << e.arg << "\" with argument \"" << e.val << "\.\n";
     ret = -1;
-  }
-
-  if( err.is_errored )
-  {
-    rcOstr << err.outstr.str();
-    if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
-    else            return -1;
-  }
-  else if( err.is_warning )
-  {
-    rcOstr << err.outstr.str();
-    return 2;
   }
 
   return ret;
