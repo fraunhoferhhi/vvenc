@@ -83,6 +83,7 @@ public:
   bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_decode                        = false;
   bool         m_showVersion                   = false;
+  bool         m_showHelp                      = false;
 
   std::string  m_additionalSettings;                           ///< set additional settings (always parsed and set after other params are set)
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'

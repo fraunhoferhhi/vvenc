@@ -1039,13 +1039,15 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
 
   if ( do_help || argc == 0 )
   {
+    m_showHelp = true;
     rcOutputStr.append( easyOpts.str() );
-    return -1;
+    return 1;
   }
   else if ( do_full_help )
   {
+    m_showHelp = true;
     rcOutputStr.append( fullOpts.str() );
-    return -1;
+    return 1;
   }
 
   if( !m_easyMode && !writeCfg.empty() )
@@ -1090,7 +1092,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
 
   for( auto& a : argv_unhandled )
   {
-    cssInfo << "Unhandled argument ignored: `" << a << "'\n";
+    cssInfo << "Unknown argument: '" << a << "'\n";
     ret = -1;
   }
 

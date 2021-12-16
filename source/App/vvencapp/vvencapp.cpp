@@ -59,7 +59,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <chrono>
 #include <algorithm>
 #include <cstdarg>
-#include <cctype>
 
 #include "vvenc/version.h"
 #include "vvenc/vvenc.h"
@@ -122,34 +121,47 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
       argc--;
       argv++;
     }
+   
+    int ret =  rcVVEncAppCfg.parse( argc, argv, &vvenccfg, cParserStr );
+    if( ret != 0 )
+    {
+      if( rcVVEncAppCfg.m_showHelp )
+      {
+        msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
+        if( !cParserStr.empty() )
+          msgApp( nullptr, VVENC_INFO, "%s\n", cParserStr.c_str() );
+        return true;
+      }
+      else if( rcVVEncAppCfg.m_showVersion)
+      {
+        msgApp( nullptr, VVENC_INFO,"vvencapp version %s\n", vvenc_get_version());
+        if( !cParserStr.empty() )
+          msgApp( nullptr, VVENC_INFO, "%s\n", cParserStr.c_str() );
+        return true;
+      }
+      else if ( ret < 0 )
+      {
+        msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
+        if( !cParserStr.empty() )
+        {
+          msgApp( nullptr, VVENC_ERROR, "%s\n", cParserStr.c_str() );
+        }
+        return false;
+      }
+    };
+
+    g_verbosity = vvenccfg.m_verbosity;
 
     msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
-    
-    int ret =  rcVVEncAppCfg.parse( argc, argv, &vvenccfg, cParserStr );
-    if( 0 != ret )
-    {
-      if( !cParserStr.empty() )
-      {
-        if( ret < 0 )
-          msgApp( nullptr, VVENC_ERROR, "%s\n", cParserStr.c_str() );
-        else
-          msgApp( nullptr, VVENC_WARNING, "%s\n", cParserStr.c_str() );
-      }
-
-      return (rcVVEncAppCfg.m_showVersion || ret > 0) ? true : false;
-    }
 
     if( !cParserStr.empty() )
-    {
-      msgApp( nullptr, VVENC_INFO, "%s\n", cParserStr.c_str() );      
-    }
+      msgApp( nullptr, (ret > 0) ? VVENC_WARNING : VVENC_INFO, "%s\n", cParserStr.c_str() );
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
     msgApp( nullptr, VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-  g_verbosity = vvenccfg.m_verbosity;
 
   bool ret = true;
 
@@ -221,45 +233,17 @@ int main( int argc, char* argv[] )
 
   vvenc_set_msg_callback( &vvenccfg, nullptr, &::msgFnc );  // register local (thread safe) logger (global logger is overwritten )
 
-  std::string verbosity = std::to_string(VVENC_VERBOSE);
-  bool bShowVersion = false;
-  apputils::df::program_options_lite::Options opts;
-  opts.addOptions()
-    ( "version",     bShowVersion,    "show version ")
-    ( "verbosity,v", verbosity,       "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)");
-
-  apputils::df::program_options_lite::SilentReporter err;
-  apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
-
-  if( bShowVersion )
-  {
-    msgApp( nullptr, VVENC_INFO,"vvencapp version %s\n", vvenc_get_version() );
-    return 0;
-  }
-
-  if( std::isdigit(verbosity[0]))
-  {
-    g_verbosity = (vvencMsgLevel)std::atoi ( verbosity.c_str() );
-  }
-  else
-  {
-    if     ( verbosity == "silent")  g_verbosity = VVENC_SILENT;
-    else if( verbosity == "error")   g_verbosity = VVENC_ERROR;
-    else if( verbosity == "warning") g_verbosity = VVENC_WARNING;
-    else if( verbosity == "info")    g_verbosity = VVENC_INFO;
-    else if( verbosity == "notice")  g_verbosity = VVENC_NOTICE;
-    else if( verbosity == "verbose") g_verbosity = VVENC_VERBOSE;
-    else if( verbosity == "debug")   g_verbosity = VVENC_DETAILS;
-  }
-
   // parse configuration
   if ( ! parseCfg( argc, argv, vvencappCfg, vvenccfg ) )
   {
     return 1;
   }
 
-  // assign verbosity used for encoder output
-  g_verbosity = vvenccfg.m_verbosity;
+  // show version or help
+  if( vvencappCfg.m_showVersion || vvencappCfg.m_showHelp )
+  {
+    return 0;
+  }
 
   // initialize the encoder
   vvencEncoder *enc = vvenc_encoder_create();
