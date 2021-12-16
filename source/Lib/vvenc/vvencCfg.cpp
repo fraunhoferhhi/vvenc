@@ -469,7 +469,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_entryPointsPresent                      = true;
   
   c->m_treatAsSubPic                           = -1;
-  c->m_apsIdOffset                             = -1;
 
   c->m_CTUSize                                 = 128;
   c->m_MinQT[0] = c->m_MinQT[1] = 8;                                            ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
@@ -2378,12 +2377,11 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize, "Max parallel frames should be less then GOP size" );
   }
 
+  vvenc_confirmParameter(c, c->m_treatAsSubPic < -1 || c->m_treatAsSubPic > 7, "TreatAsSubPic out of range [0 .. 7]" );
+
   if( c->m_treatAsSubPic != -1 )
   {
-    vvenc_confirmParameter(c, c->m_treatAsSubPic < -1 || c->m_treatAsSubPic > 7, "TreatAsSubPic out of range [0 .. 7]" );
-
     c->m_alfTempPred       = 0;
-    c->m_apsIdOffset       = c->m_treatAsSubPic;
     c->m_lumaReshapeEnable = 0;
     c->m_reshapeSignalType = 0;
     c->m_updateCtrl        = 0;
@@ -2391,10 +2389,6 @@ static bool checkCfgParameter( vvenc_config *c )
     c->m_initialCW         = 0;
     c->m_LMCSOffset        = 0;
     vvenc_ReshapeCW_default( &c->m_reshapeCW );
-  }
-  else
-  {
-    c->m_apsIdOffset       = 0;
   }
 
   vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");

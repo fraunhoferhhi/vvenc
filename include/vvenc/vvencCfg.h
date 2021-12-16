@@ -545,7 +545,6 @@ typedef struct vvenc_config
   bool                m_entryPointsPresent;
 
   int                 m_treatAsSubPic;
-  int                 m_apsIdOffset;
   
   unsigned            m_CTUSize;
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
@@ -750,7 +749,7 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[10];
+  int                 m_reservedInt[9];
   bool                m_reservedFlag[10];
   double              m_reservedDouble[10];
 
