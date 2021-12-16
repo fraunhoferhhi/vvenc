@@ -69,20 +69,18 @@ namespace df
   {
     ErrorReporter default_error_reporter;
 
-    std::string ErrorReporter::error(const std::string& where)
+    std::ostream& ErrorReporter::error(const std::string& where)
     {
-      std::stringstream cssErr;
-      is_errored = true;
-      cssErr << where << " error: ";
-      return cssErr.str();
+      is_errored = 1;
+      outstr << where << " error: ";
+      return outstr;
     }
 
-    std::string ErrorReporter::warn(const std::string& where)
+    std::ostream& ErrorReporter::warn(const std::string& where)
     {
-      std::stringstream cssErr;
-      is_warning = true;
-      cssErr << where << " warning: ";
-      return cssErr.str();
+      is_warning = 1;
+      outstr << where << " warning: ";
+      return outstr;
     }
 
     Options::~Options()
@@ -560,7 +558,7 @@ namespace df
 
       if (!found)
       {
-        error_reporter.outstr << error_reporter.error(where())
+        error_reporter.error(where())
           << "Unknown option `" << name << "' (value:`" << value << "')\n";
         return false;
       }
@@ -775,13 +773,13 @@ namespace df
       if (start == std::string::npos)
       {
         /* error: badly formatted line */
-        error_reporter.outstr << error_reporter.warn(where()) << "line formatting error\n";
+        error_reporter.warn(where()) << "line formatting error\n";
         return;
       }
       if (line[start] != ':')
       {
         /* error: badly formatted line */
-        error_reporter.outstr << error_reporter.warn(where()) << "line formatting error\n";
+        error_reporter.warn(where()) << "line formatting error\n";
         return;
       }
 
@@ -790,7 +788,7 @@ namespace df
       if (start == std::string::npos)
       {
         /* error: badly formatted line */
-        error_reporter.outstr << error_reporter.warn(where()) << "line formatting error\n";
+        error_reporter.warn(where()) << "line formatting error\n";
         return;
       }
 
@@ -821,7 +819,7 @@ namespace df
       else
       {
         /* error: no value */
-        error_reporter.outstr << error_reporter.warn(where()) << "no value found for option " << option << "\n";
+        error_reporter.warn(where()) << "no value found for option " << option << "\n";
         return;
       }
 
@@ -861,7 +859,7 @@ namespace df
       std::ifstream cfgstream(filename.c_str(), std::ifstream::in);
       if (!cfgstream)
       {
-        error_reporter.outstr << error_reporter.error(filename) << "Failed to open config file\n";
+        error_reporter.error(filename) << "Failed to open config file\n";
         return;
       }
       CfgStreamParser csp(filename, opts, error_reporter);

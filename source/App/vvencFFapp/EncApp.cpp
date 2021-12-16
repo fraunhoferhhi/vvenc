@@ -91,7 +91,7 @@ void msgApp( int level, const char* fmt, ... )
 bool EncApp::parseCfg( int argc, char* argv[])
 {
   vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
-  std::string cParserStr;
+  std::stringstream cParserStr;
 
   bool ret = true;
 
@@ -110,15 +110,15 @@ bool EncApp::parseCfg( int argc, char* argv[])
       if( m_cEncAppCfg.m_showHelp )
       {
         msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
-        if( !cParserStr.empty() )
-          msgApp( VVENC_INFO, "%s", cParserStr.c_str() );
+        if( !cParserStr.str().empty() )
+          msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
         return true;
       }
       else if( m_cEncAppCfg.m_showVersion)
       {
         msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version());
-        if( !cParserStr.empty() )
-          msgApp( VVENC_INFO, "%s", cParserStr.c_str() );
+        if( !cParserStr.str().empty() )
+          msgApp( VVENC_INFO, "%s", cParserStr.str().c_str() );
         return true;
       }
     }
@@ -128,8 +128,8 @@ bool EncApp::parseCfg( int argc, char* argv[])
 
     msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
 
-    if( !cParserStr.empty() )
-      msgApp( (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.c_str() );
+    if( !cParserStr.str().empty() )
+      msgApp( (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.str().c_str() );
 
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
@@ -189,10 +189,11 @@ bool EncApp::parseCfg( int argc, char* argv[])
     ret = false;
   }
 
+  cParserStr.str("");
   cParserStr.clear();
   if(  m_cEncAppCfg.checkCfg( &m_vvenc_config, cParserStr ))
   {
-    msgApp( VVENC_ERROR, "%s", cParserStr.c_str() );      
+    msgApp( VVENC_ERROR, "%s", cParserStr.str().c_str() );      
     ret = false;
   }
 

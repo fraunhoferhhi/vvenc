@@ -111,7 +111,7 @@ void printVVEncErrorMsg( const std::string cMessage, int code, const std::string
 
 bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vvenc_config &vvenccfg )
 {
-  std::string cParserStr;
+  std::stringstream cParserStr;
   bool ret = true;
 
   try
@@ -129,15 +129,15 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
       if( rcVVEncAppCfg.m_showHelp )
       {
         msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
-        if( !cParserStr.empty() )
-          msgApp( nullptr, VVENC_INFO, "%s", cParserStr.c_str() );
+        if( !cParserStr.str().empty() )
+          msgApp( nullptr, VVENC_INFO, "%s", cParserStr.str().c_str() );
         return true;
       }
       else if( rcVVEncAppCfg.m_showVersion)
       {
         msgApp( nullptr, VVENC_INFO,"vvencapp version %s\n", vvenc_get_version());
-        if( !cParserStr.empty() )
-          msgApp( nullptr, VVENC_INFO, "%s", cParserStr.c_str() );
+        if( !cParserStr.str().empty() )
+          msgApp( nullptr, VVENC_INFO, "%s", cParserStr.str().c_str() );
         return true;
       }
     };
@@ -147,8 +147,8 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
 
     msgApp( nullptr, VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
 
-    if( !cParserStr.empty() )
-      msgApp( nullptr, (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.c_str() );
+    if( !cParserStr.str().empty() )
+      msgApp( nullptr, (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.str().c_str() );
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
@@ -205,7 +205,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
   cParserStr.clear();
   if( rcVVEncAppCfg.checkCfg( &vvenccfg, cParserStr ))
   {
-    msgApp( nullptr, VVENC_ERROR, "%s", cParserStr.c_str() );      
+    msgApp( nullptr, VVENC_ERROR, "%s", cParserStr.str().c_str() );      
     ret = false;
   }
 

@@ -379,7 +379,7 @@ void setInputBitDepthAndColorSpace( VVEncAppCfg* appcfg, vvenc_config* cfg, int 
 // Public member functions
 // ====================================================================================================================
 
-int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rcOutputStr )
+int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::stringstream& rcOstr )
 {
   int ret = 0;
 
@@ -1030,7 +1030,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
     ;
   }
 
-  std::stringstream cssInfo;
   //
   // parse command line parameters and read configuration files
   //
@@ -1040,13 +1039,13 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
   if ( do_help || argc == 0 )
   {
     m_showHelp = true;
-    rcOutputStr.append( easyOpts.str() );
+    rcOstr << easyOpts.str();
     return 1;
   }
   else if ( do_full_help )
   {
     m_showHelp = true;
-    rcOutputStr.append( fullOpts.str() );
+    rcOstr << fullOpts.str();
     return 1;
   }
 
@@ -1056,8 +1055,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
     cfgFile.open( writeCfg.c_str(), std::ios::out | std::ios::trunc);
     if( !cfgFile.is_open() )
     {
-      cssInfo << "[error]: failed to open output config file '" << writeCfg << "'\n";
-      rcOutputStr.append( cssInfo.str() );
+      rcOstr << " [error]: failed to open output config file " << writeCfg << std::endl;
       return -1;
     }
     else
@@ -1092,20 +1090,19 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::string& rc
 
   for( auto& a : argv_unhandled )
   {
-    cssInfo << "Unknown argument: '" << a << "'\n";
+    rcOstr << "Unknown argument: '" << a << "'\n";
     ret = -1;
   }
 
-  rcOutputStr.append( cssInfo.str() );
   if( err.is_errored )
   {
-    rcOutputStr.append( err.outstr.str() );
+    rcOstr << err.outstr.str();
     if( argc == 2 ) return VVENC_PARAM_BAD_NAME;
     else            return -1;
   }
   else if( err.is_warning )
   {
-    rcOutputStr.append( err.outstr.str() );
+    rcOstr << err.outstr.str();
     return 2;
   }
 
@@ -1126,7 +1123,7 @@ std::string VVEncAppCfg::getAppConfigAsString( vvencMsgLevel eMsgLevel ) const
   return css.str();
 }
 
-bool VVEncAppCfg::checkCfg( vvenc_config* c, std::string& rcErr )
+bool VVEncAppCfg::checkCfg( vvenc_config* c, std::stringstream& rcOstr )
 {
   bool ret = false;
 
@@ -1136,7 +1133,7 @@ bool VVEncAppCfg::checkCfg( vvenc_config* c, std::string& rcErr )
     // if rc statsfile is defined and in 1st pass, bitstream file is not needed
     if ( !(c->m_RCPass == 1 && !m_RCStatsFileName.empty()) )
     {
-      rcErr.append("error: bitstream file name must be specified (--output=bit.266)\n");
+      rcOstr << "error: bitstream file name must be specified (--output=bit.266)" << std::endl;
       ret = true;
     }
   }
@@ -1148,7 +1145,7 @@ bool VVEncAppCfg::checkCfg( vvenc_config* c, std::string& rcErr )
   }
 
   // check remaining parameter set
-  if( !xCheckCfg( c, rcErr ) )
+  if( !xCheckCfg( c, rcOstr ) )
   {
     ret = true;
   }
@@ -1187,20 +1184,20 @@ int get_height_of_component( const vvencChromaFormat chFmt, const int frameHeigh
   return h;
 }
 
-bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::string& rcErr )
+bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::stringstream& rcOstr )
 {
   bool ret = true;
 
   if( m_inputFileName.empty() )
   {
-    rcErr.append("error: input yuv file name must be specified (--input=video.yuv)\n");
+    rcOstr << "error: input yuv file name must be specified (--input=video.yuv)" << std::endl;
     ret = false;
   }
   if( ! strcmp( m_inputFileName.c_str(), "-" )
       && c->m_RCNumPasses > 1
       && c->m_RCPass < 0 )
   {
-    rcErr.append("error: two pass rate control within single application call and reading from stdin not supported\n");
+    rcOstr << "error: two pass rate control within single application call and reading from stdin not supported" << std::endl;
     ret = false;
   }
 
@@ -1208,12 +1205,12 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::string& rcErr )
   {
     if( c->m_decodeBitstreams[0][0] != '\0' && c->m_decodeBitstreams[0] == m_bitstreamFileName )
     {
-      rcErr.append("error: debug bitstream and the output bitstream cannot be equal\n");
+      rcOstr << "error: debug bitstream and the output bitstream cannot be equal" << std::endl;
       ret = false;
     }
     if( c->m_decodeBitstreams[1][0] != '\0' && c->m_decodeBitstreams[1] == m_bitstreamFileName )
     {
-      rcErr.append("error: decode2 bitstream and the output bitstream cannot be equal\n");
+      rcOstr << "error: decode2 bitstream and the output bitstream cannot be equal" << std::endl;
       ret = false;
     }
   }
@@ -1221,30 +1218,30 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::string& rcErr )
 #ifndef VVENC_ENABLE_THIRDPARTY_JSON
   if( c->m_RCPass > 0 )
   {
-    rcErr.append("error: reading/writing rate control statistics file not supported, please disable pass parameter or compile with json enabled\n");
+    rcOstr << "error: reading/writing rate control statistics file not supported, please disable pass parameter or compile with json enabled" << std::endl;
     ret = false;
   }
   if( ! m_RCStatsFileName.empty() )
   {
-    rcErr.append("error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled\n");
+    rcOstr << "error: reading/writing rate control statistics file not supported, please disable rcstatsfile parameter or compile with json enabled" << std::endl;
     ret = false;
   }
 #endif
 
   if( c->m_RCPass > 0 && m_RCStatsFileName.empty() )
   {
-    rcErr.append("error: rate control statistics file name must be specify, when pass parameter is set (--rcstatsfile=stats.json)\n");
+    rcOstr << "error: rate control statistics file name must be specify, when pass parameter is set (--rcstatsfile=stats.json)" << std::endl;
     ret = false;
   }
   if( c->m_RCNumPasses == 1 && ! m_RCStatsFileName.empty() )
   {
-    rcErr.append("error: rate control statistics file not supported in single pass encoding\n");
+    rcOstr << "error: rate control statistics file not supported in single pass encoding" << std::endl;
     ret = false;
   }
 
   if( m_inputFileChromaFormat != VVENC_CHROMA_400 && m_inputFileChromaFormat != VVENC_CHROMA_420 )
   {
-    rcErr.append("error: input chroma format must be either 400, 420\n");
+    rcOstr << "error: input chroma format must be either 400, 420" << std::endl;
     ret = false;
   }
 
@@ -1252,14 +1249,14 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::string& rcErr )
   {
     if( get_width_of_component( c->m_internChromaFormat, c->m_SourceWidth, 0 ) % 4 != 0 )
     {
-      rcErr.append("error: unsupported input width for packed input (width must be a multiple of 4)\n");
+      rcOstr <<  "error: unsupported input width for packed input (width must be a multiple of 4)" << std::endl;
       ret = false;
     }
 
     if( (c->m_internChromaFormat == VVENC_CHROMA_420 || c->m_internChromaFormat == VVENC_CHROMA_422) &&
          get_width_of_component( c->m_internChromaFormat, c->m_SourceWidth, 1 ) % 4 != 0 )
     {
-      rcErr.append("error: unsupported input width for packed input (chroma width must be a multiple of 4)\n");
+      rcOstr <<  "error: unsupported input width for packed input (chroma width must be a multiple of 4)" << std::endl;
       ret = false;
     }
   }
@@ -1273,13 +1270,13 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::string& rcErr )
     if( ( c->m_outputBitDepth[ 0 ] != 10 && c->m_outputBitDepth[ 0 ] != 12 )
         || ( ( ( c->m_SourceWidth ) & ( 1 + ( c->m_outputBitDepth[ 0 ] & 3 ) ) ) != 0 ) )
     {
-      rcErr.append("error: invalid output bit-depth or image width for packed YUV output\n");
+      rcOstr << "error: invalid output bit-depth or image width for packed YUV output" << std::endl;
       ret = false;
     }
     if( ( c->m_internChromaFormat != VVENC_CHROMA_400 ) && ( ( c->m_outputBitDepth[ 1 ] != 10 && c->m_outputBitDepth[ 1 ] != 12 )
           || ( ( get_width_of_component( c->m_internChromaFormat, c->m_SourceWidth, 1 ) & ( 1 + ( c->m_outputBitDepth[ 1 ] & 3 ) ) ) != 0 ) ) )
     {
-      rcErr.append("error: invalid chroma output bit-depth or image width for packed YUV output\n");
+      rcOstr << "error: invalid chroma output bit-depth or image width for packed YUV output" << std::endl;
       ret = false;
     }
   }

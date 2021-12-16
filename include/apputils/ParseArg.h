@@ -80,10 +80,10 @@ namespace df
 
     struct APPUTILS_DECL ErrorReporter
     {
-      ErrorReporter(){}
+      ErrorReporter() : is_errored(0) {}
       virtual ~ErrorReporter() {}
-      virtual std::string error(const std::string& where);
-      virtual std::string warn(const std::string& where);
+      virtual std::ostream& error(const std::string& where);
+      virtual std::ostream& warn(const std::string& where);
       bool is_errored = false;
       bool is_warning = false;
       std::stringstream outstr;
@@ -95,9 +95,9 @@ namespace df
     {
       SilentReporter() { }
       virtual ~SilentReporter() { }
-      virtual std::string error( const std::string& ) { return dest; }
-      virtual std::string warn( const std::string& ) { return dest; }
-      std::string dest;
+      virtual std::ostream& error( const std::string& ) { return dest; }
+      virtual std::ostream& warn( const std::string& ) { return dest; }
+      std::stringstream dest;
     };
 
     void APPUTILS_DECL doHelp(std::ostream& out, Options& opts, unsigned columns  = 120);
