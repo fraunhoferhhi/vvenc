@@ -2382,8 +2382,6 @@ static bool checkCfgParameter( vvenc_config *c )
 
   if( c->m_treatAsSubPic )
   {
-    vvenc_confirmParameter(c, c->m_numTileCols > 1 || c->m_numTileRows > 1, "TreatAsSubPic and Tiles not supported yet");
-    
     c->m_alfTempPred       = 0;
     c->m_JointCbCrMode     = false;
     c->m_lumaReshapeEnable = 0;
@@ -2837,6 +2835,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   for( int row = 0; row < pps.numTileRows; row++ ) c->m_tileRowHeight  [row] = pps.tileRowHeight[row];
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
+  vvenc_confirmParameter( c, c->m_treatAsSubPic && ( c->m_numTileCols > 1 || c->m_numTileRows > 1 ), "TreatAsSubPic and Tiles not supported yet");
 }
 
 static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid )
