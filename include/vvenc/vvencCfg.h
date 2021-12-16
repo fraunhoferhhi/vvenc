@@ -544,8 +544,6 @@ typedef struct vvenc_config
   bool                m_entropyCodingSyncEnabled;
   bool                m_entryPointsPresent;
 
-  int                 m_treatAsSubPic;
-  
   unsigned            m_CTUSize;
   unsigned            m_MinQT[ 3 ];                                                      // 0: I slice luma; 1: P/B slice; 2: I slice chroma
   unsigned            m_maxMTTDepth;
@@ -748,9 +746,12 @@ typedef struct vvenc_config
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
+  bool                m_treatAsSubPic;
+  int                 m_apsOffset;
+  
   // reserved parameters for internal use
   int                 m_reservedInt[9];
-  bool                m_reservedFlag[10];
+  bool                m_reservedFlag[9];
   double              m_reservedDouble[10];
 
   // internal state variables
