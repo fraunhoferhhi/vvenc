@@ -824,10 +824,12 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     } //boundary
 
+#if 0
     if( ( m_pcEncCfg->m_IntraPeriod == 1 ) && ( partitioner.chType == CH_C ) )
     {
       xCheckFastCuChromaSplitting( tempCS, bestCS, partitioner, *m_modeCtrl.comprCUCtx );
     }
+#endif
     //////////////////////////////////////////////////////////////////////////
     // split modes
     EncTestMode lastTestMode;
