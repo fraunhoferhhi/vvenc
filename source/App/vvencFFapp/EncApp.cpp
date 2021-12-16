@@ -93,6 +93,8 @@ bool EncApp::parseCfg( int argc, char* argv[])
   vvenc_set_msg_callback( &m_vvenc_config, this, &::msgFnc ); // register local (thread safe) logger (global logger is overwritten )
   std::string cParserStr;
 
+  bool ret = true;
+
   try
   {
     if( argc )
@@ -102,47 +104,39 @@ bool EncApp::parseCfg( int argc, char* argv[])
       argv++;
     }
 
-    int ret = m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, cParserStr);
-    if( ret != 0 )
+    int parserRes = m_cEncAppCfg.parse( argc, argv, &m_vvenc_config, cParserStr);
+    if( parserRes != 0 )
     {
       if( m_cEncAppCfg.m_showHelp )
       {
         msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
         if( !cParserStr.empty() )
-          msgApp( VVENC_INFO, "%s\n", cParserStr.c_str() );
+          msgApp( VVENC_INFO, "%s", cParserStr.c_str() );
         return true;
       }
       else if( m_cEncAppCfg.m_showVersion)
       {
         msgApp( VVENC_INFO,"vvencFFapp version %s\n", vvenc_get_version());
         if( !cParserStr.empty() )
-          msgApp( VVENC_INFO, "%s\n", cParserStr.c_str() );
+          msgApp( VVENC_INFO, "%s", cParserStr.c_str() );
         return true;
-      }
-      else if ( ret < 0 )
-      {
-        msgApp( VVENC_INFO, "vvencapp: %s\n", vvenc_get_enc_information( nullptr ));
-        if( !cParserStr.empty() )
-        {
-          msgApp( VVENC_ERROR, "%s\n", cParserStr.c_str() );
-        }
-        return false;
       }
     }
 
-    g_verbosity = m_vvenc_config.m_verbosity;
+    if(  parserRes >= 0 )  g_verbosity = m_vvenc_config.m_verbosity;
+    else ret = false;
+
     msgApp( VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
 
     if( !cParserStr.empty() )
-      msgApp( (ret > 0) ? VVENC_WARNING : VVENC_INFO, "%s\n", cParserStr.c_str() );
+      msgApp( (parserRes < 0 ) ? VVENC_ERROR : ((parserRes > 0) ? VVENC_WARNING : VVENC_INFO), "%s", cParserStr.c_str() );
+
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
     msgApp( VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
-
-  bool ret = true;
 
   if( !m_cEncAppCfg.m_additionalSettings.empty() )
   {
@@ -198,7 +192,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
   cParserStr.clear();
   if(  m_cEncAppCfg.checkCfg( &m_vvenc_config, cParserStr ))
   {
-    msgApp( VVENC_ERROR, "%s\n", cParserStr.c_str() );      
+    msgApp( VVENC_ERROR, "%s", cParserStr.c_str() );      
     ret = false;
   }
 
