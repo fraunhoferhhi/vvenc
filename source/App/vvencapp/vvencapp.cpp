@@ -152,6 +152,7 @@ bool parseCfg( int argc, char* argv[], apputils::VVEncAppCfg& rcVVEncAppCfg, vve
   }
   catch( apputils::df::program_options_lite::ParseFailure &e )
   {
+    msgApp( nullptr, VVENC_INFO, "vvencFFapp: %s\n", vvenc_get_enc_information( nullptr ));
     msgApp( nullptr, VVENC_ERROR, "Error parsing option \"%s\" with argument \"%s\".\n", e.arg.c_str(), e.val.c_str() );
     return false;
   }
