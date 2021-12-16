@@ -725,7 +725,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c )
     ("EntryPointsPresent",                              c->m_entryPointsPresent,                             "Enable entry points in slice header")
     
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
-    ("APSOffset",                                       c->m_apsOffset,                                      "Set ALF APS id")
+    ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
     ;
 
     opts.setSubSection("Quad-Tree size and depth");

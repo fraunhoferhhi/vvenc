@@ -675,7 +675,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_reduceIntraChromaModesFullRD = false;
 
   c->m_treatAsSubPic                           = false;
-  c->m_apsOffset                               = -1;
+  c->m_explicitAPSid                           = 0;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -2378,7 +2378,7 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize, "Max parallel frames should be less then GOP size" );
   }
 
-  vvenc_confirmParameter(c, c->m_apsOffset < -1 || c->m_apsOffset > 7, "APSOffset out of range [-1 .. 7]" );
+  vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
 
   if( c->m_treatAsSubPic )
   {
