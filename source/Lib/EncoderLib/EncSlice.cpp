@@ -1329,6 +1329,7 @@ void EncSlice::encodeSliceData( Picture* pic )
       {
         m_CABACWriter.initCtxModels( *slice );
       }
+      prevQP[0] = prevQP[1] = slice->sliceQp;
     }
     else if (ctuXPosInCtus == tileXPosInCtus && wavefrontsEnabled)
     {
@@ -1342,6 +1343,7 @@ void EncSlice::encodeSliceData( Picture* pic )
         // Top-right is available, so use it.
         m_CABACWriter.getCtx() = m_entropyCodingSyncContextState;
       }
+      prevQP[0] = prevQP[1] = slice->sliceQp;
     }
 
     m_CABACWriter.coding_tree_unit( cs, ctuArea, prevQP, ctuRsAddr );
