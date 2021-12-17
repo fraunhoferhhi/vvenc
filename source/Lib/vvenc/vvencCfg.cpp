@@ -467,7 +467,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_entropyCodingSyncEnabled                = false;
   c->m_entryPointsPresent                      = true;
-
+  
   c->m_CTUSize                                 = 128;
   c->m_MinQT[0] = c->m_MinQT[1] = 8;                                            ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
   c->m_MinQT[2] = 4;
@@ -673,6 +673,9 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_numIntraModesFullRD = -1;
   c->m_reduceIntraChromaModesFullRD = false;
+
+  c->m_treatAsSubPic                           = false;
+  c->m_explicitAPSid                           = 0;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -1153,7 +1156,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
-  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 costrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
+  vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
 
   if( c->m_rprEnabledFlag == 2 )
   {
@@ -1281,6 +1284,22 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
+
+  if( c->m_treatAsSubPic )
+  {
+    if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
+    c->m_alfTempPred       = 0;
+    c->m_JointCbCrMode     = false;
+    c->m_lumaReshapeEnable = 0;
+    c->m_reshapeSignalType = 0;
+    c->m_updateCtrl        = 0;
+    c->m_adpOption         = 0;
+    c->m_initialCW         = 0;
+    c->m_LMCSOffset        = 0;
+    vvenc_ReshapeCW_default( &c->m_reshapeCW );
+  }
 
   /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
    * This permits the ability to omit a GOP structure specification */
@@ -2375,6 +2394,8 @@ static bool checkCfgParameter( vvenc_config *c )
     vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize, "Max parallel frames should be less then GOP size" );
   }
 
+  vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
+
   vvenc_confirmParameter(c,((c->m_PadSourceWidth) & 7) != 0, "internal picture width must be a multiple of 8 - check cropping options");
   vvenc_confirmParameter(c,((c->m_PadSourceHeight) & 7) != 0, "internal picture height must be a multiple of 8 - check cropping options");
 
@@ -2817,6 +2838,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
   for( int row = 0; row < pps.numTileRows; row++ ) c->m_tileRowHeight  [row] = pps.tileRowHeight[row];
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loppfilter across boundaries doesn't work mulit-threaded yet" );
+  vvenc_confirmParameter( c, c->m_treatAsSubPic && ( c->m_numTileCols > 1 || c->m_numTileRows > 1 ), "TreatAsSubPic and Tiles not supported yet");
 }
 
 static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid )

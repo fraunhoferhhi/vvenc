@@ -142,8 +142,8 @@ struct AreaBuf : public Size
   void copyClip             ( const AreaBuf<const T>& src, const ClpRng& clpRng);
 
   void subtract             ( const AreaBuf<const T>& minuend, const AreaBuf<const T>& subtrahend );
-  void calcVarianceSplit             ( const AreaBuf<const T>& Org, const uint32_t  size,int& varh,int& varv);
-  void extendBorderPel(unsigned marginX, unsigned marginY);
+  void calcVarianceSplit    ( const AreaBuf<const T>& Org, const uint32_t  size,int& varh,int& varv ) const;
+  void extendBorderPel      ( unsigned marginX, unsigned marginY );
 
   void addAvg               ( const AreaBuf<const T>& other1, const AreaBuf<const T>& other2, const ClpRng& clpRng );
   T    getAvg               () const;
@@ -368,13 +368,13 @@ template<>
 void AreaBuf<Pel>::subtract( const AreaBuf<const Pel>& minuend, const AreaBuf<const Pel>& subtrahend );
 
 template<typename T>
-void AreaBuf<T>::calcVarianceSplit( const AreaBuf<const T>& Org, const uint32_t  size,int& varh,int& varv)
+void AreaBuf<T>::calcVarianceSplit( const AreaBuf<const T>& Org, const uint32_t  size,int& varh,int& varv ) const 
 {
   THROW( "Type not supported" );
 }
 
 template<>
-void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int&varv);
+void AreaBuf<const Pel>::calcVarianceSplit( const AreaBuf<const Pel>& Org, const uint32_t  size, int& varh,int&varv ) const;
 
 template<typename T>
 void AreaBuf<T>::copyClip( const AreaBuf<const T>& src, const ClpRng& clpRng )
