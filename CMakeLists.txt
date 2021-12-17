@@ -12,6 +12,7 @@ endif()
 # project name
 project( vvenc VERSION 1.3.0 )
 
+# set alternative version numbering for release candidates
 #set(PROJECT_VERSION_RC rc1)
 if(PROJECT_VERSION_RC)
     set(PROJECT_VERSION "${PROJECT_VERSION}-rc${PROJECT_VERSION_RC}")
