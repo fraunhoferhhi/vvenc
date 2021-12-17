@@ -6,7 +6,7 @@ tag 1.3.1
   - allowing encoding of videos compatible with subpic-merging functionality of VVC
   - API extended, but ABI compatible
     - added paramter: m_treatAsSubPic, m_explicitAPSid
-  - temporarily forbidding rate control and use of DebugBitstram
+  - temporarily forbidding rate control combined with DebugBitstream
   
 * vvencapp:
   - fixed output of `vvencapp --version`
