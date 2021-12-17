@@ -593,6 +593,9 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.isReusingCu    = isReusingCuValid( cs, partitioner, cs.baseQP );
   cuECtx.didHorzSplit   = partitioner.canSplit( CU_HORZ_SPLIT, cs );
   cuECtx.didVertSplit   = partitioner.canSplit( CU_VERT_SPLIT, cs );
+  cuECtx.doHorChromaSplit = true;
+  cuECtx.doVerChromaSplit = true;
+  cuECtx.doQtChromaSplit  = true;
   
 
   if( m_pcEncCfg->m_contentBasedFastQtbt && cs.pcv->getMaxMTTDepth(*cs.slice, partitioner.chType))
@@ -646,11 +649,11 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
   const bool isBoundary         = implicitSplit != CU_DONT_SPLIT;
 
-  if ((m_pcEncCfg->m_IntraPeriod==1) && (partitioner.chType==CH_C) && (!partitioner. qtChromaSplit))
+  if( ( m_pcEncCfg->m_IntraPeriod == 1 ) && ( partitioner.chType == CH_C ) && ( !cuECtx.doQtChromaSplit ) )
   {
-    cuECtx.maxDepth=partitioner.currDepth;
-    partitioner.horChromaSplit=true;
-    partitioner.verChromaSplit=true;
+    cuECtx.maxDepth         = partitioner.currDepth;
+    cuECtx.doHorChromaSplit = true;
+    cuECtx.doVerChromaSplit = true;
   }
 
   if( isBoundary )
@@ -710,6 +713,26 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
     if( split == CU_HORZ_SPLIT ) cuECtx.didHorzSplit = false;
     if( split == CU_VERT_SPLIT ) cuECtx.didVertSplit = false;
     if( split == CU_QUAD_SPLIT ) cuECtx.didQuadSplit = false;
+    return false;
+  }
+
+  if( isChroma( partitioner.chType ) && !cuECtx.doHorChromaSplit && ( split == CU_HORZ_SPLIT || split == CU_TRIH_SPLIT ) )
+  {
+    if( split == CU_HORZ_SPLIT )
+    {
+      cuECtx.didHorzSplit = false;
+    }
+
+    return false;
+  }
+
+  if( isChroma( partitioner.chType ) && !cuECtx.doVerChromaSplit && ( split == CU_VERT_SPLIT || split == CU_TRIV_SPLIT ) )
+  {
+    if( split == CU_VERT_SPLIT )
+    {
+      cuECtx.didVertSplit = false;
+    }
+
     return false;
   }
 

@@ -500,62 +500,74 @@ bool EncCu::xCheckBestMode( CodingStructure *&tempCS, CodingStructure *&bestCS, 
 
 }
 
-void xCheckFastCuChromaSplitting(CodingStructure*& tempCS,CodingStructure*& bestCS,Partitioner&  partitioner)
+void xCheckFastCuChromaSplitting( CodingStructure*& tempCS, CodingStructure*& bestCS, Partitioner&  partitioner, ComprCUCtx& cuECtx )
 {
-  CodingUnit &cu      = tempCS->addCU( CS::getArea( *tempCS, tempCS->area, partitioner.chType, partitioner.treeType ), partitioner.chType );
-  CodingStructure &cs   = *cu.cs;
-  const uint32_t uiLPelX  = tempCS->area.Cb().lumaPos().x;
-  const uint32_t uiTPelY  = tempCS->area.Cb().lumaPos().y;
-  int lumaw=0,lumah=0;
-  bool splitver=true;
-  bool splithor=true;
-  bool qtSplitChroma=true;
-  if (partitioner.isSepTree (*tempCS) && isChroma (partitioner.chType))
-  {
-    Position lumaRefPos (uiLPelX ,uiTPelY);
-    CodingUnit* colLumaCu = bestCS->refCS->getCU (lumaRefPos, CH_L, TREE_D);
-    if (colLumaCu)
-    {
-      lumah=colLumaCu->Y().height;
-      lumaw=colLumaCu->Y().width;
-    }
-  }
-  CPelBuf orgCb  = cs.getOrgBuf (COMP_Cb);
-  CPelBuf orgCr  = cs.getOrgBuf (COMP_Cr);
-  int th1=FCBP_TH1;
-  if ( (lumaw>>1) == orgCb.width )
-  {
-    if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
-    {
-      splitver=false;
-      qtSplitChroma=false;
-    }
-  }
-  if ((lumah>>1) == orgCb.height )
-  {
-    if ( (bestCS->cost < (th1*orgCb.width*orgCb.height)))
-    {
-      splithor=false;
-      qtSplitChroma=false;
-    }
-  }
-  partitioner.horChromaSplit=splithor;
-  partitioner.verChromaSplit=splitver;
-  partitioner.qtChromaSplit=qtSplitChroma;
+  const uint32_t uiLPelX = tempCS->area.Cb().lumaPos().x;
+  const uint32_t uiTPelY = tempCS->area.Cb().lumaPos().y;
 
-  if ( orgCb.width==orgCb.height)
+  int lumaw = 0, lumah = 0;
+  bool splitver      = true;
+  bool splithor      = true;
+  bool qtSplitChroma = true;
+
+  if( partitioner.isSepTree( *tempCS ) && isChroma( partitioner.chType ) )
   {
-    int varh_cb,varv_cb;
-    int varh_cr,varv_cr;
-    orgCb.calcVarianceSplit(orgCb,orgCb.width,varh_cb,varv_cb);
-    orgCr.calcVarianceSplit(orgCr,orgCr.width,varh_cr,varv_cr);
-    if ((varh_cr*FCBP_TH2<varv_cr*100) && (varh_cb*FCBP_TH2<varv_cb*100))
+    Position lumaRefPos( uiLPelX, uiTPelY );
+    CodingUnit* colLumaCu = bestCS->refCS->getCU( lumaRefPos, CH_L, TREE_D );
+
+    if( colLumaCu )
     {
-      partitioner.verChromaSplit=false;
+      lumah = colLumaCu->Y().height;
+      lumaw = colLumaCu->Y().width;
     }
-    else if ((varv_cr*FCBP_TH2<varh_cr*100) && (varv_cb*FCBP_TH2<varh_cb*100))
+  }
+  else
+  {
+    return;
+  }
+
+  const CPelBuf orgCb = tempCS->getOrgBuf( COMP_Cb );
+  const CPelBuf orgCr = tempCS->getOrgBuf( COMP_Cr );
+
+  int th1 = FCBP_TH1;
+
+  if( ( lumaw >> getChannelTypeScaleX( CH_C, tempCS->area.chromaFormat ) ) == orgCb.width )
+  {
+    if( ( bestCS->cost < ( th1*orgCb.width*orgCb.height ) ) )
     {
-      partitioner.horChromaSplit=false;
+      splitver      = false;
+      qtSplitChroma = false;
+    }
+  }
+
+  if( ( lumah >> getChannelTypeScaleY( CH_C, tempCS->area.chromaFormat ) ) == orgCb.height )
+  {
+    if( ( bestCS->cost < ( th1*orgCb.width*orgCb.height ) ) )
+    {
+      splithor      = false;
+      qtSplitChroma = false;
+    }
+  }
+
+  cuECtx.doHorChromaSplit = splithor;
+  cuECtx.doVerChromaSplit = splitver;
+  cuECtx.doQtChromaSplit  = qtSplitChroma;
+
+  if( orgCb.width == orgCb.height )
+  {
+    int varh_cb, varv_cb;
+    int varh_cr, varv_cr;
+
+    orgCb.calcVarianceSplit( orgCb, orgCb.width, varh_cb, varv_cb );
+    orgCr.calcVarianceSplit( orgCr, orgCr.width, varh_cr, varv_cr );
+
+    if( ( varh_cr*FCBP_TH2 < varv_cr * 100 ) && ( varh_cb*FCBP_TH2 < varv_cb * 100 ) )
+    {
+      cuECtx.doVerChromaSplit = false;
+    }
+    else if( ( varv_cr*FCBP_TH2 < varh_cr * 100 ) && ( varv_cb*FCBP_TH2 < varh_cb * 100 ) )
+    {
+      cuECtx.doHorChromaSplit = false;
     }
   }
 }
@@ -812,9 +824,9 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
     } //boundary
 
-    if ((m_pcEncCfg->m_IntraPeriod==1)  && (partitioner.chType==CH_C))
+    if( ( m_pcEncCfg->m_IntraPeriod == 1 ) && ( partitioner.chType == CH_C ) )
     {
-      xCheckFastCuChromaSplitting(tempCS,bestCS,partitioner);
+      xCheckFastCuChromaSplitting( tempCS, bestCS, partitioner, *m_modeCtrl.comprCUCtx );
     }
     //////////////////////////////////////////////////////////////////////////
     // split modes
@@ -906,7 +918,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   }
   else
   {
-  bestCS->prevQP[partitioner.chType] = bestCS->cus.back()->qp;
+    bestCS->prevQP[partitioner.chType] = bestCS->cus.back()->qp;
   }
   if ((!slice.isIntra() || slice.sps->IBC)
     && partitioner.chType == CH_L

@@ -112,17 +112,9 @@ public:
   void  outputAU ( const vvencAccessUnit& au );            ///< write encoded access units to bitstream
   static void outputYuv( void*, vvencYUVBuffer* );      ///< write reconstructed yuv output
 
-  void msgFnc( int level, const char* fmt, va_list args )
+  bool isShowVersionHelp()
   {
-    if ( g_verbosity >= level )
-    {
-      vfprintf( level == 1 ? stderr : stdout, fmt, args );
-    }
-  }
-
-  bool isShowVersion()
-  {
-    return m_cEncAppCfg.m_showVersion;
+    return (m_cEncAppCfg.m_showVersion || m_cEncAppCfg.m_showHelp );
   }
 
 private:

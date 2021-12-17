@@ -289,23 +289,28 @@ uint32_t CU::getCtuAddr( const CodingUnit &cu )
 
 int CU::predictQP( const CodingUnit& cu, const int prevQP )
 {
-  const CodingStructure &cs = *cu.cs;
-
-  uint32_t  ctuRsAddr = getCtuAddr( cu );
-  uint32_t  ctuXPosInCtus = ctuRsAddr % cs.pcv->widthInCtus;
-  if ( ctuXPosInCtus == 0 &&
-      !( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) &&
-      !( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) && 
-      ( cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType) != NULL ) && 
-      CU::isSameSliceAndTile( *cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType), cu ) )
+  const ChannelType      chType  = cu.chType;
+  const CodingStructure& cs      = *cu.cs;
+  const Slice&           slice   = *cs.slice;
+  const CodingUnit*      cuAbove = cs.getCU( cu.blocks[chType].pos().offset( 0, -1 ), chType, cu.treeType );
+  const CodingUnit*      cuLeft  = cs.getCU( cu.blocks[chType].pos().offset( -1, 0 ), chType, cu.treeType );
+  
+  const uint32_t ctuRsAddr       = getCtuAddr( cu );
+  const uint32_t ctuXPosInCtus   = ctuRsAddr % cs.pcv->widthInCtus;
+  const uint32_t tileXPosInCtus  = slice.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]];
+  
+  if( ctuXPosInCtus == tileXPosInCtus &&
+      !( cu.blocks[chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( chType, cu.chromaFormat ) ) ) &&
+      !( cu.blocks[chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( chType, cu.chromaFormat ) ) ) &&
+       cuAbove != nullptr && CU::isSameSliceAndTile( *cuAbove, cu ) )
   {
-    return ( ( cs.getCU( cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType ) )->qp );
+    return cuAbove->qp;
   }
   else
   {
-    const int a = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) ? ( cs.getCU(cu.blocks[cu.chType].pos().offset( 0, -1 ), cu.chType, cu.treeType))->qp : prevQP;
-    const int b = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) ? ( cs.getCU(cu.blocks[cu.chType].pos().offset( -1, 0 ), cu.chType, cu.treeType))->qp : prevQP;
-
+    const int a = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) ? cuAbove->qp : prevQP;
+    const int b = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) ? cuLeft->qp  : prevQP;
+  
     return ( a + b + 1 ) >> 1;
   }
 }
