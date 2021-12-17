@@ -652,8 +652,8 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   if( ( m_pcEncCfg->m_IntraPeriod == 1 ) && ( partitioner.chType == CH_C ) && ( !cuECtx.doQtChromaSplit ) )
   {
     cuECtx.maxDepth         = partitioner.currDepth;
-    cuECtx.doHorChromaSplit = true;
-    cuECtx.doVerChromaSplit = true;
+    //cuECtx.doHorChromaSplit = true;
+    //cuECtx.doVerChromaSplit = true;
   }
 
   if( isBoundary )
