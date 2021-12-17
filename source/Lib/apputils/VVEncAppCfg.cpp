@@ -1256,12 +1256,6 @@ bool VVEncAppCfg::xCheckCfg( vvenc_config* c, std::ostream& rcOstr )
     ret = false;
   }
 
-  if( ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_RCLookAhead ) )
-  {
-    rcOstr << "Debug-bitstream for the rate-control mode is not supported yet" << std::endl;
-    ret = false;
-  }
-
   if( m_packedYUVInput )
   {
     if( get_width_of_component( c->m_internChromaFormat, c->m_SourceWidth, 0 ) % 4 != 0 )

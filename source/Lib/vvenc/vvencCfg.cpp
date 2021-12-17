@@ -2692,6 +2692,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
+  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_RCLookAhead ), "Debug-bitstream for the rate-control mode is not supported yet" );
 
   return( c->m_confirmFailed );
 }
@@ -2839,7 +2840,6 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_numThreads > 0 && c->m_bDisableLFCrossTileBoundaryFlag, "Multiple tiles and disabling loopfilter across boundaries doesn't work multi-threaded yet" );
   vvenc_confirmParameter( c, c->m_treatAsSubPic && ( c->m_numTileCols > 1 || c->m_numTileRows > 1 ), "TreatAsSubPic and Tiles not supported yet");
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_RCLookAhead ), "Debug-bitstream for the rate-control mode is not supported yet" );
 }
 
 static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &lastNonZeroRow, bool &cfgIsValid )
