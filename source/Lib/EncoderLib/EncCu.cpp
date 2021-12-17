@@ -841,7 +841,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
-//if (m_modeCtrl.comprCUCtx->doHorChromaSplit){
     if( partitioner.canSplit( CU_HORZ_SPLIT, cs ) )
     {
       // add split modes
@@ -852,8 +851,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
-//}
-//if (m_modeCtrl.comprCUCtx->doVerChromaSplit){
     if( partitioner.canSplit( CU_VERT_SPLIT, cs ) )
     {
       // add split modes
@@ -864,8 +861,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
-//}
-//if (m_modeCtrl.comprCUCtx->doHorChromaSplit){
     if( partitioner.canSplit( CU_TRIH_SPLIT, cs ) )
     {
       // add split modes
@@ -876,8 +871,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
-//}
-//  if (m_modeCtrl.comprCUCtx->doVerChromaSplit) {
     if( partitioner.canSplit( CU_TRIV_SPLIT, cs ) )
     {
       // add split modes
@@ -888,7 +881,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         xCheckModeSplit( tempCS, bestCS, partitioner, encTestMode );
       }
     }
-//  }
     if( !cuECtx.qtBeforeBt )
     {
       EncTestMode encTestMode( { ETM_SPLIT_QT, ETO_STANDARD, qp, false } );
