@@ -109,7 +109,11 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   const_cast<VVEncCfg&>(m_encCfg) = encCfg;
 
   // setup modified configs for rate control
+#if LA_WITHOUTRC
+  if (m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead || m_encCfg.m_LookAheadMode)
+#else
   if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
+#endif
   {
     xInitRCCfg();
   }
@@ -179,7 +183,11 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
+#if LA_WITHOUTRC
+    if (m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead && (m_encCfg.m_LookAheadMode==0))
+#else
     if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
+#endif
     {
       m_rateCtrl = new LegacyRateCtrl(msg);
     }
@@ -200,7 +208,11 @@ void EncLib::initPass( int pass, const char* statsFName )
   xUninitLib();
 
   // enable encoder config based on rate control pass
+#if LA_WITHOUTRC
+  if (m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead || m_encCfg.m_LookAheadMode)
+#else
   if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
+#endif
   {
     if (!m_rateCtrl->rcIsFinalPass)
     {
@@ -211,7 +223,12 @@ void EncLib::initPass( int pass, const char* statsFName )
     {
       // restore encoder config for final 2nd RC pass
       const_cast<VVEncCfg&>(m_encCfg) = m_orgCfg;
-      const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+#if LA_WITHOUTRC
+      if (m_encCfg.m_LookAheadMode==0)
+#endif
+      {
+        const_cast<VVEncCfg&>(m_encCfg).m_QP = m_rateCtrl->getBaseQP();
+      }
     }
   }
 
@@ -233,9 +250,16 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
 
   // pre analysis encoder
+#if LA_WITHOUTRC
+  if (m_encCfg.m_RCLookAhead || m_encCfg.m_LookAheadMode)
+#else
   if( m_encCfg.m_RCLookAhead )
+#endif
   {
     m_preEncoder = new EncGOP( msg );
+#if LA_WITHOUTRC
+    m_firstPassCfg.m_LookAheadMode = 1; // LookAhead pass
+#endif
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
@@ -243,7 +267,11 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
+#if LA_WITHOUTRC
+  const int encDelay = (m_encCfg.m_RCLookAhead || m_encCfg.m_LookAheadMode) ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
+#else
   const int encDelay = m_encCfg.m_RCLookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
+#endif
   m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
@@ -366,7 +394,11 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     PicShared* picShared = xGetFreePicShared();
     picShared->reuse( m_picsRcvd, yuvInBuf );
+#if LA_WITHOUTRC 
+    if (m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead || m_encCfg.m_LookAheadMode)
+#else
     if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
+#endif
     {
       xAssignPrevQpaBufs( picShared );
     }
