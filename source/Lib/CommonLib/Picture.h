@@ -248,6 +248,9 @@ public:
   int                           actualHeadBits;
   int                           actualTotalBits;
   EncRCPic*                     encRCPic;
+#if LA_WITHOUTRC
+  bool                          m_isPreAnalysis;
+#endif
 
   std::vector<SAOBlkParam>      m_sao[ 2 ];
   std::vector<uint8_t>          m_alfCtuEnabled[ MAX_NUM_COMP ];

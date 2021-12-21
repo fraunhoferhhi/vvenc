@@ -192,6 +192,9 @@ Picture::Picture()
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
+#if LA_WITHOUTRC
+    , m_isPreAnalysis   ( false )
+#endif
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
