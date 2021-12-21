@@ -5,7 +5,11 @@ set( LIB_NAME apputils )
 string( TOUPPER ${LIB_NAME} LIB_NAME_UC )
 
 # create file version.h
-configure_file( version.h.in "${CMAKE_BINARY_DIR}/${LIB_NAME}/version.h" )
+if(PROJECT_VERSION_RC)
+  configure_file( ../vvenc/version-rc.h.in "${CMAKE_BINARY_DIR}/${LIB_NAME}/version.h" )
+else()
+  configure_file( ../vvenc/version.h.in "${CMAKE_BINARY_DIR}/${LIB_NAME}/version.h" )
+endif()
 
 # get source files
 file( GLOB BASE_SRC_FILES "*.cpp"  )
