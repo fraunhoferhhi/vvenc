@@ -265,8 +265,8 @@ int testLibParameterRanges()
   testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { 16,32,1080,1088 } );
   testParamList( "Height",                                 vvencParams.m_SourceHeight,               vvencParams, { -1,0 }, true );
 
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 16,32,48, 0 } );
-  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 1,-1,17,24 }, true );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { 1,16,32,48, 0 } );
+  testParamList( "IDRPeriod",                              vvencParams.m_IntraPeriod,                vvencParams, { -1,17,24 }, true );
 
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { 0,1,2,3,4,51 } );
   testParamList( "Qp",                                     vvencParams.m_QP,                         vvencParams, { -1,64 }, true );

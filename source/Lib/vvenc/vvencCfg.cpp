@@ -1190,6 +1190,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       }
     }
   }
+  else if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
+  {
+    msg.log( VVENC_WARNING, "\nIntraPeriod is 1, thus GOPSize is set to 1 too\n\n" );
+    c->m_GOPSize = 1;
+  }
 
   //
   // do some check and set of parameters next
@@ -1282,7 +1287,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       c->m_sliceChromaQpOffsetPeriodicity = 1;
     }
   }
-
+  
   if ( c->m_usePerceptQPA ) c->m_ccalfQpThreshold = vvenc::MAX_QP_PERCEPT_QPA;
 
   if( c->m_treatAsSubPic )
@@ -2391,7 +2396,7 @@ static bool checkCfgParameter( vvenc_config *c )
 #if ENABLE_TRACING
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
-    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize, "Max parallel frames should be less then GOP size" );
+    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
