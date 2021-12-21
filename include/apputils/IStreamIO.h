@@ -454,7 +454,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToArr<T>& toArr )
   for( size_t i = 0; i < toArr._maxSize; i++ ) memset(&toArr._valVec[i],0, sizeof(T));
 
   bool fail = false;
-  int pos = 0;
+  size_t pos = 0;
   // split into multiple lines if any
   while ( ! in.eof() )
   {
@@ -545,7 +545,7 @@ template<typename T>
 inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<T>& toArr )
 {
   int size=0;
-  for ( int i = 0; i < toArr._maxSize; i++ )
+  for ( size_t i = 0; i < toArr._maxSize; i++ )
   {
     if( toArr._valVec[i] != 0 ) size++;
     else break;
