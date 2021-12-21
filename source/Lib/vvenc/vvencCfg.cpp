@@ -364,11 +364,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
-#if LA_WITHOUTRC
   c->m_LookAhead                               = false;
-#else
-  c->m_RCLookAhead                             = false;
-#endif
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
@@ -854,15 +850,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
-#if LA_WITHOUTRC
     if( c->m_RCTargetBitrate > 0
       && c->m_RCNumPasses == 1
       && !c->m_LookAhead ) 
-#else
-    if( c->m_RCTargetBitrate > 0
-        && c->m_RCNumPasses == 1
-        && ! c->m_RCLookAhead )
-#endif
     {
       c->m_maxParallelFrames = std::min( c->m_numThreads, 2 );
     }
@@ -2309,17 +2299,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
   vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
-#if LA_WITHOUTRC
-  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,          "Rate control look-ahead encoding only for single-pass encoding supported" );
-#else
-  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_RCNumPasses != 1,          "Rate control look-ahead encoding only for single-pass encoding supported" );
-#endif
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,          "Look-ahead encoding is not supported  for two-pass rate control" );
   const int periodLimit = ( c->m_SourceWidth * c->m_SourceHeight > 2048 * 1200 ? ( c->m_SourceWidth * c->m_SourceHeight > 2560 * 1536 ? 64 : 128 ) : 256 );
-#if LA_WITHOUTRC
-  vvenc_confirmParameter( c, c->m_LookAhead && c->m_IntraPeriod > periodLimit, "Specified Intra period is too large for rate control encoding with look-ahead" );
-#else
-  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_IntraPeriod > periodLimit, "Specified Intra period is too large for rate control encoding with look-ahead" );
-#endif
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_IntraPeriod > periodLimit, "Specified Intra period is too large for encoding with look-ahead" );
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
@@ -2715,11 +2697,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
-#if LA_WITHOUTRC
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_LookAhead ), "Debug-bitstream for the rate-control mode is not supported yet" );
-#else
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_RCLookAhead ), "Debug-bitstream for the rate-control mode is not supported yet" );
-#endif
+  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_LookAhead ), "Debug-bitstream for the rate-control or look ahead mode is not supported yet" );
 
   return( c->m_confirmFailed );
 }
@@ -3689,15 +3667,11 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     css << "Passes:" << c->m_RCNumPasses << " ";
     css << "Pass:" << c->m_RCPass << " ";
-#if LA_WITHOUTRC
-    css << "LookAhead:" << c->m_LookAhead << " ";
-#else
-    css << "LookAhead:" << c->m_RCLookAhead << " ";
-#endif
     css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
     css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
   }
+  css << "LookAhead:" << c->m_LookAhead << " ";
 
   css << "\nPARALLEL PROCESSING CFG: ";
   css << "NumThreads:" << c->m_numThreads << " ";

@@ -454,11 +454,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
     if( m_numPicsCoded == 0 )
     {
-#if LA_WITHOUTRC
       if ( m_pcEncCfg->m_LookAhead )
-#else
-      if ( m_pcEncCfg->m_RCLookAhead )
-#endif
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
@@ -467,11 +463,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
-#if LA_WITHOUTRC
       if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
-#else
-      if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
-#endif
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
@@ -565,9 +557,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
-#if LA_WITHOUTRC
     pic->m_isPreAnalysis = m_isPreAnalysis;
-#endif
 
     if( m_pcEncCfg->m_alfTempPred )
     {
@@ -1185,11 +1175,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-#if LA_WITHOUTRC
     bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
-#else
-    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || m_pcEncCfg->m_RCLookAhead || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
-#endif
     if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400) )
     {
       bChromaDeltaQPEnabled = (m_pcEncCfg->m_chromaCbQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCrQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCbCrQpOffsetDualTree != 0);
@@ -2649,11 +2635,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   const uint32_t uibits = numRBSPBytes * 8;
 
-#if LA_WITHOUTRC
   if( (m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || ! m_pcRateCtrl->rcIsFinalPass)
-#else
-  if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
-#endif
   {
     const double visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
 
@@ -2701,11 +2683,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
   {
-#if LA_WITHOUTRC
     if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
-#else
-    if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
-#endif
     {
       std::string cInfo = prnt("RC pass %d/%d, analyze poc %4d",
           m_pcRateCtrl->rcPass + 1,
