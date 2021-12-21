@@ -557,7 +557,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
-    pic->m_isPreAnalysis = m_isPreAnalysis;
+    pic->isPreAnalysis = m_isPreAnalysis;
 
     if( m_pcEncCfg->m_alfTempPred )
     {

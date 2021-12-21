@@ -222,6 +222,7 @@ public:
   int                           sliceDataNumBins;
   uint64_t                      cts;
   bool                          ctsValid;
+  bool                          isPreAnalysis;
 
   PicShared*                    m_picShared;
 
@@ -243,7 +244,6 @@ public:
   bool                          useScBDPCM;
   bool                          useScIBC;
   bool                          useScLMCS;
-  bool                          m_isPreAnalysis;
   int                           useQtbttSpeedUpMode;
   int                           seqBaseQp;
   int                           actualHeadBits;

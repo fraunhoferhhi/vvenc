@@ -176,6 +176,7 @@ Picture::Picture()
     , sliceDataNumBins  ( 0 )
     , cts               ( 0 )
     , ctsValid          ( false )
+    , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
     , picInitialQP      ( 0 )
     , picVisActY        ( 0.0 )
@@ -192,7 +193,6 @@ Picture::Picture()
     , actualHeadBits    ( 0 )
     , actualTotalBits   ( 0 )
     , encRCPic          ( nullptr )
-    , m_isPreAnalysis   ( false )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
   std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
