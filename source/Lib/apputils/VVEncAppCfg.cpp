@@ -555,7 +555,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("NumPasses",                                       c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Passes",                                          c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
-    ("LookAhead",                                       c->m_RCLookAhead,                                    "enable pre-analysis in single pass rate control" )
+    ("LookAhead",                                       c->m_LookAhead,                                      "enable pre-analysis" )
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)

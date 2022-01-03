@@ -222,6 +222,7 @@ public:
   int                           sliceDataNumBins;
   uint64_t                      cts;
   bool                          ctsValid;
+  bool                          isPreAnalysis;
 
   PicShared*                    m_picShared;
 
