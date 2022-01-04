@@ -552,8 +552,19 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     // decoder in encoder
     bool decPic = false;
     bool encPic = false;
-    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+    if( m_pcRateCtrl->rcIsFinalPass && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis ) )
+    {
+      DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
+      trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+      if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
+      {
+        picInitRateControl( *pic, pic->slices[0], picEncoder );
+      }
+    }
+    else
+    {
+      encPic = true;
+    }
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
