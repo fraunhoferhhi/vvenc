@@ -193,7 +193,7 @@ public:
   , m_ctuSize         ( MAX_CU_SIZE )
 #if HIGH_LEVEL_MT_OPT
   , m_isNonBlocking   ( false )
-  , m_inUse           ( false )
+  //, m_inUse           ( false )
 #endif
   {
   };
@@ -281,6 +281,7 @@ public:
         break;
     }
     m_procList.insert( picItr, pic );
+    m_picCount++;
 
     // call first picture init
     initPicture( pic );
@@ -288,19 +289,12 @@ public:
   void runStage( bool flush, AccessUnitList& auList )
   {
 #if DEBUG_PRINT
-    if( !m_procList.empty() )
+    if( !m_procList.empty() /*&& m_minQueueSize < 16 */)
     {
-#if 0
       DPRINT( "#%d %2d ", stageId(), m_minQueueSize );
-      debug_print_pic_list( m_procList, "ProcList" );
-#endif
-      _CASE( stageId() == 1 && m_procList.back()->poc == 96 )
-        _BREAK;
+      debug_print_pic_list( m_procList, " picList" );
     }
 #endif
-//#if HIGH_LEVEL_MT_OPT
-//    m_inUse = true;
-//#endif
     // ready to go?
     if( ( (int)m_procList.size() >= m_minQueueSize )
         || ( m_procList.size() && flush ) )
@@ -312,12 +306,13 @@ public:
         PicList doneList;
         PicList freeList;
         processPictures( m_procList, flush, auList, doneList, freeList );
-
         // send processed/finalized pictures to next stage
         if( m_nextStage )
         {
           for( auto pic : doneList )
           {
+            _CASE( stageId() == 1 )
+              _BREAK;
             m_nextStage->addPicSorted( pic->m_picShared );
           }
         }
@@ -334,33 +329,77 @@ public:
         }
       } while( m_flushAll && flush && m_procList.size() );
     }
-#if HIGH_LEVEL_MT_OPT
-    m_inUse = false;
-#endif
+// #if HIGH_LEVEL_MT_OPT
+//     m_inUse = false;
+// #endif
   }
-
+//#if HIGH_LEVEL_MT_OPT
+//  void finishStage( bool flush, AccessUnitList& auList )
+//  {
+//    // ready to go?
+//    if( ( (int)m_procList.size() >= m_minQueueSize )
+//        || ( m_procList.size() && flush ) )
+//    {
+//      // process always one picture or all if encoder should be flushed
+//      //do
+//      //{
+//      //  // process pictures
+//        PicList doneList;
+//        PicList freeList;
+//      //  processPictures( m_procList, flush, auList, doneList, freeList );
+//        finishPictures( auList, doneList, freeList );
+//
+//        // send processed/finalized pictures to next stage
+//        if( m_nextStage )
+//        {
+//          for( auto pic : m_doneList )
+//          {
+//            m_nextStage->addPicSorted( pic->m_picShared );
+//          }
+//        }
+//
+//        // release unused pictures
+//        for( auto pic : m_freeList )
+//        {
+//          // release shared buffer
+//          PicShared* picShared = pic->m_picShared;
+//          picShared->releaseShared( pic );
+//          // remove pic from own processing queue
+//          m_procList.remove( pic );
+//          m_freeList.push_back( pic );
+//        }
+//      //} while( m_flushAll && flush && m_procList.size() );
+//    }
+//  }
+//#endif
 #if HIGH_LEVEL_MT_OPT
   int  minQueueSize()  { return m_minQueueSize; }
   bool isNonBlocking() { return m_isNonBlocking; }
-  bool isStageInUse()  { return m_inUse; }
+  //bool isStageInUse()  { return m_inUse; }
   virtual bool canRunStage( bool flush, bool picSharedAvail )
   {
-    if( m_inUse )
-      return false;
+    //if( m_inUse )
+    //  return false;
+    //bool canStart = m_isNonBlocking ? m_picCount >= m_minQueueSize: ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
     bool canStart = ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
-#if NBSM_RELAX_LOOK_AHEAD
+#if 0 //NBSM_RELAX_LOOK_AHEAD
     // Just a dirty hack first
     return canStart && ( m_minQueueSize > 16 ? true: ( picSharedAvail || flush ) );
 #else
     return canStart && ( m_isNonBlocking ? true: ( picSharedAvail || flush ) );
 #endif
   }
+
+  virtual void checkState() {}
 #endif
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
 #if DEBUG_PRINT
   virtual int  stageId() = 0;
+#endif
+#if HIGH_LEVEL_MT_OPT
+    int       m_picCount = 0;
 #endif
 
 private:
@@ -373,8 +412,10 @@ private:
   int       m_ctuSize;
 #if HIGH_LEVEL_MT_OPT
   bool      m_isNonBlocking;
+  //PicList   m_doneList;
+  //PicList   m_freeList;
 public:
-  std::atomic<bool> m_inUse;
+  //std::atomic<bool> m_inUse;
 #endif
 };
 

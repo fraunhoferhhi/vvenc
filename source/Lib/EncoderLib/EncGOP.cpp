@@ -439,20 +439,35 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
+//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
+#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_GOPSize
+
 void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   CHECK( picList.empty(), "empty input picture list given" );
 
-  // create list of pictures ordered in coding order and ready to be encoded
   std::vector<Picture*> encList;
+  _CASE( m_picCount == 129 && isNonBlocking() )
+    _BREAK;
+#if HIGH_LEVEL_MT_OPT
+  if( !isNonBlocking() || ( m_pcEncCfg->m_RCTargetBitrate > 0 /*&& picList.back()->poc > 0 && picList.back()->poc % RC_LOOKAHEAD_PERIOD == 0 )*/ && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
+  {
+#endif
+
+  // create list of pictures ordered in coding order and ready to be encoded
   xCreateCodingOrder( picList, flush, encList );
 #if HIGH_LEVEL_MT_OPT
   _CASE( encList.empty() )
     _BREAK;
-#if NBSM_RELAX_LOOK_AHEAD
-  if( encList.empty() )
-    return;
+#if DEBUG_PRINT
+  if( !encList.empty() )
+  {
+    DPRINT( "#%d    ", stageId() );
+    debug_print_pic_list_vector( encList, " encList" );
+  }
 #endif
+  if( !encList.empty() )
+  {
 #endif
   CHECK( encList.empty(), "no pictures to be encoded found" );
 
@@ -460,7 +475,11 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   if( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
     CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
+#if HIGH_LEVEL_MT_OPT
+    if( (int)encList.front()->poc == 0 )
+#else
     if( m_numPicsCoded == 0 )
+#endif
     {
       if ( m_pcEncCfg->m_RCLookAhead )
       {
@@ -476,21 +495,54 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
         m_pcRateCtrl->processFirstPassData( flush );
       }
       m_pcRateCtrl->destroyRCGOP();
+#if 0 //HIGH_LEVEL_MT_OPT
+      const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)m_gopEncListInput.size() ) : m_pcEncCfg->m_GOPSize;
+#else
       const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
+#endif
       m_pcRateCtrl->initRCGOP( rcGopSize );
     }
   }
+  _CASE( encList.front()->poc == 128 )
+    _BREAK;
 
+//#if !HIGH_LEVEL_MT_OPT
   // encode pictures
   xInitPicsInCodingOrder( encList, picList, false );
+//#endif
+#if HIGH_LEVEL_MT_OPT
+  }
+  CHECK( m_gopEncListInput.empty() && m_gopEncListOutput.empty() && m_procList.empty() , "running with empty lists into encoder" );
+#endif
+#if HIGH_LEVEL_MT_OPT
+  } // non-blocking rc access period
+#endif
+
+#if HIGH_LEVEL_MT_OPT
+  if( isNonBlocking() )
+    xEncodePicturesNonBlocking( flush, auList, doneList );
+  else
+#endif
   xEncodePictures( flush, auList, doneList );
+
+#if HIGH_LEVEL_MT_OPT
+  if( !isNonBlocking() ){
+#endif
   CHECK( doneList.empty(), "no picture encoded" );
+#if HIGH_LEVEL_MT_OPT
+  }
+#endif
 
   // output reconstructed YUV
   xOutputRecYuv( picList );
 
   // release pictures not needed andmore
+#if HIGH_LEVEL_MT_OPT
+  //const bool allDone = flush && !encList.empty() && encList.back()->poc == doneList.back()->poc;
+  const bool allDone = flush && ( isNonBlocking() ? m_gopEncListInput.empty() && m_gopEncListOutput.empty() && m_procList.empty(): encList.back()->poc == doneList.back()->poc );
+#else
   const bool allDone = flush && encList.back()->poc == doneList.back()->poc;
+#endif
   xReleasePictures( picList, freeList, allDone );
 
   // clear output access unit
@@ -500,6 +552,273 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   }
 }
 
+#if HIGH_LEVEL_MT_OPT
+void EncGOP::checkState()
+{
+  //if( !m_procList.empty() || !m_gopEncListOutput.empty() )
+  {
+    std::unique_lock<std::mutex> lock( m_gopEncMutex );
+    bool rcPicOnTheFly = !m_rcUpdateList.empty() && ( (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames ); 
+    if( !m_procList.empty() || rcPicOnTheFly || m_freePicEncoderList.empty() )
+    {
+      bool nextPicReady = true;
+      if( !m_procList.empty() )
+      {
+        auto picItr = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[0]->checkRefPicsReconstructed(); } );
+        nextPicReady = picItr != m_procList.end();
+      }
+      if( m_freePicEncoderList.empty() || rcPicOnTheFly || !nextPicReady )
+      {
+        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
+        m_gopEncCond.wait( lock );
+      }
+    }
+  }
+}
+
+void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, PicList& doneList )
+{
+  // in lockstep mode, process all pictures in processing list
+  const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
+
+#if HIGH_LEVEL_MT_OPT
+  if( isNonBlocking() && lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames )
+  {
+    // Non-blocking: Encoder is still busy, wait outside
+    return;
+  }
+
+  // get list of pictures to be encoded and used for RC update
+  if( m_procList.empty() /*&& m_rcUpdateList.empty()*/ )
+#else
+  // get list of pictures to be encoded and used for RC update
+  std::list<Picture*> m_procList;
+  std::list<Picture*> m_rcUpdateList;
+#endif
+  xGetProcessingListsNonBlocking( m_procList, m_rcUpdateList );
+#if DEBUG_PRINT
+  if( !m_procList.empty() )
+  {
+    DPRINT( "#%d    ", stageId() );
+    debug_print_pic_list( m_procList, "procList" );
+  }
+#endif
+
+#if HIGH_LEVEL_MT_OPT
+  // Non-blocking: If nothing to do, wait outside
+  if( m_procList.empty() && !m_gopEncListOutput.front()->isReconstructed )
+    return;
+#endif
+  _CASE( !m_procList.empty() && m_procList.front()->poc == 64 && isNonBlocking() )
+    _BREAK;
+
+  // encode one picture in serial mode / multiple pictures in FPP mode
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
+  while( true )
+  {
+    Picture* pic           = nullptr;
+    EncPicture* picEncoder = nullptr;
+
+    // fetch next picture to be encoded and next free picture encoder
+    {
+      std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
+      if( m_pcEncCfg->m_numThreads > 0) lock.lock();
+
+      // in non-lockstep mode, check encoding of output picture done
+      // in lockstep mode, check all pictures encoded
+      if( ( ! lockStepMode && ( m_gopEncListOutput.empty() || m_gopEncListOutput.front()->isReconstructed ) )
+          || ( lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
+      {
+        break;
+      }
+
+      // get next picture ready to be encoded
+      auto picItr             = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[ 0 ]->checkRefPicsReconstructed(); } );
+      const bool nextPicReady = picItr != m_procList.end();
+
+      // check at least one picture and one pic encoder ready
+      if( m_freePicEncoderList.empty()
+          || ! nextPicReady )
+      {
+#if HIGH_LEVEL_MT_OPT
+        if( isNonBlocking() )
+          return;
+#endif
+        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
+        m_gopEncCond.wait( lock );
+        continue;
+      }
+
+      pic        = *picItr;
+      picEncoder = m_freePicEncoderList.front();
+      m_freePicEncoderList.pop_front();
+    }
+
+    CHECK( picEncoder == nullptr, "no free picture encoder available" );
+    CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
+
+    // picture will be encoded -> remove from input list
+#if !HIGH_LEVEL_MT_OPT
+    m_gopEncListInput.remove( pic );
+#endif
+    m_procList.remove( pic );
+
+    // decoder in encoder
+    bool decPic = false;
+    bool encPic = false;
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
+    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
+    pic->writePic = decPic || encPic;
+    pic->encPic   = encPic;
+
+    if( m_pcEncCfg->m_alfTempPred )
+    {
+      xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
+    }
+#if DEBUG_PRINT
+    DPRINT( "#%d           compress: %2d <t%2d>\n", stageId(), pic->getPOC(), pic->TLayer );
+#endif
+    // compress next picture
+    if( pic->encPic )
+    {
+      picEncoder->compressPicture( *pic, *this );
+    }
+    else
+    {
+      picEncoder->skipCompressPicture( *pic, m_gopApsMap );
+    }
+
+    // finish picture encoding and cleanup
+    if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
+    {
+      static auto finishTask = []( int, FinishTaskParam* param ) {
+        param->picEncoder->finalizePicture( *param->pic );
+        {
+          std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+          param->pic->isReconstructed = true;
+          param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+          param->gopEncoder->m_gopEncCond.notify_one();
+        }
+        delete param;
+        return true;
+      };
+      FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
+      m_threadPool->addBarrierTask<FinishTaskParam>( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
+    }
+    else
+    {
+      picEncoder->finalizePicture( *pic );
+      pic->isReconstructed = true;
+      m_freePicEncoderList.push_back( picEncoder );
+    }
+  }
+
+  CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
+  CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
+#if HIGH_LEVEL_MT_OPT
+  _CASE( isNonBlocking() )
+    _BREAK;
+#endif
+  // AU output
+  Picture* outPic = m_gopEncListOutput.front();
+  m_gopEncListOutput.pop_front();
+#if DEBUG_PRINT
+    DPRINT( "#%d             output:               %2d <t%2d>\n", stageId(), outPic->getPOC(), outPic->TLayer );
+#endif
+
+  if( outPic->writePic )
+  {
+    xWritePicture( *outPic, auList, false );
+  }
+
+  if( m_pcEncCfg->m_alfTempPred )
+  {
+    xSyncAlfAps( *outPic, m_gopApsMap, outPic->picApsMap );
+  }
+
+  // update pending RC
+  // first pic has been written to bitstream
+  // therefore we have at least for this picture a valid total bit and head bit count
+  for( auto pic : m_rcUpdateList )
+  {
+    if( pic != outPic )
+    {
+      pic->actualHeadBits  = outPic->actualHeadBits;
+      pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+    }
+    if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+    {
+      m_pcRateCtrl->xUpdateAfterPicRC( pic );
+    }
+  }
+#if HIGH_LEVEL_MT_OPT
+  if( !m_rcUpdateList.empty() )
+  {
+    if( lockStepMode )
+      m_rcUpdateList.clear();
+    else
+      m_rcUpdateList.pop_front();
+  }
+#endif
+
+  if( m_pcEncCfg->m_useAMaxBT )
+  {
+    m_BlkStat.updateMaxBT( *outPic->slices[0], outPic->picBlkStat );
+  }
+
+  outPic->slices[ 0 ]->updateRefPicCounter( -1 );
+  outPic->isFinished = true;
+
+  if( ! m_isPreAnalysis )
+  {
+    outPic->getFilteredOrigBuffer().destroy();
+  }
+
+  doneList.push_back( outPic );
+#if !HIGH_LEVEL_MT_OPT
+  m_pocEncode     = outPic->poc;
+#endif
+  m_numPicsCoded += 1;
+}
+
+void EncGOP::xOutputRecYuv( const PicList& picList )
+{
+  if( m_pcRateCtrl->rcIsFinalPass && m_recYuvBufFunc )
+  {
+    CHECK( m_isPreAnalysis, "yuv output enabled for pre analysis" );
+    // ordered YUV output
+    for( auto pic : picList )
+    {
+      if( pic->poc < m_pocRecOut )
+        continue;
+      if( ! pic->isReconstructed || pic->poc != m_pocRecOut )
+        return;
+
+      const PPS& pps = *(pic->cs->pps);
+      vvencYUVBuffer yuvBuffer;
+      vvenc_YUVBuffer_default( &yuvBuffer );
+      setupYuvBuffer( pic->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
+      m_recYuvBufFunc( m_recYuvBufCtx, &yuvBuffer );
+
+      m_pocRecOut += 1;
+      pic->isNeededForOutput = false;
+    }
+  }
+  else
+  {
+    // no output needed, simply unmark pictures
+    for( auto pic : picList )
+    {
+      if( pic->isReconstructed && pic->isNeededForOutput )
+        pic->isNeededForOutput = false;
+    }
+  }
+}
+#endif
 
 void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneList )
 {
@@ -507,7 +826,13 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   std::list<Picture*> procList;
   std::list<Picture*> rcUpdateList;
   xGetProcessingLists( procList, rcUpdateList );
-
+#if DEBUG_PRINT
+  if( !m_procList.empty() )
+  {
+    DPRINT( "#%d    ", stageId() );
+    debug_print_pic_list( m_procList, "procList" );
+  }
+#endif
   // in lockstep mode, process all pictures in processing list
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
@@ -573,6 +898,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 #if DEBUG_PRINT
     DPRINT( "#%d           compress: %2d <t%2d>\n", stageId(), pic->getPOC(), pic->TLayer );
 #endif
+
     // compress next picture
     if( pic->encPic )
     {
@@ -615,6 +941,9 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   // AU output
   Picture* outPic = m_gopEncListOutput.front();
   m_gopEncListOutput.pop_front();
+#if DEBUG_PRINT
+    DPRINT( "#%d             output:               %2d <t%2d>\n", stageId(), outPic->getPOC(), outPic->TLayer );
+#endif
 
   if( outPic->writePic )
   {
@@ -661,39 +990,6 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   m_numPicsCoded += 1;
 }
 
-void EncGOP::xOutputRecYuv( const PicList& picList )
-{
-  if( m_pcRateCtrl->rcIsFinalPass && m_recYuvBufFunc )
-  {
-    CHECK( m_isPreAnalysis, "yuv output enabled for pre analysis" );
-    // ordered YUV output
-    for( auto pic : picList )
-    {
-      if( pic->poc < m_pocRecOut )
-        continue;
-      if( ! pic->isReconstructed || pic->poc != m_pocRecOut )
-        return;
-
-      const PPS& pps = *(pic->cs->pps);
-      vvencYUVBuffer yuvBuffer;
-      vvenc_YUVBuffer_default( &yuvBuffer );
-      setupYuvBuffer( pic->getRecoBuf(), yuvBuffer, &pps.conformanceWindow );
-      m_recYuvBufFunc( m_recYuvBufCtx, &yuvBuffer );
-
-      m_pocRecOut += 1;
-      pic->isNeededForOutput = false;
-    }
-  }
-  else
-  {
-    // no output needed, simply unmark pictures
-    for( auto pic : picList )
-    {
-      if( pic->isReconstructed && pic->isNeededForOutput )
-        pic->isNeededForOutput = false;
-    }
-  }
-}
 
 void EncGOP::xReleasePictures( const PicList& picList, PicList& freeList, bool allDone )
 {
@@ -1577,9 +1873,84 @@ void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, const
 
       m_gopEncListInput.push_back( pic );
       m_gopEncListOutput.push_back( pic );
+#if HIGH_LEVEL_MT_OPT
+      m_pocEncode     = pic->poc;
+#endif
     }
   }
 }
+
+#if HIGH_LEVEL_MT_OPT
+void EncGOP::xGetProcessingListsNonBlocking( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList )
+{
+  // in lockstep mode, process only pics of same temporal layer
+  const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
+  if( lockStepMode )
+  {
+    // start new parallel chunk only, if next output picture is not reconstructed
+    if( m_gopEncListOutput.empty() || ! m_gopEncListOutput.front()->isReconstructed )
+    {
+      const int procTL         = m_gopEncListInput.size() ? m_gopEncListInput.front()->TLayer                      : -1;
+      const int gopId          = m_gopEncListInput.size() ? m_gopEncListInput.front()->poc / m_pcEncCfg->m_GOPSize : -1;
+      const int rcIdxInGop     = m_gopEncListInput.size() ? m_gopEncListInput.front()->rcIdxInGop                  : -1;
+      const int minSerialDepth = m_pcEncCfg->m_maxParallelFrames > 2 ? 1 : 2;  // up to this temporal layer encode pictures only in serial mode
+      const int maxSize        = procTL <= minSerialDepth ? 1 : m_pcEncCfg->m_maxParallelFrames;
+#if HIGH_LEVEL_MT_OPT
+      for( auto it = m_gopEncListInput.begin(); it != m_gopEncListInput.end(); )
+      {
+        auto pic = *it;
+        if( pic->poc / m_pcEncCfg->m_GOPSize == gopId
+            && pic->TLayer == procTL
+            && pic->slices[ 0 ]->checkRefPicsReconstructed() 
+          )
+        {
+          procList.push_back    ( pic );
+          rcUpdateList.push_back( pic );
+          // map all pics in a parallel chunk to the same index, improves RC performance
+          pic->rcIdxInGop = rcIdxInGop;
+          it = m_gopEncListInput.erase( it );
+        }
+        else
+        {
+          ++it;
+        }
+        if( (int)procList.size() >= maxSize )
+          break;
+      }
+#else
+      for( auto pic : m_gopEncListInput )
+      {
+        if( pic->poc / m_pcEncCfg->m_GOPSize == gopId
+            && pic->TLayer == procTL
+            && pic->slices[ 0 ]->checkRefPicsReconstructed() )
+        {
+          procList.push_back    ( pic );
+          rcUpdateList.push_back( pic );
+          // map all pics in a parallel chunk to the same index, improves RC performance
+          pic->rcIdxInGop = rcIdxInGop;
+        }
+        if( (int)procList.size() >= maxSize )
+          break;
+      }
+#endif
+    }
+  }
+  else
+  {
+#if HIGH_LEVEL_MT_OPT
+    procList.splice( procList.end(), m_gopEncListInput );
+    m_gopEncListInput.clear();
+#else
+    procList = m_gopEncListInput;
+#endif
+    // TODO: Is it correct here, to put just one picture into update list?
+    if( ! m_gopEncListOutput.empty() )
+      rcUpdateList.push_back( m_gopEncListOutput.front() );
+  }
+  CHECK( ! rcUpdateList.empty() && m_gopEncListOutput.empty(),                                                         "first picture in RC update and in output list have to be the same" );
+  CHECK( ! rcUpdateList.empty() && ! m_gopEncListOutput.empty() && rcUpdateList.front() != m_gopEncListOutput.front(), "first picture in RC update and in output list have to be the same" );
+}
+#endif
 
 void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList )
 {

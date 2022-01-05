@@ -175,6 +175,11 @@ private:
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
   std::list<Picture*>       m_gopEncListOutput;
+#if HIGH_LEVEL_MT_OPT
+  std::list<Picture*>       m_procList;
+  std::list<Picture*>       m_rcUpdateList;
+  int m_rcPeriodCnt = 0;
+#endif
 
   std::vector<int>          m_pocToGopId;
   std::vector<int>          m_nextPocOffset;
@@ -191,6 +196,9 @@ public:
   void init               ( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
+#if HIGH_LEVEL_MT_OPT
+  virtual void checkState();
+#endif
 
 protected:
   virtual void initPicture    ( Picture* pic );
@@ -199,7 +207,6 @@ protected:
   virtual int stageId() { return m_isPreAnalysis ? 1: 2; };
   //virtual bool canRunStage( bool flush, bool picSharedAvail ) { return EncStage::canRunStage( flush, picSharedAvail ) && ( m_isPreAnalysis ? picSharedAvail || flush: true ); }
 #endif
-
 private:
   int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }
 
@@ -208,6 +215,10 @@ private:
   void xCreateCodingOrder             ( const PicList& picList, bool flush, std::vector<Picture*>& encList ) const;
   void xUpdateRasInit                 ( Slice* slice );
   void xEncodePictures                ( bool flush, AccessUnitList& auList, PicList& doneList );
+#if HIGH_LEVEL_MT_OPT
+  void xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, PicList& doneList );
+  void xGetProcessingListsNonBlocking( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
+#endif
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList, bool allDone );
 

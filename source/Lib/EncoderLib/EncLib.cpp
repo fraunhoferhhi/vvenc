@@ -273,12 +273,16 @@ void EncLib::initPass( int pass, const char* statsFName )
 #if HIGH_LEVEL_MT_OPT
   if( m_encCfg.m_numThreads > 0 )
   {
+#if 0
     m_maxNumPicShared = 0;
     for( auto encStage : m_encStages )
     {
       m_maxNumPicShared += encStage->minQueueSize();
     }
     m_maxNumPicShared += 4;
+#else
+    m_maxNumPicShared = 129;
+#endif
   }
 #endif
 
@@ -375,34 +379,34 @@ void EncLib::xInitRCCfg()
 // ====================================================================================================================
 // Public member functions
 // ====================================================================================================================
-#if HIGH_LEVEL_MT_OPT
-void EncLib::xRunStageInThread( EncStage *encStage, bool flush, AccessUnitList& auList )
-{
-  struct StageTaskParam {
-    EncLib*         encLib;
-    EncStage*       encStage;
-    bool            flush;
-    AccessUnitList* au;
-    StageTaskParam()                                                        : encLib( nullptr ), encStage( nullptr ), flush( false ), au( nullptr ) {}
-    StageTaskParam( EncLib* _e, EncStage* _s, bool _f, AccessUnitList* _a ) : encLib( _e ),      encStage( _s ),      flush( _f ),    au( _a )      {}
-  };
-  static auto runStageTask = []( int, StageTaskParam* param ) 
-  {
-    param->encStage->runStage( param->flush, *param->au );
-    {
-      std::lock_guard<std::mutex> lock( param->encLib->m_stagesMutex );
-      param->encLib->m_stagesCond.notify_one();
-    }
-    delete param;
-    return true;
-  };
-  StageTaskParam* param = new StageTaskParam( this, encStage, flush, &auList );
-  encStage->m_inUse = true;
-  m_threadPool->addBarrierTask<StageTaskParam>( runStageTask, param );
-}
-#endif
+// #if HIGH_LEVEL_MT_OPT
+// void EncLib::xRunStageInThread( EncStage *encStage, bool flush, AccessUnitList& auList )
+// {
+//   struct StageTaskParam {
+//     EncLib*         encLib;
+//     EncStage*       encStage;
+//     bool            flush;
+//     AccessUnitList* au;
+//     StageTaskParam()                                                        : encLib( nullptr ), encStage( nullptr ), flush( false ), au( nullptr ) {}
+//     StageTaskParam( EncLib* _e, EncStage* _s, bool _f, AccessUnitList* _a ) : encLib( _e ),      encStage( _s ),      flush( _f ),    au( _a )      {}
+//   };
+//   static auto runStageTask = []( int, StageTaskParam* param ) 
+//   {
+//     param->encStage->runStage( param->flush, *param->au );
+//     {
+//       std::lock_guard<std::mutex> lock( param->encLib->m_stagesMutex );
+//       param->encLib->m_stagesCond.notify_one();
+//     }
+//     delete param;
+//     return true;
+//   };
+//   StageTaskParam* param = new StageTaskParam( this, encStage, flush, &auList );
+//   encStage->m_inUse = true;
+//   m_threadPool->addBarrierTask<StageTaskParam>( runStageTask, param );
+// }
+// #endif
 
-#if 1
+#if 0
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
@@ -412,10 +416,20 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // clear output access unit
   au.clearAu();
 
+#if HIGH_LEVEL_MT_OPT
+  PicShared* picShared = nullptr;
+#endif
+
   // send new YUV input buffer to first encoder stage
   if( yuvInBuf )
   {
+#if HIGH_LEVEL_MT_OPT
+    picShared = xGetFreePicShared();
+    if( picShared )
+    {
+#else
     PicShared* picShared = xGetFreePicShared();
+#endif
     picShared->reuse( m_picsRcvd, yuvInBuf );
     if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
     {
@@ -424,6 +438,31 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     xDetectScc( picShared );
     m_encStages[ 0 ]->addPicSorted( picShared );
     m_picsRcvd += 1;
+#if HIGH_LEVEL_MT_OPT
+    }
+#endif
+
+#if HIGH_LEVEL_MT_OPT
+  // If we have not got picture-unit for a new picture, we have to wait for stages to finish
+  if( m_encCfg.m_numThreads > 0 && yuvInBuf && !picShared )
+  {
+#if 1
+    std::unique_lock<std::mutex> lock( m_stagesMutex );
+    if( stageInUse )
+      m_stagesCond.wait( lock );
+
+#else
+    std::unique_lock<std::mutex> lock( m_stagesMutex );
+    bool stageInUse = false;
+    for( auto encStage : m_encStages )
+    {
+      stageInUse |= encStage->m_inUse;
+    }
+    if( stageInUse )
+      m_stagesCond.wait( lock );
+#endif
+  }
+#endif
   }
 
   PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
@@ -502,21 +541,17 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
 #if HIGH_LEVEL_MT_OPT
     // Check if cur. stage can be invoked
-    if( encStage->canRunStage( flush, ( yuvInBuf && picShared ) ) )
+    if( encStage->canRunStage( flush, picShared != nullptr ) )
     {
-      if( encStage->isNonBlocking() )
-      {
-        if( m_cAu.size() > 0 )
-        {
-          au = m_cAu;
-          m_cAu.clearAu( true );
-        }
-        xRunStageInThread( encStage, flush, m_cAu );
-      }
-      else
-      {
-        encStage->runStage( flush, au );
-      }
+      //if( encStage->isNonBlocking() )
+      //{
+      //  if( m_cAu.size() > 0 )
+      //  {
+      //    au = m_cAu;
+      //    m_cAu.clearAu( true );
+      //  }
+      //}
+      encStage->runStage( flush, au );
     }
 #else
     encStage->runStage( flush, au );
@@ -526,16 +561,21 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
 #if HIGH_LEVEL_MT_OPT
   // If we have not got picture-unit for a new picture, we have to wait for stages to finish
-  if( m_encCfg.m_numThreads > 0 && yuvInBuf && !picShared )
+  if( m_encCfg.m_numThreads > 0 && ( ( flush ) || ( yuvInBuf && !picShared ) ) )
   {
-    std::unique_lock<std::mutex> lock( m_stagesMutex );
-    bool stageInUse = false;
+    //std::unique_lock<std::mutex> lock( m_stagesMutex );
+    //bool stageInUse = false;
+    //for( auto encStage : m_encStages )
+    //{
+    //  stageInUse |= encStage->m_inUse;
+    //}
+    //if( stageInUse )
+    //  m_stagesCond.wait( lock );
     for( auto encStage : m_encStages )
     {
-      stageInUse |= encStage->m_inUse;
+      if( encStage->isNonBlocking() )
+        encStage->checkState();
     }
-    if( stageInUse )
-      m_stagesCond.wait( lock );
   }
 
   }while( yuvInBuf && !picShared );

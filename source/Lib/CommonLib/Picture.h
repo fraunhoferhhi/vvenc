@@ -285,6 +285,19 @@ inline void debug_print_pic_list( PicList& m_list, std::string listName )
     DPRINT( "\n" );
   }
 }
+inline void debug_print_pic_list_vector( std::vector<Picture*>& m_list, std::string listName )
+{
+  if( !m_list.empty() )
+  {
+    DPRINT( "%s: ", listName.c_str() );
+    for( auto p : m_list )
+    {
+      //printf( "%2d <t%2d>  ", p->getPOC(), p->TLayer );
+      printf( "%2d ", p->getPOC() );
+    }
+    DPRINT( "\n" );
+  }
+}
 #else
 #define DPRINT(...)
 #endif

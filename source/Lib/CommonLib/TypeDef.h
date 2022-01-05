@@ -73,7 +73,7 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define DEBUG_PRINT                                       0
+#define DEBUG_PRINT                                       1
 
 #define HIGH_LEVEL_MT_OPT                                 1
 #define NBSM_RELAX_LOOK_AHEAD                             1
