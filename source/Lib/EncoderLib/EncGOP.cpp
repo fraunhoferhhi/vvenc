@@ -439,38 +439,10 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
-#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_GOPSize
 
-void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+#if HIGH_LEVEL_MT_OPT
+void EncGOP::xInitRateControlGOP( std::list<Picture*>& encList, bool flush )
 {
-  CHECK( picList.empty(), "empty input picture list given" );
-
-  std::vector<Picture*> encList;
-  _CASE( m_picCount == 129 && isNonBlocking() )
-    _BREAK;
-#if HIGH_LEVEL_MT_OPT
-  if( !isNonBlocking() || ( m_pcEncCfg->m_RCTargetBitrate > 0 /*&& picList.back()->poc > 0 && picList.back()->poc % RC_LOOKAHEAD_PERIOD == 0 )*/ && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
-  {
-#endif
-
-  // create list of pictures ordered in coding order and ready to be encoded
-  xCreateCodingOrder( picList, flush, encList );
-#if HIGH_LEVEL_MT_OPT
-  _CASE( encList.empty() )
-    _BREAK;
-#if DEBUG_PRINT
-  if( !encList.empty() )
-  {
-    DPRINT( "#%d    ", stageId() );
-    debug_print_pic_list_vector( encList, " encList" );
-  }
-#endif
-  if( !encList.empty() )
-  {
-#endif
-  CHECK( encList.empty(), "no pictures to be encoded found" );
-
   // init rate control GOP
   if( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
@@ -495,21 +467,112 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
         m_pcRateCtrl->processFirstPassData( flush );
       }
       m_pcRateCtrl->destroyRCGOP();
-#if 0 //HIGH_LEVEL_MT_OPT
-      const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)m_gopEncListInput.size() ) : m_pcEncCfg->m_GOPSize;
-#else
       const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
-#endif
       m_pcRateCtrl->initRCGOP( rcGopSize );
     }
   }
+}
+#endif
+#define HIGH_LEVEL_MT_OPT_NEW_QUEUE ( 0 && HIGH_LEVEL_MT_OPT )
+
+//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
+#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
+
+void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
+{
+  CHECK( picList.empty(), "empty input picture list given" );
+
+  std::vector<Picture*> encList;
+#if HIGH_LEVEL_MT_OPT
+#if HIGH_LEVEL_MT_OPT_NEW_QUEUE
+  if( !isNonBlocking() || ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_picCount - 1 ) % m_pcEncCfg->m_GOPSize == 0 ) )
+#endif
+  {
+#endif
+#if HIGH_LEVEL_MT_OPT_NEW_QUEUE
+    if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+    {
+    }
+#endif
+  // create list of pictures ordered in coding order and ready to be encoded
+  xCreateCodingOrder( picList, flush, encList );
+#if HIGH_LEVEL_MT_OPT
+  _CASE( encList.empty() )
+    _BREAK;
+#if DEBUG_PRINT
+  if( !encList.empty() )
+  {
+    DPRINT( "#%d NumPicRecvd=%d PicCount=%d\n", stageId(), m_numPicsRecvd, m_picCount );
+    DPRINT( "#%d    ", stageId() );
+    debug_print_pic_list_vector( encList, " encList" );
+  }
+#endif
+  _CASE( m_picCount == 65 && isNonBlocking() )
+    _BREAK;
+
+  if( !encList.empty() )
+  {
+#else
+#if DEBUG_PRINT
+  if( !encList.empty() )
+  {
+    DPRINT( "#%d    ", stageId() );
+    debug_print_pic_list_vector( encList, " encList" );
+  }
+#endif
+#endif
+  CHECK( encList.empty(), "no pictures to be encoded found" );
+#if !HIGH_LEVEL_MT_OPT_NEW_QUEUE
+  // init rate control GOP
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
+#if HIGH_LEVEL_MT_OPT
+    if( m_lookAheadGOPCnt/*(int)encList.front()->poc*/ == 0 )
+#else
+    if( m_numPicsCoded == 0 )
+#endif
+    {
+      if ( m_pcEncCfg->m_RCLookAhead )
+      {
+        m_lookAheadGOPCnt++;
+        m_pcRateCtrl->processFirstPassData( flush );
+      }
+      // very first RC GOP
+      m_pcRateCtrl->initRCGOP( 1 );
+    }
+#if HIGH_LEVEL_MT_OPT
+    //else if( 1 == m_numPicsRecvd % m_pcEncCfg->m_GOPSize )
+    else if( 1 )
+    {
+      if ( m_pcEncCfg->m_RCLookAhead && ( ( m_picCount - 1 )/*encList.front()->poc*/ / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt )
+      {
+        m_lookAheadGOPCnt++;
+        m_pcRateCtrl->processFirstPassData( flush );
+      }
+      //m_pcRateCtrl->destroyRCGOP();
+      //const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
+      //m_pcRateCtrl->initRCGOP( rcGopSize );
+    }
+#else
+    else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
+    {
+      if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % RC_LOOKAHEAD_PERIOD == 0 )
+      {
+        m_pcRateCtrl->processFirstPassData( flush );
+      }
+      m_pcRateCtrl->destroyRCGOP();
+      const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
+      m_pcRateCtrl->initRCGOP( rcGopSize );
+    }
+#endif
+  }
+#endif
   _CASE( encList.front()->poc == 128 )
     _BREAK;
 
-//#if !HIGH_LEVEL_MT_OPT
   // encode pictures
   xInitPicsInCodingOrder( encList, picList, false );
-//#endif
 #if HIGH_LEVEL_MT_OPT
   }
   CHECK( m_gopEncListInput.empty() && m_gopEncListOutput.empty() && m_procList.empty() , "running with empty lists into encoder" );
@@ -597,6 +660,9 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
   std::list<Picture*> m_rcUpdateList;
 #endif
   xGetProcessingListsNonBlocking( m_procList, m_rcUpdateList );
+// #if HIGH_LEVEL_MT_OPT
+//   xInitRateControlGOP( m_procList, flush );
+// #endif
 #if DEBUG_PRINT
   if( !m_procList.empty() )
   {
@@ -784,6 +850,7 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
 #endif
   m_numPicsCoded += 1;
 }
+#endif
 
 void EncGOP::xOutputRecYuv( const PicList& picList )
 {
@@ -818,7 +885,6 @@ void EncGOP::xOutputRecYuv( const PicList& picList )
     }
   }
 }
-#endif
 
 void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneList )
 {
@@ -827,10 +893,10 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   std::list<Picture*> rcUpdateList;
   xGetProcessingLists( procList, rcUpdateList );
 #if DEBUG_PRINT
-  if( !m_procList.empty() )
+  if( !procList.empty() )
   {
     DPRINT( "#%d    ", stageId() );
-    debug_print_pic_list( m_procList, "procList" );
+    debug_print_pic_list( procList, "procList" );
   }
 #endif
   // in lockstep mode, process all pictures in processing list
@@ -1094,7 +1160,7 @@ Picture* EncGOP::xFindPicture( const PicList& picList, int poc ) const
   return nullptr;
 }
 
-void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector<Picture*>& encList ) const
+void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector<Picture*>& encList ) /*const*/
 {
   const bool altGOP = m_pcEncCfg->m_DecodingRefreshType == 4;
   const int  max    = picList.back()->poc;
@@ -1119,6 +1185,9 @@ void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector
     if( ! pic )
       break;
     encList.push_back( pic );
+#if HIGH_LEVEL_MT_OPT
+    m_numPicsRecvd++;
+#endif
   }
 }
 

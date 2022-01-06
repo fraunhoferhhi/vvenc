@@ -179,6 +179,8 @@ private:
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
   int m_rcPeriodCnt = 0;
+  int m_numPicsRecvd = 0;
+  int m_lookAheadGOPCnt = 0;
 #endif
 
   std::vector<int>          m_pocToGopId;
@@ -212,12 +214,13 @@ private:
 
   int  xGetNextPocICO                 ( int poc, int max, bool altGOP ) const;
   Picture* xFindPicture               ( const PicList& picList, int poc ) const;
-  void xCreateCodingOrder             ( const PicList& picList, bool flush, std::vector<Picture*>& encList ) const;
+  void xCreateCodingOrder             ( const PicList& picList, bool flush, std::vector<Picture*>& encList ) /*const*/;
   void xUpdateRasInit                 ( Slice* slice );
   void xEncodePictures                ( bool flush, AccessUnitList& auList, PicList& doneList );
 #if HIGH_LEVEL_MT_OPT
   void xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, PicList& doneList );
   void xGetProcessingListsNonBlocking( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
+  void xInitRateControlGOP( std::list<Picture*>& encList, bool flush );
 #endif
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList, bool allDone );

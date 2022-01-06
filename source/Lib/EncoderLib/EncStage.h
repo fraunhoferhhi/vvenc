@@ -281,7 +281,9 @@ public:
         break;
     }
     m_procList.insert( picItr, pic );
+#if HIGH_LEVEL_MT_OPT
     m_picCount++;
+#endif
 
     // call first picture init
     initPicture( pic );
@@ -291,7 +293,7 @@ public:
 #if DEBUG_PRINT
     if( !m_procList.empty() /*&& m_minQueueSize < 16 */)
     {
-      DPRINT( "#%d %2d ", stageId(), m_minQueueSize );
+      DPRINT( "#%d %d(%2d) ", stageId(), (int)m_procList.size(), m_minQueueSize );
       debug_print_pic_list( m_procList, " picList" );
     }
 #endif
