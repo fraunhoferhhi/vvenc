@@ -67,6 +67,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
+#define HIGH_LEVEL_MT_OPT_NEW_QUEUE ( 1 && HIGH_LEVEL_MT_OPT )
+#define MT_RC_LA_GOP_SW             ( 1 && HIGH_LEVEL_MT_OPT_NEW_QUEUE )
+
 namespace vvenc {
 
 #ifdef TRACE_ENABLE_ITT
@@ -473,7 +476,6 @@ void EncGOP::xInitRateControlGOP( std::list<Picture*>& encList, bool flush )
   }
 }
 #endif
-#define HIGH_LEVEL_MT_OPT_NEW_QUEUE ( 0 && HIGH_LEVEL_MT_OPT )
 
 //#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
 #define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
@@ -484,21 +486,35 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 
   std::vector<Picture*> encList;
 #if HIGH_LEVEL_MT_OPT
+  // picList contains pictures coming from Look-Ahead (1.pass)
+  // Rate Control with Look Ahead, two variants:
+  // - Chunk-wise 2.Pass: encoder all pictures from Look-Ahead list at once
+  // - GOP-wise processing by sliding window with Look-Ahead Period: Process only one GOP, but use also LA data from the future GOPs
 #if HIGH_LEVEL_MT_OPT_NEW_QUEUE
-  if( !isNonBlocking() || ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_picCount - 1 ) % m_pcEncCfg->m_GOPSize == 0 ) )
+#if MT_RC_LA_GOP_SW
+  if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_lookAheadGOPCnt == 0 || ( m_pcEncCfg->m_RCLookAhead && ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) ) )
+  //if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_picCount - 1 ) % m_pcEncCfg->m_GOPSize == 0 ) )
+#else
+  if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
+#endif
 #endif
   {
 #endif
-#if HIGH_LEVEL_MT_OPT_NEW_QUEUE
-    if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-    {
-    }
-#endif
   // create list of pictures ordered in coding order and ready to be encoded
   xCreateCodingOrder( picList, flush, encList );
+#if HIGH_LEVEL_MT_OPT_NEW_QUEUE
+#if MT_RC_LA_GOP_SW
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_lookAheadGOPCnt == 0 || ( m_pcEncCfg->m_RCLookAhead && ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) )
+#else
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_lookAheadGOPCnt == 0 || ( m_pcEncCfg->m_RCLookAhead && ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) ) )
+#endif
+  {
+    m_lookAheadGOPCnt++;
+    m_pcRateCtrl->processFirstPassData( flush );
+  }
+#endif
+
 #if HIGH_LEVEL_MT_OPT
-  _CASE( encList.empty() )
-    _BREAK;
 #if DEBUG_PRINT
   if( !encList.empty() )
   {
@@ -676,8 +692,6 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
   if( m_procList.empty() && !m_gopEncListOutput.front()->isReconstructed )
     return;
 #endif
-  _CASE( !m_procList.empty() && m_procList.front()->poc == 64 && isNonBlocking() )
-    _BREAK;
 
   // encode one picture in serial mode / multiple pictures in FPP mode
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_IGNORE );
@@ -1187,6 +1201,11 @@ void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector
     encList.push_back( pic );
 #if HIGH_LEVEL_MT_OPT
     m_numPicsRecvd++;
+#if 1
+    // GOP-wise sliding processing window with Look-Ahead Period: Process only one GOP using data from LA
+    if( m_pcEncCfg->m_RCTargetBitrate > 0 && encList.size() >= m_pcEncCfg->m_GOPSize + ( m_lookAheadGOPCnt == 0 ) ? 1: 0 )
+      break;
+#endif
 #endif
   }
 }
