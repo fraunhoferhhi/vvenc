@@ -488,12 +488,11 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 #if HIGH_LEVEL_MT_OPT
   // picList contains pictures coming from Look-Ahead (1.pass)
   // Rate Control with Look Ahead, two variants:
-  // - Chunk-wise 2.Pass: encoder all pictures from Look-Ahead list at once
-  // - GOP-wise processing by sliding window with Look-Ahead Period: Process only one GOP, but use also LA data from the future GOPs
+  // - Chunk-wise 2.Pass: encode all pictures from pre-coded Look-Ahead chunk (GOPs) using their data only
+  // - GOP-wise sliding window final pass processing using data of future pre-coded GOPs by Look-Ahead
 #if HIGH_LEVEL_MT_OPT_NEW_QUEUE
 #if MT_RC_LA_GOP_SW
   if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_lookAheadGOPCnt == 0 || ( m_pcEncCfg->m_RCLookAhead && ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) ) )
-  //if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_picCount - 1 ) % m_pcEncCfg->m_GOPSize == 0 ) )
 #else
   if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
 #endif
