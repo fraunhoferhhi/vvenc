@@ -489,7 +489,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // picList contains pictures coming from Look-Ahead (1.pass)
   // Rate Control with Look Ahead, two variants:
   // - Chunk-wise 2.Pass: encode all pictures from pre-coded Look-Ahead chunk (GOPs) using their data only
-  // - GOP-wise sliding window final pass processing using data of future pre-coded GOPs by Look-Ahead
+  // - GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
 #if HIGH_LEVEL_MT_OPT_NEW_QUEUE
 #if MT_RC_LA_GOP_SW
   if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) )
@@ -501,15 +501,9 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 #endif
   // create list of pictures ordered in coding order and ready to be encoded
   xCreateCodingOrder( picList, flush, encList );
-// #if MT_RC_LA_GOP_SW
-//   m_lookAheadGOPCnt += m_lookAheadGOPCnt == 0 ? 2: 1;
-// #else
-//   m_lookAheadGOPCnt++;
-// #endif
-
 #if HIGH_LEVEL_MT_OPT
 #if DEBUG_PRINT
-  if( !encList.empty() )
+  if( !encList.empty() && isNonBlocking() )
   {
     DPRINT( "#%d NumPicRecvd=%d PicCount=%d\n", stageId(), m_numPicsRecvd, m_picCount );
     DPRINT( "#%d    ", stageId() );
@@ -535,7 +529,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 #if MT_RC_LA_GOP_SW
   if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && (int)encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
 #else
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( m_lookAheadGOPCnt == 0 || ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) )
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) )
 #endif
   {
 #if MT_RC_LA_GOP_SW

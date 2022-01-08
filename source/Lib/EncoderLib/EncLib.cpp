@@ -623,7 +623,9 @@ PicShared* EncLib::xGetFreePicShared()
     picShared = new PicShared();
     picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
     m_picSharedList.push_back( picShared );
+#if 0 && DEBUG_PRINT
     DPRINT( "picsharedlist %d\n", (int)m_picSharedList.size() );
+#endif
   }
   CHECK( picShared == nullptr, "out of memory" );
 

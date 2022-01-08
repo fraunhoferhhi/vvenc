@@ -290,8 +290,8 @@ public:
   }
   void runStage( bool flush, AccessUnitList& auList )
   {
-#if DEBUG_PRINT
-    if( !m_procList.empty() /*&& m_minQueueSize < 16 */)
+#if 0 && DEBUG_PRINT
+    if( !m_procList.empty() /*&& isNonBlocking()*/ )
     {
       DPRINT( "#%d %d(%2d) ", stageId(), (int)m_procList.size(), m_minQueueSize );
       debug_print_pic_list( m_procList, " picList" );
@@ -335,45 +335,7 @@ public:
 //     m_inUse = false;
 // #endif
   }
-//#if HIGH_LEVEL_MT_OPT
-//  void finishStage( bool flush, AccessUnitList& auList )
-//  {
-//    // ready to go?
-//    if( ( (int)m_procList.size() >= m_minQueueSize )
-//        || ( m_procList.size() && flush ) )
-//    {
-//      // process always one picture or all if encoder should be flushed
-//      //do
-//      //{
-//      //  // process pictures
-//        PicList doneList;
-//        PicList freeList;
-//      //  processPictures( m_procList, flush, auList, doneList, freeList );
-//        finishPictures( auList, doneList, freeList );
-//
-//        // send processed/finalized pictures to next stage
-//        if( m_nextStage )
-//        {
-//          for( auto pic : m_doneList )
-//          {
-//            m_nextStage->addPicSorted( pic->m_picShared );
-//          }
-//        }
-//
-//        // release unused pictures
-//        for( auto pic : m_freeList )
-//        {
-//          // release shared buffer
-//          PicShared* picShared = pic->m_picShared;
-//          picShared->releaseShared( pic );
-//          // remove pic from own processing queue
-//          m_procList.remove( pic );
-//          m_freeList.push_back( pic );
-//        }
-//      //} while( m_flushAll && flush && m_procList.size() );
-//    }
-//  }
-//#endif
+
 #if HIGH_LEVEL_MT_OPT
   int  minQueueSize()  { return m_minQueueSize; }
   bool isNonBlocking() { return m_isNonBlocking; }
