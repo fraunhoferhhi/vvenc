@@ -218,9 +218,8 @@ private:
   void xUpdateRasInit                 ( Slice* slice );
   void xEncodePictures                ( bool flush, AccessUnitList& auList, PicList& doneList );
 #if HIGH_LEVEL_MT_OPT
-  void xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, PicList& doneList );
-  void xGetProcessingListsNonBlocking( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
-  void xInitRateControlGOP( std::list<Picture*>& encList, bool flush );
+  void xEncodePicturesNonBlocking     ( bool flush, AccessUnitList& auList, PicList& doneList );
+  void xGetProcessingListsNonBlocking ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
 #endif
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList, bool allDone );

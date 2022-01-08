@@ -442,42 +442,7 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-
-#if HIGH_LEVEL_MT_OPT
-void EncGOP::xInitRateControlGOP( std::list<Picture*>& encList, bool flush )
-{
-  // init rate control GOP
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
-#if HIGH_LEVEL_MT_OPT
-    if( (int)encList.front()->poc == 0 )
-#else
-    if( m_numPicsCoded == 0 )
-#endif
-    {
-      if ( m_pcEncCfg->m_RCLookAhead )
-      {
-        m_pcRateCtrl->processFirstPassData( flush );
-      }
-      // very first RC GOP
-      m_pcRateCtrl->initRCGOP( 1 );
-    }
-    else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
-    {
-      if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
-      {
-        m_pcRateCtrl->processFirstPassData( flush );
-      }
-      m_pcRateCtrl->destroyRCGOP();
-      const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
-      m_pcRateCtrl->initRCGOP( rcGopSize );
-    }
-  }
-}
-#endif
-
-//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
+//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_GOPSize
 #define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
 
 void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
@@ -490,12 +455,10 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // Rate Control with Look Ahead, two variants:
   // - Chunk-wise 2.Pass: encode all pictures from pre-coded Look-Ahead chunk (GOPs) using their data only
   // - GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
-#if HIGH_LEVEL_MT_OPT_NEW_QUEUE
 #if MT_RC_LA_GOP_SW
   if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) )
 #else
   if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
-#endif
 #endif
   {
 #endif
@@ -525,7 +488,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 #endif
 #endif
   CHECK( encList.empty(), "no pictures to be encoded found" );
-#if HIGH_LEVEL_MT_OPT_NEW_QUEUE
+#if HIGH_LEVEL_MT_OPT
 #if MT_RC_LA_GOP_SW
   if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && (int)encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
 #else
@@ -544,11 +507,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   if( m_pcEncCfg->m_RCTargetBitrate > 0 )
   {
     CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
-#if HIGH_LEVEL_MT_OPT
-    if( m_lookAheadGOPCnt/*(int)encList.front()->poc*/ == 0 )
-#else
     if( m_numPicsCoded == 0 )
-#endif
     {
       if ( m_pcEncCfg->m_RCLookAhead )
       {
@@ -558,20 +517,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       // very first RC GOP
       m_pcRateCtrl->initRCGOP( 1 );
     }
-#if HIGH_LEVEL_MT_OPT
-    //else if( 1 == m_numPicsRecvd % m_pcEncCfg->m_GOPSize )
-    else if( 1 )
-    {
-      if ( m_pcEncCfg->m_RCLookAhead && ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt )
-      {
-        m_lookAheadGOPCnt++;
-        m_pcRateCtrl->processFirstPassData( flush );
-      }
-      //m_pcRateCtrl->destroyRCGOP();
-      //const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
-      //m_pcRateCtrl->initRCGOP( rcGopSize );
-    }
-#else
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
       if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % RC_LOOKAHEAD_PERIOD == 0 )
@@ -582,11 +527,8 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
       m_pcRateCtrl->initRCGOP( rcGopSize );
     }
-#endif
   }
 #endif
-  _CASE( encList.front()->poc == 128 )
-    _BREAK;
 
   // encode pictures
   xInitPicsInCodingOrder( encList, picList, false );
@@ -618,7 +560,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 
   // release pictures not needed andmore
 #if HIGH_LEVEL_MT_OPT
-  //const bool allDone = flush && !encList.empty() && encList.back()->poc == doneList.back()->poc;
   const bool allDone = flush && ( isNonBlocking() ? m_gopEncListInput.empty() && m_gopEncListOutput.empty() && m_procList.empty(): encList.back()->poc == doneList.back()->poc );
 #else
   const bool allDone = flush && encList.back()->poc == doneList.back()->poc;
@@ -677,9 +618,7 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
   std::list<Picture*> m_rcUpdateList;
 #endif
   xGetProcessingListsNonBlocking( m_procList, m_rcUpdateList );
-// #if HIGH_LEVEL_MT_OPT
-//   xInitRateControlGOP( m_procList, flush );
-// #endif
+
 #if DEBUG_PRINT
   if( !m_procList.empty() )
   {
