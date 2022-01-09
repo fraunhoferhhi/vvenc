@@ -67,9 +67,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 //! \ingroup EncoderLib
 //! \{
 
-#define HIGH_LEVEL_MT_OPT_NEW_QUEUE ( 1 && HIGH_LEVEL_MT_OPT )
-#define MT_RC_LA_GOP_SW             ( 0 && HIGH_LEVEL_MT_OPT_NEW_QUEUE )
-
 namespace vvenc {
 
 #ifdef TRACE_ENABLE_ITT
@@ -511,7 +508,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     {
       if ( m_pcEncCfg->m_RCLookAhead )
       {
-        m_lookAheadGOPCnt++;
         m_pcRateCtrl->processFirstPassData( flush );
       }
       // very first RC GOP
@@ -679,7 +675,7 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
     CHECK( picEncoder == nullptr, "no free picture encoder available" );
     CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
 
-// #if HIGH_LEVEL_MT_OPT_NEW_QUEUE
+// #if HIGH_LEVEL_MT_OPT
 // #if MT_RC_LA_GOP_SW
 //   if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && pic->poc % m_pcEncCfg->m_GOPSize == 0 )
 // #else

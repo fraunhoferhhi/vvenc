@@ -73,10 +73,12 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define DEBUG_PRINT                                       1
+#define DEBUG_PRINT                                       0
 
 #define HIGH_LEVEL_MT_OPT                                 1
 #define NBSM_RELAX_LOOK_AHEAD                             1
+#define MT_RC_LA_GOP_SW                                 ( 1 && HIGH_LEVEL_MT_OPT ) //GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
+
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
