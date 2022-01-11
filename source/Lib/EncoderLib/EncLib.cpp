@@ -550,7 +550,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     isQueueEmpty &= encStage->isStageDone();
   }
 
-#if HIGH_LEVEL_MT_OPT
+#if MT_OPT_AU_LIST
   if( !au.empty() )
   {
     m_AuList.push_back( au );
@@ -569,6 +569,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   }while( yuvInBuf && !picShared );
 
+#if MT_OPT_AU_LIST
   // check if we have an AU to output
   if( !m_AuList.empty() )
   {
@@ -576,6 +577,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     m_AuList.front().clear();
     m_AuList.pop_front();
   }
+#endif
 #endif
 
   // reset output access unit, if not final pass
