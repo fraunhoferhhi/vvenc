@@ -76,7 +76,6 @@ namespace vvenc {
 #define DEBUG_PRINT                                       0
 
 #define HIGH_LEVEL_MT_OPT                                 1
-#define NBSM_RELAX_LOOK_AHEAD                             1
 #define MT_RC_LA_GOP_SW                                 ( 0 && HIGH_LEVEL_MT_OPT ) //GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
 
 

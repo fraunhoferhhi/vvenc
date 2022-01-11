@@ -48,6 +48,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <sstream>
 #include <list>
 #include "vvenc/vvenc.h"
+#include <assert.h>
 
 //! \ingroup Interface
 //! \{
@@ -166,7 +167,7 @@ public:
 
   ~AccessUnitList()
   {
-    clearAu();
+    assert( this->empty() );
   }
 
   void clearAu( bool doNotFree = false )

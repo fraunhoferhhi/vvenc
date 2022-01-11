@@ -313,8 +313,6 @@ public:
         {
           for( auto pic : doneList )
           {
-            _CASE( stageId() == 1 )
-              _BREAK;
             m_nextStage->addPicSorted( pic->m_picShared );
           }
         }
@@ -331,27 +329,15 @@ public:
         }
       } while( m_flushAll && flush && m_procList.size() );
     }
-// #if HIGH_LEVEL_MT_OPT
-//     m_inUse = false;
-// #endif
   }
 
 #if HIGH_LEVEL_MT_OPT
   int  minQueueSize()  { return m_minQueueSize; }
   bool isNonBlocking() { return m_isNonBlocking; }
-  //bool isStageInUse()  { return m_inUse; }
   virtual bool canRunStage( bool flush, bool picSharedAvail )
   {
-    //if( m_inUse )
-    //  return false;
-    //bool canStart = m_isNonBlocking ? m_picCount >= m_minQueueSize: ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
     bool canStart = ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
-#if 0 //NBSM_RELAX_LOOK_AHEAD
-    // Just a dirty hack first
-    return canStart && ( m_minQueueSize > 16 ? true: ( picSharedAvail || flush ) );
-#else
     return canStart && ( m_isNonBlocking ? true: ( picSharedAvail || flush ) );
-#endif
   }
 
   virtual void checkState() {}
@@ -376,10 +362,6 @@ private:
   int       m_ctuSize;
 #if HIGH_LEVEL_MT_OPT
   bool      m_isNonBlocking;
-  //PicList   m_doneList;
-  //PicList   m_freeList;
-public:
-  //std::atomic<bool> m_inUse;
 #endif
 };
 

@@ -489,10 +489,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
 
-#if !HIGH_LEVEL_MT_OPT
+//#if !HIGH_LEVEL_MT_OPT
   // clear output access unit
   au.clearAu();
-#endif
+//#endif
 
 #if HIGH_LEVEL_MT_OPT
   // Current requirement: The input yuv-frame must be passed to the encoding process (1.Stage)
@@ -504,10 +504,9 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // 5. Then we have to wait for the next available picture unit so the input frame can be passed to the 1.stage
 
   PicShared* picShared = nullptr;
+
   do
   {
-  // clear output access unit
-  au.clearAu();
 #endif
   // send new YUV input buffer to first encoder stage
   if( yuvInBuf )
@@ -543,14 +542,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     // Check if cur. stage can be invoked
     if( encStage->canRunStage( flush, picShared != nullptr ) )
     {
-      //if( encStage->isNonBlocking() )
-      //{
-      //  if( m_cAu.size() > 0 )
-      //  {
-      //    au = m_cAu;
-      //    m_cAu.clearAu( true );
-      //  }
-      //}
       encStage->runStage( flush, au );
     }
 #else
@@ -560,17 +551,15 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   }
 
 #if HIGH_LEVEL_MT_OPT
-  // If we have not got picture-unit for a new picture, we have to wait for stages to finish
+  if( !au.empty() )
+  {
+    m_AuList.push_back( au );
+    au.clearAu( true );
+  }
+
+  // If we haven't got an empty picture-unit for a new picture, we have to wait for stages to finish
   if( m_encCfg.m_numThreads > 0 && ( ( flush ) || ( yuvInBuf && !picShared ) ) )
   {
-    //std::unique_lock<std::mutex> lock( m_stagesMutex );
-    //bool stageInUse = false;
-    //for( auto encStage : m_encStages )
-    //{
-    //  stageInUse |= encStage->m_inUse;
-    //}
-    //if( stageInUse )
-    //  m_stagesCond.wait( lock );
     for( auto encStage : m_encStages )
     {
       if( encStage->isNonBlocking() )
@@ -579,6 +568,14 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   }
 
   }while( yuvInBuf && !picShared );
+
+  // check if we have an AU to output
+  if( !m_AuList.empty() )
+  {
+    au = m_AuList.front();
+    m_AuList.front().clear();
+    m_AuList.pop_front();
+  }
 #endif
 
   // reset output access unit, if not final pass

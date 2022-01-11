@@ -448,10 +448,10 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
 
   std::vector<Picture*> encList;
 #if HIGH_LEVEL_MT_OPT
-  // picList contains pictures coming from Look-Ahead (1.pass)
   // Rate Control with Look Ahead, two variants:
   // - Chunk-wise 2.Pass: encode all pictures from pre-coded Look-Ahead chunk (GOPs) using their data only
   // - GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
+  // NOTE: In second pass, picList contains pictures coming from Look-Ahead (1.pass)
 #if MT_RC_LA_GOP_SW
   if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) )
 #else
@@ -600,7 +600,7 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
 #if HIGH_LEVEL_MT_OPT
-  if( isNonBlocking() && lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames )
+  if( isNonBlocking() && lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && !m_gopEncListOutput.front()->isReconstructed )
   {
     // Non-blocking: Encoder is still busy, wait outside
     return;
