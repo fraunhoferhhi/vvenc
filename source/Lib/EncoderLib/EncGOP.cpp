@@ -1690,7 +1690,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // reference list
   int poc;
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) )
+  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) != -2 || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) != -2 )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
