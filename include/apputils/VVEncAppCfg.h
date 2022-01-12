@@ -83,6 +83,7 @@ public:
   bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
   bool         m_decode                        = false;
   bool         m_showVersion                   = false;
+  bool         m_showHelp                      = false;
 
   std::string  m_additionalSettings;                           ///< set additional settings (always parsed and set after other params are set)
                                                                ///< options must be defined as tuple key=value, entries must be separated by space' ' or colon ':'
@@ -112,15 +113,15 @@ public:
   }
 
 public:
-  int parse( int argc, char* argv[], vvenc_config* c );
+  int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr );
 
-  bool checkCfg( vvenc_config* c );
+  bool checkCfg( vvenc_config* c, std::ostream& rcOstr );
   virtual std::string getAppConfigAsString( vvencMsgLevel eMsgLevel ) const;
 
   std::vector <std::tuple<std::string, std::string>> getAdditionalSettingList();
 
 private:
-  bool xCheckCfg( vvenc_config* c );
+  bool xCheckCfg( vvenc_config* c, std::ostream& rcOstr );
 
   std::vector<std::string> tokenize(std::string str, char delimiter );
 };

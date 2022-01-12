@@ -4013,7 +4013,7 @@ std::vector<int> EncAdaptiveLoopFilter::getAvaiApsIdsLuma(CodingStructure& cs, i
   newApsId = m_apsIdStart - 1;
   if( !m_encCfg->m_alfTempPred )
   {
-    newApsId = m_apsIdStart = 0;
+    newApsId = m_apsIdStart = m_encCfg->m_explicitAPSid;
   }
 
   if( newApsId < 0 )

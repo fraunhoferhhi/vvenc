@@ -203,6 +203,9 @@ struct ComprCUCtx
     , didQuadSplit          (false)
     , didHorzSplit          (false)
     , didVertSplit          (false)
+    , doHorChromaSplit      (false)
+    , doVerChromaSplit      (false)
+    , doQtChromaSplit       (false)
     , isBestNoSplitSkip     (false)
     , skipSecondMTSPass     (false)
     , intraWasTested        (false)
@@ -240,6 +243,9 @@ struct ComprCUCtx
   bool              didQuadSplit;
   bool              didHorzSplit;
   bool              didVertSplit;
+  bool              doHorChromaSplit;
+  bool              doVerChromaSplit;
+  bool              doQtChromaSplit;
   bool              isBestNoSplitSkip;
   bool              skipSecondMTSPass;
   bool              intraWasTested;

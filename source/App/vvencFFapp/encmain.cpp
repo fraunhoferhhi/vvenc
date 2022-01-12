@@ -76,25 +76,13 @@ int main(int argc, char* argv[])
   opts.addOptions()
     ( "c",           apputils::df::program_options_lite::parseConfigFile, "" )
     ( "SIMD",        simdOpt,         "" );
+
   apputils::df::program_options_lite::SilentReporter err;
   apputils::df::program_options_lite::scanArgv( opts, argc, ( const char** ) argv, err );
 
-  const char* pSimd = vvenc_set_SIMD_extension( simdOpt.c_str() );
-  pSimd == nullptr ? simdOpt = "NA" : simdOpt = pSimd;
-
-  // print information
-  msgApp( VVENC_INFO, "\n");
-  msgApp( VVENC_INFO, "vvencFFapp: Encoder Version %s ", vvenc_get_version() );
-  msgApp( VVENC_INFO, "%s", vvenc_get_compile_info_string() );
-  msgApp( VVENC_INFO, "[SIMD=%s]", simdOpt.c_str() );
-  if ( vvenc_is_tracing_enabled() )
-  {
-    msgApp( VVENC_INFO, "[ENABLE_TRACING]" );
-  }
-  msgApp( VVENC_INFO, "\n" );
+  vvenc_set_SIMD_extension( simdOpt.c_str() );
 
   EncApp* pcEncApp = new EncApp;
-  //g_vvencEncApp = (vvencEncApp*)pcEncApp;
 
   // parse configuration
   if ( ! pcEncApp->parseCfg( argc, argv ) )
@@ -102,7 +90,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  if( pcEncApp->isShowVersion() )
+  if( pcEncApp->isShowVersionHelp() )
   {
     return 0;
   }

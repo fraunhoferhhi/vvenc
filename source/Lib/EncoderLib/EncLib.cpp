@@ -114,7 +114,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   const_cast<VVEncCfg&>(m_encCfg) = encCfg;
 
   // setup modified configs for rate control
-  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
+  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_LookAhead )
   {
     xInitRCCfg();
   }
@@ -184,7 +184,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
+    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_LookAhead )
     {
       m_rateCtrl = new LegacyRateCtrl(msg);
     }
@@ -205,7 +205,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   xUninitLib();
 
   // enable encoder config based on rate control pass
-  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
+  if( m_encCfg.m_RCNumPasses > 1 || (m_encCfg.m_LookAhead && m_orgCfg.m_RCTargetBitrate) )
   {
     if (!m_rateCtrl->rcIsFinalPass)
     {
@@ -238,25 +238,20 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
 
   // pre analysis encoder
-  if( m_encCfg.m_RCLookAhead )
+  if( m_encCfg.m_LookAhead )
   {
     m_preEncoder = new EncGOP( msg );
-#if 0 //HIGH_LEVEL_MT_OPT
-    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize, m_encCfg.m_numThreads > 0 );
-#else
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
-#endif
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  const int encDelay = m_encCfg.m_RCLookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
 #if HIGH_LEVEL_MT_OPT
-  m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize, m_encCfg.m_numThreads > 0 );
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_numThreads > 0 );
 #else
-  m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize );
 #endif
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
@@ -284,7 +279,8 @@ void EncLib::initPass( int pass, const char* statsFName )
 #if MT_OPT_AU_LIST
     m_maxNumPicShared = 129;
 #else
-    m_maxNumPicShared = encDelay + m_encCfg.m_GOPSize;
+    int rcLookAheadDelay = m_encCfg.m_GOPSize;
+    m_maxNumPicShared = rcLookAheadDelay + m_encCfg.m_GOPSize + m_encCfg.m_GOPSize/3;
 #endif
 #endif
   }
@@ -414,7 +410,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     PicShared* picShared = xGetFreePicShared();
 #endif
     picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
+    if (m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || (m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate) )
     {
       xAssignPrevQpaBufs( picShared );
     }
@@ -521,7 +517,7 @@ PicShared* EncLib::xGetFreePicShared()
     picShared = new PicShared();
     picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
     m_picSharedList.push_back( picShared );
-#if 0 && DEBUG_PRINT
+#if 1 && DEBUG_PRINT
     DPRINT( "picsharedlist %d\n", (int)m_picSharedList.size() );
 #endif
   }

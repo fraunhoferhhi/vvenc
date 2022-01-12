@@ -1156,9 +1156,9 @@ struct PicHeader
     jointCbCrSign                                 = 0;
     qpDelta                                       = 0;
     numAlfAps                                     = 0;
-    alfChromaApsId                                = 0;
-    ccalfCbApsId                                  = 0;
-    ccalfCrApsId                                  = 0;
+    alfChromaApsId                                = -1;
+    ccalfCbApsId                                  = -1;
+    ccalfCrApsId                                  = -1;
     deblockingFilterOverride                      = 0;
     deblockingFilterDisable                       = 0;
     deblockingFilterBetaOffsetDiv2[COMP_Y]        = 0;

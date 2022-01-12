@@ -439,8 +439,8 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_GOPSize
-#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
+#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_GOPSize
+//#define RC_LOOKAHEAD_PERIOD m_pcEncCfg->m_IntraPeriod
 
 void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
@@ -453,9 +453,9 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // - GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
   // NOTE: In second pass, picList contains pictures coming from Look-Ahead (1.pass)
 #if MT_RC_LA_GOP_SW
-  if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) )
+  if( !isNonBlocking() || flush ||  ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead && ( ( ( m_picCount - 1 ) / m_pcEncCfg->m_GOPSize ) > m_lookAheadGOPCnt ) ) )
 #else
-  if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
+  if( !isNonBlocking() || flush || ( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead && ( m_picCount - 1 ) % RC_LOOKAHEAD_PERIOD == 0 ) )
 #endif
   {
 #endif
@@ -487,9 +487,9 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   CHECK( encList.empty(), "no pictures to be encoded found" );
 #if HIGH_LEVEL_MT_OPT
 #if MT_RC_LA_GOP_SW
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( flush || (int)encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 ) )
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead && ( flush || (int)encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 ) )
 #else
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( flush || ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) )
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead && ( flush || ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) )
 #endif
   {
 #if MT_RC_LA_GOP_SW
@@ -506,7 +506,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
     if( m_numPicsCoded == 0 )
     {
-      if ( m_pcEncCfg->m_RCLookAhead )
+      if ( m_pcEncCfg->m_LookAhead )
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
@@ -515,7 +515,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
-      if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % RC_LOOKAHEAD_PERIOD == 0 )
+      if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
@@ -695,11 +695,23 @@ void EncGOP::xEncodePicturesNonBlocking( bool flush, AccessUnitList& auList, Pic
     // decoder in encoder
     bool decPic = false;
     bool encPic = false;
+    if( m_pcRateCtrl->rcIsFinalPass && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis ) )
+    {
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
     trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+      if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
+      {
+        picInitRateControl( *pic, pic->slices[0], picEncoder );
+      }
+    }
+    else
+    {
+      encPic = true;
+    }
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
+    pic->isPreAnalysis = m_isPreAnalysis;
 
     if( m_pcEncCfg->m_alfTempPred )
     {
@@ -1521,7 +1533,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || m_pcEncCfg->m_RCLookAhead || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
+    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
     if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400) )
     {
       bChromaDeltaQPEnabled = (m_pcEncCfg->m_chromaCbQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCrQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCbCrQpOffsetDualTree != 0);
@@ -3056,7 +3068,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   const uint32_t uibits = numRBSPBytes * 8;
 
-  if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
+  if( (m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || ! m_pcRateCtrl->rcIsFinalPass)
   {
     const double visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
 
@@ -3104,7 +3116,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
   {
-    if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
+    if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
     {
       std::string cInfo = prnt("RC pass %d/%d, analyze poc %4d",
           m_pcRateCtrl->rcPass + 1,

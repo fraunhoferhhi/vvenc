@@ -72,14 +72,15 @@ namespace df
     std::ostream& ErrorReporter::error(const std::string& where)
     {
       is_errored = 1;
-      std::cerr << where << " error: ";
-      return std::cerr;
+      outstr << where << " error: ";
+      return outstr;
     }
 
     std::ostream& ErrorReporter::warn(const std::string& where)
     {
-      std::cerr << where << " warning: ";
-      return std::cerr;
+      is_warning = 1;
+      outstr << where << " warning: ";
+      return outstr;
     }
 
     Options::~Options()

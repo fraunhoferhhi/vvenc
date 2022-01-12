@@ -151,10 +151,6 @@ public:
   unsigned maxTtSize;
   unsigned minQtSize;
 
-  bool horChromaSplit;
-  bool verChromaSplit;
-  bool qtChromaSplit;
-
   const PartLevel& currPartLevel          () const { return m_partStack.back(); }
   const UnitArea&  currArea               () const { return currPartLevel().parts[currPartIdx()]; }
   const unsigned   currPartIdx            () const { return currPartLevel().idx; }
