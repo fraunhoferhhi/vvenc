@@ -463,7 +463,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
-      if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
+      if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
