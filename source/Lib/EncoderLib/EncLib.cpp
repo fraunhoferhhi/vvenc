@@ -243,8 +243,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  const int encDelay = m_encCfg.m_LookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
-  m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {

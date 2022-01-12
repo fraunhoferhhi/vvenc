@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
+especially patent licenses, a separate Agreement needs to be closed.
 For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
@@ -70,7 +70,7 @@ namespace vvenc {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
                   uint32_t _numBits, double _psnrY, bool _isIntra, int _tempLayer ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
-                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), 
+                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
                   tempLayer( _tempLayer ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 )
                   {}
@@ -113,6 +113,7 @@ namespace vvenc {
     int64_t         estimatedBitUsage;
     double          qpCorrection[8];
     uint64_t        actualBitCnt[8];
+    unsigned        currFrameCnt[8];
     uint64_t        targetBitCnt[8];
     int             lastIntraQP;
     std::list<TRCPassStats> firstPassData;
@@ -164,8 +165,7 @@ namespace vvenc {
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
     void processFirstPassData (const bool flush);
     void processGops();
-    void processGopsLookAhead();
-    uint64_t getTotalBitsInFirstPass();
+    double getAverageBitsFromFirstPass();
     void detectNewScene();
     void adaptToSceneChanges();
     virtual void xUpdateAfterPicRC( const Picture* pic );
