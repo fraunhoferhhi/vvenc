@@ -74,8 +74,9 @@ typedef vvencSliceType    SliceType;
 namespace vvenc {
 
 #define DEBUG_PRINT                                       0
+#define TIMING_STAGES                                     0
 
-#define HIGH_LEVEL_MT_OPT                                 1
+#define HIGH_LEVEL_MT_OPT                                 0
 #define MT_RC_LA_GOP_SW                                 ( 0 && HIGH_LEVEL_MT_OPT ) //GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
 #define MT_OPT_AU_LIST                                  ( 1 && HIGH_LEVEL_MT_OPT ) //GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
 

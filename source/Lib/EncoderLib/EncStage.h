@@ -193,14 +193,20 @@ public:
   , m_ctuSize         ( MAX_CU_SIZE )
 #if HIGH_LEVEL_MT_OPT
   , m_isNonBlocking   ( false )
-  //, m_inUse           ( false )
 #endif
   {
+#if TIMING_STAGES
+    m_duration = m_duration.zero();
+#endif
   };
 
   virtual ~EncStage()
   {
     freePicList();
+#if TIMING_STAGES
+    std::ostream& os = std::cout;
+    os << "Stage time: " << std::fixed << std::setprecision(1) << ( m_duration.count() / 1000.0 ) << " sec" << "\n";
+#endif
   };
 
   void freePicList()
@@ -301,6 +307,10 @@ public:
     if( ( (int)m_procList.size() >= m_minQueueSize )
         || ( m_procList.size() && flush ) )
     {
+#if TIMING_STAGES
+    // starting time
+    auto startTime  = std::chrono::steady_clock::now();
+#endif
       // process always one picture or all if encoder should be flushed
       do
       {
@@ -328,6 +338,10 @@ public:
           m_freeList.push_back( pic );
         }
       } while( m_flushAll && flush && m_procList.size() );
+#if TIMING_STAGES
+    auto endTime = std::chrono::steady_clock::now();
+    m_duration += ( endTime - startTime );
+#endif
     }
   }
 
@@ -363,6 +377,9 @@ private:
   int       m_ctuSize;
 #if HIGH_LEVEL_MT_OPT
   bool      m_isNonBlocking;
+#endif
+#if TIMING_STAGES
+  std::chrono::duration<double, std::milli> m_duration;
 #endif
 };
 

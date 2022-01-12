@@ -380,37 +380,6 @@ void EncLib::xInitRCCfg()
   }
 }
 
-// ====================================================================================================================
-// Public member functions
-// ====================================================================================================================
-// #if HIGH_LEVEL_MT_OPT
-// void EncLib::xRunStageInThread( EncStage *encStage, bool flush, AccessUnitList& auList )
-// {
-//   struct StageTaskParam {
-//     EncLib*         encLib;
-//     EncStage*       encStage;
-//     bool            flush;
-//     AccessUnitList* au;
-//     StageTaskParam()                                                        : encLib( nullptr ), encStage( nullptr ), flush( false ), au( nullptr ) {}
-//     StageTaskParam( EncLib* _e, EncStage* _s, bool _f, AccessUnitList* _a ) : encLib( _e ),      encStage( _s ),      flush( _f ),    au( _a )      {}
-//   };
-//   static auto runStageTask = []( int, StageTaskParam* param ) 
-//   {
-//     param->encStage->runStage( param->flush, *param->au );
-//     {
-//       std::lock_guard<std::mutex> lock( param->encLib->m_stagesMutex );
-//       param->encLib->m_stagesCond.notify_one();
-//     }
-//     delete param;
-//     return true;
-//   };
-//   StageTaskParam* param = new StageTaskParam( this, encStage, flush, &auList );
-//   encStage->m_inUse = true;
-//   m_threadPool->addBarrierTask<StageTaskParam>( runStageTask, param );
-// }
-// #endif
-
-#if 0
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
@@ -419,84 +388,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   // clear output access unit
   au.clearAu();
-
-#if HIGH_LEVEL_MT_OPT
-  PicShared* picShared = nullptr;
-#endif
-
-  // send new YUV input buffer to first encoder stage
-  if( yuvInBuf )
-  {
-#if HIGH_LEVEL_MT_OPT
-    picShared = xGetFreePicShared();
-    if( picShared )
-    {
-#else
-    PicShared* picShared = xGetFreePicShared();
-#endif
-    picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
-    {
-      xAssignPrevQpaBufs( picShared );
-    }
-    xDetectScc( picShared );
-    m_encStages[ 0 ]->addPicSorted( picShared );
-    m_picsRcvd += 1;
-#if HIGH_LEVEL_MT_OPT
-    }
-#endif
-
-#if HIGH_LEVEL_MT_OPT
-  // If we have not got picture-unit for a new picture, we have to wait for stages to finish
-  if( m_encCfg.m_numThreads > 0 && yuvInBuf && !picShared )
-  {
-#if 1
-    std::unique_lock<std::mutex> lock( m_stagesMutex );
-    if( stageInUse )
-      m_stagesCond.wait( lock );
-
-#else
-    std::unique_lock<std::mutex> lock( m_stagesMutex );
-    bool stageInUse = false;
-    for( auto encStage : m_encStages )
-    {
-      stageInUse |= encStage->m_inUse;
-    }
-    if( stageInUse )
-      m_stagesCond.wait( lock );
-#endif
-  }
-#endif
-  }
-
-  PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
-
-  // trigger stages
-  isQueueEmpty = true;
-
-  for( auto encStage : m_encStages )
-  {
-    encStage->runStage( flush, au );
-    isQueueEmpty &= encStage->isStageDone();
-  }
-
-  // reset output access unit, if not final pass
-  if( ! m_rateCtrl->rcIsFinalPass )
-  {
-    au.clearAu();
-  }
-}
-#else
-void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
-{
-  PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
-
-  CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
-
-//#if !HIGH_LEVEL_MT_OPT
-  // clear output access unit
-  au.clearAu();
-//#endif
 
 #if HIGH_LEVEL_MT_OPT
   // Current requirement: The input yuv-frame must be passed to the encoding process (1.Stage)
@@ -591,7 +482,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     au.clearAu();
   }
 }
-#endif
 
 void EncLib::printSummary()
 {
