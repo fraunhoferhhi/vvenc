@@ -281,7 +281,11 @@ void EncLib::initPass( int pass, const char* statsFName )
     }
     m_maxNumPicShared += 4;
 #else
+#if MT_OPT_AU_LIST
     m_maxNumPicShared = 129;
+#else
+    m_maxNumPicShared = encDelay + m_encCfg.m_GOPSize;
+#endif
 #endif
   }
 #endif
@@ -550,13 +554,14 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     isQueueEmpty &= encStage->isStageDone();
   }
 
+#if HIGH_LEVEL_MT_OPT
 #if MT_OPT_AU_LIST
   if( !au.empty() )
   {
     m_AuList.push_back( au );
     au.clearAu( true );
   }
-
+#endif
   // If we haven't got an empty picture-unit for a new picture, we have to wait for stages to finish
   if( m_encCfg.m_numThreads > 0 && ( ( flush ) || ( yuvInBuf && !picShared ) ) )
   {
@@ -615,7 +620,11 @@ PicShared* EncLib::xGetFreePicShared()
   if( ! picShared )
   {
 #if HIGH_LEVEL_MT_OPT
-  if( m_encCfg.m_numThreads > 0 && m_picSharedList.size() >= m_maxNumPicShared )
+  if( m_encCfg.m_numThreads > 0 && ( m_picSharedList.size() >= m_maxNumPicShared 
+#if !MT_OPT_AU_LIST
+    || ( m_picSharedList.size() >= ( m_maxNumPicShared - m_encCfg.m_GOPSize / 2 ) && !m_encStages.back().isOutputReady() )
+#endif
+    ) )
     return nullptr;
 #endif
 

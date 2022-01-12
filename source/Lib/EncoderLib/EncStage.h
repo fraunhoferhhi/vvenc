@@ -341,6 +341,7 @@ public:
   }
 
   virtual void checkState() {}
+  virtual bool isOutputReady() { return true; }
 #endif
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;

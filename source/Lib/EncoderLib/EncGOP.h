@@ -200,6 +200,7 @@ public:
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
 #if HIGH_LEVEL_MT_OPT
   virtual void checkState();
+  virtual bool isOutputReady() { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
 #endif
 
 protected:

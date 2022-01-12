@@ -487,9 +487,9 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   CHECK( encList.empty(), "no pictures to be encoded found" );
 #if HIGH_LEVEL_MT_OPT
 #if MT_RC_LA_GOP_SW
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && (int)encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( flush || (int)encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 ) )
 #else
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) )
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_RCLookAhead && ( flush || ( ( m_picCount - 1 ) / RC_LOOKAHEAD_PERIOD ) > m_lookAheadGOPCnt ) )
 #endif
   {
 #if MT_RC_LA_GOP_SW
