@@ -132,9 +132,7 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
-#if DEBUG_PRINT
-  virtual int stageId() { return 0; };
-#endif
+  virtual bool canRunStage( bool flush, bool picSharedAvail ) { return EncStage::canRunStage( flush ) && ( picSharedAvail || flush ); }
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 

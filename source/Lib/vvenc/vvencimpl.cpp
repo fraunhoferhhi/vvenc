@@ -395,9 +395,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     }
 
     iRet = xCopyAu( *pcAccessUnit, cAu  );
-#if HIGH_LEVEL_MT_OPT
     cAu.clear();
-#endif
   }
 
 #if defined( __linux__ )

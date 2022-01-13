@@ -73,14 +73,6 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define DEBUG_PRINT                                       1
-#define TIMING_STAGES                                     0
-
-#define HIGH_LEVEL_MT_OPT                                 1
-#define MT_RC_LA_GOP_SW                                 ( 0 && HIGH_LEVEL_MT_OPT ) //GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
-#define MT_OPT_AU_LIST                                  ( 1 && HIGH_LEVEL_MT_OPT ) //GOP-wise sliding window final pass processing using data of future pre-coded GOPs from Look-Ahead
-
-
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 
 #define FIX_FOR_TEMPORARY_COMPILER_ISSUES_ENABLED         1 // Some compilers fail on particular code fragments, remove this when the compiler is fixed (or new version is used)
@@ -909,6 +901,8 @@ struct XUCache
   CUCache cuCache;
   TUCache tuCache;
 };
+
+
 
 } // namespace vvenc
 

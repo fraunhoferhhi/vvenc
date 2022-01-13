@@ -94,12 +94,10 @@ private:
 
   int                    m_picsRcvd;
   int                    m_passInitialized;
-#if HIGH_LEVEL_MT_OPT
   int                        m_maxNumPicShared;
   std::mutex                 m_stagesMutex;
   std::condition_variable    m_stagesCond;
   std::deque<AccessUnitList> m_AuList;
-#endif
 
 public:
   EncLib( MsgLog& logger );

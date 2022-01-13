@@ -175,13 +175,8 @@ private:
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
   std::list<Picture*>       m_gopEncListOutput;
-#if HIGH_LEVEL_MT_OPT
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
-  int m_rcPeriodCnt = 0;
-  int m_numPicsRecvd = 0;
-  int m_lookAheadGOPCnt = 0;
-#endif
 
   std::vector<int>          m_pocToGopId;
   std::vector<int>          m_nextPocOffset;
@@ -198,30 +193,23 @@ public:
   void init               ( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
-#if HIGH_LEVEL_MT_OPT
-  virtual void checkState();
-  virtual bool isOutputReady() { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
-#endif
+  bool nextPicReadyForOutput    () { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
+  virtual bool finishedLastChunk() { return m_numPicsCoded >= m_picCount; }
+  virtual void checkFlush       ( bool& flush ){ flush = flush && m_picCount - m_numPicsCoded <= m_pcEncCfg->m_GOPSize; }
+  virtual void checkState       ();
 
 protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
-#if DEBUG_PRINT
-  virtual int stageId() { return m_isPreAnalysis ? 1: 2; };
-  //virtual bool canRunStage( bool flush, bool picSharedAvail ) { return EncStage::canRunStage( flush, picSharedAvail ) && ( m_isPreAnalysis ? picSharedAvail || flush: true ); }
-#endif
+
 private:
   int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }
 
   int  xGetNextPocICO                 ( int poc, int max, bool altGOP ) const;
   Picture* xFindPicture               ( const PicList& picList, int poc ) const;
-  void xCreateCodingOrder             ( const PicList& picList, bool flush, std::vector<Picture*>& encList ) /*const*/;
+  void xCreateCodingOrder             ( const PicList& picList, bool flush, std::vector<Picture*>& encList ) const;
   void xUpdateRasInit                 ( Slice* slice );
   void xEncodePictures                ( bool flush, AccessUnitList& auList, PicList& doneList );
-#if HIGH_LEVEL_MT_OPT
-  void xEncodePicturesNonBlocking     ( bool flush, AccessUnitList& auList, PicList& doneList );
-  void xGetProcessingListsNonBlocking ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
-#endif
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList, bool allDone );
 

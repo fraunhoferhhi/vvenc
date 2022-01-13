@@ -209,7 +209,7 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, int frameLevel )
     // calculate the difference of under/overspent bits and adjust the current target bits based on the GOP and frame ratio for every frame
     targetBits = int (0.5 + tmpTargetBits + (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed) * 0.5 * frameVsGopRatio);
   }
-
+ 
   return targetBits;
 }
 
@@ -530,11 +530,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "isIntra" ],
                                                     data[ "tempLayer" ]
                                                     ) );
-#if HIGH_LEVEL_MT_OPT
-    if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize * 2 + 1 )
-#else
     if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
-#endif
     {
       m_listRCFirstPassStats.pop_front();
   }
@@ -630,9 +626,6 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
     for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // sum per level
     {
-#if DEBUG_PRINT
-    DPRINT( "POC=%d, bits=%d\n", it->poc, it->numBits );
-#endif
       tlBits [it->tempLayer] += it->numBits;
       tlCount[it->tempLayer]++;
     }
