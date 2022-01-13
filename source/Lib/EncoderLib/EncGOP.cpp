@@ -454,7 +454,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
     if( m_numPicsCoded == 0 )
     {
-      if ( m_pcEncCfg->m_RCLookAhead )
+      if ( m_pcEncCfg->m_LookAhead )
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
@@ -463,7 +463,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
-      if ( m_pcEncCfg->m_RCLookAhead && encList.front()->poc % m_pcEncCfg->m_IntraPeriod == 0 )
+      if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
@@ -552,11 +552,23 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     // decoder in encoder
     bool decPic = false;
     bool encPic = false;
-    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+    if( m_pcRateCtrl->rcIsFinalPass && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis ) )
+    {
+      DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
+      trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+      if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
+      {
+        picInitRateControl( *pic, pic->slices[0], picEncoder );
+      }
+    }
+    else
+    {
+      encPic = true;
+    }
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
     pic->writePic = decPic || encPic;
     pic->encPic   = encPic;
+    pic->isPreAnalysis = m_isPreAnalysis;
 
     if( m_pcEncCfg->m_alfTempPred )
     {
@@ -1174,7 +1186,7 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
   bool bChromaDeltaQPEnabled = false;
   {
     bChromaDeltaQPEnabled = ( m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ] || m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] );
-    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || m_pcEncCfg->m_RCLookAhead || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
+    bChromaDeltaQPEnabled |= (m_pcEncCfg->m_usePerceptQPA || (m_pcEncCfg->m_LookAhead && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0) && (m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400);
     if ( !bChromaDeltaQPEnabled && sps.dualITree && ( m_pcEncCfg->m_internChromaFormat != VVENC_CHROMA_400) )
     {
       bChromaDeltaQPEnabled = (m_pcEncCfg->m_chromaCbQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCrQpOffsetDualTree != 0 || m_pcEncCfg->m_chromaCbCrQpOffsetDualTree != 0);
@@ -1678,7 +1690,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // reference list
   int poc;
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) )
+  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) != -2 || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) != -2 )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
@@ -2634,7 +2646,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   const uint32_t uibits = numRBSPBytes * 8;
 
-  if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
+  if( (m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || ! m_pcRateCtrl->rcIsFinalPass)
   {
     const double visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
 
@@ -2682,7 +2694,7 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   if( m_pcEncCfg->m_verbosity >= VVENC_NOTICE )
   {
-    if( m_isPreAnalysis || ! m_pcRateCtrl->rcIsFinalPass )
+    if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
     {
       std::string cInfo = prnt("RC pass %d/%d, analyze poc %4d",
           m_pcRateCtrl->rcPass + 1,

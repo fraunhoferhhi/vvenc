@@ -5,7 +5,11 @@ set( LIB_NAME vvenc )
 string( TOUPPER ${LIB_NAME} LIB_NAME_UC )
 
 # create file version.h
-configure_file( version.h.in "${CMAKE_BINARY_DIR}/${LIB_NAME}/version.h" )
+if(PROJECT_VERSION_RC)
+  configure_file( version-rc.h.in "${CMAKE_BINARY_DIR}/${LIB_NAME}/version.h" )
+else()
+  configure_file( version.h.in "${CMAKE_BINARY_DIR}/${LIB_NAME}/version.h" )
+endif()
 
 # get source files
 file( GLOB BASE_SRC_FILES "*.cpp"  "../CommonLib/*.cpp"  "../Utilities/*.cpp" "../DecoderLib/*.cpp" "../EncoderLib/*.cpp" )

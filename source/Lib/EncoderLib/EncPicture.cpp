@@ -293,7 +293,7 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
             }
           }
           // Chroma
-          activeAps |= aps->apsId == slice->tileGroupChromaApsId;
+          activeAps |= ( slice->tileGroupAlfEnabled[COMP_Cb] || slice->tileGroupAlfEnabled[COMP_Cr] ) && aps->apsId == slice->tileGroupChromaApsId;
           // CC-ALF
           activeApsCcAlf |= slice->tileGroupCcAlfCbEnabled && aps->apsId == slice->tileGroupCcAlfCbApsId;
           activeApsCcAlf |= slice->tileGroupCcAlfCrEnabled && aps->apsId == slice->tileGroupCcAlfCrApsId;

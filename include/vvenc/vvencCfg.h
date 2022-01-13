@@ -452,7 +452,7 @@ typedef struct vvenc_config
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
-  bool                m_RCLookAhead;                                                     // enable pre-analysis in single pass rate control encoding
+  bool                m_LookAhead;                                                       // enable pre-analysis
 
   int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
