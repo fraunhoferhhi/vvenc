@@ -2830,12 +2830,14 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
     }
   }
 
-  std::string cPicInfo = accessUnit.InfoString;
-  cPicInfo.append("\n");
-
-  const vvencMsgLevel msgLevel = m_isPreAnalysis ? VVENC_DETAILS : VVENC_NOTICE;
-  msg.log( msgLevel, cPicInfo.c_str() );
-  if( m_pcEncCfg->m_verbosity >= msgLevel ) fflush( stdout );
+  if( !accessUnit.InfoString.empty() )
+  {
+    std::string cPicInfo = accessUnit.InfoString;
+    cPicInfo.append("\n");
+    const vvencMsgLevel msgLevel = m_isPreAnalysis ? VVENC_DETAILS : VVENC_NOTICE;
+    msg.log( msgLevel, cPicInfo.c_str() );
+    if( m_pcEncCfg->m_verbosity >= msgLevel ) fflush( stdout );
+  }
 }
 
 } // namespace vvenc
