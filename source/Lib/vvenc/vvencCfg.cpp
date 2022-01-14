@@ -1254,7 +1254,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_usePerceptQPATempFiltISlice = 0;
     if ( c->m_usePerceptQPA ) // automatic mode for temporal filtering depending on RC
     {
-      c->m_usePerceptQPATempFiltISlice = ( c->m_RCTargetBitrate > 0 ? 2 : 1 );
+      c->m_usePerceptQPATempFiltISlice = ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 2 ? 2 : 1 );
     }
   }
   if ( c->m_usePerceptQPATempFiltISlice == 2

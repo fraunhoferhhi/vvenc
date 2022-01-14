@@ -835,7 +835,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           sliceQP = int( 0.5 + d + 0.125 * log2HeightMinus7 * std::max( 0.0, 24.0 + 0.001/*log2HeightMinus7*/ * ( log( (double)visAct ) / log( 2.0 ) - 0.5 * encRcSeq->bitDepth - 3.0 ) - d ) + encRCSeq->qpCorrection[ frameLevel ] );
           if ( it->poc == 0 || it->refreshParameters ) // avoid overcoding after some scene cuts
           {
-            const int clipQP = ( ( ( ( 1 << encRCSeq->bitDepth ) + ( it->poc == 0 && encRCSeq->intraPeriod > 2 * encRCSeq->gopSize ? 1 << (encRCSeq->bitDepth - 1) : visAct ) ) * m_pcEncCfg->m_QP ) >> ( encRCSeq->bitDepth + 1 ) ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 );
+            const int clipQP = ( ( ( ( 1 << encRCSeq->bitDepth ) + ( it->poc == 0 ? 1 << ( encRCSeq->bitDepth - 1 ) : visAct ) ) * m_pcEncCfg->m_QP ) >> ( encRCSeq->bitDepth + 1 ) ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 );
 
             if ( sliceQP < clipQP )
             {
