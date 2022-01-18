@@ -336,6 +336,15 @@ VVENC_DECL int vvenc_reconfig( vvencEncoder *, const vvenc_config * );
 */
 VVENC_DECL int vvenc_check_config( vvencEncoder *, const vvenc_config * );
 
+/* vvenc_get_headers
+ This method returns the headers (SPS,PPS,...) that are used.
+ All init calls (vvenc_encoder_open, vvenc_init_pass) must be called in advance.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \param[out] accessUnit pointer to vvencAccessUnit that retrieves compressed access units containing all headers.    
+ \retval     int negative indicates an error, otherwise the return value VVENC_OK indicates success.
+*/
+VVENC_DECL int vvenc_get_headers(vvencEncoder *, vvencAccessUnit * );
+
 /* vvenc_get_last_error
  This method returns the last occurred error as a string.
  \param[in]  vvencEncoder pointer to opaque handler

@@ -765,6 +765,11 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
   }
 }
 
+void EncGOP::getParameterSets( AccessUnitList& accessUnit )
+{
+  xGetParameterSets( accessUnit, m_HLSWriter );
+}
+
 int EncGOP::xGetNextPocICO( int poc, int max, bool altGOP ) const
 {
   if( poc < 0 )
@@ -2226,6 +2231,25 @@ void EncGOP::xWritePicture( Picture& pic, AccessUnitList& au, bool isEncodeLtRef
   xWriteTrailingSEIs( pic, au, digestStr );
   xPrintPictureInfo ( pic, au, digestStr, m_pcEncCfg->m_printFrameMSE, isEncodeLtRef );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
+}
+
+int EncGOP::xGetParameterSets( AccessUnitList& accessUnit, HLSWriter& hlsWriter )
+{
+  CHECK( m_ppsMap.getFirstPS() == nullptr || m_spsMap.getPS( m_ppsMap.getFirstPS()->spsId ) == nullptr, "sps/pps not initialised" );
+
+  const PPS& pps = *( m_ppsMap.getFirstPS() );
+  const SPS& sps = *( m_spsMap.getPS( pps.spsId ) );
+  int actualTotalBits = 0;
+
+  if (sps.vpsId != 0)
+  {
+    actualTotalBits += xWriteVPS( accessUnit, &m_VPS, hlsWriter );
+  }
+  actualTotalBits += xWriteDCI( accessUnit, &m_DCI, hlsWriter );
+  actualTotalBits += xWriteSPS( accessUnit, &sps, hlsWriter );
+  actualTotalBits += xWritePPS( accessUnit, &pps, &sps, hlsWriter );
+
+  return actualTotalBits;
 }
 
 int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter )

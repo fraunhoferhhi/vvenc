@@ -191,6 +191,7 @@ public:
   void init               ( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
+  void getParameterSets   ( AccessUnitList& accessUnit );
 
 protected:
   virtual void initPicture    ( Picture* pic );
@@ -232,6 +233,8 @@ private:
 
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+  int  xGetParameterSets              ( AccessUnitList& accessUnit, HLSWriter& hlsWriter );
+
   int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
   void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
