@@ -81,6 +81,7 @@ public:
   bool         m_bClipOutputVideoToRec709Range = false;
   bool         m_packedYUVInput                = false;        ///< If true, packed 10-bit YUV ( 4 samples packed into 5-bytes consecutively )
   bool         m_packedYUVOutput               = false;        ///< If true, output 10-bit and 12-bit YUV data as 5-byte and 3-byte (respectively) packed YUV data
+  bool         m_forceY4mInput                 = false;        ///< If true, y4m input file syntax is forced (only needed for input via std::cin)
   bool         m_decode                        = false;
   bool         m_showVersion                   = false;
   bool         m_showHelp                      = false;

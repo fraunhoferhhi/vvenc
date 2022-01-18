@@ -60,6 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/IStreamIO.h"
 #include "apputils/ParseArg.h"
 #include "apputils/VVEncAppCfg.h"
+#include "apputils/YuvFileIO.h"
 #include "vvenc/vvenc.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
@@ -615,6 +616,11 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   ("additional",                                        m_additionalSettings,                               "additional options as string (e.g: \"bitrate=1000000 passes=1\")")
   ;
 
+  opts.setSubSection("Input Options");
+  opts.addOptions()
+  ("y4m",                                             m_forceY4mInput,                                     "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
+  ;
+
   if( !m_easyMode )
   {
     opts.setSubSection("General Options");
@@ -1091,6 +1097,16 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     if ( m_showVersion )
     {
       return 1;
+    }
+
+    // check for y4m input
+    if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
+    {
+      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, *this ))
+      {
+        rcOstr << "cannot parse 4ym metadata\n";
+        ret = -1;
+      }
     }
 
     for( auto& a : argv_unhandled )
