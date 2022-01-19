@@ -1104,7 +1104,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     {
       if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, *this ))
       {
-        rcOstr << "cannot parse 4ym metadata\n";
+        rcOstr << "cannot parse y4m metadata\n";
         ret = -1;
       }
     }
