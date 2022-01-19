@@ -618,11 +618,12 @@ double RateCtrl::getAverageBitsFromFirstPass()
   uint64_t totalBitsFirstPass = 0;
   std::list<TRCPassStats>::iterator it;
 
-  if (m_pcEncCfg->m_LookAhead)
+  if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
     const int  gopsInIp = encRCSeq->intraPeriod / encRCSeq->gopSize;
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
+    double bitsUsed;
 
     for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // sum per level
     {
@@ -636,8 +637,15 @@ double RateCtrl::getAverageBitsFromFirstPass()
     {
       totalBitsFirstPass += ((gopsInIp << (frameLevel - 2)) * tlBits[frameLevel] + (tlCount[frameLevel] >> 1)) / std::max (1u, tlCount[frameLevel]);
     }
+    bitsUsed = totalBitsFirstPass / (double) encRCSeq->intraPeriod;
 
-    return totalBitsFirstPass / (double) encRCSeq->intraPeriod;
+    if (m_listRCFirstPassStats.size() < encRCSeq->gopSize) // apply crossfade, similar to updateAfterPic
+    {
+      totalBitsFirstPass = tlBits[0] + tlBits[1] + tlBits[2] + tlBits[3] + tlBits[4] + tlBits[5] + tlBits[6] + tlBits[7];
+      bitsUsed = ((double) totalBitsFirstPass * (encRCSeq->gopSize - m_listRCFirstPassStats.size()) / (double) m_listRCFirstPassStats.size() + bitsUsed * m_listRCFirstPassStats.size()) / (double) encRCSeq->gopSize;
+    }
+
+    return bitsUsed;
   }
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // for two-pass RC
