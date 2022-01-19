@@ -539,7 +539,7 @@ int YuvFileIO::open( const std::string &fileName, bool bWriteMode, const int fil
 
   if ( m_y4mMode && bWriteMode )
   {
-    m_lastError =  "\nERROR: Cannot handle y4m yuv ouput (only support for y4m input)";
+    m_lastError =  "\nERROR: Cannot handle y4m yuv output (only support for y4m input)";
     return -1;
   }
 
