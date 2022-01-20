@@ -2115,8 +2115,8 @@ void EncGOP::xSelectReferencePictureList( Slice* slice, int curPoc, int gopId, i
   {
     if (curPoc < (2 * m_pcEncCfg->m_GOPSize + 2))
     {
-      slice->rplIdx[0] = (curPoc + m_pcEncCfg->m_GOPSize - 1);
-      slice->rplIdx[1] = (curPoc + m_pcEncCfg->m_GOPSize - 1);
+      slice->rplIdx[0] = std::min((curPoc + m_pcEncCfg->m_GOPSize - 1),m_pcEncCfg->m_numRPLList0-1);
+      slice->rplIdx[1] = std::min((curPoc + m_pcEncCfg->m_GOPSize - 1),m_pcEncCfg->m_numRPLList0-1);
     }
     else
     {
