@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "dtrace_next.h"
 #include "CommonDef.h"
 #include "Unit.h"
+#include "UnitTools.h"
 
 //! \ingroup CommonLib
 //! \{
@@ -158,6 +159,26 @@ inline void dtraceUnitComp( DTRACE_CHANNEL channel, CPelUnitBuf& pelUnitBuf, con
   DTRACE_BLOCK( g_trace_ctx, channel, piReco, uiStride, uiWidth, uiHeight );
 }
 
+inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
+{
+  DTRACE( trace_ctx, D_MOT_FIELD, "CU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
+  const CMotionBuf mb = cu.getMotionBuf();
+  for( uint32_t listIdx = 0; listIdx < 2; listIdx++ )
+  {
+    RefPicList eListIdx = RefPicList( listIdx );
+    for( int y = 0, i = 0; y < cu.lheight(); y += 4 )
+    {
+      for( int x = 0; x < cu.lwidth(); x += 4, i++ )
+      {
+        const MotionInfo &mi = mb.at( x >> 2, y >> 2 );
+        DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.refIdx[eListIdx] );
+      }
+      DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+    }
+    DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+  }
+}
+
 inline void dtraceCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const CPelUnitBuf& pelUnitBuf, const Area* parea = NULL )
 {
   const Area& area = parea ? *parea : cs.area.Y();
@@ -184,32 +205,39 @@ inline void dtraceCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingS
 inline void dtraceCCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const CPelBuf& pelBuf, ComponentID compId, const Area* parea = NULL )
 {
   const Area& area = parea ? *parea : cs.area.Y();
-  DTRACE( trace_ctx, channel, "CRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,comp %d Checksum(%x)\n",
+  DTRACE( trace_ctx, channel, "CCRC: %6lld %3d @(%4d,%4d) [%2dx%2d] ,comp %d Checksum(%x)\n",
       DTRACE_GET_COUNTER( g_trace_ctx, channel ),
       cs.slice->poc,
       area.x, area.y, area.width, area.height, compId,
       calcCheckSum( pelBuf, cs.sps->bitDepths[ toChannelType(compId) ]));
 }
 
-inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
+
+inline void dtraceAreaCRC( CDTrace *trace_ctx, DTRACE_CHANNEL channel, const CodingStructure& cs, const UnitArea& ctuArea )
 {
-  DTRACE( trace_ctx, D_MOT_FIELD, "CU %d,%d @ %d,%d\n", cu.lwidth(), cu.lheight(), cu.lx(), cu.ly() );
-  const CMotionBuf mb = cu.getMotionBuf();
-  for( uint32_t listIdx = 0; listIdx < 2; listIdx++ )
+  dtraceCRC( g_trace_ctx, channel, cs, cs.picture->getRecoBuf( clipArea( ctuArea, *cs.picture ) ), &ctuArea.Y() );
+
+  for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_L, TREE_D ), CH_L ) )
   {
-    RefPicList eListIdx = RefPicList( listIdx );
-    for( int y = 0, i = 0; y < cu.lheight(); y += 4 )
+    if( currCU.Y().valid() )
     {
-      for( int x = 0; x < cu.lwidth(); x += 4, i++ )
-      {
-        const MotionInfo &mi = mb.at( x >> 2, y >> 2 );
-        DTRACE( trace_ctx, D_MOT_FIELD, "%d,%d:%d  ", mi.mv[eListIdx].hor, mi.mv[eListIdx].ver, mi.refIdx[eListIdx] );
-      }
-      DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+      dtraceCCRC(g_trace_ctx, channel, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Y()), COMP_Y, &currCU.Y());
     }
-    DTRACE( trace_ctx, D_MOT_FIELD, "\n" );
+  }
+
+  if( cs.pcv->chrFormat != VVENC_CHROMA_400 )
+  {
+    for( auto &currCU : cs.traverseCUs( CS::getArea( cs, ctuArea, CH_C, TREE_D ), CH_C ) )
+    {
+      if( currCU.Cb().valid() )
+      {
+        dtraceCCRC(g_trace_ctx, channel, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cb()), COMP_Cb, &currCU.Cb());
+        dtraceCCRC(g_trace_ctx, channel, *currCU.cs, currCU.cs->picture->getRecoBuf(currCU.Cr()), COMP_Cr, &currCU.Cb());
+      }
+    }
   }
 }
+
 
 #define DTRACE_PEL_BUF(...)              dtracePelBuf( __VA_ARGS__ )
 #define DTRACE_COEFF_BUF(...)            dtraceCoeffBuf( __VA_ARGS__ )
@@ -218,9 +246,10 @@ inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
 #define DTRACE_COEFF_BUF_COND(_cond,...) { if((_cond)) dtraceCoeffBuf( __VA_ARGS__ ); }
 #define DTRACE_BLOCK_REC_COND(_cond,...) { if((_cond)) dtraceBlockRec( __VA_ARGS__ ); }
 #define DTRACE_UNIT_COMP(...)            dtraceUnitComp( __VA_ARGS__ )
+#define DTRACE_MOT_FIELD(...)            dtraceMotField( __VA_ARGS__ )
 #define DTRACE_CRC(...)                  dtraceCRC( __VA_ARGS__ )
 #define DTRACE_CCRC(...)                 dtraceCCRC( __VA_ARGS__ )
-#define DTRACE_MOT_FIELD(...)            dtraceMotField( __VA_ARGS__ )
+#define DTRACE_AREA_CRC(...)             dtraceAreaCRC( __VA_ARGS__ )
 
 #else
 
@@ -231,10 +260,10 @@ inline void dtraceMotField( CDTrace *trace_ctx, const CodingUnit& cu )
 #define DTRACE_COEFF_BUF_COND(...)
 #define DTRACE_BLOCK_REC_COND(...)
 #define DTRACE_UNIT_COMP(...)
+#define DTRACE_MOT_FIELD(...)
 #define DTRACE_CRC(...)
 #define DTRACE_CCRC(...)
-#define DTRACE_MOT_FIELD(...)
-
+#define DTRACE_AREA_CRC(...)
 #endif
 
 } // namespace vvenc

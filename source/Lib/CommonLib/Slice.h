@@ -1144,7 +1144,7 @@ struct PicHeader
     cuQpDeltaSubdivInter                          = 0;
     cuChromaQpOffsetSubdivIntra                   = 0;
     cuChromaQpOffsetSubdivInter                   = 0;
-    enableTMVP                                    = true;
+    enableTMVP                                    = false;
     picColFromL0                                  = true;
     colRefIdx                                     = 0;
     mvdL1Zero                                     = 0;
