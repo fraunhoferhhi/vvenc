@@ -1148,7 +1148,7 @@ struct PicHeader
     picColFromL0                                  = true;
     colRefIdx                                     = 0;
     mvdL1Zero                                     = 0;
-    maxNumAffineMergeCand                         = AFFINE_MRG_MAX_NUM_CANDS;
+    maxNumAffineMergeCand                         = 0;
     disFracMMVD                                   = 0;
     disBdofFlag                                   = 0;
     disDmvrFlag                                   = 0;

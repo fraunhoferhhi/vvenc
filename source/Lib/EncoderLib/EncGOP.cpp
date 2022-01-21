@@ -1682,10 +1682,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->numRefIdx[REF_PIC_LIST_1] = m_pcEncCfg->m_RPLList1[ gopId ].m_numRefPicsActive;
   slice->setDecodingRefreshMarking ( m_pocCRA, m_bRefreshPending, picList );
   slice->setDefaultClpRng          ( sps );
-  if (!slice->sps->Affine)
-  {
-    slice->picHeader->maxNumAffineMergeCand = m_pcEncCfg->m_SbTMVP ? 1 : 0;
-  }
 
   // reference list
   int poc;
@@ -1768,6 +1764,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   pic.cs->picHeader->pic = &pic;
   xInitSliceTMVPFlag ( pic.cs->picHeader, slice, gopId );
   xInitSliceMvdL1Zero( pic.cs->picHeader, slice );
+  slice->picHeader->maxNumAffineMergeCand = sps.Affine ? sps.maxNumAffineMergeCand : ( sps.SbtMvp && slice->picHeader->enableTMVP ? 1 : 0 );
 
   if( slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
