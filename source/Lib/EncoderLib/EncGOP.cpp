@@ -375,7 +375,6 @@ void EncGOP::picInitRateControl( Picture& pic, Slice* slice, EncPicture* picEnco
   m_pcRateCtrl->initRateControlPic (pic, slice, sliceQP, lambda);
 
   picEncoder->getEncSlice()->resetQP (&pic, sliceQP, lambda);
-  m_pcRateCtrl->setFinalLambda (lambda);
 }
 
 
@@ -458,8 +457,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
-      // very first RC GOP
-      m_pcRateCtrl->initRCGOP( 1 );
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
@@ -467,9 +464,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
-      m_pcRateCtrl->destroyRCGOP();
-      const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
-      m_pcRateCtrl->initRCGOP( rcGopSize );
     }
   }
 

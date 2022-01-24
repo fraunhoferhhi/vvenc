@@ -82,7 +82,6 @@ namespace vvenc {
     double    psnrY;
     bool      isIntra;
     int       tempLayer;
-
     bool      isNewScene;
     bool      refreshParameters;
     double    frameInGopRatio;
@@ -93,11 +92,11 @@ namespace vvenc {
   {
   public:
     EncRCSeq();
-    virtual ~EncRCSeq();
+    ~EncRCSeq();
 
     void create( bool twoPass, bool lookAhead, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
-    virtual void destroy();
-    virtual void updateAfterPic( int bits, int tgtBits );
+    void destroy();
+    void updateAfterPic( int bits, int tgtBits );
     void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
     bool            twoPass;
@@ -125,11 +124,10 @@ namespace vvenc {
   {
   public:
     EncRCPic();
-    virtual ~EncRCPic();
+    ~EncRCPic();
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
-    virtual void destroy();
-    virtual void updateCtuMSE(const unsigned int ctuAddress, const double distortion);
+    void   destroy();
     void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp);
     void   updateAfterPicture( int actualTotalBits, double averageQP, bool isIRAP );
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
@@ -155,10 +153,10 @@ namespace vvenc {
   {
   public:
     RateCtrl(MsgLog& logger);
-    virtual ~RateCtrl();
+    ~RateCtrl();
 
-    virtual void init( const VVEncCfg& encCfg );
-    virtual void destroy();
+    void init( const VVEncCfg& encCfg );
+    void destroy();
     int  getBaseQP();
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
@@ -168,14 +166,8 @@ namespace vvenc {
     double getAverageBitsFromFirstPass();
     void detectNewScene();
     void adaptToSceneChanges();
-    virtual void xUpdateAfterPicRC( const Picture* pic );
-    virtual void xUpdateAfterCtuRC( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr, std::mutex* mutex, const double lambda );
-    virtual void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
-    virtual void setFinalLambda( const double lambda );
-
-    virtual void initRCGOP( const int numberOfPictures );
-    virtual void destroyRCGOP();
-
+    void xUpdateAfterPicRC( const Picture* pic );
+    void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }

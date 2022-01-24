@@ -179,14 +179,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_LookAhead )
-    {
-      m_rateCtrl = new LegacyRateCtrl(msg);
-    }
-    else
-    {
-      m_rateCtrl = new RateCtrl(msg);
-    }
+    m_rateCtrl = new RateCtrl(msg);
   }
 
   m_rateCtrl->setRCPass( m_encCfg, pass, statsFName );
