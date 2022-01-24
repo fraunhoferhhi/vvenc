@@ -359,12 +359,6 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
     m_syncPicCtx[slice->pps->getTileLineId( ctuXPosInCtus, ctuYPosInCtus )] = m_CABACEstimator->getCtx();
   }
 
-  const int numberOfWrittenBits = int( m_CABACEstimator->getEstFracBits() >> SCALE_BITS );
-  if ( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    m_pcRateCtrl->xUpdateAfterCtuRC( slice, numberOfWrittenBits, ctuRsAddr, m_rcMutex, m_cRdCost.getLambda() );
-  }
-
   DTRACE_AREA_CRC( g_trace_ctx, D_CRC, cs, ctuArea );
 }
 
@@ -458,11 +452,6 @@ void EncCu::xCompressCtu( CodingStructure& cs, const UnitArea& area, const unsig
     cs.useSubStructure( *bestCS, partitioner->chType, TREE_D, CS::getArea( *bestCS, area, partitioner->chType, partitioner->treeType ), true );
 
     if ( m_wppMutex ) m_wppMutex->unlock();
-  }
-
-  if ( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    cs.slice->pic->encRCPic->updateCtuMSE( ctuRsAddr, (double)bestCS->dist );
   }
 
   // reset context states and uninit context pointer

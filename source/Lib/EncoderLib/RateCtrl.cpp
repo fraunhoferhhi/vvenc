@@ -253,11 +253,6 @@ void EncRCPic::destroy()
   encRCSeq = NULL;
 }
 
-void EncRCPic::updateCtuMSE( const unsigned int ctuAddress, const double distortion )
-{
-  //THROW( "Not supported in 2-pass rate control" );
-}
-
 void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp)
 {
   int lastCurrTLQP = -1;
@@ -362,7 +357,7 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   m_pcEncCfg = &encCfg;
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead, m_pcEncCfg->m_RCTargetBitrate, (int)((double)(m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
+  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, (int)((double)(m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
 }
 
 int RateCtrl::getBaseQP()
@@ -759,11 +754,6 @@ void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
 }
 
-void RateCtrl::xUpdateAfterCtuRC( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr, std::mutex* m_rcMutex, const double lambda )
-{
-  //THROW( "Not supported in 2-pass rate control" );
-}
-
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )
 {
   EncRCPic* encRcPic = new EncRCPic;
@@ -878,22 +868,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
   qp = sliceQP;
   finalLambda = lambda;
-}
-
-void RateCtrl::setFinalLambda( const double lambda )
-{
-  //THROW( "Not supported in 2-pass rate control" );
-}
-
-void RateCtrl::initRCGOP( const int numberOfPictures )
-{
-
-  //THROW("Not supported in 2-pass rate control");
-}
-
-void RateCtrl::destroyRCGOP()
-{
-  //THROW( "Not supported in 2-pass rate control" );
 }
 
 }

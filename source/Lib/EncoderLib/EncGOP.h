@@ -59,7 +59,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
-#include "LegacyRateCtrl.h"
 #include "EncHRD.h"
 #include "EncStage.h"
 
