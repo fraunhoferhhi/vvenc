@@ -365,6 +365,7 @@ void EncCu::encodeCtu( Picture* pic, int (&prevQP)[MAX_NUM_CH], uint32_t ctuXPos
     m_pcRateCtrl->xUpdateAfterCtuRC( slice, numberOfWrittenBits, ctuRsAddr, m_rcMutex, m_cRdCost.getLambda() );
   }
 
+  DTRACE_AREA_CRC( g_trace_ctx, D_CRC, cs, ctuArea );
 }
 
 // ====================================================================================================================
