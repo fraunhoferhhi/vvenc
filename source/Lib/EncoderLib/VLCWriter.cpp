@@ -513,10 +513,7 @@ void HLSWriter::codeAlfAps( const APS* pcAPS )
       CHECK(filterCount > MAX_NUM_CC_ALF_FILTERS, "CC ALF Filter count is too large");
       CHECK(filterCount == 0,                     "CC ALF Filter count is too small");
 
-      if (MAX_NUM_CC_ALF_FILTERS > 1)
-      {
-        WRITE_UVLC(filterCount - 1, ccIdx == 0 ? "alf_cc_cb_filters_signalled_minus1" : "alf_cc_cr_filters_signalled_minus1");
-      }
+      WRITE_UVLC(filterCount - 1, ccIdx == 0 ? "alf_cc_cb_filters_signalled_minus1" : "alf_cc_cr_filters_signalled_minus1");
 
       for (int filterIdx = 0; filterIdx < filterCount; filterIdx++)
       {
