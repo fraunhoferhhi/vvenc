@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -375,7 +375,6 @@ void EncGOP::picInitRateControl( Picture& pic, Slice* slice, EncPicture* picEnco
   m_pcRateCtrl->initRateControlPic (pic, slice, sliceQP, lambda);
 
   picEncoder->getEncSlice()->resetQP (&pic, sliceQP, lambda);
-  m_pcRateCtrl->setFinalLambda (lambda);
 }
 
 
@@ -458,8 +457,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
-      // very first RC GOP
-      m_pcRateCtrl->initRCGOP( 1 );
     }
     else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
     {
@@ -467,9 +464,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
       {
         m_pcRateCtrl->processFirstPassData( flush );
       }
-      m_pcRateCtrl->destroyRCGOP();
-      const int rcGopSize = flush ? std::min( m_pcEncCfg->m_GOPSize, (int)encList.size() ) : m_pcEncCfg->m_GOPSize;
-      m_pcRateCtrl->initRCGOP( rcGopSize );
     }
   }
 
@@ -1687,10 +1681,6 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->numRefIdx[REF_PIC_LIST_1] = m_pcEncCfg->m_RPLList1[ gopId ].m_numRefPicsActive;
   slice->setDecodingRefreshMarking ( m_pocCRA, m_bRefreshPending, picList );
   slice->setDefaultClpRng          ( sps );
-  if (!slice->sps->Affine)
-  {
-    slice->picHeader->maxNumAffineMergeCand = m_pcEncCfg->m_SbTMVP ? 1 : 0;
-  }
 
   // reference list
   int poc;
@@ -1773,6 +1763,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   pic.cs->picHeader->pic = &pic;
   xInitSliceTMVPFlag ( pic.cs->picHeader, slice, gopId );
   xInitSliceMvdL1Zero( pic.cs->picHeader, slice );
+  slice->picHeader->maxNumAffineMergeCand = sps.Affine ? sps.maxNumAffineMergeCand : ( sps.SbtMvp && slice->picHeader->enableTMVP ? 1 : 0 );
 
   if( slice->nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_RASL && m_pcEncCfg->m_rprRASLtoolSwitch )
   {
@@ -2120,8 +2111,8 @@ void EncGOP::xSelectReferencePictureList( Slice* slice, int curPoc, int gopId, i
   {
     if (curPoc < (2 * m_pcEncCfg->m_GOPSize + 2))
     {
-      slice->rplIdx[0] = (curPoc + m_pcEncCfg->m_GOPSize - 1);
-      slice->rplIdx[1] = (curPoc + m_pcEncCfg->m_GOPSize - 1);
+      slice->rplIdx[0] = std::min((curPoc + m_pcEncCfg->m_GOPSize - 1),m_pcEncCfg->m_numRPLList0-1);
+      slice->rplIdx[1] = std::min((curPoc + m_pcEncCfg->m_GOPSize - 1),m_pcEncCfg->m_numRPLList0-1);
     }
     else
     {

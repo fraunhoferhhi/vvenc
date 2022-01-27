@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -364,7 +364,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
-  c->m_LookAhead                               = false;
+  c->m_LookAhead                               = -1;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
@@ -830,9 +830,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_RCNumPasses = ( c->m_RCPass > 0 ? 2 : 1 ); // single pass by default (SDK usage)
   }
-  if( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 )
+  if ( c->m_LookAhead < 0 )
   {
-    c->m_LookAhead = true;
+    c->m_LookAhead = c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ? 1 : 0;
   }
 
   // threading
@@ -851,12 +851,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
-    if( c->m_RCTargetBitrate > 0
-        && c->m_RCNumPasses == 1
-        && !c->m_LookAhead )
-    {
-      c->m_maxParallelFrames = std::min( c->m_numThreads, 2 );
-    }
   }
 
   // quantization threshold
@@ -2300,7 +2294,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
   vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
-  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,            "Look-ahead encoding is not supported for two-pass rate control" );
+  vvenc_confirmParameter( c, c->m_LookAhead < -1 || c->m_LookAhead > 1,          "Look-ahead out of range [-1..1]" );
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
+  vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
+
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)

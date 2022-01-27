@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "apputils/IStreamIO.h"
 #include "apputils/ParseArg.h"
 #include "apputils/VVEncAppCfg.h"
+#include "apputils/YuvFileIO.h"
 #include "vvenc/vvenc.h"
 
 #define MACRO_TO_STRING_HELPER(val) #val
@@ -555,7 +556,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("NumPasses",                                       c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Passes",                                          c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
-    ("LookAhead",                                       c->m_LookAhead,                                      "enable pre-analysis" )
+    ("LookAhead",                                       c->m_LookAhead,                                      "enable pre-analysis (-1,0,1)" )
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
@@ -613,6 +614,11 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   opts.setSubSection("General Options");
   opts.addOptions()
   ("additional",                                        m_additionalSettings,                               "additional options as string (e.g: \"bitrate=1000000 passes=1\")")
+  ;
+
+  opts.setSubSection("Input Options");
+  opts.addOptions()
+  ("y4m",                                             m_forceY4mInput,                                     "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
   ;
 
   if( !m_easyMode )
@@ -1091,6 +1097,16 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     if ( m_showVersion )
     {
       return 1;
+    }
+
+    // check for y4m input
+    if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
+    {
+      if( 0 > apputils::YuvFileIO::parseY4mHeader( m_inputFileName, *c, *this ))
+      {
+        rcOstr << "cannot parse y4m metadata\n";
+        ret = -1;
+      }
     }
 
     for( auto& a : argv_unhandled )

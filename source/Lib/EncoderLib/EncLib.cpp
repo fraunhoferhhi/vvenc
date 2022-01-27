@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -179,14 +179,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_LookAhead )
-    {
-      m_rateCtrl = new LegacyRateCtrl(msg);
-    }
-    else
-    {
-      m_rateCtrl = new RateCtrl(msg);
-    }
+    m_rateCtrl = new RateCtrl(msg);
   }
 
   m_rateCtrl->setRCPass( m_encCfg, pass, statsFName );

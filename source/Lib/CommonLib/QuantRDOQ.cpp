@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1184,7 +1184,6 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
     transformShift = std::max<int>( 0, transformShift );
   }
 
-        double   blockUncodedCost                   = 0;
   const uint32_t maxNumCoeff                        = rect.area();
 
   CHECK( compID >= MAX_NUM_TBLOCKS, "Invalid component ID" );
@@ -1277,7 +1276,6 @@ void QuantRDOQ::rateDistOptQuantTS( TransformUnit& tu, const ComponentID compID,
       coeffLevelError[0] = dErr * dErr * errorScale;
 
       costCoeff0[scanPos] = coeffLevelError[0];
-      blockUncodedCost   += costCoeff0[ scanPos ];
       dstCoeff[blkPos]    = coeffLevels[0];
 
       //===== coefficient level estimation =====
@@ -1406,7 +1404,6 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
     transformShift = std::max<int>(0, transformShift);
   }
 
-  double   blockUncodedCost = 0;
   const uint32_t maxNumCoeff = rect.area();
 
   CHECK(compID >= MAX_NUM_TBLOCKS, "Invalid component ID");
@@ -1497,7 +1494,6 @@ void QuantRDOQ::forwardRDPCM( TransformUnit& tu, const ComponentID compID, const
       coeffLevelError[0]  = dErr * dErr * errorScale;
 
       costCoeff0[scanPos] = coeffLevelError[0];
-      blockUncodedCost   += costCoeff0[scanPos];
       dstCoeff[blkPos]    = coeffLevels[0];
 
       //===== coefficient level estimation =====

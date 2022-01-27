@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
-#include "LegacyRateCtrl.h"
 #include "EncHRD.h"
 #include "EncStage.h"
 
