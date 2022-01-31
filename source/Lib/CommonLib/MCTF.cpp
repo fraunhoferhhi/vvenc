@@ -795,6 +795,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
         {
           for( int i = 0; i < numRefs; i++ )
           {
+#if 0
             const PelBuf& corrBuf = correctedPics[i].bufs[c];
             int64_t variance = 0, diffsum = 0;
             for( int y1 = 0; y1 < blkSizeY - 1; y1++ )
@@ -818,6 +819,41 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
               }
             }
             srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 300 * variance + 50 ) / ( 10 * diffsum + 50 ) );
+#else
+            int64_t variance = 0, diffsum = 0;
+            const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
+            const Pel *     refPel    = correctedPics[i].bufs[c].buf + y * refStride + x;
+            //const PelBuf& corrBuf = correctedPics[i].bufs[c];
+            for (int y1 = 0; y1 < blkSizeY; y1++)
+            {
+              for (int x1 = 0; x1 < blkSizeX; x1++)
+              {
+                const Pel pix  = *(srcPel + srcStride * y1 + x1);
+                const Pel ref  = *(refPel + refStride * y1 + x1);
+
+                const int diff = pix - ref;
+                variance += diff * diff;
+                if (x1 != blkSizeX - 1)
+                {
+                  const Pel pixR  = *(srcPel + srcStride * y1 + x1 + 1);
+                  const Pel refR  = *(refPel + refStride * y1 + x1 + 1);
+                  const int diffR = pixR - refR;
+                  diffsum += (diffR - diff) * (diffR - diff);
+                }
+                if (y1 != blkSizeY - 1)
+                {
+                  const Pel pixD  = *(srcPel + srcStride * y1 + x1 + srcStride);
+                  const Pel refD  = *(refPel + refStride * y1 + x1 + refStride);
+                  const int diffD = pixD - refD;
+                  diffsum += (diffD - diff) * (diffD - diff);
+                }
+              }
+            }
+            const int cntV = blkSizeX * blkSizeY;
+            const int cntD = 2 * cntV - blkSizeX - blkSizeY;
+            srcFrameInfo[i].mvs.get(xBlkAddr, yBlkAddr ).noise =
+                (int) round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
+#endif
           }
         }
         if( x % blkSizeX == 0 )
