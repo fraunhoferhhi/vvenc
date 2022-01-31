@@ -232,8 +232,6 @@ private:
 
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );
   int  xWriteParameterSets            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
-  int  xGetParameterSets              ( AccessUnitList& accessUnit, HLSWriter& hlsWriter );
-
   int  xWritePictureSlices            ( Picture& pic, AccessUnitList& accessUnit, HLSWriter& hlsWriter );
   void xWriteLeadingSEIs              ( const Picture& pic, AccessUnitList& accessUnit );
   void xWriteTrailingSEIs             ( const Picture& pic, AccessUnitList& accessUnit, std::string& digestStr );
