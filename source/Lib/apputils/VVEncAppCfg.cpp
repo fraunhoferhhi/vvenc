@@ -455,7 +455,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
   opts.setSubSection("General Options");
   opts.addOptions()
-  ("help",                                            do_help,                                             "show default help")
+  ("help,h",                                          do_help,                                             "show default help")
   ("fullhelp",                                        do_full_help,                                        "show full help")
   ("Verbosity,v",                                     toMsgLevel,                                          "Specifies the level of the verboseness (0: silent, 1: error, 2: warning, 3: info, 4: notice, 5: verbose, 6: debug)")
   ("version",                                         m_showVersion,                                       "show version ")
