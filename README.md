@@ -45,10 +45,10 @@ For multi-configuration projects (e.g. Visual Studio or Xcode) specify `--config
 On top of the CMake build system, convinence Makefile is provided to simply the build process. To build using GNU Make please run the following:
 
 ```sh
-make install-release
+make install-release <options>
 ```
 
-Other supported build targets include `release`, `debug`, `relwithdebinfo`, `test`,  and `clean`. Refer to the Wiki for a full list of supported features.
+Other supported build targets include `configure`, `release`, `debug`, `relwithdebinfo`, `test`,  and `clean`. Refer to the Wiki for a full list of supported features.
 
 # Citing
 
