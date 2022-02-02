@@ -108,6 +108,8 @@ public:
 
   int encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUnit, bool* pbEncodeDone );
 
+  int getParameterSets( vvencAccessUnit *pcAccessUnit );
+
   int getConfig( vvenc_config& rcVVEncCfg ) const;
   int checkConfig( const vvenc_config& rcVVEncCfg );
   int reconfig( const vvenc_config& rcVVEncCfg );

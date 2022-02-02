@@ -190,6 +190,7 @@ public:
   void init               ( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
+  void getParameterSets   ( AccessUnitList& accessUnit );
 
 protected:
   virtual void initPicture    ( Picture* pic );

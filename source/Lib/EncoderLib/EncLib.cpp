@@ -392,6 +392,14 @@ void EncLib::printSummary()
   }
 }
 
+void EncLib::getParameterSets( AccessUnitList& au )
+{
+  if( m_gopEncoder )
+  {
+    m_gopEncoder->getParameterSets( au );
+  }
+}
+
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================

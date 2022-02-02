@@ -105,6 +105,7 @@ public:
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
   void     printSummary        ();
+  void     getParameterSets    ( AccessUnitList& au );
 
 private:
   void     xUninitLib          ();

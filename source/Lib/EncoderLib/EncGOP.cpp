@@ -759,6 +759,22 @@ void EncGOP::printOutSummary( const bool printMSEBasedSNR, const bool printSeque
   }
 }
 
+void EncGOP::getParameterSets( AccessUnitList& accessUnit )
+{
+  CHECK( m_ppsMap.getFirstPS() == nullptr || m_spsMap.getPS( m_ppsMap.getFirstPS()->spsId ) == nullptr, "sps/pps not initialised" );
+
+  const PPS& pps = *( m_ppsMap.getFirstPS() );
+  const SPS& sps = *( m_spsMap.getPS( pps.spsId ) );
+
+  if (sps.vpsId != 0)
+  {
+    xWriteVPS( accessUnit, &m_VPS, m_HLSWriter );
+  }
+  xWriteDCI( accessUnit, &m_DCI, m_HLSWriter );
+  xWriteSPS( accessUnit, &sps, m_HLSWriter );
+  xWritePPS( accessUnit, &pps, &sps, m_HLSWriter );
+}
+
 int EncGOP::xGetNextPocICO( int poc, int max, bool altGOP ) const
 {
   if( poc < 0 )
