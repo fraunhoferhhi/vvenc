@@ -2703,12 +2703,19 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
   {
     if ((m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || !m_pcRateCtrl->rcIsFinalPass)
     {
-      std::string cInfo = prnt("RC pass %d/%d, analyze poc %4d",
-          m_pcRateCtrl->rcPass + 1,
-          m_pcEncCfg->m_RCNumPasses,
-          slice->poc );
-
-          accessUnit.InfoString.append( cInfo );
+      std::string cInfo;
+      if( m_pcRateCtrl->rcIsFinalPass ) // single pass RC
+      {
+        cInfo = prnt("RC analyze poc %4d", slice->poc );
+      }
+      else
+      {
+        cInfo = prnt("RC pass %d/%d, analyze poc %4d",
+            m_pcRateCtrl->rcPass + 1,
+            m_pcEncCfg->m_RCNumPasses,
+            slice->poc );
+      }
+      accessUnit.InfoString.append( cInfo );
     }
     else
     {
