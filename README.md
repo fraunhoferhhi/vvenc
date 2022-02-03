@@ -20,7 +20,7 @@ See the [Wiki-Page](https://github.com/fraunhoferhhi/vvenc/wiki) for more inform
 
 ## Build
 
-VVenC uses CMake to describe and mange the build process. A working [CMake](http://www.cmake.org/) installation is required to build the software. In the following, the basic build steps are described. Please refer to the [Wiki](https://github.com/fraunhoferhhi/vvenc/wiki/Build) for the description of all build options.
+VVenC uses CMake to describe and manage the build process. A working [CMake](http://www.cmake.org/) installation is required to build the software. In the following, the basic build steps are described. Please refer to the [Wiki](https://github.com/fraunhoferhhi/vvenc/wiki/Build) for the description of all build options.
 
 ### How to build using CMake?
 
@@ -42,7 +42,7 @@ For multi-configuration projects (e.g. Visual Studio or Xcode) specify `--config
 
 ### How to build using GNU Make?
 
-On top of the CMake build system, convinence Makefile is provided to simply the build process. To build using GNU Make please run the following:
+On top of the CMake build system, convinence Makefile is provided to simplify the build process. To build using GNU Make please run the following:
 
 ```sh
 make install-release <options>
