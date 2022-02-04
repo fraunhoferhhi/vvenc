@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -94,7 +94,6 @@ public:
   /// picture-level deblocking filter
   void loopFilterPic                  ( CodingStructure& cs, bool calcFilterStrength ) const;
   void loopFilterPicLine              ( CodingStructure& cs, const ChannelType chType,                   const int ctuLine, const int offset = 0, DeblockEdgeDir edgeDir = NUM_EDGE_DIR ) const;
-  void loopFilterCTU                  ( CodingStructure& cs, const ChannelType chType, const int ctuCol, const int ctuLine, const int offset = 0, DeblockEdgeDir edgeDir = NUM_EDGE_DIR ) const;
   static void calcFilterStrengthsCTU  ( CodingStructure& cs, const UnitArea& ctuArea, const bool clearLFP );
 
   static void calcFilterStrengths     ( const CodingUnit& cu, bool clearLF = false );

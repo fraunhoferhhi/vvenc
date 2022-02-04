@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -335,6 +335,15 @@ VVENC_DECL int vvenc_reconfig( vvencEncoder *, const vvenc_config * );
  \retval     int VVENC_ERR_PARAMETER indicates a parameter error, otherwise the return value VVENC_OK indicates success.
 */
 VVENC_DECL int vvenc_check_config( vvencEncoder *, const vvenc_config * );
+
+/* vvenc_get_headers
+ This method returns the headers (SPS,PPS,...) that are used.
+ All init calls (vvenc_encoder_open, vvenc_init_pass) must be called in advance.
+ \param[in]  vvencEncoder pointer to opaque handler
+ \param[out] accessUnit pointer to vvencAccessUnit that retrieves compressed access units containing all headers.    
+ \retval     int negative indicates an error, otherwise the return value VVENC_OK indicates success.
+*/
+VVENC_DECL int vvenc_get_headers(vvencEncoder *, vvencAccessUnit * );
 
 /* vvenc_get_last_error
  This method returns the last occurred error as a string.

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -452,7 +452,7 @@ typedef struct vvenc_config
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
-  bool                m_RCLookAhead;                                                     // enable pre-analysis in single pass rate control encoding
+  bool                m_reserved;
 
   int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
@@ -747,7 +747,8 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
   
   // reserved parameters for internal use
-  int                 m_reservedInt[9];
+  int                 m_reservedInt[8];
+  int                 m_LookAhead;                                                       // enable pre-analysis;
   int                 m_explicitAPSid;
   bool                m_reservedFlag[9];
   bool                m_treatAsSubPic;

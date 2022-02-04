@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -652,8 +652,6 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   if( ( m_pcEncCfg->m_IntraPeriod == 1 ) && ( partitioner.chType == CH_C ) && ( !cuECtx.doQtChromaSplit ) )
   {
     cuECtx.maxDepth         = partitioner.currDepth;
-    cuECtx.doHorChromaSplit = true;
-    cuECtx.doVerChromaSplit = true;
   }
 
   if( isBoundary )
