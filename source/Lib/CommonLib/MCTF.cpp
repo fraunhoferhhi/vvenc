@@ -798,7 +798,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
             int64_t variance = 0, diffsum = 0;
             const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
             const Pel *     refPel    = correctedPics[i].bufs[c].buf + y * refStride + x;
-            //const PelBuf& corrBuf = correctedPics[i].bufs[c];
             for (int y1 = 0; y1 < blkSizeY; y1++)
             {
               for (int x1 = 0; x1 < blkSizeX; x1++)
