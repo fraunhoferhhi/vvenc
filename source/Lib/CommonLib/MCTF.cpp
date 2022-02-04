@@ -795,29 +795,37 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
         {
           for( int i = 0; i < numRefs; i++ )
           {
-            const PelBuf& corrBuf = correctedPics[i].bufs[c];
             int64_t variance = 0, diffsum = 0;
-            for( int y1 = 0; y1 < blkSizeY - 1; y1++ )
+            const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
+            const Pel *     refPel    = correctedPics[i].bufs[c].buf + y * refStride + x;
+            for (int y1 = 0; y1 < blkSizeY; y1++)
             {
-              for( int x1 = 0; x1 < blkSizeX - 1; x1++ )
+              for (int x1 = 0; x1 < blkSizeX; x1++)
               {
-                int pix =  srcPel[x1];
-                int pixR = srcPel[x1 + 1];
-                int pixD = srcPel[x1 + srcStride];
-                int ref =  corrBuf.buf[( ( y + y1     ) * corrBuf.stride + x + x1 )];
-                int refR = corrBuf.buf[( ( y + y1     ) * corrBuf.stride + x + x1 + 1 )];
-                int refD = corrBuf.buf[( ( y + y1 + 1 ) * corrBuf.stride + x + x1 )];
+                const Pel pix  = *(srcPel + srcStride * y1 + x1);
+                const Pel ref  = *(refPel + refStride * y1 + x1);
 
-                int diff = pix - ref;
-                int diffR = pixR - refR;
-                int diffD = pixD - refD;
-
+                const int diff = pix - ref;
                 variance += diff * diff;
-                diffsum += ( diffR - diff ) * ( diffR - diff );
-                diffsum += ( diffD - diff ) * ( diffD - diff );
+                if (x1 != blkSizeX - 1)
+                {
+                  const Pel pixR  = *(srcPel + srcStride * y1 + x1 + 1);
+                  const Pel refR  = *(refPel + refStride * y1 + x1 + 1);
+                  const int diffR = pixR - refR;
+                  diffsum += (diffR - diff) * (diffR - diff);
+                }
+                if (y1 != blkSizeY - 1)
+                {
+                  const Pel pixD  = *(srcPel + srcStride * y1 + x1 + srcStride);
+                  const Pel refD  = *(refPel + refStride * y1 + x1 + refStride);
+                  const int diffD = pixD - refD;
+                  diffsum += (diffD - diff) * (diffD - diff);
+                }
               }
             }
-            srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 300 * variance + 50 ) / ( 10 * diffsum + 50 ) );
+            const int cntV = blkSizeX * blkSizeY;
+            const int cntD = 2 * cntV - blkSizeX - blkSizeY;
+            srcFrameInfo[i].mvs.get(xBlkAddr, yBlkAddr ).noise = (int) round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
           }
         }
         if( x % blkSizeX == 0 )
