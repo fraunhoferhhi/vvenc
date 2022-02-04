@@ -795,31 +795,6 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
         {
           for( int i = 0; i < numRefs; i++ )
           {
-#if 0
-            const PelBuf& corrBuf = correctedPics[i].bufs[c];
-            int64_t variance = 0, diffsum = 0;
-            for( int y1 = 0; y1 < blkSizeY - 1; y1++ )
-            {
-              for( int x1 = 0; x1 < blkSizeX - 1; x1++ )
-              {
-                int pix =  srcPel[x1];
-                int pixR = srcPel[x1 + 1];
-                int pixD = srcPel[x1 + srcStride];
-                int ref =  corrBuf.buf[( ( y + y1     ) * corrBuf.stride + x + x1 )];
-                int refR = corrBuf.buf[( ( y + y1     ) * corrBuf.stride + x + x1 + 1 )];
-                int refD = corrBuf.buf[( ( y + y1 + 1 ) * corrBuf.stride + x + x1 )];
-
-                int diff = pix - ref;
-                int diffR = pixR - refR;
-                int diffD = pixD - refD;
-
-                variance += diff * diff;
-                diffsum += ( diffR - diff ) * ( diffR - diff );
-                diffsum += ( diffD - diff ) * ( diffD - diff );
-              }
-            }
-            srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 300 * variance + 50 ) / ( 10 * diffsum + 50 ) );
-#else
             int64_t variance = 0, diffsum = 0;
             const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
             const Pel *     refPel    = correctedPics[i].bufs[c].buf + y * refStride + x;
@@ -851,9 +826,7 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
             }
             const int cntV = blkSizeX * blkSizeY;
             const int cntD = 2 * cntV - blkSizeX - blkSizeY;
-            srcFrameInfo[i].mvs.get(xBlkAddr, yBlkAddr ).noise =
-                (int) round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
-#endif
+            srcFrameInfo[i].mvs.get(xBlkAddr, yBlkAddr ).noise = (int) round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
           }
         }
         if( x % blkSizeX == 0 )
