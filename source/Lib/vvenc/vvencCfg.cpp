@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
+especially patent licenses, a separate Agreement needs to be closed.
 For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -330,7 +330,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_confirmFailed                           = false;         ///< state variable, Private context used for internal data ( do not change )
   c->m_msgFnc                                  = nullptr;
   c->m_msgCtx                                  = nullptr;
-  
+
   //core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
@@ -364,7 +364,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
-  c->m_RCLookAhead                             = false;
+  c->m_LookAhead                               = -1;
 
   c->m_SegmentMode                             = VVENC_SEG_OFF;
 
@@ -467,7 +467,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_entropyCodingSyncEnabled                = false;
   c->m_entryPointsPresent                      = true;
-  
+
   c->m_CTUSize                                 = 128;
   c->m_MinQT[0] = c->m_MinQT[1] = 8;                                            ///< 0: I slice luma; 1: P/B slice; 2: I slice chroma
   c->m_MinQT[2] = 4;
@@ -652,7 +652,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_numTileCols                             = 1;
   c->m_numTileRows                             = 1;
   c->m_numSlicesInPic                          = 1;
-  
+
   memset( c->m_summaryOutFilename    , '\0', sizeof(c->m_summaryOutFilename) );
   memset( c->m_summaryPicFilenameBase, '\0', sizeof(c->m_summaryPicFilenameBase) );
   c->m_summaryVerboseness                      = 0;
@@ -738,7 +738,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c,  (c->m_numIntraModesFullRD < -1 || c->m_numIntraModesFullRD == 0 || c->m_numIntraModesFullRD > 3), "Error: NumIntraModesFullRD must be -1 or between 1 and 3");
 
-  
+
   if ( c->m_confirmFailed )
   {
     return c->m_confirmFailed;
@@ -828,10 +828,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   // rate control
   if( c->m_RCNumPasses < 0 )
   {
-    if( c->m_RCPass > 0 )
-      c->m_RCNumPasses = 2;
-    else
-      c->m_RCNumPasses = 1; // single passs per default (sdk usage)
+    c->m_RCNumPasses = ( c->m_RCPass > 0 ? 2 : 1 ); // single pass by default (SDK usage)
+  }
+  if ( c->m_LookAhead < 0 )
+  {
+    c->m_LookAhead = c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 ? 1 : 0;
   }
 
   // threading
@@ -850,12 +851,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   if( c->m_maxParallelFrames < 0 )
   {
     c->m_maxParallelFrames = std::min( c->m_numThreads, 4 );
-    if( c->m_RCTargetBitrate > 0
-        && c->m_RCNumPasses == 1
-        && ! c->m_RCLookAhead )
-    {
-      c->m_maxParallelFrames = std::min( c->m_numThreads, 2 );
-    }
   }
 
   // quantization threshold
@@ -1154,7 +1149,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_rprEnabledFlag = c->m_DecodingRefreshType == VVENC_DRT_CRA_CRE ? 2 : 0;
   }
-  
+
   vvenc_confirmParameter( c, c->m_rprEnabledFlag < -1 || c->m_rprEnabledFlag > 2, "RPR must be either -1, 0, 1 or 2" );
   vvenc_confirmParameter( c, c->m_rprEnabledFlag == 2 && c->m_DecodingRefreshType != VVENC_DRT_CRA_CRE, "for using RPR=2 constrained rasl encoding, DecodingRefreshType has to be set to VVENC_DRT_CRA_CRE" );
 
@@ -1163,9 +1158,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_resChangeInClvsEnabled = true;
     c->m_craAPSreset            = true;
     c->m_rprRASLtoolSwitch      = true;
-  }  
-    
-  if( c->m_IntraPeriod == 0 &&  c->m_IntraPeriodSec > 0 )
+  }
+
+  if( c->m_IntraPeriod == 0 && c->m_IntraPeriodSec > 0 )
   {
     if ( fps % c->m_GOPSize == 0 )
     {
@@ -1189,6 +1184,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
         c->m_IntraPeriod = iIDRPeriod + c->m_GOPSize - iDiff;
       }
     }
+  }
+  else if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
+  {
+    msg.log( VVENC_WARNING, "\nIntraPeriod is 1, thus GOPSize is set to 1 too\n\n" );
+    c->m_GOPSize = 1;
   }
 
   //
@@ -2060,7 +2060,7 @@ static bool checkCfgParameter( vvenc_config *c )
 {
   // run base check first
   vvenc_confirmParameter( c, c->m_profile == vvencProfile::VVENC_PROFILE_AUTO, "can not determin auto profile");
-  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10 
+  vvenc_confirmParameter( c, (c->m_profile != vvencProfile::VVENC_MAIN_10
                            && c->m_profile != vvencProfile::VVENC_MAIN_10_STILL_PICTURE
                            && c->m_profile != vvencProfile::VVENC_MAIN_10_444
                            && c->m_profile != vvencProfile::VVENC_MAIN_10_444_STILL_PICTURE
@@ -2294,9 +2294,11 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_RCNumPasses < 2 && c->m_RCPass > 1,            "Only one pass supported in single pass encoding" );
   vvenc_confirmParameter( c, c->m_RCPass != -1 && ( c->m_RCPass < 1 || c->m_RCPass > 2 ), "Invalid pass parameter, only -1, 1 or 2 supported" );
   vvenc_confirmParameter( c, c->m_RCTargetBitrate > 0 && c->m_maxParallelFrames > 4, "Up to 4 parallel frames supported with rate control" );
-  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_RCNumPasses != 1,          "Rate control look-ahead encoding only for single-pass encoding supported" );
-  const int periodLimit = ( c->m_SourceWidth * c->m_SourceHeight > 2048 * 1200 ? ( c->m_SourceWidth * c->m_SourceHeight > 2560 * 1536 ? 64 : 128 ) : 256 );
-  vvenc_confirmParameter( c, c->m_RCLookAhead && c->m_IntraPeriod > periodLimit, "Specified Intra period is too large for rate control encoding with look-ahead" );
+  vvenc_confirmParameter( c, c->m_LookAhead < -1 || c->m_LookAhead > 1,          "Look-ahead out of range [-1..1]" );
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCNumPasses != 1,       "Look-ahead encoding is not supported for two-pass rate control" );
+  vvenc_confirmParameter( c, !c->m_LookAhead && c->m_RCNumPasses == 1 && c->m_RCTargetBitrate > 0, "Look-ahead encoding must be used with one-pass rate control" );
+  vvenc_confirmParameter( c, c->m_LookAhead && c->m_RCTargetBitrate == 0,   "Look-ahead encoding is not supported when rate control is disabled" );
+
 
   vvenc_confirmParameter(c, !((c->m_level==VVENC_LEVEL1)
     || (c->m_level==VVENC_LEVEL2) || (c->m_level==VVENC_LEVEL2_1)
@@ -2391,7 +2393,7 @@ static bool checkCfgParameter( vvenc_config *c )
 #if ENABLE_TRACING
     vvenc_confirmParameter(c, c->m_traceFile[0] != '\0' && c->m_maxParallelFrames > 1, "Tracing and frame parallel encoding not supported" );
 #endif
-    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize, "Max parallel frames should be less then GOP size" );
+    vvenc_confirmParameter(c, c->m_maxParallelFrames > c->m_GOPSize && c->m_GOPSize != 1, "Max parallel frames should be less then GOP size" );
   }
 
   vvenc_confirmParameter(c, c->m_explicitAPSid < 0 || c->m_explicitAPSid > 7, "ExplicitAPDid out of range [0 .. 7]" );
@@ -2692,7 +2694,7 @@ static bool checkCfgParameter( vvenc_config *c )
 
     checkCfgPicPartitioningParameter( c );
   }
-  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 || c->m_RCLookAhead ), "Debug-bitstream for the rate-control mode is not supported yet" );
+  vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 && !c->m_LookAhead ), "Debug-bitstream for the rate-control in one pass mode is not supported yet" );
 
   return( c->m_confirmFailed );
 }
@@ -2725,7 +2727,7 @@ static void checkCfgPicPartitioningParameter( vvenc_config *c )
     vvenc_confirmParameter( c, !rowHeight_all_zero && ( lastNonZeroRow    + 1 ) != c->m_numTileRows, "Explicit number of tile rows and column heights are given, but not consistent!" );
 
     if( !colWidth_all_zero || !rowHeight_all_zero ) return;
-    
+
     if( c->m_numTileCols > 1 )
     {
       unsigned int tileWidth = pps.picWidthInCtu / c->m_numTileCols;
@@ -2854,7 +2856,7 @@ static void checkCfgInputArrays( vvenc_config *c, int &lastNonZeroCol, int &last
     }
   }
   lastNonZeroCol = lastNonZeroIdx;
-  
+
   lastNonZeroIdx = -1;
 
   for( int i = 9; i >= 0; i-- )
@@ -3120,7 +3122,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_maxMTTDepthIChroma              = 1;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 3;
       c->m_fastTTSplit                     = 0;
       c->m_contentBasedFastQtbt            = 1;
@@ -3136,7 +3138,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_numIntraModesFullRD             = -1;
       c->m_reduceIntraChromaModesFullRD    = true;
 
-      // tools                             
+      // tools
       c->m_RDOQ                            = 2;
       c->m_SignDataHidingEnabled           = 1;
       c->m_Affine                          = 2;
@@ -3184,7 +3186,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 3;
       c->m_fastTTSplit                     = 0;
       c->m_contentBasedFastQtbt            = 0;
@@ -3253,7 +3255,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 2;
       c->m_fastTTSplit                     = 5;
       c->m_contentBasedFastQtbt            = 0;
@@ -3325,7 +3327,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_maxMTTDepthIChroma              = 3;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 1;
       c->m_fastTTSplit                     = 1;
       c->m_contentBasedFastQtbt            = 0;
@@ -3399,7 +3401,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_maxMTTDepthIChroma              = 2;
       c->m_log2MinCodingBlockSize          = 2;
 
-      // speedups                          
+      // speedups
       c->m_qtbttSpeedUp                    = 2;
       c->m_fastTTSplit                     = 0;
       c->m_contentBasedFastQtbt            = 1;
@@ -3662,11 +3664,11 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   {
     css << "Passes:" << c->m_RCNumPasses << " ";
     css << "Pass:" << c->m_RCPass << " ";
-    css << "LookAhead:" << c->m_RCLookAhead << " ";
     css << "TargetBitrate:" << c->m_RCTargetBitrate << " ";
     css << "RCInitialQP:" << c->m_RCInitialQP << " ";
     css << "RCForceIntraQP:" << c->m_RCForceIntraQP << " ";
   }
+  css << "LookAhead:" << c->m_LookAhead << " ";
 
   css << "\nPARALLEL PROCESSING CFG: ";
   css << "NumThreads:" << c->m_numThreads << " ";

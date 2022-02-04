@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -293,7 +293,7 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
             }
           }
           // Chroma
-          activeAps |= aps->apsId == slice->tileGroupChromaApsId;
+          activeAps |= ( slice->tileGroupAlfEnabled[COMP_Cb] || slice->tileGroupAlfEnabled[COMP_Cr] ) && aps->apsId == slice->tileGroupChromaApsId;
           // CC-ALF
           activeApsCcAlf |= slice->tileGroupCcAlfCbEnabled && aps->apsId == slice->tileGroupCcAlfCbApsId;
           activeApsCcAlf |= slice->tileGroupCcAlfCrEnabled && aps->apsId == slice->tileGroupCcAlfCrApsId;

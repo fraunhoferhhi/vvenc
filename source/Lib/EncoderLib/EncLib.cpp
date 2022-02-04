@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -109,7 +109,7 @@ void EncLib::initEncoderLib( const VVEncCfg& encCfg )
   const_cast<VVEncCfg&>(m_encCfg) = encCfg;
 
   // setup modified configs for rate control
-  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
+  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_LookAhead )
   {
     xInitRCCfg();
   }
@@ -179,14 +179,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   if( m_rateCtrl == nullptr )
   {
-    if( m_encCfg.m_RCNumPasses == 1 && !m_encCfg.m_RCLookAhead )
-    {
-      m_rateCtrl = new LegacyRateCtrl(msg);
-    }
-    else
-    {
-      m_rateCtrl = new RateCtrl(msg);
-    }
+    m_rateCtrl = new RateCtrl(msg);
   }
 
   m_rateCtrl->setRCPass( m_encCfg, pass, statsFName );
@@ -200,7 +193,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   xUninitLib();
 
   // enable encoder config based on rate control pass
-  if( m_encCfg.m_RCNumPasses > 1 || m_encCfg.m_RCLookAhead )
+  if( m_encCfg.m_RCNumPasses > 1 || (m_encCfg.m_LookAhead && m_orgCfg.m_RCTargetBitrate) )
   {
     if (!m_rateCtrl->rcIsFinalPass)
     {
@@ -233,7 +226,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
 
   // pre analysis encoder
-  if( m_encCfg.m_RCLookAhead )
+  if( m_encCfg.m_LookAhead )
   {
     m_preEncoder = new EncGOP( msg );
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
@@ -243,8 +236,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  const int encDelay = m_encCfg.m_RCLookAhead ? m_encCfg.m_IntraPeriod + 1 : m_encCfg.m_GOPSize + 1;
-  m_gopEncoder->initStage( encDelay, false, false, m_encCfg.m_CTUSize );
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -366,7 +358,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     PicShared* picShared = xGetFreePicShared();
     picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || m_encCfg.m_RCLookAhead )
+    if (m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || (m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate) )
     {
       xAssignPrevQpaBufs( picShared );
     }
@@ -397,6 +389,14 @@ void EncLib::printSummary()
   if( m_gopEncoder )
   {
     m_gopEncoder->printOutSummary( m_encCfg.m_printMSEBasedSequencePSNR, m_encCfg.m_printSequenceMSE, m_encCfg.m_printHexPsnr );
+  }
+}
+
+void EncLib::getParameterSets( AccessUnitList& au )
+{
+  if( m_gopEncoder )
+  {
+    m_gopEncoder->getParameterSets( au );
   }
 }
 

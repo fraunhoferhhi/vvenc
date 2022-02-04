@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1144,11 +1144,11 @@ struct PicHeader
     cuQpDeltaSubdivInter                          = 0;
     cuChromaQpOffsetSubdivIntra                   = 0;
     cuChromaQpOffsetSubdivInter                   = 0;
-    enableTMVP                                    = true;
+    enableTMVP                                    = false;
     picColFromL0                                  = true;
     colRefIdx                                     = 0;
     mvdL1Zero                                     = 0;
-    maxNumAffineMergeCand                         = AFFINE_MRG_MAX_NUM_CANDS;
+    maxNumAffineMergeCand                         = 0;
     disFracMMVD                                   = 0;
     disBdofFlag                                   = 0;
     disDmvrFlag                                   = 0;
@@ -1156,9 +1156,9 @@ struct PicHeader
     jointCbCrSign                                 = 0;
     qpDelta                                       = 0;
     numAlfAps                                     = 0;
-    alfChromaApsId                                = 0;
-    ccalfCbApsId                                  = 0;
-    ccalfCrApsId                                  = 0;
+    alfChromaApsId                                = -1;
+    ccalfCbApsId                                  = -1;
+    ccalfCrApsId                                  = -1;
     deblockingFilterOverride                      = 0;
     deblockingFilterDisable                       = 0;
     deblockingFilterBetaOffsetDiv2[COMP_Y]        = 0;
