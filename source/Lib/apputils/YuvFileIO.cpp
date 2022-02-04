@@ -675,7 +675,7 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
   {
     m_lastError = "end of file";
     eof = true;
-    return -1;
+    return 0;
   }
 
   if ( m_packedYUVMode &&  ( 0 != (yuvInBuf.planes[0].width >> 1) % 4 ) )
@@ -711,8 +711,9 @@ int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )
       getline(inStream, y4mPrefix);   /* assume basic FRAME\n headers */
       if( y4mPrefix != "FRAME")
       {
-        m_lastError = "Source image does not contain valid y4m header (FRAME)";
-        return -1;
+        m_lastError = "Source image does not contain valid y4m header (FRAME) - end of stream";
+        eof = true;
+        return 0;
       }
     }
 
