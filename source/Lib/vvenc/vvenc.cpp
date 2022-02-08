@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -287,6 +287,17 @@ VVENC_DECL int vvenc_check_config( vvencEncoder *enc, const vvenc_config *cfg )
   }
 
   return e->checkConfig( *cfg );
+}
+
+VVENC_DECL int vvenc_get_headers(vvencEncoder *enc, vvencAccessUnit *accessUnit)
+{
+  auto e = (vvenc::VVEncImpl*)enc;
+  if (!e)
+  {
+    return VVENC_ERR_UNSPECIFIED;
+  }
+
+  return e->getParameterSets( accessUnit );
 }
 
 VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )

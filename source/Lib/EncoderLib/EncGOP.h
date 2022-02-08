@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,6 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Picture.h"
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/Nal.h"
-#include "LegacyRateCtrl.h"
 #include "EncHRD.h"
 #include "EncStage.h"
 
@@ -193,6 +192,7 @@ public:
   void init               ( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
+  void getParameterSets   ( AccessUnitList& accessUnit );
   bool nextPicReadyForOutput    () { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
   virtual bool finishedLastChunk() { return m_numPicsCoded >= m_picCount; }
   virtual void checkFlush       ( bool& flush ){ flush = flush && m_picCount - m_numPicsCoded <= m_pcEncCfg->m_GOPSize; }

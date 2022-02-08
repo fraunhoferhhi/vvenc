@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,8 @@ struct vvencYUVBuffer;
 
 namespace apputils {
 
+class VVEncAppCfg;
+
 // ====================================================================================================================
 
 class APPUTILS_DECL YuvFileIO
@@ -77,10 +79,11 @@ private:
   bool                m_clipToRec709        = false;            ///< clip data according to Recom.709
   bool                m_packedYUVMode       = false;            ///< used packed buffer file format
   bool                m_readStdin           = false;            ///< read input from stdin
+  bool                m_y4mMode             = false;            ///< use/force y4m file format
 
 public:
   int   open( const std::string &fileName, bool bWriteMode, int fileBitDepth, int MSBExtendedBitDepth, int internalBitDepth, 
-              vvencChromaFormat fileChrFmt, vvencChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode );
+              vvencChromaFormat fileChrFmt, vvencChromaFormat bufferChrFmt, bool clipToRec709, bool packedYUVMode, bool y4mMode );
   void  close();
   bool  isOpen();
   bool  isEof();
@@ -89,6 +92,9 @@ public:
   int   readYuvBuf   ( vvencYUVBuffer& yuvInBuf, bool& eof );
   bool  writeYuvBuf  ( const vvencYUVBuffer& yuvOutBuf );
   std::string getLastError() const { return m_lastError; }   
+
+  static int parseY4mHeader( const std::string &fileName, vvenc_config& config, VVEncAppCfg& appconfig );
+  static bool isY4mInputFilename( std::string fileName );
 };
 
 } // namespace apputils

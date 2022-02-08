@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -253,11 +253,6 @@ void EncRCPic::destroy()
   encRCSeq = NULL;
 }
 
-void EncRCPic::updateCtuMSE( const unsigned int ctuAddress, const double distortion )
-{
-  //THROW( "Not supported in 2-pass rate control" );
-}
-
 void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp)
 {
   int lastCurrTLQP = -1;
@@ -362,7 +357,7 @@ void RateCtrl::init( const VVEncCfg& encCfg )
   m_pcEncCfg = &encCfg;
 
   encRCSeq = new EncRCSeq;
-  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead, m_pcEncCfg->m_RCTargetBitrate, (int)((double)(m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
+  encRCSeq->create( m_pcEncCfg->m_RCNumPasses == 2, m_pcEncCfg->m_LookAhead == 1, m_pcEncCfg->m_RCTargetBitrate, (int)((double)(m_pcEncCfg->m_FrameRate / m_pcEncCfg->m_FrameScale) / m_pcEncCfg->m_temporalSubsampleRatio + 0.5), m_pcEncCfg->m_IntraPeriod, m_pcEncCfg->m_GOPSize, m_pcEncCfg->m_internalBitDepth[CH_L], getFirstPassStats() );
 }
 
 int RateCtrl::getBaseQP()
@@ -618,11 +613,12 @@ double RateCtrl::getAverageBitsFromFirstPass()
   uint64_t totalBitsFirstPass = 0;
   std::list<TRCPassStats>::iterator it;
 
-  if (m_pcEncCfg->m_LookAhead)
+  if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
     const int  gopsInIp = encRCSeq->intraPeriod / encRCSeq->gopSize;
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
+    double bitsUsed;
 
     for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // sum per level
     {
@@ -636,8 +632,15 @@ double RateCtrl::getAverageBitsFromFirstPass()
     {
       totalBitsFirstPass += ((gopsInIp << (frameLevel - 2)) * tlBits[frameLevel] + (tlCount[frameLevel] >> 1)) / std::max (1u, tlCount[frameLevel]);
     }
+    bitsUsed = totalBitsFirstPass / (double) encRCSeq->intraPeriod;
 
-    return totalBitsFirstPass / (double) encRCSeq->intraPeriod;
+    if (m_listRCFirstPassStats.size() < encRCSeq->gopSize) // apply crossfade, similar to updateAfterPic
+    {
+      totalBitsFirstPass = tlBits[0] + tlBits[1] + tlBits[2] + tlBits[3] + tlBits[4] + tlBits[5] + tlBits[6] + tlBits[7];
+      bitsUsed = ((double) totalBitsFirstPass * (encRCSeq->gopSize - m_listRCFirstPassStats.size()) / (double) m_listRCFirstPassStats.size() + bitsUsed * m_listRCFirstPassStats.size()) / (double) encRCSeq->gopSize;
+    }
+
+    return bitsUsed;
   }
 
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // for two-pass RC
@@ -751,11 +754,6 @@ void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
 }
 
-void RateCtrl::xUpdateAfterCtuRC( const Slice* slice, const int numberOfWrittenBits, const int ctuRsAddr, std::mutex* m_rcMutex, const double lambda )
-{
-  //THROW( "Not supported in 2-pass rate control" );
-}
-
 void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda )
 {
   EncRCPic* encRcPic = new EncRCPic;
@@ -835,7 +833,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           sliceQP = int( 0.5 + d + 0.125 * log2HeightMinus7 * std::max( 0.0, 24.0 + 0.001/*log2HeightMinus7*/ * ( log( (double)visAct ) / log( 2.0 ) - 0.5 * encRcSeq->bitDepth - 3.0 ) - d ) + encRCSeq->qpCorrection[ frameLevel ] );
           if ( it->poc == 0 || it->refreshParameters ) // avoid overcoding after some scene cuts
           {
-            const int clipQP = ( ( ( ( 1 << encRCSeq->bitDepth ) + ( it->poc == 0 && encRCSeq->intraPeriod > 2 * encRCSeq->gopSize ? 1 << (encRCSeq->bitDepth - 1) : visAct ) ) * m_pcEncCfg->m_QP ) >> ( encRCSeq->bitDepth + 1 ) ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 );
+            const int clipQP = ( ( ( ( 1 << encRCSeq->bitDepth ) + ( it->poc == 0 ? 1 << ( encRCSeq->bitDepth - 1 ) : visAct ) ) * m_pcEncCfg->m_QP ) >> ( encRCSeq->bitDepth + 1 ) ) + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 );
 
             if ( sliceQP < clipQP )
             {
@@ -870,22 +868,6 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
 
   qp = sliceQP;
   finalLambda = lambda;
-}
-
-void RateCtrl::setFinalLambda( const double lambda )
-{
-  //THROW( "Not supported in 2-pass rate control" );
-}
-
-void RateCtrl::initRCGOP( const int numberOfPictures )
-{
-
-  //THROW("Not supported in 2-pass rate control");
-}
-
-void RateCtrl::destroyRCGOP()
-{
-  //THROW( "Not supported in 2-pass rate control" );
 }
 
 }

@@ -14,7 +14,7 @@ Einsteinufer 37
 www.hhi.fraunhofer.de/vvc
 vvc@hhi.fraunhofer.de
 
-Copyright (c) 2019-2021, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -404,6 +404,63 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 
   return iRet;
 }
+
+int VVEncImpl::getParameterSets( vvencAccessUnit *pcAccessUnit )
+{
+  if( !m_bInitialized )                      { return VVENC_ERR_INITIALIZE; }
+  if( m_eState == INTERNAL_STATE_FINALIZED ) { m_cErrorString = "encoder already flushed, please reinit."; return VVENC_ERR_RESTART_REQUIRED; }
+
+  if( !pcAccessUnit )
+  {
+    m_cErrorString = "vvencAccessUnit is null. AU memory must be allocated before encode call.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+  if( pcAccessUnit->payloadSize <= 0 )
+  {
+    m_cErrorString = "vvencAccessUnit has no payload size. AU payload must have a sufficient size to store encoded data.";
+    return VVENC_NOT_ENOUGH_MEM;
+  }
+
+  int iRet= VVENC_OK;
+
+  // reset AU data
+  vvenc_accessUnit_reset(pcAccessUnit);
+
+  AccessUnitList cAu;
+#if HANDLE_EXCEPTION
+  try
+#endif
+  {
+    m_pEncLib->getParameterSets( cAu );
+  }
+#if HANDLE_EXCEPTION
+  catch( std::exception& e )
+  {
+    msg.log( VVENC_ERROR, "\n%s\n", e.what() );
+    m_cErrorString = e.what();
+    return VVENC_ERR_UNSPECIFIED;
+  }
+#endif
+
+  /* copy output AU */
+  if ( !cAu.empty() )
+  {
+    int sizeAu = xGetAccessUnitsSize( cAu );
+    if( pcAccessUnit->payloadSize < sizeAu )
+    {
+      std::stringstream css;
+      css << "vvencAccessUnit payload size is too small to store data. (payload size: " << pcAccessUnit->payloadSize << ", needed " << sizeAu << ")";
+      m_cErrorString =css.str();
+      return VVENC_NOT_ENOUGH_MEM;
+    }
+
+    iRet = xCopyAu( *pcAccessUnit, cAu  );
+  }
+
+  return iRet;
+}
+
+
 
 const char* VVEncImpl::getVersionNumber()
 {
