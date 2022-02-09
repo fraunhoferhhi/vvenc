@@ -313,7 +313,7 @@ public:
   void runStage( bool flush, AccessUnitList& auList )
   {
     // TODO VG: check whether it finally makes sense
-    checkFlush( flush );
+    //checkFlush( flush );
 
     // last chunk flush
     if( flush && m_usingChunks && !m_chunkBuf.empty() && finishedLastChunk() )
