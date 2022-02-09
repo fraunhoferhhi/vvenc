@@ -1,11 +1,11 @@
 /* -----------------------------------------------------------------------------
 The copyright in this software is being made available under the BSD
-License, included below. No patent rights, trademark rights and/or 
-other Intellectual Property Rights other than the copyrights concerning 
+License, included below. No patent rights, trademark rights and/or
+other Intellectual Property Rights other than the copyrights concerning
 the Software are granted under this license.
 
 For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
+especially patent licenses, a separate Agreement needs to be closed.
 For more information please contact:
 
 Fraunhofer Heinrich Hertz Institute
@@ -98,7 +98,7 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int fr
   intraPeriod         = intraPer;
   gopSize             = GOPSize;
   firstPassData       = firstPassStats;
-  bitDepth            = bitDpth; 
+  bitDepth            = bitDpth;
 
   int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
   minEstLambda = 0.1;
@@ -150,9 +150,9 @@ void EncRCSeq::updateAfterPic ( int bits, int tgtBits )
   }
   else
   {
-  estimatedBitUsage += tgtBits;
-  bitsUsed += bits;
-}
+    estimatedBitUsage += tgtBits;
+    bitsUsed += bits;
+  }
 }
 
 void EncRCSeq::getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters)
@@ -209,7 +209,7 @@ int EncRCPic::xEstPicTargetBits( EncRCSeq* encRcSeq, int frameLevel )
     // calculate the difference of under/overspent bits and adjust the current target bits based on the GOP and frame ratio for every frame
     targetBits = int (0.5 + tmpTargetBits + (encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed) * 0.5 * frameVsGopRatio);
   }
- 
+
   return targetBits;
 }
 
@@ -528,7 +528,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
     {
       m_listRCFirstPassStats.pop_front();
-  }
+    }
   }
 #else
   m_listRCFirstPassStats.push_back( statsData );
@@ -599,8 +599,8 @@ void RateCtrl::processFirstPassData (const bool flush)
   // run a simple scene change detection
   detectNewScene();
 
-    // process and scale GOP and frame bits using the data from the first pass to account for different target bitrates
-    processGops();
+  // process and scale GOP and frame bits using the data from the first pass to account for different target bitrates
+  processGops();
 
   // loop though the first-pass data and update RC parameters when new scenes are detected
   adaptToSceneChanges();
@@ -801,8 +801,8 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
             encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : 0.0 );
             if ( !m_pcEncCfg->m_LookAhead )
             {
-            encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
-          }
+              encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
+            }
           }
           CHECK( slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7" );
 
@@ -817,8 +817,8 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           {
             if ( m_pcEncCfg->m_LookAhead && encRcSeq->bitsUsedIn1stPass > 0 )
             {
-              const double bp1pf = (double)encRCSeq->bitsUsedIn1stPass / (double)std::max( 1, encRCSeq->framesCoded );  // first pass
-              const double ratio = (double)encRCSeq->targetRate / ( encRCSeq->frameRate * bp1pf );  // targeted 2nd-to-1st pass ratio
+              const double bp1pf = (double)encRCSeq->bitsUsedIn1stPass / (double)std::max( 1, encRCSeq->framesCoded ); // first pass
+              const double ratio = (double)encRCSeq->targetRate / ( encRCSeq->frameRate * bp1pf ); // targeted 2nd-to-1st pass ratio
               d = std::max( 0.0, d - ( encRCSeq->estimatedBitUsage - encRCSeq->bitsUsed ) * 0.5 * it->frameInGopRatio );
               d = std::max( 1.0, d + ( encRCSeq->bitsUsedIn1stPass * ratio - encRCSeq->bitsUsed ) * it->frameInGopRatio );
             }

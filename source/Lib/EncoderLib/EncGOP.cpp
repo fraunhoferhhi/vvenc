@@ -470,27 +470,27 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   xCreateCodingOrder( picList, flush, encList );
   if( ! encList.empty() )
   {
-    // init rate control GOP
-    if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  // init rate control GOP
+  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+  {
+    CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
+    if( m_numPicsCoded == 0 )
     {
-      CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
-      if( m_numPicsCoded == 0 )
+      if ( m_pcEncCfg->m_LookAhead )
       {
-        if ( m_pcEncCfg->m_LookAhead )
-        {
-          m_pcRateCtrl->processFirstPassData( flush );
-        }
-      }
-      else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
-      {
-        if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
-        {
-          m_pcRateCtrl->processFirstPassData( flush );
-        }
+        m_pcRateCtrl->processFirstPassData( flush );
       }
     }
+    else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
+    {
+      if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
+      {
+        m_pcRateCtrl->processFirstPassData( flush );
+      }
+    }
+  }
 
-    xInitPicsInCodingOrder( encList, picList, false );
+  xInitPicsInCodingOrder( encList, picList, false );
   }
 
   // encode pictures
@@ -508,6 +508,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
     auList.clearAu();
   }
 }
+
 
 void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneList )
 {
@@ -585,8 +586,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     bool encPic = false;
     if( m_pcRateCtrl->rcIsFinalPass && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis ) )
     {
-    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+      DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
+      trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
       if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
       {
         picInitRateControl( *pic, pic->slices[0], picEncoder );
@@ -2764,11 +2765,11 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
       else
       {
         cInfo = prnt("RC pass %d/%d, analyze poc %4d",
-          m_pcRateCtrl->rcPass + 1,
-          m_pcEncCfg->m_RCNumPasses,
-          slice->poc );
+            m_pcRateCtrl->rcPass + 1,
+            m_pcEncCfg->m_RCNumPasses,
+            slice->poc );
       }
-          accessUnit.InfoString.append( cInfo );
+      accessUnit.InfoString.append( cInfo );
     }
     else
     {
@@ -2899,12 +2900,12 @@ void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, 
 
   if( !accessUnit.InfoString.empty() )
   {
-  std::string cPicInfo = accessUnit.InfoString;
-  cPicInfo.append("\n");
-  const vvencMsgLevel msgLevel = m_isPreAnalysis ? VVENC_DETAILS : VVENC_NOTICE;
-  msg.log( msgLevel, cPicInfo.c_str() );
-  if( m_pcEncCfg->m_verbosity >= msgLevel ) fflush( stdout );
-}
+    std::string cPicInfo = accessUnit.InfoString;
+    cPicInfo.append("\n");
+    const vvencMsgLevel msgLevel = m_isPreAnalysis ? VVENC_DETAILS : VVENC_NOTICE;
+    msg.log( msgLevel, cPicInfo.c_str() );
+    if( m_pcEncCfg->m_verbosity >= msgLevel ) fflush( stdout );
+  }
 }
 
 } // namespace vvenc

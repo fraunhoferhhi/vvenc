@@ -62,6 +62,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
+
 // ====================================================================================================================
 // Constructor / destructor / create / destroy
 // ====================================================================================================================
@@ -218,6 +219,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF = new MCTF();
+    //m_MCTF->initStage( MCTF_ADD_QUEUE_DELAY, true, true, m_encCfg.m_CTUSize );
     const int minDelay = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 + VVENC_MCTF_RANGE ) : ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 );
     m_MCTF->initStage( m_encCfg, minDelay, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
@@ -344,6 +346,10 @@ void EncLib::xInitRCCfg()
   }
 }
 
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
 void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty )
 {
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
@@ -353,14 +359,15 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // clear output access unit
   au.clearAu();
 
-
-  // Current requirement: The input yuv-frame must be passed to the encoding process (1.Stage)
-  // Non-Blocking Stages Model (NBSM):
-  // 1. The stages can be non-blocking
-  // 2. The number of used picture units in encoder is limited
-  // 3. The stages have different throughput, last stage is the slowest
-  // 4. It possible that here at the input we will run out of picture units that is needed for the next input frame
-  // 5. Then we have to wait for the next available picture unit so the input frame can be passed to the 1.stage
+  // NOTE regarding the chunk-mode
+  // The chunk-mode is using non-blocking concept and it is applied in the final stage.
+  // The next input yuv-frame must be passed to the encoding process (1.Stage).
+  // Following should be considered:
+  // 1. The final stage is non-blocking, so it dosen't wait until picture is reconstructed.
+  // 2. Generally the stages have different throughput, last stage is the slowest.
+  // 3. The number of picture-units, required for the input frames, is limited.
+  // 4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
+  // 5. Then we have to wait for the next available picture-unit and the input frame can be passed to the 1.stage.
 
   PicShared* picShared = nullptr;
   do
@@ -386,13 +393,12 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   // trigger stages
   isQueueEmpty = true;
-
   for( auto encStage : m_encStages )
   {
     // Check if cur. stage can be invoked
     if( encStage->canRunStage( flush, picShared != nullptr ) )
     {
-      encStage->runStage( flush, au );
+    encStage->runStage( flush, au );
     }
     isQueueEmpty &= encStage->isStageDone();
   }

@@ -279,15 +279,15 @@ public:
     }
     else 
     {
-      // sort picture into processing queue
-      PicList::iterator picItr;
-      for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
-      {
-        if( pic->poc < ( *picItr )->poc )
-          break;
-      }
-      m_procList.insert( picItr, pic );
-      m_picCount++;
+    // sort picture into processing queue
+    PicList::iterator picItr;
+    for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
+    {
+      if( pic->poc < ( *picItr )->poc )
+        break;
+    }
+    m_procList.insert( picItr, pic );
+    m_picCount++;
     }
   }
 
@@ -312,7 +312,7 @@ public:
 
   void runStage( bool flush, AccessUnitList& auList )
   {
-    // TODO VG: check whether it makes sense
+    // TODO VG: check whether it finally makes sense
     checkFlush( flush );
 
     // last chunk flush
@@ -321,37 +321,39 @@ public:
       pushChunk();
     }
 
-    // process always one picture or all if encoder should be flushed
-    do
     {
-      // process pictures
-      PicList doneList;
-      PicList freeList;
-      // chunk mode: next chunk is preprocessed, wait until next stage finished its last chunk
-      if( m_nextStage && m_nextStage->usingChunks() && m_nextStage->nextChunkComplete() && !m_nextStage->finishedLastChunk() && !flush )
-        break;
-      processPictures( m_procList, flush, auList, doneList, freeList );
-
-      // send processed/finalized pictures to next stage
-      if( m_nextStage )
+      // process always one picture or all if encoder should be flushed
+      do
       {
-        for( auto pic : doneList )
+        // process pictures
+        PicList doneList;
+        PicList freeList;
+        // chunk mode: next chunk is preprocessed, wait until next stage finished its last chunk
+        if( m_nextStage && m_nextStage->usingChunks() && m_nextStage->nextChunkComplete() && !m_nextStage->finishedLastChunk() && !flush )
+          break;
+        processPictures( m_procList, flush, auList, doneList, freeList );
+
+        // send processed/finalized pictures to next stage
+        if( m_nextStage )
         {
-          m_nextStage->addPic( pic->m_picShared );
+          for( auto pic : doneList )
+          {
+            m_nextStage->addPic( pic->m_picShared );
+          }
         }
-      }
 
-      // release unused pictures
-      for( auto pic : freeList )
-      {
-        // release shared buffer
-        PicShared* picShared = pic->m_picShared;
-        picShared->releaseShared( pic );
-        // remove pic from own processing queue
-        m_procList.remove( pic );
-        m_freeList.push_back( pic );
-      }
-    } while( m_flushAll && flush && m_procList.size() );
+        // release unused pictures
+        for( auto pic : freeList )
+        {
+          // release shared buffer
+          PicShared* picShared = pic->m_picShared;
+          picShared->releaseShared( pic );
+          // remove pic from own processing queue
+          m_procList.remove( pic );
+          m_freeList.push_back( pic );
+        }
+      } while( m_flushAll && flush && m_procList.size() );
+    }
 
     // flush next chunk to the stage (non-blocking)
     if( m_nextStage && m_nextStage->usingChunks() && m_nextStage->finishedLastChunk() && ( flush || m_nextStage->nextChunkComplete() ) )
