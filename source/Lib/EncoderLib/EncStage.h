@@ -266,6 +266,9 @@ public:
     pic->reset();
     picShared->shareData( pic );
 
+    // call first picture init
+    initPicture( pic );
+
     if( m_usingChunks )
     {
       // chunk-mode: gather pictures into one chunk first
@@ -286,9 +289,6 @@ public:
       m_procList.insert( picItr, pic );
       m_picCount++;
     }
-
-    // call first picture init
-    initPicture( pic );
   }
 
   void pushChunk()
@@ -367,17 +367,15 @@ public:
   virtual bool canRunStage( bool flush, bool picSharedAvail ) { return canRunStage( flush ); }
   virtual bool canRunStage( bool flush )
   {
-    return ( ( (int)m_procList.size() >= m_minQueueSize ) || ( ( m_procList.size() || !m_chunkBuf.empty() ) && ( ( usingChunks() && m_picCount >= m_minQueueSize ) || flush ) ) );
+    return ( ( (int)m_procList.size() + m_chunkBuf.size() >= m_minQueueSize ) || ( ( m_procList.size() || !m_chunkBuf.empty() ) && flush ) );
   }
   bool startingNewChunk( Picture* pic ) 
   { 
-    int chunkSize = m_pcEncCfg->m_GOPSize + ( m_picCount == 0 ? 1: 0 );
-    return ( m_chunkBuf.size() >= chunkSize ) || ( !m_chunkBuf.empty() && pic->TLayer == 0 ); 
+    return ( m_chunkBuf.size() >= m_pcEncCfg->m_GOPSize ) || ( !m_chunkBuf.empty() && pic->TLayer == 0 );
   }
   bool nextChunkComplete()
   {
-    int chunkSize = m_pcEncCfg->m_GOPSize + ( m_picCount == 0 ? 1: 0 );
-    return ( m_chunkBuf.size() >= chunkSize ) || ( !m_nextChunkBuf.empty() );
+    return ( m_chunkBuf.size() >= m_pcEncCfg->m_GOPSize ) || ( !m_nextChunkBuf.empty() );
   }
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;

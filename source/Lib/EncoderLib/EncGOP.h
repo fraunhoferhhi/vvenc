@@ -194,13 +194,13 @@ public:
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
   void getParameterSets   ( AccessUnitList& accessUnit );
   bool nextPicReadyForOutput    () { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
-  virtual bool finishedLastChunk() { return m_numPicsCoded >= m_picCount; }
-  virtual void checkFlush       ( bool& flush ){ flush = flush && m_picCount - m_numPicsCoded <= m_pcEncCfg->m_GOPSize; }
-  virtual void checkState       ();
 
 protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+  virtual bool finishedLastChunk()             { return m_numPicsCoded >= m_picCount || m_pocEncode == 0 /* mark first IDR chunk finished as fast as possible */; }
+  virtual void checkFlush       ( bool& flush ){ flush = flush && m_picCount - m_numPicsCoded <= m_pcEncCfg->m_GOPSize; }
+  virtual void checkState       ();
 
 private:
   int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }

@@ -438,6 +438,29 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
+void EncGOP::checkState()
+{
+  {
+    std::unique_lock<std::mutex> lock( m_gopEncMutex );
+    bool rcPicOnTheFly = !m_rcUpdateList.empty() && ( (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames ); 
+    if( !m_procList.empty() || rcPicOnTheFly || m_freePicEncoderList.empty() )
+    {
+      bool nextPicReady = true;
+      if( !m_procList.empty() )
+      {
+        auto picItr = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[0]->checkRefPicsReconstructed(); } );
+        nextPicReady = picItr != m_procList.end();
+      }
+      if( m_freePicEncoderList.empty() || rcPicOnTheFly || !nextPicReady )
+      {
+        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
+        m_gopEncCond.wait( lock );
+      }
+    }
+  }
+}
+
 void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
   CHECK( picList.empty(), "empty input picture list given" );
@@ -483,29 +506,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   if( m_isPreAnalysis )
   {
     auList.clearAu();
-  }
-}
-
-void EncGOP::checkState()
-{
-  {
-    std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    bool rcPicOnTheFly = !m_rcUpdateList.empty() && ( (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames ); 
-    if( !m_procList.empty() || rcPicOnTheFly || m_freePicEncoderList.empty() )
-    {
-      bool nextPicReady = true;
-      if( !m_procList.empty() )
-      {
-        auto picItr = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[0]->checkRefPicsReconstructed(); } );
-        nextPicReady = picItr != m_procList.end();
-      }
-      if( m_freePicEncoderList.empty() || rcPicOnTheFly || !nextPicReady )
-      {
-        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
-        m_gopEncCond.wait( lock );
-      }
-    }
   }
 }
 
@@ -872,6 +872,8 @@ void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector
     if( ! pic )
       break;
     encList.push_back( pic );
+    if( pic->poc == 0 )
+      break;
   }
 }
 
@@ -1626,7 +1628,7 @@ void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, const
 
       m_gopEncListInput.push_back( pic );
       m_gopEncListOutput.push_back( pic );
-      m_pocEncode     = pic->poc;
+      m_pocEncode = pic->poc;
     }
   }
 }
