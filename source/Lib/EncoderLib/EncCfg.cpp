@@ -43,81 +43,30 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     EncLib.h
-    \brief    encoder class (header)
+/** \file     EncCfg.cpp
+    \brief    encoder internal configuration class
 */
 
-#pragma once
 
-#include "EncGOP.h"
-#include "EncStage.h"
-#include "CommonLib/MCTF.h"
-#include "vvenc/vvencCfg.h"
-
-#include <mutex>
-
-//! \ingroup EncoderLib
-//! \{
+#include "EncCfg.h"
 
 namespace vvenc {
 
+VVEncCfg::VVEncCfg():
+  m_ChunkBasedMode( 0 )
+{}
 
-// ====================================================================================================================
-// Class definition
-// ====================================================================================================================
-
-
-class NoMallocThreadPool;
-class MsgLog;
-
-/// encoder class
-class EncLib
+VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
 {
-private:
-  MsgLog&                msg;
+  *((vvenc_config*)this) = extern_cfg;
+  xInitCfgMembers();
+  return *this;
+}
 
-  std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
-  void*                                         m_recYuvBufCtx;
+void VVEncCfg::xInitCfgMembers() 
+{ 
+  m_ChunkBasedMode = 0; 
+}
 
-  const VVEncCfg         m_encCfg;
-  const VVEncCfg         m_orgCfg;
-  VVEncCfg               m_firstPassCfg;
-  RateCtrl*              m_rateCtrl;
-  MCTF*                  m_MCTF;
-  EncGOP*                m_preEncoder;
-  EncGOP*                m_gopEncoder;
-  std::vector<EncStage*> m_encStages;
-  std::list<PicShared*>  m_picSharedList;
-  std::deque<PicShared*> m_prevSharedQueue;
-
-  NoMallocThreadPool*    m_threadPool;
-
-  int                    m_picsRcvd;
-  int                    m_passInitialized;
-
-public:
-  EncLib( MsgLog& logger );
-  virtual ~EncLib();
-
-  void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func );
-  void     initEncoderLib      ( const vvenc_config& encCfg );
-  void     initPass            ( int pass, const char* statsFName );
-  void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
-  void     uninitEncoderLib    ();
-  void     printSummary        ();
-  void     getParameterSets    ( AccessUnitList& au );
-
-private:
-  void     xUninitLib          ();
-  void     xInitRCCfg          ();
-
-  PicShared* xGetFreePicShared();
-  void     xAssignPrevQpaBufs( PicShared* picShared );
-
-  void     xDetectScc          ( PicShared* picShared );
-};
-
-} // namespace vvenc
-
-//! \}
+}
 
