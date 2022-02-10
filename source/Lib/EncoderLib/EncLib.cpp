@@ -103,7 +103,7 @@ void EncLib::setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func 
   }
 }
 
-void EncLib::initEncoderLib( const VVEncCfg& encCfg )
+void EncLib::initEncoderLib( const vvenc_config& encCfg )
 {
   // copy config parameter
   const_cast<VVEncCfg&>(m_encCfg) = encCfg;

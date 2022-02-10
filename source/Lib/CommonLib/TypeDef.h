@@ -61,9 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <cassert>
 
-#include "vvenc/vvencCfg.h"
-
-typedef struct vvenc_config VVEncCfg;
+#include "EncoderLib/EncCfg.h"
 
 typedef vvencChromaFormat ChromaFormat;
 typedef vvencSliceType    SliceType;
