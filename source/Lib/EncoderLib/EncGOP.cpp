@@ -527,8 +527,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     xGetProcessingLists( m_procList, m_rcUpdateList );
   }
 
-  // TODO VG: check if we need this here
-  // non-blocking: if nothing to do, wait outside
+  // if nothing to do, wait outside
   if( m_procList.empty() && !nextPicReadyForOutput() )
   {
     return;

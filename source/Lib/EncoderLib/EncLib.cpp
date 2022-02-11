@@ -252,8 +252,11 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
   if( m_encCfg.m_chunkMode )
   {
-    int rcLookAheadDelay = m_encCfg.m_GOPSize;
-    m_maxNumPicShared = rcLookAheadDelay + m_encCfg.m_GOPSize + m_encCfg.m_GOPSize/2 + 5;
+    m_maxNumPicShared = 0;
+    for( auto encStage : m_encStages )
+    {
+      m_maxNumPicShared += encStage->picOutputDelay();
+    }
   }
 
   // rate control

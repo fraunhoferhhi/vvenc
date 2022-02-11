@@ -201,6 +201,8 @@ protected:
   virtual bool finishedLastChunk()             { return m_numPicsCoded >= m_picCount || m_pocEncode == 0 /* mark first IDR chunk finished as fast as possible */; }
   virtual void checkFlush       ( bool& flush ){ flush = flush && m_picCount - m_numPicsCoded <= m_pcEncCfg->m_GOPSize; }
   virtual void checkState       ();
+  virtual int  picOutputDelay   () { return EncStage::picOutputDelay() + Log2(m_pcEncCfg->m_GOPSize) + 2; }
+
 
 private:
   int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }

@@ -312,8 +312,7 @@ public:
 
   void runStage( bool flush, AccessUnitList& auList )
   {
-    // TODO VG: check whether it finally makes sense
-    //checkFlush( flush );
+    checkFlush( flush );
 
     // last chunk flush
     if( flush && m_usingChunks && !m_chunkBuf.empty() && finishedLastChunk() )
@@ -362,9 +361,9 @@ public:
     }
   }
 
-  bool         isNonBlocking()  { return m_usingChunks; }
-  bool         usingChunks()    { return m_usingChunks; }
-  virtual void checkState()     {}
+  bool         isNonBlocking()     { return m_usingChunks; }
+  bool         usingChunks()       { return m_usingChunks; }
+  virtual int  picOutputDelay()    { return m_minQueueSize; }
   virtual bool finishedLastChunk() { return true; }
   virtual bool canRunStage( bool flush, bool picSharedAvail ) { return canRunStage( flush ); }
   virtual bool canRunStage( bool flush )
@@ -379,6 +378,7 @@ public:
   {
     return ( m_chunkBuf.size() >= m_pcEncCfg->m_GOPSize ) || ( !m_nextChunkBuf.empty() );
   }
+  virtual void checkState()  {}
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
