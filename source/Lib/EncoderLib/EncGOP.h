@@ -203,7 +203,6 @@ protected:
   virtual void checkState       ();
   virtual int  picOutputDelay   () { return EncStage::picOutputDelay() + Log2(m_pcEncCfg->m_GOPSize) + 2; }
 
-
 private:
   int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }
 

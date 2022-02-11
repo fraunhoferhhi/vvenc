@@ -443,20 +443,11 @@ void EncGOP::checkState()
   {
     std::unique_lock<std::mutex> lock( m_gopEncMutex );
     bool rcPicOnTheFly = !m_rcUpdateList.empty() && ( (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames ); 
-    if( !m_procList.empty() || rcPicOnTheFly || m_freePicEncoderList.empty() )
+    if( rcPicOnTheFly )
     {
-      bool nextPicReady = true;
-      if( !m_procList.empty() )
-      {
-        auto picItr = find_if( m_procList.begin(), m_procList.end(), []( auto pic ) { return pic->slices[0]->checkRefPicsReconstructed(); } );
-        nextPicReady = picItr != m_procList.end();
-      }
-      if( m_freePicEncoderList.empty() || rcPicOnTheFly || !nextPicReady )
-      {
-        CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-        CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
-        m_gopEncCond.wait( lock );
-      }
+      CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
+      CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
+      m_gopEncCond.wait( lock );
     }
   }
 }
