@@ -162,6 +162,7 @@ namespace vvenc {
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
     void processFirstPassData (const bool flush);
+    void processFirstPassData (const bool flush, int poc);
     void processGops();
     double getAverageBitsFromFirstPass();
     void detectNewScene();
@@ -194,6 +195,7 @@ namespace vvenc {
 
   private:
     std::list<TRCPassStats> m_listRCFirstPassStats;
+    std::list<TRCPassStats> m_listRCFirstPassStatsCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream            m_rcStatsFHandle;

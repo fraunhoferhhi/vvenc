@@ -442,7 +442,7 @@ void EncGOP::checkState()
 {
   {
     std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    bool rcPicOnTheFly = !m_rcUpdateList.empty() && ( (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames ); 
+    bool rcPicOnTheFly = (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames; 
     if( rcPicOnTheFly )
     {
       CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
@@ -461,26 +461,6 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   xCreateCodingOrder( picList, flush, encList );
   if( ! encList.empty() )
   {
-  // init rate control GOP
-  if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-  {
-    CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
-    if( m_numPicsCoded == 0 )
-    {
-      if ( m_pcEncCfg->m_LookAhead )
-      {
-        m_pcRateCtrl->processFirstPassData( flush );
-      }
-    }
-    else if( 1 == m_numPicsCoded % m_pcEncCfg->m_GOPSize )
-    {
-      if ( m_pcEncCfg->m_LookAhead && encList.front()->poc % m_pcEncCfg->m_GOPSize == 0 )
-      {
-        m_pcRateCtrl->processFirstPassData( flush );
-      }
-    }
-  }
-
   xInitPicsInCodingOrder( encList, picList, false );
   }
 
@@ -490,7 +470,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   xOutputRecYuv( picList );
 
   // release pictures not needed andmore
-  const bool allDone = flush && m_numPicsCoded >= m_picCount && m_chunkBuf.empty();
+  const bool allDone = flush && m_numPicsCoded >= m_picCount;
   xReleasePictures( picList, freeList, allDone );
 
   // clear output access unit
@@ -570,6 +550,26 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
 
     m_procList.remove( pic );
+
+    // rate-control with look-ahead: init next chunk
+    if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+    {
+      CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
+      if( m_numPicsCoded == 0 )
+      {
+        if ( m_pcEncCfg->m_LookAhead )
+        {
+          m_pcRateCtrl->processFirstPassData( flush, pic->poc );
+        }
+      }
+      else
+      {
+        if ( m_pcEncCfg->m_LookAhead && pic->poc % m_pcEncCfg->m_GOPSize == 0 )
+        {
+          m_pcRateCtrl->processFirstPassData( flush, pic->poc );
+        }
+      }
+    }
 
     // decoder in encoder
     bool decPic = false;

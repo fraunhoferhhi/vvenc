@@ -237,7 +237,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  m_gopEncoder->initStage( m_encCfg, m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_chunkMode );
+  m_gopEncoder->initStage( m_encCfg, m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -250,7 +250,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_encStages[ i ]->linkNextStage( m_encStages[ i + 1 ] );
   }
-  if( m_encCfg.m_chunkMode )
+  if( m_encCfg.m_stageParallelProc )
   {
     m_maxNumPicShared = 0;
     for( auto encStage : m_encStages )
@@ -473,7 +473,7 @@ PicShared* EncLib::xGetFreePicShared()
 
   if( ! picShared )
   {
-    if( m_encCfg.m_chunkMode && ( m_picSharedList.size() >= m_maxNumPicShared ) )
+    if( m_encCfg.m_stageParallelProc && ( m_picSharedList.size() >= m_maxNumPicShared ) )
       return nullptr;
 
     picShared = new PicShared();

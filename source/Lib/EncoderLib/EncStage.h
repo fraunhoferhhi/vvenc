@@ -192,7 +192,7 @@ public:
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
   , m_ctuSize         ( MAX_CU_SIZE )
-  , m_usingChunks     ( false )
+  , m_isNonBlocking   ( false )
   {
   };
 
@@ -219,13 +219,13 @@ public:
 
   bool isStageDone() const { return m_procList.empty(); }
 
-  void initStage( const VVEncCfg& encCfg, int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool usingChunks = false )
+  void initStage( const VVEncCfg& encCfg, int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool nonBlocking = false )
   {
     m_minQueueSize     = minQueueSize;
     m_flushAll         = flushAll;
     m_processLeadTrail = processLeadTrail;
     m_ctuSize          = ctuSize;
-    m_usingChunks      = usingChunks;
+    m_isNonBlocking    = nonBlocking;
     m_pcEncCfg         = &encCfg;
   }
 
@@ -269,16 +269,6 @@ public:
     // call first picture init
     initPicture( pic );
 
-    if( m_usingChunks )
-    {
-      // chunk-mode: gather pictures into one chunk first
-      if( startingNewChunk( pic ) )
-        m_nextChunkBuf.push_back( pic );
-      else
-        m_chunkBuf.push_back( pic );
-    }
-    else 
-    {
     // sort picture into processing queue
     PicList::iterator picItr;
     for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
@@ -288,38 +278,10 @@ public:
     }
     m_procList.insert( picItr, pic );
     m_picCount++;
-    }
-  }
-
-  void pushChunk()
-  {
-    // push chunk to processing list
-    for( auto pic : m_chunkBuf )
-    {
-      // sort picture into processing queue
-      PicList::iterator picItr;
-      for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
-      {
-        if( pic->poc < ( *picItr )->poc )
-          break;
-      }
-      m_procList.insert( picItr, pic );
-      m_picCount++;
-    }
-    m_chunkBuf = m_nextChunkBuf;
-    m_nextChunkBuf.clear();
   }
 
   void runStage( bool flush, AccessUnitList& auList )
   {
-    checkFlush( flush );
-
-    // last chunk flush
-    if( flush && m_usingChunks && !m_chunkBuf.empty() && finishedLastChunk() )
-    {
-      pushChunk();
-    }
-
     {
       // process always one picture or all if encoder should be flushed
       do
@@ -327,9 +289,6 @@ public:
         // process pictures
         PicList doneList;
         PicList freeList;
-        // chunk mode: next chunk is preprocessed, wait until next stage finished its last chunk
-        if( m_nextStage && m_nextStage->usingChunks() && m_nextStage->nextChunkComplete() && !m_nextStage->finishedLastChunk() && !flush )
-          break;
         processPictures( m_procList, flush, auList, doneList, freeList );
 
         // send processed/finalized pictures to next stage
@@ -354,39 +313,20 @@ public:
       } while( m_flushAll && flush && m_procList.size() );
     }
 
-    // flush next chunk to the stage (non-blocking)
-    if( m_nextStage && m_nextStage->usingChunks() && m_nextStage->finishedLastChunk() && ( flush || m_nextStage->nextChunkComplete() ) )
-    {
-      m_nextStage->pushChunk();
-    }
   }
 
-  bool         isNonBlocking()     { return m_usingChunks; }
-  bool         usingChunks()       { return m_usingChunks; }
+  bool         isNonBlocking()     { return m_isNonBlocking; }
   virtual int  picOutputDelay()    { return m_minQueueSize; }
-  virtual bool finishedLastChunk() { return true; }
   virtual bool canRunStage( bool flush, bool picSharedAvail ) { return canRunStage( flush ); }
   virtual bool canRunStage( bool flush )
   {
-    return ( ( (int)m_procList.size() + m_chunkBuf.size() >= m_minQueueSize ) || ( ( m_procList.size() || !m_chunkBuf.empty() ) && flush ) );
-  }
-  bool startingNewChunk( Picture* pic ) 
-  { 
-    return ( m_chunkBuf.size() >= m_pcEncCfg->m_GOPSize ) || ( !m_chunkBuf.empty() && pic->TLayer == 0 );
-  }
-  bool nextChunkComplete()
-  {
-    return ( m_chunkBuf.size() >= m_pcEncCfg->m_GOPSize ) || ( !m_nextChunkBuf.empty() );
+    return ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
   }
   virtual void checkState()  {}
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
-  virtual void checkFlush( bool& flush ) {}
-  std::vector<Picture*> m_chunkBuf;
-  std::vector<Picture*> m_nextChunkBuf;
   int64_t               m_picCount;
-
 private:
   const VVEncCfg* m_pcEncCfg;
   EncStage* m_nextStage;
@@ -396,7 +336,7 @@ private:
   bool      m_flushAll;
   bool      m_processLeadTrail;
   int       m_ctuSize;
-  bool      m_usingChunks;
+  bool      m_isNonBlocking;
 };
 
 } // namespace vvenc
