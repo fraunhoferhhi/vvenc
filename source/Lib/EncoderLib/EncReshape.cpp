@@ -194,6 +194,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
   uint32_t winLens = (m_binNum == PIC_CODE_CW_BINS) ? (std::min(height, width) / 240) : 2;
   winLens = winLens > 0 ? winLens : 1;
 
+  
   int64_t tempSq  = 0;
   int64_t topSum  = 0,  topSumSq = 0;
   int64_t leftSum = 0, leftSumSq = 0;
@@ -338,6 +339,28 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
         sumSq = leftSumSq;
       }
 
+  
+#if 1
+      double average = double(sum) / numPixInPart;
+      double variance = double(sumSq) / numPixInPart - average * average;
+      int binLen = m_reshapeLUTSize / m_binNum;
+      uint32_t binIdx = (uint32_t)(pxlY / binLen);
+      if (m_lumaBD > 10)
+      {
+        average = average / (double)(1 << (m_lumaBD - 10));
+        variance = variance / (double)(1 << (2 * m_lumaBD - 20));
+      }
+      else if (m_lumaBD < 10)
+      {
+        average = average * (double)(1 << (10 - m_lumaBD));
+        variance = variance * (double)(1 << (20 - 2 * m_lumaBD));
+      }
+      double varLog10 = log10(variance + 1.0);
+      stats.binVar[binIdx] += varLog10;
+      binCnt[binIdx]++;
+//        printf("calcSeqStats m_lumaBD %d  average %f variance %f binIdx %d \n",m_lumaBD,average,variance,binIdx);
+
+#else
       double average = double(sum) / numPixInPart;
       double variance = double(sumSq) / numPixInPart - average * average;
       int binLen = m_reshapeLUTSize / m_binNum;
@@ -348,6 +371,9 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
       double varLog10 = log10(variance + 1.0);
       stats.binVar[binIdx] += varLog10;
       binCnt[binIdx]++;
+        printf("calcSeqStats m_lumaBD %d  average %f variance %f binIdx %d \n",m_lumaBD,average,variance,binIdx);
+
+#endif
     }
     picY.buf += stride;
   }
