@@ -338,9 +338,6 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
         sum = leftSum;
         sumSq = leftSumSq;
       }
-
-  
-#if 1
       double average = double(sum) / numPixInPart;
       double variance = double(sumSq) / numPixInPart - average * average;
       int binLen = m_reshapeLUTSize / m_binNum;
@@ -355,33 +352,9 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
         average = average * (double)(1 << (10 - m_lumaBD));
         variance = variance * (double)(1 << (20 - 2 * m_lumaBD));
       }
-      //average =0;
-      //variance =0;
-      //binIdx=0;
       double varLog10 = log10(variance + 1.0);
       stats.binVar[binIdx] += varLog10;
       binCnt[binIdx]++;
-  //      printf("calcSeqStats m_lumaBD %d  average %f variance %f binIdx %d \n",m_lumaBD,average,variance,binIdx);
-
-#else
-      double average = double(sum) / numPixInPart;
-      double variance = double(sumSq) / numPixInPart - average * average;
-      int binLen = m_reshapeLUTSize / m_binNum;
-      uint32_t binIdx = (uint32_t)(pxlY / binLen);
-      
-      average = average / (double)(1 << (m_lumaBD - 10));
-      variance = variance / (double)(1 << (2 * (m_lumaBD - 10)));
-      binIdx = (uint32_t)((pxlY >> (m_lumaBD - 10)) / binLen);
-      average =0;
-      variance =0;
-      //binIdx=0;
-
-      double varLog10 = log10(variance + 1.0);
-      stats.binVar[binIdx] += varLog10;
-      binCnt[binIdx]++;
-        printf("calcSeqStats m_lumaBD %d  average %f variance %f binIdx %d \n",m_lumaBD,average,variance,binIdx);
-
-#endif
     }
     picY.buf += stride;
   }
