@@ -194,7 +194,6 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
   uint32_t winLens = (m_binNum == PIC_CODE_CW_BINS) ? (std::min(height, width) / 240) : 2;
   winLens = winLens > 0 ? winLens : 1;
 
-  
   int64_t tempSq  = 0;
   int64_t topSum  = 0,  topSumSq = 0;
   int64_t leftSum = 0, leftSumSq = 0;
@@ -338,6 +337,7 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
         sum = leftSum;
         sumSq = leftSumSq;
       }
+      
       double average = double(sum) / numPixInPart;
       double variance = double(sumSq) / numPixInPart - average * average;
       int binLen = m_reshapeLUTSize / m_binNum;
