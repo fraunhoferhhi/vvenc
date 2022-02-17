@@ -361,6 +361,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
 
   c->m_usePerceptQPA                           = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
+  c->m_redPerceptQPATempWeight                 = false;         ///< Reduce temporal visual activity weights in QP adaptation
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;

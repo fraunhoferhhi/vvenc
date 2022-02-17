@@ -750,8 +750,11 @@ typedef struct vvenc_config
   int                 m_reservedInt[8];
   int                 m_LookAhead;                                                       // enable pre-analysis;
   int                 m_explicitAPSid;
-  bool                m_reservedFlag[9];
+
+  bool                m_reservedFlag[8];
+  bool                m_redPerceptQPATempWeight;                                         // reduce weight of temporal activity in QPA's visual sensitivity calculations
   bool                m_treatAsSubPic;
+
   double              m_reservedDouble[10];
 
   // internal state variables
