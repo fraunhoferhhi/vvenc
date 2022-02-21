@@ -82,9 +82,8 @@ static inline int lumaDQPOffset (const uint32_t avgLumaValue, const uint32_t bit
 
 static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrcStride, const int height, const int width,
                                                  const Pel* pSM1, const int iSM1Stride, const Pel* pSM2, const int iSM2Stride,
-                                                 uint32_t frameRate, const uint32_t bitDepth, const bool isUHD, const bool reduceTempWeight = false)
+                                                 uint32_t frameRate, const uint32_t bitDepth, const bool isUHD)
 {
-  const double f = (reduceTempWeight ? 1.0 : 2.0);
   double meanAct = 0.0;
   uint64_t saAct = 0;   // spatial absolute activity sum
   uint64_t taAct = 0;  // temporal absolute activity sum
@@ -186,7 +185,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
       }
     }
 
-    meanAct += (f * taAct) / double ((width - 4) * (height - 4));
+    meanAct += (2.0 * taAct) / double ((width - 4) * (height - 4));
   }
   else // HD high-pass without downsampling
   {
@@ -226,7 +225,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
       }
     }
 
-    meanAct += (f * taAct) / double ((width - 2) * (height - 2));
+    meanAct += (2.0 * taAct) / double ((width - 2) * (height - 2));
   }
 
   // lower limit, compensate for high-pass amplification
@@ -339,7 +338,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
     hpEner[comp] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                       picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
-                                                      bitDepth, isHighResolution && (isLuma (compID) || pic->chromaFormat == CHROMA_444), encCfg->m_redPerceptQPATempWeight);
+                                                      bitDepth, isHighResolution && (isLuma (compID) || pic->chromaFormat == CHROMA_444));
     if (isChroma (compID))
     {
       const int adaptChromaQPOffset = 2.0 * hpEner[comp] <= hpEner[0] ? 0 : apprI3Log2 (2.0 * hpEner[comp] / hpEner[0]);
@@ -413,7 +412,7 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
 
       hpEnerPic = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                      picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
-                                                     bitDepth, isHighResolution, encCfg->m_redPerceptQPATempWeight);
+                                                     bitDepth, isHighResolution);
       hpEnerAvg += hpEnerPic;
       pic->ctuQpaLambda[ctuRsAddr] = hpEnerPic; // temporary backup of CTU mean visual activity
       pic->ctuAdaptedQP[ctuRsAddr] = pic->getOrigBuf (ctuArea).getAvg(); // and mean luma value
@@ -597,7 +596,7 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
 
   hpEnerSub = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                  picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
-                                                 bitDepth, isHighResolution, encCfg->m_redPerceptQPATempWeight);
+                                                 bitDepth, isHighResolution);
   hpEnerPic = 1.0 / getAveragePictureActivity (encCfg->m_PadSourceWidth, encCfg->m_PadSourceHeight, 0,
                                                (encCfg->m_usePerceptQPATempFiltISlice || !slice->isIntra()), bitDepth);
   adaptedSubCtuQP = Clip3 (0, MAX_QP, pic->picInitialQP + apprI3Log2 (hpEnerSub * hpEnerPic));
@@ -667,7 +666,7 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
 
   return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                             picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
-                                            slice->sps->bitDepths[CH_L], isHighRes, encCfg->m_redPerceptQPATempWeight);
+                                            slice->sps->bitDepths[CH_L], isHighRes);
 }
 
 } // namespace vvenc

@@ -560,7 +560,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
-    ("ReduceQPATempWeight",                             c->m_redPerceptQPATempWeight,                        "Reduce temporal visual activity weights in QP adaptation (0:off, 1:on)")
     ;
 
     opts.setSubSection("Quantization paramters");
