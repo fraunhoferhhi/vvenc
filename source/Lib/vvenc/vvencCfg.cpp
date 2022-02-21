@@ -677,8 +677,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_treatAsSubPic                           = false;
   c->m_explicitAPSid                           = 0;
 
-  c->m_stageParallelProc                       = c->m_numThreads > 0 && c->m_LookAhead;
-
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
@@ -2055,8 +2053,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
-
-  c->m_stageParallelProc = c->m_numThreads > 0 && c->m_LookAhead;
 
   c->m_configDone = true;
 
