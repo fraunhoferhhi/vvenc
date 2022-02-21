@@ -323,12 +323,11 @@ void InterpolationFilter::filterCopy( const ClpRng& clpRng, const Pel* src, int 
       if ((clpRng.bd - IF_INTERNAL_PREC_BILINEAR) > 0)
       {
         shift10BitOut = (clpRng.bd - IF_INTERNAL_PREC_BILINEAR);
-        offset = (1 << (shift10BitOut - 1));
         for (row = 0; row < height; row++)
         {
           for (col = 0; col < width; col++)
           {
-            dst[col] = (src[col] + offset) >> shift10BitOut;
+            dst[col] = src[col] << shift10BitOut;
           }
           src += srcStride;
           dst += dstStride;
@@ -337,11 +336,12 @@ void InterpolationFilter::filterCopy( const ClpRng& clpRng, const Pel* src, int 
       else
       {
         shift10BitOut = (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
+        offset = (1 << (shift10BitOut - 1));
         for (row = 0; row < height; row++)
         {
           for (col = 0; col < width; col++)
           {
-            dst[col] = src[col] << shift10BitOut;
+            dst[col] = (src[col] + offset) >> shift10BitOut;
           }
           src += srcStride;
           dst += dstStride;
