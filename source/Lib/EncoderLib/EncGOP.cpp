@@ -686,6 +686,9 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     outPic->getFilteredOrigBuffer().destroy();
   }
 
+#if !MOD
+  m_pocEncode = outPic->poc;
+#endif
   doneList.push_back( outPic );
 
   m_numPicsCoded += 1;
@@ -1619,7 +1622,9 @@ void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, const
 
       m_gopEncListInput.push_back( pic );
       m_gopEncListOutput.push_back( pic );
+#if MOD
       m_pocEncode = pic->poc;
+#endif
     }
   }
 }
