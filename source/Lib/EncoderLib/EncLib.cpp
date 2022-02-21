@@ -362,8 +362,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // clear output access unit
   au.clearAu();
 
-  // NOTE regarding the chunk-mode
-  // The chunk-mode is using non-blocking concept and it is applied in the final stage.
+  // NOTE regarding the stage parallel processing
   // The next input yuv-frame must be passed to the encoding process (1.Stage).
   // Following should be considered:
   // 1. The final stage is non-blocking, so it dosen't wait until picture is reconstructed.

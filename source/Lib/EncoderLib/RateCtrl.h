@@ -72,7 +72,7 @@ namespace vvenc {
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
                   tempLayer( _tempLayer ),
-                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 )
+                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), copied( 0 )
                   {}
     int       poc;
     int       qp;
@@ -86,6 +86,7 @@ namespace vvenc {
     bool      refreshParameters;
     double    frameInGopRatio;
     int       targetBits;
+    bool      copied;
   };
 
   class EncRCSeq
@@ -195,7 +196,7 @@ namespace vvenc {
 
   private:
     std::list<TRCPassStats> m_listRCFirstPassStats;
-    std::list<TRCPassStats> m_listRCFirstPassStatsCache;
+    std::list<TRCPassStats> m_firstPassCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream            m_rcStatsFHandle;

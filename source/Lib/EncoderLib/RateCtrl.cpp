@@ -516,7 +516,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     std::stringstream iss;
     iss << data;
     data = nlohmann::json::parse( iss.str() );
-    std::list<TRCPassStats>& listRCFirstPassStats = m_pcEncCfg->m_LookAhead ? m_listRCFirstPassStatsCache: m_listRCFirstPassStats;
+    std::list<TRCPassStats>& listRCFirstPassStats = m_pcEncCfg->m_LookAhead ? m_firstPassCache: m_listRCFirstPassStats;
     listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
                                                     data[ "qp" ],
                                                     data[ "lambda" ],
@@ -583,32 +583,29 @@ void RateCtrl::readStatsFile()
 
 void RateCtrl::processFirstPassData (const bool flush, int poc)
 {
-  CHECK( m_listRCFirstPassStatsCache.size() == 0, "No data available from the first pass!" );
-  // retrieve RC data for the next look-ahead chunk
-  // the next look-ahead chunk starts with a given POC
-  // find pic for a given poc in cache
-  // NOTE!!!: pictures in cache are in coding order
-  auto picStatCacheItr = find_if( m_listRCFirstPassStatsCache.begin(), m_listRCFirstPassStatsCache.end(), [poc]( auto picStat ) { return picStat.poc == poc; } );
-  // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
-  int count = 0;
-  for( ; picStatCacheItr != m_listRCFirstPassStatsCache.end(); ++picStatCacheItr )
-  {
-    auto picStat = *picStatCacheItr;
-    // check whether the picture is already in the stats buf
-    // the reason is that the first GOP with pictures 1..32 is used twice with POC 0 and POC 32
-    // maybe we can find a better solution for that and skip searching
-    auto picStatBufItr = find_if( m_listRCFirstPassStats.begin(), m_listRCFirstPassStats.end(), [&picStat]( auto ps ) { return ps.poc == picStat.poc; } );
+  CHECK( m_firstPassCache.size() == 0, "No data available from the first pass!" );
 
+  // fetch RC data for the next look-ahead chunk
+  // the next look-ahead chunk starts with a given POC, so find a pic for a given POC in cache
+  // NOTE!!!: pictures in cache are in coding order
+
+  auto picCacheItr = find_if( m_firstPassCache.begin(), m_firstPassCache.end(), [poc]( auto& picStat ) { return picStat.poc == poc; } );
+
+  for( int count = 0; picCacheItr != m_firstPassCache.end(); ++picCacheItr )
+  {
+    auto& picStat = *picCacheItr;
     count++;
-    if( picStatBufItr == m_listRCFirstPassStats.end() )
+    if( !picStat.copied )
     {
+      picStat.copied = true;
       m_listRCFirstPassStats.push_back( picStat );
       if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
       {
         m_listRCFirstPassStats.pop_front();
-        m_listRCFirstPassStatsCache.pop_front();
+        m_firstPassCache.pop_front();
       }
 
+      // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
       if( !flush && ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) )
         break;
     }
