@@ -740,6 +740,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c,  (c->m_numIntraModesFullRD < -1 || c->m_numIntraModesFullRD == 0 || c->m_numIntraModesFullRD > 3), "Error: NumIntraModesFullRD must be -1 or between 1 and 3");
 
+#if ! ENABLE_TRACING
+  vvenc_confirmParameter( c, c->m_traceFile[0] != '\0', "trace file option '--tracefile' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+  vvenc_confirmParameter( c, c->m_traceRule[0] != '\0', "trace rule option '--tracerule' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+  vvenc_confirmParameter( c, c->m_listTracingChannels, "list trace channels option '--tracechannellist' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+#endif
 
   if ( c->m_confirmFailed )
   {

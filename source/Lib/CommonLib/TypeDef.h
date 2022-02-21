@@ -61,9 +61,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <cassert>
 
-#include "vvenc/vvencCfg.h"
-
-typedef struct vvenc_config VVEncCfg;
+#include "EncoderLib/EncCfg.h"
 
 typedef vvencChromaFormat ChromaFormat;
 typedef vvencSliceType    SliceType;
@@ -92,7 +90,7 @@ namespace vvenc {
 #endif
 
 #ifndef ENABLE_TRACING
-#define ENABLE_TRACING                                    0 // DISABLED by default (enable only when debugging, requires 15% run-time in decoding) -- see documentation in 'doc/DTrace for NextSoftware.pdf'
+#define ENABLE_TRACING                                    0 // DISABLED by default (enable only when debugging, requires additional runtime)
 #endif
 
 #ifndef ENABLE_TIME_PROFILING

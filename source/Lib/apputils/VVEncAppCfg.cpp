@@ -1004,7 +1004,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ;
   }
 
-#if ENABLE_TRACING
   {
     opts.setSubSection( "Tracing" );
     opts.addOptions()
@@ -1013,7 +1012,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("tracefile",                     toTraceFile,            "Tracing file")
     ;
   }
-#endif
 
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );
