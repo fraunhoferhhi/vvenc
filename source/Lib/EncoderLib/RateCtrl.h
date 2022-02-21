@@ -72,7 +72,7 @@ namespace vvenc {
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
                   tempLayer( _tempLayer ),
-                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), copied( 0 )
+                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), copied( false )
                   {}
     int       poc;
     int       qp;
