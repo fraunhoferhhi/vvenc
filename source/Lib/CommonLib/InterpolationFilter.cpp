@@ -267,7 +267,7 @@ void InterpolationFilter::filterCopy( const ClpRng& clpRng, const Pel* src, int 
   {
     if (biMCForDMVR)
     {
-      CHECK( ( clpRng.bd - IF_INTERNAL_PREC_BILINEAR ) > 0, "VVenC doesn't support bitdepth over '10'!" );
+      CHECKD( ( clpRng.bd - IF_INTERNAL_PREC_BILINEAR ) > 0, "VVenC doesn't support bitdepth over '10'!" );
 
       int shift10BitOut = (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
       for (row = 0; row < height; row++)
@@ -301,7 +301,7 @@ void InterpolationFilter::filterCopy( const ClpRng& clpRng, const Pel* src, int 
   {
     const unsigned shift = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
 
-    CHECK( biMCForDMVR, "Bilinear filter copy for DMVR has to be 'isFirst' step!" );
+    CHECKD( biMCForDMVR, "Bilinear filter copy for DMVR has to be 'isFirst' step!" );
 
     const Pel offset = ((1) << (shift - 1)) + IF_INTERNAL_OFFS;
     for (row = 0; row < height; row++)
