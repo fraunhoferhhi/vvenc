@@ -314,7 +314,7 @@ static int getGlaringColorQPOffsetSubCtu (Picture* const pic, const CompArea& lu
 // public functions
 
 int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
-                                            std::vector<int>& ctuPumpRedQP, int optChromaQPOffset[2], double* picVisActY /*= nullptr*/)
+                                            std::vector<int>& ctuPumpRedQP, int optChromaQPOffset[2], uint16_t* picVisActY /*= nullptr*/)
 {
   Picture* const pic          = (slice != nullptr ? slice->pic : nullptr);
   double hpEner[MAX_NUM_COMP] = {0.0, 0.0, 0.0};
@@ -333,8 +333,8 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
   {
     const ComponentID  compID = (ComponentID) comp;
     const CPelBuf     picOrig = pic->getOrigBuf (compID);
-    const CPelBuf     picPrv1 = pic->getOrigBufPrev (compID, false);
-    const CPelBuf     picPrv2 = pic->getOrigBufPrev (compID, true );
+    const CPelBuf     picPrv1 = pic->getOrigBufPrev (compID, PREV_FRAME_1);
+    const CPelBuf     picPrv2 = pic->getOrigBufPrev (compID, PREV_FRAME_2);
 
     hpEner[comp] = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                       picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
@@ -371,7 +371,7 @@ int BitAllocation::applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* 
 
       optChromaQPOffset[comp-1] = std::min (3 + lumaChromaMappingDQP, adaptChromaQPOffset + lumaChromaMappingDQP);
     } // isChroma (compID)
-    else if (picVisActY != nullptr) *picVisActY = hpEner[comp];
+    else if (picVisActY != nullptr) *picVisActY = ClipBD (uint16_t (0.5 + hpEner[comp]), bitDepth);
   }
 
   return savedLumaQP;
@@ -407,8 +407,8 @@ int BitAllocation::applyQPAdaptationLuma (const Slice* slice, const VVEncCfg* en
       const SizeType fltHeight = pcv.maxCUSize + guardSize * (pos.y > 0 ? 2 : 1);
       const CompArea fltArea   = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x > 0 ? pos.x - guardSize : 0, pos.y > 0 ? pos.y - guardSize : 0, fltWidth, fltHeight)), pic->Y());
       const CPelBuf  picOrig   = pic->getOrigBuf (fltArea);
-      const CPelBuf  picPrv1   = pic->getOrigBufPrev (fltArea, false);
-      const CPelBuf  picPrv2   = pic->getOrigBufPrev (fltArea, true );
+      const CPelBuf  picPrv1   = pic->getOrigBufPrev (fltArea, PREV_FRAME_1);
+      const CPelBuf  picPrv2   = pic->getOrigBufPrev (fltArea, PREV_FRAME_2);
 
       hpEnerPic = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                      picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
@@ -591,8 +591,8 @@ int BitAllocation::applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* 
   const SizeType    fltHeight = lumaArea.height + guardSize * (pos.y > 0 ? 2 : 1);
   const CompArea    fltArea   = clipArea (CompArea (COMP_Y, pic->chromaFormat, Area (pos.x > 0 ? pos.x - guardSize : 0, pos.y > 0 ? pos.y - guardSize : 0, fltWidth, fltHeight)), pic->Y());
   const CPelBuf     picOrig   = pic->getOrigBuf (fltArea);
-  const CPelBuf     picPrv1   = pic->getOrigBufPrev (fltArea, false);
-  const CPelBuf     picPrv2   = pic->getOrigBufPrev (fltArea, true );
+  const CPelBuf     picPrv1   = pic->getOrigBufPrev (fltArea, PREV_FRAME_1);
+  const CPelBuf     picPrv2   = pic->getOrigBufPrev (fltArea, PREV_FRAME_2);
 
   hpEnerSub = filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
                                                  picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
@@ -653,7 +653,7 @@ int BitAllocation::getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& o
   return pumpingReducQP;
 }
 
-double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg)
+double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev /*= nullptr*/)
 {
   Picture* const pic    = (slice != nullptr ? slice->pic : nullptr);
 
@@ -661,12 +661,56 @@ double BitAllocation::getPicVisualActivity (const Slice* slice, const VVEncCfg* 
 
   const bool isHighRes  = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
   const CPelBuf picOrig = pic->getOrigBuf (COMP_Y);
-  const CPelBuf picPrv1 = pic->getOrigBufPrev (COMP_Y, false);
-  const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, true );
+  const CPelBuf picPrv1 = (origPrev != nullptr ? *origPrev : pic->getOrigBufPrev (COMP_Y, PREV_FRAME_1));
+  const CPelBuf picPrv2 = pic->getOrigBufPrev (COMP_Y, PREV_FRAME_2);
 
   return filterAndCalculateAverageActivity (picOrig.buf, picOrig.stride, picOrig.height, picOrig.width,
-                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride, encCfg->m_FrameRate/encCfg->m_FrameScale,
+                                            picPrv1.buf, picPrv1.stride, picPrv2.buf, picPrv2.stride,
+                                            (origPrev != nullptr ? 24 : encCfg->m_FrameRate/encCfg->m_FrameScale),
                                             slice->sps->bitDepths[CH_L], isHighRes);
+}
+
+bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass)
+{
+  Picture* const curPic = (slice != nullptr ? slice->pic : nullptr);
+
+  if (curPic == nullptr || encCfg == nullptr) return false;
+
+  const int gopSize    = encCfg->m_GOPSize;
+  const int curPoc     = slice->poc;
+  const int idr2Adj    = (encCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
+  const bool isHighRes = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
+
+  curPic->picVisActTL0 = curPic->picVisActY = 0;
+
+  if (((encCfg->m_LookAhead > 0 && encCfg->m_RCTargetBitrate <= 0) || (encCfg->m_RCNumPasses > 1 && !rcIsFinalPass)) && !(slice->pps->sliceChromaQpFlag && encCfg->m_usePerceptQPA &&
+      ((slice->isIntra() && !slice->sps->IBC) || (encCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (curPoc % encCfg->m_sliceChromaQpOffsetPeriodicity) == 0))))
+  {
+    const double visActY = getPicVisualActivity (slice, encCfg);
+
+    curPic->picVisActY   = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
+  }
+
+  if (encCfg->m_adaptSliceType && (curPoc >= 0) && (gopSize > 8) && ((curPoc + idr2Adj) % gopSize == 0))
+  {
+    const CPelBuf prvTL0 = curPic->getOrigBufPrev (COMP_Y, PREV_FRAME_TL0);
+    const double visActY = (prvTL0.buf == nullptr ? 0.0 : getPicVisualActivity (slice, encCfg, &prvTL0));
+
+    curPic->picVisActTL0 = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
+
+    if (!slice->isIntra() && curPoc >= (gopSize << idr2Adj)) // detect scene change if comparison is possible
+    {
+      const Picture* refPic = slice->getRefPic (REF_PIC_LIST_0, 0);
+      const int scThreshold = (curPic->isSccStrong ? 3 : (curPic->isSccWeak ? 2 : 1)) * (isHighRes ? 16 : 15);
+
+      return ((curPic->picVisActTL0 * 11 > refPic->picVisActTL0 * scThreshold ||
+               refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * scThreshold) && refPic->picVisActTL0 > 0);
+    }
+
+    return false;
+  }
+
+  return false;
 }
 
 } // namespace vvenc

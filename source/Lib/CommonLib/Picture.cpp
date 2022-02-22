@@ -179,7 +179,8 @@ Picture::Picture()
     , isPreAnalysis     ( false )
     , m_picShared       ( nullptr )
     , picInitialQP      ( 0 )
-    , picVisActY        ( 0.0 )
+    , picVisActTL0      ( 0 )
+    , picVisActY        ( 0 )
     , isSccWeak         ( false )
     , isSccStrong       ( false )
     , useScME           ( false )
@@ -195,7 +196,7 @@ Picture::Picture()
     , encRCPic          ( nullptr )
 {
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
-  std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
+  std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
 }
 
 void Picture::create( ChromaFormat _chromaFormat, const Size& size, unsigned _maxCUSize, unsigned _margin, bool _decoder )
@@ -234,7 +235,7 @@ void Picture::reset()
   actualTotalBits     = 0;
 
   std::fill_n( m_sharedBufs, (int)NUM_PIC_TYPES, nullptr );
-  std::fill_n( m_bufsOrigPrev, QPA_PREV_FRAMES, nullptr );
+  std::fill_n( m_bufsOrigPrev, NUM_PREV_FRAMES, nullptr );
 
   encTime.resetTimer();
 }
@@ -270,12 +271,12 @@ void Picture::destroy( bool bPicHeader )
   SEIs.clear();
 }
 
-void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], PicShared* picShared )
+void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared )
 {
   m_picShared                      = picShared;
   m_sharedBufs[ PIC_ORIGINAL ]     = origBuf;
   m_sharedBufs[ PIC_ORIGINAL_RSP ] = filteredBuf;
-  for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+  for( int i = 0; i < NUM_PREV_FRAMES; i++ )
     m_bufsOrigPrev[ i ] = prevOrigBufs[ i ];
 }
 
@@ -302,9 +303,9 @@ void Picture::destroyTempBuffers()
   if( cs ) cs->rebindPicBufs();
 }
 
-const CPelBuf     Picture::getOrigBufPrev (const CompArea &blk, const bool minus2) const { return (m_bufsOrigPrev[minus2 ? 1 : 0] && blk.valid() ? m_bufsOrigPrev[minus2 ? 1 : 0]->getBuf (blk) : PelBuf()); }
-const CPelUnitBuf Picture::getOrigBufPrev (const bool minus2)   const { return (m_bufsOrigPrev[minus2 ? 1 : 0] ? *m_bufsOrigPrev[minus2 ? 1 : 0] : PelUnitBuf()); }
-const CPelBuf     Picture::getOrigBufPrev (const ComponentID compID, const bool minus2) const { return (m_bufsOrigPrev[minus2 ? 1 : 0] ? m_bufsOrigPrev[minus2 ? 1 : 0]->getBuf (compID) : PelBuf()); }
+const CPelBuf     Picture::getOrigBufPrev (const CompArea &blk, const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] && blk.valid() ? m_bufsOrigPrev[ type ]->getBuf (blk) : PelBuf()); }
+const CPelUnitBuf Picture::getOrigBufPrev (const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] ? *m_bufsOrigPrev[ type ] : PelUnitBuf()); }
+const CPelBuf     Picture::getOrigBufPrev (const ComponentID compID, const PrevFrameType type) const { return (m_bufsOrigPrev[ type ] ? m_bufsOrigPrev[ type ]->getBuf (compID) : PelBuf()); }
 
 void Picture::finalInit( const VPS& _vps, const SPS& sps, const PPS& pps, PicHeader* picHeader, XUCache& unitCache, std::mutex* mutex, APS** alfAps, APS* lmcsAps )
 {

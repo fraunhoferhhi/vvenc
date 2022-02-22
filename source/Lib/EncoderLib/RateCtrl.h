@@ -96,7 +96,7 @@ namespace vvenc {
 
     void create( bool twoPass, bool lookAhead, int targetBitrate, int frameRate, int intraPeriod, int GOPSize, int bitDepth, std::list<TRCPassStats> &firstPassData );
     void destroy();
-    void updateAfterPic( int bits, int tgtBits );
+    void updateAfterPic (const int actBits, const int tgtBits);
     void getTargetBitsFromFirstPass (const int poc, int &targetBits, double &frameVsGopRatio, bool &isNewScene, bool &refreshParameters);
 
     bool            twoPass;
@@ -129,11 +129,11 @@ namespace vvenc {
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
     void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp);
-    void   updateAfterPicture( int actualTotalBits, double averageQP, bool isIRAP );
+    void   updateAfterPicture (const int actualTotalBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
     int     targetBits;
-    int     tmpTargetBits; // only for 2p RC
+    int     tmpTargetBits;
     int     picQPOffsetQPA;
     int     poc;
     double  picLambdaOffsetQPA;
@@ -143,8 +143,8 @@ namespace vvenc {
 
     EncRCSeq* encRCSeq;
     int     frameLevel;
-    int     picActualBits;          // the whole picture, including header
-    int     picQP;                  // in integer form
+    int     picActualBits;   // the whole picture, including header
+    int     picQP;           // in integer form
     bool    isNewScene;
     bool    refreshParams;
   };
@@ -164,8 +164,7 @@ namespace vvenc {
     void processFirstPassData (const bool flush);
     void processGops();
     double getAverageBitsFromFirstPass();
-    void detectNewScene();
-    void adaptToSceneChanges();
+    void detectSceneCuts();
     void xUpdateAfterPicRC( const Picture* pic );
     void initRateControlPic( Picture& pic, Slice* slice, int& qp, double& finalLambda );
 

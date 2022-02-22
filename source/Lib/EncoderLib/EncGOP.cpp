@@ -1713,6 +1713,14 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->numRefIdx[REF_PIC_LIST_0] = sliceType == VVENC_I_SLICE ? 0 : slice->rpl[0]->numberOfActivePictures;
   slice->numRefIdx[REF_PIC_LIST_1] = sliceType != VVENC_B_SLICE ? 0 : slice->rpl[1]->numberOfActivePictures;
   slice->constructRefPicList  ( picList, false );
+
+  if ( BitAllocation::isTempLayer0IntraFrame( slice, m_pcEncCfg, picList, m_pcRateCtrl->rcIsFinalPass ) ) // T-Layer-0 B frame adaptation and some preparations for rate control
+  {
+    slice->sliceType = sliceType = VVENC_I_SLICE;
+    slice->numRefIdx[REF_PIC_LIST_0] = 0;
+    slice->numRefIdx[REF_PIC_LIST_1] = 0;
+    slice->constructRefPicList( picList, false );
+  }
   slice->setRefPOCList        ();
   slice->setList1IdxToList0Idx();
   slice->updateRefPicCounter  ( +1 );
@@ -2655,12 +2663,10 @@ void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUni
 
   if( (m_isPreAnalysis && m_pcRateCtrl->m_pcEncCfg->m_RCTargetBitrate) || ! m_pcRateCtrl->rcIsFinalPass)
   {
-    const double visualActivity = (pic->picVisActY > 0.0 ? pic->picVisActY : BitAllocation::getPicVisualActivity (slice, m_pcEncCfg));
-
     m_pcRateCtrl->addRCPassStats( slice->poc,
                                   slice->sliceQp,
                                   slice->getLambdas()[0],
-                                  ClipBD( uint16_t (0.5 + visualActivity), m_pcEncCfg->m_internalBitDepth[CH_L] ),
+                                  pic->picVisActY,
                                   uibits,
                                   dPSNR[COMP_Y],
                                   slice->isIntra(),

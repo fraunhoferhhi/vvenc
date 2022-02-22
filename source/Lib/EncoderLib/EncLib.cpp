@@ -78,6 +78,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_MCTF           ( nullptr )
   , m_preEncoder     ( nullptr )
   , m_gopEncoder     ( nullptr )
+  , m_prevSharedTL0  ( nullptr )
   , m_threadPool     ( nullptr )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
@@ -218,7 +219,6 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF = new MCTF();
-    //m_MCTF->initStage( MCTF_ADD_QUEUE_DELAY, true, true, m_encCfg.m_CTUSize );
     const int minDelay = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 + VVENC_MCTF_RANGE ) : ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 );
     m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
@@ -265,8 +265,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_prevSharedQueue.push_back( nullptr );
   }
+  m_prevSharedTL0 = nullptr;
 
-  m_picsRcvd        = m_encCfg.m_vvencMCTF.MCTF ? -m_encCfg.m_vvencMCTF.MCTFNumLeadFrames : 0;
+  m_picsRcvd        = -m_encCfg.m_numLeadFrames;
   m_passInitialized = pass;
 }
 
@@ -295,6 +296,11 @@ void EncLib::xUninitLib()
   m_encStages.clear();
 
   // shared data
+  if( m_prevSharedTL0 )
+  {
+    m_prevSharedTL0->decUsed();
+    m_prevSharedTL0 = nullptr;
+  }
   for( auto picShared : m_picSharedList )
   {
     delete picShared;
@@ -350,6 +356,8 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
 
+  const int firstPoc = m_encCfg.m_vvencMCTF.MCTF ? -m_encCfg.m_vvencMCTF.MCTFNumLeadFrames : 0;
+
   // clear output access unit
   au.clearAu();
 
@@ -358,19 +366,28 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     PicShared* picShared = xGetFreePicShared();
     picShared->reuse( m_picsRcvd, yuvInBuf );
-    if (m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || (m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate) )
+    if( m_encCfg.m_adaptSliceType
+        || m_encCfg.m_usePerceptQPA
+        || m_encCfg.m_RCNumPasses == 2
+        || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
     {
       xAssignPrevQpaBufs( picShared );
     }
-    xDetectScc( picShared );
-    m_encStages[ 0 ]->addPicSorted( picShared );
+    if( ! picShared->isLeadTrail() )
+    {
+      xDetectScc( picShared );
+    }
+    if( picShared->getPOC() >= firstPoc )
+    {
+      m_encStages[ 0 ]->addPicSorted( picShared );
+    }
     m_picsRcvd += 1;
   }
 
   PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
   // trigger stages
-  isQueueEmpty = true;
+  isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
   for( auto encStage : m_encStages )
   {
     encStage->runStage( flush, au );
@@ -439,6 +456,22 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
   if( picShared->m_prevShared[ 0 ] == nullptr )
   {
     picShared->m_prevShared[ 0 ] = picShared;
+  }
+
+  if (m_encCfg.m_adaptSliceType)
+  {
+    const int idr2Adj = (m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
+
+    if ((picShared->getPOC() + idr2Adj) % m_encCfg.m_GOPSize == 0)
+    {
+      if( m_prevSharedTL0 )
+      {
+        m_prevSharedTL0->decUsed();
+      }
+      picShared->m_prevShared[ PREV_FRAME_TL0 ] = m_prevSharedTL0;
+      m_prevSharedTL0 = picShared;
+      m_prevSharedTL0->incUsed();
+    }
   }
 }
 
