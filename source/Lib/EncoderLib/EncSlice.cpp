@@ -289,8 +289,6 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   double dLambda = xCalculateLambda( slice, gopId, slice->depth, dQP, dQP, iQP );
   int sliceChromaQpOffsetIntraOrPeriodic[ 2 ] = { m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 0 ], m_pcEncCfg->m_sliceChromaQpOffsetIntraOrPeriodic[ 1 ] };
 
-  slice->pic->picVisActY = 0.0; // to allow reusing calculated luma visual activity for rate control
-
   if (slice->pps->sliceChromaQpFlag && m_pcEncCfg->m_usePerceptQPA &&
       ((slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0)))
   {

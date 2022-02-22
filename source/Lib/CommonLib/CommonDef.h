@@ -196,7 +196,16 @@ static const int MAX_NUM_REF =                                     16; ///< max.
 static const int MAX_QP =                                          63;
 static const int MAX_QP_PERCEPT_QPA =                              42; ///< max. base QP up to which CTU or sub-CTU QPA is used instead of frame QPA
 static const int NOT_VALID =                                       -1;
-static const int QPA_PREV_FRAMES =                                  2;
+
+typedef enum
+{
+  PREV_FRAME_1    = 0,
+  PREV_FRAME_2    = 1,
+  PREV_FRAME_TL0  = 2,
+} PrevFrameType;
+
+static const int QPA_PREV_FRAMES =              (int)PREV_FRAME_2 + 1;
+static const int NUM_PREV_FRAMES =            (int)PREV_FRAME_TL0 + 1;
 
 
 static const int AMVP_MAX_NUM_CANDS =                               2; ///< AMVP: advanced motion vector prediction - max number of final candidates

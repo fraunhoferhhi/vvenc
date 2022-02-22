@@ -123,7 +123,7 @@ struct Picture : public UnitArea
   void reset();
   void destroy( bool bPicHeader );
 
-  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ], PicShared* picShared );
+  void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared );
   void releaseSharedBuffers();
 
   void createTempBuffers( unsigned _maxCUSize );
@@ -167,9 +167,9 @@ struct Picture : public UnitArea
   const CPelBuf     getRspOrigBuf(const CompArea& blk)              const { return getSharedBuf(blk,    PIC_ORIGINAL_RSP); }
   const CPelUnitBuf getRspOrigBuf(const UnitArea& unit)             const { return getSharedBuf(unit,   PIC_ORIGINAL_RSP); }
 
-  const CPelBuf     getOrigBufPrev(const CompArea &blk, const bool minus2) const;
-  const CPelUnitBuf getOrigBufPrev(const bool minus2) const;
-  const CPelBuf     getOrigBufPrev(const ComponentID compID, const bool minus2) const;
+  const CPelBuf     getOrigBufPrev(const CompArea &blk, const PrevFrameType type) const;
+  const CPelUnitBuf getOrigBufPrev(const PrevFrameType type) const;
+  const CPelBuf     getOrigBufPrev(const ComponentID compID, const PrevFrameType type) const;
 
 private:
          PelUnitBuf getPicBuf(                          const PictureType type)         { return m_picBufs[ type ]; }
@@ -228,13 +228,15 @@ public:
 
   PelStorage                    m_picBufs[ NUM_PIC_TYPES ];
   PelStorage*                   m_sharedBufs[ NUM_PIC_TYPES ];
-  PelStorage*                   m_bufsOrigPrev[ QPA_PREV_FRAMES ];
+  PelStorage*                   m_bufsOrigPrev[ NUM_PREV_FRAMES ];
 
   std::vector<double>           ctuQpaLambda;
   std::vector<Pel>              ctuAdaptedQP;
   std::mutex                    wppMutex;
   int                           picInitialQP;
-  double                        picVisActY;
+  uint16_t                      picVisActTL0;
+  uint16_t                      picVisActY;
+
   StopClock                     encTime;
   bool                          isSccWeak;
   bool                          isSccStrong;
