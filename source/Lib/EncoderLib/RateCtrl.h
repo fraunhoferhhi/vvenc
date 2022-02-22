@@ -202,6 +202,8 @@ namespace vvenc {
     std::fstream            m_rcStatsFHandle;
     int                     m_pqpaStatsWritten;
 #endif
+    int                     m_numPicStats;
+    int                     m_numPicStatsUsed;
   };
 
 }
