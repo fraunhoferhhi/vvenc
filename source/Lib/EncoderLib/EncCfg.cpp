@@ -52,9 +52,9 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace vvenc {
 
-VVEncCfg::VVEncCfg():
-  m_ChunkBasedMode( 0 )
-{}
+VVEncCfg::VVEncCfg()
+{
+}
 
 VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
 {
@@ -63,9 +63,8 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
   return *this;
 }
 
-void VVEncCfg::xInitCfgMembers() 
-{ 
-  m_ChunkBasedMode = 0; 
+void VVEncCfg::xInitCfgMembers()
+{
 }
 
 }

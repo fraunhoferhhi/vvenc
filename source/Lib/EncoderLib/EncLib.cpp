@@ -219,7 +219,8 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF = new MCTF();
-    const int minDelay = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 + VVENC_MCTF_RANGE ) : ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 );
+    const int leadFrames = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
+    const int minDelay   = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
     m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
@@ -267,7 +268,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
   m_prevSharedTL0 = nullptr;
 
-  m_picsRcvd        = -m_encCfg.m_numLeadFrames;
+  m_picsRcvd        = -m_encCfg.m_leadFrames;
   m_passInitialized = pass;
 }
 
@@ -356,7 +357,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
 
-  const int firstPoc = m_encCfg.m_vvencMCTF.MCTF ? -m_encCfg.m_vvencMCTF.MCTFNumLeadFrames : 0;
+  const int firstPoc = m_encCfg.m_vvencMCTF.MCTF ? -std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames ) : 0;
 
   // clear output access unit
   au.clearAu();
@@ -366,7 +367,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     PicShared* picShared = xGetFreePicShared();
     picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_adaptSliceType
+    if( m_encCfg.m_sliceTypeAdaption
         || m_encCfg.m_usePerceptQPA
         || m_encCfg.m_RCNumPasses == 2
         || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
@@ -458,11 +459,11 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
     picShared->m_prevShared[ 0 ] = picShared;
   }
 
-  if (m_encCfg.m_adaptSliceType)
+  if( m_encCfg.m_sliceTypeAdaption )
   {
-    const int idr2Adj = (m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
+    const int idr2Adj = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
 
-    if ((picShared->getPOC() + idr2Adj) % m_encCfg.m_GOPSize == 0)
+    if( ( picShared->getPOC() + idr2Adj ) % m_encCfg.m_GOPSize == 0 )
     {
       if( m_prevSharedTL0 )
       {

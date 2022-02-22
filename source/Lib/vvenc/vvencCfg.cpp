@@ -313,8 +313,6 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   vvencMCTF->MCTF = 0;
   vvencMCTF->MCTFSpeed = 0;
   vvencMCTF->MCTFFutureReference = true;
-  vvencMCTF->MCTFNumLeadFrames = 0;
-  vvencMCTF->MCTFNumTrailFrames = 0;
   vvencMCTF->numFrames = 0;
   vvencMCTF->numStrength = 0;
   memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
@@ -361,7 +359,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
-  c->m_adaptSliceType                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
+  c->m_sliceTypeAdaption                       = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
@@ -678,7 +676,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_treatAsSubPic                           = false;
   c->m_explicitAPSid                           = 0;
 
-  c->m_numLeadFrames                           = -1;
+  c->m_leadFrames                              = 0;
+  c->m_trailFrames                             = 0;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -724,7 +723,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                                             "GOP Size must be between 1 and 64" );
   vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                                        "GOP Size must be a multiple of 2" );
   vvenc_confirmParameter( c, c->m_GOPList[0].m_POC == -1 && c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32, "GOP list auto config only supported GOP sizes: 1, 16, 32" );
-  vvenc_confirmParameter( c, c->m_numLeadFrames < -1 || c->m_numLeadFrames > VVENC_MAX_GOP,                                "LeadFrames exceeds supported range (-1 to 64)" );
+  vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                                       "Lead frames exceeds supported range (0 to 64)" );
+  vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                                  "Trail frames exceeds supported range (0 to 4)" );
 
   vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                 "QP exceeds supported range (0 to 63)" );
 
@@ -809,31 +809,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_maxTT[1] = std::min( c->m_CTUSize, c->m_maxTT[1] );
   c->m_maxTT[2] = std::min( c->m_CTUSize, c->m_maxTT[2] );
 
-  // set MCTF Lead/Trail frames
-  if( c->m_SegmentMode != VVENC_SEG_OFF )
-  {
-    if( c->m_vvencMCTF.MCTF )
-    {
-      switch( c->m_SegmentMode )
-      {
-        case VVENC_SEG_FIRST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = 0;
-          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
-          break;
-        case VVENC_SEG_MID:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
-          break;
-        case VVENC_SEG_LAST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = 0;
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
   // rate control
   if( c->m_RCNumPasses < 0 )
   {
@@ -867,10 +842,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_quantThresholdVal = 8;
   }
-
-  // MCTF
-  c->m_vvencMCTF.MCTFNumLeadFrames  = std::min( c->m_vvencMCTF.MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
-  c->m_vvencMCTF.MCTFNumTrailFrames = std::min( c->m_vvencMCTF.MCTFNumTrailFrames, VVENC_MCTF_RANGE );
 
   /* rules for input, output and internal bitdepths as per help text */
   if (c->m_MSBExtendedBitDepth[0  ] == 0)
@@ -1200,32 +1171,30 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_GOPSize = 1;
   }
 
-  // try to determine number of lead frames
-  if( c->m_SegmentMode == VVENC_SEG_MID || c->m_SegmentMode == VVENC_SEG_LAST )
+  // set number of lead / trail frames in segment mode
+  const int staFrames  = c->m_sliceTypeAdaption ? c->m_GOPSize     : 0;
+  const int mctfFrames = c->m_vvencMCTF.MCTF    ? VVENC_MCTF_RANGE : 0;
+  switch( c->m_SegmentMode )
   {
-    // good news, segment mode is set and we know which segment we are
-    if( c->m_adaptSliceType && c->m_vvencMCTF.MCTF )
-      c->m_numLeadFrames = std::max( c->m_GOPSize, c->m_vvencMCTF.MCTFNumLeadFrames );
-    else if( c->m_adaptSliceType )
-      c->m_numLeadFrames = c->m_GOPSize;
-    else if( c->m_vvencMCTF.MCTF )
-      c->m_numLeadFrames = c->m_vvencMCTF.MCTFNumLeadFrames;
-    else
-      c->m_numLeadFrames = 0;
+    case VVENC_SEG_FIRST:
+      c->m_leadFrames  = 0;
+      c->m_trailFrames = mctfFrames;
+      break;
+    case VVENC_SEG_MID:
+      c->m_leadFrames  = std::max( staFrames, mctfFrames );
+      c->m_trailFrames = mctfFrames;
+      break;
+    case VVENC_SEG_LAST:
+      c->m_leadFrames  = std::max( staFrames, mctfFrames );
+      c->m_trailFrames = 0;
+      break;
+    default:
+      // do nothing
+      break;
   }
-  if( c->m_numLeadFrames < 0 )
-  {
-    // if MCTF is enabled and MCTF lead frames should be used, conclude we are in segment mode and automatically set number of lead frames required for pre-analysis
-    if( c->m_adaptSliceType && c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFNumLeadFrames > 0 )
-      c->m_numLeadFrames = std::max( c->m_GOPSize, c->m_vvencMCTF.MCTFNumLeadFrames );
-    else if( c->m_vvencMCTF.MCTF )
-      c->m_numLeadFrames = c->m_vvencMCTF.MCTFNumLeadFrames;
-    else
-      c->m_numLeadFrames = 0; // even if pre-analysis is used (c->m_adaptSliceType), we don't know if we run in segment mode, therefore parameter has to be set by application
-  }
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTF && c->m_vvencMCTF.MCTFNumLeadFrames > c->m_numLeadFrames,                               "Number of lead frames required for MCTF is greater than number of lead frames set" );
-  vvenc_confirmParameter( c, ! c->m_adaptSliceType && c->m_numLeadFrames != 0 && c->m_numLeadFrames != c->m_vvencMCTF.MCTFNumLeadFrames, "Number of lead frames should be set only, when adapt slice type is enabled" );
-  vvenc_confirmParameter( c, c->m_numLeadFrames > 0 && c->m_temporalSubsampleRatio > 1,                                                  "Use of leading frames not supported in combination with temporal subsampling" );
+
+  vvenc_confirmParameter( c, c->m_leadFrames > 0 && c->m_temporalSubsampleRatio > 1, "Use of leading frames not supported in combination with temporal subsampling" );
+  vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0,    "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
 
   //
   // do some check and set of parameters next
@@ -2253,11 +2222,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
   vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
@@ -3643,14 +3607,11 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
   css << "EDO:" << c->m_EDO << " ";
   css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
-  if( c->m_vvencMCTF.MCTF )
-  {
-    css << "[L:" << c->m_vvencMCTF.MCTFNumLeadFrames << ", T:" << c->m_vvencMCTF.MCTFNumTrailFrames << "] ";
-  }
 
   css << "\nPRE-ANALYSIS CFG: ";
-  css << "STA:" << c->m_adaptSliceType << " ";
-  css << "LeadFrames:" << c->m_numLeadFrames << " ";
+  css << "STA:" << c->m_sliceTypeAdaption << " ";
+  css << "LeadFrames:" << c->m_leadFrames << " ";
+  css << "TrailFrames:" << c->m_trailFrames << " ";
 
   css << "\nFAST TOOL CFG: ";
   css << "ECU:" << c->m_useEarlyCU << " ";

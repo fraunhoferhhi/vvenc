@@ -408,8 +408,9 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  int                 MCTFNumLeadFrames;
-  int                 MCTFNumTrailFrames;
+  // TODO (jb): cleanup
+  int                 mctfUnused1;
+  int                 mctfUnused2;
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -747,13 +748,14 @@ typedef struct vvenc_config
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
 
   // reserved parameters for internal use
-  int                 m_reservedInt[7];
-  int                 m_numLeadFrames;                                                   // number of leading frames to be processed / to be given before starting with POC 0
+  int                 m_reservedInt[6];
+  int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0
+  int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
 
   bool                m_reservedFlag[8];
-  bool                m_adaptSliceType;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
+  bool                m_sliceTypeAdaption;                                               // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
 
   double              m_reservedDouble[10];
