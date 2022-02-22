@@ -367,7 +367,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   {
     PicShared* picShared = xGetFreePicShared();
     picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_sliceTypeAdaption
+    if( m_encCfg.m_sliceTypeAdapt
         || m_encCfg.m_usePerceptQPA
         || m_encCfg.m_RCNumPasses == 2
         || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
@@ -459,7 +459,7 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
     picShared->m_prevShared[ 0 ] = picShared;
   }
 
-  if( m_encCfg.m_sliceTypeAdaption )
+  if( m_encCfg.m_sliceTypeAdapt )
   {
     const int idr2Adj = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
 

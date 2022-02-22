@@ -359,7 +359,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
-  c->m_sliceTypeAdaption                       = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
+  c->m_sliceTypeAdapt                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
@@ -1172,8 +1172,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
 
   // set number of lead / trail frames in segment mode
-  const int staFrames  = c->m_sliceTypeAdaption ? c->m_GOPSize     : 0;
-  const int mctfFrames = c->m_vvencMCTF.MCTF    ? VVENC_MCTF_RANGE : 0;
+  const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
+  const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
   switch( c->m_SegmentMode )
   {
     case VVENC_SEG_FIRST:
@@ -3609,7 +3609,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
 
   css << "\nPRE-ANALYSIS CFG: ";
-  css << "STA:" << c->m_sliceTypeAdaption << " ";
+  css << "STA:" << c->m_sliceTypeAdapt << " ";
   css << "LeadFrames:" << c->m_leadFrames << " ";
   css << "TrailFrames:" << c->m_trailFrames << " ";
 

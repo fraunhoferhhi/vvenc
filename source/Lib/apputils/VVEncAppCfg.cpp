@@ -562,7 +562,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
-    ("STA",                                             c->m_sliceTypeAdaption,                              "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
+    ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
 
     opts.setSubSection("Quantization paramters");
