@@ -221,7 +221,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_MCTF = new MCTF();
     const int minDelay = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 + VVENC_MCTF_RANGE ) : ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 );
-    m_MCTF->initStage( m_encCfg, minDelay, true, true, m_encCfg.m_CTUSize );
+    m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
   }
@@ -230,14 +230,14 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_LookAhead )
   {
     m_preEncoder = new EncGOP( msg );
-    m_preEncoder->initStage( m_firstPassCfg, m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
+    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  m_gopEncoder->initStage( m_encCfg, m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -398,7 +398,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     }
     if( ! picShared->isLeadTrail() )
     {
-    xDetectScc( picShared );
+      xDetectScc( picShared );
     }
     if( picShared->getPOC() >= firstPoc )
     {
@@ -524,7 +524,7 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
       if( m_prevSharedTL0 )
       {
         m_prevSharedTL0->decUsed();
-}
+      }
       picShared->m_prevShared[ PREV_FRAME_TL0 ] = m_prevSharedTL0;
       m_prevSharedTL0 = picShared;
       m_prevSharedTL0->incUsed();

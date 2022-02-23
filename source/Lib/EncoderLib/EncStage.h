@@ -189,13 +189,13 @@ class EncStage
 {
 public:
   EncStage()
-  : m_picCount        ( 0 )
-  , m_nextStage       ( nullptr )
+  : m_nextStage       ( nullptr )
   , m_minQueueSize    ( 0 )
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
   , m_ctuSize         ( MAX_CU_SIZE )
   , m_isNonBlocking   ( false )
+  , m_picCount        ( 0 )
   {
   };
 
@@ -222,14 +222,13 @@ public:
 
   bool isStageDone() const { return m_procList.empty(); }
 
-  void initStage( const VVEncCfg& encCfg, int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool nonBlocking = false )
+  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool nonBlocking = false )
   {
     m_minQueueSize     = minQueueSize;
     m_flushAll         = flushAll;
     m_processLeadTrail = processLeadTrail;
     m_ctuSize          = ctuSize;
     m_isNonBlocking    = nonBlocking;
-    m_pcEncCfg         = &encCfg;
   }
 
   void linkNextStage( EncStage* nextStage )
@@ -315,7 +314,6 @@ public:
         }
       } while( m_flushAll && flush && m_procList.size() );
     }
-
   }
 
   bool         isNonBlocking()     { return m_isNonBlocking; }
@@ -329,9 +327,7 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
-  int64_t               m_picCount;
 private:
-  const VVEncCfg* m_pcEncCfg;
   EncStage* m_nextStage;
   PicList   m_procList;
   PicList   m_freeList;
@@ -340,6 +336,8 @@ private:
   bool      m_processLeadTrail;
   int       m_ctuSize;
   bool      m_isNonBlocking;
+protected:
+  int64_t   m_picCount;
 };
 
 } // namespace vvenc

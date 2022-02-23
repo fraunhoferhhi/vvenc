@@ -324,8 +324,8 @@ RateCtrl::RateCtrl(MsgLog& logger)
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
   m_pqpaStatsWritten = 0;
 #endif
-  m_numPicStatsTotal = 0;
-  m_numPicAddedToList  = 0;
+  m_numPicStatsTotal  = 0;
+  m_numPicAddedToList = 0;
 }
 
 RateCtrl::~RateCtrl()
