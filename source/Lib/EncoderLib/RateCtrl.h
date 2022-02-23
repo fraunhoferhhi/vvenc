@@ -72,7 +72,7 @@ namespace vvenc {
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
                   tempLayer( _tempLayer ),
-                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), copied( false )
+                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {}
     int       poc;
     int       qp;
@@ -86,7 +86,7 @@ namespace vvenc {
     bool      refreshParameters;
     double    frameInGopRatio;
     int       targetBits;
-    bool      copied;
+    bool      addedToList;
   };
 
   class EncRCSeq
@@ -202,8 +202,8 @@ namespace vvenc {
     std::fstream            m_rcStatsFHandle;
     int                     m_pqpaStatsWritten;
 #endif
-    int                     m_numPicStats;
-    int                     m_numPicStatsUsed;
+    int                     m_numPicStatsTotal;
+    int                     m_numPicAddedToList;
   };
 
 }

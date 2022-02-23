@@ -71,7 +71,7 @@ typedef vvencSliceType    SliceType;
 
 namespace vvenc {
 
-#define MOD                                               1
+#define MOD                                               0
 
 #define JVET_M0497_MATRIX_MULT                            1 // 0: Fast method; 1: Matrix multiplication
 

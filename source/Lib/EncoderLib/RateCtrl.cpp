@@ -320,8 +320,8 @@ RateCtrl::RateCtrl(MsgLog& logger)
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
   m_pqpaStatsWritten = 0;
 #endif
-  m_numPicStats = 0;
-  m_numPicStatsUsed  = 0;
+  m_numPicStatsTotal = 0;
+  m_numPicAddedToList  = 0;
 }
 
 RateCtrl::~RateCtrl()
@@ -529,7 +529,7 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "tempLayer" ]
                                                     ) );
   }
-  m_numPicStats++;
+  m_numPicStatsTotal++;
 #else
   m_listRCFirstPassStats.push_back( statsData );
 
@@ -599,10 +599,10 @@ void RateCtrl::processFirstPassData (const bool flush, int poc)
   {
     auto& picStat = *picCacheItr;
     count++;
-    if( !picStat.copied )
+    if( !picStat.addedToList )
     {
-      picStat.copied = true;
-      m_numPicStatsUsed++;
+      picStat.addedToList = true;
+      m_numPicAddedToList++;
       m_listRCFirstPassStats.push_back( picStat );
       if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
       {
@@ -611,15 +611,13 @@ void RateCtrl::processFirstPassData (const bool flush, int poc)
       }
 
       // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
-#if 1
-      if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) && !( flush && m_numPicStatsUsed > m_numPicStats - m_pcEncCfg->m_GOPSize ) )
-#else
-      if( !flush && ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) )
-#endif
+      // in flush-mode, ensure the deterministic definition of last chunk
+      if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) && !( flush && m_numPicAddedToList > m_numPicStatsTotal - m_pcEncCfg->m_GOPSize ) )
         break;
     }
   }
-  processFirstPassData( flush );
+  // enable flush only in last chunk (provides correct calculation of flushPOC)
+  processFirstPassData( flush && ( m_numPicAddedToList == m_numPicStatsTotal ) );
 }
 
 void RateCtrl::processFirstPassData (const bool flush)
@@ -627,35 +625,12 @@ void RateCtrl::processFirstPassData (const bool flush)
   CHECK( m_listRCFirstPassStats.size() == 0, "No data available from the first pass!" );
 
   m_listRCFirstPassStats.sort( []( const TRCPassStats& a, const TRCPassStats& b ) { return a.poc < b.poc; } );
-#if 1
-  if ( flush && flushPOC == -1 )
-  {
-    if( m_pcEncCfg->m_LookAhead )
-    {
-      const int flushPicNum = m_numPicStats - std::max( 32, m_pcEncCfg->m_GOPSize );
-      if( m_numPicStatsUsed >= flushPicNum )
-      {
-        int flushPocDiff = m_numPicStatsUsed - flushPicNum;
-        auto itr = m_listRCFirstPassStats.end();
-        for( ;itr != m_listRCFirstPassStats.begin() && flushPocDiff >= 0; --itr, --flushPocDiff ) {}
-        flushPOC = (*itr).poc;
-        printf( "FlushPOC=%d\n", flushPOC );
-      }
-    }
-    else
-    {
-      // store start POC of last chunk of pictures
-      flushPOC = m_listRCFirstPassStats.back().poc - std::max( 32, m_pcEncCfg->m_GOPSize );
-    }
-  }
-#else
+
   if ( flush || !m_pcEncCfg->m_LookAhead )
   {
     // store start POC of last chunk of pictures
     flushPOC = m_listRCFirstPassStats.back().poc - std::max( 32, m_pcEncCfg->m_GOPSize );
-    printf( "FlushPOC=%d\n", flushPOC );
   }
-#endif
 
   // run a simple scene change detection
   detectNewScene();
