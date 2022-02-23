@@ -89,6 +89,7 @@ private:
   std::vector<EncStage*> m_encStages;
   std::list<PicShared*>  m_picSharedList;
   std::deque<PicShared*> m_prevSharedQueue;
+  PicShared*             m_prevSharedTL0;
 
   NoMallocThreadPool*    m_threadPool;
 
