@@ -319,17 +319,17 @@ int main( int argc, char* argv[] )
       return -1;
     }
 
-    const int iRemSkipFrames = vvencappCfg.m_FrameSkip - vvenccfg.m_numLeadFrames;
+    const int iRemSkipFrames = vvencappCfg.m_FrameSkip - vvenccfg.m_leadFrames;
     if( iRemSkipFrames < 0 )
     {
-      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: skip frames (%d) less than number of lead frames required (%d)\n", vvencappCfg.m_FrameSkip, vvenccfg.m_numLeadFrames );
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: skip frames (%d) less than number of lead frames required (%d)\n", vvencappCfg.m_FrameSkip, vvenccfg.m_leadFrames );
       vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
       vvenc_accessUnit_free_payload( &AU );
       vvenc_encoder_close( enc );
       return -1;
     }
 
-    const int64_t iMaxFrames  = vvenccfg.m_framesToBeEncoded + vvenccfg.m_numLeadFrames + vvenccfg.m_vvencMCTF.MCTFNumTrailFrames;
+    const int64_t iMaxFrames  = vvenccfg.m_framesToBeEncoded + vvenccfg.m_leadFrames + vvenccfg.m_trailFrames;
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     bool          bEncodeDone = false;

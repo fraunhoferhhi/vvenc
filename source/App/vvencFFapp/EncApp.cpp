@@ -276,10 +276,10 @@ int EncApp::encode()
       return -1;
     }
 
-    const int remSkipFrames = appCfg.m_FrameSkip - vvencCfg.m_numLeadFrames;
+    const int remSkipFrames = appCfg.m_FrameSkip - vvencCfg.m_leadFrames;
     if( remSkipFrames < 0 )
     {
-      msgApp( VVENC_ERROR, "skip frames (%d) less than number of lead frames required (%d)\n", appCfg.m_FrameSkip, vvencCfg.m_numLeadFrames );
+      msgApp( VVENC_ERROR, "skip frames (%d) less than number of lead frames required (%d)\n", appCfg.m_FrameSkip, vvencCfg.m_leadFrames );
       vvenc_encoder_close( m_encCtx );
       vvenc_YUVBuffer_free_buffer( &yuvInBuf );
       vvenc_accessUnit_free_payload( &au );
@@ -311,7 +311,7 @@ int EncApp::encode()
     {
       // check for more input pictures
       inputDone = ( vvencCfg.m_framesToBeEncoded > 0
-          && framesRcvd >= ( vvencCfg.m_framesToBeEncoded + vvencCfg.m_numLeadFrames + vvencCfg.m_vvencMCTF.MCTFNumTrailFrames ) )
+          && framesRcvd >= ( vvencCfg.m_framesToBeEncoded + vvencCfg.m_leadFrames + vvencCfg.m_trailFrames ) )
         || m_yuvInputFile.isEof();
 
       // read input YUV
@@ -369,7 +369,7 @@ int EncApp::encode()
     m_yuvInputFile.close();
   }
 
-  printRateSummary( framesRcvd - ( vvencCfg.m_numLeadFrames + vvencCfg.m_vvencMCTF.MCTFNumTrailFrames ) );
+  printRateSummary( framesRcvd - ( vvencCfg.m_leadFrames + vvencCfg.m_trailFrames ) );
 
   // cleanup encoder lib
   vvenc_encoder_close( m_encCtx );

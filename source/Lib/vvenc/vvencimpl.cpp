@@ -507,12 +507,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.m_numLeadFrames;
+  return m_cVVEncCfg.m_leadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.m_vvencMCTF.MCTFNumTrailFrames;
+  return m_cVVEncCfg.m_trailFrames;
 }
 
 int VVEncImpl::printSummary() const

@@ -691,7 +691,7 @@ bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* 
     curPic->picVisActY   = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
   }
 
-  if (encCfg->m_adaptSliceType && (curPoc >= 0) && (gopSize > 8) && ((curPoc + idr2Adj) % gopSize == 0))
+  if (encCfg->m_sliceTypeAdapt && (curPoc >= 0) && (gopSize > 8) && ((curPoc + idr2Adj) % gopSize == 0))
   {
     const CPelBuf prvTL0 = curPic->getOrigBufPrev (COMP_Y, PREV_FRAME_TL0);
     const double visActY = (prvTL0.buf == nullptr ? 0.0 : getPicVisualActivity (slice, encCfg, &prvTL0));
