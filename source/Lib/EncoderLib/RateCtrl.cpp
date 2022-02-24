@@ -324,6 +324,8 @@ RateCtrl::RateCtrl(MsgLog& logger)
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
   m_pqpaStatsWritten = 0;
 #endif
+  m_numPicStatsTotal  = 0;
+  m_numPicAddedToList = 0;
 }
 
 RateCtrl::~RateCtrl()
@@ -518,7 +520,8 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     std::stringstream iss;
     iss << data;
     data = nlohmann::json::parse( iss.str() );
-    m_listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
+    std::list<TRCPassStats>& listRCFirstPassStats = m_pcEncCfg->m_LookAhead ? m_firstPassCache: m_listRCFirstPassStats;
+    listRCFirstPassStats.push_back( TRCPassStats( data[ "poc" ],
                                                     data[ "qp" ],
                                                     data[ "lambda" ],
                                                     data[ "visActY" ],
@@ -527,11 +530,8 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "isIntra" ],
                                                     data[ "tempLayer" ]
                                                     ) );
-    if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
-    {
-      m_listRCFirstPassStats.pop_front();
-    }
   }
+  m_numPicStatsTotal++;
 #else
   m_listRCFirstPassStats.push_back( statsData );
 
@@ -585,6 +585,42 @@ void RateCtrl::readStatsFile()
   }
 }
 #endif
+
+void RateCtrl::processFirstPassData (const bool flush, int poc)
+{
+  CHECK( m_firstPassCache.size() == 0, "No data available from the first pass!" );
+  CHECKD( !m_pcEncCfg->m_LookAhead, "This function should be only used in look-ahead mode" );
+
+  // fetch RC data for the next look-ahead chunk
+  // the next look-ahead chunk starts with a given POC, so find a pic for a given POC in cache
+  // NOTE!!!: pictures in cache are in coding order
+
+  auto picCacheItr = find_if( m_firstPassCache.begin(), m_firstPassCache.end(), [poc]( auto& picStat ) { return picStat.poc == poc; } );
+
+  for( int count = 0; picCacheItr != m_firstPassCache.end(); ++picCacheItr )
+  {
+    auto& picStat = *picCacheItr;
+    count++;
+    if( !picStat.addedToList )
+    {
+      picStat.addedToList = true;
+      m_numPicAddedToList++;
+      m_listRCFirstPassStats.push_back( picStat );
+      if( m_pcEncCfg->m_LookAhead && (int) m_listRCFirstPassStats.size() > m_pcEncCfg->m_IntraPeriod + m_pcEncCfg->m_GOPSize + 1 )
+      {
+        m_listRCFirstPassStats.pop_front();
+        m_firstPassCache.pop_front();
+      }
+
+      // the chunk is considered either to contain a particular number of pictures or up to next TID0 picture (including it)
+      // in flush-mode, ensure the deterministic definition of last chunk
+      if( ( count >= m_pcEncCfg->m_GOPSize + 1 || ( picStat.tempLayer == 0 && m_listRCFirstPassStats.size() > 2 ) ) && !( flush && m_numPicAddedToList > m_numPicStatsTotal - m_pcEncCfg->m_GOPSize ) )
+        break;
+    }
+  }
+  // enable flush only in last chunk (provides correct calculation of flushPOC)
+  processFirstPassData( flush && ( m_numPicAddedToList == m_numPicStatsTotal ) );
+}
 
 void RateCtrl::processFirstPassData (const bool flush)
 {

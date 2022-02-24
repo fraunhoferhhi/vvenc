@@ -188,6 +188,7 @@ MCTF::MCTF()
   : m_encCfg    ( nullptr )
   , m_threadPool( nullptr )
   , m_filterPoc ( 0 )
+  , m_lastPicIn ( nullptr )
 {
   m_motionErrorLumaIntX  = motionErrorLumaInt;
   m_motionErrorLumaInt8  = motionErrorLumaInt;
@@ -229,6 +230,13 @@ void MCTF::initPicture( Picture* pic )
 
 void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList )
 {
+  // ensure this is only processed if necessary 
+  if( !flush && (picList.empty() || ( m_lastPicIn == picList.back())))
+  {
+    return;
+  }
+  m_lastPicIn = picList.back();
+
   // filter one picture (either all or up to frames to be encoded)
   if( picList.size()
       && m_filterPoc <= picList.back()->poc

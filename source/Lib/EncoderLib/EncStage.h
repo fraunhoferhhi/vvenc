@@ -194,6 +194,8 @@ public:
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
   , m_ctuSize         ( MAX_CU_SIZE )
+  , m_isNonBlocking   ( false )
+  , m_picCount        ( 0 )
   {
   };
 
@@ -220,12 +222,13 @@ public:
 
   bool isStageDone() const { return m_procList.empty(); }
 
-  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize )
+  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool nonBlocking = false )
   {
     m_minQueueSize     = minQueueSize;
     m_flushAll         = flushAll;
     m_processLeadTrail = processLeadTrail;
     m_ctuSize          = ctuSize;
+    m_isNonBlocking    = nonBlocking;
   }
 
   void linkNextStage( EncStage* nextStage )
@@ -265,6 +268,9 @@ public:
     pic->reset();
     picShared->shareData( pic );
 
+    // call first picture init
+    initPicture( pic );
+
     // sort picture into processing queue
     PicList::iterator picItr;
     for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
@@ -273,9 +279,7 @@ public:
         break;
     }
     m_procList.insert( picItr, pic );
-
-    // call first picture init
-    initPicture( pic );
+    m_picCount++;
   }
 
   void runStage( bool flush, AccessUnitList& auList )
@@ -315,10 +319,11 @@ public:
     }
   }
 
+  bool         isNonBlocking()     { return m_isNonBlocking; }
+  virtual void waitForFreeEncoders()  {}
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
-
 private:
   EncStage* m_nextStage;
   PicList   m_procList;
@@ -327,6 +332,9 @@ private:
   bool      m_flushAll;
   bool      m_processLeadTrail;
   int       m_ctuSize;
+  bool      m_isNonBlocking;
+protected:
+  int64_t   m_picCount;
 };
 
 } // namespace vvenc
