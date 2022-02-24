@@ -284,6 +284,9 @@ public:
 
   void runStage( bool flush, AccessUnitList& auList )
   {
+    // ready to go?
+    if( ( (int)m_procList.size() >= m_minQueueSize )
+        || ( m_procList.size() && flush ) )
     {
       // process always one picture or all if encoder should be flushed
       do
@@ -317,12 +320,6 @@ public:
   }
 
   bool         isNonBlocking()     { return m_isNonBlocking; }
-  virtual int  picOutputDelay()    { return m_minQueueSize; }
-  virtual bool canRunStage( bool flush, bool picSharedAvail ) { return canRunStage( flush ); }
-  virtual bool canRunStage( bool flush )
-  {
-    return ( ( (int)m_procList.size() >= m_minQueueSize ) || ( m_procList.size() && flush ) );
-  }
   virtual void checkState()  {}
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;

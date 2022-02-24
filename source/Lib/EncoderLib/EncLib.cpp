@@ -215,7 +215,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_threadPool = new NoMallocThreadPool( m_encCfg.m_numThreads, "EncSliceThreadPool", &m_encCfg );
   }
-
+  m_maxNumPicShared = 0;
   // MCTF
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
@@ -224,6 +224,7 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
+    m_maxNumPicShared += minDelay;
   }
 
   // pre analysis encoder
@@ -233,12 +234,15 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
+    m_maxNumPicShared += m_firstPassCfg.m_GOPSize + 1 + Log2(m_firstPassCfg.m_GOPSize) + 2;
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
   m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
+  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + Log2(m_encCfg.m_GOPSize) + 2;
+
   if( m_rateCtrl->rcIsFinalPass )
   {
     m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufFunc );
@@ -249,14 +253,6 @@ void EncLib::initPass( int pass, const char* statsFName )
   for( int i = 0; i < (int)m_encStages.size() - 1; i++ )
   {
     m_encStages[ i ]->linkNextStage( m_encStages[ i + 1 ] );
-  }
-  if( m_encCfg.m_stageParallelProc )
-  {
-    m_maxNumPicShared = 0;
-    for( auto encStage : m_encStages )
-    {
-      m_maxNumPicShared += encStage->picOutputDelay();
-    }
   }
 
   // rate control
@@ -414,11 +410,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
   for( auto encStage : m_encStages )
   {
-    // Check if cur. stage can be invoked
-    if( encStage->canRunStage( flush, picShared != nullptr ) )
-    {
     encStage->runStage( flush, au );
-    }
     isQueueEmpty &= encStage->isStageDone();
   }
 
