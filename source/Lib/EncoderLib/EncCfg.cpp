@@ -53,6 +53,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 namespace vvenc {
 
 VVEncCfg::VVEncCfg()
+  : m_stageParallelProc( false )
 {
 }
 
@@ -65,6 +66,7 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
 
 void VVEncCfg::xInitCfgMembers()
 {
+  m_stageParallelProc = m_numThreads > 0 && m_LookAhead;
 }
 
 }

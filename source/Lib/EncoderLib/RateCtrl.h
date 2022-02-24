@@ -72,7 +72,7 @@ namespace vvenc {
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
                   tempLayer( _tempLayer ),
-                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 )
+                  isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {}
     int       poc;
     int       qp;
@@ -86,6 +86,7 @@ namespace vvenc {
     bool      refreshParameters;
     double    frameInGopRatio;
     int       targetBits;
+    bool      addedToList;
   };
 
   class EncRCSeq
@@ -162,6 +163,7 @@ namespace vvenc {
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer);
     void processFirstPassData (const bool flush);
+    void processFirstPassData (const bool flush, int poc);
     void processGops();
     double getAverageBitsFromFirstPass();
     void detectSceneCuts();
@@ -193,11 +195,14 @@ namespace vvenc {
 
   private:
     std::list<TRCPassStats> m_listRCFirstPassStats;
+    std::list<TRCPassStats> m_firstPassCache;
     std::vector<uint8_t>    m_listRCIntraPQPAStats;
 #ifdef VVENC_ENABLE_THIRDPARTY_JSON
     std::fstream            m_rcStatsFHandle;
     int                     m_pqpaStatsWritten;
 #endif
+    int                     m_numPicStatsTotal;
+    int                     m_numPicAddedToList;
   };
 
 }

@@ -60,6 +60,8 @@ struct VVEncCfg : public vvenc_config
 
   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
+  bool m_stageParallelProc;
+
 private:
   void xInitCfgMembers();
 };
