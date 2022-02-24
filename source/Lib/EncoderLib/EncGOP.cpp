@@ -438,7 +438,7 @@ void EncGOP::initPicture( Picture* pic )
   pic->encTime.stopTimer();
 }
 
-void EncGOP::checkState()
+void EncGOP::waitForFreeEncoders()
 {
   {
     std::unique_lock<std::mutex> lock( m_gopEncMutex );

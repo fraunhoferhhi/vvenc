@@ -320,7 +320,7 @@ public:
   }
 
   bool         isNonBlocking()     { return m_isNonBlocking; }
-  virtual void checkState()  {}
+  virtual void waitForFreeEncoders()  {}
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;

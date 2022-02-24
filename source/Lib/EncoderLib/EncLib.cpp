@@ -426,7 +426,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     for( auto encStage : m_encStages )
     {
       if( encStage->isNonBlocking() )
-        encStage->checkState();
+        encStage->waitForFreeEncoders();
     }
   }
 
