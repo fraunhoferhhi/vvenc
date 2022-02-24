@@ -319,18 +319,27 @@ int main( int argc, char* argv[] )
       return -1;
     }
 
-    const int iFrameSkip  = std::max( vvencappCfg.m_FrameSkip - vvenc_get_num_lead_frames(enc), 0 );
-    const int64_t iMaxFrames  = vvenccfg.m_framesToBeEncoded + vvenc_get_num_lead_frames(enc) + vvenc_get_num_trail_frames(enc);
+    const int iRemSkipFrames = vvencappCfg.m_FrameSkip - vvenccfg.m_leadFrames;
+    if( iRemSkipFrames < 0 )
+    {
+      msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: skip frames (%d) less than number of lead frames required (%d)\n", vvencappCfg.m_FrameSkip, vvenccfg.m_leadFrames );
+      vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+      vvenc_accessUnit_free_payload( &AU );
+      vvenc_encoder_close( enc );
+      return -1;
+    }
+
+    const int64_t iMaxFrames  = vvenccfg.m_framesToBeEncoded + vvenccfg.m_leadFrames + vvenccfg.m_trailFrames;
     int64_t       iSeqNumber  = 0;
     bool          bEof        = false;
     bool          bEncodeDone = false;
 
     uiFrames    = 0;
 
-    if( iFrameSkip )
+    if( iRemSkipFrames > 0 )
     {
-      cYuvFileInput.skipYuvFrames(iFrameSkip, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight);
-      iSeqNumber=iFrameSkip;
+      cYuvFileInput.skipYuvFrames(iRemSkipFrames, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight);
+      iSeqNumber=iRemSkipFrames;
     }
 
     while( !bEof || !bEncodeDone )
@@ -383,7 +392,7 @@ int main( int argc, char* argv[] )
         uiFrames++;
       }
 
-      if( iMaxFrames > 0 && iSeqNumber >= ( iFrameSkip + iMaxFrames ) )
+      if( iMaxFrames > 0 && iSeqNumber >= ( iRemSkipFrames + iMaxFrames ) )
       {
         bEof = true;
       }

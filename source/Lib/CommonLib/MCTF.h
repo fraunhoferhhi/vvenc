@@ -132,7 +132,6 @@ public:
 protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
-
 private:
   void filter( const std::deque<Picture*>& picFifo, int filterIdx );
 
@@ -163,6 +162,7 @@ private:
   int                   m_filterPoc;
   Area                  m_area;
   int                   m_MCTFSpeedVal;
+  Picture*              m_lastPicIn;
 
   void subsampleLuma(const PelStorage &input, PelStorage &output, const int factor = 2) const;
 

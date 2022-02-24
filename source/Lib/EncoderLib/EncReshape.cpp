@@ -337,14 +337,21 @@ void EncReshape::calcSeqStats(Picture& pic, SeqInfo &stats)
         sum = leftSum;
         sumSq = leftSumSq;
       }
-
+      
       double average = double(sum) / numPixInPart;
       double variance = double(sumSq) / numPixInPart - average * average;
       int binLen = m_reshapeLUTSize / m_binNum;
       uint32_t binIdx = (uint32_t)(pxlY / binLen);
-      average = average / (double)(1 << (m_lumaBD - 10));
-      variance = variance / (double)(1 << (2 * (m_lumaBD - 10)));
-      binIdx = (uint32_t)((pxlY >> (m_lumaBD - 10)) / binLen);
+      if (m_lumaBD > 10)
+      {
+        average = average / (double)(1 << (m_lumaBD - 10));
+        variance = variance / (double)(1 << (2 * m_lumaBD - 20));
+      }
+      else if (m_lumaBD < 10)
+      {
+        average = average * (double)(1 << (10 - m_lumaBD));
+        variance = variance * (double)(1 << (20 - 2 * m_lumaBD));
+      }
       double varLog10 = log10(variance + 1.0);
       stats.binVar[binIdx] += varLog10;
       binCnt[binIdx]++;
@@ -1203,7 +1210,7 @@ void EncReshape::adjustLmcsPivot()
   int bdShift = m_lumaBD - 10;
   int totCW = bdShift != 0 ? (bdShift > 0 ? m_reshapeLUTSize / (1 << bdShift) : m_reshapeLUTSize * (1 << (-bdShift))) : m_reshapeLUTSize;
   int orgCW = totCW / PIC_CODE_CW_BINS;
-  int log2SegSize = Log2(LMCS_SEG_NUM);
+  int log2SegSize = m_lumaBD - floorLog2(LMCS_SEG_NUM);
 
   m_reshapePivot[0] = 0;
   for (int i = 0; i < PIC_CODE_CW_BINS; i++)

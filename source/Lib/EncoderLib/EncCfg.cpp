@@ -43,37 +43,31 @@ THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
-/** \file     BitAllocation.h
-\brief    Bit allocation class for QP adaptation and, possibly, rate control (header)
+/** \file     EncCfg.cpp
+    \brief    encoder internal configuration class
 */
 
-#pragma once
 
-#include "CommonLib/Slice.h"
-#include "CommonLib/Unit.h"
-
-//! \ingroup EncoderLib
-//! \{
-
-//struct VVEncCfg;
+#include "EncCfg.h"
 
 namespace vvenc {
 
-  // BitAllocation functions
-  namespace BitAllocation
-  {
-    int applyQPAdaptationChroma (const Slice* slice, const VVEncCfg* encCfg, const int sliceQP,
-                                 std::vector<int>& ctuPumpRedQP, int optChromaQPOffset[2], uint16_t* picVisActY = nullptr);
-    int applyQPAdaptationLuma   (const Slice* slice, const VVEncCfg* encCfg, const int savedQP, const double lambda,
-                                 std::vector<int>& ctuPumpRedQP, std::vector<uint8_t>* ctuRCQPMemory,
-                                 const uint32_t ctuStartAddr, const uint32_t ctuBoundingAddr);
-    int applyQPAdaptationSubCtu (const Slice* slice, const VVEncCfg* encCfg, const Area& lumaArea);
-    int getCtuPumpingReducingQP (const Slice* slice, const CPelBuf& origY, const Distortion uiSadBestForQPA,
-                                 std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
-    double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev = nullptr);
-    bool isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass);
-  }
+VVEncCfg::VVEncCfg()
+  : m_stageParallelProc( false )
+{
+}
 
-} // namespace vvenc
+VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
+{
+  *((vvenc_config*)this) = extern_cfg;
+  xInitCfgMembers();
+  return *this;
+}
 
-//! \}
+void VVEncCfg::xInitCfgMembers()
+{
+  m_stageParallelProc = m_numThreads > 0 && m_LookAhead;
+}
+
+}
+

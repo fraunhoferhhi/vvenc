@@ -166,10 +166,9 @@ public:
 
   ~AccessUnitList()
   {
-    clearAu();
   }
 
-  void clearAu()
+  void clearAu( bool doNotFree = false )
   {
     cts          = 0;
     dts          = 0;
@@ -183,9 +182,12 @@ public:
     refPic        = false;
     InfoString.clear();
 
-    for (AccessUnitList::iterator it = this->begin(); it != this->end(); it++)
+    if( !doNotFree )
     {
-      delete *it;
+      for( AccessUnitList::iterator it = this->begin(); it != this->end(); it++ )
+      {
+        delete* it;
+      }
     }
     std::list<NALUnitEBSP*>::clear();
   }
