@@ -89,18 +89,23 @@ private:
   std::vector<EncStage*> m_encStages;
   std::list<PicShared*>  m_picSharedList;
   std::deque<PicShared*> m_prevSharedQueue;
+  PicShared*             m_prevSharedTL0;
 
   NoMallocThreadPool*    m_threadPool;
 
   int                    m_picsRcvd;
   int                    m_passInitialized;
+  int                        m_maxNumPicShared;
+  std::mutex                 m_stagesMutex;
+  std::condition_variable    m_stagesCond;
+  std::deque<AccessUnitList> m_AuList;
 
 public:
   EncLib( MsgLog& logger );
   virtual ~EncLib();
 
   void     setRecYUVBufferCallback( void* ctx, vvencRecYUVBufferCallback func );
-  void     initEncoderLib      ( const VVEncCfg& encCfg );
+  void     initEncoderLib      ( const vvenc_config& encCfg );
   void     initPass            ( int pass, const char* statsFName );
   void     encodePicture       ( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUnitList& au, bool& isQueueEmpty );
   void     uninitEncoderLib    ();
@@ -115,7 +120,7 @@ private:
   void     xAssignPrevQpaBufs( PicShared* picShared );
 
   void     xDetectScc          ( PicShared* picShared );
-};
+ };
 
 } // namespace vvenc
 

@@ -313,8 +313,6 @@ VVENC_DECL void vvenc_vvencMCTF_default(vvencMCTF *vvencMCTF )
   vvencMCTF->MCTF = 0;
   vvencMCTF->MCTFSpeed = 0;
   vvencMCTF->MCTFFutureReference = true;
-  vvencMCTF->MCTFNumLeadFrames = 0;
-  vvencMCTF->MCTFNumTrailFrames = 0;
   vvencMCTF->numFrames = 0;
   vvencMCTF->numStrength = 0;
   memset( vvencMCTF->MCTFFrames, 0, sizeof( vvencMCTF->MCTFFrames ) );
@@ -331,7 +329,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_msgFnc                                  = nullptr;
   c->m_msgCtx                                  = nullptr;
 
-  //core params
+  // core params
   c->m_SourceWidth                             = 0;             ///< source width in pixel
   c->m_SourceHeight                            = 0;             ///< source height in pixel (when interlaced = field height)
   c->m_FrameRate                               = 0;             ///< source frame-rates (Hz) Numerator
@@ -350,7 +348,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_verbosity                               = VVENC_VERBOSE; ///< encoder verbosity
 
-  //basic params
+  // basic params
   c->m_profile                                 = vvencProfile::VVENC_PROFILE_AUTO;
   c->m_levelTier                               = vvencTier::VVENC_TIER_MAIN ;
   c->m_level                                   = vvencLevel::VVENC_LEVEL_AUTO;
@@ -360,7 +358,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
   c->m_GOPSize                                 = 32;            ///< GOP size of hierarchical structure
 
-  c->m_usePerceptQPA                           = false;         ///< Mode of perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA).
+  c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
+  c->m_sliceTypeAdapt                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
 
   c->m_RCNumPasses                             = -1;
   c->m_RCPass                                  = -1;
@@ -671,11 +670,14 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_traceRule, '\0', sizeof(c->m_traceRule) );
   memset( c->m_traceFile, '\0', sizeof(c->m_traceFile) );
 
-  c->m_numIntraModesFullRD = -1;
-  c->m_reduceIntraChromaModesFullRD = false;
+  c->m_numIntraModesFullRD                     = -1;
+  c->m_reduceIntraChromaModesFullRD            = false;
 
   c->m_treatAsSubPic                           = false;
   c->m_explicitAPSid                           = 0;
+
+  c->m_leadFrames                              = 0;
+  c->m_trailFrames                             = 0;
 
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
@@ -718,9 +720,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IntraPeriod < -1,                                            "IDR period (in frames) must be >= -1");
   vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
 
-  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > 64,                                                        "GOP Size must be between 1 and 64" );
+  vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                                             "GOP Size must be between 1 and 64" );
   vvenc_confirmParameter( c, c->m_GOPSize > 1 &&  c->m_GOPSize % 2,                                                        "GOP Size must be a multiple of 2" );
   vvenc_confirmParameter( c, c->m_GOPList[0].m_POC == -1 && c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32, "GOP list auto config only supported GOP sizes: 1, 16, 32" );
+  vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                                       "Lead frames exceeds supported range (0 to 64)" );
+  vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                                  "Trail frames exceeds supported range (0 to 4)" );
 
   vvenc_confirmParameter( c, c->m_QP < 0 || c->m_QP > vvenc::MAX_QP,                                                 "QP exceeds supported range (0 to 63)" );
 
@@ -738,6 +742,11 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   vvenc_confirmParameter( c,  (c->m_numIntraModesFullRD < -1 || c->m_numIntraModesFullRD == 0 || c->m_numIntraModesFullRD > 3), "Error: NumIntraModesFullRD must be -1 or between 1 and 3");
 
+#if ! ENABLE_TRACING
+  vvenc_confirmParameter( c, c->m_traceFile[0] != '\0', "trace file option '--tracefile' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+  vvenc_confirmParameter( c, c->m_traceRule[0] != '\0', "trace rule option '--tracerule' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+  vvenc_confirmParameter( c, c->m_listTracingChannels, "list trace channels option '--tracechannellist' set, but encoder lib not compiled with tracing support, use make ... enable-tracing=1 or set ENABLE_TRACING" );
+#endif
 
   if ( c->m_confirmFailed )
   {
@@ -800,31 +809,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   c->m_maxTT[1] = std::min( c->m_CTUSize, c->m_maxTT[1] );
   c->m_maxTT[2] = std::min( c->m_CTUSize, c->m_maxTT[2] );
 
-  // set MCTF Lead/Trail frames
-  if( c->m_SegmentMode != VVENC_SEG_OFF )
-  {
-    if( c->m_vvencMCTF.MCTF )
-    {
-      switch( c->m_SegmentMode )
-      {
-        case VVENC_SEG_FIRST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = 0;
-          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
-          break;
-        case VVENC_SEG_MID:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = VVENC_MCTF_RANGE;
-          break;
-        case VVENC_SEG_LAST:
-          c->m_vvencMCTF.MCTFNumLeadFrames  = VVENC_MCTF_RANGE;
-          c->m_vvencMCTF.MCTFNumTrailFrames = 0;
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
   // rate control
   if( c->m_RCNumPasses < 0 )
   {
@@ -858,10 +842,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   {
     c->m_quantThresholdVal = 8;
   }
-
-  // MCTF
-  c->m_vvencMCTF.MCTFNumLeadFrames  = std::min( c->m_vvencMCTF.MCTFNumLeadFrames,  VVENC_MCTF_RANGE );
-  c->m_vvencMCTF.MCTFNumTrailFrames = std::min( c->m_vvencMCTF.MCTFNumTrailFrames, VVENC_MCTF_RANGE );
 
   /* rules for input, output and internal bitdepths as per help text */
   if (c->m_MSBExtendedBitDepth[0  ] == 0)
@@ -1190,6 +1170,31 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     msg.log( VVENC_WARNING, "\nIntraPeriod is 1, thus GOPSize is set to 1 too\n\n" );
     c->m_GOPSize = 1;
   }
+
+  // set number of lead / trail frames in segment mode
+  const int staFrames  = c->m_sliceTypeAdapt ? c->m_GOPSize     : 0;
+  const int mctfFrames = c->m_vvencMCTF.MCTF ? VVENC_MCTF_RANGE : 0;
+  switch( c->m_SegmentMode )
+  {
+    case VVENC_SEG_FIRST:
+      c->m_leadFrames  = 0;
+      c->m_trailFrames = mctfFrames;
+      break;
+    case VVENC_SEG_MID:
+      c->m_leadFrames  = std::max( staFrames, mctfFrames );
+      c->m_trailFrames = mctfFrames;
+      break;
+    case VVENC_SEG_LAST:
+      c->m_leadFrames  = std::max( staFrames, mctfFrames );
+      c->m_trailFrames = 0;
+      break;
+    default:
+      // do nothing
+      break;
+  }
+
+  vvenc_confirmParameter( c, c->m_leadFrames > 0 && c->m_temporalSubsampleRatio > 1, "Use of leading frames not supported in combination with temporal subsampling" );
+  vvenc_confirmParameter( c, c->m_trailFrames > 0 && c->m_framesToBeEncoded <= 0,    "If number of trailing frames is given, the total number of frames to be encoded has to be set" );
 
   //
   // do some check and set of parameters next
@@ -2197,7 +2202,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[0]   > (c->m_internalBitDepth[0  ]<10?0:(c->m_internalBitDepth[0  ]-10)), "SaoLumaOffsetBitShift must be in the range of 0 to InternalBitDepth-10, inclusive");
   vvenc_confirmParameter( c, c->m_log2SaoOffsetScale[1] > (c->m_internalBitDepth[1]<10?0:(c->m_internalBitDepth[1]-10)), "SaoChromaOffsetBitShift must be in the range of 0 to InternalBitDepthC-10, inclusive");
 
-  vvenc_confirmParameter( c, c->m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be no less than 1" );
+  vvenc_confirmParameter( c, c->m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be greater than or equal to 1" );
   vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
   vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
@@ -2217,11 +2222,6 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
   vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  < 0,                             "MCTF number of lead frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames < 0,                             "MCTF number of trailing frames must be greater than or equal to 0" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumLeadFrames  > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF lead frames is given" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && ! c->m_vvencMCTF.MCTF,                 "MCTF disabled but number of MCTF trailing frames is given" );
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFNumTrailFrames > 0 && c->m_framesToBeEncoded <= 0, "If number of MCTF trailing frames is given, the total number of frames to be encoded has to be set" );
   vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
@@ -3000,8 +3000,6 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   switch( preset )
   {
     case vvencPresetMode::VVENC_FIRSTPASS:
-      c->m_DMVR                            = 0;
-
       // motion estimation
       c->m_SearchRange                     = 128;
       c->m_bipredSearchRange               = 1;
@@ -3023,8 +3021,8 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       // speedups
       c->m_qtbttSpeedUp                    = 7;
       c->m_fastTTSplit                     = 0;
-      c->m_contentBasedFastQtbt            = 0;
-      c->m_usePbIntraFast                  = 1;
+      c->m_contentBasedFastQtbt            = 1;
+      c->m_usePbIntraFast                  = 2;
       c->m_useFastMrg                      = 2;
       c->m_fastLocalDualTreeMode           = 1;
       c->m_fastSubPel                      = 2;
@@ -3609,10 +3607,11 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "RestrictMESampling:" << c->m_bRestrictMESampling << " ";
   css << "EDO:" << c->m_EDO << " ";
   css << "MCTF:" << c->m_vvencMCTF.MCTF << " ";
-  if( c->m_vvencMCTF.MCTF )
-  {
-    css << "[L:" << c->m_vvencMCTF.MCTFNumLeadFrames << ", T:" << c->m_vvencMCTF.MCTFNumTrailFrames << "] ";
-  }
+
+  css << "\nPRE-ANALYSIS CFG: ";
+  css << "STA:" << c->m_sliceTypeAdapt << " ";
+  css << "LeadFrames:" << c->m_leadFrames << " ";
+  css << "TrailFrames:" << c->m_trailFrames << " ";
 
   css << "\nFAST TOOL CFG: ";
   css << "ECU:" << c->m_useEarlyCU << " ";

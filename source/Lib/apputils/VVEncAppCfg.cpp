@@ -487,6 +487,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FrameScale",                                      c->m_FrameScale,                                     "Temporal scale (framerate denominator) e.g. 1, 1001")
     ("fps",                                             toFps,                                               "Framerate as int or fraction (num/denom) ")
     ("TicksPerSecond",                                  c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
+    ("LeadFrames",                                      c->m_leadFrames,                                     "Number of leading frames to be read before starting the encoding, use when splitting the video into overlapping segments")
+    ("TrailFrames",                                     c->m_trailFrames,                                    "Number of trailing frames to be read after frames to be encoded, use when splitting the video into overlapping segments")
     ;
   }
 
@@ -556,10 +558,11 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("NumPasses",                                       c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Passes",                                          c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
-    ("LookAhead",                                       c->m_LookAhead,                                      "enable pre-analysis (-1,0,1)" )
+    ("LookAhead",                                       c->m_LookAhead,                                      "Enable pre-analysis pass with picture look-ahead (-1,0,1)")
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
     ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
+    ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
 
     opts.setSubSection("Quantization paramters");
@@ -729,7 +732,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
     ("WaveFrontSynchro",                                c->m_entropyCodingSyncEnabled,                       "Enable entropy coding sync")
     ("EntryPointsPresent",                              c->m_entryPointsPresent,                             "Enable entry points in slice header")
-    
+
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
     ;
@@ -946,8 +949,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("MCTF",                                            c->m_vvencMCTF.MCTF,                                 "Enable GOP based temporal filter. (0:off, 1:filter all frames, 2:use SCC detection to disable for screen coded content)")
     ("MCTFSpeed",                                       c->m_vvencMCTF.MCTFSpeed,                            "MCTF Fast Mode (0:best quality .. 4:fast)")
     ("MCTFFutureReference",                             c->m_vvencMCTF.MCTFFutureReference,                  "Enable referencing of future frames in the GOP based temporal filter. This is typically disabled for Low Delay configurations.")
-    ("MCTFNumLeadFrames",                               c->m_vvencMCTF.MCTFNumLeadFrames,                    "Number of additional MCTF lead frames, which will not be encoded, but can used for MCTF filtering")
-    ("MCTFNumTrailFrames",                              c->m_vvencMCTF.MCTFNumTrailFrames,                   "Number of additional MCTF trail frames, which will not be encoded, but can used for MCTF filtering")
     ("MCTFFrame",                                       toMCTFFrames,                                        "Frame to filter Strength for frame in GOP based temporal filter")
     ("MCTFStrength",                                    toMCTFStrengths,                                     "Strength for  frame in GOP based temporal filter.")
 
@@ -1004,7 +1005,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ;
   }
 
-#if ENABLE_TRACING
   {
     opts.setSubSection( "Tracing" );
     opts.addOptions()
@@ -1013,7 +1013,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("tracefile",                     toTraceFile,            "Tracing file")
     ;
   }
-#endif
 
   std::ostringstream fullOpts;
   po::doHelp( fullOpts, opts );

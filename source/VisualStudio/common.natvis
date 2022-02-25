@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
+  <Type Name="vvenc::Picture">
+    <DisplayString>{{poc={poc}, TID={TLayer}, Rec{isReconstructed}, Ref{isReferenced}, RC{refCounter}, F{isFinished}, NFO{isNeededForOutput}  }</DisplayString>
+    <DisplayString>{{poc = {poc}, TID={TLayer}, width = {((CompArea*) blocks._arr)->width}, height = {((CompArea*) blocks._arr)->height}}}</DisplayString>
+  </Type>
   <Type Name="vvenc::Area">
     <DisplayString>{{x = {x}, y = {y}, width = {width}, height = {height}}}</DisplayString>
   </Type>
