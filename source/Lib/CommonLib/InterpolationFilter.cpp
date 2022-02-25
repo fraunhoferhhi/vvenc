@@ -265,41 +265,25 @@ void InterpolationFilter::filterCopy( const ClpRng& clpRng, const Pel* src, int 
   }
   else if ( isFirst )
   {
-    const unsigned shift = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
-
     if (biMCForDMVR)
     {
-      int shift10BitOut, offset;
-      if ((clpRng.bd - IF_INTERNAL_PREC_BILINEAR) > 0)
+      CHECKD( ( clpRng.bd - IF_INTERNAL_PREC_BILINEAR ) > 0, "VVenC doesn't support bitdepth over '10'!" );
+
+      int shift10BitOut = (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
+      for (row = 0; row < height; row++)
       {
-        shift10BitOut = (clpRng.bd - IF_INTERNAL_PREC_BILINEAR);
-        offset = (1 << (shift10BitOut - 1));
-        for (row = 0; row < height; row++)
+        for (col = 0; col < width; col++)
         {
-          for (col = 0; col < width; col++)
-          {
-            dst[col] = (src[col] + offset) >> shift10BitOut;
-          }
-          src += srcStride;
-          dst += dstStride;
+          dst[col] = src[col] << shift10BitOut;
         }
-      }
-      else
-      {
-        shift10BitOut = (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
-        for (row = 0; row < height; row++)
-        {
-          for (col = 0; col < width; col++)
-          {
-            dst[col] = src[col] << shift10BitOut;
-          }
-          src += srcStride;
-          dst += dstStride;
-        }
+        src += srcStride;
+        dst += dstStride;
       }
     }
     else
     {
+      const unsigned shift = std::max<int>( 2, ( IF_INTERNAL_PREC - clpRng.bd ) );
+
       for (row = 0; row < height; row++)
       {
         for (col = 0; col < width; col++)
@@ -317,53 +301,21 @@ void InterpolationFilter::filterCopy( const ClpRng& clpRng, const Pel* src, int 
   {
     const unsigned shift = std::max<int>(2, (IF_INTERNAL_PREC - clpRng.bd));
 
-    if (biMCForDMVR)
-    {
-      int shift10BitOut, offset;
-      if ((clpRng.bd - IF_INTERNAL_PREC_BILINEAR) > 0)
-      {
-        shift10BitOut = (clpRng.bd - IF_INTERNAL_PREC_BILINEAR);
-        offset = (1 << (shift10BitOut - 1));
-        for (row = 0; row < height; row++)
-        {
-          for (col = 0; col < width; col++)
-          {
-            dst[col] = (src[col] + offset) >> shift10BitOut;
-          }
-          src += srcStride;
-          dst += dstStride;
-        }
-      }
-      else
-      {
-        shift10BitOut = (IF_INTERNAL_PREC_BILINEAR - clpRng.bd);
-        for (row = 0; row < height; row++)
-        {
-          for (col = 0; col < width; col++)
-          {
-            dst[col] = src[col] << shift10BitOut;
-          }
-          src += srcStride;
-          dst += dstStride;
-        }
-      }
-    }
-    else
-    {
-      const Pel offset = ((1) << (shift - 1)) + IF_INTERNAL_OFFS;
-      for (row = 0; row < height; row++)
-      {
-        for (col = 0; col < width; col++)
-        {
-          Pel val = src[ col ];
-          val = rightShiftU((val + offset), shift);
+    CHECKD( biMCForDMVR, "Bilinear filter copy for DMVR has to be 'isFirst' step!" );
 
-          dst[col] = ClipPel( val, clpRng );
-        }
+    const Pel offset = ((1) << (shift - 1)) + IF_INTERNAL_OFFS;
+    for (row = 0; row < height; row++)
+    {
+      for (col = 0; col < width; col++)
+      {
+        Pel val = src[ col ];
+        val = rightShiftU((val + offset), shift);
 
-        src += srcStride;
-        dst += dstStride;
+        dst[col] = ClipPel( val, clpRng );
       }
+
+      src += srcStride;
+      dst += dstStride;
     }
   }
 }

@@ -73,13 +73,16 @@ public:
   , m_isTrail    ( false )
   , m_ctsValid   ( false )
   {
-    std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
+    std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
   };
 
   ~PicShared() {};
 
   bool         isUsed()          const { return m_refCount > 0; }
+  void         incUsed()               { m_refCount += 1; }
+  void         decUsed()               { CHECK( m_refCount <= 0, "release unused picture" ); if( m_refCount > 0 ) m_refCount -= 1; }
   bool         isLeadTrail()     const { return m_isLead || m_isTrail; }
+  int          getPOC()          const { return m_poc; }
   ChromaFormat getChromaFormat() const { return m_origBuf.chromaFormat; }
   Size         getLumaSize()     const { return m_origBuf.Y(); }
 
@@ -109,13 +112,13 @@ public:
     m_isLead      = poc < 0;
     m_isTrail     = m_maxFrames > 0 && poc >= m_maxFrames;
     m_ctsValid    = yuvInBuf->ctsValid;
-    std::fill_n( m_prevShared, QPA_PREV_FRAMES, nullptr );
+    std::fill_n( m_prevShared, NUM_PREV_FRAMES, nullptr );
   }
 
   void shareData( Picture* pic )
   {
-    PelStorage* prevOrigBufs[ QPA_PREV_FRAMES ];
-    for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+    PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ];
+    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
     {
       prevOrigBufs[ i ] = sharePrevOrigBuffer( i );
     }
@@ -131,7 +134,7 @@ public:
   void releaseShared( Picture* pic )
   {
     pic->releaseSharedBuffers();
-    for( int i = 0; i < QPA_PREV_FRAMES; i++ )
+    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
     {
       releasePrevOrigBuffer( i );
     }
@@ -142,7 +145,7 @@ public:
 private:
   PelStorage* sharePrevOrigBuffer( int idx )
   {
-    CHECK( idx >= QPA_PREV_FRAMES, "array access out of bounds" );
+    CHECK( idx >= NUM_PREV_FRAMES, "array access out of bounds" );
     if( m_prevShared[ idx ] )
     {
       m_prevShared[ idx ]->m_refCount += 1;
@@ -153,7 +156,7 @@ private:
 
   void releasePrevOrigBuffer( int idx )
   {
-    CHECK( idx >= QPA_PREV_FRAMES, "array access out of bounds" );
+    CHECK( idx >= NUM_PREV_FRAMES, "array access out of bounds" );
     if( m_prevShared[ idx ] )
     {
       m_prevShared[ idx ]->m_refCount -= 1;
@@ -162,7 +165,7 @@ private:
   }
 
 public:
-  PicShared* m_prevShared[ QPA_PREV_FRAMES ];
+  PicShared* m_prevShared[ NUM_PREV_FRAMES ];
   bool       m_isSccWeak;
   bool       m_isSccStrong;
 
@@ -191,6 +194,8 @@ public:
   , m_flushAll        ( false )
   , m_processLeadTrail( false )
   , m_ctuSize         ( MAX_CU_SIZE )
+  , m_isNonBlocking   ( false )
+  , m_picCount        ( 0 )
   {
   };
 
@@ -217,12 +222,13 @@ public:
 
   bool isStageDone() const { return m_procList.empty(); }
 
-  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize )
+  void initStage( int minQueueSize, bool flushAll, bool processLeadTrail, int ctuSize, bool nonBlocking = false )
   {
     m_minQueueSize     = minQueueSize;
     m_flushAll         = flushAll;
     m_processLeadTrail = processLeadTrail;
     m_ctuSize          = ctuSize;
+    m_isNonBlocking    = nonBlocking;
   }
 
   void linkNextStage( EncStage* nextStage )
@@ -262,6 +268,9 @@ public:
     pic->reset();
     picShared->shareData( pic );
 
+    // call first picture init
+    initPicture( pic );
+
     // sort picture into processing queue
     PicList::iterator picItr;
     for( picItr = m_procList.begin(); picItr != m_procList.end(); picItr++ )
@@ -270,9 +279,7 @@ public:
         break;
     }
     m_procList.insert( picItr, pic );
-
-    // call first picture init
-    initPicture( pic );
+    m_picCount++;
   }
 
   void runStage( bool flush, AccessUnitList& auList )
@@ -312,10 +319,11 @@ public:
     }
   }
 
+  bool         isNonBlocking()     { return m_isNonBlocking; }
+  virtual void waitForFreeEncoders()  {}
 protected:
   virtual void initPicture    ( Picture* pic ) = 0;
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList ) = 0;
-
 private:
   EncStage* m_nextStage;
   PicList   m_procList;
@@ -324,6 +332,9 @@ private:
   bool      m_flushAll;
   bool      m_processLeadTrail;
   int       m_ctuSize;
+  bool      m_isNonBlocking;
+protected:
+  int64_t   m_picCount;
 };
 
 } // namespace vvenc

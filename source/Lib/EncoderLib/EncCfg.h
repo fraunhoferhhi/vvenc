@@ -58,10 +58,9 @@ struct VVEncCfg : public vvenc_config
 
   VVEncCfg();
 
-   VVEncCfg& operator= ( const vvenc_config& extern_cfg );
+  VVEncCfg& operator= ( const vvenc_config& extern_cfg );
 
-  int m_ChunkBasedMode;
-
+  bool m_stageParallelProc;
 
 private:
   void xInitCfgMembers();

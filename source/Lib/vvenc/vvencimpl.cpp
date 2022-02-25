@@ -395,6 +395,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
     }
 
     iRet = xCopyAu( *pcAccessUnit, cAu  );
+    cAu.clear();
   }
 
 #if defined( __linux__ )
@@ -506,12 +507,12 @@ int VVEncImpl::setAndRetErrorMsg( int iRet )
 
 int VVEncImpl::getNumLeadFrames() const
 {
-  return m_cVVEncCfg.m_vvencMCTF.MCTFNumLeadFrames;
+  return m_cVVEncCfg.m_leadFrames;
 }
 
 int VVEncImpl::getNumTrailFrames() const
 {
-  return m_cVVEncCfg.m_vvencMCTF.MCTFNumTrailFrames;
+  return m_cVVEncCfg.m_trailFrames;
 }
 
 int VVEncImpl::printSummary() const

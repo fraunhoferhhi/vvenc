@@ -78,9 +78,11 @@ EncLib::EncLib( MsgLog& logger )
   , m_MCTF           ( nullptr )
   , m_preEncoder     ( nullptr )
   , m_gopEncoder     ( nullptr )
+  , m_prevSharedTL0  ( nullptr )
   , m_threadPool     ( nullptr )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
+  , m_maxNumPicShared( MAX_INT )
 {
 }
 
@@ -213,16 +215,17 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_threadPool = new NoMallocThreadPool( m_encCfg.m_numThreads, "EncSliceThreadPool", &m_encCfg );
   }
-
+  m_maxNumPicShared = 0;
   // MCTF
   if( m_encCfg.m_vvencMCTF.MCTF )
   {
     m_MCTF = new MCTF();
-    //m_MCTF->initStage( MCTF_ADD_QUEUE_DELAY, true, true, m_encCfg.m_CTUSize );
-    const int minDelay = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 + VVENC_MCTF_RANGE ) : ( m_encCfg.m_vvencMCTF.MCTFNumLeadFrames + 1 );
+    const int leadFrames = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
+    const int minDelay   = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
     m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
+    m_maxNumPicShared += minDelay;
   }
 
   // pre analysis encoder
@@ -232,12 +235,15 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
+    m_maxNumPicShared += m_firstPassCfg.m_GOPSize + 1 + Log2(m_firstPassCfg.m_GOPSize) + 2;
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize );
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
+  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + Log2(m_encCfg.m_GOPSize) + 2;
+
   if( m_rateCtrl->rcIsFinalPass )
   {
     m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufFunc );
@@ -265,8 +271,9 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_prevSharedQueue.push_back( nullptr );
   }
+  m_prevSharedTL0 = nullptr;
 
-  m_picsRcvd        = m_encCfg.m_vvencMCTF.MCTF ? -m_encCfg.m_vvencMCTF.MCTFNumLeadFrames : 0;
+  m_picsRcvd        = -m_encCfg.m_leadFrames;
   m_passInitialized = pass;
 }
 
@@ -295,6 +302,11 @@ void EncLib::xUninitLib()
   m_encStages.clear();
 
   // shared data
+  if( m_prevSharedTL0 )
+  {
+    m_prevSharedTL0->decUsed();
+    m_prevSharedTL0 = nullptr;
+  }
   for( auto picShared : m_picSharedList )
   {
     delete picShared;
@@ -350,31 +362,83 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
 
   CHECK( yuvInBuf == nullptr && ! flush, "no input picture given" );
 
+  const int firstPoc = m_encCfg.m_vvencMCTF.MCTF ? -std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames ) : 0;
+
   // clear output access unit
   au.clearAu();
 
+  // NOTE regarding the stage parallel processing
+  // The next input yuv-frame must be passed to the encoding process (1.Stage).
+  // Following should be considered:
+  // 1. The final stage is non-blocking, so it dosen't wait until picture is reconstructed.
+  // 2. Generally the stages have different throughput, last stage is the slowest.
+  // 3. The number of picture-units, required for the input frames, is limited.
+  // 4. Due to chunk-mode and non-blockiness, it's possible that we can run out of picture-units.
+  // 5. Then we have to wait for the next available picture-unit and the input frame can be passed to the 1.stage.
+
+  PicShared* picShared = nullptr;
+  do
+  {
   // send new YUV input buffer to first encoder stage
   if( yuvInBuf )
   {
-    PicShared* picShared = xGetFreePicShared();
+    picShared = xGetFreePicShared();
+    if( picShared )
+    {
     picShared->reuse( m_picsRcvd, yuvInBuf );
-    if (m_encCfg.m_usePerceptQPA || m_encCfg.m_RCNumPasses == 2 || (m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate) )
+    if( m_encCfg.m_sliceTypeAdapt
+        || m_encCfg.m_usePerceptQPA
+        || m_encCfg.m_RCNumPasses == 2
+        || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
     {
       xAssignPrevQpaBufs( picShared );
     }
-    xDetectScc( picShared );
-    m_encStages[ 0 ]->addPicSorted( picShared );
+    if( ! picShared->isLeadTrail() )
+    {
+      xDetectScc( picShared );
+    }
+    if( picShared->getPOC() >= firstPoc )
+    {
+      m_encStages[ 0 ]->addPicSorted( picShared );
+    }
     m_picsRcvd += 1;
+    }
   }
 
   PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
   // trigger stages
-  isQueueEmpty = true;
+  isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
   for( auto encStage : m_encStages )
   {
     encStage->runStage( flush, au );
     isQueueEmpty &= encStage->isStageDone();
+  }
+
+  if( !au.empty() )
+  {
+    m_AuList.push_back( au );
+    au.clearAu( true );
+  }
+
+  // If we haven't got an empty picture-unit for a new picture, we have to wait for stages to finish
+  if( m_encCfg.m_numThreads > 0 && ( ( flush ) || ( yuvInBuf && !picShared ) ) )
+  {
+    for( auto encStage : m_encStages )
+    {
+      if( encStage->isNonBlocking() )
+        encStage->waitForFreeEncoders();
+    }
+  }
+
+  }while( yuvInBuf && !picShared );
+
+  // check if we have an AU to output
+  if( !m_AuList.empty() )
+  {
+    au = m_AuList.front();
+    m_AuList.front().clear();
+    m_AuList.pop_front();
   }
 
   // reset output access unit, if not final pass
@@ -418,6 +482,9 @@ PicShared* EncLib::xGetFreePicShared()
 
   if( ! picShared )
   {
+    if( m_encCfg.m_stageParallelProc && ( m_picSharedList.size() >= m_maxNumPicShared ) )
+      return nullptr;
+
     picShared = new PicShared();
     picShared->create( m_encCfg.m_framesToBeEncoded, m_encCfg.m_internChromaFormat, Size( m_encCfg.m_PadSourceWidth, m_encCfg.m_PadSourceHeight ), m_encCfg.m_vvencMCTF.MCTF );
     m_picSharedList.push_back( picShared );
@@ -439,6 +506,22 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
   if( picShared->m_prevShared[ 0 ] == nullptr )
   {
     picShared->m_prevShared[ 0 ] = picShared;
+  }
+
+  if( m_encCfg.m_sliceTypeAdapt )
+  {
+    const int idr2Adj = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
+
+    if( ( picShared->getPOC() + idr2Adj ) % m_encCfg.m_GOPSize == 0 )
+    {
+      if( m_prevSharedTL0 )
+      {
+        m_prevSharedTL0->decUsed();
+      }
+      picShared->m_prevShared[ PREV_FRAME_TL0 ] = m_prevSharedTL0;
+      m_prevSharedTL0 = picShared;
+      m_prevSharedTL0->incUsed();
+    }
   }
 }
 

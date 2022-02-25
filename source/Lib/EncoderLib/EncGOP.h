@@ -174,6 +174,8 @@ private:
   std::list<EncPicture*>    m_freePicEncoderList;
   std::list<Picture*>       m_gopEncListInput;
   std::list<Picture*>       m_gopEncListOutput;
+  std::list<Picture*>       m_procList;
+  std::list<Picture*>       m_rcUpdateList;
 
   std::vector<int>          m_pocToGopId;
   std::vector<int>          m_nextPocOffset;
@@ -191,10 +193,12 @@ public:
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
   void getParameterSets   ( AccessUnitList& accessUnit );
+  bool nextPicReadyForOutput    () { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
 
 protected:
   virtual void initPicture    ( Picture* pic );
   virtual void processPictures( const PicList& picList, bool flush, AccessUnitList& auList, PicList& doneList, PicList& freeList );
+  virtual void waitForFreeEncoders();
 
 private:
   int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }

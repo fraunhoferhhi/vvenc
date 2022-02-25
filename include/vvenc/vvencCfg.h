@@ -408,8 +408,9 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  int                 MCTFNumLeadFrames;
-  int                 MCTFNumTrailFrames;
+  // TODO (jb): cleanup
+  int                 mctfUnused1;
+  int                 mctfUnused2;
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -725,7 +726,7 @@ typedef struct vvenc_config
   uint32_t            m_numExpTileCols;                                                  // number of explicitly specified tile columns
   uint32_t            m_numExpTileRows;                                                  // number of explicitly specified tile rows
   uint32_t            m_numSlicesInPic;                                                  // derived number of rectangular slices in the picture (raster-scan slice specified at slice level)
-  
+
   // decode bitstream options
   int                 m_switchPOC;                                                       // dbg poc.
   int                 m_switchDQP;                                                       // switch DQP.
@@ -745,13 +746,18 @@ typedef struct vvenc_config
   unsigned            m_summaryVerboseness;                                              // Specifies the level of the verboseness of the text output.
   int                 m_numIntraModesFullRD;                                             // Number Modes for Full RD Intra Search
   bool                m_reduceIntraChromaModesFullRD;                                    // Reduce Number Modes for Full RD Intra Chroma Search
-  
+
   // reserved parameters for internal use
-  int                 m_reservedInt[8];
-  int                 m_LookAhead;                                                       // enable pre-analysis;
+  int                 m_reservedInt[6];
+  int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0
+  int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
+  int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-  bool                m_reservedFlag[9];
+
+  bool                m_reservedFlag[8];
+  bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
+
   double              m_reservedDouble[10];
 
   // internal state variables
