@@ -52,6 +52,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
 #include <list>
 #include <map>
 #include <vector>
+#include <algorithm>
 
 #include "apputils/VVEncAppCfg.h"
 #include <vvenc/vvencCfg.h>
@@ -67,6 +68,10 @@ struct APPUTILS_DECL SVPair
   const char* str;
   E           value;
 };
+
+// ====================================================================================================================
+// string <-> vector
+// ====================================================================================================================
 
 template<typename T>
 class APPUTILS_DECL IStreamToRefVec
@@ -163,6 +168,11 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToRefVec<T>& t
   return os;
 }
 
+
+// ====================================================================================================================
+// string <-> enum
+// ====================================================================================================================
+
 template<typename E>
 class APPUTILS_DECL IStreamToEnum
 {
@@ -239,7 +249,7 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToEnum<E>& toE
 }
 
 // ====================================================================================================================
-// string <-> enum
+// string <-> function
 // ====================================================================================================================
 
 
@@ -597,6 +607,90 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& t
 
   return os;
 }
+
+
+// ====================================================================================================================
+// string -> abbreviated value
+// ====================================================================================================================
+
+// T: value type, A abbreviation value type
+template<typename T, typename A>
+class APPUTILS_DECL IStreamToAbrev
+{
+  public:
+    IStreamToAbrev( T* v, const std::vector<SVPair<A>>* m  )
+    : dstVal ( v )
+    , toMap  ( m )      
+    {
+    }
+
+    ~IStreamToAbrev()
+    {
+    }
+
+    template<typename F, typename G>
+    friend std::istream& operator >> ( std::istream& in, IStreamToAbrev<F,G>& toValue );
+
+    template<typename F, typename G>
+    friend std::ostream& operator << ( std::ostream& in, const IStreamToAbrev<F,G>& toValue );
+
+  private:
+    T*                            dstVal;
+    const std::vector<SVPair<A>>* toMap;
+};
+
+template<typename T, typename A>
+inline std::istream& operator >> ( std::istream& in, IStreamToAbrev<T,A>& toValue )
+{
+  std::string str;
+  in >> str;
+
+  // search map for a used abbreviation
+  for ( const auto& map : *toValue.toMap )
+  {
+    std::string entry(map.str);
+    std::transform( entry.begin(), entry.end(), entry.begin(), ::tolower );
+    std::transform( str.begin(), str.end(), str.begin(), ::tolower );
+
+    std::size_t n = str.find( entry );
+    if (n!=std::string::npos)
+    {
+      str.erase(n, entry.length());             // remove the scaling unit
+      replace_if( str.begin(), str.end(), []( int c ){ return c == ','; }, '.' ); // use correct comma syntax for double
+
+      bool isNumber = strspn( str.c_str(), "-.0123456789" ) == str.size();
+      if( !isNumber)
+      {
+        in.setstate( std::ios::failbit );
+        return in;
+      }
+
+      double value = strtod(str.c_str(), NULL); // convert scaling factor to double
+      value *= map.value;                       // scale
+      *toValue.dstVal = (T)value;
+      return in;
+    }
+  }
+
+  // read value in original format
+  std::string::size_type posAfter;
+  *toValue.dstVal = std::stoi( str, &posAfter );
+
+  if( posAfter && !str.substr(posAfter).empty() ) // check if value is int only
+  {
+    in.setstate( std::ios::failbit );
+  }
+
+  return in;
+}
+
+template<typename T, typename A>
+inline std::ostream& operator << ( std::ostream& os, const IStreamToAbrev<T,A>& toValue )
+{
+  os << *toValue.dstVal;
+  return os;
+}
+
 
 // ====================================================================================================================
 // vvencGOPEntry
