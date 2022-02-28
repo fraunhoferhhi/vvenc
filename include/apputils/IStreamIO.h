@@ -645,28 +645,29 @@ inline std::istream& operator >> ( std::istream& in, IStreamToAbrev<T,A>& toValu
   std::string str;
   in >> str;
 
+  std::transform( str.begin(), str.end(), str.begin(), ::tolower ); // use lower case only
+
   // search map for a used abbreviation
   for ( const auto& map : *toValue.toMap )
   {
-    std::string entry(map.str);
-    std::transform( entry.begin(), entry.end(), entry.begin(), ::tolower );
-    std::transform( str.begin(), str.end(), str.begin(), ::tolower );
+    std::string entry(map.str);  
+    std::transform( entry.begin(), entry.end(), entry.begin(), ::tolower ); // transform map entry to lower case
 
     std::size_t n = str.find( entry );
     if (n!=std::string::npos)
     {
-      str.erase(n, entry.length());             // remove the scaling unit
-      replace_if( str.begin(), str.end(), []( int c ){ return c == ','; }, '.' ); // use correct comma syntax for double
+      str.erase(n, entry.length());                                               // remove the scaling unit, e.g. 1.5M -> 1.5
+      replace_if( str.begin(), str.end(), []( int c ){ return c == ','; }, '.' ); // use correct comma syntax for double representaion
 
-      bool isNumber = strspn( str.c_str(), "-.0123456789" ) == str.size();
+      bool isNumber = strspn( str.c_str(), "-.0123456789" ) == str.size(); // check if valid double value
       if( !isNumber)
       {
         in.setstate( std::ios::failbit );
         return in;
       }
 
-      double value = strtod(str.c_str(), NULL); // convert scaling factor to double
-      value *= map.value;                       // scale
+      double value = strtod(str.c_str(), NULL); // convert input string to double
+      value *= map.value;                       // scale depending on given abbreviation/scaling factor
       *toValue.dstVal = (T)value;
       return in;
     }
@@ -676,7 +677,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToAbrev<T,A>& toValu
   std::string::size_type posAfter;
   *toValue.dstVal = std::stoi( str, &posAfter );
 
-  if( posAfter && !str.substr(posAfter).empty() ) // check if value is int only
+  if( posAfter && !str.substr(posAfter).empty() ) // check if value is valid int
   {
     in.setstate( std::ios::failbit );
   }
