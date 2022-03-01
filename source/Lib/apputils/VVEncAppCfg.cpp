@@ -418,7 +418,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
   IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8);
-  IStreamToAbrev<int,int>                 toBitrate              ( &c->m_RCTargetBitrate, &BitrateAbrevToIntMap);
+  IStreamToAbbr<int,int>                  toBitrate              ( &c->m_RCTargetBitrate, &BitrateAbrevToIntMap);
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &c->m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &c->m_AccessUnitDelimiter,         &FlagToIntMap );

@@ -615,24 +615,24 @@ inline std::ostream& operator << ( std::ostream& os, const IStreamToArr<char>& t
 
 // T: value type, A abbreviation value type
 template<typename T, typename A>
-class APPUTILS_DECL IStreamToAbrev
+class APPUTILS_DECL IStreamToAbbr
 {
   public:
-    IStreamToAbrev( T* v, const std::vector<SVPair<A>>* m  )
+    IStreamToAbbr( T* v, const std::vector<SVPair<A>>* m  )
     : dstVal ( v )
     , toMap  ( m )      
     {
     }
 
-    ~IStreamToAbrev()
+    ~IStreamToAbbr()
     {
     }
 
     template<typename F, typename G>
-    friend std::istream& operator >> ( std::istream& in, IStreamToAbrev<F,G>& toValue );
+    friend std::istream& operator >> ( std::istream& in, IStreamToAbbr<F,G>& toValue );
 
     template<typename F, typename G>
-    friend std::ostream& operator << ( std::ostream& in, const IStreamToAbrev<F,G>& toValue );
+    friend std::ostream& operator << ( std::ostream& in, const IStreamToAbbr<F,G>& toValue );
 
   private:
     T*                            dstVal;
@@ -640,7 +640,7 @@ class APPUTILS_DECL IStreamToAbrev
 };
 
 template<typename T, typename A>
-inline std::istream& operator >> ( std::istream& in, IStreamToAbrev<T,A>& toValue )
+inline std::istream& operator >> ( std::istream& in, IStreamToAbbr<T,A>& toValue )
 {
   std::string str;
   in >> str;
@@ -686,7 +686,7 @@ inline std::istream& operator >> ( std::istream& in, IStreamToAbrev<T,A>& toValu
 }
 
 template<typename T, typename A>
-inline std::ostream& operator << ( std::ostream& os, const IStreamToAbrev<T,A>& toValue )
+inline std::ostream& operator << ( std::ostream& os, const IStreamToAbbr<T,A>& toValue )
 {
   os << *toValue.dstVal;
   return os;
