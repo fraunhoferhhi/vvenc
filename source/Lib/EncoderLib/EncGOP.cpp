@@ -264,6 +264,7 @@ EncGOP::EncGOP( MsgLog& logger )
   , m_appliedSwitchDQQ   ( 0 )
   , m_associatedIRAPPOC  ( 0 )
   , m_associatedIRAPType ( VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP )
+  , m_trySkipOrDecodePicture( false )
 {
 }
 
@@ -365,6 +366,8 @@ void EncGOP::init( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPoo
   {
     CHECK( m_pocToGopId[ i ] < 0 || m_nextPocOffset[ i ] == 0, "error: poc not found in gop list" );
   }
+  m_trySkipOrDecodePicture = ( m_pcEncCfg->m_decodeBitstreams[0][0] != '\0' || m_pcEncCfg->m_decodeBitstreams[1][0] != '\0' ) &&
+    m_pcRateCtrl->rcIsFinalPass && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis );
 }
 
 void EncGOP::picInitRateControl( Picture& pic, Slice* slice, EncPicture* picEncoder )
@@ -574,7 +577,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     // decoder in encoder
     bool decPic = false;
     bool encPic = false;
-    if( m_pcRateCtrl->rcIsFinalPass && ( m_pcEncCfg->m_RCTargetBitrate > 0 || !m_isPreAnalysis ) )
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "finalpass", m_pcRateCtrl->rcIsFinalPass ? 1: 0 ) );
+    if( m_trySkipOrDecodePicture )
     {
       DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
       trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
@@ -592,7 +596,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     pic->encPic   = encPic;
     pic->isPreAnalysis = m_isPreAnalysis;
 
-    if( m_pcEncCfg->m_alfTempPred )
+    if( m_pcEncCfg->m_alfTempPred || !encPic )
     {
       xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
     }
@@ -1626,6 +1630,24 @@ void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, const
 
 void EncGOP::xGetProcessingLists( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList )
 {
+  // decoder in encoder and FPP: restrict processing list to the default sequential coding order
+  if( m_trySkipOrDecodePicture && m_pcEncCfg->m_maxParallelFrames > 0 )
+  {
+    auto& pic = m_gopEncListInput.front();
+    if( pic->poc == m_pcEncCfg->m_switchPOC )
+    {
+      m_trySkipOrDecodePicture = false;
+    }
+    else
+    {
+      // try to skip or decode picture
+      procList.push_back( pic );
+      rcUpdateList.push_back( pic );
+      m_gopEncListInput.pop_front();
+      return;
+    }
+  }
+
   // in lockstep mode, process only pics of same temporal layer
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
   if( lockStepMode )
@@ -2341,7 +2363,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
       const int apsMapIdx          = ( apsId << NUM_APS_TYPE_LEN ) + ALF_APS;
       APS* aps                     = apsMap.getPS( apsMapIdx );
       bool writeAps                = aps && apsMap.getChangedFlag( apsMapIdx );
-      if ( !aps && slice->alfAps[ apsId ] && slice->alfAps[ apsId ])
+      if ( !aps && slice->alfAps[ apsId ] )
       {
         aps   = apsMap.allocatePS( apsMapIdx );
         *aps  = *slice->alfAps[ apsId ]; // copy aps from slice header
