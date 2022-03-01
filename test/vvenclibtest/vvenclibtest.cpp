@@ -808,8 +808,8 @@ int checkSDKStringApiDefault()
   settings.push_back(std::make_tuple( VVENC_OPT_THREADS,      "1") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000000") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1M") );
-  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000K") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1.5Mbps") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000k") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1500.5kbps") );
 
   settings.push_back(std::make_tuple( VVENC_OPT_QP,           "32") );
@@ -866,7 +866,9 @@ int checkSDKStringApiInvalid()
   settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "MED") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1apple") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1;5M") );
-  
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1m") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1K") );
+
   int ret=0;
 
   for( auto & d : settings )
