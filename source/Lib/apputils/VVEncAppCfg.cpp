@@ -348,10 +348,10 @@ const std::vector<SVPair<bool>> QPAToIntMap =
 // abbreviations for target bitrates that are converted into bps internally (lower/upper case independent)
 const std::vector<SVPair<int>> BitrateAbrevToIntMap =
 {
+  { "Mbps",         1000000 },
   { "M",            1000000 },
-  { "mbps",         1000000 },
-  { "K",               1000 },
   { "kbps",            1000 },
+  { "K",               1000 },
   { "bps",                1 }
 };
 
@@ -533,7 +533,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     opts.setSubSection("Encoder Options");
     opts.addOptions()
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
-    ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise bits/second (use e.g. 1.5M, 1.5mbps, 1500K, 1500kbps, 1500000))" )
+    ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise bits/second (use e.g. 1.5M, 1.5Mbps, 1500K, 1500kbps, 1500000))" )
     ("passes,p",                                        c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
@@ -571,7 +571,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
     ("LookAhead",                                       c->m_LookAhead,                                      "Enable pre-analysis pass with picture look-ahead (-1,0,1)")
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
-    ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bit-rate [bps], use e.g. 1.5M, 1.5mbps, 1500K, 1500kbps, 1500000" )
+    ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bit-rate [bps], use e.g. 1.5M, 1.5Mbps, 1500K, 1500kbps, 1500000" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
@@ -1044,7 +1044,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
     ("framerate,r",                                     c->m_FrameRate,                                      "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
     ("frames",                                          c->m_framesToBeEncoded,                              "max. frames to encode [all]")
-    ("bitrate",                                         toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second (use e.g. 1.5M, 1.5mbps, 1500K, 1500kbps, 1500000))" )
+    ("bitrate",                                         toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second (use e.g. 1.5M, 1.5Mbps, 1500K, 1500kbps, 1500000))" )
     ("qpa",                                             toQPA,                                               "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ;
   }

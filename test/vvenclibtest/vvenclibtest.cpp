@@ -804,13 +804,13 @@ int checkSDKStringApiDefault()
   settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000") );
   settings.push_back(std::make_tuple( VVENC_OPT_INPUTBITDEPTH,"10") );
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMES,       "2") );
-  settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "MEDIUM") );
+  settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "medium") );
   settings.push_back(std::make_tuple( VVENC_OPT_THREADS,      "1") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000000") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1M") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000K") );
-  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1.5M") );
-  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1500.5k") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1.5Mbps") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1500.5kbps") );
 
   settings.push_back(std::make_tuple( VVENC_OPT_QP,           "32") );
   settings.push_back(std::make_tuple( VVENC_OPT_TILES,        "1x0") );
