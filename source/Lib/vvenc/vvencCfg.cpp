@@ -3755,10 +3755,13 @@ VVENC_DECL int vvenc_set_param_list( vvenc_config *c, int argc, char* argv[] )
   int ret =  cVVEncAppCfg.parse( argc, argv, c, cssO );
 
   if( !cssO.str().empty() )
-  {
+  {    
     vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
-    if( ret < 0 ) msg.log( VVENC_ERROR, "%s\n", cssO.str().c_str());
-    else          msg.log( VVENC_INFO , "%s\n", cssO.str().c_str());
+    vvencMsgLevel msgLvl = VVENC_INFO;
+    if( ret < 0 ) msgLvl = VVENC_ERROR;
+    else if( ret == 2 ) msgLvl = VVENC_WARNING;
+
+    msg.log( msgLvl , "%s\n", cssO.str().c_str());
   }
 
   return ret;
