@@ -114,6 +114,18 @@ public:
   }
 
 public:
+
+  /* parse
+    This method parses a list of command line arguments and sets them in the vvenc_config
+    \param[in]  argc number or arguments in argv string list
+    \param[in]  argv list of char* (argv[]); option name must be defined by prefix -- or -
+    \param[in]  vvenc_config* pointer to vvenc_config struct that contains encoder parameters
+    \param[in]  std::ostream& reference to ostream where info,warnings and errors are written to
+    \retval     returns 0 on success,
+                < o on error
+                > 0 :  1 when information is printed into ostream (help)
+                       2 when warning is printed into ostream
+  */
   int parse( int argc, char* argv[], vvenc_config* c, std::ostream& rcOstr );
 
   bool checkCfg( vvenc_config* c, std::ostream& rcOstr );

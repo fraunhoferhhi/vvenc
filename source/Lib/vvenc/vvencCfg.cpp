@@ -3751,7 +3751,19 @@ VVENC_DECL int vvenc_set_param_list( vvenc_config *c, int argc, char* argv[] )
 
   apputils::VVEncAppCfg cVVEncAppCfg;
   std::stringstream cssO;
-  return cVVEncAppCfg.parse( argc, argv, c, cssO );
+  int ret =  cVVEncAppCfg.parse( argc, argv, c, cssO );
+
+  if( !cssO.str().empty() )
+  {    
+    vvenc::MsgLog msg(c->m_msgCtx,c->m_msgFnc);
+    vvencMsgLevel msgLvl = VVENC_INFO;
+    if( ret < 0 ) msgLvl = VVENC_ERROR;
+    else if( ret == 2 ) msgLvl = VVENC_WARNING;
+
+    msg.log( msgLvl , "%s\n", cssO.str().c_str());
+  }
+
+  return ret;
 }
 
 
