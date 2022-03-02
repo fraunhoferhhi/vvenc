@@ -289,27 +289,26 @@ uint32_t CU::getCtuAddr( const CodingUnit &cu )
 
 int CU::predictQP( const CodingUnit& cu, const int prevQP )
 {
-  const ChannelType      chType  = cu.chType;
-  const CodingStructure& cs      = *cu.cs;
-  const Slice&           slice   = *cs.slice;
-  const CodingUnit*      cuAbove = cs.getCU( cu.blocks[chType].pos().offset( 0, -1 ), chType, cu.treeType );
-  const CodingUnit*      cuLeft  = cs.getCU( cu.blocks[chType].pos().offset( -1, 0 ), chType, cu.treeType );
+  const ChannelType      chType   = cu.chType;
+  const CodingStructure& cs       = *cu.cs;
+  const Slice&           slice    = *cs.slice;
+  const bool             inCtuA   = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) );
+  const bool             inCtuL   = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) );
+  const CodingUnit*      cuAbove  =          cs.getCURestricted( cu.blocks[chType].pos().offset( 0, -1 ), cu, chType );
+  const CodingUnit*      cuLeft   = inCtuL ? cs.getCURestricted( cu.blocks[chType].pos().offset( -1, 0 ), cu, chType ) : nullptr;
   
   const uint32_t ctuRsAddr       = getCtuAddr( cu );
   const uint32_t ctuXPosInCtus   = ctuRsAddr % cs.pcv->widthInCtus;
   const uint32_t tileXPosInCtus  = slice.pps->tileColBd[cs.pps->ctuToTileCol[ctuXPosInCtus]];
   
-  if( ctuXPosInCtus == tileXPosInCtus &&
-      !( cu.blocks[chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( chType, cu.chromaFormat ) ) ) &&
-      !( cu.blocks[chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( chType, cu.chromaFormat ) ) ) &&
-       cuAbove != nullptr && CU::isSameSliceAndTile( *cuAbove, cu ) )
+  if( ctuXPosInCtus == tileXPosInCtus && !inCtuL && !inCtuA && cuAbove )
   {
     return cuAbove->qp;
   }
   else
   {
-    const int a = ( cu.blocks[cu.chType].y & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleY( cu.chType, cu.chromaFormat ) ) ) ? cuAbove->qp : prevQP;
-    const int b = ( cu.blocks[cu.chType].x & ( cs.pcv->maxCUSizeMask >> getChannelTypeScaleX( cu.chType, cu.chromaFormat ) ) ) ? cuLeft->qp  : prevQP;
+    const int a = inCtuA ? cuAbove->qp : prevQP;
+    const int b = inCtuL ? cuLeft->qp  : prevQP;
   
     return ( a + b + 1 ) >> 1;
   }
