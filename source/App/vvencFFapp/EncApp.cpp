@@ -143,6 +143,7 @@ bool EncApp::parseCfg( int argc, char* argv[])
     {
       std::string key = std::get<0>(d);
       std::string value = std::get<1>(d);
+      msgApp( VVENC_DETAILS, "additional params: set option key:'%s' value:'%s'\n", key.c_str(), value.c_str() );
       int parse_ret = vvenc_set_param( &m_vvenc_config, key.c_str(), value.c_str() );
       switch (parse_ret)
       {

@@ -3707,7 +3707,6 @@ VVENC_DECL int vvenc_set_param(vvenc_config *c, const char *name, const char *va
   std::string n(name);
   std::string v(value);
   std::transform( n.begin(), n.end(), n.begin(), ::tolower );
-  std::transform( v.begin(), v.end(), v.begin(), ::tolower );
 
   if ( name[0] == '-'  || name[1] == '-' ) // name prefix given - not supported
   {

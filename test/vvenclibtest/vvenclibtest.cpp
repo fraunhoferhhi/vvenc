@@ -804,9 +804,14 @@ int checkSDKStringApiDefault()
   settings.push_back(std::make_tuple( VVENC_OPT_TICKSPERSEC,  "900000") );
   settings.push_back(std::make_tuple( VVENC_OPT_INPUTBITDEPTH,"10") );
   settings.push_back(std::make_tuple( VVENC_OPT_FRAMES,       "2") );
-  settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "MEDIUM") );
+  settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "medium") );
   settings.push_back(std::make_tuple( VVENC_OPT_THREADS,      "1") );
   settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000000") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1M") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1.5Mbps") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1000k") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1500.5kbps") );
+
   settings.push_back(std::make_tuple( VVENC_OPT_QP,           "32") );
   settings.push_back(std::make_tuple( VVENC_OPT_TILES,        "1x0") );
   settings.push_back(std::make_tuple( VVENC_OPT_VERBOSITY,    "verbose") );
@@ -851,6 +856,48 @@ int checkSDKStringApiDefault()
   return 0;
 }
 
+int checkSDKStringApiInvalid()
+{
+  vvenc_config c;
+  vvenc_init_default( &c, 176,144,60, 500000, 32, vvencPresetMode::VVENC_MEDIUM );
+
+  std::vector <std::tuple<std::string, std::string>> settings;
+  settings.push_back(std::make_tuple( VVENC_OPT_SIZE,         "176t144") );
+  settings.push_back(std::make_tuple( VVENC_OPT_PRESET,       "MED") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1apple") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1;5M") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1m") );
+  settings.push_back(std::make_tuple( VVENC_OPT_BITRATE,      "1K") );
+
+  int ret=0;
+
+  for( auto & d : settings )
+  {
+    std::string key = std::get<0>(d);
+    std::string value = std::get<1>(d);
+    int parse_ret = vvenc_set_param( &c, key.c_str(), value.c_str() );
+    switch (parse_ret)
+    {
+      case VVENC_PARAM_BAD_NAME:
+        ret = -1;
+        break;
+      case VVENC_PARAM_BAD_VALUE:
+        ret = -1;
+        break;
+      default:
+        return 0; // expecting an error - if no error something went wrong
+        break;
+    }
+  }
+
+  if( vvenc_init_config_parameter( &c ) )
+  {
+    return -1;
+  }
+
+  return ret;
+}
+
 
 int testLibCallingOrder()
 {
@@ -877,6 +924,8 @@ int testSDKDefaultBehaviour()
 int testStringApiInterface()
 {
   testfunc( "checkSDKStringApiDefault", &checkSDKStringApiDefault, false );
+  testfunc( "checkSDKStringApiInvalid", &checkSDKStringApiInvalid, true );
+
   return 0;
 }
 

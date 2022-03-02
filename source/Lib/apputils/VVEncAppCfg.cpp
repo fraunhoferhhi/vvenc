@@ -345,6 +345,16 @@ const std::vector<SVPair<bool>> QPAToIntMap =
   { "5",            1 },
 };
 
+// abbreviations for target bitrates that are converted into bps internally (lower/upper case independent)
+const std::vector<SVPair<int>> BitrateAbrevToIntMap =
+{
+  { "Mbps",         1000000 },  // mega bit/sec
+  { "M",            1000000 },
+  { "kbps",            1000 },  // kilo bit/sec
+  { "k",               1000 },
+  { "bps",                1 }   // bit/sec
+};
+
 //// ====================================================================================================================
 //// string <-> enum
 //// ====================================================================================================================
@@ -408,6 +418,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   IStreamToRefVec<uint32_t>         toNumTiles                   ( { &c->m_numTileCols, &c->m_numTileRows }, true, 'x'       );
 
   IStreamToFunc<BitDepthAndColorSpace>    toInputFormatBitdepth  ( setInputBitDepthAndColorSpace, this, c, &BitColorSpaceToIntMap, YUV420_8);
+  IStreamToAbbr<int,int>                  toBitrate              ( &c->m_RCTargetBitrate, &BitrateAbrevToIntMap);
   IStreamToEnum<vvencDecodingRefreshType> toDecRefreshType       ( &c->m_DecodingRefreshType,         &DecodingRefreshTypeToEnumMap );
 
   IStreamToEnum<int>                toAud                        ( &c->m_AccessUnitDelimiter,         &FlagToIntMap );
@@ -522,7 +533,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     opts.setSubSection("Encoder Options");
     opts.addOptions()
     ("preset",                                          toPreset,                                            "select preset for specific encoding setting (faster, fast, medium, slow, slower)")
-    ("bitrate,b",                                       c->m_RCTargetBitrate,                                "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
+    ("bitrate,b",                                       toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control; otherwise bits/second "
+                                                                                                             "(use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000))" )
     ("passes,p",                                        c->m_RCNumPasses,                                    "number of rate control passes (1,2)" )
     ("pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
     ("rcstatsfile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
@@ -560,7 +572,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("Pass",                                            c->m_RCPass,                                         "rate control pass for two-pass rate control (-1,1,2)" )
     ("LookAhead",                                       c->m_LookAhead,                                      "Enable pre-analysis pass with picture look-ahead (-1,0,1)")
     ("RCStatsFile",                                     m_RCStatsFileName,                                   "rate control statistics file" )
-    ("TargetBitrate",                                   c->m_RCTargetBitrate,                                "Rate control: target bit-rate [bps]" )
+    ("TargetBitrate",                                   toBitrate,                                           "Rate control: target bit-rate [bits/second], use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000" )
     ("PerceptQPA,-qpa",                                 c->m_usePerceptQPA,                                  "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ("STA",                                             c->m_sliceTypeAdapt,                                 "Enable slice type (B-to-I frame) adaptation at GOPSize>8 (0:off, 1:on)")
     ;
@@ -621,7 +633,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
   opts.setSubSection("Input Options");
   opts.addOptions()
-  ("y4m",                                             m_forceY4mInput,                                     "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
+  ("y4m",                                               m_forceY4mInput,                                   "force y4m input (only needed for input pipe, else enabled by .y4m file extension)")
   ;
 
   if( !m_easyMode )
@@ -1033,7 +1045,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("tickspersec",                                     c->m_TicksPerSecond,                                 "Ticks Per Second for dts generation, (1..27000000)")
     ("framerate,r",                                     c->m_FrameRate,                                      "temporal rate (framerate) e.g. 25,29,30,50,59,60 ")
     ("frames",                                          c->m_framesToBeEncoded,                              "max. frames to encode [all]")
-    ("bitrate",                                         c->m_RCTargetBitrate,                                "bitrate for rate control (0: constant-QP encoding without rate control, otherwise bits/second)" )
+    ("bitrate",                                         toBitrate,                                           "bitrate for rate control (0: constant-QP encoding without rate control, "
+                                                                                                             "otherwise bits/second (use e.g. 1.5M, 1.5Mbps, 1500k, 1500kbps, 1500000bps, 1500000))" )
     ("qpa",                                             toQPA,                                               "Enable perceptually motivated QP adaptation, XPSNR based (0:off, 1:on)", true)
     ;
   }
@@ -1129,7 +1142,10 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
   catch( df::program_options_lite::ParseFailure &e )
   {
     rcOstr << "Error parsing option \"" << e.arg << "\" with argument \"" << e.val << "\".\n";
-    ret = -1;
+    if( argc == 2 )
+      ret = VVENC_PARAM_BAD_VALUE;
+    else
+      ret = -1;
   }
 
   return ret;
