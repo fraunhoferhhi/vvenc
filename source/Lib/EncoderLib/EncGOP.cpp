@@ -461,7 +461,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   xCreateCodingOrder( picList, flush, encList );
   if( ! encList.empty() )
   {
-  xInitPicsInCodingOrder( encList, picList, false );
+    xInitPicsInCodingOrder( encList, picList, false );
   }
 
   // encode pictures

@@ -418,7 +418,8 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   if( !au.empty() )
   {
     m_AuList.push_back( au );
-    au.clearAu( true );
+    au.detachNalUnitList();
+    au.clearAu();
   }
 
   // If we haven't got an empty picture-unit for a new picture, we have to wait for stages to finish
@@ -437,7 +438,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   if( !m_AuList.empty() )
   {
     au = m_AuList.front();
-    m_AuList.front().clear();
+    m_AuList.front().detachNalUnitList();
     m_AuList.pop_front();
   }
 
