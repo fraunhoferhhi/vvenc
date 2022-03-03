@@ -190,13 +190,20 @@ cleanup:
 
 int main( int argc, char* argv[] )
 {
-   vvenc_config vvencCfg;
+  vvenc_config vvencCfg;
 
-   int maxFrames = 16;  // max frames to encode
+  int width  = 320;
+  int height = 240;
+  int fps    = 60;
+  int qp     = 32;
+  int bitrate = 0;
+  vvencPresetMode preset  = VVENC_FASTER;
+  vvencMsgLevel verbosity = VVENC_DETAILS;
+  int maxFrames = 16;  // max frames to encode
 
   // init test without multi threading
-  vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
-  vvencCfg.m_verbosity = VVENC_DETAILS;
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
   vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
 
   vvencCfg.m_numThreads = 0;
@@ -207,10 +214,9 @@ int main( int argc, char* argv[] )
   }
 
   // init test multi threading
-  vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
-  vvencCfg.m_verbosity = VVENC_DETAILS;
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
   vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
-
 
   if( 0 != run( &vvencCfg, maxFrames ))
   {
