@@ -311,15 +311,16 @@ VVENC_DECL const char* vvenc_get_last_error( vvencEncoder *enc )
   return e->getLastError();
 }
 
+static std::string VVencDefaultInfo;
+
 VVENC_DECL const char* vvenc_get_enc_information( vvencEncoder *enc )
 {
   auto e = (vvenc::VVEncImpl*)enc;
   if (!e)
   {
-    std::string info = vvenc::VVEncImpl::createEncoderInfoStr();
-    char* defaultInfo = (char*)malloc(info.size()+1);
-    strcpy(defaultInfo,info.c_str());
-    return defaultInfo;
+    VVencDefaultInfo.clear();
+    VVencDefaultInfo = vvenc::VVEncImpl::createEncoderInfoStr();
+    return VVencDefaultInfo.c_str();
   }
 
   return e->getEncoderInfo();
@@ -394,11 +395,16 @@ VVENC_DECL bool vvenc_is_tracing_enabled()
 #endif
 }
 
+static std::string VVencCompileInfo;
+
 // creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
 VVENC_DECL const char* vvenc_get_compile_info_string()
 {
-  return vvenc::VVEncImpl::getCompileInfoString();
+  VVencCompileInfo.clear();
+  VVencCompileInfo = vvenc::VVEncImpl::getCompileInfoString();
+  return VVencCompileInfo.c_str();
 }
+
 VVENC_DECL int vvenc_decode_bitstream( const char* FileName, const char* trcFile, const char* trcRule)
 {
   return vvenc::VVEncImpl::decodeBitstream( FileName, trcFile, trcRule );
