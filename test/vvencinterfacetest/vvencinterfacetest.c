@@ -61,7 +61,6 @@ void msgFnc( void* ctx, int level, const char* fmt, va_list args )
   vfprintf( level == 1 ? stderr : stdout, fmt, args );
 }
 
-
 void msgApp( int level, const char* fmt, ... )
 {
     va_list args;
@@ -69,7 +68,6 @@ void msgApp( int level, const char* fmt, ... )
     msgFnc( NULL, level, fmt, args );
     va_end( args );
 }
-
 
 int run( vvenc_config* vvencCfg, int maxFrames )
 {
@@ -199,9 +197,9 @@ int main( int argc, char* argv[] )
   int bitrate = 0;
   vvencPresetMode preset  = VVENC_FASTER;
   vvencMsgLevel verbosity = VVENC_WARNING;
-  int maxFrames = 16;  // max frames to encode
+  int maxFrames = 16;
 
-  // init test without multi threading
+  // init test run without multi threading
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
   vvencCfg.m_verbosity = verbosity;
   vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
@@ -213,7 +211,7 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  // init test multi threading
+  // init test run with multi threading
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
   vvencCfg.m_verbosity = verbosity;
   vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
@@ -222,8 +220,4 @@ int main( int argc, char* argv[] )
   {
     return -1;
   }
-
-
-
 }
-
