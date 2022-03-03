@@ -198,7 +198,7 @@ int main( int argc, char* argv[] )
   int qp     = 32;
   int bitrate = 0;
   vvencPresetMode preset  = VVENC_FASTER;
-  vvencMsgLevel verbosity = VVENC_DETAILS;
+  vvencMsgLevel verbosity = VVENC_WARNING;
   int maxFrames = 16;  // max frames to encode
 
   // init test without multi threading
