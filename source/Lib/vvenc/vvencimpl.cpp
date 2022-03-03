@@ -92,7 +92,7 @@ bool tryDecodePicture( Picture* pic, const int expectedPoc, const std::string& b
 
 VVEncImpl::VVEncImpl()
 {
-  m_cEncoderInfo = createEncoderInfoStr(); 
+  m_cEncoderInfo = createEncoderInfoStr();
 }
 
 VVEncImpl::~VVEncImpl()
@@ -724,14 +724,14 @@ const char* VVEncImpl::setSIMDExtension( const char* simdId )
 }
 
 ///< creates compile info string containing OS, Compiler and Bit-depth (e.g. 32 or 64 bit).
-const char* VVEncImpl::getCompileInfoString()
+std::string VVEncImpl::getCompileInfoString()
 {
+  std::string info;
   char convBuf[ 256 ];
-  VVencCompileInfo.clear();
-  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      VVencCompileInfo += convBuf;
-  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); VVencCompileInfo += convBuf;
-  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      VVencCompileInfo += convBuf;
-  return VVencCompileInfo.c_str();
+  snprintf( convBuf, sizeof( convBuf ), NVM_ONOS );      info += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_COMPILEDBY); info += convBuf;
+  snprintf( convBuf, sizeof( convBuf ), NVM_BITS );      info += convBuf;
+  return info;
 }
 
 std::string VVEncImpl::createEncoderInfoStr()
