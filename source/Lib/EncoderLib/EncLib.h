@@ -74,28 +74,29 @@ class MsgLog;
 class EncLib
 {
 private:
-  MsgLog&                msg;
+  MsgLog&                    msg;
 
   std::function<void( void*, vvencYUVBuffer* )> m_recYuvBufFunc;
   void*                                         m_recYuvBufCtx;
 
-  const VVEncCfg         m_encCfg;
-  const VVEncCfg         m_orgCfg;
-  VVEncCfg               m_firstPassCfg;
-  RateCtrl*              m_rateCtrl;
-  MCTF*                  m_MCTF;
-  EncGOP*                m_preEncoder;
-  EncGOP*                m_gopEncoder;
-  std::vector<EncStage*> m_encStages;
-  std::list<PicShared*>  m_picSharedList;
-  std::deque<PicShared*> m_prevSharedQueue;
-  PicShared*             m_prevSharedTL0;
+  const VVEncCfg             m_encCfg;
+  const VVEncCfg             m_orgCfg;
+  VVEncCfg                   m_firstPassCfg;
+  RateCtrl*                  m_rateCtrl;
+  MCTF*                      m_MCTF;
+  EncGOP*                    m_preEncoder;
+  EncGOP*                    m_gopEncoder;
+  std::vector<EncStage*>     m_encStages;
+  std::list<PicShared*>      m_picSharedList;
+  std::deque<PicShared*>     m_prevSharedQueue;
+  PicShared*                 m_prevSharedTL0;
 
-  NoMallocThreadPool*    m_threadPool;
+  NoMallocThreadPool*        m_threadPool;
 
-  int                    m_picsRcvd;
-  int                    m_passInitialized;
+  int                        m_picsRcvd;
+  int                        m_passInitialized;
   int                        m_maxNumPicShared;
+  bool                       m_anyAuDone;
   std::mutex                 m_stagesMutex;
   std::condition_variable    m_stagesCond;
   std::deque<AccessUnitList> m_AuList;
