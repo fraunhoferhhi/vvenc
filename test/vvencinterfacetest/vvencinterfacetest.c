@@ -61,7 +61,15 @@ void msgFnc( void* ctx, int level, const char* fmt, va_list args )
   vfprintf( level == 1 ? stderr : stdout, fmt, args );
 }
 
-int main( int argc, char* argv[] )
+void msgApp( int level, const char* fmt, ... )
+{
+    va_list args;
+    va_start( args, fmt );
+    msgFnc( NULL, level, fmt, args );
+    va_end( args );
+}
+
+int run( vvenc_config* vvencCfg, int maxFrames )
 {
   int iRet = 0;
   vvencEncoder *enc = NULL;        // encoder handler
@@ -70,13 +78,6 @@ int main( int argc, char* argv[] )
   vvencYUVBuffer* ptrYUVInputBuffer = NULL;
 
   vvencAccessUnit AU;  // access unint storage
-
-  int maxFrames = 8;  // max frames to encode
-
-  // init default settings
-  vvenc_config vvencCfg;
-  vvenc_init_default( &vvencCfg, 1920, 1080, 60, 0, 32, VVENC_MEDIUM );
-  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
 
   // create the encoder
   enc = vvenc_encoder_create();
@@ -87,7 +88,7 @@ int main( int argc, char* argv[] )
   }
 
   // initialize the encoder
-  iRet = vvenc_encoder_open( enc, &vvencCfg );
+  iRet = vvenc_encoder_open( enc, vvencCfg );
   if( 0 != iRet )
   {
     printf("cannot open encoder. ret: %d, %s\n", iRet, vvenc_get_last_error( enc ) );
@@ -96,11 +97,13 @@ int main( int argc, char* argv[] )
 
   // get the adapted config, because changes are needed for the yuv reader
   // (uninitialized parameter may be set during vvenc_encoder_open)
-  vvenc_get_config( enc, &vvencCfg );
+  vvenc_get_config( enc, vvencCfg );
+
+  msgApp( VVENC_INFO,"%s\n", vvenc_get_config_as_string( vvencCfg, vvencCfg->m_verbosity) );
 
   // --- allocate memory for YUV input picture
   vvenc_YUVBuffer_default( &cYUVInputBuffer );
-  vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencCfg.m_internChromaFormat, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
+  vvenc_YUVBuffer_alloc_buffer( &cYUVInputBuffer, vvencCfg->m_internChromaFormat, vvencCfg->m_SourceWidth, vvencCfg->m_SourceHeight );
 
   // inititialize yuv input buffer
   for( int comp = 0; comp < 3; comp++ )
@@ -110,12 +113,18 @@ int main( int argc, char* argv[] )
 
   // --- allocate memory for output packets
   vvenc_accessUnit_default( &AU );
-  vvenc_accessUnit_alloc_payload( &AU, vvencCfg.m_SourceWidth * vvencCfg.m_SourceHeight );
+  vvenc_accessUnit_alloc_payload( &AU, vvencCfg->m_SourceWidth * vvencCfg->m_SourceHeight );
 
   // run encoder loop
+  int AuCount = 0;
   bool encodeDone = false;
   for( int frame = 0; frame < maxFrames; frame++ )
   {
+    int iWhere = frame % vvencCfg->m_SourceHeight;
+    for( int comp = 0; comp < 3; comp++ )
+    {
+      memset( cYUVInputBuffer.planes[ comp ].ptr+iWhere, frame, cYUVInputBuffer.planes[comp].width*sizeof(int16_t));
+    }
     ptrYUVInputBuffer = &cYUVInputBuffer; // assign dummy input buffer
     iRet = vvenc_encode( enc, ptrYUVInputBuffer, &AU, &encodeDone );
     if( 0 != iRet )
@@ -124,9 +133,15 @@ int main( int argc, char* argv[] )
       goto cleanup;
     }
 
-    if( AU.payloadUsedSize > 0 )
+    if( AU.payloadUsedSize > 0 && !encodeDone )
     {
       // write bitstream output: AU.payload, AU.payloadUsedSize
+      AuCount++;
+    }
+    else if ( AuCount > 0 )
+    {
+      printf("expecting Au, but receive empty payload (frame %d/%d, payloads rcv %d)\n", frame, maxFrames, AuCount);
+      goto cleanup;
     }
   }
 
@@ -144,6 +159,12 @@ int main( int argc, char* argv[] )
     if( AU.payloadUsedSize > 0 )
     {
       // write bitstream output: AU.payload, AU.payloadUsedSize
+      AuCount++;
+    }
+    else if ( AuCount > 0 && !encodeDone )
+    {
+      printf("expecting Au on flush, but receive empty payload (frame %d/%d, payloads rcv %d)\n",  maxFrames, maxFrames, AuCount);
+      goto cleanup;
     }
   }
 
@@ -165,3 +186,38 @@ cleanup:
   return iRet;
 }
 
+int main( int argc, char* argv[] )
+{
+  vvenc_config vvencCfg;
+
+  int width  = 320;
+  int height = 240;
+  int fps    = 60;
+  int qp     = 32;
+  int bitrate = 0;
+  vvencPresetMode preset  = VVENC_FASTER;
+  vvencMsgLevel verbosity = VVENC_WARNING;
+  int maxFrames = 16;
+
+  // init test run without multi threading
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
+
+  vvencCfg.m_numThreads = 0;
+
+  if( 0 != run( &vvencCfg, maxFrames ))
+  {
+    return -1;
+  }
+
+  // init test run with multi threading
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
+
+  if( 0 != run( &vvencCfg, maxFrames ))
+  {
+    return -1;
+  }
+}
