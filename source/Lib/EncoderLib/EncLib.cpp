@@ -83,6 +83,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
   , m_maxNumPicShared( MAX_INT )
+  , m_anyAuDone      ( false )
 {
 }
 
@@ -274,6 +275,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_prevSharedTL0 = nullptr;
 
   m_picsRcvd        = -m_encCfg.m_leadFrames;
+  m_anyAuDone       = false;
   m_passInitialized = pass;
 }
 
@@ -377,62 +379,69 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // 5. Then we have to wait for the next available picture-unit and the input frame can be passed to the 1.stage.
 
   PicShared* picShared = nullptr;
-  do
+  bool inputPending    = ( yuvInBuf != nullptr );
+  while( true )
   {
-  // send new YUV input buffer to first encoder stage
-  if( yuvInBuf )
-  {
-    picShared = xGetFreePicShared();
-    if( picShared )
+    // send new YUV input buffer to first encoder stage
+    if( inputPending )
     {
-    picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_sliceTypeAdapt
-        || m_encCfg.m_usePerceptQPA
-        || m_encCfg.m_RCNumPasses == 2
-        || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
-    {
-      xAssignPrevQpaBufs( picShared );
+      picShared = xGetFreePicShared();
+      if( picShared )
+      {
+        picShared->reuse( m_picsRcvd, yuvInBuf );
+        if( m_encCfg.m_sliceTypeAdapt
+            || m_encCfg.m_usePerceptQPA
+            || m_encCfg.m_RCNumPasses == 2
+            || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
+        {
+          xAssignPrevQpaBufs( picShared );
+        }
+        if( ! picShared->isLeadTrail() )
+        {
+          xDetectScc( picShared );
+        }
+        if( picShared->getPOC() >= firstPoc )
+        {
+          m_encStages[ 0 ]->addPicSorted( picShared );
+        }
+        m_picsRcvd  += 1;
+        inputPending = false;
+      }
     }
-    if( ! picShared->isLeadTrail() )
-    {
-      xDetectScc( picShared );
-    }
-    if( picShared->getPOC() >= firstPoc )
-    {
-      m_encStages[ 0 ]->addPicSorted( picShared );
-    }
-    m_picsRcvd += 1;
-    }
-  }
 
-  PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
+    PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
-  // trigger stages
-  isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
-  for( auto encStage : m_encStages )
-  {
-    encStage->runStage( flush, au );
-    isQueueEmpty &= encStage->isStageDone();
-  }
-
-  if( !au.empty() )
-  {
-    m_AuList.push_back( au );
-    au.detachNalUnitList();
-    au.clearAu();
-  }
-
-  // If we haven't got an empty picture-unit for a new picture, we have to wait for stages to finish
-  if( m_encCfg.m_numThreads > 0 && ( ( flush ) || ( yuvInBuf && !picShared ) ) )
-  {
+    // trigger stages
+    isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
     for( auto encStage : m_encStages )
     {
-      if( encStage->isNonBlocking() )
-        encStage->waitForFreeEncoders();
+      encStage->runStage( flush, au );
+      isQueueEmpty &= encStage->isStageDone();
+    }
+
+    if( !au.empty() )
+    {
+      m_AuList.push_back( au );
+      au.detachNalUnitList();
+      au.clearAu();
+    }
+
+    // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
+    bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_anyAuDone || flush ) );
+    if( ! waitAndStay )
+    {
+      break;
+    }
+
+    if( m_encCfg.m_numThreads > 0 )
+    {
+      for( auto encStage : m_encStages )
+      {
+        if( encStage->isNonBlocking() )
+          encStage->waitForFreeEncoders();
+      }
     }
   }
-
-  }while( yuvInBuf && !picShared );
 
   // check if we have an AU to output
   if( !m_AuList.empty() )
