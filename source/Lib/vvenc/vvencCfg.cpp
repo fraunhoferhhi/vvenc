@@ -1167,8 +1167,14 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   }
   else if( c->m_IntraPeriod == 1 && c->m_GOPSize != 1 )
   {
-    msg.log( VVENC_WARNING, "\nIntraPeriod is 1, thus GOPSize is set to 1 too\n\n" );
+    msg.log( VVENC_WARNING, "\nIntraPeriod is 1, thus GOPSize is set to 1 too and given gop structures are resetted\n\n" );
     c->m_GOPSize = 1;
+    for( int i = 0; i < VVENC_MAX_GOP; i++ )
+    {
+      vvenc_RPLEntry_default( &c->m_RPLList0[i]);
+      vvenc_RPLEntry_default( &c->m_RPLList1[i]);
+      vvenc_GOPEntry_default( &c->m_GOPList[i]);
+    }
   }
 
   // set number of lead / trail frames in segment mode
