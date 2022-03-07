@@ -181,6 +181,8 @@ private:
   std::vector<int>          m_nextPocOffset;
   std::vector<int>          m_globalCtuQpVector;
 
+  bool                      m_trySkipOrDecodePicture;
+
 public:
   EncGOP( MsgLog& msglog );
   virtual ~EncGOP();

@@ -314,7 +314,7 @@ void EncPicture::skipCompressPicture( Picture& pic, ParameterSetMap<APS>& shrdAp
       }
     }
 
-    // Assign tne correct APS to slice and emulate the setting of ALF start APS ID
+    // Assign the correct APS to slice and emulate the setting of ALF start APS ID
     int changedApsId = -1;
     for( int apsId = ALF_CTB_MAX_NUM_APS - 1; apsId >= 0; apsId-- )
     {
