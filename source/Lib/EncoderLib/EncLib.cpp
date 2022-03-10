@@ -281,6 +281,12 @@ void EncLib::initPass( int pass, const char* statsFName )
 
 void EncLib::xUninitLib()
 {
+  // make sure all processing threads are stopped before releasing data
+  if( m_threadPool )
+  {
+    m_threadPool->shutdown( true );
+  }
+
   // sub modules
   if( m_rateCtrl != nullptr )
   {
@@ -319,7 +325,6 @@ void EncLib::xUninitLib()
   // thread pool
   if( m_threadPool )
   {
-    m_threadPool->shutdown( true );
     delete m_threadPool;
     m_threadPool = nullptr;
   }
