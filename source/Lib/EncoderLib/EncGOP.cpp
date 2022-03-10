@@ -867,8 +867,6 @@ void EncGOP::xCreateCodingOrder( const PicList& picList, bool flush, std::vector
     if( ! pic )
       break;
     encList.push_back( pic );
-    if( pic->poc == 0 )
-      break;
   }
 }
 
