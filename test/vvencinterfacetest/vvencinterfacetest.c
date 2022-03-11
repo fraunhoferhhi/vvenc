@@ -82,10 +82,6 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
   bool encodeDone = false;
   int auCount = 0;
   int auCountExpected = maxFrames;
-  if( !runTillFlushed )
-  {
-    auCountExpected = (maxFrames > 10) ? (maxFrames-10) : 1;
-  }
 
   // create the encoder
   enc = vvenc_encoder_create();
@@ -107,7 +103,10 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
   // (uninitialized parameter may be set during vvenc_encoder_open)
   vvenc_get_config( enc, vvencCfg );
 
-  msgApp( VVENC_INFO,"%s\n", vvenc_get_config_as_string( vvencCfg, vvencCfg->m_verbosity) );
+  if( vvencCfg->m_verbosity >= VVENC_INFO )
+  {
+    msgApp( VVENC_INFO,"%s\n", vvenc_get_config_as_string( vvencCfg, vvencCfg->m_verbosity) );
+  }
 
   // --- allocate memory for YUV input picture
   vvenc_YUVBuffer_default( &cYUVInputBuffer );
@@ -186,7 +185,10 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
     }
   }
 
-  vvenc_print_summary(enc);
+  if( vvencCfg->m_verbosity >= VVENC_INFO )
+  {
+    vvenc_print_summary(enc);
+  }
 
 cleanup:
 
