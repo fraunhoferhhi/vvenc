@@ -144,6 +144,7 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
     else if ( auCount > 0 )
     {
       printf("expecting Au, but receive empty payload (frame %d/%d, payloads rcv %d)\n", frame, maxFrames, auCount);
+      iRet=-1;
       goto cleanup;
     }
   }
@@ -167,6 +168,7 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
     else if ( auCount > 0 && !encodeDone )
     {
       printf("expecting Au on flush, but receive empty payload (frame %d/%d, payloads rcv %d)\n",  maxFrames, maxFrames, auCount);
+      iRet=-1;
       goto cleanup;
     }
 
