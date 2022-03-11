@@ -454,6 +454,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     au = m_AuList.front();
     m_AuList.front().detachNalUnitList();
     m_AuList.pop_front();
+    m_anyAuDone=true;
   }
 
   // reset output access unit, if not final pass
