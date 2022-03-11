@@ -1298,6 +1298,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_treatAsSubPic )
   {
+    if( c->m_sliceTypeAdapt )    msg.log( VVENC_WARNING, "with SliceTypeAdation (STA) enabled, merging subPicture streams with the SubPicMergeApp may crash (TreatAsSubPic)\n" );
     if( c->m_alfTempPred )       msg.log( VVENC_WARNING, "disable ALF temporal prediction, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
     if( c->m_JointCbCrMode )     msg.log( VVENC_WARNING, "disable joint coding of chroma residuals, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
     if( c->m_lumaReshapeEnable ) msg.log( VVENC_WARNING, "disable LMCS luma mapping with chroma scaling, when generation of subpicture streams is enabled (TreatAsSubPic)\n" );
