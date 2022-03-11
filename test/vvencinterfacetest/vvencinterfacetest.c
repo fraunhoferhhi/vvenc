@@ -277,4 +277,28 @@ int main( int argc, char* argv[] )
   {
     return -1;
   }
+
+
+#if 0 // only for development purposes
+  // ---------------------------------------- 5 ------------------------------
+  // init test run with 1pass RC, lookahead, multi threading + different frame count
+  bitrate = 500000;
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
+
+  vvencCfg.m_RCNumPasses = 1;
+
+  maxFrames = vvencCfg.m_GOPSize;
+  while ( maxFrames < 128 )
+  {
+    printf("encoding %d frames\n", maxFrames);
+    if( 0 != run( &vvencCfg, maxFrames, false ))
+    {
+      printf("error when encoding %d frames\n", maxFrames);
+      return -1;
+    }
+    maxFrames++;
+  }
+#endif
 }
