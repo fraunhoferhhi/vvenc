@@ -79,6 +79,14 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
 
   vvencAccessUnit AU;  // access unint storage
 
+  bool encodeDone = false;
+  int auCount = 0;
+  int auCountExpected = maxFrames;
+  if( !runTillFlushed )
+  {
+    auCountExpected = (maxFrames > 10) ? (maxFrames-10) : 1;
+  }
+
   // create the encoder
   enc = vvenc_encoder_create();
   if( NULL == enc )
@@ -116,8 +124,7 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
   vvenc_accessUnit_alloc_payload( &AU, vvencCfg->m_SourceWidth * vvencCfg->m_SourceHeight );
 
   // run encoder loop
-  int auCount = 0;
-  bool encodeDone = false;
+
   for( int frame = 0; frame < maxFrames; frame++ )
   {
     int iWhere = frame % vvencCfg->m_SourceHeight;
@@ -172,7 +179,7 @@ int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
       goto cleanup;
     }
 
-    if( !runTillFlushed && auCount > 0 )
+    if( !runTillFlushed && auCount > auCountExpected )
     {
       //printf("cancel after retrieving %d AU´s for test purpose\n", auCount );
       break;
@@ -191,6 +198,12 @@ cleanup:
   if( 0 != vvenc_encoder_close( enc ) )
   {
     printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
+    return -1;
+  }
+
+  if( runTillFlushed && auCount != auCountExpected )
+  {
+    printf("expecting %d Au´s but only retrieve %d", auCountExpected, auCount);
     return -1;
   }
 
