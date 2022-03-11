@@ -253,8 +253,6 @@ int main( int argc, char* argv[] )
   test++;
   // ---------------------------------------- 4 ------------------------------
   // init test run with 1pass RC, lookahead, multi threading
-  verbosity = VVENC_DETAILS;
-
   bitrate = 500000;
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
   vvencCfg.m_verbosity = verbosity;
