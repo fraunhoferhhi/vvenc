@@ -69,7 +69,7 @@ void msgApp( int level, const char* fmt, ... )
     va_end( args );
 }
 
-int run( vvenc_config* vvencCfg, int maxFrames )
+int run( vvenc_config* vvencCfg, int maxFrames, bool runTillFlushed )
 {
   int iRet = 0;
   vvencEncoder *enc = NULL;        // encoder handler
@@ -78,6 +78,10 @@ int run( vvenc_config* vvencCfg, int maxFrames )
   vvencYUVBuffer* ptrYUVInputBuffer = NULL;
 
   vvencAccessUnit AU;  // access unint storage
+
+  bool encodeDone = false;
+  int auCount = 0;
+  int auCountExpected = maxFrames;
 
   // create the encoder
   enc = vvenc_encoder_create();
@@ -99,7 +103,10 @@ int run( vvenc_config* vvencCfg, int maxFrames )
   // (uninitialized parameter may be set during vvenc_encoder_open)
   vvenc_get_config( enc, vvencCfg );
 
-  msgApp( VVENC_INFO,"%s\n", vvenc_get_config_as_string( vvencCfg, vvencCfg->m_verbosity) );
+  if( vvencCfg->m_verbosity >= VVENC_INFO )
+  {
+    msgApp( VVENC_INFO,"%s\n", vvenc_get_config_as_string( vvencCfg, vvencCfg->m_verbosity) );
+  }
 
   // --- allocate memory for YUV input picture
   vvenc_YUVBuffer_default( &cYUVInputBuffer );
@@ -116,8 +123,7 @@ int run( vvenc_config* vvencCfg, int maxFrames )
   vvenc_accessUnit_alloc_payload( &AU, vvencCfg->m_SourceWidth * vvencCfg->m_SourceHeight );
 
   // run encoder loop
-  int AuCount = 0;
-  bool encodeDone = false;
+
   for( int frame = 0; frame < maxFrames; frame++ )
   {
     int iWhere = frame % vvencCfg->m_SourceHeight;
@@ -126,6 +132,9 @@ int run( vvenc_config* vvencCfg, int maxFrames )
       memset( cYUVInputBuffer.planes[ comp ].ptr+iWhere, frame, cYUVInputBuffer.planes[comp].width*sizeof(int16_t));
     }
     ptrYUVInputBuffer = &cYUVInputBuffer; // assign dummy input buffer
+    ptrYUVInputBuffer->sequenceNumber = frame;
+
+    //printf("vvenc_encode seq: %ld\n", ptrYUVInputBuffer->sequenceNumber );
     iRet = vvenc_encode( enc, ptrYUVInputBuffer, &AU, &encodeDone );
     if( 0 != iRet )
     {
@@ -136,11 +145,12 @@ int run( vvenc_config* vvencCfg, int maxFrames )
     if( AU.payloadUsedSize > 0 && !encodeDone )
     {
       // write bitstream output: AU.payload, AU.payloadUsedSize
-      AuCount++;
+      auCount++;
     }
-    else if ( AuCount > 0 )
+    else if ( auCount > 0 )
     {
-      printf("expecting Au, but receive empty payload (frame %d/%d, payloads rcv %d)\n", frame, maxFrames, AuCount);
+      printf("expecting Au, but receive empty payload (frame %d/%d, payloads rcv %d)\n", frame, maxFrames, auCount);
+      iRet=-1;
       goto cleanup;
     }
   }
@@ -159,16 +169,26 @@ int run( vvenc_config* vvencCfg, int maxFrames )
     if( AU.payloadUsedSize > 0 )
     {
       // write bitstream output: AU.payload, AU.payloadUsedSize
-      AuCount++;
+      auCount++;
     }
-    else if ( AuCount > 0 && !encodeDone )
+    else if ( auCount > 0 && !encodeDone )
     {
-      printf("expecting Au on flush, but receive empty payload (frame %d/%d, payloads rcv %d)\n",  maxFrames, maxFrames, AuCount);
+      printf("expecting Au on flush, but receive empty payload (frame %d/%d, payloads rcv %d)\n",  maxFrames, maxFrames, auCount);
+      iRet=-1;
       goto cleanup;
+    }
+
+    if( !runTillFlushed && auCount > auCountExpected )
+    {
+      //printf("cancel after retrieving %d AU´s for test purpose\n", auCount );
+      break;
     }
   }
 
-  vvenc_print_summary(enc);
+  if( vvencCfg->m_verbosity >= VVENC_INFO )
+  {
+    vvenc_print_summary(enc);
+  }
 
 cleanup:
 
@@ -180,6 +200,12 @@ cleanup:
   if( 0 != vvenc_encoder_close( enc ) )
   {
     printf("close encoder failed. ret: %d, %s", iRet, vvenc_get_last_error( enc ) );
+    return -1;
+  }
+
+  if( runTillFlushed && auCount != auCountExpected )
+  {
+    printf("expecting %d Au´s but only retrieve %d", auCountExpected, auCount);
     return -1;
   }
 
@@ -199,6 +225,7 @@ int main( int argc, char* argv[] )
   vvencMsgLevel verbosity = VVENC_WARNING;
   int maxFrames = 16;
 
+  // ---------------------------------------- 1 ------------------------------
   // init test run without multi threading
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
   vvencCfg.m_verbosity = verbosity;
@@ -206,18 +233,72 @@ int main( int argc, char* argv[] )
 
   vvencCfg.m_numThreads = 0;
 
-  if( 0 != run( &vvencCfg, maxFrames ))
+  if( 0 != run( &vvencCfg, maxFrames, true ))
   {
     return -1;
   }
 
+  // ---------------------------------------- 2 ------------------------------
   // init test run with multi threading
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
   vvencCfg.m_verbosity = verbosity;
   vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
 
-  if( 0 != run( &vvencCfg, maxFrames ))
+  if( 0 != run( &vvencCfg, maxFrames, true ))
   {
     return -1;
   }
+
+  // ---------------------------------------- 3 ------------------------------
+  // init test run with multi threading, (2*GOPSize)+8 franes
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
+
+  maxFrames = (2 * vvencCfg.m_GOPSize)+8;
+  if( 0 != run( &vvencCfg, maxFrames, true ))
+  {
+    return -1;
+  }
+
+
+  // ---------------------------------------- 4 ------------------------------
+  // init test run with 1pass RC, lookahead, multi threading
+  bitrate = 500000;
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
+
+  vvencCfg.m_RCNumPasses = 1;
+
+  maxFrames = (2 * vvencCfg.m_GOPSize)+8;
+
+  if( 0 != run( &vvencCfg, maxFrames, false ))
+  {
+    return -1;
+  }
+
+
+#if 0 // only for development purposes
+  // ---------------------------------------- 5 ------------------------------
+  // init test run with 1pass RC, lookahead, multi threading + different frame count
+  bitrate = 500000;
+  vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
+  vvencCfg.m_verbosity = verbosity;
+  vvenc_set_msg_callback( &vvencCfg, NULL, &msgFnc );
+
+  vvencCfg.m_RCNumPasses = 1;
+
+  maxFrames = vvencCfg.m_GOPSize;
+  while ( maxFrames < 128 )
+  {
+    printf("encoding %d frames\n", maxFrames);
+    if( 0 != run( &vvencCfg, maxFrames, false ))
+    {
+      printf("error when encoding %d frames\n", maxFrames);
+      return -1;
+    }
+    maxFrames++;
+  }
+#endif
 }
