@@ -429,6 +429,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       m_AuList.push_back( au );
       au.detachNalUnitList();
       au.clearAu();
+      m_anyAuDone = true;
     }
 
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
@@ -454,7 +455,6 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
     au = m_AuList.front();
     m_AuList.front().detachNalUnitList();
     m_AuList.pop_front();
-    m_anyAuDone = true;
   }
 
   // reset output access unit, if not final pass
