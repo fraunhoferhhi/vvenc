@@ -208,8 +208,6 @@ int main( int argc, char* argv[] )
   vvencMsgLevel verbosity = VVENC_WARNING;
   int maxFrames = 16;
 
-  int test=1;
-
   // ---------------------------------------- 1 ------------------------------
   // init test run without multi threading
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
@@ -220,11 +218,9 @@ int main( int argc, char* argv[] )
 
   if( 0 != run( &vvencCfg, maxFrames, true ))
   {
-    printf("error during interface test %d", test );
     return -1;
   }
 
-  test++;
   // ---------------------------------------- 2 ------------------------------
   // init test run with multi threading
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
@@ -236,7 +232,6 @@ int main( int argc, char* argv[] )
     return -1;
   }
 
-  test++;
   // ---------------------------------------- 3 ------------------------------
   // init test run with multi threading, (2*GOPSize)+8 franes
   vvenc_init_default( &vvencCfg, width, height, fps, bitrate, qp, preset );
@@ -250,7 +245,6 @@ int main( int argc, char* argv[] )
   }
 
 
-  test++;
   // ---------------------------------------- 4 ------------------------------
   // init test run with 1pass RC, lookahead, multi threading
   bitrate = 500000;
