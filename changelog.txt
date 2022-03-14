@@ -1,4 +1,40 @@
 /////////////////////////////////////////
+tag 1.4.0 (rc1)
+
+* all:
+  - changed license to the standard Clear BSD license (without adaptations)
+  - explicitly stating the authors (AUTHORS.md) as copyright holders
+
+* libvvenc:
+  - removed library parameters:
+    - vvencMCTF::MCTFNumLeadFrames, vvencMCTF::MCTFNumTrailFrames
+    - vvenc_config::m_RCLookAhead (now always behaving as if equal to 1)
+  - added library parameters:
+    - vvenc_config::m_leadFrames, vvenc_config::m_trailFrames, vvenc_config::m_LookAhead, vvenc_config::m_sliceTypeAdapt
+  - add function to extract SPS, PPS and other headers during encoding
+    int vvenc_get_headers(vvencEncoder *, vvencAccessUnit *);
+  - removed legacy 1-pass rate control (now always using the look-ahead based 1pRC)
+  - added a slice adaptation mode inserting intra-frames instead of TL-0 B-frames when scene-cut is detected within the preceding GOP
+  - fix encoder initialization with other bitstream when using rate control
+  - fixed CU tracing
+  - ported improvements to motion compensated filtering from JVET
+  - fixed LMCS processing for 8-bit internal bitdepth coding
+  - various fixes and improvements
+  
+* vvencapp:
+  - changed semantics of the bitrate parameters to understand suffixes (Mbps, M, kbps, k, bps),
+    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1, 1), respectively
+
+* vvencFFapp:
+  - added command line parameters:
+    - STA: enable/disable TL-0 B-to-I slice type adaptation after scene cuts (default: on)
+  - renamed parameters:
+    - MCTFNumLeadFrames -> LeadFrames (now also relevant in chunk based encoding for STA)
+    - MCTFNumTrailFrames -> TrailFrames
+  - changed semantics of the TargetBitrate parameter to understand suffixes (Mbps, M, kbps, k, bps),
+    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1, 1), respectively
+
+/////////////////////////////////////////
 tag 1.3.1
 
 * libvvenc:
@@ -35,7 +71,7 @@ tag 1.3.0
   - perceptual QPA improvements for lower bitrates
   - added tile support including tile parallelism
   - mingw support added
-  - various cleanups, bugfixes and reducing memory usage
+  - various cleanups, bugfixes and reducing memory usage)
 
 * vvencapp:
   - added command line parameters:
