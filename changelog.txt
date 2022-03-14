@@ -71,7 +71,7 @@ tag 1.3.0
   - perceptual QPA improvements for lower bitrates
   - added tile support including tile parallelism
   - mingw support added
-  - various cleanups, bugfixes and reducing memory usage)
+  - various cleanups, bugfixes and reducing memory usage
 
 * vvencapp:
   - added command line parameters:
