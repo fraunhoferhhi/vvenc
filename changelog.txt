@@ -23,7 +23,8 @@ tag 1.4.0 (rc1)
   
 * vvencapp:
   - changed semantics of the bitrate parameters to understand suffixes (Mbps, M, kbps, k, bps),
-    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1, 1), respectively
+    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1), respectively
+  - added y4m parameter to force input interpretation as Y4M (also inferred when file file extension is .y4m)
 
 * vvencFFapp:
   - added command line parameters:
@@ -32,7 +33,8 @@ tag 1.4.0 (rc1)
     - MCTFNumLeadFrames -> LeadFrames (now also relevant in chunk based encoding for STA)
     - MCTFNumTrailFrames -> TrailFrames
   - changed semantics of the TargetBitrate parameter to understand suffixes (Mbps, M, kbps, k, bps),
-    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1, 1), respectively
+    associated with multipliers (1e6, 1e6, 1e3, 1e3, 1), respectively
+  - added y4m parameter to force input interpretation as Y4M (also inferred when file file extension is .y4m)
 
 /////////////////////////////////////////
 tag 1.3.1
