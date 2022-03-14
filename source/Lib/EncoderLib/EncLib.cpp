@@ -1,45 +1,41 @@
 /* -----------------------------------------------------------------------------
-The copyright in this software is being made available under the BSD
+The copyright in this software is being made available under the Clear BSD
 License, included below. No patent rights, trademark rights and/or 
 other Intellectual Property Rights other than the copyrights concerning 
 the Software are granted under this license.
 
-For any license concerning other Intellectual Property rights than the software,
-especially patent licenses, a separate Agreement needs to be closed. 
-For more information please contact:
+The Clear BSD License
 
-Fraunhofer Heinrich Hertz Institute
-Einsteinufer 37
-10587 Berlin, Germany
-www.hhi.fraunhofer.de/vvc
-vvc@hhi.fraunhofer.de
-
-Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.
+Copyright (c) 2019-2022, Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V. & The VVenC Authors.
 All rights reserved.
 
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+Redistribution and use in source and binary forms, with or without modification,
+are permitted (subject to the limitations in the disclaimer below) provided that
+the following conditions are met:
 
- * Redistributions of source code must retain the above copyright notice,
-   this list of conditions and the following disclaimer.
- * Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
- * Neither the name of Fraunhofer nor the names of its contributors may
-   be used to endorse or promote products derived from this software without
-   specific prior written permission.
+     * Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
-BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
-THE POSSIBILITY OF SUCH DAMAGE.
+     * Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+     * Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from this
+     software without specific prior written permission.
+
+NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY
+THIS LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 
 ------------------------------------------------------------------------------------------- */
@@ -83,6 +79,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
   , m_maxNumPicShared( MAX_INT )
+  , m_anyAuDone      ( false )
 {
 }
 
@@ -274,11 +271,18 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_prevSharedTL0 = nullptr;
 
   m_picsRcvd        = -m_encCfg.m_leadFrames;
+  m_anyAuDone       = false;
   m_passInitialized = pass;
 }
 
 void EncLib::xUninitLib()
 {
+  // make sure all processing threads are stopped before releasing data
+  if( m_threadPool )
+  {
+    m_threadPool->shutdown( true );
+  }
+
   // sub modules
   if( m_rateCtrl != nullptr )
   {
@@ -317,7 +321,6 @@ void EncLib::xUninitLib()
   // thread pool
   if( m_threadPool )
   {
-    m_threadPool->shutdown( true );
     delete m_threadPool;
     m_threadPool = nullptr;
   }
@@ -377,67 +380,76 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   // 5. Then we have to wait for the next available picture-unit and the input frame can be passed to the 1.stage.
 
   PicShared* picShared = nullptr;
-  do
+  bool inputPending    = ( yuvInBuf != nullptr );
+  while( true )
   {
-  // send new YUV input buffer to first encoder stage
-  if( yuvInBuf )
-  {
-    picShared = xGetFreePicShared();
-    if( picShared )
+    // send new YUV input buffer to first encoder stage
+    if( inputPending )
     {
-    picShared->reuse( m_picsRcvd, yuvInBuf );
-    if( m_encCfg.m_sliceTypeAdapt
-        || m_encCfg.m_usePerceptQPA
-        || m_encCfg.m_RCNumPasses == 2
-        || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
-    {
-      xAssignPrevQpaBufs( picShared );
+      picShared = xGetFreePicShared();
+      if( picShared )
+      {
+        picShared->reuse( m_picsRcvd, yuvInBuf );
+        if( m_encCfg.m_sliceTypeAdapt
+            || m_encCfg.m_usePerceptQPA
+            || m_encCfg.m_RCNumPasses == 2
+            || ( m_encCfg.m_LookAhead && m_rateCtrl->m_pcEncCfg->m_RCTargetBitrate ) )
+        {
+          xAssignPrevQpaBufs( picShared );
+        }
+        if( ! picShared->isLeadTrail() )
+        {
+          xDetectScc( picShared );
+        }
+        if( picShared->getPOC() >= firstPoc )
+        {
+          m_encStages[ 0 ]->addPicSorted( picShared );
+        }
+        m_picsRcvd  += 1;
+        inputPending = false;
+      }
     }
-    if( ! picShared->isLeadTrail() )
-    {
-      xDetectScc( picShared );
-    }
-    if( picShared->getPOC() >= firstPoc )
-    {
-      m_encStages[ 0 ]->addPicSorted( picShared );
-    }
-    m_picsRcvd += 1;
-    }
-  }
 
-  PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
+    PROFILER_EXT_UPDATE( g_timeProfiler, P_TOP_LEVEL, pic->TLayer );
 
-  // trigger stages
-  isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
-  for( auto encStage : m_encStages )
-  {
-    encStage->runStage( flush, au );
-    isQueueEmpty &= encStage->isStageDone();
-  }
-
-  if( !au.empty() )
-  {
-    m_AuList.push_back( au );
-    au.clearAu( true );
-  }
-
-  // If we haven't got an empty picture-unit for a new picture, we have to wait for stages to finish
-  if( m_encCfg.m_numThreads > 0 && ( ( flush ) || ( yuvInBuf && !picShared ) ) )
-  {
+    // trigger stages
+    isQueueEmpty = m_picsRcvd > firstPoc || ( m_picsRcvd <= firstPoc && flush );
     for( auto encStage : m_encStages )
     {
-      if( encStage->isNonBlocking() )
-        encStage->waitForFreeEncoders();
+      encStage->runStage( flush, au );
+      isQueueEmpty &= encStage->isStageDone();
+    }
+
+    if( !au.empty() )
+    {
+      m_AuList.push_back( au );
+      au.detachNalUnitList();
+      au.clearAu();
+      m_anyAuDone = true;
+    }
+
+    // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
+    bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_anyAuDone || flush ) );
+    if( ! waitAndStay )
+    {
+      break;
+    }
+
+    if( m_encCfg.m_numThreads > 0 )
+    {
+      for( auto encStage : m_encStages )
+      {
+        if( encStage->isNonBlocking() )
+          encStage->waitForFreeEncoders();
+      }
     }
   }
-
-  }while( yuvInBuf && !picShared );
 
   // check if we have an AU to output
   if( !m_AuList.empty() )
   {
     au = m_AuList.front();
-    m_AuList.front().clear();
+    m_AuList.front().detachNalUnitList();
     m_AuList.pop_front();
   }
 
