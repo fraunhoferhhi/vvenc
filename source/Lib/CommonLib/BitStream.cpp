@@ -122,7 +122,7 @@ void OutputBitstream::clear()
 void OutputBitstream::write   ( uint32_t uiBits, uint32_t uiNumberOfBits )
 {
   CHECK( uiNumberOfBits > 32, "Number of bits is exceeds '32'" );
-  CHECK( uiNumberOfBits != 32 && (uiBits & (~0 << uiNumberOfBits)) != 0, "Unsupported parameters" );
+  CHECK( uiNumberOfBits != 32 && (uiBits & (~0u << uiNumberOfBits)) != 0, "Unsupported parameters" );
 
   /* any modulo 8 remainder of num_total_bits cannot be written this time,
    * and will be held until next time. */
