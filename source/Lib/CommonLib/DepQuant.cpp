@@ -760,7 +760,7 @@ namespace DQIntern
         {
           invQScale <<= -shift;
         }
-        Intermediate_Int  qIdx      = ( level << 1 ) + ( level > 0 ? -(state>>1) : (state>>1) );
+        Intermediate_Int qIdx = 2 * level + (level > 0 ? -(state >> 1) : (state >> 1));
         int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
         tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
       }

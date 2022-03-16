@@ -93,7 +93,7 @@ if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR
     CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
 
   # enable address sanitizer
-  set( VVENC_USE_ADDRESS_SANITIZER          OFF CACHE BOOL   "Enable or disable address sanitizer" )
+  set( VVENC_USE_ADDRESS_SANITIZER          ON CACHE BOOL   "Enable or disable address sanitizer" )
 
   set( VVENC_OPT_TARGET_ARCH                ""  CACHE STRING "Enable or disable building with architecture specific optimization" )
 endif()
