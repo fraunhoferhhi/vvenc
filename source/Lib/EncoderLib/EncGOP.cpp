@@ -2335,8 +2335,8 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
     // only 1 LMCS data for 1 picture
     ParameterSetMap<APS>& apsMap = pic.picApsMap;
     const int apsId              = slice->picHeader->lmcsApsId;
-    const int apsMapIdx          = ( apsId << NUM_APS_TYPE_LEN ) + LMCS_APS;
-    APS* aps                     = apsMap.getPS( apsMapIdx );
+    const int apsMapIdx          = apsId >= 0 ?  ( apsId << NUM_APS_TYPE_LEN ) + LMCS_APS : 0;
+    APS* aps                     = apsId >= 0 ?  apsMap.getPS( apsMapIdx ) : nullptr;
     const bool doAPS             = aps && apsMap.getChangedFlag( apsMapIdx );
     if ( doAPS )
     {

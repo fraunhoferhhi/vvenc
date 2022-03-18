@@ -459,7 +459,7 @@ inline int EncSampleAdaptiveOffset::estIterOffset(int typeIdx, double lambda, in
       tempRate --;
     }
     // Do the dequantization before distortion calculation
-    tempOffset  = iterOffset << bitIncrease;
+    tempOffset  = iterOffset * (1<< bitIncrease);
     tempDist    = estSaoDist( count, tempOffset, diffSum, shift);
     tempCost    = ((double)tempDist + lambda * (double) tempRate);
     if(tempCost < tempMinCost)
