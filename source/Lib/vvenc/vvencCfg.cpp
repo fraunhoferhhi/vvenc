@@ -1306,6 +1306,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_adpOption         = 0;
     c->m_initialCW         = 0;
     c->m_LMCSOffset        = 0;
+    c->m_useAMaxBT         = 0;
     vvenc_ReshapeCW_default( &c->m_reshapeCW );
   }
 
