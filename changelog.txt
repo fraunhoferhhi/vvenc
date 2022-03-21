@@ -1,5 +1,5 @@
 /////////////////////////////////////////
-tag 1.4.0 (rc1)
+tag 1.4.0
 
 * all:
   - changed license to the standard Clear BSD license (without adaptations)
