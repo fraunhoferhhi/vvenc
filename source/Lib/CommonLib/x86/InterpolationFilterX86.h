@@ -2836,7 +2836,7 @@ void xWeightedGeoBlk_SSE(const ClpRngs &clpRng, const CodingUnit& cu, const uint
   const __m128i mmMax    = _mm_set1_epi16(clpRng.comp[compIdx].max);
 
   if (compIdx != COMP_Y && cu.chromaFormat == CHROMA_420)
-    stepY <<= 1;
+    stepY*= 2;
   if (width == 4)
   {
     // it will occur to chroma only

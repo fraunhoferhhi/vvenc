@@ -111,7 +111,7 @@ static inline void addBIOAvg4_2x_AVX2(const int16_t* src0, const int16_t* src1, 
   const ptrdiff_t src1Stride = widthG + 2;
   const ptrdiff_t gradStride = widthG;
 
-  __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 << 16 ) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 << 16 ) ), 1 );
+  __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 *65536 ) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 *65536) ), 1 );
   __m256i mm_offset  = _mm256_set1_epi32( offset );
   __m256i vibdimin   = _mm256_set1_epi32( clpRng.min );
   __m256i vibdimax   = _mm256_set1_epi32( clpRng.max );
@@ -327,25 +327,25 @@ static inline void calcBIOSums2x_AVX2(const Pel* srcY0Tmp, const Pel* srcY1Tmp, 
   tmpy0 = sumAbsGY0 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( _mm_extract_epi32( vtmpyIn, 0 ), sumAbsGY0 ) );
   tmpy1 = sumAbsGY1 == 0 ? 0 : Clip3( -limit, limit, rightShiftMSB( _mm_extract_epi32( vtmpyIn, 1 ), sumAbsGY1 ) );
 #else
-  tmpx0 = sumAbsGX0 == 0 ? 0 : rightShiftMSB( sumDIX0 << 2, sumAbsGX0 );
+  tmpx0 = sumAbsGX0 == 0 ? 0 : rightShiftMSB( sumDIX0 *4, sumAbsGX0 );
   tmpx0 = Clip3( -limit, limit, tmpx0 );
 
   int mainsGxGy0 = sumSignGY_GX0 >> 12;
   int secsGxGy0  = sumSignGY_GX0 & ( ( 1 << 12 ) - 1 );
   int tmpData0   = tmpx0 * mainsGxGy0;
-  tmpData0       = ( ( tmpData0 << 12 ) + tmpx0 * secsGxGy0 ) >> 1;
-  tmpy0 = sumAbsGY0 == 0 ? 0 : rightShiftMSB( ( ( sumDIY0 << 2 ) - tmpData0 ), sumAbsGY0 );
+  tmpData0       = ( ( tmpData0 *4096 ) + tmpx0 * secsGxGy0 ) >> 1;
+  tmpy0 = sumAbsGY0 == 0 ? 0 : rightShiftMSB( ( ( sumDIY0 *4) - tmpData0 ), sumAbsGY0 );
   tmpy0 = Clip3( -limit, limit, tmpy0 );
 
 
-  tmpx1 = sumAbsGX1 == 0 ? 0 : rightShiftMSB( sumDIX1 << 2, sumAbsGX1 );
+  tmpx1 = sumAbsGX1 == 0 ? 0 : rightShiftMSB( sumDIX1 *4, sumAbsGX1 );
   tmpx1 = Clip3( -limit, limit, tmpx1 );
 
   int mainsGxGy1 = sumSignGY_GX1 >> 12;
   int secsGxGy1  = sumSignGY_GX1 & ( ( 1 << 12 ) - 1 );
   int tmpData1   = tmpx1 * mainsGxGy1;
-  tmpData1 = ( ( tmpData1 << 12 ) + tmpx1 * secsGxGy1 ) >> 1;
-  tmpy1 = sumAbsGY1 == 0 ? 0 : rightShiftMSB( ( ( sumDIY1 << 2 ) - tmpData1 ), sumAbsGY1 );
+  tmpData1 = ( ( tmpData1 *4096 ) + tmpx1 * secsGxGy1 ) >> 1;
+  tmpy1 = sumAbsGY1 == 0 ? 0 : rightShiftMSB( ( ( sumDIY1*4 ) - tmpData1 ), sumAbsGY1 );
   tmpy1 = Clip3( -limit, limit, tmpy1 );
 #endif
 

@@ -2322,8 +2322,8 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
         break;
 
       case 5: // 5 : LT, LB
-        vx = (cMv[l][0].hor << shift) + ((cMv[l][2].ver - cMv[l][0].ver) * (1<< shiftHtoW));
-        vy = (cMv[l][0].ver << shift) - ((cMv[l][2].hor - cMv[l][0].hor) * (1<< shiftHtoW));
+        vx = (cMv[l][0].hor *(1<< shift)) + ((cMv[l][2].ver - cMv[l][0].ver) * (1<< shiftHtoW));
+        vy = (cMv[l][0].ver *(1<< shift)) - ((cMv[l][2].hor - cMv[l][0].hor) * (1<< shiftHtoW));
         roundAffineMv(vx, vy, shift);
         cMv[l][1].set(vx, vy);
         cMv[l][1].clipToStorageBitDepth();

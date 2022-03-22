@@ -906,7 +906,7 @@ void InterpolationFilter::xWeightedGeoBlk(const ClpRngs &clpRngs, const CodingUn
   }
   else if (g_angle2mirror[angle] == 1)
   {
-    stepX = -1 << scaleX;
+    stepX = -1*(1<<scaleX);
     stepY = (GEO_WEIGHT_MASK_SIZE << scaleY) + cu.lwidth();
     weight =
       &g_globalGeoWeights[g_angle2mask[angle]][g_weightOffset[hIdx][wIdx][splitDir][1] * GEO_WEIGHT_MASK_SIZE

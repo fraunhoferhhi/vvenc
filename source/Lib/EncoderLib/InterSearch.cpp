@@ -4925,8 +4925,8 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
           int mvScaleHor = nbMv[0].hor *  (1<< shift);
           int mvScaleVer = nbMv[0].ver *  (1<< shift);
           Mv dMv = nbMv[1] - nbMv[0];
-          dMvHorX = dMv.hor << (shift - Log2(mvInfo->w));
-          dMvHorY = dMv.ver << (shift - Log2(mvInfo->w));
+          dMvHorX = dMv.hor *(1<<(shift - Log2(mvInfo->w)));
+          dMvHorY = dMv.ver *(1<< (shift - Log2(mvInfo->w)));
           dMvVerX = -dMvHorY;
           dMvVerY = dMvHorX;
           vx = mvScaleHor + dMvHorX * (cu.Y().x - mvInfo->x) + dMvVerX * (cu.Y().y - mvInfo->y);
