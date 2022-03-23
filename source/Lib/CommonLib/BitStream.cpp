@@ -149,7 +149,7 @@ void OutputBitstream::write   ( uint32_t uiBits, uint32_t uiNumberOfBits )
 
   /* topword serves to justify held_bits to align with the msb of uiBits */
   uint32_t topword = (uiNumberOfBits - next_num_held_bits) & ~((1 << 3) -1);
-  uint32_t write_bits = (m_held_bits << topword) | (uiBits >> next_num_held_bits);
+  uint32_t write_bits = ((uint64_t)m_held_bits << topword) | (uiBits >> next_num_held_bits);
   switch (num_total_bits >> 3)
   {
   case 4: m_fifo.push_back(write_bits >> 24);
