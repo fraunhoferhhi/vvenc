@@ -91,6 +91,13 @@ public:
 
   static int parseY4mHeader( const std::string &fileName, vvenc_config& config, VVEncAppCfg& appconfig );
   static bool isY4mInputFilename( std::string fileName );
+  static bool isY4mHeaderAvailable( std::string fileName );
+
+  static bool checkInputFile( std::string fileName, std::string& rcErrText );
+  static bool checkBitstreamFile( std::string fileName, std::string& rcErrText );
+
+  static std::string getFileExtension( std::string fileName );
+
 };
 
 } // namespace apputils
