@@ -1132,14 +1132,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     {
       if( apputils::YuvFileIO::isY4mHeaderAvailable( m_inputFileName ) )
       {
-        if( m_inputFileName == "-" )
-        {
-          err.warn( "Input stream" ) << "Y4M file signature detected. To force y4m input use option --y4m\n";
-        }
-        else
-        {
-          err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
-        }       
+        err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
     }
 
