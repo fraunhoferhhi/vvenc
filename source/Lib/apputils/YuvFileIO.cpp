@@ -774,7 +774,7 @@ bool YuvFileIO::writeYuvBuf( const vvencYUVBuffer& yuvOutBuf )
 
 bool YuvFileIO::isY4mInputFilename( std::string fileName )
 {
-  return ( "y4m" == getFileExtension(fileName) ) ? true : false;
+  return ( "y4m" == getFileExtension(fileName) );
 }
 
 int YuvFileIO::parseY4mHeader( const std::string &fileName, vvenc_config& cfg, VVEncAppCfg& appcfg )
