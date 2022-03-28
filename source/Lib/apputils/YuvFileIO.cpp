@@ -52,6 +52,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <vector>
 #include <regex>
 
@@ -906,7 +908,7 @@ bool YuvFileIO::isY4mHeaderAvailable( std::string fileName )
   std::istream& inStream = ( fileName == "-" ) ? std::cin : cfHandle;
   std::string headerline;
   getline(inStream, headerline);
-  if( headerline.empty() ){ return -1; }
+  if( headerline.empty() ){ return false; }
   if( fileName != "-" )   { cfHandle.close(); }
 
   std::transform( headerline.begin(), headerline.end(), headerline.begin(), ::toupper );
