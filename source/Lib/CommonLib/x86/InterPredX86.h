@@ -111,7 +111,7 @@ static inline void addBIOAvg4_2x_AVX2(const int16_t* src0, const int16_t* src1, 
   const ptrdiff_t src1Stride = widthG + 2;
   const ptrdiff_t gradStride = widthG;
 
-  __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 *65536 ) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 * ( 1 << 16 )) ), 1 );
+  __m256i mm_tmpx    = _mm256_inserti128_si256( _mm256_castsi128_si256( _mm_set1_epi32( ( tmpx0 & 0xffff ) | ( tmpy0 * ( 1 << 16 )) ) ), _mm_set1_epi32( ( tmpx1 & 0xffff ) | ( tmpy1 * ( 1 << 16 )) ), 1 );
   __m256i mm_offset  = _mm256_set1_epi32( offset );
   __m256i vibdimin   = _mm256_set1_epi32( clpRng.min );
   __m256i vibdimax   = _mm256_set1_epi32( clpRng.max );
