@@ -1581,9 +1581,9 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   const int iMvShift = 4;
   const int iOffset = 8;
   const int iHorMax = (pps.picWidthInLumaSamples + iOffset - cu.Y().x - 1) << iMvShift;
-  const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) *(1 << iMvShift);
+  const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) * (1 << iMvShift);
   const int iVerMax = (pps.picHeightInLumaSamples + iOffset - cu.Y().y - 1) << iMvShift;
-  const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) *(1<< iMvShift);
+  const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
 
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   bool      wrapRef = false;
@@ -1624,7 +1624,7 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     int quadVerX = 4 * iDMvVerX ;
     int quadVerY = 4 * iDMvVerY ;
 
-    dMvH[0] = ((iDMvHorX + iDMvVerX)  * 2 ) - ((quadHorX + quadVerX)  * 2);
+    dMvH[0] = ((iDMvHorX + iDMvVerX) * 2) - ((quadHorX + quadVerX)  * 2);
     dMvV[0] = ((iDMvHorY + iDMvVerY) * 2) - ((quadHorY + quadVerY)  * 2);
 
     for (int w = 1; w < blockWidth; w++)

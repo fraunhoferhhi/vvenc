@@ -706,7 +706,7 @@ namespace DQIntern
     const int     dfShift       = ceil_log2( pow2dfShift );
     m_DistShift                 = 62 + m_QShift - 2*maxLog2TrDynamicRange - dfShift;
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
-    m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 )) ;
+    m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 ));
     m_DistOrgFact               = (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+1       )) + .5 );
   }
 
@@ -760,7 +760,7 @@ namespace DQIntern
         {
           invQScale <<= -shift;
         }
-        Intermediate_Int qIdx = 2 * level + (level > 0 ? -(state >> 1) : (state >> 1));
+        Intermediate_Int qIdx = 2 * level + (level > 0 ? -(state>>1) : (state>>1));
         int64_t  nomTCoeff          = ((int64_t)qIdx * (int64_t)invQScale + add) >> ((shift < 0) ? 0 : shift);
         tCoeff[rasterPos]           = (TCoeff)Clip3<int64_t>(minTCoeff, maxTCoeff, nomTCoeff);
       }
@@ -781,7 +781,6 @@ namespace DQIntern
 
     pq_a.deltaDist    = ( ( scaledAdd + 0 * m_DistStepAdd ) * ( qIdx + 0 ) + m_DistAdd ) >> m_DistShift;
     pq_a.absLevel     = ( qIdx + 1 ) >> 1;
-
 
     pq_b.deltaDist    = ( ( scaledAdd + 1 * m_DistStepAdd ) * ( qIdx + 1 ) + m_DistAdd ) >> m_DistShift;
     pq_b.absLevel     = ( qIdx + 2 ) >> 1;
