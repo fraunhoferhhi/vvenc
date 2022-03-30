@@ -328,7 +328,7 @@ static inline void xPelFilterChroma( Pel* piSrc, const ptrdiff_t iOffset, const 
   }
   else
   {
-    delta = Clip3(-tc, tc, ((((m4 - m3) << 2) + m2 - m5 + 4) >> 3));
+    delta           = Clip3(-tc, tc, ((4 * (m4 - m3) + m2 - m5 + 4) >> 3));
     piSrc[-iOffset] = ClipPel(m3 + delta, clpRng);
     piSrc[0] = ClipPel(m4 - delta, clpRng);
   }
@@ -1531,8 +1531,8 @@ void LoopFilter::xEdgeFilterLuma( const CodingStructure& cs, const Position& pos
     sidePisLarge = false;
   }
  
-  const int iIndexTC  = Clip3( 0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, int( iQP + DEFAULT_INTRA_TC_OFFSET * ( uiBs - 1 ) + ( tcOffsetDiv2 << 1 ) ) );
-  const int iIndexB   = Clip3( 0, MAX_QP, iQP + ( betaOffsetDiv2 << 1 ) );
+  const int iIndexTC  = Clip3( 0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, int( iQP + DEFAULT_INTRA_TC_OFFSET * ( uiBs - 1 ) + 2 * tcOffsetDiv2  ) );
+  const int iIndexB   = Clip3( 0, MAX_QP, iQP + 2 * betaOffsetDiv2 );
 
       const int iTc = bitDepthLuma < 10 ? ((sm_tcTable[iIndexTC] + (1 << (9 - bitDepthLuma))) >> (10 - bitDepthLuma)) : ((sm_tcTable[iIndexTC]) << (bitDepthLuma - 10));
   const int iBeta     = sm_betaTable[iIndexB ] << ( bitDepthLuma - 8 );
@@ -1682,7 +1682,7 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
       const ClpRng& clpRng( cs.slice->clpRngs[ComponentID( chromaIdx + 1 )] );
 
       int iQP = lfp.qp[chromaIdx + 1];
-      const int iIndexTC = Clip3<int>(0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET * (bS[chromaIdx] - 1) + (tcOffsetDiv2[chromaIdx] << 1));
+      const int iIndexTC = Clip3<int>(0, MAX_QP + DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET * (bS[chromaIdx] - 1) + 2 * tcOffsetDiv2[chromaIdx] );
         const int iTc = bitDepthChroma < 10 ? ((sm_tcTable[iIndexTC] + (1 << (9 - bitDepthChroma))) >> (10 - bitDepthChroma)) : ((sm_tcTable[iIndexTC]) << (bitDepthChroma - 10));
       Pel* piSrcChroma   = chromaIdx == 0 ? piSrcCb : piSrcCr;
 
@@ -1691,7 +1691,7 @@ void LoopFilter::xEdgeFilterChroma( const CodingStructure &cs, const Position &p
       if( largeBoundary )
       {
         const int iBitdepthScale = 1 << ( sps.bitDepths[CH_C] - 8 );
-        const int indexB = Clip3<int>(0, MAX_QP, iQP + (betaOffsetDiv2[chromaIdx] << 1));
+        const int indexB = Clip3<int>(0, MAX_QP, iQP + 2 * betaOffsetDiv2[chromaIdx]);
         const int beta   = sm_betaTable[indexB] * iBitdepthScale;
 
         const int dp0 = xCalcDP( piSrcChroma, offset, isChromaHorCTBBoundary );

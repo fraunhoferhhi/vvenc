@@ -459,7 +459,7 @@ inline int EncSampleAdaptiveOffset::estIterOffset(int typeIdx, double lambda, in
       tempRate --;
     }
     // Do the dequantization before distortion calculation
-    tempOffset  = iterOffset << bitIncrease;
+    tempOffset  = iterOffset * (1<< bitIncrease);
     tempDist    = estSaoDist( count, tempOffset, diffSum, shift);
     tempCost    = ((double)tempDist + lambda * (double) tempRate);
     if(tempCost < tempMinCost)
@@ -495,11 +495,16 @@ void EncSampleAdaptiveOffset::deriveOffsets(ComponentID compIdx, const int chann
     {
       continue; //offset will be zero
     }
-
+#if (  DISTORTION_PRECISION_ADJUSTMENT(x)  == 0 )
     quantOffsets[classIdx] =
-      (int) xRoundIbdi(bitDepth, (double)(statData.diff[classIdx] << DISTORTION_PRECISION_ADJUSTMENT(bitDepth))
-                                   / (double)(statData.count[classIdx] << m_offsetStepLog2[compIdx]));
-    quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+       (int) xRoundIbdi(bitDepth, (double)(statData.diff[classIdx] ) / (double)(statData.count[classIdx] << m_offsetStepLog2[compIdx]));
+     quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+#else
+      quantOffsets[classIdx] =
+        (int) xRoundIbdi(bitDepth, (double)(statData.diff[classIdx] << DISTORTION_PRECISION_ADJUSTMENT(bitDepth))
+                                     / (double)(statData.count[classIdx] << m_offsetStepLog2[compIdx]));
+      quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+#endif
   }
 
   // adjust offsets

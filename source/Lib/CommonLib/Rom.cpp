@@ -759,7 +759,7 @@ void InitGeoRom::initGeoTemplate() const
 
     int     distanceX = angleIdx;
     int     distanceY = (distanceX + (GEO_NUM_ANGLES >> 2)) % GEO_NUM_ANGLES;
-    int16_t rho       = (g_Dis[distanceX] << (GEO_MAX_CU_LOG2 + 1)) + (g_Dis[distanceY] << (GEO_MAX_CU_LOG2 + 1));
+    int16_t rho = (g_Dis[distanceX] * 2 * GEO_MAX_CU_SIZE) + (g_Dis[distanceY] * 2 * GEO_MAX_CU_SIZE);
     static const int16_t maskOffset = (2 * GEO_MAX_CU_SIZE - GEO_WEIGHT_MASK_SIZE) >> 1;
     int                  index      = 0;
     for (int y = 0; y < GEO_WEIGHT_MASK_SIZE; y++)

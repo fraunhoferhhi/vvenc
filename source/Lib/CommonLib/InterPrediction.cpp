@@ -942,14 +942,11 @@ void InterPredInterpolation::xApplyBDOF( PelBuf& yuvDst, const ClpRng& clpRng )
       const Pel* SrcY0Tmp = srcY0 + (xu << 2) + (yu << 2) * src0Stride;
 
       calcBDOFSumsCore(SrcY0Tmp, SrcY1Tmp, pGradX0Tmp, pGradX1Tmp, pGradY0Tmp, pGradY1Tmp, xu, yu, src0Stride, src1Stride, widthG, bitDepth, &sumAbsGX, &sumAbsGY, &sumDIX, &sumDIY, &sumSignGY_GX);
-      tmpx = (sumAbsGX == 0 ? 0 : xRightShiftMSB(sumDIX << 2, sumAbsGX));
+      tmpx = (sumAbsGX == 0 ? 0 : xRightShiftMSB(4 * sumDIX, sumAbsGX));
       tmpx = Clip3(-limit, limit, tmpx);
 
-      int     mainsGxGy = sumSignGY_GX >> 12;
-      int     secsGxGy  = sumSignGY_GX & ((1 << 12) - 1);
-      int     tmpData   = tmpx * mainsGxGy;
-      tmpData           = ((tmpData << 12) + tmpx*secsGxGy) >> 1;
-      tmpy = (sumAbsGY == 0 ? 0 : xRightShiftMSB(((sumDIY << 2) - tmpData), sumAbsGY));
+      const int tmpData = sumSignGY_GX * tmpx >> 1;
+      tmpy = (sumAbsGY == 0 ? 0 : xRightShiftMSB((4 * sumDIY - tmpData), sumAbsGY));
       tmpy = Clip3(-limit, limit, tmpy);
 
       srcY0Temp = srcY0 + (stridePredMC + 1) + ((yu*src0Stride + xu) << 2);
@@ -1424,8 +1421,8 @@ void DMVR::xProcessDMVR( const CodingUnit& cu, PelUnitBuf& pcYuvDst, const ClpRn
         }
 
         bioAppliedType[num] = (minCost < bioEnabledThres) ? false : bioApplied;
-        totalDeltaMV[0] = (totalDeltaMV[0] << mvShift);
-        totalDeltaMV[1] = (totalDeltaMV[1] << mvShift);
+        totalDeltaMV[0] = totalDeltaMV[0] * (1 << mvShift);
+        totalDeltaMV[1] = totalDeltaMV[1] * (1 << mvShift);
         xDMVRSubPixelErrorSurface(notZeroCost, totalDeltaMV, deltaMV, pSADsArray);
 
         cu.mvdL0SubPu[num] = Mv(totalDeltaMV[0], totalDeltaMV[1]);
@@ -1564,12 +1561,12 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   int iDMvVerX = 0;
   int iDMvVerY = 0;
 
-  iDMvHorX = (mvRT - mvLT).hor << (iBit - Log2(cxWidth));
-  iDMvHorY = (mvRT - mvLT).ver << (iBit - Log2(cxWidth));
+  iDMvHorX = (mvRT - mvLT).hor * (1 << (iBit - Log2(cxWidth)));
+  iDMvHorY = (mvRT - mvLT).ver * (1 <<(iBit - Log2(cxWidth)));
   if (cu.affineType == AFFINEMODEL_6PARAM)
   {
-    iDMvVerX = (mvLB - mvLT).hor << (iBit - Log2(cxHeight));
-    iDMvVerY = (mvLB - mvLT).ver << (iBit - Log2(cxHeight));
+    iDMvVerX = (mvLB - mvLT).hor * (1 <<(iBit - Log2(cxHeight)));
+    iDMvVerY = (mvLB - mvLT).ver * (1 <<(iBit - Log2(cxHeight)));
   }
   else
   {
@@ -1577,16 +1574,16 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     iDMvVerY = iDMvHorX;
   }
 
-  int iMvScaleHor = mvLT.hor << iBit;
-  int iMvScaleVer = mvLT.ver << iBit;
+  int iMvScaleHor = mvLT.hor * (1 << iBit);
+  int iMvScaleVer = mvLT.ver * (1 << iBit);
   const PPS &pps = *cu.cs->pps;
   const SPS &sps = *cu.cs->sps;
   const int iMvShift = 4;
   const int iOffset = 8;
   const int iHorMax = (pps.picWidthInLumaSamples + iOffset - cu.Y().x - 1) << iMvShift;
-  const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) << iMvShift;
+  const int iHorMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().x + 1) * (1 << iMvShift);
   const int iVerMax = (pps.picHeightInLumaSamples + iOffset - cu.Y().y - 1) << iMvShift;
-  const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) << iMvShift;
+  const int iVerMin = (-(int)cu.cs->pcv->maxCUSize - iOffset - (int)cu.Y().y + 1) * (1 << iMvShift);
 
   const int shift = iBit - 4 + MV_FRACTIONAL_BITS_INTERNAL;
   bool      wrapRef = false;
@@ -1622,13 +1619,13 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
   {
     int* dMvH = dMvScaleHor;
     int* dMvV = dMvScaleVer;
-    int quadHorX = iDMvHorX << 2;
-    int quadHorY = iDMvHorY << 2;
-    int quadVerX = iDMvVerX << 2;
-    int quadVerY = iDMvVerY << 2;
+    int quadHorX = 4 * iDMvHorX ;
+    int quadHorY = 4 * iDMvHorY ;
+    int quadVerX = 4 * iDMvVerX ;
+    int quadVerY = 4 * iDMvVerY ;
 
-    dMvH[0] = ((iDMvHorX + iDMvVerX) << 1) - ((quadHorX + quadVerX) << 1);
-    dMvV[0] = ((iDMvHorY + iDMvVerY) << 1) - ((quadHorY + quadVerY) << 1);
+    dMvH[0] = ((iDMvHorX + iDMvVerX) * 2) - ((quadHorX + quadVerX)  * 2);
+    dMvV[0] = ((iDMvHorY + iDMvVerY) * 2) - ((quadHorY + quadVerY)  * 2);
 
     for (int w = 1; w < blockWidth; w++)
     {
@@ -1686,12 +1683,12 @@ void InterPredInterpolation::xPredAffineBlk(const ComponentID compID, const Codi
     const int halfBHLuma = lumaBlockHeight >> 1;
 
     int dMvHorXLuma, dMvHorYLuma, dMvVerXLuma, dMvVerYLuma;
-    dMvHorXLuma = (mvRT - mvLT).hor << (iBit - floorLog2(cxWidthLuma));
-    dMvHorYLuma = (mvRT - mvLT).ver << (iBit - floorLog2(cxWidthLuma));
+    dMvHorXLuma = (mvRT - mvLT).hor * (1 << (iBit - floorLog2(cxWidthLuma)));
+    dMvHorYLuma = (mvRT - mvLT).ver * (1 <<  (iBit - floorLog2(cxWidthLuma)));
     if (cu.affineType == AFFINEMODEL_6PARAM)
     {
-      dMvVerXLuma = (mvLB - mvLT).hor << (iBit - floorLog2(cxHeightLuma));
-      dMvVerYLuma = (mvLB - mvLT).ver << (iBit - floorLog2(cxHeightLuma));
+      dMvVerXLuma = (mvLB - mvLT).hor * (1 << (iBit - floorLog2(cxHeightLuma)));
+      dMvVerYLuma = (mvLB - mvLT).ver * (1 << (iBit - floorLog2(cxHeightLuma)));
     }
     else
     {

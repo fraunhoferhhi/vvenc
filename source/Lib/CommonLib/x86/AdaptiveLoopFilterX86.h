@@ -1330,9 +1330,9 @@ void simdFilterBlkCcAlf<AVX2>( const PelBuf &dstBuf, const CPelUnitBuf &recSrc, 
   if( getChannelTypeScaleX( CH_C, nChromaFormat ) == 1 )
   {
     __m256i vfilterCoeff[4];
-    vfilterCoeff[0] = _mm256_set1_epi32( ( filterCoeff[1] & 0xffff ) | ( filterCoeff[2] << 16 ) );
-    vfilterCoeff[1] = _mm256_set1_epi32( ( filterCoeff[0] & 0xffff ) | ( filterCoeff[3] << 16 ) );
-    vfilterCoeff[2] = _mm256_set1_epi32( ( filterCoeff[4] & 0xffff ) | ( filterCoeff[5] << 16 ) );
+    vfilterCoeff[0] = _mm256_set1_epi32( ( filterCoeff[1] & 0xffff ) | ( filterCoeff[2] * (1<< 16 )) );
+    vfilterCoeff[1] = _mm256_set1_epi32( ( filterCoeff[0] & 0xffff ) | ( filterCoeff[3] * (1<< 16 )) );
+    vfilterCoeff[2] = _mm256_set1_epi32( ( filterCoeff[4] & 0xffff ) | ( filterCoeff[5] * (1<< 16 )));
     vfilterCoeff[3] = _mm256_set1_epi32( ( filterCoeff[6] & 0xffff ) );
 
     for( int i = 0; i < endHeight - startHeight; i += clsSizeY )

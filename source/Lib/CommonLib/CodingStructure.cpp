@@ -1265,7 +1265,7 @@ const CodingUnit* CodingStructure::getCURestricted( const Position& pos, const C
   if( ydiff > 0 || ( ydiff == 0 && xdiff > 0 ) || ( ydiff == -1 && xdiff > ( sps->entropyCodingSyncEnabled ? 0 : 1 ) ) )
     return nullptr;
 
-  if( pos.x < 0 || pos.y < 0 || ( pos.x << csx ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
+  if( pos.x < 0 || pos.y < 0 || ( pos.x * (1 << csx) ) >= pcv->lumaWidth || pps->getTileIdx( pos.x >> xshift, pos.y >> yshift ) != curCu.tileIdx ) return nullptr;
 
   const CodingUnit* cu = getCU( pos, _chType, curCu.treeType );
 
