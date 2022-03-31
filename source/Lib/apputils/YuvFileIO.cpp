@@ -900,19 +900,17 @@ int YuvFileIO::parseY4mHeader( const std::string &fileName, vvenc_config& cfg, V
 bool YuvFileIO::isY4mHeaderAvailable( std::string fileName )
 {
   if( fileName == "-" ) return false;
-
   std::fstream cfHandle;
   cfHandle.open( fileName, std::ios::binary | std::ios::in );
   if( cfHandle.fail() ) return false;
 
-  std::istream& inStream = cfHandle;
-  char line[10];
-  int headerlinesize = inStream.readsome( line, 10 );
+  char line[10] = {0};
+  int headerlinesize = cfHandle.readsome( line, 10 );
   cfHandle.close();
 
-  std::string headerline( line, headerlinesize );
-  if( headerline.empty() ){ return false; }
-  return (headerline.rfind("YUV4MPEG2", 0) == 0) ? true : false;
+  if( headerlinesize && memcmp( line, "YUV4MPEG2", 9 ) == 0 ) return true;
+
+  return false;
 }
 
 bool YuvFileIO::checkInputFile( std::string fileName, std::string& rcErrText )
