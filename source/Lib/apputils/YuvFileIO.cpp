@@ -905,25 +905,14 @@ bool YuvFileIO::isY4mHeaderAvailable( std::string fileName )
   cfHandle.open( fileName, std::ios::binary | std::ios::in );
   if( cfHandle.fail() ) return false;
 
-  std::istream& inStream = ( fileName == "-" ) ? std::cin : cfHandle;
-  std::string headerline;
-  getline(inStream, headerline);
+  std::istream& inStream = cfHandle;
+  char line[10];
+  int headerlinesize = inStream.readsome( line, 10 );
+  cfHandle.close();
+
+  std::string headerline( line, headerlinesize );
   if( headerline.empty() ){ return false; }
-  if( fileName != "-" )   { cfHandle.close(); }
-
-  std::transform( headerline.begin(), headerline.end(), headerline.begin(), ::toupper );
-  std::regex reg("\\s+"); // tokenize at spaces
-  std::sregex_token_iterator iter(headerline.begin(), headerline.end(), reg, -1);
-  std::sregex_token_iterator end;
-  std::vector<std::string> vec(iter, end);
-
-  for (auto &p : vec)
-  {
-    if( p == "YUV4MPEG2" ) // read file signature
-    { return true; }
-  }
-
-  return false;
+  return (headerline.rfind("YUV4MPEG2", 0) == 0) ? true : false;
 }
 
 bool YuvFileIO::checkInputFile( std::string fileName, std::string& rcErrText )
