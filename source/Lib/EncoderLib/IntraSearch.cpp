@@ -2506,7 +2506,7 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
         currTU.copyComponentFrom(tmpTU, COMP_Cr);
         m_CABACEstimator->getCtx() = ctxBest;
       }
-      currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) | TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
+      currTU.jointCbCr = (TU::getCbf(currTU, COMP_Cb) || TU::getCbf(currTU, COMP_Cr)) ? bestJointCbCr : 0;
     } // jointCbCr
 
     cs.dist += bestDistCbCr;
