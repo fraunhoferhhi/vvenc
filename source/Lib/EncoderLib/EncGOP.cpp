@@ -1804,6 +1804,13 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
 
   const vvencGOPEntry& gopEntry = m_pcEncCfg->m_GOPList[pic.gopId];
   slice->deblockingFilterOverride = sliceType != VVENC_I_SLICE && (gopEntry.m_betaOffsetDiv2 || gopEntry.m_tcOffsetDiv2);
+  
+  if( m_pcEncCfg->m_deblockLastTLayers > 0 && slice->TLayer < m_pcEncCfg->m_maxTempLayer - m_pcEncCfg->m_deblockLastTLayers )
+  {
+    slice->deblockingFilterOverride = true;
+    slice->deblockingFilterDisable  = true;
+  }
+
   if( slice->deblockingFilterOverride )
   {
     for( int comp = 0; comp < MAX_NUM_COMP; comp++)
