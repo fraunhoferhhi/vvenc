@@ -745,11 +745,11 @@ typedef struct vvenc_config
 
   // reserved parameters for internal use
   int                 m_reservedInt[5];
+  int                 m_deblockLastTLayers;
   int                 m_leadFrames;                                                      // number of leading frames to to be given before starting with POC 0
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-  int                 m_deblockLastTLayers;
   
   bool                m_reservedFlag[8];
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
