@@ -303,7 +303,7 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
 
     if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
 
-    encRCSeq->qpCorrection[frameLevel] = (refreshed ? 1.0 : 6.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0);
+    encRCSeq->qpCorrection[frameLevel] = (refreshed || refreshParams ? 1.0 : 6.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0);
     encRCSeq->qpCorrection[frameLevel] = Clip3 (-12.0, 12.0, encRCSeq->qpCorrection[frameLevel]);
   }
 }
@@ -828,7 +828,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           }
           if ( it->refreshParameters )
           {
-            encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : 0.0 );
+            encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : ( it->poc <= m_pcEncCfg->m_GOPSize && m_pcEncCfg->m_QP < 32 ? 0.0625 * ( 32 - m_pcEncCfg->m_QP ) : 0.0 ) );
             if ( !m_pcEncCfg->m_LookAhead )
             {
               encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
