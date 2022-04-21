@@ -289,22 +289,38 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp
   }
 }
 
-void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQP)
+void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQP, const uint16_t visAct)
 {
   picActualBits = actualTotalBits;
   picQP         = averageQP;
 
   if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update qpCorrection for EncGOP::picInitRateControl()
   {
-    const bool refreshed = (encRCSeq->actualBitCnt[frameLevel] == 0) && (encRCSeq->targetBitCnt[frameLevel] == 0);
+    const uint16_t vaMin = (1u << (encRCSeq->bitDepth - 6));
+    const double clipVal = (visAct < vaMin + 32 ? 0.25 * (visAct - vaMin) : 8.0);
 
-    encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
-    encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
+    if( encRCSeq->isLookAhead )
+    {
+      encRCSeq->actualBitCnt[frameLevel] += (uint64_t) ( 0.125 * clipVal * picActualBits );
+      encRCSeq->targetBitCnt[frameLevel] += (uint64_t) ( 0.125 * clipVal * targetBits );
+      
+      encRCSeq->currFrameCnt[frameLevel]++;
+    }
+    else
+    {
+      encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
+      encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
+    }
 
-    if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
-
-    encRCSeq->qpCorrection[frameLevel] = (refreshed || refreshParams ? 1.0 : 6.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0);
-    encRCSeq->qpCorrection[frameLevel] = Clip3 (-12.0, 12.0, encRCSeq->qpCorrection[frameLevel]);
+    if( encRCSeq->targetBitCnt[frameLevel] == 0 )
+    {
+      encRCSeq->qpCorrection[frameLevel] = 0;
+    }
+    else
+    {
+      encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
+      encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal * (0.25 + frameLevel * frameLevel * 0.0234375), clipVal, encRCSeq->qpCorrection[frameLevel]);
+    }
   }
 }
 
@@ -779,7 +795,7 @@ void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
 {
   EncRCPic* encRCPic = pic->encRCPic;
 
-  encRCPic->updateAfterPicture( pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
+  encRCPic->updateAfterPicture( pic->actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->picVisActY );
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
 }
