@@ -126,7 +126,7 @@ namespace vvenc {
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
     void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp);
-    void   updateAfterPicture (const int actualTotalBits, const int averageQP, const uint16_t visAct);
+    void   updateAfterPicture (const int actualTotalBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 
     int     targetBits;
@@ -134,6 +134,7 @@ namespace vvenc {
     int     picQPOffsetQPA;
     int     poc;
     double  picLambdaOffsetQPA;
+    uint16_t visActSteady;
 
   protected:
     int xEstPicTargetBits( EncRCSeq* encRCSeq, int frameLevel );
