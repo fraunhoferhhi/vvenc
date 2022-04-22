@@ -1324,12 +1324,12 @@ public:
 
   void                        copySliceInfo( const Slice* slice, bool cpyAlmostAll = true);
 
-  void                        checkLeadingPictureRestrictions( const PicList& rcListPic )                                         const;
+  void                        checkLeadingPictureRestrictions( const PicList& rcListPic ) const;
   void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
-  bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic )                                           const;
-  bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic )                          const;
-  int                         checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, int &rCurPoc)                const;
-  void                        createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1);
+  bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic ) const;
+  bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic ) const;
+  bool                        rplPicsMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
+  void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1 );
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
   void                        resetWpScaling();

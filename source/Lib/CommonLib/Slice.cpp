@@ -964,57 +964,30 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
   }
 }
 
-int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const ReferencePictureList* pRPL, int rplIdx, int &rCurPoc ) const
+bool Slice::rplPicsMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const
 {
-  Picture* pic;
-  int isAvailable = 0;
-  int notPresentPoc = -2;
+  if( isIDRorBLA() ) return false; // assume that all pic in the DPB will be flushed anyway so no need to check.
 
-  if (isIDRorBLA()) return 0; //Assume that all pic in the DPB will be flushed anyway so no need to check.
+  const ReferencePictureList* pRPL = rpl[ refList ];
+  int numberOfPictures             = pRPL->numberOfLongtermPictures + pRPL->numberOfShorttermPictures + pRPL->numberOfInterLayerPictures;
 
-  int numberOfPictures = pRPL->numberOfLongtermPictures + pRPL->numberOfShorttermPictures + pRPL->numberOfInterLayerPictures;
-
-  if( numberOfPictures < 1) return -1;
-  //Check long term ref pics
-  for (int ii = 0; pRPL->numberOfLongtermPictures > 0 && ii < numberOfPictures; ii++)
+  // check long term ref pics
+  if( pRPL->numberOfLongtermPictures > 0 )
   {
-    if (!pRPL->isLongtermRefPic[ii] || pRPL->isInterLayerRefPic[ii])
-      continue;
+    for( int ii = 0; ii < numberOfPictures; ii++ )
+    {
+      if( ! pRPL->isLongtermRefPic[ii] || pRPL->isInterLayerRefPic[ii] )
+        continue;
 
-    notPresentPoc = pRPL->refPicIdentifier[ii];
-    isAvailable = 0;
-    PicList::const_iterator iterPic = rcListPic.begin();
-    while (iterPic != rcListPic.end())
-    {
-      pic = *(iterPic++);
-      int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
-      int curPoc = pic->getPOC() & (pocCycle - 1);
-      int refPoc = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
-      if(pRPL->deltaPocMSBPresent[ii])
+      bool isAvailable = false;
+      int  checkPoc    = pRPL->refPicIdentifier[ii];
+
+      for( auto& pic : rcListPic )
       {
-        refPoc += poc - pRPL->deltaPocMSBCycleLT[ii] * pocCycle - (poc & (pocCycle - 1));
-      }
-      else
-      {
-        curPoc = curPoc & (pocCycle - 1);
-      }
-      if (pic->isLongTerm && curPoc == refPoc && pic->isReferenced)
-      {
-        isAvailable = 1;
-        break;
-      }
-    }
-    // if there was no such long-term check the short terms
-    if (!isAvailable)
-    {
-      iterPic = rcListPic.begin();
-      while (iterPic != rcListPic.end())
-      {
-        pic = *(iterPic++);
         int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
-        int curPoc = pic->getPOC() & (pocCycle - 1);
-        int refPoc = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
-        if(pRPL->deltaPocMSBPresent[ii])
+        int curPoc   = pic->getPOC() & (pocCycle - 1);
+        int refPoc   = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
+        if( pRPL->deltaPocMSBPresent[ii] )
         {
           refPoc += poc - pRPL->deltaPocMSBCycleLT[ii] * pocCycle - (poc & (pocCycle - 1));
         }
@@ -1022,49 +995,71 @@ int Slice::checkThatAllRefPicsAreAvailable(const PicList& rcListPic, const Refer
         {
           curPoc = curPoc & (pocCycle - 1);
         }
-        if (!pic->isLongTerm && curPoc == refPoc && pic->isReferenced)
+        if( pic->isLongTerm && curPoc == refPoc && pic->isReferenced )
         {
-          isAvailable = 1;
-          pic->isLongTerm = true;
+          isAvailable = true;
           break;
         }
       }
-    }
-    if (!isAvailable)
-    {
-      rCurPoc = poc;
-      return notPresentPoc;
+
+      // if there was no such long-term check the short terms
+      if( ! isAvailable )
+      {
+        for( auto& pic : rcListPic )
+        {
+          int pocCycle = 1 << (pic->cs->sps->bitsForPOC);
+          int curPoc   = pic->getPOC() & (pocCycle - 1);
+          int refPoc   = pRPL->refPicIdentifier[ii] & (pocCycle - 1);
+          if( pRPL->deltaPocMSBPresent[ii] )
+          {
+            refPoc += poc - pRPL->deltaPocMSBCycleLT[ii] * pocCycle - (poc & (pocCycle - 1));
+          }
+          else
+          {
+            curPoc = curPoc & (pocCycle - 1);
+          }
+          if( ! pic->isLongTerm && curPoc == refPoc && pic->isReferenced )
+          {
+            isAvailable     = true;
+            pic->isLongTerm = true;
+            break;
+          }
+        }
+      }
+
+      if( ! isAvailable )
+      {
+        missingPoc = checkPoc;
+        return true;
+      }
     }
   }
-  //report that a picture is lost if it is in the Reference Picture List but not in the DPB
 
-  isAvailable = 0;
-  //Check short term ref pics
-  for (int ii = 0; ii < numberOfPictures; ii++)
+  // check short term ref pics
+  for( int ii = 0; ii < numberOfPictures; ii++ )
   {
-    if (pRPL->isLongtermRefPic[ii])
+    if( pRPL->isLongtermRefPic[ii] )
       continue;
 
-    notPresentPoc = poc + pRPL->refPicIdentifier[ii];
-    isAvailable = 0;
-    PicList::const_iterator iterPic = rcListPic.begin();
-    while (iterPic != rcListPic.end())
+    bool isAvailable = false;
+    int  checkPoc    = poc + pRPL->refPicIdentifier[ii];
+
+    for( auto& pic : rcListPic )
     {
-      pic = *(iterPic++);
-      if (!pic->isLongTerm && pic->getPOC() == poc + pRPL->refPicIdentifier[ii] && pic->isReferenced)
+      if( ! pic->isLongTerm && pic->getPOC() == poc + pRPL->refPicIdentifier[ii] && pic->isReferenced )
       {
-        isAvailable = 1;
+        isAvailable = true;
         break;
       }
     }
-    //report that a picture is lost if it is in the Reference Picture List but not in the DPB
-    if (isAvailable == 0 && pRPL->numberOfShorttermPictures > 0)
+    if( ! isAvailable && pRPL->numberOfShorttermPictures > 0 )
     {
-      rCurPoc = poc;
-      return notPresentPoc;
+      missingPoc = checkPoc;
+      return true;
     }
   }
-  return 0;
+
+  return false;
 }
 
 void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1)
@@ -1072,7 +1067,7 @@ void Slice::createExplicitReferencePictureSetFromReference(const PicList& rcList
   Picture* picCand;;
   int pocCycle = 0;
 
-    if ( isIDRorBLA() ) return; //Assume that all pic in the DPB will be flushed anyway so no need to check.
+  if ( isIDRorBLA() ) return; //Assume that all pic in the DPB will be flushed anyway so no need to check.
 
   ReferencePictureList* pLocalRPL0 = &rplLocal[0];
   (*pLocalRPL0) = ReferencePictureList();
