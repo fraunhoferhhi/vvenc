@@ -242,6 +242,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, int frameLvl, int framePoc )
   picQP               = 0;
   picQPOffsetQPA      = 0;
   picLambdaOffsetQPA  = 0.0;
+  visActSteady        = 0;
 }
 
 void EncRCPic::destroy()
@@ -289,38 +290,22 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp
   }
 }
 
-void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQP, const uint16_t visAct)
+void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQP)
 {
   picActualBits = actualTotalBits;
   picQP         = averageQP;
 
   if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update qpCorrection for EncGOP::picInitRateControl()
   {
-    const uint16_t vaMin = (1u << (encRCSeq->bitDepth - 6));
-    const double clipVal = (visAct < vaMin + 32 ? 0.25 * (visAct - vaMin) : 8.0);
+    const uint16_t vaMin = 1u << (encRCSeq->bitDepth - 6);
 
-    if( encRCSeq->isLookAhead )
-    {
-      encRCSeq->actualBitCnt[frameLevel] += (uint64_t) ( 0.125 * clipVal * picActualBits );
-      encRCSeq->targetBitCnt[frameLevel] += (uint64_t) ( 0.125 * clipVal * targetBits );
-      
-      encRCSeq->currFrameCnt[frameLevel]++;
-    }
-    else
-    {
-      encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
-      encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
-    }
+    encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
+    encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
 
-    if( encRCSeq->targetBitCnt[frameLevel] == 0 )
-    {
-      encRCSeq->qpCorrection[frameLevel] = 0;
-    }
-    else
-    {
-      encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
-      encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal * (0.25 + frameLevel * frameLevel * 0.0234375), clipVal, encRCSeq->qpCorrection[frameLevel]);
-    }
+    if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
+
+    encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, tab. 1
+    encRCSeq->qpCorrection[frameLevel] = Clip3 ((visActSteady > 0 && visActSteady < vaMin + 48 ? -0.25 * (visActSteady - vaMin) : -12.0), 12.0, encRCSeq->qpCorrection[frameLevel]);
   }
 }
 
@@ -795,7 +780,7 @@ void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
 {
   EncRCPic* encRCPic = pic->encRCPic;
 
-  encRCPic->updateAfterPicture( pic->actualTotalBits, pic->slices[ 0 ]->sliceQp, pic->picVisActY );
+  encRCPic->updateAfterPicture( pic->actualTotalBits, pic->slices[ 0 ]->sliceQp );
   encRCPic->addToPictureList( getPicList() );
   encRCSeq->updateAfterPic( pic->actualTotalBits, encRCPic->tmpTargetBits );
 }
@@ -842,6 +827,8 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               itNext++;
             }
           }
+          encRcPic->visActSteady = visAct;
+
           if ( it->refreshParameters )
           {
             encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : ( it->poc <= m_pcEncCfg->m_GOPSize && m_pcEncCfg->m_QP < 32 ? 0.0625 * ( 32 - m_pcEncCfg->m_QP ) : 0.0 ) );
