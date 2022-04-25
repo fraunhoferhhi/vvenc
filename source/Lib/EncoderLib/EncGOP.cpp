@@ -1756,7 +1756,7 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   // reference list
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
   int missingPoc;
-  if ( slice->rplPicsMissing( picList, REF_PIC_LIST_0, missingPoc ) || slice->rplPicsMissing( picList, REF_PIC_LIST_1, missingPoc ) )
+  if ( slice->isRplPicMissing( picList, REF_PIC_LIST_0, missingPoc ) || slice->isRplPicMissing( picList, REF_PIC_LIST_1, missingPoc ) )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }

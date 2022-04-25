@@ -1475,12 +1475,12 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
   //detect lost reference picture and insert copy of earlier frame.
   {
     int lostPoc;
-    while( m_apcSlicePilot->rplPicsMissing( m_cListPic, REF_PIC_LIST_0, lostPoc ) )
+    while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_0, lostPoc ) )
     {
       msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
     }
-    while( m_apcSlicePilot->rplPicsMissing( m_cListPic, REF_PIC_LIST_1, lostPoc ) )
+    while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_1, lostPoc ) )
     {
       msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);

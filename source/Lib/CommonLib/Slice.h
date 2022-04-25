@@ -1328,7 +1328,7 @@ public:
   void                        applyReferencePictureListBasedMarking( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1, const int layerId, const PPS& pps )  const;
   bool                        isTemporalLayerSwitchingPoint( PicList& rcListPic ) const;
   bool                        isStepwiseTemporalLayerSwitchingPointCandidate( const PicList& rcListPic ) const;
-  bool                        rplPicsMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
+  bool                        isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const;
   void                        createExplicitReferencePictureSetFromReference( const PicList& rcListPic, const ReferencePictureList* pRPL0, const ReferencePictureList* pRPL1 );
   void                        getWpScaling( RefPicList e, int iRefIdx, WPScalingParam *&wp) const;
 
