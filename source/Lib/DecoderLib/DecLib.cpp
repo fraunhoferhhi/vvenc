@@ -1474,20 +1474,20 @@ bool DecLib::xDecodeSlice(InputNALUnit &nalu, int& iSkipFrame, int iPOCLastDispl
 
   //detect lost reference picture and insert copy of earlier frame.
   {
-    int lostPoc, poc;
-    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[0], 0, poc)) > 0)
+    int lostPoc;
+    while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_0, lostPoc ) )
     {
-      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
+      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
     }
-    while ((lostPoc = m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->rpl[1], 1, poc)) > 0)
+    while( m_apcSlicePilot->isRplPicMissing( m_cListPic, REF_PIC_LIST_1, lostPoc ) )
     {
-      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", poc, lostPoc);
+      msg.log(VVENC_ERROR, "\nCurrent picture: %d reference picture with POC = %3d seems to have been removed or not correctly decoded.", m_apcSlicePilot->poc, lostPoc);
       xCreateLostPicture(lostPoc - 1);
     }
   }
 
-    m_prevPOC = m_apcSlicePilot->poc;
+  m_prevPOC = m_apcSlicePilot->poc;
 
   if (m_bFirstSliceInPicture)
   {

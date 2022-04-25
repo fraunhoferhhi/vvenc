@@ -277,8 +277,6 @@ void EncSlice::initPic( Picture* pic, int gopId )
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
-  const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
-
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
   double dQP     = xGetQPForPicture( slice, gopId );
@@ -339,6 +337,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   else if (slice->pps->sliceChromaQpFlag)
   {
+    const vvencGOPEntry* gopList         = m_pcEncCfg->m_GOPList;
     const bool bUseIntraOrPeriodicOffset = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
 
     cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 0 ] : gopList[ gopId ].m_CbQPoffset;
