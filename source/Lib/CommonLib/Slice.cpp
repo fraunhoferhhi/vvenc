@@ -964,6 +964,7 @@ void Slice::applyReferencePictureListBasedMarking(const PicList& rcListPic, cons
   }
 }
 
+// int Slice::checkThatAllRefPicsAreAvailable( const PicList& rcListPic, const ReferencePictureList *pRPL, int rplIdx ) const
 bool Slice::isRplPicMissing( const PicList& rcListPic, const RefPicList refList, int& missingPoc ) const
 {
   if( isIDRorBLA() ) return false; // assume that all pic in the DPB will be flushed anyway so no need to check.
