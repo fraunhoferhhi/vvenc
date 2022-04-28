@@ -648,7 +648,8 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
   if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
-    const int  gopsInIp = encRCSeq->intraPeriod / encRCSeq->gopSize;
+    const int gopsInIp  = encRCSeq->intraPeriod / encRCSeq->gopSize;
+    const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
     int l = 1;
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
@@ -657,7 +658,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
     for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // sum per level
     {
       tlBits[it->tempLayer] += it->numBits;
-      if (it->isIntra && (it->poc % encRCSeq->intraPeriod != 0)) // account for rate of inserted I-frame
+      if (it->isIntra && ((it->poc + idr2Adj) % encRCSeq->intraPeriod != 0)) // account for rate of inserted I-frames
       {
         l++;
       }
@@ -694,6 +695,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
 void RateCtrl::detectSceneCuts()
 {
+  const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
   const int minPocDif = encRCSeq->gopSize >> 1;
   const int numLevels = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0)) + 2;
   double psnrTL01Prev = 0.0;
@@ -728,7 +730,7 @@ void RateCtrl::detectSceneCuts()
         it->isNewScene = false;
       }
     }
-    if (it->isIntra && !needRefresh[0] && (it->poc % encRCSeq->intraPeriod != 0)) // using extra I-frame
+    if (it->isIntra && !needRefresh[0] && ((it->poc + idr2Adj) % encRCSeq->intraPeriod != 0)) // extra I
     {
       it->isNewScene = needRefresh[0] = true;
     }
@@ -809,6 +811,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
         if ( ( it->poc == slice->poc ) && ( encRcPic->targetBits > 0 ) && ( it->numBits > 0 ) )
         {
           double d = (double)encRcPic->targetBits;
+          const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
           const int firstPassSliceQP = it->qp;
           const int log2HeightMinus7 = int( 0.5 + log( (double)std::max( 128, m_pcEncCfg->m_SourceHeight ) ) / log( 2.0 ) ) - 7;
           uint16_t visAct = it->visActY;
@@ -862,6 +865,11 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
             }
           }
+          if ( it->isIntra && ( ( it->poc + idr2Adj ) % encRCSeq->intraPeriod != 0 ) && ( encRcSeq->estimatedBitUsage < encRcSeq->bitsUsed ) )
+          {
+            encRcPic->targetBits = int( ( d *= 0.875 ) + 0.5 ); // increase QP of inserted I-frame by one if bit saving is necessary
+          }
+
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
           sliceQP = int( 0.5 + d + 0.125 * log2HeightMinus7 * std::max( 0.0, 24.0 + 0.001/*log2HeightMinus7*/ * ( log( (double)visAct ) / log( 2.0 ) - 0.5 * encRcSeq->bitDepth - 3.0 ) - d ) + encRCSeq->qpCorrection[ frameLevel ] );
