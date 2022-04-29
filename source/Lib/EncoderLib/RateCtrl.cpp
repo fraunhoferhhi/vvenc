@@ -282,7 +282,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp
   }
   if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level
   {
-    qp = Clip3 (lastPrevTLQP + 1, (lastCurrTLQP < 0 ? std::min (MAX_QP, 1 + lastPrevTLQP * 2) : MAX_QP), qp);
+    qp = Clip3 (lastPrevTLQP + 1, (lastCurrTLQP < 0 ? std::min ((1 + lastPrevTLQP + MAX_QP) >> 1, 1 + lastPrevTLQP * 2) : MAX_QP), qp);
   }
   if (encRCSeq->lastIntraQP >= 0 && (frameLevel == 1 || frameLevel == 2))
   {
