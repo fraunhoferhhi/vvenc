@@ -1618,7 +1618,7 @@ void QuantRDOQ::xDequantSample(TCoeff& pRes, TCoeffSig& coeff, const TrQuantPara
   }
   else
   {
-    pRes = TCoeff((Intermediate_Int(coeff) * trQuantParams.qScale) << -trQuantParams.rightShift);
+    pRes = TCoeff((Intermediate_Int(coeff) * trQuantParams.qScale) *(1<< -trQuantParams.rightShift));
   }
 }
 

@@ -675,6 +675,8 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_leadFrames                              = 0;
   c->m_trailFrames                             = 0;
 
+  c-> m_deblockLastTLayers                     = 0;
+  
   memset( c->m_reservedInt, 0, sizeof(c->m_reservedInt) );
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
@@ -2057,6 +2059,13 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_checkCharArrayStr( c->m_traceFile, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryOutFilename, VVENC_MAX_STRING_LEN);
   vvenc_checkCharArrayStr( c->m_summaryPicFilenameBase, VVENC_MAX_STRING_LEN);
+  
+  if( c->m_deblockLastTLayers > 0 )
+  {
+    vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                          "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
+    vvenc_confirmParameter( c, c->m_maxTempLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
+    c->m_loopFilterOffsetInPPS = false;
+  }
 
   c->m_configDone = true;
 

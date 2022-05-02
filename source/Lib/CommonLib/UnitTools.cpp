@@ -1296,7 +1296,7 @@ int convertMvFixedToFloat(int32_t val)
     int round = (1 << scale) >> 1;
     int n     = (val + round) >> scale;
     exponent  = scale + ((n ^ sign) >> (MV_MANTISSA_BITCOUNT - 1));
-    mantissa  = (n & MV_MANTISSA_UPPER_LIMIT) | (sign << (MV_MANTISSA_BITCOUNT - 1));
+    mantissa  = (n & MV_MANTISSA_UPPER_LIMIT) | (sign * (1 << (MV_MANTISSA_BITCOUNT - 1)));
   }
   else
   {
@@ -1304,14 +1304,14 @@ int convertMvFixedToFloat(int32_t val)
     mantissa = val;
   }
 
-  return exponent | (mantissa << MV_EXPONENT_BITCOUNT);
+  return exponent | (mantissa * (1 << MV_EXPONENT_BITCOUNT));
 }
 
 int convertMvFloatToFixed(int val)
 {
   int exponent = val & MV_EXPONENT_MASK;
   int mantissa = val >> MV_EXPONENT_BITCOUNT;
-  return exponent == 0 ? mantissa : (mantissa ^ MV_MANTISSA_LIMIT) << (exponent - 1);
+  return exponent == 0 ? mantissa : (mantissa ^ MV_MANTISSA_LIMIT) * (1 << (exponent - 1));
 }
 
 int roundMvComp(int x)
@@ -1898,12 +1898,12 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
   int shift = MAX_CU_DEPTH;
   int iDMvHorX, iDMvHorY, iDMvVerX, iDMvVerY;
 
-  iDMvHorX = (mvRT - mvLT).hor << (shift - Log2(neiW));
-  iDMvHorY = (mvRT - mvLT).ver << (shift - Log2(neiW));
+  iDMvHorX = (mvRT - mvLT).hor * (1<< (shift - Log2(neiW)));
+  iDMvHorY = (mvRT - mvLT).ver * (1<< (shift - Log2(neiW)));
   if (cuNeighbour->affineType == AFFINEMODEL_6PARAM && !isTopCtuBoundary)
   {
-    iDMvVerX = (mvLB - mvLT).hor << (shift - Log2(neiH));
-    iDMvVerY = (mvLB - mvLT).ver << (shift - Log2(neiH));
+    iDMvVerX = (mvLB - mvLT).hor * (1<< (shift - Log2(neiH)));
+    iDMvVerY = (mvLB - mvLT).ver * (1<< (shift - Log2(neiH)));
   }
   else
   {
@@ -1911,8 +1911,8 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
     iDMvVerY = iDMvHorX;
   }
 
-  int iMvScaleHor = mvLT.hor << shift;
-  int iMvScaleVer = mvLT.ver << shift;
+  int iMvScaleHor = mvLT.hor * (1<< shift);
+  int iMvScaleVer = mvLT.ver * (1<< shift);
   int horTmp, verTmp;
 
   // v0
@@ -2322,8 +2322,8 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
         break;
 
       case 5: // 5 : LT, LB
-        vx = (cMv[l][0].hor << shift) + ((cMv[l][2].ver - cMv[l][0].ver) << shiftHtoW);
-        vy = (cMv[l][0].ver << shift) - ((cMv[l][2].hor - cMv[l][0].hor) << shiftHtoW);
+        vx = (cMv[l][0].hor *(1<< shift)) + ((cMv[l][2].ver - cMv[l][0].ver) * (1<< shiftHtoW));
+        vy = (cMv[l][0].ver *(1<< shift)) - ((cMv[l][2].hor - cMv[l][0].hor) * (1<< shiftHtoW));
         roundAffineMv(vx, vy, shift);
         cMv[l][1].set(vx, vy);
         cMv[l][1].clipToStorageBitDepth();
@@ -2925,13 +2925,13 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
   int deltaMvVerY = 0;
   if (!SameMV)
   {
-    deltaMvHorX = (affRT - affLT).hor << (shift - Log2(width));
-    deltaMvHorY = (affRT - affLT).ver << (shift - Log2(width));
+    deltaMvHorX = (affRT - affLT).hor * (1<< (shift - Log2(width)));
+    deltaMvHorY = (affRT - affLT).ver * (1<< (shift - Log2(width)));
     int height = cu.Y().height;
     if (cu.affineType == AFFINEMODEL_6PARAM)
     {
-      deltaMvVerX = (affLB - affLT).hor << (shift - Log2(height));
-      deltaMvVerY = (affLB - affLT).ver << (shift - Log2(height));
+      deltaMvVerX = (affLB - affLT).hor * (1<< (shift - Log2(height)));
+      deltaMvVerY = (affLB - affLT).ver * (1<< (shift - Log2(height)));
     }
     else
     {
@@ -2940,8 +2940,8 @@ void CU::setAllAffineMv(CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList
     }
   }
 
-  int mvScaleHor = affLT.hor << shift;
-  int mvScaleVer = affLT.ver << shift;
+  int mvScaleHor = affLT.hor * (1<< shift);
+  int mvScaleVer = affLT.ver * (1<< shift);
   int blockWidth = AFFINE_MIN_BLOCK_SIZE;
   int blockHeight = AFFINE_MIN_BLOCK_SIZE;
   const int halfBW = blockWidth >> 1;
@@ -3234,10 +3234,10 @@ void CU::spanGeoMotionInfo(CodingUnit& cu, MergeCtx &geoMrgCtx, const uint8_t sp
   }
   for (int y = 0; y < mb.height; y++)
   {
-    lookUpY = (((4 * y + offsetY) << 1) + 5) * g_Dis[distanceY];
+    lookUpY = (2 * (4 * y + offsetY) + 5) * g_Dis[distanceY];
     for (int x = 0; x < mb.width; x++)
     {
-      motionIdx = (((4 * x + offsetX) << 1) + 5) * g_Dis[distanceX] + lookUpY;
+      motionIdx = (2 * (4 * x + offsetX) + 5) * g_Dis[distanceX] + lookUpY;
       tpmMask   = abs(motionIdx) < 32 ? 2 : (motionIdx <= 0 ? (1 - isFlip) : isFlip);
       if (tpmMask == 2)
       {

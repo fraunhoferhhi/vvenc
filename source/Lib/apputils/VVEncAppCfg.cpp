@@ -842,6 +842,8 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("LoopFilterCrTcOffset_div2",                       c->m_loopFilterTcOffsetDiv2[2],                      "")
     ("DeblockingFilterMetric",                          c->m_deblockingFilterMetric,                         "")
 
+    ("DeblockLastTLayers",                              c->m_deblockLastTLayers,                             "Deblock only the highest n temporal layers, 0: all temporal layers are deblocked")
+    
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
@@ -1107,6 +1109,18 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
       return 1;
     }
 
+    // file check
+    std::string cErr;
+    if( !apputils::YuvFileIO::checkInputFile( m_inputFileName, cErr ) )
+    {
+      err.warn( "Input file" ) << cErr;
+    }
+
+    if( !apputils::YuvFileIO::checkBitstreamFile( m_bitstreamFileName, cErr ) )
+    {
+      err.warn( "Bitstream file" ) << cErr;
+    }
+
     // check for y4m input
     if ( m_forceY4mInput || apputils::YuvFileIO::isY4mInputFilename( m_inputFileName ) )
     {
@@ -1114,6 +1128,13 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
       {
         rcOstr << "cannot parse y4m metadata\n";
         ret = -1;
+      }
+    }
+    else
+    {
+      if( apputils::YuvFileIO::isY4mHeaderAvailable( m_inputFileName ) )
+      {
+        err.warn( "Input file" ) << "Y4M file signature detected. To force y4m input use option --y4m or set correct file extension *.y4m\n";
       }
     }
 
@@ -1131,7 +1152,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     }
     else if( err.is_warning )
     {
-      rcOstr << err.outstr.str();
+      rcOstr << err.outstr.str() << "\n";
       return 2;
     }
   }

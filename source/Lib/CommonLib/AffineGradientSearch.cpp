@@ -174,7 +174,7 @@ namespace vvenc {
           {
             pEqualCoeff[col + 1][row] += (int64_t)iC[col] * iC[row];
           }
-          pEqualCoeff[col + 1][affineParamNum] += ((int64_t)iC[col] * pResidue[idx]) << 3;
+          pEqualCoeff[col + 1][affineParamNum] += ((int64_t)iC[col] * pResidue[idx]) *(1<< 3);
         }
       }
     }
