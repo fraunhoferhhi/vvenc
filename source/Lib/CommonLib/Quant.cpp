@@ -154,7 +154,7 @@ static void DeQuantCore(const int maxX,const int maxY,const int scale,const TCoe
       for( int x = 0; x <= maxX; x++, n++ )
       {
         const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[x + y * piQCfStride]));
-        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) << leftShift;
+        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) * (1 << leftShift);
         piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
       }
     }

@@ -1754,9 +1754,9 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->setDefaultClpRng          ( sps );
 
   // reference list
-  int poc;
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) != -2 || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) != -2 )
+  int missingPoc;
+  if ( slice->isRplPicMissing( picList, REF_PIC_LIST_0, missingPoc ) || slice->isRplPicMissing( picList, REF_PIC_LIST_1, missingPoc ) )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }
@@ -1804,6 +1804,13 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
 
   const vvencGOPEntry& gopEntry = m_pcEncCfg->m_GOPList[pic.gopId];
   slice->deblockingFilterOverride = sliceType != VVENC_I_SLICE && (gopEntry.m_betaOffsetDiv2 || gopEntry.m_tcOffsetDiv2);
+  
+  if( m_pcEncCfg->m_deblockLastTLayers > 0 && slice->TLayer < m_pcEncCfg->m_maxTempLayer - m_pcEncCfg->m_deblockLastTLayers )
+  {
+    slice->deblockingFilterOverride = true;
+    slice->deblockingFilterDisable  = true;
+  }
+
   if( slice->deblockingFilterOverride )
   {
     for( int comp = 0; comp < MAX_NUM_COMP; comp++)
@@ -2335,8 +2342,8 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
     // only 1 LMCS data for 1 picture
     ParameterSetMap<APS>& apsMap = pic.picApsMap;
     const int apsId              = slice->picHeader->lmcsApsId;
-    const int apsMapIdx          = ( apsId << NUM_APS_TYPE_LEN ) + LMCS_APS;
-    APS* aps                     = apsMap.getPS( apsMapIdx );
+    const int apsMapIdx          = apsId >= 0 ?  ( apsId << NUM_APS_TYPE_LEN ) + LMCS_APS : 0;
+    APS* aps                     = apsId >= 0 ?  apsMap.getPS( apsMapIdx ) : nullptr;
     const bool doAPS             = aps && apsMap.getChangedFlag( apsMapIdx );
     if ( doAPS )
     {

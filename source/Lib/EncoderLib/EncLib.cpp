@@ -79,7 +79,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_picsRcvd       ( 0 )
   , m_passInitialized( -1 )
   , m_maxNumPicShared( MAX_INT )
-  , m_anyAuDone      ( false )
+  , m_accessUnitOutputStarted( false )
 {
 }
 
@@ -271,7 +271,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_prevSharedTL0 = nullptr;
 
   m_picsRcvd        = -m_encCfg.m_leadFrames;
-  m_anyAuDone       = false;
+  m_accessUnitOutputStarted = false;
   m_passInitialized = pass;
 }
 
@@ -425,17 +425,19 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       m_AuList.push_back( au );
       au.detachNalUnitList();
       au.clearAu();
-      m_anyAuDone = true;
+      // NOTE: delay AU output in stage parallel mode only
+      if( !m_accessUnitOutputStarted )
+        m_accessUnitOutputStarted = !m_encCfg.m_stageParallelProc || m_AuList.size() > 4 || flush;
     }
-
+    
     // wait if input picture hasn't been stored yet or if encoding is running and no new output access unit has been encoded
-    bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_anyAuDone || flush ) );
+    bool waitAndStay = inputPending || ( m_AuList.empty() && ! isQueueEmpty && ( m_accessUnitOutputStarted || flush ) );
     if( ! waitAndStay )
     {
       break;
     }
 
-    if( m_encCfg.m_numThreads > 0 )
+    if( m_encCfg.m_stageParallelProc )
     {
       for( auto encStage : m_encStages )
       {
@@ -446,7 +448,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
   }
 
   // check if we have an AU to output
-  if( !m_AuList.empty() )
+  if( !m_AuList.empty() && m_accessUnitOutputStarted )
   {
     au = m_AuList.front();
     m_AuList.front().detachNalUnitList();

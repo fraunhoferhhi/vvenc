@@ -242,6 +242,7 @@ void EncRCPic::create( EncRCSeq* encRcSeq, int frameLvl, int framePoc )
   picQP               = 0;
   picQPOffsetQPA      = 0;
   picLambdaOffsetQPA  = 0.0;
+  visActSteady        = 0;
 }
 
 void EncRCPic::destroy()
@@ -281,7 +282,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp
   }
   if (lastPrevTLQP >= 0) // prevent QP from being lower than QPs at lower temporal level
   {
-    qp = Clip3 (lastPrevTLQP + 1, MAX_QP, qp);
+    qp = Clip3 (lastPrevTLQP + 1, (lastCurrTLQP < 0 ? std::min ((1 + lastPrevTLQP + MAX_QP) >> 1, 1 + lastPrevTLQP * 2) : MAX_QP), qp);
   }
   if (encRCSeq->lastIntraQP >= 0 && (frameLevel == 1 || frameLevel == 2))
   {
@@ -296,15 +297,16 @@ void EncRCPic::updateAfterPicture (const int actualTotalBits, const int averageQ
 
   if ((frameLevel <= 7) && (picActualBits > 0) && (targetBits > 0)) // update qpCorrection for EncGOP::picInitRateControl()
   {
-    const bool refreshed = (encRCSeq->actualBitCnt[frameLevel] == 0) && (encRCSeq->targetBitCnt[frameLevel] == 0);
+    const uint16_t vaMin = 1u << (encRCSeq->bitDepth - 6);
+    const double clipVal = (visActSteady > 0 && visActSteady < vaMin + 48 ? 0.25 * (visActSteady - vaMin) : 12.0);
 
     encRCSeq->actualBitCnt[frameLevel] += (uint64_t) picActualBits;
     encRCSeq->targetBitCnt[frameLevel] += (uint64_t) targetBits;
 
     if (encRCSeq->isLookAhead) encRCSeq->currFrameCnt[frameLevel]++;
 
-    encRCSeq->qpCorrection[frameLevel] = (refreshed ? 1.0 : 6.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0);
-    encRCSeq->qpCorrection[frameLevel] = Clip3 (-12.0, 12.0, encRCSeq->qpCorrection[frameLevel]);
+    encRCSeq->qpCorrection[frameLevel] = (refreshParams ? 1.0 : 5.0) * log ((double) encRCSeq->actualBitCnt[frameLevel] / (double) encRCSeq->targetBitCnt[frameLevel]) / log (2.0); // 5.0 as in VCIP paper, Tab. 1
+    encRCSeq->qpCorrection[frameLevel] = Clip3 (-clipVal * (0.15625 + frameLevel * frameLevel * 0.0234375), clipVal, encRCSeq->qpCorrection[frameLevel]);
   }
 }
 
@@ -646,7 +648,8 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
   if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
-    const int  gopsInIp = encRCSeq->intraPeriod / encRCSeq->gopSize;
+    const int gopsInIp  = encRCSeq->intraPeriod / encRCSeq->gopSize;
+    const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
     int l = 1;
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
@@ -655,7 +658,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
     for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // sum per level
     {
       tlBits[it->tempLayer] += it->numBits;
-      if (it->isIntra && (it->poc % encRCSeq->intraPeriod != 0)) // account for rate of inserted I-frame
+      if (it->isIntra && ((it->poc + idr2Adj) % encRCSeq->intraPeriod != 0)) // account for rate of inserted I-frames
       {
         l++;
       }
@@ -692,6 +695,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
 
 void RateCtrl::detectSceneCuts()
 {
+  const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
   const int minPocDif = encRCSeq->gopSize >> 1;
   const int numLevels = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0)) + 2;
   double psnrTL01Prev = 0.0;
@@ -726,7 +730,7 @@ void RateCtrl::detectSceneCuts()
         it->isNewScene = false;
       }
     }
-    if (it->isIntra && !needRefresh[0] && (it->poc % encRCSeq->intraPeriod != 0)) // using extra I-frame
+    if (it->isIntra && !needRefresh[0] && ((it->poc + idr2Adj) % encRCSeq->intraPeriod != 0)) // extra I
     {
       it->isNewScene = needRefresh[0] = true;
     }
@@ -807,6 +811,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
         if ( ( it->poc == slice->poc ) && ( encRcPic->targetBits > 0 ) && ( it->numBits > 0 ) )
         {
           double d = (double)encRcPic->targetBits;
+          const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
           const int firstPassSliceQP = it->qp;
           const int log2HeightMinus7 = int( 0.5 + log( (double)std::max( 128, m_pcEncCfg->m_SourceHeight ) ) / log( 2.0 ) ) - 7;
           uint16_t visAct = it->visActY;
@@ -826,9 +831,11 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               itNext++;
             }
           }
+          encRcPic->visActSteady = visAct;
+
           if ( it->refreshParameters )
           {
-            encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : 0.0 );
+            encRCSeq->qpCorrection[ frameLevel ] = ( ( it->poc == 0 ) && ( d < it->numBits ) ? std::max( -1.0 * visAct / double( 1 << ( encRCSeq->bitDepth - 3 ) ), 1.0 - it->numBits / d ) : ( it->poc <= m_pcEncCfg->m_GOPSize && m_pcEncCfg->m_QP < 32 ? 0.0625 * ( 32 - m_pcEncCfg->m_QP ) : 0.0 ) );
             if ( !m_pcEncCfg->m_LookAhead )
             {
               encRCSeq->actualBitCnt[ frameLevel ] = encRCSeq->targetBitCnt[ frameLevel ] = 0;
@@ -858,6 +865,11 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side
             }
           }
+          if ( it->isIntra && ( ( it->poc + idr2Adj ) % encRCSeq->intraPeriod != 0 ) && ( encRcSeq->estimatedBitUsage < encRcSeq->bitsUsed ) )
+          {
+            encRcPic->targetBits = int( ( d *= 0.875 ) + 0.5 ); // increase QP of inserted I-frame by one if bit saving is necessary
+          }
+
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
           sliceQP = int( 0.5 + d + 0.125 * log2HeightMinus7 * std::max( 0.0, 24.0 + 0.001/*log2HeightMinus7*/ * ( log( (double)visAct ) / log( 2.0 ) - 0.5 * encRcSeq->bitDepth - 3.0 ) - d ) + encRCSeq->qpCorrection[ frameLevel ] );
