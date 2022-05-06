@@ -98,7 +98,7 @@ void EncRCSeq::create( bool twoPassRC, bool lookAhead, int targetBitrate, int fr
 
   int bitdepthLumaScale = 2 * ( bitDepth - 8 - DISTORTION_PRECISION_ADJUSTMENT( bitDepth ) );
   minEstLambda = 0.1;
-  maxEstLambda = 10000.0 * pow( 2.0, bitdepthLumaScale );
+  maxEstLambda = 65535.9375 * pow( 2.0, bitdepthLumaScale );
 
   framesCoded = 0;
   bitsUsed = 0;
@@ -376,7 +376,7 @@ int RateCtrl::getBaseQP()
 
   if (firstPassData.size() > 0 && fps > 0)
   {
-    const int firstPassBaseQP = std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + firstQPOffset));
+    const int firstPassBaseQP = (m_pcEncCfg->m_RCInitialQP > 0 ? Clip3 (17, MAX_QP, m_pcEncCfg->m_RCInitialQP) : std::max (17, MAX_QP_PERCEPT_QPA - 2 - int (0.5 + firstQPOffset)));
     uint64_t sumFrBits = 0, sumVisAct = 0; // first-pass data
 
     for (auto& stats : firstPassData)
