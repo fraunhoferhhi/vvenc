@@ -485,7 +485,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   // in lockstep mode, process all pictures in processing list
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
-  if( isNonBlocking() && lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && !nextPicReadyForOutput() )
+  if( isNonBlocking() && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && !nextPicReadyForOutput() )
   {
     // non-blocking mode: stage is still busy, wait outside
     return;
@@ -517,7 +517,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 
       // in non-lockstep mode, check encoding of output picture done
       // in lockstep mode, check all pictures encoded
-      if( ( ! lockStepMode && ( m_gopEncListOutput.empty() || m_gopEncListOutput.front()->isReconstructed ) )
+      if( ( ! lockStepMode && m_procList.empty() )
           || ( lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
       {
         break;
@@ -533,7 +533,9 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
       {
         // non-blocking mode: wait on top level, let other stages do their jobs
         if( isNonBlocking() )
-          return;
+        {
+          break;
+        }
         CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
         CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
         m_gopEncCond.wait( lock );
@@ -632,8 +634,15 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     }
   }
 
-  CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
-  CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+  if( !nextPicReadyForOutput() )
+  {
+    if( lockStepMode )
+    {
+      CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
+      CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+    }
+    return;
+  }
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
 
   // AU output
@@ -2652,45 +2661,16 @@ void EncGOP::xCabacZeroWordPadding( const Picture& pic, const Slice* slice, uint
   }
 }
 
-void EncGOP::xCalculateAddPSNR( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList& accessUnit, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef )
+void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitList& accessUnit, bool printFrameMSE, double* PSNR_Y, bool isEncodeLtRef )
 {
-  const SPS&         sps = *pic->cs->sps;
-  const CPelUnitBuf& org = pic->getOrigBuf();
-  double  dPSNR[MAX_NUM_COMP];
-
-  for (int i = 0; i < MAX_NUM_COMP; i++)
-  {
-    dPSNR[i] = 0.0;
-  }
-
-  //===== calculate PSNR =====
-  double MSEyuvframe[MAX_NUM_COMP] = {0, 0, 0};
-  const ChromaFormat formatD = cPicD.chromaFormat;
-  const ChromaFormat format  = sps.chromaFormatIdc;
   const Slice* slice         = pic->slices[0];
 
-  for (int comp = 0; comp < getNumberValidComponents(formatD); comp++)
+  double dPSNR[MAX_NUM_COMP];
+  double MSEyuvframe[MAX_NUM_COMP];
+  for (int i = 0; i < MAX_NUM_COMP; i++)
   {
-    const ComponentID compID = ComponentID(comp);
-    const CPelBuf&    p = cPicD.get(compID);
-    const CPelBuf&    o = org.get(compID);
-
-    CHECK(!( p.width  == o.width), "Unspecified error");
-    CHECK(!( p.height == o.height), "Unspecified error");
-
-    const uint32_t   width  = p.width  - (m_pcEncCfg->m_aiPad[ 0 ] >> getComponentScaleX(compID, format));
-    const uint32_t   height = p.height - (m_pcEncCfg->m_aiPad[ 1 ] >> getComponentScaleY(compID, format));
-
-    // create new buffers with correct dimensions
-    const CPelBuf recPB(p.bufAt(0, 0), p.stride, width, height);
-    const CPelBuf orgPB(o.bufAt(0, 0), o.stride, width, height);
-    const uint32_t    bitDepth = sps.bitDepths[toChannelType(compID)];
-    const uint64_t uiSSDtemp = xFindDistortionPlane(recPB, orgPB, 0);
-    const uint32_t maxval = 255 << (bitDepth - 8);
-    const uint32_t size   = width * height;
-    const double fRefValue = (double)maxval * maxval * size;
-    dPSNR[comp]       = uiSSDtemp ? 10.0 * log10(fRefValue / (double)uiSSDtemp) : 999.99;
-    MSEyuvframe[comp] = (double)uiSSDtemp / size;
+    dPSNR[i]       = pic->psnr[i];
+    MSEyuvframe[i] = pic->mse[i];
   }
 
   /* calculate the size of the access unit, excluding:
@@ -2883,7 +2863,7 @@ uint64_t EncGOP::xFindDistortionPlane( const CPelBuf& pic0, const CPelBuf& pic1,
 void EncGOP::xPrintPictureInfo( const Picture& pic, AccessUnitList& accessUnit, const std::string& digestStr, bool printFrameMSE, bool isEncodeLtRef )
 {
   double PSNR_Y;
-  xCalculateAddPSNR( &pic, pic.getRecoBuf(), accessUnit, printFrameMSE, &PSNR_Y, isEncodeLtRef );
+  xAddPSNRStats( &pic, pic.getRecoBuf(), accessUnit, printFrameMSE, &PSNR_Y, isEncodeLtRef );
 
   if( ! m_isPreAnalysis && m_pcRateCtrl->rcIsFinalPass )
   {

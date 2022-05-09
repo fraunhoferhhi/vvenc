@@ -158,6 +158,8 @@ void EncPicture::finalizePicture( Picture& pic )
     DTRACE_UPDATE( g_trace_ctx, std::make_pair( "bsfinal", 0 ) );
   }
 
+  xCalcDistortion( pic, *slice->sps );
+  
   // finalize
   pic.extendPicBorder();
   if ( m_pcEncCfg->m_useAMaxBT )
@@ -174,6 +176,80 @@ void EncPicture::finalizePicture( Picture& pic )
   pic.destroyTempBuffers();
 
   pic.encTime.stopTimer();
+}
+
+uint64_t findDistortionPlane( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t rshift )
+{
+  uint64_t uiTotalDiff;
+  const  Pel*  pSrc0 = pic0.bufAt(0, 0);
+  const  Pel*  pSrc1 = pic1.bufAt(0, 0);
+
+  CHECK(pic0.width  != pic1.width , "Unspecified error");
+  CHECK(pic0.height != pic1.height, "Unspecified error");
+
+  if( rshift > 0 )
+  {
+    uiTotalDiff = 0;
+    for (int y = 0; y < pic0.height; y++)
+    {
+      for (int x = 0; x < pic0.width; x++)
+      {
+        Intermediate_Int iTemp = pSrc0[x] - pSrc1[x];
+        uiTotalDiff += uint64_t((iTemp * iTemp) >> rshift);
+      }
+      pSrc0 += pic0.stride;
+      pSrc1 += pic1.stride;
+    }
+  }
+  else
+  {
+    uiTotalDiff = 0;
+    for (int y = 0; y < pic0.height; y++)
+    {
+      for (int x = 0; x < pic0.width; x++)
+      {
+        Intermediate_Int iTemp = pSrc0[x] - pSrc1[x];
+        uiTotalDiff += uint64_t(iTemp * iTemp);
+      }
+      pSrc0 += pic0.stride;
+      pSrc1 += pic1.stride;
+    }
+  }
+
+  return uiTotalDiff;
+}
+
+void EncPicture::xCalcDistortion( Picture& pic, const SPS& sps )
+{
+  const CPelUnitBuf& cPicD = pic.getRecoBuf();
+  const CPelUnitBuf& org   = pic.getOrigBuf();
+  const ChromaFormat formatD = cPicD.chromaFormat;
+  const ChromaFormat format  = sps.chromaFormatIdc;
+
+  for (int comp = 0; comp < getNumberValidComponents(formatD); comp++)
+  {
+    const ComponentID compID = ComponentID(comp);
+    const CPelBuf&    p = cPicD.get(compID);
+    const CPelBuf&    o = org.get(compID);
+
+    CHECK(!( p.width  == o.width), "Unspecified error");
+    CHECK(!( p.height == o.height), "Unspecified error");
+
+    const uint32_t   width  = p.width  - (m_pcEncCfg->m_aiPad[ 0 ] >> getComponentScaleX(compID, format));
+    const uint32_t   height = p.height - (m_pcEncCfg->m_aiPad[ 1 ] >> getComponentScaleY(compID, format));
+
+    // create new buffers with correct dimensions
+    const CPelBuf recPB(p.bufAt(0, 0), p.stride, width, height);
+    const CPelBuf orgPB(o.bufAt(0, 0), o.stride, width, height);
+    const uint32_t    bitDepth = sps.bitDepths[toChannelType(compID)];
+    //pic.ssd[comp] = findDistortionPlane(recPB, orgPB, 0);
+    const uint64_t uiSSDtemp = findDistortionPlane(recPB, orgPB, 0);
+    const uint32_t maxval = 255 << (bitDepth - 8);
+    const uint32_t size   = width * height;
+    const double fRefValue = (double)maxval * maxval * size;
+    pic.psnr[comp] = uiSSDtemp ? 10.0 * log10(fRefValue / (double)uiSSDtemp) : 999.99;
+    pic.mse [comp] = (double)uiSSDtemp / size;
+  }
 }
 
 void EncPicture::xInitPicEncoder( Picture& pic )

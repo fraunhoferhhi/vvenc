@@ -77,6 +77,50 @@ static const __itt_string_handle* itt_handle_ccalf_derive = __itt_string_handle_
 static const __itt_string_handle* itt_handle_ccalf_recon  = __itt_string_handle_create( "CCALF_RECONSTRUCT" );
 #endif
 
+void setArbitraryWppPattern( const PreCalcValues& pcv, std::vector<int>& ctuAddrMap, int stepX = 1 )
+{
+  ctuAddrMap.resize( pcv.sizeInCtus, 0 );
+  std::vector<int> x_in_line( pcv.heightInCtus, 0 );
+  int x = 0, y = 0, addr = 0;
+  int y_top = 0;
+  const int step = stepX; // number of CTUs in x-direction to scan 
+  ctuAddrMap[addr++] = x++; // first entry (can be omitted)
+  while( addr < pcv.sizeInCtus )
+  {
+    // fill entries in x-direction
+    int x1 = x;
+    while( x < std::min(x1 + step, (int)pcv.widthInCtus) )
+    {
+      // general WPP condition (top-right CTU availability)
+      if( y > 0 && !( x_in_line[y - 1] - x >= 2 ) && x != pcv.widthInCtus - 1 )
+        break;
+      ctuAddrMap[addr++] = y*pcv.widthInCtus + x;
+      x++;
+    }
+    x_in_line[y] = x;
+        
+    y += 1;
+
+    if( y >= pcv.heightInCtus )
+    {
+      // go up
+      if( x_in_line[y_top] >= pcv.widthInCtus )
+      {
+        y_top++;
+        if( y_top >= pcv.heightInCtus )
+        {
+          // done
+          break;
+        }
+      }
+      y = y_top;
+    }
+    x = x_in_line[y];
+
+    CHECK( y >= pcv.heightInCtus, "Height in CTUs is exceeded" );
+  }
+}
+
 struct TileLineEncRsrc
 {
   BitEstimator            m_BitEstimator;
@@ -228,6 +272,7 @@ void EncSlice::init( const VVEncCfg& encCfg,
     }
   }
   ctuEncParams.resize( sizeInCtus );
+  setArbitraryWppPattern( *pps.pcv, m_ctuAddrMap, 3 );
 }
 
 
@@ -647,6 +692,7 @@ class CtuTsIterator : public std::iterator<std::forward_iterator_tag, int>
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, bool _wpp                          ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ),                     m_ctuTsAddr( _s ) { if( _wpp ) setWppPattern(); }
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>& _m         ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( _s ) {}
     CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>& _m, int _c ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuAddrMap( _m ), m_ctuTsAddr( std::max( _s, _c ) ) {}
+    CtuTsIterator( const CodingStructure& _cs, int _s, int _e, const std::vector<int>* _m, bool _wpp ) : cs( _cs ), m_startTsAddr( _s ), m_endTsAddr( _e ), m_ctuTsAddr( _s ) {  if( _wpp ) m_ctuAddrMap = *_m;  }
 
     virtual ~CtuTsIterator() { m_ctuAddrMap.clear(); }
 
@@ -750,7 +796,7 @@ void EncSlice::xProcessCtus( Picture* pic, const unsigned startCtuTsAddr, const 
   // fill encoder parameter list
   int idx = 0;
   const std::vector<int> base = slice.sliceMap.ctuAddrInSlice;
-  auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, m_pcEncCfg->m_numThreads > 0 );
+  auto ctuIter = CtuTsIterator( cs, startCtuTsAddr, boundingCtuTsAddr, &m_ctuAddrMap, m_pcEncCfg->m_numThreads > 0 );
   for( auto ctuPos : ctuIter )
   {
     ctuEncParams[ idx ].pic       = pic;
