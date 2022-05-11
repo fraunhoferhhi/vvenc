@@ -38,21 +38,11 @@ variables:
    tags:
       - docker
 
-
-.build_only_macos_arm64_template:
-   extends: .build_only_template
-   script:
-      - make osx-arch=arm64 disable-lto=1 all
-
-.build_only_macos_x86_64_template:
-   extends: .build_only_template
-   script:
-      - make osx-arch=x86_64 disable-lto=1 all
-
 .build_only_ubuntu2004_mingw_template:
    extends: .build_only_template_full
    script:
       - make toolchainfile=cmake/toolchains/x86_64-w64-mingw32-gcc-posix-ubuntu2004.cmake disable-lto=1 all
+
 
 build_gcc5_ubuntu1804:
    extends: .build_only_template_full
@@ -203,17 +193,12 @@ test_vc192x:
    tags:
       - vc192x
 
-test_macos:
+test_macos-x86_64:
    extends: .build_test_template
    tags:
-      - macos
+      - macos-x86_64
 
-build_macos_arm64:
-   extends: .build_only_macos_arm64_template
+test_macos-arm:
+   extends: .build_test_template
    tags:
-      - macos
-
-build_macos_x86_64:
-   extends: .build_only_macos_x86_64_template
-   tags:
-      - macos
+      - macos-arm
