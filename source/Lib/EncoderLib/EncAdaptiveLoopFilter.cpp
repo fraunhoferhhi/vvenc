@@ -4228,8 +4228,8 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
     _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xrec );
   }
   else
-  {
 #endif
+  {
     int k = 0;
   
     const Pel* rec0 = &rec[0];
