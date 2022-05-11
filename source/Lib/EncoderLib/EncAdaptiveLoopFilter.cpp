@@ -3283,6 +3283,11 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
   if( !m_encCfg->m_useNonLinearAlfLuma && !m_encCfg->m_useNonLinearAlfChroma && ( area.width & 3 ) == 0 )
   {
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+    bool useSimd = read_x86_extension_flags() > SCALAR;
+#else
+    bool useSimd = false;
+#endif
     for( int i = 0; i < area.height; i += 4 )
     {
       const int maxFilterSamples = 4;
@@ -3328,15 +3333,24 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         //      std::memset( ELocal, 0, sizeof( ELocal ) );
         Pel ELocal[MAX_NUM_ALF_LUMA_COEFF << 4];
 
-        for( int ii = 0; ii < 4; ii++ )
+        if( useSimd )
         {
-          if( clipBotRow[ii] == 4 )
+          for( int ii = 0; ii < 4; ii++ )
           {
-            calcLinCovariance4<false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            if( clipBotRow[ii] == 4 ) 
+              calcLinCovariance4<false, true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            else 
+              calcLinCovariance4<true,  true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
           }
-          else
+        }
+        else
+        {
+          for( int ii = 0; ii < 4; ii++ )
           {
-            calcLinCovariance4<true>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            if( clipBotRow[ii] == 4 ) 
+              calcLinCovariance4<false, false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
+            else 
+              calcLinCovariance4<true,  false>( ELocal + ( ii << 2 ), rec + j + ii * recStride, recStride, filterPattern, halfFilterLength, transposeIdx, clipTopRow[ii], clipBotRow[ii] );
           }
         }
 
@@ -3349,7 +3363,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
           }
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-          if( read_x86_extension_flags() > SCALAR )
+          if( useSimd )
           {
 #if ALF_SINGLE_PREC_FLOAT
             for( int k = 0; k < shape.numCoeff; k++ )
@@ -3572,7 +3586,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
         else
         {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-          if( read_x86_extension_flags() > SCALAR )
+          if( useSimd )
           {
 #if ALF_SINGLE_PREC_FLOAT
             const __m128i mylocal0 = _mm_loadu_si128( ( const __m128i* ) &yLocal[0][0] );
@@ -4050,11 +4064,11 @@ void EncAdaptiveLoopFilter::calcLinCovariance( int* ELocal, const Pel *rec, cons
 template void EncAdaptiveLoopFilter::calcLinCovariance<true >( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 template void EncAdaptiveLoopFilter::calcLinCovariance<false>( int* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 
-template<bool clipToBdry>
+template<bool clipToBdry, bool simd>
 void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow )
 {
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-  if( read_x86_extension_flags() > SCALAR )
+  if( simd )
   {
     int k = 0;
   
@@ -4429,8 +4443,10 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
   }
 }
 
-template void EncAdaptiveLoopFilter::calcLinCovariance4<true> ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
-template void EncAdaptiveLoopFilter::calcLinCovariance4<false>( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  false>( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<false, false>( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<true,  true> ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
+template void EncAdaptiveLoopFilter::calcLinCovariance4<false, true> ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
 
 void EncAdaptiveLoopFilter::calcCovariance( int ELocal[MAX_NUM_ALF_LUMA_COEFF][MaxAlfNumClippingValues], const Pel *rec, const int stride, const AlfFilterShape& shape, const int transposeIdx, const ChannelType channel, int vbDistance )
 {
