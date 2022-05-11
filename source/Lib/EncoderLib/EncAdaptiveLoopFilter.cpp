@@ -3602,7 +3602,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-                *cov++ += _mm_extract_epi32( mmacc, 0 );
+                *cov++ += _mm_cvtsi128_si32( mmacc );
               }
 
               const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
@@ -3612,7 +3612,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               mmacc = _mm_hadd_epi32( mmacc, mmacc );
               mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-              alfCovariance[classIdx].y[0][k] += _mm_extract_epi32( mmacc, 0 );
+              alfCovariance[classIdx].y[0][k] += _mm_cvtsi128_si32( mmacc );
             }
 
             const __m128i mmacc0 = _mm_madd_epi16( mylocal0, mylocal0 );
@@ -3622,7 +3622,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             mmacc = _mm_hadd_epi32( mmacc, mmacc );
             mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-            alfCovariance[classIdx].pixAcc += _mm_extract_epi32( mmacc, 0 );
+            alfCovariance[classIdx].pixAcc += _mm_cvtsi128_si32( mmacc );
 #else
             const __m128i mylocal0 = _mm_loadu_si128( ( const __m128i* ) &yLocal[0][0] );
             const __m128i mylocal8 = _mm_loadu_si128( ( const __m128i* ) &yLocal[2][0] );
@@ -3684,7 +3684,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-                *cov += _mm_extract_epi32( mmacc, 0 );
+                *cov += _mm_cvtsi128_si32( mmacc );
               }
 
               const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
@@ -3694,7 +3694,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               mmacc = _mm_hadd_epi32( mmacc, mmacc );
               mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-              alfCovariance[classIdx].y[0][k] += _mm_extract_epi32( mmacc, 0 );
+              alfCovariance[classIdx].y[0][k] += _mm_cvtsi128_si32( mmacc );
             }
 
             const __m128i mmacc0 = _mm_madd_epi16( mylocal0, mylocal0 );
@@ -3704,7 +3704,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             mmacc = _mm_hadd_epi32( mmacc, mmacc );
             mmacc = _mm_hadd_epi32( mmacc, mmacc );
 
-            alfCovariance[classIdx].pixAcc += _mm_extract_epi32( mmacc, 0 );
+            alfCovariance[classIdx].pixAcc += _mm_cvtsi128_si32( mmacc );
 #endif
           }
           else
@@ -4053,188 +4053,270 @@ template void EncAdaptiveLoopFilter::calcLinCovariance<false>( int* ELocal, cons
 template<bool clipToBdry>
 void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow )
 {
-  int k = 0;
-  
-  const Pel* rec0 = &rec[0];
-  const Pel* rec1 = &rec[1];
-  const Pel* rec2 = &rec[2];
-  const Pel* rec3 = &rec[3];
-  
-  const Pel curr0 = *rec0 << 1;
-  const Pel curr1 = *rec1 << 1;
-  const Pel curr2 = *rec2 << 1;
-  const Pel curr3 = *rec3 << 1;
-
-  if( transposeIdx == 0 )
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
+  if( read_x86_extension_flags() > SCALAR )
   {
-    for( int i = -halfFilterLength; i < 0; i++ )
+    int k = 0;
+  
+    const Pel* rec0 = &rec[0];
+
+    __m128i xrec = _mm_loadl_epi64( ( const __m128i* ) rec );
+    __m128i xcur = _mm_slli_epi16( xrec, 1 );
+
+    if( transposeIdx == 0 )
     {
-      const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
-      const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
-
-      const Pel* rec00 = rec0 + off0;
-      const Pel* rec01 = rec0 + off1;
-
-      const Pel* rec10 = rec1 + off0;
-      const Pel* rec11 = rec1 + off1;
-
-      const Pel* rec20 = rec2 + off0;
-      const Pel* rec21 = rec2 + off1;
-
-      const Pel* rec30 = rec3 + off0;
-      const Pel* rec31 = rec3 + off1;
-
-      for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
-      {
-        const Pel val00 = rec00[ j];
-        const Pel val01 = rec01[-j];
-        
-        const Pel val10 = rec10[ j];
-        const Pel val11 = rec11[-j];
-        
-        const Pel val20 = rec20[ j];
-        const Pel val21 = rec21[-j];
-
-        const Pel val30 = rec30[ j];
-        const Pel val31 = rec31[-j];
-
-        ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
-        ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
-        ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
-        ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
-      }
-    }
-
-    for( int j = -halfFilterLength; j < 0; j++, k++ )
-    {
-      const Pel val00 = rec0[ j];
-      const Pel val01 = rec0[-j];
-      
-      const Pel val10 = rec1[ j];
-      const Pel val11 = rec1[-j];
-      
-      const Pel val20 = rec2[ j];
-      const Pel val21 = rec2[-j];
-      
-      const Pel val30 = rec3[ j];
-      const Pel val31 = rec3[-j];
-
-      ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
-      ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
-      ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
-      ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
-    }
-  }
-  else if( transposeIdx == 1 )
-  {
-    for( int j = -halfFilterLength; j < 0; j++ )
-    {
-      const Pel* rec00 = rec0 + j;
-      const Pel* rec01 = rec0 - j;
-
-      for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+      for( int i = -halfFilterLength; i < 0; i++ )
       {
         const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
         const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-        const Pel *vptr0 = &rec00[off0];
-        const Pel *vptr1 = &rec01[off1];
-        const Pel* vptr2 =  rec0;
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
 
-        ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-        ELocal[filterPattern[k] + 1] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-        ELocal[filterPattern[k] + 2] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-        ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
+        {
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec00[ j] );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec01[-j] );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+        }
       }
-    }
-    for( int i = -halfFilterLength; i < 0; i++, k++ )
-    {
-      const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
-      const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-      const Pel *vptr0 = &rec0[off0];
-      const Pel *vptr1 = &rec0[off1];
-      const Pel* vptr2 =  rec0;
-
-      ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-      ELocal[filterPattern[k] + 1] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-      ELocal[filterPattern[k] + 2] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-      ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-    }
-  }
-  else if( transposeIdx == 2 )
-  {
-    for( int i = -halfFilterLength; i < 0; i++ )
-    {
-      const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
-      const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
-
-      const Pel* rec00 = rec0 + off0;
-      const Pel* rec01 = rec0 + off1;
-
-      const Pel* rec10 = rec1 + off0;
-      const Pel* rec11 = rec1 + off1;
-
-      const Pel* rec20 = rec2 + off0;
-      const Pel* rec21 = rec2 + off1;
-
-      const Pel* rec30 = rec3 + off0;
-      const Pel* rec31 = rec3 + off1;
-
-      for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
       {
-        const Pel val00 = rec00[ j];
-        const Pel val01 = rec01[-j];
-        
-        const Pel val10 = rec10[ j];
-        const Pel val11 = rec11[-j];
-        
-        const Pel val20 = rec20[ j];
-        const Pel val21 = rec21[-j];
-        
-        const Pel val30 = rec30[ j];
-        const Pel val31 = rec31[-j];
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec[ j] );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec[-j] );
 
-        ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
-        ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
-        ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
-        ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) & ELocal[filterPattern[k]], xval0 );
       }
     }
-    for( int j = -halfFilterLength; j < 0; j++, k++ )
+    else if( transposeIdx == 1 )
     {
-      const Pel val00 = rec0[ j];
-      const Pel val01 = rec0[-j];
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
 
-      const Pel val10 = rec1[ j];
-      const Pel val11 = rec1[-j];
+        for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-      const Pel val20 = rec2[ j];
-      const Pel val21 = rec2[-j];
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
 
-      const Pel val30 = rec3[ j];
-      const Pel val31 = rec3[-j];
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
 
-      ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
-      ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
-      ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
-      ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+      }
     }
+    else if( transposeIdx == 2 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
+
+        for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+        {
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec00[ j] );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec01[-j] );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+        }
+      }
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) &rec0[ j] );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) &rec0[-j] );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+      }
+    }
+    else
+    {
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
+
+        for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+          
+          __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+          __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+          xval0 = _mm_add_epi16( xval0, xval1 );
+          xval0 = _mm_sub_epi16( xval0, xcur );
+
+          _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+        
+        __m128i xval0 = _mm_loadl_epi64( ( const __m128i* ) vptr0 );
+        __m128i xval1 = _mm_loadl_epi64( ( const __m128i* ) vptr1 );
+
+        xval0 = _mm_add_epi16( xval0, xval1 );
+        xval0 = _mm_sub_epi16( xval0, xcur );
+
+        _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xval0 );
+      }
+    }
+
+    _mm_storel_epi64( ( __m128i* ) &ELocal[filterPattern[k]], xrec );
   }
   else
   {
-    for( int j = -halfFilterLength; j < 0; j++ )
-    {
-      const Pel* rec00 = rec0 + j;
-      const Pel* rec01 = rec0 - j;
+#endif
+    int k = 0;
+  
+    const Pel* rec0 = &rec[0];
+    const Pel* rec1 = &rec[1];
+    const Pel* rec2 = &rec[2];
+    const Pel* rec3 = &rec[3];
+  
+    const Pel curr0 = *rec0 << 1;
+    const Pel curr1 = *rec1 << 1;
+    const Pel curr2 = *rec2 << 1;
+    const Pel curr3 = *rec3 << 1;
 
-      for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+    if( transposeIdx == 0 )
+    {
+      for( int i = -halfFilterLength; i < 0; i++ )
       {
         const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
         const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-        const Pel *vptr0 = &rec00[off0];
-        const Pel *vptr1 = &rec01[off1];
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
+
+        const Pel* rec10 = rec1 + off0;
+        const Pel* rec11 = rec1 + off1;
+
+        const Pel* rec20 = rec2 + off0;
+        const Pel* rec21 = rec2 + off1;
+
+        const Pel* rec30 = rec3 + off0;
+        const Pel* rec31 = rec3 + off1;
+
+        for( int j = -halfFilterLength - i; j <= halfFilterLength + i; j++, k++ )
+        {
+          const Pel val00 = rec00[ j];
+          const Pel val01 = rec01[-j];
+        
+          const Pel val10 = rec10[ j];
+          const Pel val11 = rec11[-j];
+        
+          const Pel val20 = rec20[ j];
+          const Pel val21 = rec21[-j];
+
+          const Pel val30 = rec30[ j];
+          const Pel val31 = rec31[-j];
+
+          ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
+          ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
+          ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
+          ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
+        }
+      }
+
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        const Pel val00 = rec0[ j];
+        const Pel val01 = rec0[-j];
+      
+        const Pel val10 = rec1[ j];
+        const Pel val11 = rec1[-j];
+      
+        const Pel val20 = rec2[ j];
+        const Pel val21 = rec2[-j];
+      
+        const Pel val30 = rec3[ j];
+        const Pel val31 = rec3[-j];
+
+        ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
+        ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
+        ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
+        ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
+      }
+    }
+    else if( transposeIdx == 1 )
+    {
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
+
+        for( int i = -halfFilterLength - j; i <= halfFilterLength + j; i++, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+          const Pel* vptr2 =  rec0;
+
+          ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          ELocal[filterPattern[k] + 1] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          ELocal[filterPattern[k] + 2] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
         const Pel* vptr2 =  rec0;
 
         ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
@@ -4243,26 +4325,108 @@ void EncAdaptiveLoopFilter::calcLinCovariance4( Pel* ELocal, const Pel *rec, con
         ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
       }
     }
-    for( int i = -halfFilterLength; i < 0; i++, k++ )
+    else if( transposeIdx == 2 )
     {
-      const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
-      const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+      for( int i = -halfFilterLength; i < 0; i++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
 
-      const Pel *vptr0 = &rec0[off0];
-      const Pel *vptr1 = &rec0[off1];
-      const Pel* vptr2 =  rec0;
+        const Pel* rec00 = rec0 + off0;
+        const Pel* rec01 = rec0 + off1;
 
-      ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-      ELocal[filterPattern[k] + 1] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-      ELocal[filterPattern[k] + 2] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
-      ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        const Pel* rec10 = rec1 + off0;
+        const Pel* rec11 = rec1 + off1;
+
+        const Pel* rec20 = rec2 + off0;
+        const Pel* rec21 = rec2 + off1;
+
+        const Pel* rec30 = rec3 + off0;
+        const Pel* rec31 = rec3 + off1;
+
+        for( int j = halfFilterLength + i; j >= -halfFilterLength - i; j--, k++ )
+        {
+          const Pel val00 = rec00[ j];
+          const Pel val01 = rec01[-j];
+        
+          const Pel val10 = rec10[ j];
+          const Pel val11 = rec11[-j];
+        
+          const Pel val20 = rec20[ j];
+          const Pel val21 = rec21[-j];
+        
+          const Pel val30 = rec30[ j];
+          const Pel val31 = rec31[-j];
+
+          ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
+          ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
+          ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
+          ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
+        }
+      }
+      for( int j = -halfFilterLength; j < 0; j++, k++ )
+      {
+        const Pel val00 = rec0[ j];
+        const Pel val01 = rec0[-j];
+
+        const Pel val10 = rec1[ j];
+        const Pel val11 = rec1[-j];
+
+        const Pel val20 = rec2[ j];
+        const Pel val21 = rec2[-j];
+
+        const Pel val30 = rec3[ j];
+        const Pel val31 = rec3[-j];
+
+        ELocal[filterPattern[k] + 0] = val00 + val01 - curr0;
+        ELocal[filterPattern[k] + 1] = val10 + val11 - curr1;
+        ELocal[filterPattern[k] + 2] = val20 + val21 - curr2;
+        ELocal[filterPattern[k] + 3] = val30 + val31 - curr3;
+      }
     }
-  }
+    else
+    {
+      for( int j = -halfFilterLength; j < 0; j++ )
+      {
+        const Pel* rec00 = rec0 + j;
+        const Pel* rec01 = rec0 - j;
 
-  ELocal[filterPattern[k] + 0] = *rec0;
-  ELocal[filterPattern[k] + 1] = *rec1;
-  ELocal[filterPattern[k] + 2] = *rec2;
-  ELocal[filterPattern[k] + 3] = *rec3;
+        for( int i = halfFilterLength + j; i >= -halfFilterLength - j; i--, k++ )
+        {
+          const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+          const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+          const Pel *vptr0 = &rec00[off0];
+          const Pel *vptr1 = &rec01[off1];
+          const Pel* vptr2 =  rec0;
+
+          ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          ELocal[filterPattern[k] + 1] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          ELocal[filterPattern[k] + 2] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+          ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        }
+      }
+      for( int i = -halfFilterLength; i < 0; i++, k++ )
+      {
+        const int off0 =  clipIdx<clipToBdry>( i,  clipTopRow ) * stride;
+        const int off1 = -clipIdx<clipToBdry>( i, -clipBotRow ) * stride;
+
+        const Pel *vptr0 = &rec0[off0];
+        const Pel *vptr1 = &rec0[off1];
+        const Pel* vptr2 =  rec0;
+
+        ELocal[filterPattern[k] + 0] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        ELocal[filterPattern[k] + 1] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        ELocal[filterPattern[k] + 2] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+        ELocal[filterPattern[k] + 3] = *vptr0++ + *vptr1++ - ( *vptr2++ << 1 );
+      }
+    }
+
+    ELocal[filterPattern[k] + 0] = *rec0;
+    ELocal[filterPattern[k] + 1] = *rec1;
+    ELocal[filterPattern[k] + 2] = *rec2;
+    ELocal[filterPattern[k] + 3] = *rec3;
+  }
 }
 
 template void EncAdaptiveLoopFilter::calcLinCovariance4<true> ( Pel* ELocal, const Pel* rec, const int stride, const int* filterPattern, const int halfFilterLength, const int transposeIdx, int clipTopRow, int clipBotRow );
@@ -6002,7 +6166,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
               mmacc = _mm_hadd_epi32(mmacc, mmacc);
               mmacc = _mm_hadd_epi32(mmacc, mmacc);
 
-              *cov++ += _mm_extract_epi32(mmacc, 0);
+              *cov++ += _mm_cvtsi128_si32(mmacc);
             }
 
             const __m128i mmacc0 = _mm_madd_epi16(melocalk0, mylocal0);
@@ -6012,7 +6176,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
             mmacc = _mm_hadd_epi32(mmacc, mmacc);
             mmacc = _mm_hadd_epi32(mmacc, mmacc);
 
-            alfCovariance.y[0][k] += _mm_extract_epi32(mmacc, 0);
+            alfCovariance.y[0][k] += _mm_cvtsi128_si32(mmacc);
           }
 
           const __m128i mmacc0 = _mm_madd_epi16(mylocal0, mylocal0);
@@ -6022,7 +6186,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           mmacc = _mm_hadd_epi32(mmacc, mmacc);
           mmacc = _mm_hadd_epi32(mmacc, mmacc);
 
-          alfCovariance.pixAcc += _mm_extract_epi32(mmacc, 0);
+          alfCovariance.pixAcc += _mm_cvtsi128_si32(mmacc);
         }
         else
 #endif
