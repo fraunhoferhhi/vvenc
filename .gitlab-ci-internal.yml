@@ -96,6 +96,21 @@ build_gcc10_ubuntu2004:
      CC: gcc-10
      CXX: g++-10
 
+build_gcc11_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: gcc-11
+     CXX: g++-11
+
+
+build_gcc12_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: gcc-12
+     CXX: g++-12
+
 build_clang7_ubuntu2004:
    extends: .build_only_template_full
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2004_full:latest
@@ -124,6 +139,34 @@ build_clang10_ubuntu2004:
      CC: clang-10
      CXX: clang++-10
 
+build_clang11_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: clang-11
+     CXX: clang++-11
+
+build_clang12_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: clang-12
+     CXX: clang++-12
+
+build_clang13_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: clang-13
+     CXX: clang++-13
+
+build_clang14_ubuntu2204:
+   extends: .build_only_template_full
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
+   variables:
+     CC: clang-14
+     CXX: clang++-14
+
 build_mingw_ubuntu2004:
    extends: .build_only_ubuntu2004_mingw_template
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2004_full:latest
@@ -145,6 +188,10 @@ test_ubuntu1804:
 test_ubuntu2004:
    extends: .build_test_template
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2004_full:latest
+
+test_ubuntu2204:
+   extends: .build_test_template
+   image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
 
 test_vc191x:
    extends: .build_test_template
