@@ -84,7 +84,7 @@ build_gcc9_ubuntu2004:
      CXX: g++-9
 
 build_gcc10_ubuntu2004:
-   extends: .build_only_template
+   extends: .build_only_template_full
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2004_full:latest
    variables:
      CC: gcc-10
@@ -99,7 +99,7 @@ build_gcc11_ubuntu2204:
 
 
 build_gcc12_ubuntu2204:
-   extends: .build_only_template_full
+   extends: .build_only_template
    image: $CI_REGISTRY/pub/dockerimages/ubuntu_2204_full:latest
    variables:
      CC: gcc-12
