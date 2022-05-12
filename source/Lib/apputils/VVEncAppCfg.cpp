@@ -743,6 +743,9 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
 
     ("TreatAsSubPic",                                   c->m_treatAsSubPic,                                  "Allow generation of subpicture streams. Disable LMCS, AlfTempPred and JCCR")
     ("ExplicitAPSid",                                   c->m_explicitAPSid,                                  "Set ALF APS id")
+    
+    ("AddGOP32refPics",                                 c->m_addGOP32refPics,                                "Use different QP offsets and reference pictures in GOP structure")
+    ("LFBetaTcOffsets",                                 c->m_loopFilterBetaTcOffsets,                        "Use beta offset and tc offset per temporal layer for loop filter")
     ;
 
     opts.setSubSection("Quad-Tree size and depth");

@@ -751,7 +751,9 @@ typedef struct vvenc_config
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
   
-  bool                m_reservedFlag[8];
+  bool                m_reservedFlag[6];
+  bool                m_loopFilterBetaTcOffsets;
+  bool                m_addGOP32refPics;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
 
