@@ -649,7 +649,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
   if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
     const int gopsInIp  = encRCSeq->intraPeriod / encRCSeq->gopSize;
-    const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
+    const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? -(m_pcEncCfg->m_GOPSize-1) : 0);
     int l = 1;
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
@@ -747,7 +747,7 @@ void RateCtrl::processGops()
 {
   const unsigned fps = encRCSeq->frameRate;
   const int gopShift = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0));
-  const int itOffset = m_listRCFirstPassStats.begin()->poc + 1; // NOTE: in two-pass RC, this value is 1
+  const int itOffset = m_listRCFirstPassStats.begin()->poc + 1 - (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0); // NOTE: in two-pass RC, this value is 1
   const int qpOffset = Clip3 (0, 6, ((m_pcEncCfg->m_QP + 1) >> 1) - 9);
   const double bp1pf = getAverageBitsFromFirstPass();  // first-pass bits/frame
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
