@@ -932,6 +932,17 @@ void EncGOP::xInitSPS(SPS &sps) const
   profileTierLevel->subProfileIdc.clear();
   profileTierLevel->subProfileIdc.push_back( m_pcEncCfg->m_subProfile );
 
+#if GDR_ENABLED
+  sps.GDR = m_pcEncCfg->m_gdrEnabled;
+  if (m_pcEncCfg->m_gdrEnabled)
+  {
+    sps.virtualBoundariesEnabled = 1;
+    sps.virtualBoundariesPresent = 0;
+    sps.numHorVirtualBoundaries  = 0;
+    sps.numVerVirtualBoundaries  = 0;
+  }
+#endif
+
   sps.maxPicWidthInLumaSamples      = m_pcEncCfg->m_PadSourceWidth;
   sps.maxPicHeightInLumaSamples     = m_pcEncCfg->m_PadSourceHeight;
   sps.conformanceWindow.setWindow( m_pcEncCfg->m_confWinLeft, m_pcEncCfg->m_confWinRight, m_pcEncCfg->m_confWinTop, m_pcEncCfg->m_confWinBottom );
