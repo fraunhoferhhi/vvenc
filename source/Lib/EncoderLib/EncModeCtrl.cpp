@@ -629,6 +629,14 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
       cuECtx.grad_dupVal = (double)dupVal;
     }
   }
+
+#if GDR_ENABLED
+  // Flags for GDR 
+  forceIntraMode = false;
+  forceVerSplitOnly = false;
+  forceRemoveTTV = false;
+  forceRemoveQT = false;
+#endif
 }
 
 void EncModeCtrl::finishCULevel( Partitioner &partitioner )
@@ -639,6 +647,13 @@ void EncModeCtrl::finishCULevel( Partitioner &partitioner )
 
 bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructure &cs, Partitioner& partitioner, const EncTestMode& lastTestmode )
 {
+#if GDR_ENABLED
+  if ( ( encTestmode.type == ETM_SPLIT_QT && forceRemoveQT ) || ( encTestmode.type == ETM_SPLIT_TT_V && forceRemoveTTV ) )
+  {
+    return false;
+  }
+#endif
+
   ComprCUCtx& cuECtx = *comprCUCtx;
 
   const PartSplit implicitSplit = partitioner.getImplicitSplit( cs );
@@ -888,6 +903,12 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
   {
     case CU_HORZ_SPLIT:
     case CU_TRIH_SPLIT:
+#if GDR_ENABLED
+      if ( forceVerSplitOnly )
+      {
+        return false;
+      }
+#endif
       if( cuECtx.qtBeforeBt && cuECtx.didQuadSplit )
       {
         if( cuECtx.maxQtSubDepth > partitioner.currQtDepth + 1 )
@@ -897,8 +918,17 @@ bool EncModeCtrl::trySplit( const EncTestMode& encTestmode, const CodingStructur
         }
       }
       break;
+#if GDR_ENABLED
+    case CU_TRIV_SPLIT:
+      if ( forceRemoveTTV )
+      {
+        return false;
+      }
+    case CU_VERT_SPLIT:
+#else
     case CU_VERT_SPLIT:
     case CU_TRIV_SPLIT:
+#endif
       if( cuECtx.qtBeforeBt && cuECtx.didQuadSplit )
       {
         if( cuECtx.maxQtSubDepth > partitioner.currQtDepth + 1 )
@@ -924,6 +954,13 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
 {
   CHECK( isModeSplit( encTestmode ), "wrong method");
 
+#if GDR_ENABLED
+  if ( forceVerSplitOnly )
+  {
+    return false;
+  }
+#endif
+
   ComprCUCtx& cuECtx = m_ComprCUCtxList.back();
 
   if( cuECtx.minDepth > partitioner.currQtDepth && partitioner.canSplit( CU_QUAD_SPLIT, cs ) )
@@ -943,7 +980,11 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   {
     // if this is removed, the IntraSearch::xIntraCodingLumaQT needs to be adapted to support Intra TU split
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
+#if GDR_ENABLED
+    if ((m_pcEncCfg->m_FastInferMerge && !slice.picHeader->inGdrInterval) && !slice.isIntra() && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+#else
     if (m_pcEncCfg->m_FastInferMerge && !slice.isIntra() && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
+#endif
     {
       if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
         && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
@@ -968,7 +1009,11 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
      // return true;
     }
     else
+#if GDR_ENABLED
+    if( (partitioner.isConsIntra() || forceIntraMode) && !cuECtx.bestTU )
+#else
     if( partitioner.isConsIntra() && !cuECtx.bestTU )
+#endif
     {
       //return true;
     }
@@ -978,8 +1023,12 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       //return true;
     }
     else
-    if (!(slice.isIRAP() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
-      ((!m_pcEncCfg->m_bDisableIntraCUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
+#if GDR_ENABLED
+      if (!(slice.picHeader->inGdrInterval || slice.isIRAP() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
+#else
+      if (!(slice.isIRAP() || bestMode.type == ETM_INTRA || !cuECtx.bestTU ||
+#endif
+        ((!m_pcEncCfg->m_bDisableIntraCUsInInterSlices) && (!relatedCU.isInter || !relatedCU.isIBC) && (
                                     ( cuECtx.bestTU->cbf[0] != 0 ) ||
            ( ( numComp > COMP_Cb ) && cuECtx.bestTU->cbf[1] != 0 ) ||
            ( ( numComp > COMP_Cr ) && cuECtx.bestTU->cbf[2] != 0 )  // avoid very complex intra if it is unlikely
@@ -1021,6 +1070,13 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
   }
   else if( isModeInter( encTestmode ) )
   {
+#if GDR_ENABLED
+    if (forceIntraMode)
+    {
+      return false;
+    }
+#endif
+
     // INTER MODES (ME + MERGE/SKIP)
     CHECK( slice.isIntra(), "Inter-mode should not be in the I-Slice mode list!" );
 
@@ -1030,7 +1086,11 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     {
       if( encTestmode.opts == ETO_STANDARD )
       {
+#if GDR_ENABLED
+        if (m_pcEncCfg->m_FastInferMerge && bestCS)
+#else
         if (m_pcEncCfg->m_FastInferMerge)
+#endif
         {
           if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
             && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))

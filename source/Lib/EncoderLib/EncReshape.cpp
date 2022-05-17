@@ -441,6 +441,9 @@ void EncReshape::preAnalyzerLMCS(Picture& pic, const uint32_t signalType, const 
   m_sliceReshapeInfo.sliceReshaperModelPresent = true;
   m_sliceReshapeInfo.sliceReshaperEnabled = true;
   int modIP = pic.getPOC() - pic.getPOC() / reshapeCW.rspFpsToIp * reshapeCW.rspFpsToIp;
+#if GDR_ENABLED
+  if (pic.cs->slice->isInterGDR()) modIP = 0;
+#endif
   if (sliceType == VVENC_I_SLICE || (reshapeCW.updateCtrl == 2 && modIP == 0))
   {
     if (m_sliceReshapeInfo.sliceReshaperModelPresent == true)

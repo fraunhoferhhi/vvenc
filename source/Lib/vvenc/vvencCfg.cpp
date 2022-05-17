@@ -673,6 +673,14 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset( c->m_reservedFlag, 0, sizeof(c->m_reservedFlag) );
   memset( c->m_reservedDouble, 0, sizeof(c->m_reservedDouble) );
 
+#if GDR_ENABLED
+  c->m_gdrEnabled                              = false;
+  c->m_gdrPocStart                             = -1;
+  c->m_gdrPeriod                               = -1;
+  c->m_gdrInterval                             = -1;
+  c->m_gdrNoHash                               = true;
+#endif
+
   // init default preset
   vvenc_init_preset( c, vvencPresetMode::VVENC_MEDIUM );
 }
@@ -733,21 +741,33 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_GOPList[0].m_CrBetaOffsetDiv2 = 0;
     c->m_GOPList[0].m_temporalId = 0;
 
+#if 0
+    c->m_GOPList[0].m_numRefPicsActive[0] = 1;
+    c->m_GOPList[0].m_numRefPics[0] = 1;
+    c->m_GOPList[0].m_deltaRefPics[0][0] = 1;
+#else
     c->m_GOPList[0].m_numRefPicsActive[0] = 4;
     c->m_GOPList[0].m_numRefPics[0] = 4;
     c->m_GOPList[0].m_deltaRefPics[0][0] = 1;
     c->m_GOPList[0].m_deltaRefPics[0][1] = 2;
     c->m_GOPList[0].m_deltaRefPics[0][2] = 3;
     c->m_GOPList[0].m_deltaRefPics[0][3] = 4;
+#endif
 
     if (sliceType == 'B')
     {
+#if 0
+      c->m_GOPList[0].m_numRefPicsActive[1] = 1;
+      c->m_GOPList[0].m_numRefPics[1] = 1;
+      c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
+#else
       c->m_GOPList[0].m_numRefPicsActive[1] = 4;
       c->m_GOPList[0].m_numRefPics[1] = 4;
       c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
       c->m_GOPList[0].m_deltaRefPics[1][1] = 2;
       c->m_GOPList[0].m_deltaRefPics[1][2] = 3;
       c->m_GOPList[0].m_deltaRefPics[1][3] = 4;
+#endif
     }
 
     c->m_BDOF  = false;
@@ -1656,7 +1676,18 @@ static bool checkCfgParameter( vvenc_config *c )
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
   vvenc_confirmParameter( c,   c->m_picReordering && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
+#if GDR_ENABLED
+  if (!c->m_gdrEnabled)
+  {
+    vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
+  }
+  else
+  {
+    vvenc_confirmParameter( c, c->m_DecodingRefreshType != VVENC_DRT_RECOVERY_POINT_SEI, "Decoding refresh type Recovery Point SEI must be used for GDR" );
+  }
+#else
   vvenc_confirmParameter( c, ! c->m_picReordering &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
+#endif
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)

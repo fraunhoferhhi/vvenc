@@ -1320,6 +1320,9 @@ public:
   bool                        isIntra() const                                        { return sliceType == VVENC_I_SLICE; }
   bool                        isInterB() const                                       { return sliceType == VVENC_B_SLICE; }
   bool                        isInterP() const                                       { return sliceType == VVENC_P_SLICE; }
+#if GDR_ENABLED
+  bool                        isInterGDR() const { return (sliceType != VVENC_I_SLICE && nalUnitType == VVENC_NAL_UNIT_CODED_SLICE_GDR); }  
+#endif
 
   void                        setLambdas( const double lambdas_[MAX_NUM_COMP] )  { for (int component = 0; component < MAX_NUM_COMP; component++) lambdas[component] = lambdas_[component]; }
   const double*               getLambdas() const                                     { return lambdas;                                             }

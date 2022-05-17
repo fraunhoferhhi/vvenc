@@ -1232,7 +1232,15 @@ void IntraSearch::estIntraPredChromaQT( CodingUnit& cu, Partitioner& partitioner
       double    dCost   = m_pcRdCost->calcRdCost( fracBits, uiDist - baseDist );
 
       //----- compare -----
+#if GDR_ENABLED
+      bool allOk = (dCost < dBestCost);
+      if (m_pcEncCfg->m_gdrEnabled)
+        allOk = allOk && dBestCost && isValidIntraPredChroma(cu, (int)CU::getCoLocatedIntraLumaMode(cu), chromaIntraMode);
+
+      if (allOk)
+#else
       if( dCost < dBestCost )
+#endif
       {
         if (lumaUsesISP && (dCost < bestCostSoFar))
         {
@@ -2286,6 +2294,14 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
 
   if( !currArea.Cb().valid() ) 
     return ChromaCbfs(false);
+
+  // *TEST*
+  if (cs.picture->getPOC() == 2 && currArea.lx() == 44 && currArea.ly() == 76 && currArea.lwidth() == 4 && currArea.lheight() == 4)
+  {
+    if (1)
+    {
+    }
+  }
 
   TransformUnit& currTU     = *cs.getTU( currArea.chromaPos(), CH_C );
   const CodingUnit& cu  = *cs.getCU( currArea.chromaPos(), CH_C, TREE_D );

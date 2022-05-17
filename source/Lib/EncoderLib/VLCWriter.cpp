@@ -997,6 +997,22 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
   WRITE_FLAG( pcSPS->virtualBoundariesEnabled,            "sps_virtual_boundaries_enabled_flag" );
   if( pcSPS->virtualBoundariesEnabled )
   {
+#if GDR_ENABLED
+    WRITE_FLAG( pcSPS->virtualBoundariesPresent,          "sps_virtual_boundaries_present_flag" );
+    if (pcSPS->virtualBoundariesPresent)
+    {
+      WRITE_UVLC( pcSPS->numVerVirtualBoundaries,         "sps_num_ver_virtual_boundaries");
+      for( unsigned i = 0; i < pcSPS->numVerVirtualBoundaries; i++ )
+      {
+        WRITE_UVLC((pcSPS->virtualBoundariesPosX[i]>>3)-1,  "sps_virtual_boundaries_pos_x");
+      }
+      WRITE_UVLC(pcSPS->numHorVirtualBoundaries,          "sps_num_hor_virtual_boundaries");
+      for( unsigned i = 0; i < pcSPS->numHorVirtualBoundaries; i++ )
+      {
+        WRITE_UVLC((pcSPS->virtualBoundariesPosY[i]>>3)-1,  "sps_virtual_boundaries_pos_y");
+      }
+    }
+#else
     WRITE_CODE( pcSPS->numVerVirtualBoundaries, 2,        "sps_num_ver_virtual_boundaries");
     for( unsigned i = 0; i < pcSPS->numVerVirtualBoundaries; i++ )
     {
@@ -1007,6 +1023,7 @@ void HLSWriter::codeSPS( const SPS* pcSPS )
     {
       WRITE_UVLC((pcSPS->virtualBoundariesPosY[i]>>3),    "sps_virtual_boundaries_pos_y");
     }
+#endif
   }
 
   if (pcSPS->ptlDpbHrdParamsPresent)
@@ -1434,6 +1451,18 @@ void HLSWriter::codePictureHeader( const PicHeader* picHeader, bool writeRbspTra
     WRITE_FLAG( picHeader->virtualBoundariesEnabled,    "ph_loop_filter_across_virtual_boundaries_disabled_present_flag" );
     if( picHeader->virtualBoundariesEnabled )
     {
+#if GDR_ENABLED
+      WRITE_UVLC(picHeader->numVerVirtualBoundaries,    "ph_num_ver_virtual_boundaries");
+      for( unsigned i = 0; i < picHeader->numVerVirtualBoundaries; i++ )
+      {
+        WRITE_UVLC((picHeader->virtualBoundariesPosX[i] >> 3) - 1, "ph_virtual_boundaries_pos_x");
+      }
+      WRITE_UVLC(picHeader->numHorVirtualBoundaries,    "ph_num_hor_virtual_boundaries");
+      for( unsigned i = 0; i < picHeader->numHorVirtualBoundaries; i++ )
+      {
+        WRITE_UVLC((picHeader->virtualBoundariesPosY[i] >> 3) - 1, "ph_virtual_boundaries_pos_y");
+      }
+#else
       WRITE_CODE(picHeader->numVerVirtualBoundaries, 2, "ph_num_ver_virtual_boundaries");
       for( unsigned i = 0; i < picHeader->numVerVirtualBoundaries; i++ )
       {
@@ -1444,6 +1473,7 @@ void HLSWriter::codePictureHeader( const PicHeader* picHeader, bool writeRbspTra
       {
         WRITE_UVLC(picHeader->virtualBoundariesPosY[i]>>3, "ph_virtual_boundaries_pos_y");
       }
+#endif
     }
   }
 

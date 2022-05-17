@@ -1487,6 +1487,13 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     sliceType = VVENC_I_SLICE;
   }
 
+#if GDR_ENABLED
+  if ( curPoc > 0 && m_pcEncCfg->m_gdrEnabled && curPoc >= m_pcEncCfg->m_gdrPocStart && ((curPoc - m_pcEncCfg->m_gdrPocStart) % m_pcEncCfg->m_gdrPeriod == 0))
+  {
+    sliceType = gopEntry.m_sliceType == 'P' ? VVENC_P_SLICE : VVENC_B_SLICE;
+  }
+#endif
+
   // update IRAP
   if( naluType == VVENC_NAL_UNIT_CODED_SLICE_IDR_W_RADL
       || naluType == VVENC_NAL_UNIT_CODED_SLICE_IDR_N_LP
@@ -1620,16 +1627,19 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     slice->picHeader->recoveryPocCnt = 0;
     slice->picHeader->inGdrInterval = false;
 
+    slice->picHeader->virtualBoundariesEnabled = false;
     slice->picHeader->virtualBoundariesPresent = false;
+    slice->picHeader->numHorVirtualBoundaries = 0;
+    slice->picHeader->numVerVirtualBoundaries = 0;
 
     int  offset = (curPoc < gdrPocStart) ? 0 : (((curPoc - gdrPocStart) / gdrPeriod) * gdrPeriod);
     int  actualGdrStart = gdrPocStart + offset;
     int  actualGdrInterval = std::min(gdrInterval, (int)(picWidth / 8));
-    int  recoveryPocCnt = actualGdrInterval - 1;
+//    int  recoveryPocCnt = actualGdrInterval - 1;
+    int  recoveryPocCnt = actualGdrInterval;
     int  recoveryPicPoc = actualGdrStart + recoveryPocCnt;
 
     bool isInGdrInterval = (curPoc >= actualGdrStart) && (curPoc < recoveryPicPoc);
-    bool isOutGdrInterval = !isInGdrInterval;
     bool isGdrPic = (actualGdrStart == curPoc);
 
 #if GDR_ENC_TRACE
@@ -1637,32 +1647,10 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
     printf("-poc:%d gdrPocStart:%d actualGdrStart:%d actualGdrInterval:%d actualGdrEndPoc:%d\n", rpcSlice->getPOC(), gdrPocStart, actualGdrStart, actualGdrInterval, recoveryPicPoc - 1);
 #endif
 
-    // for none gdr period pictures
-    if ((curPoc < gdrPocStart) || isOutGdrInterval)
-    {
-      slice->picHeader->inGdrInterval = false;
-      slice->picHeader->virtualBoundariesPresent = false;
-
-      slice->picHeader->numHorVirtualBoundaries = 0;
-      slice->picHeader->numVerVirtualBoundaries = 0;
-
-#if GDR_ENC_TRACE    
-      printf("-poc:%d no virtual boundary\n", rpcSlice->getPOC());
-#endif
-    }
     // for gdr inteval pictures
-    else
+    if (isInGdrInterval)
     {
-      if (curPoc == recoveryPicPoc)
-      {
-        slice->picHeader->inGdrInterval = false;
-      }
-      else
-      {
-        slice->picHeader->inGdrInterval = true;
-      }
-
-      slice->picHeader->virtualBoundariesPresent = true;
+      slice->picHeader->inGdrInterval = true;
 
       if (isGdrPic)
       {
@@ -1673,46 +1661,20 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
         m_lastGdrIntervalPoc = recoveryPicPoc - 1;
       }
 
-      slice->picHeader->numHorVirtualBoundaries = 0;
-      slice->picHeader->numVerVirtualBoundaries = 1;
+      int endGdrX = (int)((double)picWidth * (gdrPoc + 1) / gdrInterval);  // "ideal" position of virtual boundary
+      endGdrX = endGdrX & ~7;                                              // virtual bondary position rounded to be multiple of 8
 
-      int begGdrX;
-      int endGdrX;
-      int m1, m2, n1;
-
-      double dd = (picWidth / (double)gdrInterval);
-      int mm = (int)((picWidth / (double)gdrInterval) + 0.49999);
-      m1 = ((mm + 7) >> 3) << 3;
-      m2 = ((mm + 0) >> 3) << 3;
-
-      if (dd > mm && m1 == m2)
+      if (endGdrX < picWidth)
       {
-        m1 = m1 + 8;
+        slice->picHeader->virtualBoundariesEnabled = true;
+        slice->picHeader->virtualBoundariesPresent = true;
+        slice->picHeader->numVerVirtualBoundaries = 1;
+        slice->picHeader->virtualBoundariesPosX[0] = endGdrX;
       }
-
-      n1 = (picWidth - m2 * gdrInterval) / 8;
-
-      if (gdrPoc < n1)
-      {
-        begGdrX = m1 * gdrPoc;
-        endGdrX = begGdrX + m1;
-      }
-      else
-      {
-        begGdrX = m1 * n1 + m2 * (gdrPoc - n1);
-        endGdrX = begGdrX + m2;
-        if (picWidth <= begGdrX)
-        {
-          begGdrX = picWidth;
-          endGdrX = picWidth;
-        }
-      }
-
-      slice->picHeader->virtualBoundariesPosX[0] = endGdrX;
 
 #if GDR_ENC_TRACE
       printf("\n");
-      printf("-poc:%d beg:%d end:%d\n", rpcSlice->getPOC(), begGdrX, endGdrX);
+      printf("-poc:%d end:%d\n", rpcSlice->getPOC(), endGdrX);
 #endif    
     }
   }
@@ -2024,6 +1986,12 @@ void EncGOP::xInitLMCS( Picture& pic )
     else if ( m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_SDR || m_pcEncCfg->m_reshapeSignalType == RESHAPE_SIGNAL_HLG )
     {
       int modIP = pic.getPOC() - pic.getPOC() / m_pcEncCfg->m_reshapeCW.rspFpsToIp * m_pcEncCfg->m_reshapeCW.rspFpsToIp;
+#if GDR_ENABLED        
+      if (slice->isInterGDR())
+      {
+        modIP = 0;
+      }
+#endif
       if (m_Reshaper.getReshapeFlag() && m_pcEncCfg->m_reshapeCW.updateCtrl == 2 && modIP == 0)
       {
         m_Reshaper.getSliceReshaperInfo().sliceReshaperModelPresent = true;
@@ -2040,6 +2008,12 @@ void EncGOP::xInitLMCS( Picture& pic )
   //set all necessary information in LMCS APS and slice
   slice->lmcsEnabled = slice->picHeader->lmcsEnabled = m_Reshaper.getSliceReshaperInfo().sliceReshaperEnabled;
   slice->picHeader->lmcsChromaResidualScale          = ( m_Reshaper.getSliceReshaperInfo().enableChromaAdj == 1 );
+#if GDR_ENABLED   
+  if (slice->picHeader->inGdrInterval) 
+  {
+    slice->picHeader->lmcsChromaResidualScale = false;
+  }   
+#endif
   if ( m_Reshaper.getSliceReshaperInfo().sliceReshaperModelPresent )
   {
     ParameterSetMap<APS>& picApsMap = pic.picApsMap;

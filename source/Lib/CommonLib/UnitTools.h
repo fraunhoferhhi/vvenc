@@ -172,7 +172,11 @@ namespace CU
   void     spanGeoMotionInfo            (CodingUnit& cu, MergeCtx &GeoMrgCtx, const uint8_t splitDir, const uint8_t candIdx0, const uint8_t candIdx1);
   bool     isBiPredFromDifferentDirEqDistPoc(const CodingUnit& cu);
   bool     checkDMVRCondition           (const CodingUnit& cu);
+#if GDR_ENABLED
+  void     getAffineControlPointCand    (const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgCtx, bool isEncodeGdrClean, bool modelSolid[6]);
+#else
   void     getAffineControlPointCand    (const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgCtx);
+#endif
   void     getAffineMergeCand           (      CodingUnit& cu, AffineMergeCtx& affMrgCtx, const int mrgCandIdx = -1);
   void     setAllAffineMvField          (      CodingUnit& cu, MvField *mvField, RefPicList eRefList);
   void     setAllAffineMv               (      CodingUnit& cu, Mv affLT, Mv affRT, Mv affLB, RefPicList eRefList, bool clipCPMVs = false);

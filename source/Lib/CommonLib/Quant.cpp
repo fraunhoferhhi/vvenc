@@ -655,7 +655,11 @@ void Quant::quant(TransformUnit& tu, const ComponentID compID, const CCoeffBuf& 
     const int qBits8 = iQBits - 8;
 
     const uint32_t lfnstIdx = tu.cu->lfnstIdx;
+#if GDR_ENABLED
+    const int maxNumberOfCoeffs = ( uiWidth * uiHeight >= 16 ) && lfnstIdx > 0 ? ((( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8) ) ? 8 : 16) : piQCoef.area();
+#else
     const int maxNumberOfCoeffs = lfnstIdx > 0 ? ((( uiWidth == 4 && uiHeight == 4 ) || ( uiWidth == 8 && uiHeight == 8) ) ? 8 : 16) : piQCoef.area();
+#endif
     piQCoef.memset( 0 );
     for (int uiBlockPos = 0; uiBlockPos < maxNumberOfCoeffs; uiBlockPos++ )
     {

@@ -210,6 +210,13 @@ struct AffineMVInfo
   int x, y, w, h;
 };
 
+#if GDR_ENABLED 
+struct AffineMVInfoSolid
+{
+  bool  affMVsSolid[2][MAX_REF_PICS][3];
+};
+#endif
+
 typedef struct
 {
   Mv acMvAffine4Para[2][3];
@@ -218,6 +225,10 @@ typedef struct
   int16_t affine6ParaRefIdx[2];
   bool affine4ParaAvail;
   bool affine6ParaAvail;
+#if GDR_ENABLED
+  bool acMvAffine4ParaSolid[2][3];
+  bool acMvAffine6ParaSolid[2][3];
+#endif
 } EncAffineMotion;
 
 struct AffineProfList
@@ -226,6 +237,9 @@ struct AffineProfList
   {
     m_affMVListMaxSize = 0;
     m_affMVList = nullptr;
+#if GDR_ENABLED
+    m_affMVListSolid = nullptr;
+#endif
     m_affMVListIdx = 0;
     m_affMVListSize = 0;
   }
@@ -237,6 +251,12 @@ struct AffineProfList
     {
       m_affMVList = new AffineMVInfo[m_affMVListMaxSize];
     }
+#if GDR_ENABLED
+    if( !m_affMVListSolid)
+    {
+      m_affMVListSolid = new AffineMVInfoSolid[m_affMVListMaxSize];
+    }
+#endif
     m_affMVListIdx = 0;
     m_affMVListSize = 0;
   }
@@ -247,50 +267,85 @@ struct AffineProfList
     {
       delete[] m_affMVList;
       m_affMVList = nullptr;
+#if GDR_ENABLED
+      delete[] m_affMVListSolid;
+      m_affMVListSolid = nullptr;
+#endif
     }
     m_affMVListIdx = 0;
     m_affMVListSize = 0;
   }
 
   void resetAffineMVList() { m_affMVListIdx = 0; m_affMVListSize = 0; }
+#if GDR_ENABLED
+  bool savePrevAffMVInfo(int idx, AffineMVInfo &tmpMVInfo, AffineMVInfoSolid &tmpMVInfoSolid)
+#else
   bool savePrevAffMVInfo(int idx, AffineMVInfo &tmpMVInfo )
+#endif
   {
     if( m_affMVListSize > idx)
     {
       tmpMVInfo = m_affMVList[(m_affMVListIdx - 1 - idx + m_affMVListMaxSize) % m_affMVListMaxSize];
+#if GDR_ENABLED
+      tmpMVInfoSolid = m_affMVListSolid[(m_affMVListIdx - 1 - idx + m_affMVListMaxSize) % m_affMVListMaxSize];
+#endif
       return true;
     }
 
     return false;
   }
 
+#if GDR_ENABLED
+  void addAffMVInfo(AffineMVInfo &tmpMVInfo, AffineMVInfoSolid &tmpMVInfoSolid)
+#else
   void addAffMVInfo(AffineMVInfo &tmpMVInfo)
+#endif
   {
     int j = 0;
     AffineMVInfo *prevInfo = nullptr;
+#if GDR_ENABLED
+    AffineMVInfoSolid *prevInfoSolid = nullptr;
+#endif
     for (; j < m_affMVListSize; j++)
     {
       prevInfo = m_affMVList + ((m_affMVListIdx - j - 1 + m_affMVListMaxSize) % (m_affMVListMaxSize));
+#if GDR_ENABLED
+      prevInfoSolid = m_affMVListSolid + ((m_affMVListIdx - j - 1 + m_affMVListMaxSize) % (m_affMVListMaxSize));
+#endif
       if ((tmpMVInfo.x == prevInfo->x) && (tmpMVInfo.y == prevInfo->y) && (tmpMVInfo.w == prevInfo->w) && (tmpMVInfo.h == prevInfo->h))
       {
         break;
       }
     }
+#if GDR_ENABLED
+    if (j < m_affMVListSize)
+    {
+      *prevInfo = tmpMVInfo;
+      *prevInfoSolid = tmpMVInfoSolid;
+    }
+#else
     if (j < m_affMVListSize)
     {
       *prevInfo = tmpMVInfo;
     }
+#endif
     else
     {
       m_affMVList[m_affMVListIdx] = tmpMVInfo;
+#if GDR_ENABLED
+      m_affMVListSolid[m_affMVListIdx] = tmpMVInfoSolid;
+#endif
       m_affMVListIdx = (m_affMVListIdx + 1) % m_affMVListMaxSize;
       m_affMVListSize = std::min(m_affMVListSize + 1, m_affMVListMaxSize);
     }
   }
 
-  void insert( const AffineMVInfo& cMvTemp, const Area& area )
+  void insert( const AffineMVInfo& cMvTemp, bool cMvTempSolid[2][MAX_REF_PICS][3], const Area& area )
   {
     AffineMVInfo *affMVInfo = m_affMVList + m_affMVListIdx;
+#if GDR_ENABLED 
+    AffineMVInfoSolid *affMVInfoSolid = m_affMVListSolid + m_affMVListIdx;
+#endif
 
     //check;
     int j = 0;
@@ -305,9 +360,15 @@ struct AffineProfList
     if (j < m_affMVListSize)
     {
       affMVInfo = m_affMVList + ((m_affMVListIdx - j - 1 + m_affMVListMaxSize) % (m_affMVListMaxSize));
+#if GDR_ENABLED 
+      affMVInfoSolid = m_affMVListSolid + ((m_affMVListIdx - j - 1 + m_affMVListMaxSize) % (m_affMVListMaxSize));
+#endif
     }
 
     ::memcpy(affMVInfo->affMVs, cMvTemp.affMVs, sizeof(cMvTemp.affMVs));
+    ::memcpy(affMVInfoSolid->affMVsSolid, cMvTempSolid, sizeof(cMvTempSolid));
+#if GDR_ENABLED 
+#endif
 
     if (j == m_affMVListSize)
     {
@@ -321,6 +382,9 @@ struct AffineProfList
   }
 
   AffineMVInfo*   m_affMVList;
+#if GDR_ENABLED  
+  AffineMVInfoSolid *m_affMVListSolid;
+#endif
   int             m_affMVListIdx;
   int             m_affMVListSize;
   int             m_affMVListMaxSize;
@@ -373,6 +437,9 @@ protected:
   RdCost*           m_pcRdCost;
 
   Distortion        m_hevcCost;
+#if GDR_ENABLED  
+  bool              m_hevcCostOk;
+#endif
   EncAffineMotion   m_affineMotion;
   PelStorage        m_tmpAffiStorage;
   Pel*              m_tmpAffiError;
@@ -415,7 +482,11 @@ public:
   void setSearchRange               ( const Slice* slice, const VVEncCfg& encCfg );
 
   void resetSavedAffineMotion       ();
+#if GDR_ENABLED
+  void storeAffineMotion            ( Mv acAffineMv[2][3], bool acAffineMvSolid[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int bcwIdx);
+#else
   void storeAffineMotion            ( Mv acAffineMv[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int BcwIdx);
+#endif
   void loadGlobalUniMvs             ( const Area& lumaArea, const PreCalcValues& pcv);
 
   uint8_t    skipSbtByRDCost        ( int width, int height, int mtDepth, uint8_t sbtIdx, uint8_t sbtPos, double bestCost, Distortion distSbtOff, double costSbtOff, bool rootCbfSbtOff );
@@ -437,7 +508,11 @@ public:
 private:
   void       xCalcMinDistSbt        ( CodingStructure &cs, const CodingUnit& cu, const uint8_t sbtAllowed );
   /// sub-function for motion vector refinement used in fractional-pel accuracy
+#if GDR_ENABLED
+  Distortion xPatternRefinement     (const CodingUnit& cu, RefPicList refPicList, int iRefIdx, const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, bool bAllowUseOfHadamard, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf, bool& rbCleanCandExist);
+#else
   Distortion xPatternRefinement     ( const CPelBuf* pcPatternKey, Mv baseRefMv, int iFrac, Mv& rcMvFrac, bool bAllowUseOfHadamard, Distortion& uiDistBest, int& patternId, CPelBuf* pattern, bool useAltHpelIf );
+#endif
 
    typedef struct
    {
@@ -478,7 +553,11 @@ private:
   // -------------------------------------------------------------------------------------------------------------------
 
   void       xEstimateMvPredAMVP  ( CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv& rcMvPred, AMVPInfo& amvpInfo, Distortion& distBiP );
+#if GDR_ENABLED
+  void       xCheckBestMVP        ( CodingUnit &cu, RefPicList refPicList, const Mv& cMv, Mv& rcMvPred, int& riMVPIdx, AMVPInfo& amvpInfo, uint32_t&  ruiBits, Distortion& ruiCost, const uint8_t imv);
+#else
   void       xCheckBestMVP        ( RefPicList refPicList, const Mv& cMv, Mv& rcMvPred, int& riMVPIdx, AMVPInfo& amvpInfo, uint32_t&  ruiBits, Distortion& ruiCost, const uint8_t imv);
+#endif
   Distortion xGetTemplateCost     ( const CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv cMvCand, int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx );
 
   void       xCopyAMVPInfo        ( AMVPInfo* pSrc, AMVPInfo* pDst );
@@ -490,6 +569,22 @@ private:
   // motion estimation
   // -------------------------------------------------------------------------------------------------------------------
 
+#if GDR_ENABLED
+  void xMotionEstimation          ( CodingUnit&           cu,
+                                    CPelUnitBuf&          origBuf,
+                                    RefPicList            refPicList,
+                                    Mv&                   rcMvPred,
+                                    int                   iRefIdxPred,
+                                    Mv&                   rcMv,
+                                    bool&                 rcMvSolid,
+                                    int&                  riMVPIdx,
+                                    uint32_t&             ruiBits,
+                                    Distortion&           ruiCost,
+                                    const AMVPInfo&       amvpInfo,
+                                    bool&                 rbCleanCandExist,
+                                    bool                  bBi = false
+                                  );
+#else
   void xMotionEstimation          ( CodingUnit&           cu,
                                     CPelUnitBuf&          origBuf,
                                     RefPicList            refPicList,
@@ -502,6 +597,7 @@ private:
                                     const AMVPInfo&       amvpInfo,
                                     bool                  bBi = false
                                   );
+#endif
 
   void xTZSearch                  ( const CodingUnit&     cu,
                                     RefPicList            refPicList,
@@ -527,6 +623,10 @@ private:
                                     const Mv&             cMvPred,
                                     const int             iSrchRng,
                                     SearchRange&          sr                                  
+#if GDR_ENABLED
+                                  , RefPicList            refPicList
+                                  , int                   iRefIdx
+#endif
                                   );
 
   void xPatternSearchFast         ( const CodingUnit&     cu,
@@ -552,6 +652,11 @@ private:
                                     Distortion&         ruiCost,
                                     const AMVPInfo&     amvpInfo,
                                     double              fWeight
+#if GDR_ENABLED
+                                    ,RefPicList         refPicList
+                                    ,int                iRefIdxPred
+                                    , bool&             rbCleanCandExist
+#endif
                                   );
 
   void xPatternSearchFracDIF      ( const CodingUnit&     cu,
@@ -562,6 +667,9 @@ private:
                                     Mv&                   rcMvHalf,
                                     Mv&                   rcMvQter,
                                     Distortion&           ruiCost
+#if GDR_ENABLED
+                                    ,bool&                rbCleanCandExist
+#endif
                                   );
 
   void xPredAffineInterSearch     ( CodingUnit&           cu,
@@ -570,13 +678,35 @@ private:
                                     uint32_t&             lastMode,
                                     Distortion&           affineCost,
                                     Mv                    hevcMv[2][MAX_REF_PICS],
+#if GDR_ENABLED
+                                    bool                  hevcMvSolid[2][MAX_REF_PICS],
+#endif
                                     Mv                    mvAffine4Para[2][MAX_REF_PICS][3],
+#if GDR_ENABLED
+                                    bool                  mvAffine4ParaSolid[2][MAX_REF_PICS][3],
+#endif
                                     int                   refIdx4Para[2],
                                     uint8_t               BcwIdx = BCW_DEFAULT,
                                     bool                  enforceBcwPred = false,
                                     uint32_t              BcwIdxBits = 0
                                   );
 
+#if GDR_ENABLED
+  void  xAffineMotionEstimation  ( CodingUnit&           cu,
+                                   CPelUnitBuf&          origBuf,
+                                   RefPicList            refPicList,
+                                   Mv                    acMvPred[3],
+                                   int                   iRefIdxPred,
+                                   Mv                    acMv[3],
+                                   bool                  acMvSolid[3],
+                                   uint32_t&             ruiBits,
+                                   Distortion&           ruiCost,
+                                   int&                  mvpIdx,
+                                   const AffineAMVPInfo& aamvpi,
+                                   bool&                 rbCleanCandExist,
+                                   bool                  bBi = false
+                                 );
+#else
   void  xAffineMotionEstimation  ( CodingUnit&           cu,
                                    CPelUnitBuf&          origBuf,
                                    RefPicList            refPicList,
@@ -589,25 +719,52 @@ private:
                                    const AffineAMVPInfo& aamvpi,
                                    bool                  bBi = false
                                  );
+#endif
 
   void        xEstimateAffineAMVP     ( CodingUnit& cu, AffineAMVPInfo& affineAMVPInfo, CPelUnitBuf& origBuf, RefPicList refPicList, int iRefIdx, Mv acMvPred[3], Distortion& distBiP);
 
-  Distortion  xGetAffineTemplateCost  ( CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv acMvCand[3], int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx);
+#if GDR_ENABLED
+  Distortion  xGetAffineTemplateCost  ( CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv acMvCand[3], int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx, bool& rbOk );
+#else
+  Distortion  xGetAffineTemplateCost  ( CodingUnit& cu, CPelUnitBuf& origBuf, PelUnitBuf& predBuf, Mv acMvCand[3], int iMVPIdx, int iMVPNum, RefPicList refPicList, int iRefIdx );
+#endif
   void        xCopyAffineAMVPInfo     ( AffineAMVPInfo& src, AffineAMVPInfo& dst );
   void        xCheckBestAffineMVP     ( CodingUnit& cu, AffineAMVPInfo &affineAMVPInfo, RefPicList refPicList, Mv acMv[3], Mv acMvPred[3], int& riMVPIdx, uint32_t& ruiBits, Distortion& ruiCost );
   uint32_t    xCalcAffineMVBits       ( CodingUnit& cu, Mv mvCand[3], Mv mvPred[3]);
 
   Distortion  xGetSymCost             ( const CodingUnit& cu, CPelUnitBuf& origBuf, RefPicList eCurRefPicList, const MvField& cCurMvField, MvField& cTarMvField , int BcwIdx );
+#if GDR_ENABLED
+  Distortion  xSymRefineMvSearch      ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList,
+                                        MvField& rCurMvField, MvField& rTarMvField, Distortion uiMinCost, int searchPattern, int nSearchStepShift, uint32_t uiMaxSearchRounds, int BcwIdx, bool& rbOk );
+#else
   Distortion  xSymRefineMvSearch      ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList,
                                         MvField& rCurMvField, MvField& rTarMvField, Distortion uiMinCost, int searchPattern, int nSearchStepShift, uint32_t uiMaxSearchRounds, int BcwIdx );
+#endif
+#if GDR_ENABLED
+  bool        xSymMotionEstimation    ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList, MvField& rCurMvField, MvField& rTarMvField, Distortion& ruiCost, int BcwIdx, bool& ruiCostOk );
+#else
   void        xSymMotionEstimation    ( CodingUnit& cu, CPelUnitBuf& origBuf, Mv& rcMvCurPred, Mv& rcMvTarPred, RefPicList refPicList, MvField& rCurMvField, MvField& rTarMvField, Distortion& ruiCost, int BcwIdx );
+#endif
   double      xGetMEDistortionWeight  ( uint8_t BcwIdx, RefPicList refPicList);
 
+#if GDR_ENABLED
+  void xSymMvdCheckBestMvp            ( CodingUnit& cu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
+                                        int32_t BcwIdx, Mv cMvPredSym[2], bool cMvPredSymSolid[2], int32_t mvpIdxSym[2], Distortion& bestCost, bool skip );
+#else
   void xSymMvdCheckBestMvp            ( CodingUnit& cu,  CPelUnitBuf& origBuf, Mv curMv, RefPicList curRefList, AMVPInfo amvpInfo[2][MAX_REF_PICS], 
                                         int32_t BcwIdx, Mv cMvPredSym[2], int32_t mvpIdxSym[2], Distortion& bestCost, bool skip );
+#endif
 
+#if GDR_ENABLED
+  bool xReadBufferedAffineUniMv       ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv acMvPred[3], Mv acMv[3], bool acMvSolid[3], uint32_t& ruiBits, Distortion& ruiCost, int& mvpIdx, const AffineAMVPInfo& aamvpi );
+#else
   bool xReadBufferedAffineUniMv       ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv acMvPred[3], Mv acMv[3], uint32_t& ruiBits, Distortion& ruiCost, int& mvpIdx, const AffineAMVPInfo& aamvpi );
+#endif
+#if GDR_ENABLED
+  bool xReadBufferedUniMv             ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv& pcMvPred, Mv& rcMv, bool& rcMvSolid, uint32_t& ruiBits, Distortion& ruiCost);
+#else
   bool xReadBufferedUniMv             ( CodingUnit& cu, RefPicList eRefPicList, int32_t iRefIdx, Mv& pcMvPred, Mv& rcMv, uint32_t& ruiBits, Distortion& ruiCost);
+#endif
 
   void xExtDIFUpSamplingH             ( CPelBuf* pcPattern, bool useAltHpelIf);
   void xExtDIFUpSamplingQ             ( CPelBuf* pcPatternKey, Mv halfPelRef, int& patternId );

@@ -308,10 +308,18 @@ class BcwMotionParam
   Mv         m_mv[2][33];
   Distortion m_dist[2][33];
 
+#if GDR_ENABLED
+  bool       m_mvSolid[2][33];
+#endif
+
   bool       m_readOnlyAffine[2][2][33];
   Mv         m_mvAffine[2][2][33][3];
   Distortion m_distAffine[2][2][33];
   int        m_mvpIdx[2][2][33];
+
+#if GDR_ENABLED
+  bool       m_mvAffineSolid[2][2][33][3];
+#endif
 
 public:
 
@@ -334,6 +342,12 @@ public:
     memset(m_readOnlyAffine, false, 2 * 2 * 33 * sizeof(bool));
     memset(m_distAffine, -1, 2 * 2 * 33 * sizeof(Distortion));
     memset( m_mvpIdx, 0, 2 * 2 * 33 * sizeof( int ) );
+#if GDR_ENABLED
+    memset(m_mvSolid, true, 2 * 2 * 33 * sizeof(bool));
+#endif
+#if GDR_ENABLED
+    memset(m_mvAffineSolid, true, 2 * 2 * 33 * sizeof(bool));
+#endif
   }
 
   void setReadMode(bool b, uint32_t uiRefList, uint32_t uiRefIdx) { m_readOnly[uiRefList][uiRefIdx] = b; }
@@ -350,11 +364,29 @@ public:
     m_dist[uiRefList][uiRefIdx] = uiDist;
   }
 
+#if GDR_ENABLED
+  void copyFrom(Mv& rcMv, bool& rcMvSolid, Distortion uiDist, uint32_t uiRefList, uint32_t uiRefIdx)
+  {
+    m_mv[uiRefList][uiRefIdx] = rcMv;
+    m_dist[uiRefList][uiRefIdx] = uiDist;
+    m_mvSolid[uiRefList][uiRefIdx] = rcMvSolid;
+  }
+#endif
+
   void copyTo(Mv& rcMv, Distortion& ruiDist, uint32_t uiRefList, uint32_t uiRefIdx)
   {
     rcMv = m_mv[uiRefList][uiRefIdx];
     ruiDist = m_dist[uiRefList][uiRefIdx];
   }
+
+#if GDR_ENABLED
+  void copyTo(Mv& rcMv, bool& rcMvSolid, Distortion& ruiDist, uint32_t uiRefList, uint32_t uiRefIdx)
+  {
+    rcMv      = m_mv[uiRefList][uiRefIdx];
+    ruiDist   = m_dist[uiRefList][uiRefIdx];
+    rcMvSolid = m_mvSolid[uiRefList][uiRefIdx];
+  }
+#endif
 
   Mv& getAffineMv(uint32_t uiRefList, uint32_t uiRefIdx, uint32_t uiAffineMvIdx, int bP4) { return m_mvAffine[bP4][uiRefList][uiRefIdx][uiAffineMvIdx]; }
 
@@ -375,6 +407,27 @@ public:
     ruiDist = m_distAffine[bP4][uiRefList][uiRefIdx];
     mvpIdx  = m_mvpIdx[bP4][uiRefList][uiRefIdx];
   }
+
+#if GDR_ENABLED
+  void copyAffineMvFrom(Mv(&racAffineMvs)[3], bool(&racAffineMvsSolid)[3], Distortion uiDist, uint32_t uiRefList, uint32_t uiRefIdx, int bP4, const int mvpIdx)
+  {
+    memcpy(m_mvAffine[bP4][uiRefList][uiRefIdx],      racAffineMvs,      3 * sizeof(Mv));
+    memcpy(m_mvAffineSolid[bP4][uiRefList][uiRefIdx], racAffineMvsSolid, 3 * sizeof(bool));
+    m_distAffine[bP4][uiRefList][uiRefIdx] = uiDist;
+    m_mvpIdx[bP4][uiRefList][uiRefIdx]     = mvpIdx;
+  }
+#endif
+
+#if GDR_ENABLED
+  void copyAffineMvTo(Mv acAffineMvs[3], bool acAffineMvsSolid[3], Distortion& ruiDist, uint32_t uiRefList, uint32_t uiRefIdx, int bP4, int& mvpIdx)
+  {
+    memcpy(acAffineMvs,      m_mvAffine[bP4][uiRefList][uiRefIdx],      3 * sizeof(Mv));
+    memcpy(acAffineMvsSolid, m_mvAffineSolid[bP4][uiRefList][uiRefIdx], 3 * sizeof(bool));
+    ruiDist = m_distAffine[bP4][uiRefList][uiRefIdx];
+    mvpIdx  = m_mvpIdx[bP4][uiRefList][uiRefIdx];
+  }
+#endif
+
 };
 
 } // namespace vvenc

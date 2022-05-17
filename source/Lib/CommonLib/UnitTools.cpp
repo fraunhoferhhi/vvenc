@@ -770,7 +770,7 @@ bool CU::addMergeHMVPCand(const CodingStructure &cs, MergeCtx& mrgCtx, const int
         // note : cannot gaurantee the order/value in the lut if any of the lut is in dirty area
         mrgCtx.mvPos[(cnt << 1) + 0]   = sourcePos;
         mrgCtx.mvSolid[(cnt << 1) + 0] = allCandSolidInAbove && vbOnCtuBoundary;
-        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(pu.Y().bottomRight(), miNeighbor.mv[0], REF_PIC_LIST_0, miNeighbor.refIdx[0]);
+        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(cu.Y().bottomRight(), miNeighbor.mv[0], REF_PIC_LIST_0, miNeighbor.refIdx[0]);
         allCandSolidInAbove = allCandSolidInAbove && vbOnCtuBoundary;
       }
 #endif
@@ -1014,8 +1014,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
     {
       Position pos = puAbove->lumaPos();
       mrgCtx.mvPos[(cnt << 1) + 0] = pos;
-      mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, pu.chType);
-      mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(pu.Y().bottomRight(), miAbove.mv[0], REF_PIC_LIST_0, miAbove.refIdx[0]);
+      mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, cu.chType);
+      mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(cu.Y().bottomRight(), miAbove.mv[0], REF_PIC_LIST_0, miAbove.refIdx[0]);
     }
 #endif
 
@@ -1027,8 +1027,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
       {
         Position pos = puAbove->lumaPos();
         mrgCtx.mvPos[(cnt << 1) + 1] = pos;
-        mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, pu.chType);
-        mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(pu.Y().bottomRight(), miAbove.mv[1], REF_PIC_LIST_1, miAbove.refIdx[1]);
+        mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, cu.chType);
+        mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(cu.Y().bottomRight(), miAbove.mv[1], REF_PIC_LIST_1, miAbove.refIdx[1]);
       }
 #endif
     }
@@ -1068,8 +1068,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
       {
         Position pos = puLeft->lumaPos();
         mrgCtx.mvPos[(cnt << 1) + 0] = pos;
-        mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, pu.chType);
-        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(pu.Y().bottomRight(), miLeft.mv[0], REF_PIC_LIST_0, miLeft.refIdx[0]);
+        mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, cu.chType);
+        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(cu.Y().bottomRight(), miLeft.mv[0], REF_PIC_LIST_0, miLeft.refIdx[0]);
       }
 #endif
 
@@ -1081,8 +1081,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
         {
           Position pos = puLeft->lumaPos();
           mrgCtx.mvPos[(cnt << 1) + 1] = pos;
-          mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, pu.chType);
-          mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(pu.Y().bottomRight(), miLeft.mv[1], REF_PIC_LIST_1, miLeft.refIdx[1]);
+          mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, cu.chType);
+          mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(cu.Y().bottomRight(), miLeft.mv[1], REF_PIC_LIST_1, miLeft.refIdx[1]);
         }
 #endif
       }
@@ -1123,8 +1123,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
       {
         Position pos = puAboveRight->lumaPos();
         mrgCtx.mvPos[(cnt << 1) + 0] = pos;
-        mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, pu.chType);
-        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(pu.Y().bottomRight(), miAboveRight.mv[0], REF_PIC_LIST_0, miAboveRight.refIdx[0]);
+        mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, cu.chType);
+        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(cu.Y().bottomRight(), miAboveRight.mv[0], REF_PIC_LIST_0, miAboveRight.refIdx[0]);
       }
 #endif
 
@@ -1136,8 +1136,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
         {
           Position pos = puAboveRight->lumaPos();
           mrgCtx.mvPos[(cnt << 1) + 1] = pos;
-          mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, pu.chType);
-          mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(pu.Y().bottomRight(), miAboveRight.mv[1], REF_PIC_LIST_1, miAboveRight.refIdx[1]);
+          mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, cu.chType);
+          mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(cu.Y().bottomRight(), miAboveRight.mv[1], REF_PIC_LIST_1, miAboveRight.refIdx[1]);
         }
 #endif
       }
@@ -1178,8 +1178,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
       {
         Position pos = puLeftBottom->lumaPos();
         mrgCtx.mvPos[(cnt << 1) + 0] = pos;
-        mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, pu.chType);
-        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(pu.Y().bottomRight(), miBelowLeft.mv[0], REF_PIC_LIST_0, miBelowLeft.refIdx[0]);
+        mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, cu.chType);
+        mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(cu.Y().bottomRight(), miBelowLeft.mv[0], REF_PIC_LIST_0, miBelowLeft.refIdx[0]);
       }
 #endif
 
@@ -1191,8 +1191,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
         {
           Position pos = puLeftBottom->lumaPos();
           mrgCtx.mvPos[(cnt << 1) + 1] = pos;
-          mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, pu.chType);
-          mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(pu.Y().bottomRight(), miBelowLeft.mv[1], REF_PIC_LIST_1, miBelowLeft.refIdx[1]);
+          mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, cu.chType);
+          mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(cu.Y().bottomRight(), miBelowLeft.mv[1], REF_PIC_LIST_1, miBelowLeft.refIdx[1]);
         }
 #endif
       }
@@ -1236,8 +1236,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
         {
           Position pos = puAboveLeft->lumaPos();
           mrgCtx.mvPos[(cnt << 1) + 0] = pos;
-          mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, pu.chType);
-          mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(pu.Y().bottomRight(), miAboveLeft.mv[0], REF_PIC_LIST_0, miAboveLeft.refIdx[0]);
+          mrgCtx.mvSolid[(cnt << 1) + 0] = cs.isClean(pos, cu.chType);
+          mrgCtx.mvValid[(cnt << 1) + 0] = cs.isClean(cu.Y().bottomRight(), miAboveLeft.mv[0], REF_PIC_LIST_0, miAboveLeft.refIdx[0]);
         }
 #endif
 
@@ -1249,8 +1249,8 @@ void CU::getInterMergeCandidates( const CodingUnit& cu, MergeCtx& mrgCtx, int mm
           {
             Position pos = puAboveLeft->lumaPos();
             mrgCtx.mvPos[(cnt << 1) + 1] = pos;
-            mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, pu.chType);
-            mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(pu.Y().bottomRight(), miAboveLeft.mv[1], REF_PIC_LIST_1, miAboveLeft.refIdx[1]);
+            mrgCtx.mvSolid[(cnt << 1) + 1] = cs.isClean(pos, cu.chType);
+            mrgCtx.mvValid[(cnt << 1) + 1] = cs.isClean(cu.Y().bottomRight(), miAboveLeft.mv[1], REF_PIC_LIST_1, miAboveLeft.refIdx[1]);
           }
 #endif
         }
@@ -2304,9 +2304,9 @@ void CU::xInheritedAffineMv(const CodingUnit& cu, const CodingUnit* cuNeighbour,
 
   Mv mvLT, mvRT, mvLB;
 
-  mvLT = cuNeighbour->mvAffi[refPicList][0];
-  mvRT = cuNeighbour->mvAffi[refPicList][1];
-  mvLB = cuNeighbour->mvAffi[refPicList][2];
+  mvLT = cuNeighbour->mv[refPicList][0];
+  mvRT = cuNeighbour->mv[refPicList][1];
+  mvLB = cuNeighbour->mv[refPicList][2];
 
 
 #if GDR_ENABLED
@@ -2991,7 +2991,11 @@ bool CU::isBipredRestriction(const CodingUnit& cu)
   return false;
 }
 
+#if GDR_ENABLED
+void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgType, bool isEncodeGdrClean, bool modelSolid[6])
+#else
 void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool isAvailable[4], int verIdx[4], int8_t BcwIdx, int modelIdx, int verNum, AffineMergeCtx& affMrgType)
+#endif
 {
   int cuW = cu.Y().width;
   int cuH = cu.Y().height;
@@ -3120,6 +3124,13 @@ void CU::getAffineControlPointCand(const CodingUnit& cu, MotionInfo mi[4], bool 
 
     affMrgType.mvFieldNeighbours[(affMrgType.numValidMergeCand << 1) + 1][i].mv = cMv[1][i];
     affMrgType.mvFieldNeighbours[(affMrgType.numValidMergeCand << 1) + 1][i].refIdx = refIdx[1];
+#if GDR_ENABLED
+    if (isEncodeGdrClean)
+    {
+      affMrgType.mvSolid[(affMrgType.numValidMergeCand << 1) + 0][i] = modelSolid[modelIdx];
+      affMrgType.mvSolid[(affMrgType.numValidMergeCand << 1) + 1][i] = modelSolid[modelIdx];
+    }
+#endif
   }
   affMrgType.interDirNeighbours[affMrgType.numValidMergeCand] = dir;
   affMrgType.affineType[affMrgType.numValidMergeCand] = curType;
@@ -3399,7 +3410,7 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
   const uint32_t maxNumAffineMergeCand = slice.picHeader->maxNumAffineMergeCand;
   const unsigned plevel = cu.cs->sps->log2ParallelMergeLevelMinus2 + 2;
 #if GDR_ENABLED
-  const bool isEncodeGdrClean = cs.sps->GDR && cs.pcv->isEncoder && ((cs.picHeader->inGdrInterval && cs.isClean(pu.Y().topRight(), CH_L)) || (cs.picHeader->numVerVirtualBoundaries == 0));
+  const bool isEncodeGdrClean = cs.sps->GDR && cs.pcv->isEncoder && ((cs.picHeader->inGdrInterval && cs.isClean(cu.Y().topRight(), CH_L)) || (cs.picHeader->numVerVirtualBoundaries == 0));
 #endif
 
   for (int i = 0; i < maxNumAffineMergeCand; i++)
@@ -3770,18 +3781,9 @@ void CU::getAffineMergeCand( CodingUnit& cu, AffineMergeCtx& affMrgCtx, const in
       {
         int modelIdx = order[idx];
 #if GDR_ENABLED       
-        int affinNumValidCand = affMrgCtx.numValidMergeCand;        
-#endif
+        getAffineControlPointCand(cu, mi, isAvailable, model[modelIdx], ((modelIdx == 3) ? neighBcw[1] : neighBcw[0]), modelIdx, verNum[modelIdx], affMrgCtx, isEncodeGdrClean, modelSolid);
+#else
         getAffineControlPointCand(cu, mi, isAvailable, model[modelIdx], ((modelIdx == 3) ? neighBcw[1] : neighBcw[0]), modelIdx, verNum[modelIdx], affMrgCtx);
-#if GDR_ENABLED
-        if (isEncodeGdrClean) 
-        {
-          for (int i = 0; i < 3; i++)  
-          {
-            affMrgCtx.mvSolid[(affinNumValidCand << 1) + 0][i] = modelSolid[modelIdx];
-            affMrgCtx.mvSolid[(affinNumValidCand << 1) + 1][i] = modelSolid[modelIdx];
-          }
-        }
 #endif
         if (affMrgCtx.numValidMergeCand != 0 && affMrgCtx.numValidMergeCand - 1 == mrgCandIdx)
         {
