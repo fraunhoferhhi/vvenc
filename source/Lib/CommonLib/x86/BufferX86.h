@@ -1701,6 +1701,112 @@ void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, vo
     }
   }
 }
+#define MULADD(p1, p2, scale, tmp1, tmp2, sum) \
+        tmp1 = _mm_madd_epi16 (p1, scale); \
+        tmp2 = _mm_madd_epi16 (p2, scale); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp2); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
+        sum += _mm_extract_epi32 (tmp1, 0);
+
+template<X86_VEXT vext>
+uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct = 0;
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+  //printf("width %d height %d :",width,height);
+
+#ifdef USE_AVX2
+  if (width > 12)
+  {
+    const __m128i scale1 = _mm_set_epi16 (0, 0,-1,-2,-3,-3,-2,-1);
+    const __m128i scale2 = _mm_set_epi16 (0, 0,-1,-3,12,12,-3,-1);
+    const __m128i scale3 = _mm_set_epi16 (0, 0, 0,-1,-1,-1,-1, 0);
+    __m128i tmp1, tmp2;
+    __m128i l0, lP1, lM1, lP2, lM2, lP3;
+    int sum;
+
+    for (int y = 2; y < height-2; y += 2)
+    {
+      for (int x = 2; x < width-2; x += 12)
+      {
+        __m256i lineM2 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y-2)*iSrcStride + x-2]);
+        __m256i lineM1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y-1)*iSrcStride + x-2]);
+        __m256i line0  = _mm256_lddqu_si256 ((__m256i*) &pSrc[ y   *iSrcStride + x-2]);
+        __m256i lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-2]);
+        __m256i lineP2 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+2)*iSrcStride + x-2]);
+        __m256i lineP3 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+3)*iSrcStride + x-2]);
+
+        for (int xx = 0; xx < 3; xx++)
+        {
+          if ((xx << 2) + x < width-2)
+          {
+            sum = 0;
+            l0  = _mm256_castsi256_si128 (line0 );
+            lP1 = _mm256_castsi256_si128 (lineP1);
+            MULADD (l0 , lP1, scale2, tmp1, tmp2, sum)
+            lM1 = _mm256_castsi256_si128 (lineM1);
+            lP2 = _mm256_castsi256_si128 (lineP2);
+            MULADD (lM1, lP2, scale1, tmp1, tmp2, sum)
+            lM2 = _mm256_castsi256_si128 (lineM2);
+            lP3 = _mm256_castsi256_si128 (lineP3);
+            MULADD (lM2, lP3, scale3, tmp1, tmp2, sum)
+           // printf("1 f %d ",sum);
+            saAct += (uint64_t) abs (sum);
+            //printf("x %d y %d saAct %ld \n",x,y,saAct);
+          }
+          if ((xx << 2) + x + 2 < width-2)
+          {
+            sum = 0;
+            l0  = _mm_bsrli_si128 (l0 , 4);
+            lP1 = _mm_bsrli_si128 (lP1, 4);
+            MULADD (l0 , lP1, scale2, tmp1, tmp2, sum)
+            lM1 = _mm_bsrli_si128 (lM1, 4);
+            lP2 = _mm_bsrli_si128 (lP2, 4);
+            MULADD (lM1, lP2, scale1, tmp1, tmp2, sum)
+            lM2 = _mm_bsrli_si128 (lM2, 4);
+            lP3 = _mm_bsrli_si128 (lP3, 4);
+            MULADD (lM2, lP3, scale3, tmp1, tmp2, sum)
+            //printf("2 f %d ",sum);
+            saAct += (uint64_t) abs (sum);
+            //printf("x %d y %d saAct %ld \n",x,y,saAct);
+
+            /* 4 byte to the right */
+            lineM2 = _mm256_permute4x64_epi64 (lineM2, 0x39);
+            lineM1 = _mm256_permute4x64_epi64 (lineM1, 0x39);
+            line0  = _mm256_permute4x64_epi64 (line0 , 0x39);
+            lineP1 = _mm256_permute4x64_epi64 (lineP1, 0x39);
+            lineP2 = _mm256_permute4x64_epi64 (lineP2, 0x39);
+            lineP3 = _mm256_permute4x64_epi64 (lineP3, 0x39);
+
+
+          }
+        }
+      }
+    }
+  }
+  else
+#endif
+  {
+    for (int y = 2; y < height - 2; y += 2)
+    {
+      for (int x = 2; x < width - 2; x += 2)
+      {
+        const int f = 12 * ((int)pSrc[ y   *iSrcStride + x  ] + (int)pSrc[ y   *iSrcStride + x+1] + (int)pSrc[(y+1)*iSrcStride + x  ] + (int)pSrc[(y+1)*iSrcStride + x+1])
+                     - 3 * ((int)pSrc[(y-1)*iSrcStride + x  ] + (int)pSrc[(y-1)*iSrcStride + x+1] + (int)pSrc[(y+2)*iSrcStride + x  ] + (int)pSrc[(y+2)*iSrcStride + x+1])
+                     - 3 * ((int)pSrc[ y   *iSrcStride + x-1] + (int)pSrc[ y   *iSrcStride + x+2] + (int)pSrc[(y+1)*iSrcStride + x-1] + (int)pSrc[(y+1)*iSrcStride + x+2])
+                     - 2 * ((int)pSrc[(y-1)*iSrcStride + x-1] + (int)pSrc[(y-1)*iSrcStride + x+2] + (int)pSrc[(y+2)*iSrcStride + x-1] + (int)pSrc[(y+2)*iSrcStride + x+2])
+                         - ((int)pSrc[(y-2)*iSrcStride + x-1] + (int)pSrc[(y-2)*iSrcStride + x  ] + (int)pSrc[(y-2)*iSrcStride + x+1] + (int)pSrc[(y-2)*iSrcStride + x+2]
+                          + (int)pSrc[(y+3)*iSrcStride + x-1] + (int)pSrc[(y+3)*iSrcStride + x  ] + (int)pSrc[(y+3)*iSrcStride + x+1] + (int)pSrc[(y+3)*iSrcStride + x+2]
+                          + (int)pSrc[(y-1)*iSrcStride + x-2] + (int)pSrc[ y   *iSrcStride + x-2] + (int)pSrc[(y+1)*iSrcStride + x-2] + (int)pSrc[(y+2)*iSrcStride + x-2]
+                          + (int)pSrc[(y-1)*iSrcStride + x+3] + (int)pSrc[ y   *iSrcStride + x+3] + (int)pSrc[(y+1)*iSrcStride + x+3] + (int)pSrc[(y+2)*iSrcStride + x+3]);
+        saAct += (uint64_t) abs(f);
+      }
+    }
+  }
+  return saAct;
+}
 
 template<X86_VEXT vext>
 void PelBufferOps::_initPelBufOpsX86()
@@ -1749,9 +1855,12 @@ void PelBufferOps::_initPelBufOpsX86()
   applyLut = applyLut_SIMD<vext>;
 
   fillPtrMap = fillPtrMap_SIMD<vext>;
+
+  AvgHighPassWithDownsampling = AvgHighPassWithDownsampling_SIMD<vext>;
 }
 
 template void PelBufferOps::_initPelBufOpsX86<SIMDX86>();
+
 
 } // namespace vvenc
 

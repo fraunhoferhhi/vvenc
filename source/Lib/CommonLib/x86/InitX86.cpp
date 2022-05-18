@@ -61,6 +61,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "MCTF.h"
 #include "TrQuant_EMT.h"
 #include "QuantRDOQ2.h"
+#include "BitAllocation.h"
 
 #ifdef TARGET_SIMD_X86
 

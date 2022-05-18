@@ -94,31 +94,13 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   // center rows
   if (isUHD) // high-pass with downsampling
   {
-    const int i2ndStride = iSrcStride * 2;
-    const int i3rdStride = iSrcStride * 3;
-
     pSrc += iSrcStride;
-    for (int y = 2; y < height - 2; y += 2)
-    {
-      for (int x = 2; x < width - 2; x += 2) // cnt cols
-      {
-        const int s = 12 * ((int) pSrc[x             ] + (int) pSrc[x+1           ] + (int) pSrc[x  +iSrcStride] + (int) pSrc[x+1+iSrcStride])
-                     - 3 * ((int) pSrc[x-1           ] + (int) pSrc[x+2           ] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+2+iSrcStride]
-                          + (int) pSrc[x  -iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x  +i2ndStride] + (int) pSrc[x+1+i2ndStride])
-                     - 2 * ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+2-iSrcStride] + (int) pSrc[x-1+i2ndStride] + (int) pSrc[x+2+i2ndStride])
-                         - ((int) pSrc[x-1-i2ndStride] + (int) pSrc[x  -i2ndStride] + (int) pSrc[x+1-i2ndStride] + (int) pSrc[x+2-i2ndStride]
-                          + (int) pSrc[x-1+i3rdStride] + (int) pSrc[x  +i3rdStride] + (int) pSrc[x+1+i3rdStride] + (int) pSrc[x+2+i3rdStride]
-                          + (int) pSrc[x-2-iSrcStride] + (int) pSrc[x-2           ] + (int) pSrc[x-2+iSrcStride] + (int) pSrc[x-2+i2ndStride]
-                          + (int) pSrc[x+3-iSrcStride] + (int) pSrc[x+3           ] + (int) pSrc[x+3+iSrcStride] + (int) pSrc[x+3+i2ndStride]);
-        saAct += abs (s);
-      }
-      pSrc += i2ndStride;
-    }
-
+    saAct=g_pelBufOP.AvgHighPassWithDownsampling ( width, height, pSrc, iSrcStride);
     meanAct = double (saAct) / double ((width - 4) * (height - 4));
   }
   else // HD high-pass without downsampling
   {
+    printf("HD\n");
     for (int y = 1; y < height - 1; y++)
     {
       for (int x = 1; x < width - 1; x++) // center cols
