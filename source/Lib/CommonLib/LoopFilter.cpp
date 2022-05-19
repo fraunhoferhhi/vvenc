@@ -668,8 +668,12 @@ void xSetMaxFilterLengthPQForCodingSubBlocks( const CodingUnit& cu );
 
 
 LFCUParam xGetLoopfilterParam               ( const CodingUnit& cu );
-  
+
+#if GDR_ENABLED
+bool isCrossedByVirtualBoundaries           ( const SPS* pps, const PicHeader* picHeader, const Area& area, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[] );
+#else
 bool isCrossedByVirtualBoundaries           ( const SPS* pps, const Area& area, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[] );
+#endif
 void xDeriveEdgefilterParam                 ( const Position pos, const int numVerVirBndry, const int numHorVirBndry, const int verVirBndryPos[], const int horVirBndryPos[], bool& verEdgeFilter, bool& horEdgeFilter );
 
 void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
@@ -714,7 +718,11 @@ void LoopFilter::calcFilterStrengths( const CodingUnit& cu, bool clearLF )
     }
   }
 
+#if GDR_ENABLED
+  const bool isCuCrossedByVirtualBoundaries = isCrossedByVirtualBoundaries( cu.cs->sps, cu.cs->picHeader,
+#else
   const bool isCuCrossedByVirtualBoundaries = isCrossedByVirtualBoundaries( cu.cs->sps,
+#endif
                                                                             Area( area.x << channelScaleX, area.y << channelScaleY, area.width << channelScaleX, area.height << channelScaleY ),
                                                                             numHorVirBndry, numVerVirBndry,
                                                                             horVirBndryPos, verVirBndryPos );
@@ -863,7 +871,11 @@ void LoopFilter::loopFilterCu( const CodingUnit& cu, ChannelType chType, Deblock
   }
 }
 
+#if GDR_ENABLED
+inline bool isCrossedByVirtualBoundaries( const SPS* sps, const PicHeader* picHeader, const Area& area, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[] )
+#else
 inline bool isCrossedByVirtualBoundaries( const SPS* sps, const Area& area, int& numHorVirBndry, int& numVerVirBndry, int horVirBndryPos[], int verVirBndryPos[] )
+#endif
 {
   numHorVirBndry = 0;
   numVerVirBndry = 0;
@@ -872,6 +884,42 @@ inline bool isCrossedByVirtualBoundaries( const SPS* sps, const Area& area, int&
     return false;
   }
 
+#if GDR_ENABLED
+  if (sps->virtualBoundariesPresent)
+  {
+    for( int i = 0; i < sps->numHorVirtualBoundaries; i++ )
+    {
+      if( area.y <= sps->virtualBoundariesPosY[ i ] && sps->virtualBoundariesPosY[ i ] < area.y + area.height )
+      {
+        horVirBndryPos[numHorVirBndry++] = sps->virtualBoundariesPosY[ i ];
+      }
+    }
+    for( int i = 0; i < sps->numVerVirtualBoundaries; i++ )
+    {
+      if( area.x <= sps->virtualBoundariesPosX[ i ] && sps->virtualBoundariesPosX[ i ] < area.x + area.width )
+      {
+        verVirBndryPos[numVerVirBndry++] = sps->virtualBoundariesPosX[ i ];
+      }
+    }
+  }
+  else if (picHeader->virtualBoundariesEnabled)
+  {
+    for( int i = 0; i < picHeader->numHorVirtualBoundaries; i++ )
+    {
+      if( area.y <= picHeader->virtualBoundariesPosY[ i ] && picHeader->virtualBoundariesPosY[ i ] < area.y + area.height )
+      {
+        horVirBndryPos[numHorVirBndry++] = picHeader->virtualBoundariesPosY[ i ];
+      }
+    }
+    for( int i = 0; i < picHeader->numVerVirtualBoundaries; i++ )
+    {
+      if( area.x <= picHeader->virtualBoundariesPosX[ i ] && picHeader->virtualBoundariesPosX[ i ] < area.x + area.width )
+      {
+        verVirBndryPos[numVerVirBndry++] = picHeader->virtualBoundariesPosX[ i ];
+      }
+    }
+  }
+#else
   for( int i = 0; i < sps->numHorVirtualBoundaries; i++ )
   {
     if( area.y <= sps->virtualBoundariesPosY[ i ] && sps->virtualBoundariesPosY[ i ] < area.y + area.height )
@@ -886,6 +934,7 @@ inline bool isCrossedByVirtualBoundaries( const SPS* sps, const Area& area, int&
       verVirBndryPos[numVerVirBndry++] = sps->virtualBoundariesPosX[ i ];
     }
   }
+#endif
 
   return numHorVirBndry > 0 || numVerVirBndry > 0;
 }

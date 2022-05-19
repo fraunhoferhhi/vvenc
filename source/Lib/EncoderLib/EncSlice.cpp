@@ -976,6 +976,13 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         // loopfilter
         if( !cs.pps->deblockingFilterControlPresent || !cs.pps->deblockingFilterDisabled || cs.pps->deblockingFilterOverrideEnabled )
         {
+          // *TEST*
+          if (slice.poc == 2)
+          {
+            if (1)
+            {
+            }
+          }
           PROFILER_EXT_ACCUM_AND_START_NEW_SET( 1, _TPROF, P_DEBLOCK_FILTER, &cs, CH_L );
           // calculate filter strengths
           encSlice->m_pLoopFilter->calcFilterStrengthsCTU( cs, ctuArea, true );

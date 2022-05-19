@@ -1979,6 +1979,20 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && ( c->m_RCTargetBitrate > 0 && c->m_RCNumPasses == 1 && !c->m_LookAhead ), "Debug-bitstream for the rate-control in one pass mode is not supported yet" );
   vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && c->m_maxParallelFrames > 1 && ( c->m_LookAhead || c->m_RCTargetBitrate > 0 ), "Debug-bitstream in frame-parallel mode and enabled rate-control or look-ahead is not supported yet" );
 
+#if GDR_ENABLED
+  if (c->m_gdrEnabled && c->m_bUseSAO)
+  {
+    msg.log( VVENC_ERROR, "Warning: VVenC does not support SAO with GDR - SAO will be disabled!\n" );
+    c->m_bUseSAO = false;
+  }
+  if (c->m_gdrEnabled && (c->m_alf || c->m_ccalf))
+  {
+    msg.log( VVENC_ERROR, "Warning: VVenC does not support ALF with GDR - ALF will be disabled!\n" );
+    c->m_alf = false;
+    c->m_ccalf = false;
+  }
+#endif
+
   return( c->m_confirmFailed );
 }
 
