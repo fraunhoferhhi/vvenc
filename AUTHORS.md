@@ -12,3 +12,7 @@
 * Christian Stoffers, , Fraunhofer HHI
 * Gabriel Hege, , Fraunhofer HHI
 * Jens Güther, , Fraunhofer HHI
+* Antti Hallapuro, , Nokia
+* Seungwook Hong, , Nokia
+* Krit Panusopone, , Nokia
+* Limin Wang, , Nokia
