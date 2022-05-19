@@ -697,10 +697,10 @@ bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* 
     if (!slice->isIntra() && curPoc >= (gopSize << idr2Adj)) // detect scene change if comparison is possible
     {
       const Picture* refPic = slice->getRefPic (REF_PIC_LIST_0, 0);
-      const int scThreshold = (curPic->isSccStrong ? 3 : (curPic->isSccWeak ? 2 : 1)) * (isHighRes ? 16 : 15);
+      const int scThreshold = (curPic->isSccStrong ? 3 : (curPic->isSccWeak ? 2 : 1)) * (isHighRes ? 19 : 15);
 
       return ((curPic->picVisActTL0 * 11 > refPic->picVisActTL0 * scThreshold ||
-               refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * scThreshold) && refPic->picVisActTL0 > 0);
+               refPic->picVisActTL0 * 11 > curPic->picVisActTL0 * (scThreshold + 1)) && refPic->picVisActTL0 > 0);
     }
 
     return false;
