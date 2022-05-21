@@ -485,7 +485,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   // in lockstep mode, process all pictures in processing list
   const bool lockStepMode = m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_maxParallelFrames > 0;
 
-  if( isNonBlocking() && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && !nextPicReadyForOutput() )
+  if( isNonBlocking() && lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && !nextPicReadyForOutput() )
   {
     // non-blocking mode: stage is still busy, wait outside
     return;
@@ -534,7 +534,10 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         // non-blocking mode: wait on top level, let other stages do their jobs
         if( isNonBlocking() )
         {
-          break;
+//           if( lockStepMode )
+//             return;
+//           else
+            break;
         }
         CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
         CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
@@ -636,11 +639,11 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 
   if( !nextPicReadyForOutput() )
   {
-    if( lockStepMode )
-    {
-      CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
-      CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
-    }
+    //if( lockStepMode )
+    //{
+    //  CHECK( m_gopEncListOutput.empty(),                    "try to output picture, but no output picture available" );
+    //  CHECK( ! m_gopEncListOutput.front()->isReconstructed, "try to output picture, but picture not reconstructed" );
+    //}
     return;
   }
   PROFILER_ACCUM_AND_START_NEW_SET( 1, g_timeProfiler, P_TOP_LEVEL );
