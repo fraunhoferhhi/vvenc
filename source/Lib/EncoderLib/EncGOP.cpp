@@ -534,9 +534,9 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         // non-blocking mode: wait on top level, let other stages do their jobs
         if( isNonBlocking() )
         {
-//           if( lockStepMode )
-//             return;
-//           else
+          if( lockStepMode )
+            return;
+          else
             break;
         }
         CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
