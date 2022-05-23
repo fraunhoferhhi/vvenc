@@ -307,8 +307,7 @@ bool InterPrediction::xCheckIdenticalMotion( const CodingUnit& cu ) const
         }
         else
         {
-          if ( (cu.affineType == AFFINEMODEL_4PARAM && (cu.mv[0][0] == cu.mv[1][0]) && (cu.mv[0][1] == cu.mv[1][1]))
-            || (cu.affineType == AFFINEMODEL_6PARAM && (cu.mv[0][0] == cu.mv[1][0]) && (cu.mv[0][1] == cu.mv[1][1]) && (cu.mv[0][2] == cu.mv[1][2])) )
+          if( cu.mv[0][0] == cu.mv[1][0] && cu.mv[0][1] == cu.mv[1][1] && ( cu.affineType == AFFINEMODEL_4PARAM || cu.mv[0][2] == cu.mv[1][2] ) )
           {
             return true;
           }
