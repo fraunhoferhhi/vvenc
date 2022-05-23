@@ -1272,26 +1272,12 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   {
     bool enforceQT = implicitSplit == CU_QUAD_SPLIT;
 
-    // LARGE CTU bug
-    if( m_pcEncCfg->m_useFastLCTU )
-    {
-      unsigned minDepth = m_modeCtrl.comprCUCtx->minDepth;
-      if( minDepth > partitioner.currQtDepth )
-      {
-        // enforce QT
-        enforceQT = true;
-      }
-    }
+    m_CABACEstimator->resetBits();
 
-    if( !enforceQT )
-    {
-      m_CABACEstimator->resetBits();
-
-      m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
-      partitioner.modeType = modeTypeParent;
-      m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
-      tempCS->fracBits += m_CABACEstimator->getEstFracBits(); // split bits
-    }
+    m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
+    partitioner.modeType = modeTypeParent;
+    m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
+    tempCS->fracBits += m_CABACEstimator->getEstFracBits(); // split bits
   }
 
   tempCS->cost = m_cRdCost.calcRdCost( tempCS->fracBits, tempCS->dist );
