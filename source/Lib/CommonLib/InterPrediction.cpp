@@ -300,7 +300,7 @@ bool InterPrediction::xCheckIdenticalMotion( const CodingUnit& cu ) const
       {
         if( !cu.affine )
         {
-          if( std::equal( std::begin( cu.mv[0] ), std::end( cu.mv[0] ), std::begin( cu.mv[1] ) ) )
+          if( cu.mv[0][0] == cu.mv[1][0] )
           {
             return true;
           }
