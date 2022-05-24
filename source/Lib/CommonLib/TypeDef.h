@@ -711,6 +711,15 @@ public:
   static_vector( size_t N_, const T& _val ) : _size( 0 )       { resize( N_, _val ); }
   template<typename It>
   static_vector( It _it1, It _it2 ) : _size( 0 )               { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
+  static_vector( const static_vector<T, N>& other ) : _size( 0 )
+  {
+    auto _src1 = other.begin();
+    auto _src2 = other.end();
+
+    while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
+
+    CHECKD( _size > N, "capacity exceeded" );
+  }
   static_vector( std::initializer_list<T> _il ) : _size( 0 )
   {
     typename std::initializer_list<T>::iterator _src1 = _il.begin();
