@@ -366,8 +366,8 @@ struct AffineProfList
     }
 
     ::memcpy(affMVInfo->affMVs, cMvTemp.affMVs, sizeof(cMvTemp.affMVs));
-    ::memcpy(affMVInfoSolid->affMVsSolid, cMvTempSolid, sizeof(cMvTempSolid));
 #if GDR_ENABLED 
+    ::memcpy(affMVInfoSolid->affMVsSolid, cMvTempSolid, sizeof(bool[2][MAX_REF_PICS][3]));
 #endif
 
     if (j == m_affMVListSize)
