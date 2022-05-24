@@ -52,6 +52,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #include <algorithm>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <vector>
 #include <regex>
 
@@ -636,14 +638,13 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
     frameSize *= wordsize;
   }
 
-  std::streamoff offsetAdditional = 0;
   if( m_y4mMode )
   {
     const char Y4MHeader[] = {'F','R','A','M','E'};
-    offsetAdditional = sizeof(Y4MHeader) + 1;  /* assume basic FRAME\n headers */
+    frameSize += (sizeof(Y4MHeader) + 1);  /* assume basic FRAME\n headers */;
   }
 
-  const std::streamoff offset = (frameSize * numFrames) + offsetAdditional;
+  const std::streamoff offset = frameSize * numFrames;
 
   // attempt to seek
   if ( !! m_cHandle.seekg( offset, std::ios::cur ) )
@@ -774,13 +775,7 @@ bool YuvFileIO::writeYuvBuf( const vvencYUVBuffer& yuvOutBuf )
 
 bool YuvFileIO::isY4mInputFilename( std::string fileName )
 {
-  if(fileName.find_last_of(".") != std::string::npos)
-  {
-    std::string ext = fileName.substr(fileName.find_last_of(".")+1);
-    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
-    return ( "y4m" == ext );
-  }
-  return false;
+  return ( "y4m" == getFileExtension(fileName) );
 }
 
 int YuvFileIO::parseY4mHeader( const std::string &fileName, vvenc_config& cfg, VVEncAppCfg& appcfg )
@@ -899,6 +894,89 @@ int YuvFileIO::parseY4mHeader( const std::string &fileName, vvenc_config& cfg, V
   if( !valid ) return -1;
 
   return (int)headerline.length()+1;
+}
+
+bool YuvFileIO::isY4mHeaderAvailable( std::string fileName )
+{
+  if( fileName == "-" ) return false;
+  std::fstream cfHandle;
+  cfHandle.open( fileName, std::ios::binary | std::ios::in );
+  if( cfHandle.fail() ) return false;
+
+  char line[10] = {0};
+  int headerlinesize = cfHandle.readsome( line, 10 );
+  cfHandle.close();
+
+  if( headerlinesize && memcmp( line, "YUV4MPEG2", 9 ) == 0 ) return true;
+
+  return false;
+}
+
+bool YuvFileIO::checkInputFile( std::string fileName, std::string& rcErrText )
+{
+  if( fileName == "-" ) return true;
+
+  std::stringstream css;
+  std::fstream cfHandle;
+  cfHandle.open( fileName, std::ios::binary | std::ios::in );
+  if( cfHandle.fail() )
+  {
+    css <<"cannot open input file " << fileName;
+    rcErrText = css.str();
+    return false;
+  }
+
+  cfHandle.seekg( 0, std::ios::end );
+  if ( 0 >= cfHandle.tellg() )
+  {
+    css <<"cannot determine valid input file size of file" << fileName;
+    rcErrText = css.str();
+    return false;
+  }
+  cfHandle.close();
+
+  std::string ext = getFileExtension(fileName);
+  std::vector<std::string> unsupportedList { "mp4", "mkv", "ts", "mpeg", "avi" } ;
+  for (auto &e : unsupportedList)
+  {
+    if( e == ext )
+    {
+      css <<"unsupported input file format " << e << " detected. support only for RAW/YUV/Y4M input files.\n";
+      rcErrText = css.str();
+      return false;
+    }
+  }
+  return true;
+}
+
+bool YuvFileIO::checkBitstreamFile( std::string fileName, std::string& rcErrText )
+{
+  if( fileName == "-" ) return true;
+  std::stringstream css;
+  std::string ext = getFileExtension(fileName);
+  std::vector<std::string> unsupportedList { "mp4", "mkv", "ts", "mpeg", "avi" } ;
+  for (auto &e : unsupportedList)
+  {
+    if( e == ext )
+    {
+      css <<"unsupported output file format detected. no support for " << e << " container. RAW ES (e.g. *.vvc, *.266) support only.\n" << fileName;
+      rcErrText = css.str();
+      return false;
+    }
+  }
+
+  return true;
+}
+
+std::string YuvFileIO::getFileExtension( std::string fileName )
+{
+  std::string ext;
+  if(fileName.find_last_of(".") != std::string::npos)
+  {
+    ext = fileName.substr(fileName.find_last_of(".")+1);
+    std::transform( ext.begin(), ext.end(), ext.begin(), ::tolower );
+  }
+  return ext;
 }
 
 

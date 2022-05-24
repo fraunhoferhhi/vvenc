@@ -74,10 +74,10 @@ void clipMv( Mv& rcMv, const Position& pos, const struct Size& size, const PreCa
   int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
   int iOffset = 8;
   int iHorMax = ( pcv.lumaWidth + iOffset - ( int ) pos.x - 1 ) << iMvShift;
-  int iHorMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.x + 1 ) << iMvShift;
+  int iHorMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.x + 1 ) * (1 << iMvShift);
 
   int iVerMax = ( pcv.lumaHeight + iOffset - ( int ) pos.y - 1 ) << iMvShift;
-  int iVerMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.y + 1 ) << iMvShift;
+  int iVerMin = ( -( int ) pcv.maxCUSize   - iOffset - ( int ) pos.y + 1 ) * (1 << iMvShift);
 
   rcMv.hor = ( std::min( iHorMax, std::max( iHorMin, rcMv.hor ) ) );
   rcMv.ver = ( std::min( iVerMax, std::max( iVerMin, rcMv.ver ) ) );
@@ -92,18 +92,18 @@ void clipMv(Mv& rcMv, const Position& pos, const struct Size& size, const PreCal
   int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
   int iOffset = 8;
   int iHorMax = (pcv.lumaWidth + iOffset - (int)pos.x - 1) << iMvShift;
-  int iHorMin = (-(int)pcv.maxCUSize - iOffset - (int)pos.x + 1) << iMvShift;
+  int iHorMin = (-(int)pcv.maxCUSize - iOffset - (int)pos.x + 1) * (1 << iMvShift);
 
   int iVerMax = (pcv.lumaHeight + iOffset - (int)pos.y - 1) << iMvShift;
-  int iVerMin = (-(int)pcv.maxCUSize - iOffset - (int)pos.y + 1) << iMvShift;
+  int iVerMin = (-(int)pcv.maxCUSize - iOffset - (int)pos.y + 1) * (1 << iMvShift);
   const SubPic& curSubPic = pps.getSubPicFromPos(pos);
   if (curSubPic.treatedAsPic && m_clipMvInSubPic)
   {
     iHorMax = ((curSubPic.subPicRight + 1) + iOffset - (int)pos.x - 1) << iMvShift;
-    iHorMin = (-(int)pcv.maxCUSize - iOffset - ((int)pos.x - curSubPic.subPicLeft) + 1) << iMvShift;
+    iHorMin = (-(int)pcv.maxCUSize - iOffset - ((int)pos.x - curSubPic.subPicLeft) + 1) * (1 << iMvShift);
 
     iVerMax = ((curSubPic.subPicBottom + 1) + iOffset - (int)pos.y - 1) << iMvShift;
-    iVerMin = (-(int)pcv.maxCUSize - iOffset - ((int)pos.y - curSubPic.subPicTop) + 1) << iMvShift;
+    iVerMin = (-(int)pcv.maxCUSize - iOffset - ((int)pos.y - curSubPic.subPicTop) + 1) * (1 << iMvShift);
   }
   rcMv.hor = (std::min(iHorMax, std::max(iHorMin, rcMv.hor)));
   rcMv.ver = (std::min(iVerMax, std::max(iVerMin, rcMv.ver)));
@@ -115,9 +115,9 @@ bool wrapClipMv( Mv& rcMv, const Position& pos, const struct Size& size, const C
   int iMvShift = MV_FRACTIONAL_BITS_INTERNAL;
   int iOffset = 8;
   int iHorMax = ( cs.pcv->lumaWidth + cs.pcv->maxCUSize - size.width + iOffset - ( int ) pos.x - 1 ) << iMvShift;
-  int iHorMin = ( -( int ) cs.pcv->maxCUSize                     - iOffset - ( int ) pos.x + 1 ) << iMvShift;
+  int iHorMin = ( -( int ) cs.pcv->maxCUSize                     - iOffset - ( int ) pos.x + 1 ) * (1 << iMvShift);
   int iVerMax = ( cs.pcv->lumaHeight + iOffset - ( int ) pos.y - 1 ) << iMvShift;
-  int iVerMin = ( -( int ) cs.pcv->maxCUSize   - iOffset - ( int ) pos.y + 1 ) << iMvShift;
+  int iVerMin = ( -( int ) cs.pcv->maxCUSize   - iOffset - ( int ) pos.y + 1 ) * (1 << iMvShift);
   int mvX = rcMv.hor;
 
   if(mvX > iHorMax)

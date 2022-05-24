@@ -4922,11 +4922,11 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
           Mv mvTmp[3], *nbMv = mvInfo->affMVs[iRefList][iRefIdxTemp];
           int vx, vy;
           int dMvHorX, dMvHorY, dMvVerX, dMvVerY;
-          int mvScaleHor = nbMv[0].hor << shift;
-          int mvScaleVer = nbMv[0].ver << shift;
+          int mvScaleHor = nbMv[0].hor * (1<< shift);
+          int mvScaleVer = nbMv[0].ver * (1<< shift);
           Mv dMv = nbMv[1] - nbMv[0];
-          dMvHorX = dMv.hor << (shift - Log2(mvInfo->w));
-          dMvHorY = dMv.ver << (shift - Log2(mvInfo->w));
+          dMvHorX = dMv.hor *(1<<(shift - Log2(mvInfo->w)));
+          dMvHorY = dMv.ver *(1<< (shift - Log2(mvInfo->w)));
           dMvVerX = -dMvHorY;
           dMvVerY = dMvHorX;
           vx = mvScaleHor + dMvHorX * (cu.Y().x - mvInfo->x) + dMvVerX * (cu.Y().y - mvInfo->y);
@@ -4965,8 +4965,8 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
         mvAffine4Para[iRefList][iRefIdxTemp][1].roundAffinePrecInternal2Amvr(cu.imv);
 
         int shift = MAX_CU_DEPTH;
-        int vx2 = (mvFour[0].hor << shift) - ((mvFour[1].ver - mvFour[0].ver) << (shift + Log2(cu.lheight()) - Log2(cu.lwidth())));
-        int vy2 = (mvFour[0].ver << shift) + ((mvFour[1].hor - mvFour[0].hor) << (shift + Log2(cu.lheight()) - Log2(cu.lwidth())));
+        int vx2 = (mvFour[0].hor * (1<< shift)) - ((mvFour[1].ver - mvFour[0].ver) * (1<< (shift + Log2(cu.lheight()) - Log2(cu.lwidth()))));
+        int vy2 = (mvFour[0].ver * (1<< shift)) + ((mvFour[1].hor - mvFour[0].hor) * (1<< (shift + Log2(cu.lheight()) - Log2(cu.lwidth()))));
         int offset = (1 << (shift - 1));
         vx2 = (vx2 + offset - (vx2 >= 0)) >> shift;
         vy2 = (vy2 + offset - (vy2 >= 0)) >> shift;
@@ -5717,11 +5717,11 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     const int multiShift = 1 << normShiftTab[cu.imv];
     const int mvShift = stepShiftTab[cu.imv];
 
-    acDeltaMv[0] = Mv((int)(dDeltaMv[0] * multiShift + SIGN(dDeltaMv[0]) * 0.5) << mvShift, (int)(dDeltaMv[2] * multiShift + SIGN(dDeltaMv[2]) * 0.5) << mvShift);
-    acDeltaMv[1] = Mv((int)(dDeltaMv[1] * multiShift + SIGN(dDeltaMv[1]) * 0.5) << mvShift, (int)(dDeltaMv[3] * multiShift + SIGN(dDeltaMv[3]) * 0.5) << mvShift);
+    acDeltaMv[0] = Mv((int)(dDeltaMv[0] * multiShift + SIGN(dDeltaMv[0]) * 0.5) * (1<< mvShift), (int)(dDeltaMv[2] * multiShift + SIGN(dDeltaMv[2]) * 0.5) * (1<< mvShift));
+    acDeltaMv[1] = Mv((int)(dDeltaMv[1] * multiShift + SIGN(dDeltaMv[1]) * 0.5) * (1<< mvShift), (int)(dDeltaMv[3] * multiShift + SIGN(dDeltaMv[3]) * 0.5) * (1<< mvShift));
     if (extParams)
     {
-      acDeltaMv[2] = Mv((int)(dDeltaMv[4] * multiShift + SIGN(dDeltaMv[4]) * 0.5) << mvShift, (int)(dDeltaMv[5] * multiShift + SIGN(dDeltaMv[5]) * 0.5) << mvShift);
+      acDeltaMv[2] = Mv((int)(dDeltaMv[4] * multiShift + SIGN(dDeltaMv[4]) * 0.5) *  (1<< mvShift), (int)(dDeltaMv[5] * multiShift + SIGN(dDeltaMv[5]) * 0.5) *  (1<< mvShift));
     }
     bool bAllZero = false;
     for (int i = 0; i < mvNum; i++)
@@ -5868,7 +5868,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
 
           for (int i = ((iter == 0) ? 0 : 4); i < ((iter == 0) ? 4 : 8); i++)
           {
-            acMvTemp[j].set(centerMv[j].hor + (testPos[i][0] << mvShift), centerMv[j].ver + (testPos[i][1] << mvShift));
+            acMvTemp[j].set(centerMv[j].hor + (testPos[i][0] * (1 << mvShift)), centerMv[j].ver + (testPos[i][1] * (1 << mvShift)));
             clipMv(acMvTemp[j], cu.lumaPos(), cu.lumaSize(), *cu.cs->pcv);
             xPredAffineBlk(COMP_Y, cu, refPic, acMvTemp, predBuf, false, cu.slice->clpRngs[COMP_Y], refPicList);
 
