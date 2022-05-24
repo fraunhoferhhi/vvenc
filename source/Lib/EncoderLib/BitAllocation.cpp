@@ -100,7 +100,6 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   }
   else // HD high-pass without downsampling
   {
-    printf("HD\n");
     for (int y = 1; y < height - 1; y++)
     {
       for (int x = 1; x < width - 1; x++) // center cols
@@ -129,6 +128,9 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
     pSM1 += i2M1Stride;
     if (frameRate <= 31) // 1st-order delta
     {
+#if 1
+      taAct= g_pelBufOP.AvgHighPassWithDownsamplingDiff1st (width, height,pSrc,pSM1,iSrcStride, iSM1Stride);
+#else
       for (int y = 2; y < height - 2; y += 2)
       {
         for (int x = 2; x < width - 2; x += 2) // c cols
@@ -140,6 +142,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
         pSrc += i2M0Stride;
         pSM1 += i2M1Stride;
       }
+#endif
     }
     else // 2nd-order delta (diff of diffs)
     {

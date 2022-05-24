@@ -111,6 +111,7 @@ struct PelBufferOps
   void ( *applyLut )      ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, ptrdiff_t dstStride, int width, int height, const Pel* lut );
   void ( *fillPtrMap )    ( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val );
   uint64_t ( *AvgHighPassWithDownsampling )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
+  uint64_t ( *AvgHighPassWithDownsamplingDiff1st ) (const uint32_t width, const uint32_t height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride);
 
 };
 
