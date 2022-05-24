@@ -128,7 +128,7 @@ struct AreaBuf : public Size
   AreaBuf( T *_buf, const int& _stride, const SizeType& _width, const SizeType& _height ) : Size( _width, _height ), buf( _buf ), stride( _stride )    { }
 //  AreaBuf( const AreaBuf<typename std::remove_const<T>::type >& other )                         : Size( other ),           buf( other.buf ), stride( other.stride ) { }
 
-  operator AreaBuf<const T>() const { auto ret = *reinterpret_cast< const AreaBuf<const T>* >( this ); return ret; }
+  operator const AreaBuf<const T>&() const { return *reinterpret_cast< const AreaBuf<const T>* >( this ); }
 
   void fill                 ( const T &val );
   void memset               ( const int val );

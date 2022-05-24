@@ -277,8 +277,6 @@ void EncSlice::initPic( Picture* pic, int gopId )
 
 void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
 {
-  const vvencGOPEntry* gopList = m_pcEncCfg->m_GOPList;
-
   // pre-compute lambda and qp
   int  iQP, adaptedLumaQP = -1;
   double dQP     = xGetQPForPicture( slice, gopId );
@@ -339,6 +337,7 @@ void EncSlice::xInitSliceLambdaQP( Slice* slice, int gopId )
   }
   else if (slice->pps->sliceChromaQpFlag)
   {
+    const vvencGOPEntry* gopList         = m_pcEncCfg->m_GOPList;
     const bool bUseIntraOrPeriodicOffset = (slice->isIntra() && !slice->sps->IBC) || (m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity > 0 && (slice->poc % m_pcEncCfg->m_sliceChromaQpOffsetPeriodicity) == 0);
 
     cbQP = bUseIntraOrPeriodicOffset ? sliceChromaQpOffsetIntraOrPeriodic[ 0 ] : gopList[ gopId ].m_CbQPoffset;
@@ -836,18 +835,19 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
   ProcessCtuState* processStates = encSlice->m_processStates.data();
   const UnitArea& ctuArea        = ctuEncParam->ctuArea;
   const bool wppSyncEnabled      = cs.sps->entropyCodingSyncEnabled;
+  const TaskType currState       = processStates[ ctuRsAddr ];
 
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "poc", cs.slice->poc ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "ctu", ctuRsAddr ) );
   DTRACE_UPDATE( g_trace_ctx, std::make_pair( "final", processStates[ ctuRsAddr ] == CTU_ENCODE ? 0 : 1 ) );
 
   // process ctu's line wise from left to right
-  if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && processStates[ctuRsAddr] == CTU_ENCODE && ctuPosX > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) )
+  if( encSlice->m_pcEncCfg->m_tileParallelCtuEnc && currState == CTU_ENCODE && ctuPosX > 0 && slice.pps->getTileIdx( ctuPosX, ctuPosY ) != slice.pps->getTileIdx( ctuPosX - 1, ctuPosY ) )
     ; // for CTU_ENCODE on tile boundaries, allow parallel processing of tiles
-  else if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= processStates[ ctuRsAddr ] && processStates[ ctuRsAddr ] < PROCESS_DONE )
+  else if( ctuPosX > 0 && processStates[ ctuRsAddr - 1 ] <= currState && currState < PROCESS_DONE )
     return false;
 
-  switch( processStates[ ctuRsAddr ].load() )
+  switch( currState )
   {
     // encode
     case CTU_ENCODE:
@@ -1120,10 +1120,7 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
         if( processStates[ deriveFilterCtu ] < ALF_RECONSTRUCT )
           return false;
 
-        // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0                                  && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
-          return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ ctuRsAddr - ctuStride + 1 ] <= ALF_RECONSTRUCT )
+        if( ctuPosY > 0 && processStates[ ctuRsAddr - ctuStride     ] <= ALF_RECONSTRUCT )
           return false;
 
         if( checkReadyState )
@@ -1208,12 +1205,6 @@ bool EncSlice::xProcessCtuTask( int threadIdx, CtuEncParam* ctuEncParam )
 
         // start alf reconstruct, when derive filter is done
         if( processStates[deriveFilterCtu] < CCALF_RECONSTRUCT )
-          return false;
-
-        // general wpp conditions, top and top-right ctu have to be encoded
-        if( ctuPosY > 0 && processStates[ctuRsAddr - ctuStride] <= CCALF_RECONSTRUCT )
-          return false;
-        if( ctuPosY > 0 && ctuPosX + 1 < pcv.widthInCtus && processStates[ctuRsAddr - ctuStride + 1] <= CCALF_RECONSTRUCT )
           return false;
 
         if( checkReadyState )

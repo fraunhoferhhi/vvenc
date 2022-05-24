@@ -563,7 +563,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
       }
       else
       {
-        if ( m_pcEncCfg->m_LookAhead && pic->poc % m_pcEncCfg->m_GOPSize == 0 )
+        if ( m_pcEncCfg->m_LookAhead && ( pic->poc + ( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0 ) ) % m_pcEncCfg->m_GOPSize == 0 )
         {
           m_pcRateCtrl->processFirstPassData( flush, pic->poc );
         }
@@ -1754,9 +1754,9 @@ void EncGOP::xInitFirstSlice( Picture& pic, const PicList& picList, bool isEncod
   slice->setDefaultClpRng          ( sps );
 
   // reference list
-  int poc;
   xSelectReferencePictureList( slice, curPoc, gopId, -1 );
-  if ( slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[0], 0, poc ) != -2 || slice->checkThatAllRefPicsAreAvailable( picList, slice->rpl[1], 1, poc ) != -2 )
+  int missingPoc;
+  if ( slice->isRplPicMissing( picList, REF_PIC_LIST_0, missingPoc ) || slice->isRplPicMissing( picList, REF_PIC_LIST_1, missingPoc ) )
   {
     slice->createExplicitReferencePictureSetFromReference( picList, slice->rpl[0], slice->rpl[1] );
   }

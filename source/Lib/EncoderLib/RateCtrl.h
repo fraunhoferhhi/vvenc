@@ -134,6 +134,7 @@ namespace vvenc {
     int     picQPOffsetQPA;
     int     poc;
     double  picLambdaOffsetQPA;
+    uint16_t visActSteady;
 
   protected:
     int xEstPicTargetBits( EncRCSeq* encRCSeq, int frameLevel );
