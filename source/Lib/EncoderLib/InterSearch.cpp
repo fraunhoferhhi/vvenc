@@ -6133,12 +6133,12 @@ void InterSearch::resetSavedAffineMotion()
 }
 
 #if GDR_ENABLED
-void InterSearch::storeAffineMotion(Mv acAffineMv[2][3], bool acAffineMvSolid[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int bcwIdx)
+void InterSearch::storeAffineMotion(Mv acAffineMv[2][3], bool acAffineMvSolid[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int BcwIdx)
 #else
 void InterSearch::storeAffineMotion(Mv acAffineMv[2][3], int16_t affineRefIdx[2], EAffineModel affineType, int BcwIdx)
 #endif
 {
-  if ((bcwIdx == BCW_DEFAULT || !m_affineMotion.affine6ParaAvail) && affineType == AFFINEMODEL_6PARAM)
+  if ((BcwIdx == BCW_DEFAULT || !m_affineMotion.affine6ParaAvail) && affineType == AFFINEMODEL_6PARAM)
   {
     for (int i = 0; i < 2; i++)
     {
@@ -6154,7 +6154,7 @@ void InterSearch::storeAffineMotion(Mv acAffineMv[2][3], int16_t affineRefIdx[2]
     m_affineMotion.affine6ParaAvail = true;
   }
 
-  if ((bcwIdx == BCW_DEFAULT || !m_affineMotion.affine4ParaAvail) && affineType == AFFINEMODEL_4PARAM)
+  if ((BcwIdx == BCW_DEFAULT || !m_affineMotion.affine4ParaAvail) && affineType == AFFINEMODEL_4PARAM)
   {
     for (int i = 0; i < 2; i++)
     {
@@ -6991,7 +6991,11 @@ void InterSearch::xPredAffineInterSearch( CodingUnit& cu,
 #endif
     if (cu.imv == 0)
     {
+#if GDR_ENABLED 
       m_AffineProfList->insert( tmp, cMvTempSolid, cu.Y());
+#else
+      m_AffineProfList->insert( tmp, cu.Y());
+#endif
     }
   }
 

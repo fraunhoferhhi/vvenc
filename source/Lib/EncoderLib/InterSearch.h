@@ -340,7 +340,11 @@ struct AffineProfList
     }
   }
 
+#if GDR_ENABLED 
   void insert( const AffineMVInfo& cMvTemp, bool cMvTempSolid[2][MAX_REF_PICS][3], const Area& area )
+#else
+  void insert( const AffineMVInfo& cMvTemp, const Area& area )
+#endif
   {
     AffineMVInfo *affMVInfo = m_affMVList + m_affMVListIdx;
 #if GDR_ENABLED 
