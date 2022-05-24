@@ -637,18 +637,11 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
   m_sbtCostSave[0] = m_sbtCostSave[1] = MAX_DOUBLE;
 
 #if GDR_ENABLED 
-  // *TEST*
-  if (slice.poc == 5 && tempCS->area.lx() == 0 && tempCS->area.ly() == 256 && tempCS->area.lwidth() == 32 && tempCS->area.lheight() == 32)
-  {
-    if (1)
-    {
-    }
-  }
   if (m_pcEncCfg->m_gdrEnabled)
   {
     bool isInGdrInterval = slice.picHeader->inGdrInterval;
 
-    // 1.0 applicable to inter picture only  
+    // Applicable to inter picture only  
     if (isInGdrInterval)
     {
       int gdrPocStart = m_pcEncCfg->m_gdrPocStart;
@@ -675,10 +668,10 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       }
       else if (tempCS->containRefresh(begGdrX, endGdrX) || tempCS->overlapRefresh(begGdrX, endGdrX))
       {
-        // 1.3.1 enable only vertical splits (QT, BT_V, TT_V)                  
+        // Anable only vertical splits (QT, BT_V, TT_V)                  
         m_modeCtrl.forceVerSplitOnly = true;
 
-        // 1.3.2 remove TT_V if it does not satisfy the condition
+        // Remove TT_V if it does not satisfy the condition
         if (tempCS->refreshCrossTTV(begGdrX, endGdrX))
         {
           m_modeCtrl.forceRemoveTTV = true;
@@ -689,14 +682,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
       {
         m_modeCtrl.forceRemoveQT = true;
       }
-
-#if 0
-      // Is this needed in vvenc?
-      if (!m_modeCtrl->anyPredModeLeft())
-      {
-        m_modeCtrl->forceRemoveDontSplit();
-      }
-#endif
     }
   }
 #endif
@@ -782,13 +767,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           EncTestMode encTestModeSkip = { ETM_MERGE_SKIP, ETO_STANDARD, qp, lossless };
           if (m_modeCtrl.tryMode(encTestModeSkip, cs, partitioner))
           {
-            // *TEST*
-            if (slice.poc == 4 && cs.area.lx() == 0 && cs.area.ly() == 288 && cs.area.lwidth() == 16 && cs.area.lheight() == 16)
-            {
-              if (1)
-              {
-              }
-            }
             xCheckRDCostMerge(tempCS, bestCS, partitioner, encTestModeSkip);
 
             CodingUnit* cu = bestCS->getCU(partitioner.chType, partitioner.treeType);
@@ -806,13 +784,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
           EncTestMode encTestMode = { ETM_INTER_ME, ETO_STANDARD, qp, lossless };
           if (m_modeCtrl.tryMode(encTestMode, cs, partitioner))
           {
-            // *TEST*
-            if (slice.poc == 3 && cs.area.lx() == 0 && cs.area.ly() == 296 && cs.area.lwidth() == 8 && cs.area.lheight() == 8)
-            {
-              if (1)
-              {
-              }
-            }
             xCheckRDCostInter(tempCS, bestCS, partitioner, encTestMode);
           }
 
@@ -857,13 +828,6 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         EncTestMode encTestMode( {ETM_INTRA, ETO_STANDARD, qp, lossless} );
         if( !partitioner.isConsInter() && m_modeCtrl.tryMode( encTestMode, cs, partitioner ) )
         {
-          // *TEST*
-          if (slice.poc == 3 && cs.area.lx() == 124 && cs.area.ly() == 64 && cs.area.lwidth() == 4 && cs.area.lheight() == 4)
-          {
-            if (1)
-            {
-            }
-          }
           xCheckRDCostIntra( tempCS, bestCS, partitioner, encTestMode );
         }
       } // reusing cu

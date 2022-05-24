@@ -741,33 +741,21 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     c->m_GOPList[0].m_CrBetaOffsetDiv2 = 0;
     c->m_GOPList[0].m_temporalId = 0;
 
-#if 0
-    c->m_GOPList[0].m_numRefPicsActive[0] = 1;
-    c->m_GOPList[0].m_numRefPics[0] = 1;
-    c->m_GOPList[0].m_deltaRefPics[0][0] = 1;
-#else
     c->m_GOPList[0].m_numRefPicsActive[0] = 4;
     c->m_GOPList[0].m_numRefPics[0] = 4;
     c->m_GOPList[0].m_deltaRefPics[0][0] = 1;
     c->m_GOPList[0].m_deltaRefPics[0][1] = 2;
     c->m_GOPList[0].m_deltaRefPics[0][2] = 3;
     c->m_GOPList[0].m_deltaRefPics[0][3] = 4;
-#endif
 
     if (sliceType == 'B')
     {
-#if 0
-      c->m_GOPList[0].m_numRefPicsActive[1] = 1;
-      c->m_GOPList[0].m_numRefPics[1] = 1;
-      c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
-#else
       c->m_GOPList[0].m_numRefPicsActive[1] = 4;
       c->m_GOPList[0].m_numRefPics[1] = 4;
       c->m_GOPList[0].m_deltaRefPics[1][0] = 1;
       c->m_GOPList[0].m_deltaRefPics[1][1] = 2;
       c->m_GOPList[0].m_deltaRefPics[1][2] = 3;
       c->m_GOPList[0].m_deltaRefPics[1][3] = 4;
-#endif
     }
 
     c->m_BDOF  = false;
@@ -1980,11 +1968,19 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, ( c->m_decodeBitstreams[0][0] != '\0' || c->m_decodeBitstreams[1][0] != '\0' ) && c->m_maxParallelFrames > 1 && ( c->m_LookAhead || c->m_RCTargetBitrate > 0 ), "Debug-bitstream in frame-parallel mode and enabled rate-control or look-ahead is not supported yet" );
 
 #if GDR_ENABLED
+  if (c->m_gdrEnabled)
+  {
+    vvenc_confirmParameter( c,  c->m_gdrPocStart <= 0, "GdrPocStart must be greater than 0" );
+    vvenc_confirmParameter( c,  c->m_gdrPeriod <= c->m_gdrInterval, "GdrPeriod must be greater than GdrInterval" );
+    vvenc_confirmParameter( c,  (c->m_gdrInterval < 2) || (c->m_SourceWidth/c->m_gdrInterval < 8) , "GdrInterval must be in range of [2 .. SourceWidth/8]" );
+  }
+
   if (c->m_gdrEnabled && c->m_bUseSAO)
   {
     msg.log( VVENC_ERROR, "Warning: VVenC does not support SAO with GDR - SAO will be disabled!\n" );
     c->m_bUseSAO = false;
   }
+
   if (c->m_gdrEnabled && (c->m_alf || c->m_ccalf))
   {
     msg.log( VVENC_ERROR, "Warning: VVenC does not support ALF with GDR - ALF will be disabled!\n" );

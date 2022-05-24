@@ -2295,14 +2295,6 @@ ChromaCbfs IntraSearch::xIntraChromaCodingQT(CodingStructure& cs, Partitioner& p
   if( !currArea.Cb().valid() ) 
     return ChromaCbfs(false);
 
-  // *TEST*
-  if (cs.picture->getPOC() == 2 && currArea.lx() == 44 && currArea.ly() == 76 && currArea.lwidth() == 4 && currArea.lheight() == 4)
-  {
-    if (1)
-    {
-    }
-  }
-
   TransformUnit& currTU     = *cs.getTU( currArea.chromaPos(), CH_C );
   const CodingUnit& cu  = *cs.getCU( currArea.chromaPos(), CH_C, TREE_D );
   ChromaCbfs cbfs(false);
