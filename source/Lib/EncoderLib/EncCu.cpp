@@ -1033,7 +1033,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   int64_t approxBits = m_pcEncCfg->m_qtbttSpeedUp > 0 ? numChild << SCALE_BITS : 0;
 
   const double factor = ( tempCS->currQP[partitioner.chType] > 30 ? 1.1 : 1.075 )
-                      + ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.02 : 0.0 )
+                      + ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.015 : 0.0 )
                       + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
   const double cost   = m_cRdCost.calcRdCost( uint64_t( splitBits + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
