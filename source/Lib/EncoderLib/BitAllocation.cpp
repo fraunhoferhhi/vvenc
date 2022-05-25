@@ -128,21 +128,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
     pSM1 += i2M1Stride;
     if (frameRate <= 31) // 1st-order delta
     {
-#if 1
       taAct= g_pelBufOP.AvgHighPassWithDownsamplingDiff1st (width, height,pSrc,pSM1,iSrcStride, iSM1Stride);
-#else
-      for (int y = 2; y < height - 2; y += 2)
-      {
-        for (int x = 2; x < width - 2; x += 2) // c cols
-        {
-          const int t = (int) pSrc[x] + (int) pSrc[x+1] + (int) pSrc[x+iSrcStride] + (int) pSrc[x+1+iSrcStride]
-                     - ((int) pSM1[x] + (int) pSM1[x+1] + (int) pSM1[x+iSM1Stride] + (int) pSM1[x+1+iSM1Stride]);
-          taAct += (1 + 3 * abs (t)) >> 1;
-        }
-        pSrc += i2M0Stride;
-        pSM1 += i2M1Stride;
-      }
-#endif
     }
     else // 2nd-order delta (diff of diffs)
     {
@@ -151,20 +137,9 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
       CHECK (pSM2 == nullptr || iSM2Stride <= 0 || iSM2Stride < width, "Pel buffer pointer pSM2 must not be null!");
 
       pSM2 += i2M2Stride;
-      for (int y = 2; y < height - 2; y += 2)
-      {
-        for (int x = 2; x < width - 2; x += 2) // c cols
-        {
-          const int t = (int) pSrc[x] + (int) pSrc[x+1] + (int) pSrc[x+iSrcStride] + (int) pSrc[x+1+iSrcStride]
-                 - 2 * ((int) pSM1[x] + (int) pSM1[x+1] + (int) pSM1[x+iSM1Stride] + (int) pSM1[x+1+iSM1Stride])
-                      + (int) pSM2[x] + (int) pSM2[x+1] + (int) pSM2[x+iSM2Stride] + (int) pSM2[x+1+iSM2Stride];
-          taAct += abs (t);
-        }
-        pSrc += i2M0Stride;
-        pSM1 += i2M1Stride;
-        pSM2 += i2M2Stride;
-      }
+    taAct= g_pelBufOP.AvgHighPassWithDownsamplingDiff2nd (width, height,pSrc,pSM1,pSM2,iSrcStride, iSM1Stride, iSM2Stride);
     }
+
 
     meanAct += (2.0 * taAct) / double ((width - 4) * (height - 4));
   }

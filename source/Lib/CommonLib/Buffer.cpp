@@ -353,12 +353,9 @@ uint64_t AvgHighPassWithDownsamplingCore( const int width, const int height, con
  }
  return saAct;
 }
-uint64_t AvgHighPassWithDownsamplingDiff1stCore (const uint32_t width, const uint32_t height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride)
+uint64_t AvgHighPassWithDownsamplingDiff1stCore (const int width, const int  height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride)
 {
   uint64_t taAct = 0;
-  //pSrc += iSrcStride;
-  //pSrcM1 += iSrcM1Stride;
-#if 1
   pSrc -= iSrcStride;
   pSrc -= iSrcStride;
   pSrcM1-=iSrcM1Stride;
@@ -370,58 +367,31 @@ uint64_t AvgHighPassWithDownsamplingDiff1stCore (const uint32_t width, const uin
     {
       const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
                  - ((int)pSrcM1[y*iSrcM1Stride + x] + (int)pSrcM1[y*iSrcM1Stride + x+1] + (int)pSrcM1[(y+1)*iSrcM1Stride + x] + (int)pSrcM1[(y+1)*iSrcM1Stride + x+1]);
- //     taAct += abs (t);
-
-           taAct += (1 + 3 * abs (t)) >> 1;
-            if (taAct )
-              printf("x %d y %d tact %d taSact %ld \n",x,y,t,taAct);
-
-//      pSrcM1[y*iSrcStride + x  ] = pSrc  [y*iSrcStride + x  ];  pSrcM1[(y+1)*iSrcStride + x  ] = pSrc  [(y+1)*iSrcStride + x  ];
-//      pSrcM1[y*iSrcStride + x+1] = pSrc  [y*iSrcStride + x+1];  pSrcM1[(y+1)*iSrcStride + x+1] = pSrc  [(y+1)*iSrcStride + x+1];
+      taAct += (1 + 3 * abs (t)) >> 1;
     }
   }
-#else
-  for (int y = 2; y < height - 2; y += 2)
-   {
-     for (int x = 2; x < width - 2; x += 2) // c cols
-     {
-       const int t = (int) pSrc[x] + (int) pSrc[x+1] + (int) pSrc[x+iSrcStride] + (int) pSrc[x+1+iSrcStride]
-                  - ((int) pSrcM1[x] + (int) pSrcM1[x+1] + (int) pSrcM1[x+iSrcM1Stride] + (int) pSrcM1[x+1+iSrcM1Stride]);
-       taAct += (1 + 3 * abs (t)) >> 1;
-//       taAct += abs (t);
-     }
-//     if (taAct )
-//       printf("width %d taSact %ld \n",width,taAct);
-
-     pSrc += iSrcStride*2;
-     pSrcM1 += iSrcM1Stride*2;
-   }
-#endif
-  if (taAct )
-  {
-    printf("width %d taSact %ld \n",width,taAct);
-    exit(1);
-  }
-  //taAct=(1 + 3 * taAct)>>1;
   return (taAct );
 }
 
-uint64_t diff2nd (const uint32_t width, const uint32_t height, const int16_t *pSrc, int16_t *pSrcM1, int16_t *pSrcM2, const int iSrcStride)
+uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int height,const Pel* pSrc,const Pel* pSrcM1,const Pel* pSrcM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
 {
   uint64_t taAct = 0;
 
-  for (uint32_t y = 0; y < height; y += 2)
+  pSrc -= iSrcStride;
+  pSrc -= iSrcStride;
+  pSrcM1-=iSM1Stride;
+  pSrcM1-=iSM1Stride;
+  pSrcM2-=iSM2Stride;
+  pSrcM2-=iSM2Stride;
+
+  for (uint32_t y = 2; y < height-2; y += 2)
   {
-    for (uint32_t x = 0; x < width; x += 2)
+    for (uint32_t x = 2; x < width-2; x += 2)
     {
       const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
-             - 2 * ((int)pSrcM1[y*iSrcStride + x] + (int)pSrcM1[y*iSrcStride + x+1] + (int)pSrcM1[(y+1)*iSrcStride + x] + (int)pSrcM1[(y+1)*iSrcStride + x+1])
-                  + (int)pSrcM2[y*iSrcStride + x] + (int)pSrcM2[y*iSrcStride + x+1] + (int)pSrcM2[(y+1)*iSrcStride + x] + (int)pSrcM2[(y+1)*iSrcStride + x+1];
+                                                                                                                                      - 2 * ((int)pSrcM1[y*iSM1Stride + x] + (int)pSrcM1[y*iSM1Stride + x+1] + (int)pSrcM1[(y+1)*iSM1Stride + x] + (int)pSrcM1[(y+1)*iSM1Stride + x+1])
+                                                                                                                                      + (int)pSrcM2[y*iSM2Stride + x] + (int)pSrcM2[y*iSM2Stride + x+1] + (int)pSrcM2[(y+1)*iSM2Stride + x] + (int)pSrcM2[(y+1)*iSM2Stride + x+1];
       taAct += (uint64_t) abs(t);
-      pSrcM2[y*iSrcStride + x  ] = pSrcM1[y*iSrcStride + x  ];  pSrcM2[(y+1)*iSrcStride + x  ] = pSrcM1[(y+1)*iSrcStride + x  ];
-      pSrcM2[y*iSrcStride + x+1] = pSrcM1[y*iSrcStride + x+1];  pSrcM2[(y+1)*iSrcStride + x+1] = pSrcM1[(y+1)*iSrcStride + x+1];
-      pSrcM1[y*iSrcStride + x  ] = pSrc  [y*iSrcStride + x  ];  pSrcM1[(y+1)*iSrcStride + x  ] = pSrc  [(y+1)*iSrcStride + x  ];
-      pSrcM1[y*iSrcStride + x+1] = pSrc  [y*iSrcStride + x+1];  pSrcM1[(y+1)*iSrcStride + x+1] = pSrc  [(y+1)*iSrcStride + x+1];
     }
   }
   return (taAct);
@@ -473,6 +443,7 @@ PelBufferOps::PelBufferOps()
   fillPtrMap        = fillMapPtr_Core;
   AvgHighPassWithDownsampling = AvgHighPassWithDownsamplingCore;
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1stCore;
+  AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
 
 }
 
