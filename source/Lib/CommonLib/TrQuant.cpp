@@ -249,7 +249,7 @@ TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
   m_invLfnstNxN = xInvLfnstNxNCore;
   m_fwdLfnstNxN = xFwdLfnstNxNCore;
 
-#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TCOEFF_OPS
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TRAFO
   initTrQuantX86();
 #endif
 }

@@ -865,36 +865,36 @@ void simdFwdLfnstNxN( int* src, int* dst, const uint32_t mode, const uint32_t in
 
   const __m128i vzero  = _mm_setzero_si128();
 
-  for( int j = 0; j < zeroOutSize; j += 4 )
+  for( int j = 0; j < zeroOutSize; j += 4, out += 4 )
   {
     __m128i vout[4];
 
-    for( int k = 0; k < 4; k++, out += 4 )
+    for( int k = 0; k < 4; k++ )
     {
       int* srcPtr = src;
       const int8_t* trMatTmp = trMat;
 
       __m128i vsum = vzero;
 
-      for( int i = 0; i < trSize; i += 16 )
+      for( int i = 0; i < trSize; i += 16, srcPtr += 16, trMatTmp += 16 )
       {
-        __m128i vtrc = _mm_load_si128( ( const __m128i* ) &trMatTmp[i] );
+        __m128i vtrc = _mm_loadu_si128( ( const __m128i* ) trMatTmp );
         __m128i vtrl = _mm_cvtepi8_epi16( vtrc );
         __m128i vtrh = _mm_cvtepi8_epi16( _mm_unpackhi_epi64( vtrc, vzero ) );
 
-        __m128i vsrc0 = _mm_load_si128( ( const __m128i* ) &srcPtr[0] );
+        __m128i vsrc0 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[0] );
                 vtrc  = _mm_cvtepi16_epi32( vtrl );
                 vsrc0 = _mm_mullo_epi32( vsrc0, vtrc );
               
-        __m128i vsrc1 = _mm_load_si128( ( const __m128i* ) &srcPtr[4] );
+        __m128i vsrc1 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[4] );
                 vtrc  = _mm_cvtepi16_epi32( _mm_unpackhi_epi64( vtrl, vzero ) );
                 vsrc1 = _mm_mullo_epi32( vsrc1, vtrc );
               
-        __m128i vsrc2 = _mm_load_si128( ( const __m128i* ) &srcPtr[8] );
+        __m128i vsrc2 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[8] );
                 vtrc  = _mm_cvtepi16_epi32( vtrh );
                 vsrc2 = _mm_mullo_epi32( vsrc2, vtrc );
               
-        __m128i vsrc3 = _mm_load_si128( ( const __m128i* ) &srcPtr[12] );
+        __m128i vsrc3 = _mm_loadu_si128( ( const __m128i* ) &srcPtr[12] );
                 vtrc  = _mm_cvtepi16_epi32( _mm_unpackhi_epi64( vtrh, vzero ) );
                 vsrc3 = _mm_mullo_epi32( vsrc3, vtrc );
 
