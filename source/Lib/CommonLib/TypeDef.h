@@ -720,6 +720,12 @@ public:
 
     CHECKD( _size > N, "capacity exceeded" );
   }
+  static_vector( const static_vector<T, N>& other ) : _size( other._size )
+  {
+    static_assert( std::is_trivially_copyable<T>::value, "the type has to be trivially copyable!" );
+
+    memcpy( _arr, other._arr, sizeof( T ) * _size );
+  }
   static_vector& operator=( std::initializer_list<T> _il )
   {
     _size = 0;
