@@ -648,20 +648,24 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   // update pending RC
   // first pic has been written to bitstream
   // therefore we have at least for this picture a valid total bit and head bit count
-  for( auto pic : m_rcUpdateList )
+  if( !m_rcUpdateList.empty() && m_rcUpdateList.front() == outPic )
   {
-    if( pic != outPic )
-    {
-      pic->actualHeadBits  = outPic->actualHeadBits;
-      pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
-    }
     if( m_pcEncCfg->m_RCTargetBitrate > 0 )
     {
-      m_pcRateCtrl->xUpdateAfterPicRC( pic );
+      for( auto pic : m_rcUpdateList )
+      {
+        if( pic != outPic )
+        {
+          pic->actualHeadBits = outPic->actualHeadBits;
+          pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
+        }
+        //if( m_pcEncCfg->m_RCTargetBitrate > 0 )
+        {
+          m_pcRateCtrl->xUpdateAfterPicRC( pic );
+        }
+      }
     }
-  }
-  if( !m_rcUpdateList.empty() )
-  {
+
     if( lockStepMode )
       m_rcUpdateList.clear();
     else

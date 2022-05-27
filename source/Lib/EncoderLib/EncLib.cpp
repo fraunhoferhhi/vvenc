@@ -239,7 +239,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_gopEncoder = new EncGOP( msg );
   m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
-  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + Log2(m_encCfg.m_GOPSize) + 2 + (m_encCfg.m_LookAhead ? 0 : 5);
+  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + Log2(m_encCfg.m_GOPSize) + 2 + (m_encCfg.m_LookAhead ? 0 : Log2(m_encCfg.m_GOPSize));
 
   if( m_rateCtrl->rcIsFinalPass )
   {
