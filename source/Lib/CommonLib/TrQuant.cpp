@@ -163,6 +163,55 @@ template<int signedMode> void invTransformCbCr( PelBuf& resCb, PelBuf& resCr )
   }
 }
 
+void xFwdLfnstNxNCore(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
+{
+  const int8_t *trMat  = (size > 4) ? g_lfnstFwd8x8[mode][index][0] : g_lfnstFwd4x4[mode][index][0];
+  const int     trSize = (size > 4) ? 48 : 16;
+  int           coef;
+  int *         out = dst;
+
+  for (int j = 0; j < zeroOutSize; j++)
+  {
+    int *         srcPtr   = src;
+    const int8_t *trMatTmp = trMat;
+    coef                   = 0;
+    for (int i = 0; i < trSize; i++)
+    {
+      coef += *srcPtr++ * *trMatTmp++;
+    }
+    *out++ = (coef + 64) >> 7;
+    trMat += trSize;
+  }
+
+  ::memset(out, 0, (trSize - zeroOutSize) * sizeof(int));
+}
+
+
+void xInvLfnstNxNCore(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
+{
+  int           maxLog2TrDynamicRange = 15;
+  const TCoeff  outputMinimum         = -(1 << maxLog2TrDynamicRange);
+  const TCoeff  outputMaximum         = (1 << maxLog2TrDynamicRange) - 1;
+  const int8_t *trMat                 = (size > 4) ? g_lfnstInv8x8[mode][index][0] : g_lfnstInv4x4[mode][index][0];
+  const int     trSize                = (size > 4) ? 48 : 16;
+  int           resi;
+  int *         out                   = dst;
+
+  for( int j = 0; j < trSize; j++, trMat += 16 )
+  {
+    resi = 0;
+    const int8_t* trMatTmp = trMat;
+    int*          srcPtr   = src;
+
+    for( int i = 0; i < zeroOutSize; i++ )
+    {
+      resi += *srcPtr++ * *trMatTmp++;
+    }
+
+    *out++ = Clip3( outputMinimum, outputMaximum, ( int ) ( resi + 64 ) >> 7 );
+  }
+}
+
 // ====================================================================================================================
 // TrQuant class member functions
 // ====================================================================================================================
@@ -196,6 +245,13 @@ TrQuant::TrQuant() : m_scalingListEnabled(false), m_quant( nullptr )
     m_fwdICT[ 3]  = fwdTransformCbCr< 3>;
     m_fwdICT[-3]  = fwdTransformCbCr<-3>;
   }
+
+  m_invLfnstNxN = xInvLfnstNxNCore;
+  m_fwdLfnstNxN = xFwdLfnstNxNCore;
+
+#if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_TCOEFF_OPS
+  initTrQuantX86();
+#endif
 }
 
 TrQuant::~TrQuant()
@@ -775,60 +831,6 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   }
 }
 
-
-void TrQuant::xFwdLfnstNxN(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
-{
-  const int8_t *trMat  = (size > 4) ? g_lfnst8x8[mode][index][0] : g_lfnst4x4[mode][index][0];
-  const int     trSize = (size > 4) ? 48 : 16;
-  int           coef;
-  int *         out = dst;
-
-  assert(index < 3);
-
-  for (int j = 0; j < zeroOutSize; j++)
-  {
-    int *         srcPtr   = src;
-    const int8_t *trMatTmp = trMat;
-    coef                   = 0;
-    for (int i = 0; i < trSize; i++)
-    {
-      coef += *srcPtr++ * *trMatTmp++;
-    }
-    *out++ = (coef + 64) >> 7;
-    trMat += trSize;
-  }
-
-  ::memset(out, 0, (trSize - zeroOutSize) * sizeof(int));
-}
-
-
-void TrQuant::xInvLfnstNxN(int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize)
-{
-  int           maxLog2TrDynamicRange = 15;
-  const TCoeff  outputMinimum         = -(1 << maxLog2TrDynamicRange);
-  const TCoeff  outputMaximum         = (1 << maxLog2TrDynamicRange) - 1;
-  const int8_t *trMat                 = (size > 4) ? g_lfnst8x8[mode][index][0] : g_lfnst4x4[mode][index][0];
-  const int     trSize                = (size > 4) ? 48 : 16;
-  int           resi;
-  int *         out = dst;
-
-  assert(index < 3);
-
-  for (int j = 0; j < trSize; j++)
-  {
-    resi                   = 0;
-    const int8_t *trMatTmp = trMat;
-    int *         srcPtr   = src;
-    for (int i = 0; i < zeroOutSize; i++)
-    {
-      resi += *srcPtr++ * *trMatTmp;
-      trMatTmp += trSize;
-    }
-    *out++ = Clip3(outputMinimum, outputMaximum, (int) (resi + 64) >> 7);
-    trMat++;
-  }
-}
-
 uint32_t TrQuant::xGetLFNSTIntraMode( const Area& tuArea, const uint32_t dirMode )
 {
   if (dirMode < 2)
@@ -912,8 +914,7 @@ void TrQuant::xInvLfnst(const TransformUnit &tu, const ComponentID compID)
         scanPtr++;
       }
 
-      xInvLfnstNxN(m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize,
-                  (tu4x4Flag || tu8x8Flag) ? 8 : 16);
+      m_invLfnstNxN( m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
 
       lfnstTemp = m_tempOutMatrix;   // inverse spectral rearrangement
 
@@ -1059,8 +1060,7 @@ void TrQuant::xFwdLfnst(const TransformUnit &tu, const ComponentID compID, const
         }
       }
 
-      xFwdLfnstNxN(m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize,
-                  (tu4x4Flag || tu8x8Flag) ? 8 : 16);
+      m_fwdLfnstNxN( m_tempInMatrix, m_tempOutMatrix, g_lfnstLut[intraMode], lfnstIdx - 1, sbSize, ( tu4x4Flag || tu8x8Flag ) ? 8 : 16 );
 
       lfnstTemp                        = m_tempOutMatrix;   // forward spectral rearrangement
       coeffTemp                        = tempCoeff;
