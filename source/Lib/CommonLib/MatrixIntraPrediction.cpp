@@ -277,13 +277,13 @@ void MatrixIntraPrediction::predictionUpsampling1DHor(Pel* const dst, const Pel*
           Pel* currDst = dstLine;
     for( SizeType idxUpsmpDim = 0; idxUpsmpDim < predPredSize; idxUpsmpDim++ )
     {
-      int scaledVal = ( *before ) << log2UpsmpFactor;
+      const int valDiff   = *behind - *before;
+            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
       for( SizeType pos = 0; pos < upsmpFactor; pos++)
       {
-        scaledVal -= *before;
-        scaledVal += *behind;
-        *currDst = (scaledVal + roundingOffset) >> log2UpsmpFactor;
-        currDst ++;
+        scaledVal += valDiff;
+        *currDst   = scaledVal >> log2UpsmpFactor;
+        currDst++;
       }
       before = behind;
       behind ++;
@@ -312,12 +312,13 @@ void MatrixIntraPrediction::predictionUpsampling1DVer(Pel* const dst, const Pel*
           Pel* currDst = dstLine;
     for( SizeType idxUpsmpDim = 0; idxUpsmpDim < inHeight; idxUpsmpDim++ )
     {
-      int scaledVal = ( *before ) << log2UpsmpFactor;
+      const int valDiff   = *behind - *before;
+            int scaledVal = ( ( *before ) << log2UpsmpFactor ) + roundingOffset;
+
       for( SizeType pos = 0; pos < upsmpFactor; pos++)
       {
-        scaledVal -= *before;
-        scaledVal += *behind;
-        *currDst = (scaledVal + roundingOffset) >> log2UpsmpFactor;
+        scaledVal += valDiff;
+        *currDst   = scaledVal >> log2UpsmpFactor;
         currDst += outWidth;
       }
       before = behind;
