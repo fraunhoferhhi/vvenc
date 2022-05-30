@@ -507,7 +507,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 
         // in non-lockstep mode, check encoding of output picture done
         // in lockstep mode, check all pictures encoded
-        if( m_procList.empty() && ( ! lockStepMode || (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
+        if( ( ! lockStepMode && ( m_gopEncListOutput.front()->isReconstructed ) )
+            || ( lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
         {
           break;
         }
@@ -530,35 +531,29 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
           continue;
         }
 
-        pic        = *picItr;
+        pic = *picItr;
+
+        // rate-control with look-ahead: init next chunk
+        if( m_pcEncCfg->m_RCTargetBitrate > 0 && m_pcEncCfg->m_LookAhead )
+        {
+          CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
+          if( m_numPicsCoded == 0 || ( pic->poc + ( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0 ) ) % m_pcEncCfg->m_GOPSize == 0 )
+          { 
+            // check the RC final pass requirement for availability of preprocessed pictures (GOP+1)
+            if( m_pcRateCtrl->lastPOCInCache() <= pic->poc && !flush )
+            {
+              break;
+            }
+            m_pcRateCtrl->processFirstPassData( flush, pic->poc );
+          }
+        }
         picEncoder = m_freePicEncoderList.front();
         m_freePicEncoderList.pop_front();
       }
 
       CHECK( picEncoder == nullptr, "no free picture encoder available" );
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
-
       m_procList.remove( pic );
-
-      // rate-control with look-ahead: init next chunk
-      if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-      {
-        CHECK( m_isPreAnalysis, "rate control enabled for pre analysis" );
-        if( m_numPicsCoded == 0 )
-        {
-          if ( m_pcEncCfg->m_LookAhead )
-          {
-            m_pcRateCtrl->processFirstPassData( flush, pic->poc );
-          }
-        }
-        else
-        {
-          if ( m_pcEncCfg->m_LookAhead && ( pic->poc + ( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0 ) ) % m_pcEncCfg->m_GOPSize == 0 )
-          {
-            m_pcRateCtrl->processFirstPassData( flush, pic->poc );
-          }
-        }
-      }
 
       // decoder in encoder
       bool decPic = false;
