@@ -229,7 +229,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_LookAhead )
   {
     m_preEncoder = new EncGOP( msg );
-    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
+    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
     m_maxNumPicShared += m_firstPassCfg.m_GOPSize + 1 + Log2(m_firstPassCfg.m_GOPSize) + 2;

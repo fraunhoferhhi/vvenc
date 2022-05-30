@@ -505,11 +505,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
         if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
-        // in non-lockstep mode, check encoding of output picture done
         // in lockstep mode, check all pictures encoded
         if( m_procList.empty() && ( ! lockStepMode || (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
-//         if( ( ! lockStepMode && ( m_gopEncListOutput.front()->isReconstructed ) )
-//             || ( lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
         {
           break;
         }
@@ -522,7 +519,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         if( m_freePicEncoderList.empty() || ! nextPicReady )
         {
           // non-blocking mode: wait on top level, let other stages do their jobs
-          if( isNonBlocking() )
+          // in non-lockstep mode, check if next picture can be output
+          if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isReconstructed ) )
           {
             break;
           }
