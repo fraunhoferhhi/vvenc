@@ -507,8 +507,9 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 
         // in non-lockstep mode, check encoding of output picture done
         // in lockstep mode, check all pictures encoded
-        if( ( ! lockStepMode && ( m_gopEncListOutput.front()->isReconstructed ) )
-            || ( lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
+        if( m_procList.empty() && ( ! lockStepMode || (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
+//         if( ( ! lockStepMode && ( m_gopEncListOutput.front()->isReconstructed ) )
+//             || ( lockStepMode && m_procList.empty() && (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
         {
           break;
         }
