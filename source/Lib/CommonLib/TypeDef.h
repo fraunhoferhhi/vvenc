@@ -690,7 +690,7 @@ template<typename T, size_t N>
 class static_vector
 {
   T _arr[ N ];
-  size_t _size;
+  size_t _size = 0;
 
 public:
 
@@ -706,26 +706,32 @@ public:
 
   static const size_type max_num_elements = N;
 
-  static_vector() : _size( 0 )                                 { }
-  static_vector( size_t N_ ) : _size( N_ )                     { }
-  static_vector( size_t N_, const T& _val ) : _size( 0 )       { resize( N_, _val ); }
+  static_vector()                                  { }
+  static_vector( size_t N_ ) : _size( N_ )         { }
+  static_vector( size_t N_, const T& _val )        { resize( N_, _val ); }
   template<typename It>
-  static_vector( It _it1, It _it2 ) : _size( 0 )               { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
-  static_vector( std::initializer_list<T> _il ) : _size( 0 )
+  static_vector( It _it1, It _it2 )                { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
+  static_vector( std::initializer_list<T> _il )
   {
-    typename std::initializer_list<T>::iterator _src1 = _il.begin();
-    typename std::initializer_list<T>::iterator _src2 = _il.end();
+    auto _src1 = _il.begin();
+    auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 
     CHECKD( _size > N, "capacity exceeded" );
   }
+  static_vector( const static_vector<T, N>& other ) : _size( other._size )
+  {
+    static_assert( std::is_trivially_copyable<T>::value, "the type has to be trivially copyable!" );
+
+    memcpy( _arr, other._arr, sizeof( T ) * _size );
+  }
   static_vector& operator=( std::initializer_list<T> _il )
   {
     _size = 0;
 
-    typename std::initializer_list<T>::iterator _src1 = _il.begin();
-    typename std::initializer_list<T>::iterator _src2 = _il.end();
+    auto _src1 = _il.begin();
+    auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 

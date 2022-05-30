@@ -1986,7 +1986,7 @@ void InterSearch::xMotionEstimation(CodingUnit& cu, CPelUnitBuf& origBuf, RefPic
     origBufTmp.copyFrom(origBuf);
     origBufTmp.removeHighFreq( otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs );
    
-    origBufTmpCnst = m_tmpStorageLCU.getCompactBuf( cu );
+    origBufTmpCnst = origBufTmp;
     pBuf           = &origBufTmpCnst;
     fWeight        = xGetMEDistortionWeight( cu.BcwIdx, refPicList );
   }
@@ -5557,7 +5557,7 @@ void InterSearch::xAffineMotionEstimation(CodingUnit& cu,
     origBufTmp.copyFrom(origBuf);
     origBufTmp.removeHighFreq(otherBuf, m_pcEncCfg->m_bClipForBiPredMeEnabled, cu.slice->clpRngs);
 
-    origBufTmpCnst = m_tmpStorageLCU.getCompactBuf(cu);
+    origBufTmpCnst = origBufTmp;
     pBuf           = &origBufTmpCnst;
     fWeight        = xGetMEDistortionWeight(cu.BcwIdx, refPicList);
   }
