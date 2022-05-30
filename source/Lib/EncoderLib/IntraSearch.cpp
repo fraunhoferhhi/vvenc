@@ -1514,7 +1514,7 @@ void IntraSearch::xIntraCodingLumaQT(CodingStructure& cs, Partitioner& partition
     endLfnstIdx = 0;
   }
   int bestMTS = 0;
-  int EndMTS  = mtsAllowed ? m_pcEncCfg->m_MTSIntraMaxCand +1 : 0;
+  int EndMTS  = mtsAllowed ? m_pcEncCfg->m_MTSIntraMaxCand : 0;
   if (cu.ispMode && (EndMTS || endLfnstIdx))
   {
     EndMTS = 0;
