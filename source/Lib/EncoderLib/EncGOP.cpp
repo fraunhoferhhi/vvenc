@@ -619,7 +619,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
 
   // in lock-step mode, start output only if all pictures in RC-chunk finished (all encoders are free)
   if( !nextPicReadyForOutput() || 
-    ( lockStepMode && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && m_rcUpdateList.front() == m_gopEncListOutput.front() ) )
+    ( lockStepMode && m_rcUpdateList.front() == m_gopEncListOutput.front() && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames ) )
   {
     return;
   }
@@ -653,10 +653,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
           pic->actualHeadBits = outPic->actualHeadBits;
           pic->actualTotalBits = pic->sliceDataStreams[0].getNumberOfWrittenBits();
         }
-        //if( m_pcEncCfg->m_RCTargetBitrate > 0 )
-        {
-          m_pcRateCtrl->xUpdateAfterPicRC( pic );
-        }
+        m_pcRateCtrl->xUpdateAfterPicRC( pic );
       }
     }
 
