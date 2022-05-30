@@ -1019,9 +1019,12 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   const TempCtx  ctxSplitFlags( m_CtxCache, SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), m_CABACEstimator->getCtx()));
 
   m_CABACEstimator->resetBits();
-
   m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
+  partitioner.modeType = modeTypeParent;
   m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
+  partitioner.modeType = modeTypeChild;
+
+  const int64_t splitBits = m_CABACEstimator->getEstFracBits();
 
   int numChild = 3;
   if( split == CU_VERT_SPLIT || split == CU_HORZ_SPLIT ) numChild--;
@@ -1033,13 +1036,12 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
                       + ( m_pcEncCfg->m_qtbttSpeedUp > 0 ? 0.01 : 0.0 )
                       + ( ( m_pcEncCfg->m_qtbttSpeedUp > 0 && isChroma( partitioner.chType ) ) ? 0.2 : 0.0 );
 
-  const double cost   = m_cRdCost.calcRdCost( uint64_t( m_CABACEstimator->getEstFracBits() + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
+  const double cost   = m_cRdCost.calcRdCost( uint64_t( splitBits + approxBits + ( ( bestCS->fracBits ) / factor ) ), Distortion( bestCS->dist / factor ) ) + bestCS->costDbOffset / factor;
 
-  m_CABACEstimator->getCtx() = SubCtx(CtxSet(Ctx::SplitFlag(), split_ctx_size), ctxSplitFlags);
-
-  if (cost > bestCS->cost + bestCS->costDbOffset )
+  if( cost > bestCS->cost + bestCS->costDbOffset )
   {
-//    DTRACE( g_trace_ctx, D_TMP, "%d exit split %f %f %f\n", g_trace_ctx->getChannelCounter(D_TMP), cost, bestCS->cost, bestCS->costDbOffset );
+    m_CABACEstimator->getCtx() = SubCtx( CtxSet( Ctx::SplitFlag(), split_ctx_size ), ctxSplitFlags );
+    // DTRACE( g_trace_ctx, D_TMP, "%d exit split %f %f %f\n", g_trace_ctx->getChannelCounter(D_TMP), cost, bestCS->cost, bestCS->costDbOffset );
     xCheckBestMode( tempCS, bestCS, partitioner, encTestMode );
     return;
   }
@@ -1266,35 +1268,10 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
     partitioner.modeType = MODE_TYPE_ALL;
   }
 
-  // Finally, generate split-signaling bits for RD-cost check
-  const PartSplit implicitSplit = partitioner.getImplicitSplit( *tempCS );
-
-  {
-    bool enforceQT = implicitSplit == CU_QUAD_SPLIT;
-
-    // LARGE CTU bug
-    if( m_pcEncCfg->m_useFastLCTU )
-    {
-      unsigned minDepth = m_modeCtrl.comprCUCtx->minDepth;
-      if( minDepth > partitioner.currQtDepth )
-      {
-        // enforce QT
-        enforceQT = true;
-      }
-    }
-
-    if( !enforceQT )
-    {
-      m_CABACEstimator->resetBits();
-
-      m_CABACEstimator->split_cu_mode( split, *tempCS, partitioner );
-      partitioner.modeType = modeTypeParent;
-      m_CABACEstimator->mode_constraint( split, *tempCS, partitioner, modeTypeChild );
-      tempCS->fracBits += m_CABACEstimator->getEstFracBits(); // split bits
-    }
-  }
-
-  tempCS->cost = m_cRdCost.calcRdCost( tempCS->fracBits, tempCS->dist );
+  // Finally, add split-signaling bits for RD-cost check
+  tempCS->fracBits += splitBits; // split bits
+  tempCS->cost      = m_cRdCost.calcRdCost( tempCS->fracBits, tempCS->dist );
+  partitioner.modeType = modeTypeParent;
 
   // Check Delta QP bits for splitted structure
   if( !qgEnableChildren ) // check at deepest QG level only
@@ -1305,7 +1282,7 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   // slice/slice-segment must be made prior to this CTU.
   // This can be achieved by forcing the decision to be that of the rpcTempCU.
   // The exception is each slice / slice-segment must have at least one CTU.
-  if (bestCS->cost == MAX_DOUBLE)
+  if( bestCS->cost == MAX_DOUBLE )
   {
     bestCS->costDbOffset = 0;
   }
@@ -1326,12 +1303,12 @@ void EncCu::xCheckModeSplitInternal(CodingStructure *&tempCS, CodingStructure *&
   // RD check for sub partitioned coding structure.
   xCheckBestMode( tempCS, bestCS, partitioner, encTestMode, m_EDO );
 
-  if( isAffMVInfoSaved)
+  if( isAffMVInfoSaved )
   {
     m_cInterSearch.m_AffineProfList->addAffMVInfo(tmpMVInfo);
   }
 
-  if (!tempCS->slice->isIntra() && isUniMvInfoSaved)
+  if( !tempCS->slice->isIntra() && isUniMvInfoSaved )
   {
     m_cInterSearch.m_BlkUniMvInfoBuffer->addUniMvInfo(tmpUniMvInfo);
   }

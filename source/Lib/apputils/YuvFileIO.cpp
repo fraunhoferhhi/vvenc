@@ -638,14 +638,13 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
     frameSize *= wordsize;
   }
 
-  std::streamoff offsetAdditional = 0;
   if( m_y4mMode )
   {
     const char Y4MHeader[] = {'F','R','A','M','E'};
-    offsetAdditional = sizeof(Y4MHeader) + 1;  /* assume basic FRAME\n headers */
+    frameSize += (sizeof(Y4MHeader) + 1);  /* assume basic FRAME\n headers */;
   }
 
-  const std::streamoff offset = (frameSize * numFrames) + offsetAdditional;
+  const std::streamoff offset = frameSize * numFrames;
 
   // attempt to seek
   if ( !! m_cHandle.seekg( offset, std::ios::cur ) )
