@@ -3602,6 +3602,39 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
               int l = k;
               
+              
+              for( ; l < ( shape.numCoeff - 3 ); l += 4 )
+              {
+                __m128i vmacc[4];
+
+                for( int ll = 0; ll < 4; ll++ )
+                {
+                  const Pel *Elocall = &ELocal[( l + ll ) << 4];
+
+                  __m128i melocall0 = _mm_loadu_si128( ( const __m128i * ) &Elocall[0] );
+                  __m128i melocall8 = _mm_loadu_si128( ( const __m128i * ) &Elocall[8] );
+
+                  __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                  __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+
+                  __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+
+                  vmacc[ll] = mmacc;
+                }
+
+                __m128i
+                mmacc = _mm_hadd_epi32( _mm_hadd_epi32( vmacc[0], vmacc[1] ),
+                                        _mm_hadd_epi32( vmacc[2], vmacc[3] ) );
+                
+                __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
+
+                __m128 mcov = _mm_loadu_ps( cov );
+                mcov = _mm_add_ps( mcov, mmaccf );
+                _mm_storeu_ps( cov, mcov );
+
+                cov += 4;
+              }
+              
               for( ; l < shape.numCoeff; l++ )
               {
                 const Pel* Elocall = &ELocal[l << 4];
@@ -3615,8 +3648,10 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                 __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
+                
+                __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
 
-                *cov++ += _mm_cvtsi128_si32( mmacc );
+                *cov++ += _mm_cvtss_f32( mmaccf );
               }
 
               const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
