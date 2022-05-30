@@ -152,7 +152,7 @@ UnitArea::UnitArea(const ChromaFormat _chromaFormat, const Area& _area) : chroma
 
   for (uint32_t i = 0; i < numCh; i++)
   {
-    blocks[i] = CompArea(ComponentID(i), chromaFormat, _area, true);
+    new (&blocks[i]) CompArea(ComponentID(i), chromaFormat, _area, true);
   }
 }
 

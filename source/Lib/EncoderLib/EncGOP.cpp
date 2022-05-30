@@ -563,7 +563,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
       }
       else
       {
-        if ( m_pcEncCfg->m_LookAhead && pic->poc % m_pcEncCfg->m_GOPSize == 0 )
+        if ( m_pcEncCfg->m_LookAhead && ( pic->poc + ( m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0 ) ) % m_pcEncCfg->m_GOPSize == 0 )
         {
           m_pcRateCtrl->processFirstPassData( flush, pic->poc );
         }

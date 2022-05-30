@@ -690,7 +690,7 @@ template<typename T, size_t N>
 class static_vector
 {
   T _arr[ N ];
-  size_t _size;
+  size_t _size = 0;
 
 public:
 
@@ -706,26 +706,32 @@ public:
 
   static const size_type max_num_elements = N;
 
-  static_vector() : _size( 0 )                                 { }
-  static_vector( size_t N_ ) : _size( N_ )                     { }
-  static_vector( size_t N_, const T& _val ) : _size( 0 )       { resize( N_, _val ); }
+  static_vector()                                  { }
+  static_vector( size_t N_ ) : _size( N_ )         { }
+  static_vector( size_t N_, const T& _val )        { resize( N_, _val ); }
   template<typename It>
-  static_vector( It _it1, It _it2 ) : _size( 0 )               { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
-  static_vector( std::initializer_list<T> _il ) : _size( 0 )
+  static_vector( It _it1, It _it2 )                { while( _it1 < _it2 ) _arr[ _size++ ] = *_it1++; }
+  static_vector( std::initializer_list<T> _il )
   {
-    typename std::initializer_list<T>::iterator _src1 = _il.begin();
-    typename std::initializer_list<T>::iterator _src2 = _il.end();
+    auto _src1 = _il.begin();
+    auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 
     CHECKD( _size > N, "capacity exceeded" );
   }
+  static_vector( const static_vector<T, N>& other ) : _size( other._size )
+  {
+    static_assert( std::is_trivially_copyable<T>::value, "the type has to be trivially copyable!" );
+
+    memcpy( _arr, other._arr, sizeof( T ) * _size );
+  }
   static_vector& operator=( std::initializer_list<T> _il )
   {
     _size = 0;
 
-    typename std::initializer_list<T>::iterator _src1 = _il.begin();
-    typename std::initializer_list<T>::iterator _src2 = _il.end();
+    auto _src1 = _il.begin();
+    auto _src2 = _il.end();
 
     while( _src1 < _src2 ) _arr[ _size++ ] = *_src1++;
 
@@ -767,34 +773,37 @@ public:
 
   iterator        insert( const_iterator _pos, const T& _val )
                                                 { CHECKD( _size >= N, "capacity exceeded" );
+                                                  iterator dst = _arr + ( _pos - _arr );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + 1] = _arr[i];
-                                                  *const_cast<iterator>( _pos ) = _val;
+                                                  *dst = _val;
                                                   _size++;
-                                                  return const_cast<iterator>( _pos ); }
+                                                  return dst; }
 
   iterator        insert( const_iterator _pos, T&& _val )
                                                 { CHECKD( _size >= N, "capacity exceeded" );
+                                                  iterator dst = _arr + ( _pos - _arr );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + 1] = _arr[i];
-                                                  *const_cast<iterator>( _pos ) = std::forward<T>( _val );
-                                                  _size++; return const_cast<iterator>( _pos ); }
+                                                  *dst = std::forward<T>( _val );
+                                                  _size++;
+                                                  return dst; }
   template<class InputIt>
   iterator        insert( const_iterator _pos, InputIt first, InputIt last )
                                                 { const difference_type numEl = last - first;
                                                   CHECKD( _size + numEl >= N, "capacity exceeded" );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + numEl] = _arr[i];
-                                                  iterator it = const_cast<iterator>( _pos ); _size += numEl;
+                                                  iterator it = _arr + ( _pos - _arr ); _size += numEl; iterator ret = it;
                                                   while( first != last ) *it++ = *first++;
-                                                  return const_cast<iterator>( _pos ); }
+                                                  return ret; }
 
   iterator        insert( const_iterator _pos, size_t numEl, const T& val )
                                                 { //const difference_type numEl = last - first;
                                                   CHECKD( _size + numEl >= N, "capacity exceeded" );
                                                   for( difference_type i = _size - 1; i >= _pos - _arr; i-- ) _arr[i + numEl] = _arr[i];
-                                                  iterator it = const_cast<iterator>( _pos ); _size += numEl;
+                                                  iterator it = _arr + ( _pos - _arr ); _size += numEl; iterator ret = it;
                                                   for ( int k = 0; k < numEl; k++) *it++ = val;
-                                                  return const_cast<iterator>( _pos ); }
-
-  void            erase( const_iterator _pos )  { iterator it   = const_cast<iterator>( _pos ) - 1;
+                                                  return ret; }
+  
+  void            erase( const_iterator _pos )  { iterator it   = begin() + ( _pos - 1 - begin() );
                                                   iterator last = end() - 1;
                                                   while( ++it != last ) *it = *( it + 1 );
                                                   _size--; }

@@ -101,14 +101,14 @@ void xPredIntraPlanar_Core( PelBuf& pDst, const CPelBuf& pSrc )
   int bottomLeft = leftColumn[height];
   int topRight = topRow[width];
 
+  // with some optimizations gcc-8 gives spurious "-Wmaybe-uninitialized" warnings here (says leftColumn or topRow would be uninitialized here)
+  GCC_WARNING_DISABLE_maybe_uninitialized
   for( int k = 0; k < width; k++ )
   {
     bottomRow[k] = bottomLeft - topRow[k];
     topRow[k]    = topRow[k] << log2H;
   }
 
-  // with some optimizations gcc-8 gives spurious "-Wmaybe-uninitialized" warnings here (says leftColumn would be uninitialized here)
-  GCC_WARNING_DISABLE_maybe_uninitialized
   for( int k = 0; k < height; k++ )
   {
     rightColumn[k] = topRight - leftColumn[k];
