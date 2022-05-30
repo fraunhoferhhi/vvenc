@@ -551,11 +551,11 @@ void CABACWriter::mode_constraint( const PartSplit split, const CodingStructure&
   }
   else if( val == LDT_MODE_TYPE_INFER )
   {
-    assert( modeType == MODE_TYPE_INTRA );
+    CHECK( modeType != MODE_TYPE_INTRA, "Wrong mode type" );
   }
   else
   {
-    assert( modeType == partitioner.modeType );
+    CHECK( modeType != partitioner.modeType, "Wrong mode type" );
   }
 }
 

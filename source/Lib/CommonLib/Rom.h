@@ -178,8 +178,10 @@ extern const TMatrixCoeff g_trCoreDST7P8  [TRANSFORM_NUMBER_OF_DIRECTIONS][  8][
 extern const TMatrixCoeff g_trCoreDST7P16 [TRANSFORM_NUMBER_OF_DIRECTIONS][ 16][ 16];
 extern const TMatrixCoeff g_trCoreDST7P32 [TRANSFORM_NUMBER_OF_DIRECTIONS][ 32][ 32];
 
-extern const     int8_t   g_lfnst8x8[ 4 ][ 2 ][ 16 ][ 48 ];
-extern const     int8_t   g_lfnst4x4[ 4 ][ 2 ][ 16 ][ 16 ];
+extern const     int8_t   g_lfnstFwd8x8[ 4 ][ 2 ][ 16 ][ 48 ];
+extern const     int8_t   g_lfnstFwd4x4[ 4 ][ 2 ][ 16 ][ 16 ];
+extern const     int8_t   g_lfnstInv8x8[ 4 ][ 2 ][ 48 ][ 16 ];
+extern const     int8_t   g_lfnstInv4x4[ 4 ][ 2 ][ 16 ][ 16 ];
 
 extern const     uint8_t  g_lfnstLut[ NUM_INTRA_MODE + NUM_EXT_LUMA_MODE - 1 ];
 

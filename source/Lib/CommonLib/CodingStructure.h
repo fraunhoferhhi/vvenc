@@ -191,7 +191,6 @@ private:
   bool m_isTuEnc;
 
   CodingUnit**      m_cuPtr   [MAX_NUM_CH];
-  TransformUnit**   m_tuPtr   [MAX_NUM_CH];
 
   unsigned m_numCUs;
   unsigned m_numTUs;
