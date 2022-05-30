@@ -126,9 +126,9 @@ struct AreaBuf : public Size
   AreaBuf( T *_buf, const int& _stride, const Size& size )                                : Size( size ),            buf( _buf ), stride( _stride )    { }
   AreaBuf( T *_buf, const SizeType& _width, const SizeType& _height )                     : Size( _width, _height ), buf( _buf ), stride( _width )     { }
   AreaBuf( T *_buf, const int& _stride, const SizeType& _width, const SizeType& _height ) : Size( _width, _height ), buf( _buf ), stride( _stride )    { }
-//  AreaBuf( const AreaBuf<typename std::remove_const<T>::type >& other )                         : Size( other ),           buf( other.buf ), stride( other.stride ) { }
 
-  operator const AreaBuf<const T>&() const { return *reinterpret_cast< const AreaBuf<const T>* >( this ); }
+  // conversion from AreaBuf<const T> to AreaBuf<T>
+  AreaBuf( const AreaBuf<typename std::remove_const<T>::type >& other )                   : Size( other ),           buf( other.buf ), stride( other.stride ) { }
 
   void fill                 ( const T &val );
   void memset               ( const int val );
@@ -673,8 +673,9 @@ struct UnitBuf
   UnitBuf( const ChromaFormat _chromaFormat,       AreaBuf<T>&& blkY )      : chromaFormat( _chromaFormat ), bufs{ std::forward<AreaBuf<T> >(blkY) } { }
   UnitBuf( const ChromaFormat _chromaFormat, const AreaBuf<T>&  blkY, const AreaBuf<T>&  blkCb, const AreaBuf<T>  &blkCr ) : chromaFormat( _chromaFormat ), bufs{ blkY, blkCb, blkCr } { }
   UnitBuf( const ChromaFormat _chromaFormat,       AreaBuf<T>&& blkY,       AreaBuf<T>&& blkCb,       AreaBuf<T> &&blkCr ) : chromaFormat( _chromaFormat ), bufs{ std::forward<AreaBuf<T> >(blkY), std::forward<AreaBuf<T> >(blkCb), std::forward<AreaBuf<T> >(blkCr) } { }
-  
-  operator const UnitBuf<const T>&() const { return *reinterpret_cast<const UnitBuf<const T>*>( this ); }
+
+  // conversion from UnitBuf<const T> to UnitBuf<T>
+  UnitBuf( const UnitBuf<typename std::remove_const<T>::type>& other ): chromaFormat( other.chromaFormat ), bufs( other.bufs.begin(), other.bufs.end() ) { }
 
         AreaBuf<T>& get( const ComponentID comp )        { return bufs[comp]; }
   const AreaBuf<T>& get( const ComponentID comp )  const { return bufs[comp]; }
