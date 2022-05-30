@@ -331,6 +331,30 @@ void fillMapPtr_Core( void** ptrMap, const ptrdiff_t mapStride, int width, int h
   }
 }
 
+uint64_t AvgHighPassCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct = 0;
+  printf("AvgHighPassCore\n");
+
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++) // center cols
+    {
+      const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
+                         - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+      saAct += abs (s);
+/*
+      printf("%i %i %i\n",pSrc[x-1-iSrcStride],pSrc[x-iSrcStride],pSrc[x+1-iSrcStride]);
+      printf("%i %i %i\n",pSrc[x-1],pSrc[x],pSrc[x+1]);
+      printf("%i %i %i\n",pSrc[x-1+iSrcStride],pSrc[x+iSrcStride],pSrc[x+1+iSrcStride]);
+*/
+
+      printf("y %d x %d sum %d saAct %ld \n",y,x,s,saAct);
+    }
+    pSrc += iSrcStride;
+  }
+  return saAct;
+}
 uint64_t AvgHighPassWithDownsamplingCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
   uint64_t saAct = 0;
@@ -442,6 +466,7 @@ PelBufferOps::PelBufferOps()
 
   fillPtrMap        = fillMapPtr_Core;
   AvgHighPassWithDownsampling = AvgHighPassWithDownsamplingCore;
+  AvgHighPass = AvgHighPassCore;
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1stCore;
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
 

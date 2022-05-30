@@ -100,6 +100,10 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   }
   else // HD high-pass without downsampling
   {
+#if 1
+    saAct=g_pelBufOP.AvgHighPass ( width, height, pSrc, iSrcStride);
+    exit(1);
+#else
     for (int y = 1; y < height - 1; y++)
     {
       for (int x = 1; x < width - 1; x++) // center cols
@@ -110,7 +114,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
       }
       pSrc += iSrcStride;
     }
-
+#endif
     meanAct = double (saAct) / double ((width - 2) * (height - 2));
   }
 

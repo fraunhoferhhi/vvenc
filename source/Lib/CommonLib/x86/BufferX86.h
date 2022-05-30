@@ -1710,12 +1710,104 @@ void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, vo
         sum += _mm_extract_epi32 (tmp1, 0);
 
 template<X86_VEXT vext>
+void print128_num(__m128i var)
+{
+    uint16_t val[8];
+    memcpy(val, &var, sizeof(val));
+    printf("Numerical: %i %i %i %i %i %i %i %i \n",
+           val[0], val[1], val[2], val[3], val[4], val[5],
+           val[6], val[7]);
+}
+template<X86_VEXT vext>
+void print128_num32(__m128i var)
+{
+    uint32_t val[4];
+    memcpy(val, &var, sizeof(val));
+    printf("Numerical: %d %d %d %d \n",
+           val[0], val[1], val[2], val[3]);
+}
+#define MULADD2(p0,p1, p2, scale0, scale1, tmp1, tmp2, tmp3, sum) \
+        tmp1 = _mm_madd_epi16 (p0, scale0); \
+        print128_num32<vext>(tmp1);\
+        tmp2 = _mm_madd_epi16 (p1, scale1); \
+        tmp3 = _mm_madd_epi16 (p2, scale1); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp2); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp3); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
+        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
+        sum += _mm_extract_epi32 (tmp1, 0);
+
+
+template<X86_VEXT vext>
+uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, const int iSrcStride)
+{
+  uint64_t saAct=0;
+  pSrc -= iSrcStride;
+
+  printf("AvgHighPass_SIMD\n");
+  if (width > 14)
+  {
+    const __m128i scale1 = _mm_set_epi16 (0,0,0,0,0,-1,-2,-1);
+    const __m128i scale0 = _mm_set_epi16 (0,0,0,0,0,-2,12,-2);
+    __m128i tmp1, tmp2, tmp3;
+    __m128i line0, llineP1, lineM1;
+    int sum;
+
+    for (int y = 1; y < height-1; y += 1)
+    {
+      for (int x = 1; x < width-1; x += 6)
+      {
+        // load 8 Pixel
+        __m128i line0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x-1]); /* load 8 16-bit values */
+        __m128i lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x-1]);
+        __m128i lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
+
+        /*
+        print128_num<vext>(lineM1);
+        print128_num<vext>(line0);
+        print128_num<vext>(lineP1);
+         */
+        for (int xx = 0; xx < 6; xx++)
+        {
+          if (x+xx<width-1)
+          {
+            sum = 0;
+            MULADD2 (line0 , lineP1, lineM1, scale0, scale1, tmp1, tmp2, tmp3, sum)
+            saAct += (uint64_t) abs (sum);
+            printf("y %d x %d xx %d sum %d SACT %ld \n",y,x,xx,sum,saAct);
+
+            line0  = _mm_bsrli_si128 (line0 , 2);
+            lineP1 = _mm_bsrli_si128 (lineP1, 2);
+            lineM1 = _mm_bsrli_si128 (lineM1, 2);
+          }
+        }
+
+      }
+    }
+  }
+  else
+  {
+    for (int y = 1; y < height - 1; y++)
+    {
+      for (int x = 1; x < width - 1; x++) // center cols
+      {
+        const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
+                                           - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+        saAct += abs (s);
+        printf("x %d sum %d saAct %ld \n",x,s,saAct);
+      }
+      pSrc += iSrcStride;
+    }
+  }
+  return saAct;
+}
+
+template<X86_VEXT vext>
 uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
   uint64_t saAct = 0;
   pSrc -= iSrcStride;
   pSrc -= iSrcStride;
-  //printf("width %d height %d :",width,height);
 
 #ifdef USE_AVX2
   if (width > 12)
@@ -1752,10 +1844,8 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
             lM2 = _mm256_castsi256_si128 (lineM2);
             lP3 = _mm256_castsi256_si128 (lineP3);
             MULADD (lM2, lP3, scale3, tmp1, tmp2, sum)
-           // printf("1 f %d ",sum);
-            saAct += (uint64_t) abs (sum);
-            //printf("x %d y %d saAct %ld \n",x,y,saAct);
-          }
+             saAct += (uint64_t) abs (sum);
+           }
           if ((xx << 2) + x + 2 < width-2)
           {
             sum = 0;
@@ -1768,20 +1858,15 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
             lM2 = _mm_bsrli_si128 (lM2, 4);
             lP3 = _mm_bsrli_si128 (lP3, 4);
             MULADD (lM2, lP3, scale3, tmp1, tmp2, sum)
-            //printf("2 f %d ",sum);
-            saAct += (uint64_t) abs (sum);
-            //printf("x %d y %d saAct %ld \n",x,y,saAct);
-
-            /* 4 byte to the right */
+             saAct += (uint64_t) abs (sum);
+             /* 4 byte to the right */
             lineM2 = _mm256_permute4x64_epi64 (lineM2, 0x39);
             lineM1 = _mm256_permute4x64_epi64 (lineM1, 0x39);
             line0  = _mm256_permute4x64_epi64 (line0 , 0x39);
             lineP1 = _mm256_permute4x64_epi64 (lineP1, 0x39);
             lineP2 = _mm256_permute4x64_epi64 (lineP2, 0x39);
             lineP3 = _mm256_permute4x64_epi64 (lineP3, 0x39);
-
-
-          }
+            }
         }
       }
     }
@@ -1844,7 +1929,6 @@ uint64_t AvgHighPassWithDownsamplingDiff1st_SIMD (const int width, const int hei
       M1 = _mm_hadds_epi16 (M1, M1);
       M1 = _mm_hadds_epi16 (M1, M1);
       _mm_storeu_si16 (&act, M1);
-
       taAct += (uint64_t)act;
     }
     // last collum
@@ -1853,11 +1937,10 @@ uint64_t AvgHighPassWithDownsamplingDiff1st_SIMD (const int width, const int hei
       __m128i lineM0d = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x]);
       __m128i lineM1u = _mm_lddqu_si128 ((__m128i*) &pSrcM1[ y   *iSrcM1Stride + x]);
       __m128i lineM1d = _mm_lddqu_si128 ((__m128i*) &pSrcM1[(y+1)*iSrcM1Stride + x]);
-
       __m128i M0 = _mm_add_epi16 (lineM0u, lineM0d);
       __m128i M1 = _mm_add_epi16 (lineM1u, lineM1d);
-
       M1 = _mm_sub_epi16 (M0, M1); /* abs (sum (o[u0, u1, d0, d1]) - sum (oM1[u0, u1, d0, d1])) */
+
       int n=8-width+2+x;
       if (n > 0)
       {
@@ -1952,7 +2035,6 @@ uint64_t AvgHighPassWithDownsamplingDiff2nd_SIMD (const int width,const int heig
 
       M0 = _mm_add_epi16 (M0, M2);
       int n=8-width+2+x;
-      //printf("remove %d Pixel\n",n);
       if (n > 0)
       {
         //remove n Pixel
@@ -2043,6 +2125,7 @@ void PelBufferOps::_initPelBufOpsX86()
   fillPtrMap = fillPtrMap_SIMD<vext>;
 
   AvgHighPassWithDownsampling = AvgHighPassWithDownsampling_SIMD<vext>;
+  AvgHighPass = AvgHighPass_SIMD<vext>;
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1st_SIMD<vext>;
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2nd_SIMD<vext>;
 
