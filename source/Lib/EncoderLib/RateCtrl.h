@@ -125,7 +125,7 @@ namespace vvenc {
 
     void   create( EncRCSeq* encRCSeq, int frameLevel, int framePoc );
     void   destroy();
-    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp);
+    void   clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp);
     void   updateAfterPicture (const int actualTotalBits, const int averageQP);
     void   addToPictureList( std::list<EncRCPic*>& listPreviousPictures );
 

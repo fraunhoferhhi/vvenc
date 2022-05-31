@@ -285,8 +285,8 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_area       = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
   m_filterPoc  = 0;
 
-  const uint8_t acMCTFSpeedVal[] = {0, 5, 6, 22, 26 };
-  m_MCTFSpeedVal = acMCTFSpeedVal[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
+  // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
+  m_MCTFSpeedVal = m_encCfg->m_vvencMCTF.MCTFSpeed ? ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 0) : 0;
 }
 
 // ====================================================================================================================
@@ -371,15 +371,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFrames = 0;
   if( idx >= 0 )
   {
-    // m_MCTFSpeedVal is specified for m_FiterFrames.size() == 3, with keyframe being idx == 2
-    // for m_FiterFrames.size() > 3, this is not a problem, since less important frames will be sped-up for
-    // low values for idx, and keyframe in idx == 3 or higher will get threshold == 0, i.e. full filtering
-    // for m_FiterFrames.size() < 3 (e.g. GOP16), the value of idx has to shifted so that keyframe is at idx == 2
-    if( m_encCfg->m_vvencMCTF.numFrames < 3 ) idx += ( 3 - ( int ) m_encCfg->m_vvencMCTF.numFrames );
+    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (idx + 1);
+    const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
-    int threshold     = ( m_MCTFSpeedVal >> ( idx * 2 ) ) & 3;
-    isFilterThisFrame =   threshold < 2;
-    dropFrames        = ( threshold & 1 ) << 1;
+    dropFrames          = std::min(VVENC_MCTF_RANGE, threshold);
+    isFilterThisFrame   = threshold < VVENC_MCTF_RANGE;
   }
 
   const int filterFrames = VVENC_MCTF_RANGE - dropFrames;
