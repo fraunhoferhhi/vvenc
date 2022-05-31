@@ -130,26 +130,15 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
     pSM1 += iSM1Stride;
     if (frameRate <= 31) // 1st-order delta
     {
-#if 1
       taAct= g_pelBufOP.HDHighPass(width, height,pSrc,pSM1,iSrcStride, iSM1Stride);
-#else
-      for (int y = 1; y < height - 1; y++)
-      {
-        for (int x = 1; x < width - 1; x++)  // cnt cols
-        {
-          const int t = (int) pSrc[x] - (int) pSM1[x];
-          taAct += (1 + 3 * abs (t)) >> 1;
-        }
-        pSrc += iSrcStride;
-        pSM1 += iSM1Stride;
-      }
-#endif
     }
     else // 2nd-order delta (diff of diffs)
     {
       CHECK (pSM2 == nullptr || iSM2Stride <= 0 || iSM2Stride < width, "Pel buffer pointer pSM2 must not be null!");
-
       pSM2 += iSM2Stride;
+#if 1
+      taAct= g_pelBufOP.HDHighPass2(width, height,pSrc,pSM1,pSM2,iSrcStride, iSM1Stride, iSM2Stride);
+#else
       for (int y = 1; y < height - 1; y++)
       {
         for (int x = 1; x < width - 1; x++)  // cnt cols
@@ -162,6 +151,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
         pSM1 += iSM1Stride;
         pSM2 += iSM2Stride;
       }
+#endif
     }
 
     meanAct += (2.0 * taAct) / double ((width - 2) * (height - 2));

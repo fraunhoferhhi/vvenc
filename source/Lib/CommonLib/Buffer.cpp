@@ -364,6 +364,23 @@ uint64_t HDHighPassCore  (const int width, const int height,const Pel*  pSrc,con
   return taAct;
 }
 
+uint64_t  HDHighPass2Core  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
+{
+  uint64_t taAct = 0;
+
+  for (int y = 1; y < height - 1; y++)
+  {
+    for (int x = 1; x < width - 1; x++)  // cnt cols
+    {
+      const int t = (int) pSrc[x] - 2 * (int) pSM1[x] + (int) pSM2[x];
+      taAct += abs (t);
+    }
+    pSrc += iSrcStride;
+    pSM1 += iSM1Stride;
+    pSM2 += iSM2Stride;
+  }
+  return taAct;
+}
 uint64_t AvgHighPassWithDownsamplingCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
   uint64_t saAct = 0;
@@ -479,6 +496,7 @@ PelBufferOps::PelBufferOps()
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1stCore;
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2ndCore;
   HDHighPass = HDHighPassCore;
+  HDHighPass2 = HDHighPass2Core;
 }
 
 PelBufferOps g_pelBufOP = PelBufferOps();

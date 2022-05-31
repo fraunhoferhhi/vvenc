@@ -1835,20 +1835,26 @@ uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,co
       if (n > 0)
       {
         //remove n Pixel
-        if (n==2)
+        switch( n )
         {
-          M1 = _mm_slli_si128 (M1, 4);
-          M1 = _mm_srli_si128 (M1,4);
-        }
-        else if  (n==4)
-        {
-          M1 = _mm_slli_si128 (M1, 8);
-          M1 = _mm_srli_si128 (M1,8);
-        }
-        else if  (n==6)
-        {
-          M1 = _mm_slli_si128 (M1, 12);
-          M1 = _mm_srli_si128 (M1,12);
+          case 2:
+          {
+            M1 = _mm_slli_si128 (M1, 4);
+            M1 = _mm_srli_si128 (M1,4);
+            break;
+          }
+          case 4:
+          {
+            M1 = _mm_slli_si128 (M1, 8);
+            M1 = _mm_srli_si128 (M1,8);
+            break;
+          }
+          case 6:
+          {
+            M1 = _mm_slli_si128 (M1, 12);
+            M1 = _mm_srli_si128 (M1,12);
+            break;
+          }
         }
       }
       M1 = _mm_hadd_epi16 (M1, M1);
@@ -1877,10 +1883,118 @@ uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,co
       pSM1 += iSM1Stride;
     }
   }
-#endif
   return taAct;
 }
 
+template<X86_VEXT vext>
+uint64_t  HDHighPass2_SIMD  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
+{
+  uint64_t taAct = 0;
+  uint16_t act = 0;
+  pSrc -= iSrcStride;
+  pSM1 -= iSM1Stride;
+  pSM2 -= iSM2Stride;
+  int x;
+  if (width>8)
+  {
+    for (int y = 1; y < height - 1; y++)
+    {
+      for (x = 1; x < width - 1-8 ; x+=8)  // cnt cols
+      {
+        __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+        __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
+        __m128i M2 = _mm_lddqu_si128 ((__m128i*) &pSM2  [y *iSM2Stride + x]);
+        M1 = _mm_slli_epi16 (M1, 1);
+        M1 = _mm_sub_epi16 (M0, M1);
+        M1 = _mm_add_epi16 (M1,M2);
+        M1 = _mm_abs_epi16 (M1);
+        M1 = _mm_hadd_epi16 (M1, M1);
+
+        M1 = _mm_hadds_epi16 (M1, M1);
+        M1 = _mm_hadds_epi16 (M1, M1);
+        _mm_storeu_si16 (&act, M1);
+        taAct += (uint64_t)act;
+      }
+      // last collum
+      __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
+      __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
+      __m128i M2 = _mm_lddqu_si128 ((__m128i*) &pSM2  [y *iSM2Stride + x]);
+      M1 = _mm_slli_epi16 (M1, 1);
+      M1 = _mm_sub_epi16 (M0, M1);
+      M1 = _mm_add_epi16 (M1,M2);
+      M1 = _mm_abs_epi16 (M1);
+      int n=8-width+1+x;
+      if (n > 0)
+      {
+        switch (n)
+        {
+        case 1:
+        {
+          M1 = _mm_slli_si128 (M1,2);
+          M1 = _mm_srli_si128 (M1,2);
+          break;
+        }
+        case 2:
+        {
+          M1 = _mm_slli_si128 (M1,4);
+          M1 = _mm_srli_si128 (M1,4);
+          break;
+        }
+        case 3:
+        {
+          M1 = _mm_slli_si128 (M1,6);
+          M1 = _mm_srli_si128 (M1,6);
+          break;
+        }
+        case 4:
+        {
+          M1 = _mm_slli_si128 (M1,8);
+          M1 = _mm_srli_si128 (M1,8);
+          break;
+        }
+        case 5:
+        {
+          M1 = _mm_slli_si128 (M1,10);
+          M1 = _mm_srli_si128 (M1,10);
+          break;
+        }
+        case 6:
+        {
+          M1 = _mm_slli_si128 (M1,12);
+          M1 = _mm_srli_si128 (M1,12);
+          break;
+        }
+        case 7:
+        {
+          M1 = _mm_slli_si128 (M1,14);
+          M1 = _mm_srli_si128 (M1,14);
+          break;
+        }
+        }
+      }
+      M1 = _mm_hadd_epi16 (M1, M1);
+      M1 = _mm_hadds_epi16 (M1, M1);
+      M1 = _mm_hadds_epi16 (M1, M1);
+      _mm_storeu_si16 (&act, M1);
+      taAct += (uint64_t)act;
+    }
+  }
+  else
+  {
+    for (int y = 1; y < height - 1; y++)
+    {
+      for (int x = 1; x < width - 1; x++)  // cnt cols
+      {
+        const int t = (int) pSrc[x] - 2 * (int) pSM1[x] + (int) pSM2[x];
+        taAct += abs (t);
+      }
+      pSrc += iSrcStride;
+      pSM1 += iSM1Stride;
+      pSM2 += iSM2Stride;
+    }
+  }
+  return taAct;
+}
 template<X86_VEXT vext>
 uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
@@ -2207,7 +2321,7 @@ void PelBufferOps::_initPelBufOpsX86()
   AvgHighPassWithDownsamplingDiff1st = AvgHighPassWithDownsamplingDiff1st_SIMD<vext>;
   AvgHighPassWithDownsamplingDiff2nd = AvgHighPassWithDownsamplingDiff2nd_SIMD<vext>;
   HDHighPass = HDHighPass_SIMD<vext>;
-
+  HDHighPass2 = HDHighPass2_SIMD<vext>;
 }
 
 template void PelBufferOps::_initPelBufOpsX86<SIMDX86>();
