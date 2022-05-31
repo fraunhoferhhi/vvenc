@@ -114,7 +114,7 @@ struct PelBufferOps
   uint64_t ( *AvgHighPass )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
   uint64_t ( *AvgHighPassWithDownsamplingDiff1st ) (const int width, const int height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride);
   uint64_t ( *AvgHighPassWithDownsamplingDiff2nd) (const int width,const int height,const Pel* pSrc,const Pel* pSM1,const Pel* pS21,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
-
+  uint64_t ( *HDHighPass) (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride);
 };
 
 extern PelBufferOps g_pelBufOP;

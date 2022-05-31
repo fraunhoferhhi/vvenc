@@ -84,11 +84,9 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   uint64_t saAct = 0;   // spatial absolute activity sum
   uint64_t taAct = 0;  // temporal absolute activity sum
   const Pel* pS0 = pSrc;
-
   if (pSrc == nullptr || iSrcStride <= 0) return 0.0;
   // force 1st-order delta if only prev. frame available
   if (pSM2 == nullptr || iSM2Stride <= 0) frameRate = 24;
-
   // skip first row as there may be a black border frame
   pSrc += iSrcStride;
   // center rows
@@ -100,24 +98,9 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   }
   else // HD high-pass without downsampling
   {
-#if 1
     saAct=g_pelBufOP.AvgHighPass ( width, height, pSrc, iSrcStride);
-    exit(1);
-#else
-    for (int y = 1; y < height - 1; y++)
-    {
-      for (int x = 1; x < width - 1; x++) // center cols
-      {
-        const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
-                         - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
-        saAct += abs (s);
-      }
-      pSrc += iSrcStride;
-    }
-#endif
     meanAct = double (saAct) / double ((width - 2) * (height - 2));
   }
-
   // skip first row as there may be a black border frame
   pSrc = pS0 + iSrcStride;
   // center rows
@@ -125,9 +108,7 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   {
     const int i2M0Stride = iSrcStride * 2;
     const int i2M1Stride = iSM1Stride * 2;
-
     CHECK (pSM1 == nullptr || iSM1Stride <= 0 || iSM1Stride < width, "Pel buffer pointer pSM1 must not be null!");
-
     pSrc += iSrcStride;
     pSM1 += i2M1Stride;
     if (frameRate <= 31) // 1st-order delta
@@ -137,34 +118,32 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
     else // 2nd-order delta (diff of diffs)
     {
       const int i2M2Stride = iSM2Stride * 2;
-
       CHECK (pSM2 == nullptr || iSM2Stride <= 0 || iSM2Stride < width, "Pel buffer pointer pSM2 must not be null!");
-
       pSM2 += i2M2Stride;
-    taAct= g_pelBufOP.AvgHighPassWithDownsamplingDiff2nd (width, height,pSrc,pSM1,pSM2,iSrcStride, iSM1Stride, iSM2Stride);
+      taAct= g_pelBufOP.AvgHighPassWithDownsamplingDiff2nd (width, height,pSrc,pSM1,pSM2,iSrcStride, iSM1Stride, iSM2Stride);
     }
-
-
     meanAct += (2.0 * taAct) / double ((width - 4) * (height - 4));
   }
   else // HD high-pass without downsampling
   {
     CHECK (pSM1 == nullptr || iSM1Stride <= 0 || iSM1Stride < width, "Pel buffer pointer pSM1 must not be null!");
-
     pSM1 += iSM1Stride;
     if (frameRate <= 31) // 1st-order delta
     {
+#if 1
+      taAct= g_pelBufOP.HDHighPass(width, height,pSrc,pSM1,iSrcStride, iSM1Stride);
+#else
       for (int y = 1; y < height - 1; y++)
       {
         for (int x = 1; x < width - 1; x++)  // cnt cols
         {
           const int t = (int) pSrc[x] - (int) pSM1[x];
-
           taAct += (1 + 3 * abs (t)) >> 1;
         }
         pSrc += iSrcStride;
         pSM1 += iSM1Stride;
       }
+#endif
     }
     else // 2nd-order delta (diff of diffs)
     {
