@@ -221,8 +221,8 @@ uint64_t findDistortionPlane( const CPelBuf& pic0, const CPelBuf& pic1, uint32_t
 
 void EncPicture::xCalcDistortion( Picture& pic, const SPS& sps )
 {
-  const CPelUnitBuf& cPicD = pic.getRecoBuf();
-  const CPelUnitBuf& org   = pic.getOrigBuf();
+  const CPelUnitBuf cPicD = pic.getRecoBuf();
+  const CPelUnitBuf org   = pic.getOrigBuf();
   const ChromaFormat formatD = cPicD.chromaFormat;
   const ChromaFormat format  = sps.chromaFormatIdc;
 
