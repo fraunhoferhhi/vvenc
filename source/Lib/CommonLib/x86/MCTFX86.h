@@ -447,11 +447,137 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
   return error;
 }
 
+
+template<X86_VEXT vext>
+int motionErrorLumaFrac_loRes_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
+{
+  int error = 0;
+  const int base = x + ( dx >> 4 ) - 1;
+  
+  CHECK( bs & 7, "SIMD blockSize needs to be a multiple of 8" );
+
+  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
+
+  const __m128i yfilt12 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[0] ), _mm_set1_epi16( yFilter[1] ) );
+  const __m128i yfilt34 = _mm_unpacklo_epi16( _mm_set1_epi16( yFilter[2] ), _mm_set1_epi16( yFilter[3] ) );
+
+  const __m128i xfilt12 = _mm_unpacklo_epi16( _mm_set1_epi16( xFilter[0] ), _mm_set1_epi16( xFilter[1] ) );
+  const __m128i xfilt34 = _mm_unpacklo_epi16( _mm_set1_epi16( xFilter[2] ), _mm_set1_epi16( xFilter[3] ) );
+  
+  const __m128i xmax   = _mm_set1_epi16( maxSampleValue );
+  const __m128i xmin   = _mm_setzero_si128();
+  
+  const int yOffset    = y + ( dy >> 4 ) - 1;
+  const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
+  const Pel* origCol   = origOrigin + y * origStride + x;
+
+  for( int x1 = 0; x1 < bs; x1 += 8, sourceCol += 8, origCol += 8 )
+  {
+    const Pel* origRow  = origCol;
+    const Pel* rowStart = sourceCol;
+
+    __m128i xsrc[4];
+
+    for( int y1 = 0; y1 < bs + 3; y1++, rowStart += buffStride )
+    {
+      __m128i xsrc1 = _mm_loadu_si128( ( const __m128i * ) &rowStart[0] );
+      __m128i xsrc2 = _mm_loadu_si128( ( const __m128i * ) &rowStart[1] );
+      __m128i xsrc3 = _mm_loadu_si128( ( const __m128i * ) &rowStart[2] );
+      __m128i xsrc4 = _mm_loadu_si128( ( const __m128i * ) &rowStart[3] );
+
+      __m128i
+      xsum0 = _mm_set1_epi32( 1 << 5 );
+      __m128i
+      xsum1 = _mm_set1_epi32( 1 << 5 );
+
+      xsum0 = _mm_add_epi32( xsum0, _mm_madd_epi16( _mm_unpacklo_epi16( xsrc1, xsrc2 ), xfilt12 ) );
+      xsum1 = _mm_add_epi32( xsum1, _mm_madd_epi16( _mm_unpackhi_epi16( xsrc1, xsrc2 ), xfilt12 ) );
+
+      xsum0 = _mm_add_epi32( xsum0, _mm_madd_epi16( _mm_unpacklo_epi16( xsrc3, xsrc4 ), xfilt34 ) );
+      xsum1 = _mm_add_epi32( xsum1, _mm_madd_epi16( _mm_unpackhi_epi16( xsrc3, xsrc4 ), xfilt34 ) );
+
+      xsum0 = _mm_srai_epi32( xsum0, 6 );
+      xsum1 = _mm_srai_epi32( xsum1, 6 );
+      __m128i
+      xsum  = _mm_packs_epi32( xsum0, xsum1 );
+      xsum  = _mm_min_epi16( xmax, _mm_max_epi16( xmin, xsum ) );
+
+      if( y1 >= 3 )
+      {
+        xsrc[0] = xsrc[1];
+        xsrc[1] = xsrc[2];
+        xsrc[2] = xsrc[3];
+        xsrc[3] = xsum;
+        
+        xsum0 = _mm_set1_epi32( 1 << 5 );
+        xsum1 = _mm_set1_epi32( 1 << 5 );
+
+        xsum0 = _mm_add_epi32( xsum0, _mm_madd_epi16( yfilt12, _mm_unpacklo_epi16( xsrc[0], xsrc[1] ) ) );
+        xsum1 = _mm_add_epi32( xsum1, _mm_madd_epi16( yfilt12, _mm_unpackhi_epi16( xsrc[0], xsrc[1] ) ) );
+
+        xsum0 = _mm_add_epi32( xsum0, _mm_madd_epi16( yfilt34, _mm_unpacklo_epi16( xsrc[2], xsrc[3] ) ) );
+        xsum1 = _mm_add_epi32( xsum1, _mm_madd_epi16( yfilt34, _mm_unpackhi_epi16( xsrc[2], xsrc[3] ) ) );
+        
+        xsum0 = _mm_srai_epi32( xsum0, 6 );
+        xsum1 = _mm_srai_epi32( xsum1, 6 );
+
+        xsum  = _mm_packs_epi32( xsum0, xsum1 );
+        xsum  = _mm_min_epi16  ( xmax, _mm_max_epi16( xmin, xsum ) );
+
+        __m128i
+        xorg = _mm_loadu_si128( ( const __m128i * ) origRow );
+        origRow += origStride;
+
+        xsum = _mm_sub_epi16 ( xsum, xorg );
+        xsum = _mm_madd_epi16( xsum, xsum );
+        xsum = _mm_hadd_epi32( xsum, xsum );
+
+        error += _mm_extract_epi32( xsum, 0 );
+        error += _mm_extract_epi32( xsum, 1 );
+
+        //sum = 0;
+        //sum += yFilter[1] * tempArray[y1 + 1][x1];
+        //sum += yFilter[2] * tempArray[y1 + 2][x1];
+        //sum += yFilter[3] * tempArray[y1 + 3][x1];
+        //sum += yFilter[4] * tempArray[y1 + 4][x1];
+        //
+        //sum = ( sum + ( 1 << 5 ) ) >> 6;
+        //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+        //
+        //error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
+
+        if( error > besterror )
+        {
+          return error;
+        }
+      }
+      else
+      {
+        xsrc[y1 + 1] = xsum;
+      
+        //sum  = 0;
+        //sum += xFilter[1] * rowStart[1];
+        //sum += xFilter[2] * rowStart[2];
+        //sum += xFilter[3] * rowStart[3];
+        //sum += xFilter[4] * rowStart[4];
+        //
+        //sum = ( sum + ( 1 << 5 ) ) >> 6;
+        //sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+        //
+        //tempArray[y1][x1] = sum;
+      }
+    }
+  }
+
+  return error;
+}
+
 template<X86_VEXT vext>
 void MCTF::_initMCTF_X86()
 {
   m_motionErrorLumaInt8  = motionErrorLumaInt_SIMD <vext>;
-  m_motionErrorLumaFrac8 = motionErrorLumaFrac_SIMD<vext>;
+  m_motionErrorLumaFrac8[0] = motionErrorLumaFrac_SIMD<vext>;
+  m_motionErrorLumaFrac8[1] = motionErrorLumaFrac_loRes_SIMD<vext>;
 }
 
 template
