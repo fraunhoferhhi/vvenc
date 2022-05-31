@@ -133,7 +133,8 @@ struct AreaBuf : public Size
   AreaBuf& operator=(       AreaBuf&& ) = default;
 
   // conversion from AreaBuf<const T> to AreaBuf<T>
-  AreaBuf( const AreaBuf<typename std::remove_const<T>::type >& other )                   : Size( other ),           buf( other.buf ), stride( other.stride ) { }
+  template<bool T_IS_CONST = std::is_const<T>::value>
+  AreaBuf( const AreaBuf<typename std::remove_const_t<T>>& other, std::enable_if_t<T_IS_CONST>* = 0) : Size( other ), buf( other.buf ), stride( other.stride ) { }
 
   void fill                 ( const T &val );
   void memset               ( const int val );
@@ -685,7 +686,8 @@ struct UnitBuf
   UnitBuf& operator=(       UnitBuf&& other ) = default;
 
   // conversion from UnitBuf<const T> to UnitBuf<T>
-  UnitBuf( const UnitBuf<typename std::remove_const<T>::type>& other ): chromaFormat( other.chromaFormat ), bufs( other.bufs.begin(), other.bufs.end() ) { }
+  template<bool T_IS_COST = std::is_const<T>::value>
+  UnitBuf( const UnitBuf<typename std::remove_const<T>::type>& other, std::enable_if<T_IS_COST>* = 0 ) : chromaFormat( other.chromaFormat ), bufs( other.bufs.begin(), other.bufs.end() ) { }
 
         AreaBuf<T>& get( const ComponentID comp )        { return bufs[comp]; }
   const AreaBuf<T>& get( const ComponentID comp )  const { return bufs[comp]; }
