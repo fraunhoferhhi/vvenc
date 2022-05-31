@@ -2276,6 +2276,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
+  vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
