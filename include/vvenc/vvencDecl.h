@@ -61,4 +61,3 @@ POSSIBILITY OF SUCH DAMAGE.
 #if !defined( VVENC_DECL )
 # define VVENC_DECL
 #endif
-
