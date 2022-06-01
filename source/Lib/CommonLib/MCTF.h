@@ -64,8 +64,8 @@ struct MotionVector
 {
   int x, y;
   int error;
-  int noise;
-  MotionVector() : x(0), y(0), error(INT_LEAST32_MAX), noise(0) {}
+  //int noise;
+  MotionVector() : x(0), y(0), error(INT_LEAST32_MAX) {}
 
   void set(int vectorX, int vectorY, int errorValue) { x = vectorX; y = vectorY; error = errorValue; }
 };
