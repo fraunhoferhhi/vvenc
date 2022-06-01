@@ -747,7 +747,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
 
       prevBest = best;
-      doubleRange = 3;
+      doubleRange = 2;
       for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 2 )
       {
         for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 2 )
