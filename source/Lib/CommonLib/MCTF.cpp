@@ -255,6 +255,110 @@ int motionErrorLumaFrac4( const Pel* org, const ptrdiff_t origStride, const Pel*
   return error;
 }
 
+void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  const int numFilterTaps   = 7;
+  const int centreTapOffset = 3;
+  const int maxValue        = ( 1 << bitDepth ) - 1;
+
+  static constexpr int lbs = 8;
+
+  Pel tempArray[lbs + numFilterTaps][lbs];
+
+  for( int by = 1; by < bsy + numFilterTaps - 1; by++ )
+  {
+    const int yOffset = by - centreTapOffset;
+    const Pel *sourceRow = org + yOffset * origStride;
+    for( int bx = 0; bx < bsx; bx++ )
+    {
+      int base = bx - centreTapOffset;
+      const Pel *rowStart = sourceRow + base;
+
+      int sum = 0;
+      sum += xFilter[1] * rowStart[1];
+      sum += xFilter[2] * rowStart[2];
+      sum += xFilter[3] * rowStart[3];
+      sum += xFilter[4] * rowStart[4];
+      sum += xFilter[5] * rowStart[5];
+      sum += xFilter[6] * rowStart[6];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      tempArray[by][bx] = sum;
+    }
+  }
+
+  Pel *dstRow = dst;
+  for( int by = 0; by < bsy; by++, dstRow += dstStride )
+  {
+    Pel *dstPel = dstRow;
+    for( int bx = 0; bx < bsx; bx++, dstPel++ )
+    {
+      int sum = 0;
+
+      sum += yFilter[1] * tempArray[by + 1][bx];
+      sum += yFilter[2] * tempArray[by + 2][bx];
+      sum += yFilter[3] * tempArray[by + 3][bx];
+      sum += yFilter[4] * tempArray[by + 4][bx];
+      sum += yFilter[5] * tempArray[by + 5][bx];
+      sum += yFilter[6] * tempArray[by + 6][bx];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxValue ? maxValue : sum );
+      *dstPel = sum;
+    }
+  }
+}
+
+void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  const int numFilterTaps   = 3;
+  const int centreTapOffset = 1;
+  const int maxValue        = ( 1 << bitDepth ) - 1;
+
+  static constexpr int lbs = 8;
+
+  Pel tempArray[lbs + numFilterTaps][lbs];
+
+  for( int by = 0; by < bsy + numFilterTaps; by++ )
+  {
+    const int yOffset    = by - centreTapOffset;
+    const Pel* sourceRow = org + yOffset * origStride;
+
+    for( int bx = 0; bx < bsx; bx++ )
+    {
+      int base = bx - centreTapOffset;
+      const Pel* rowStart = sourceRow + base;
+
+      int sum = 0;
+      sum += xFilter[0] * rowStart[0];
+      sum += xFilter[1] * rowStart[1];
+      sum += xFilter[2] * rowStart[2];
+      sum += xFilter[3] * rowStart[3];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      tempArray[by][bx] = sum;
+    }
+  }
+
+  Pel* dstRow = dst;
+  for( int by = 0; by < bsy; by++, dstRow += dstStride )
+  {
+    Pel* dstPel = dstRow;
+    for( int bx = 0; bx < bsx; bx++, dstPel++ )
+    {
+      int sum = 0;
+      sum += yFilter[0] * tempArray[by + 0][bx];
+      sum += yFilter[1] * tempArray[by + 1][bx];
+      sum += yFilter[2] * tempArray[by + 2][bx];
+      sum += yFilter[3] * tempArray[by + 3][bx];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxValue ? maxValue : sum );
+      *dstPel = sum;
+    }
+  }
+}
+
 MCTF::MCTF()
   : m_encCfg    ( nullptr )
   , m_threadPool( nullptr )
@@ -267,6 +371,10 @@ MCTF::MCTF()
   m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6;
   m_motionErrorLumaFracX[1] = motionErrorLumaFrac4;
   m_motionErrorLumaFrac8[1] = motionErrorLumaFrac4;
+  m_applyFrac[0][0]         = applyFrac8Core_6Tap;
+  m_applyFrac[0][1]         = applyFrac8Core_4Tap;
+  m_applyFrac[1][0]         = applyFrac8Core_6Tap;
+  m_applyFrac[1][1]         = applyFrac8Core_4Tap;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
   initMCTF_X86();
@@ -790,104 +898,24 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
     const int xInt = mv.x >> (4+csx) ;
     const int yInt = mv.y >> (4+csy) ;
 
-    if( m_lowResFltApply || isChroma( compID ) )
+    const int yOffset = y + yInt;
+    const int xOffset = x + xInt;
+    const Pel* src = srcImage + yOffset * srcStride + xOffset;
+          Pel* dst = dstImage + y       * dstStride + x;
+
+    if( m_lowResFltApply ) // || isChroma( compID )
     {
-      const int16_t *xFilter = m_interpolationFilter4[dx & 0xf];
-      const int16_t *yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
-      const int numFilterTaps = 3;
-      const int centreTapOffset = 1;
+      const int16_t* xFilter = m_interpolationFilter4[dx & 0xf];
+      const int16_t* yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
 
-      Pel tempArray[lumaBlockSize + numFilterTaps][lumaBlockSize];
-
-      for( int by = 0; by < blockSizeY + numFilterTaps; by++ )
-      {
-        const int yOffset = y + by + yInt - centreTapOffset;
-        const Pel *sourceRow = srcImage + yOffset * srcStride;
-        for( int bx = 0; bx < blockSizeX; bx++ )
-        {
-          int base = x + bx + xInt - centreTapOffset;
-          const Pel *rowStart = sourceRow + base;
-
-          int sum = 0;
-          sum += xFilter[0] * rowStart[0];
-          sum += xFilter[1] * rowStart[1];
-          sum += xFilter[2] * rowStart[2];
-          sum += xFilter[3] * rowStart[3];
-
-          sum = ( sum + ( 1 << 5 ) ) >> 6;
-          tempArray[by][bx] = sum;
-        }
-      }
-
-      Pel *dstRow = dstImage + y * dstStride;
-      for( int by = 0; by < blockSizeY; by++, dstRow += dstStride )
-      {
-        Pel *dstPel = dstRow + x;
-        for( int bx = 0; bx < blockSizeX; bx++, dstPel++ )
-        {
-          int sum = 0;
-          sum += yFilter[0] * tempArray[by + 0][bx];
-          sum += yFilter[1] * tempArray[by + 1][bx];
-          sum += yFilter[2] * tempArray[by + 2][bx];
-          sum += yFilter[3] * tempArray[by + 3][bx];
-
-          sum = ( sum + ( 1 << 5 ) ) >> 6;
-          sum = sum < 0 ? 0 : ( sum > maxValue ? maxValue : sum );
-          *dstPel = sum;
-        }
-      }
+      m_applyFrac[toChannelType( compID )][1]( src, srcStride, dst, dstStride, blockSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
     }
     else
     {
       const int16_t *xFilter = m_interpolationFilter8[dx & 0xf];
       const int16_t *yFilter = m_interpolationFilter8[dy & 0xf]; // will add 6 bit.
-      const int numFilterTaps = 7;
-      const int centreTapOffset = 3;
 
-      Pel tempArray[lumaBlockSize + numFilterTaps][lumaBlockSize];
-
-      for( int by = 1; by < blockSizeY + numFilterTaps - 1; by++ )
-      {
-        const int yOffset = y + by + yInt - centreTapOffset;
-        const Pel *sourceRow = srcImage + yOffset * srcStride;
-        for( int bx = 0; bx < blockSizeX; bx++ )
-        {
-          int base = x + bx + xInt - centreTapOffset;
-          const Pel *rowStart = sourceRow + base;
-
-          int sum = 0;
-          sum += xFilter[1] * rowStart[1];
-          sum += xFilter[2] * rowStart[2];
-          sum += xFilter[3] * rowStart[3];
-          sum += xFilter[4] * rowStart[4];
-          sum += xFilter[5] * rowStart[5];
-          sum += xFilter[6] * rowStart[6];
-
-          sum = ( sum + ( 1 << 5 ) ) >> 6;
-          tempArray[by][bx] = sum;
-        }
-      }
-
-      Pel *dstRow = dstImage + y * dstStride;
-      for( int by = 0; by < blockSizeY; by++, dstRow += dstStride )
-      {
-        Pel *dstPel = dstRow + x;
-        for( int bx = 0; bx < blockSizeX; bx++, dstPel++ )
-        {
-          int sum = 0;
-
-          sum += yFilter[1] * tempArray[by + 1][bx];
-          sum += yFilter[2] * tempArray[by + 2][bx];
-          sum += yFilter[3] * tempArray[by + 3][bx];
-          sum += yFilter[4] * tempArray[by + 4][bx];
-          sum += yFilter[5] * tempArray[by + 5][bx];
-          sum += yFilter[6] * tempArray[by + 6][bx];
-
-          sum = ( sum + ( 1 << 5 ) ) >> 6;
-          sum = sum < 0 ? 0 : ( sum > maxValue ? maxValue : sum );
-          *dstPel = sum;
-        }
-      }
+      m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, blockSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
     }
   }
 }
