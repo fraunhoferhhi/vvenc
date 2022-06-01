@@ -286,7 +286,8 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_filterPoc  = 0;
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
-  m_MCTFSpeedVal = m_encCfg->m_vvencMCTF.MCTFSpeed ? ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 0) : 0;
+  m_MCTFSpeedVal     = m_encCfg->m_vvencMCTF.MCTFSpeed > 1 ? ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 0) : 0;
+  m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
 }
 
 // ====================================================================================================================
