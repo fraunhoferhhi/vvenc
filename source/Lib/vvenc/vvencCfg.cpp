@@ -2264,7 +2264,7 @@ static bool checkCfgParameter( vvenc_config *c )
   if( 1 << ( c->m_FastInferMerge & 7 ) > c->m_GOPSize )
   {
     const int hbm = c->m_FastInferMerge >> 3;
-    const int lbm = std::min<int>(c->m_FastInferMerge & 7, log2( c->m_GOPSize ) );
+    const int lbm = std::min<int>( 7, log2( c->m_GOPSize ) );
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
 
