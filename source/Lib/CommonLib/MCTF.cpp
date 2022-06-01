@@ -731,16 +731,16 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
       prevBest = best;
       int doubleRange = 3 * 4;
-      for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2 += 4)
+      for (int y2 = -doubleRange; y2 <= doubleRange; y2 += 4)
       {
-        for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2 += 4)
+        for (int x2 = -doubleRange; x2 <= doubleRange; x2 += 4)
         {
           if( x2 && y2 )
           {
-            int error = motionErrorLuma( orig, buffer, blockX, blockY, x2, y2, blockSize, best.error );
+            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
             if( error < best.error )
             {
-              best.set( x2, y2, error );
+              best.set( prevBest.x + x2, prevBest.y + y2, error );
             }
           }
         }
@@ -748,16 +748,16 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
 
       prevBest = best;
       doubleRange = 3;
-      for( int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2 += 2 )
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 2 )
       {
-        for( int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2 += 2 )
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 2 )
         {
           if( x2 && y2 )
           {
-            int error = motionErrorLuma( orig, buffer, blockX, blockY, x2, y2, blockSize, best.error );
+            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
             if( error < best.error )
             {
-              best.set( x2, y2, error );
+              best.set( prevBest.x + x2, prevBest.y + y2, error );
             }
           }
         }
@@ -765,16 +765,16 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
 
       prevBest = best;
       doubleRange = 1;
-      for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2++)
+      for (int y2 = -doubleRange; y2 <= doubleRange; y2++)
       {
-        for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2++)
+        for (int x2 = -doubleRange; x2 <= doubleRange; x2++)
         {
           if( x2 && y2 )
           {
-            int error = motionErrorLuma( orig, buffer, blockX, blockY, x2, y2, blockSize, best.error );
+            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
             if( error < best.error )
             {
-              best.set( x2, y2, error );
+              best.set( prevBest.x + x2, prevBest.y + y2, error );
             }
           }
         }
