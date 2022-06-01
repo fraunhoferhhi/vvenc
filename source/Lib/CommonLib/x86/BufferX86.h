@@ -1753,213 +1753,111 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
   uint64_t saAct=0;
   pSrc -= iSrcStride;
   int sum;
-#ifdef USE_AVX2
-//#if 0
 
-  printf("width %d height %d \n",width,height);
+#ifdef USE_AVX2
+  int x;
   if (width > 16)
   {
-#if 1
-     for (int y = 1; y < height-1; y += 1)
-     {
-       for (int x = 1; x < width-1; x += 14)
-       {
- //        printf("y %d x %d \n",y,x);
-         sum=0;
-         __m256i scale1 = _mm256_set_epi16 (0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
-         __m256i scale0 = _mm256_set_epi16 (0,-2,12,-2,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
-         __m256i scale11 = _mm256_set_epi16(0,0,0,0,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
-         __m256i scale00 = _mm256_set_epi16 (0,0,0,0,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
-         __m256i tmp1, tmp2, tmp3;
-         __m256i line0, lineP1, lineM1;
-
-         lineM1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
-         line0  = _mm256_lddqu_si256 ((__m256i*) &pSrc [(y)*iSrcStride + x-1]);
-         lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-1]);
-
-         tmp1 = _mm256_madd_epi16 (line0, scale0);
-         tmp2 = _mm256_madd_epi16 (lineP1, scale1);
-         tmp3 = _mm256_madd_epi16 (lineM1, scale1);
-         //print256_num32<vext>(tmp1);
-         //print256_num32<vext>(tmp2);
-         //print256_num32<vext>(tmp3);
-         tmp1 = _mm256_add_epi32(tmp1,tmp2);
-         tmp1 = _mm256_add_epi32(tmp1,tmp3);
-         tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-         tmp1 = _mm256_abs_epi32(tmp1);
-//         print256_num32<vext>(tmp1);
-         tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-//         print256_num32<vext>(tmp1);
-         sum+=_mm256_extract_epi32 (tmp1, 0);
-         sum+=_mm256_extract_epi32 (tmp1, 4);
-//         printf("sum %d \n",sum);
-
-         line0  = _mm256_bsrli_epi128 (line0 , 2);
-         lineP1 = _mm256_bsrli_epi128 (lineP1, 2);
-         lineM1 = _mm256_bsrli_epi128 (lineM1, 2);
-         tmp1 = _mm256_madd_epi16 (line0, scale0);
-         tmp2 = _mm256_madd_epi16 (lineP1, scale1);
-         tmp3 = _mm256_madd_epi16 (lineM1, scale1);
-
-         //print256_num32<vext>(tmp1);
-         //print256_num32<vext>(tmp2);
-         //print256_num32<vext>(tmp3);
-         tmp1 = _mm256_add_epi32(tmp1,tmp2);
-         tmp1 = _mm256_add_epi32(tmp1,tmp3);
-         tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-         tmp1 = _mm256_abs_epi32(tmp1);
-//         print256_num32<vext>(tmp1);
-         tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-//         printf("SUM\n");
-
-//         print256_num32<vext>(tmp1);
-         sum+=_mm256_extract_epi32 (tmp1, 0);
-         sum+=_mm256_extract_epi32 (tmp1, 4);
-//         printf("sum %d \n",sum);
-
-         lineM1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[ (y -1)  *iSrcStride + x-1+2]);
-         line0  = _mm256_lddqu_si256 ((__m256i*) &pSrc [(y)*iSrcStride + x-1+2]);
-         lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-1+2]);
-         tmp1 = _mm256_madd_epi16 (line0, scale00);
-         tmp2 = _mm256_madd_epi16 (lineP1, scale11);
-         tmp3 = _mm256_madd_epi16 (lineM1, scale11);
-         // print256_num32<vext>(tmp1);
-         // print256_num32<vext>(tmp2);
-         // print256_num32<vext>(tmp3);
-          tmp1 = _mm256_add_epi32(tmp1,tmp2);
-          tmp1 = _mm256_add_epi32(tmp1,tmp3);
-          tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-          tmp1 = _mm256_abs_epi32(tmp1);
-//          print256_num32<vext>(tmp1);
-          tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-//          printf("SUM\n");
-//          print256_num32<vext>(tmp1);
-          sum+=_mm256_extract_epi32 (tmp1, 0);
-          sum+=_mm256_extract_epi32 (tmp1, 4);
-//          printf("sum %d \n",sum);
-
-          line0  = _mm256_bsrli_epi128 (line0 , 2);
-          lineP1 = _mm256_bsrli_epi128 (lineP1, 2);
-          lineM1 = _mm256_bsrli_epi128 (lineM1, 2);
-
-          tmp1 = _mm256_madd_epi16 (line0, scale00);
-          tmp2 = _mm256_madd_epi16 (lineP1, scale11);
-          tmp3 = _mm256_madd_epi16 (lineM1, scale11);
-
-          //print256_num32<vext>(tmp1);
-          //print256_num32<vext>(tmp2);
-          //print256_num32<vext>(tmp3);
-          tmp1 = _mm256_add_epi32(tmp1,tmp2);
-          tmp1 = _mm256_add_epi32(tmp1,tmp3);
-          tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-          tmp1 = _mm256_abs_epi32(tmp1);
-//          print256_num32<vext>(tmp1);
-          tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
-//          printf("SUM\n");
-
-//          print256_num32<vext>(tmp1);
-          sum+=_mm256_extract_epi32 (tmp1, 0);
-          sum+=_mm256_extract_epi32 (tmp1, 4);
-//          printf("sum %d \n",sum);
-
-
-/*
- *      __m128i scale1 = _mm_set_epi16 (0,-1,-2,-1,0,-1,-2,-1);
-     __m128i scale0 = _mm_set_epi16 (0,-2,12,-2,0,-2,12,-2);
-     __m128i tmp1, tmp2, tmp3;
-     __m128i line0, llineP1, lineM1;
- *
-         printf("Y %d x %d \n",y,x);
-         __m128i line0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x-1]);
-         __m128i lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x-1]);
-         __m128i lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
-         sum = 0;
-         tmp1 = _mm_madd_epi16 (line0, scale0);
-         tmp2 = _mm_madd_epi16 (lineP1, scale1);
-         tmp3 = _mm_madd_epi16 (lineM1, scale1);
-         print128_num32<vext>(tmp1);
-         print128_num32<vext>(tmp2);
-         print128_num32<vext>(tmp3);
-         line0  = _mm_bsrli_si128 (line0 , 2);
-         lineP1 = _mm_bsrli_si128 (lineP1, 2);
-         lineM1 = _mm_bsrli_si128 (lineM1, 2);
-
-         tmp1 = _mm_madd_epi16 (line0, scale0);
-         tmp2 = _mm_madd_epi16 (lineP1, scale1);
-         tmp3 = _mm_madd_epi16 (lineM1, scale1);
-         print128_num32<vext>(tmp1);
-         print128_num32<vext>(tmp2);
-         print128_num32<vext>(tmp3);
-         line0  = _mm_bsrli_si128 (line0 , 2);
-         lineP1 = _mm_bsrli_si128 (lineP1, 2);
-         lineM1 = _mm_bsrli_si128 (lineM1, 2);
-
-         tmp1 = _mm_madd_epi16 (line0, scale0);
-         tmp2 = _mm_madd_epi16 (lineP1, scale1);
-         tmp3 = _mm_madd_epi16 (lineM1, scale1);
-         print128_num32<vext>(tmp1);
-         print128_num32<vext>(tmp2);
-         print128_num32<vext>(tmp3);
-*/
-
-
-
-         saAct += (uint64_t) sum;
-       }
-     }
-
-
-#else
-    const __m128i scale1 = _mm_set_epi16 (0,0,0,0,0,-1,-2,-1);
-    const __m128i scale0 = _mm_set_epi16 (0,0,0,0,0,-2,12,-2);
-    __m128i tmp1, tmp2, tmp3;
-    __m128i line0, llineP1, lineM1;
-    int sum;
-
     for (int y = 1; y < height-1; y += 1)
     {
-      for (int x = 1; x < width-1; x += 6)
+      for (x = 1; x < width-1-14; x += 14)
       {
-        // load 8 Pixel
-        __m128i line0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x-1]); /* load 8 16-bit values */
-        __m128i lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc  [(y+1)*iSrcStride + x-1]);
-        __m128i lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
-        sum = 0;
-        for (int xx = 0; xx < 6; xx++)
-        {
-          printf("Y %d x %d \n",y,x);
-          if (x+xx<width-1)
-          {
-            MULADD2 (line0 , lineP1, lineM1, scale0, scale1, tmp1, tmp2, tmp3, sum)
-            printf("xx %d sum %d \n",xx,sum);
-            line0  = _mm_bsrli_si128 (line0 , 2);
-            lineP1 = _mm_bsrli_si128 (lineP1, 2);
-            lineM1 = _mm_bsrli_si128 (lineM1, 2);
-          }
-        }
+        sum=0;
+        __m256i scale1 = _mm256_set_epi16 (0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
+        __m256i scale0 = _mm256_set_epi16 (0,-2,12,-2,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
+        __m256i scale11 = _mm256_set_epi16(0,0,0,0,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
+        __m256i scale00 = _mm256_set_epi16 (0,0,0,0,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
+        __m256i tmp1, tmp2, tmp3;
+        __m256i line0, lineP1, lineM1;
+
+        lineM1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
+        line0  = _mm256_lddqu_si256 ((__m256i*) &pSrc [(y)*iSrcStride + x-1]);
+        lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-1]);
+
+        tmp1 = _mm256_madd_epi16 (line0, scale0);
+        tmp2 = _mm256_madd_epi16 (lineP1, scale1);
+        tmp3 = _mm256_madd_epi16 (lineM1, scale1);
+        tmp1 = _mm256_add_epi32(tmp1,tmp2);
+        tmp1 = _mm256_add_epi32(tmp1,tmp3);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm256_abs_epi32(tmp1);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+        sum+=_mm256_extract_epi32 (tmp1, 0);
+        sum+=_mm256_extract_epi32 (tmp1, 4);
+
+        line0  = _mm256_bsrli_epi128 (line0 , 2);
+        lineP1 = _mm256_bsrli_epi128 (lineP1, 2);
+        lineM1 = _mm256_bsrli_epi128 (lineM1, 2);
+        tmp1 = _mm256_madd_epi16 (line0, scale0);
+        tmp2 = _mm256_madd_epi16 (lineP1, scale1);
+        tmp3 = _mm256_madd_epi16 (lineM1, scale1);
+
+        tmp1 = _mm256_add_epi32(tmp1,tmp2);
+        tmp1 = _mm256_add_epi32(tmp1,tmp3);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm256_abs_epi32(tmp1);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+
+        sum+=_mm256_extract_epi32 (tmp1, 0);
+        sum+=_mm256_extract_epi32 (tmp1, 4);
+
+        lineM1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[ (y -1)  *iSrcStride + x-1+2]);
+        line0  = _mm256_lddqu_si256 ((__m256i*) &pSrc [(y)*iSrcStride + x-1+2]);
+        lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-1+2]);
+        tmp1 = _mm256_madd_epi16 (line0, scale00);
+        tmp2 = _mm256_madd_epi16 (lineP1, scale11);
+        tmp3 = _mm256_madd_epi16 (lineM1, scale11);
+        tmp1 = _mm256_add_epi32(tmp1,tmp2);
+        tmp1 = _mm256_add_epi32(tmp1,tmp3);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm256_abs_epi32(tmp1);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+        sum+=_mm256_extract_epi32 (tmp1, 0);
+        sum+=_mm256_extract_epi32 (tmp1, 4);
+
+        line0  = _mm256_bsrli_epi128 (line0 , 2);
+        lineP1 = _mm256_bsrli_epi128 (lineP1, 2);
+        lineM1 = _mm256_bsrli_epi128 (lineM1, 2);
+
+        tmp1 = _mm256_madd_epi16 (line0, scale00);
+        tmp2 = _mm256_madd_epi16 (lineP1, scale11);
+        tmp3 = _mm256_madd_epi16 (lineM1, scale11);
+
+        tmp1 = _mm256_add_epi32(tmp1,tmp2);
+        tmp1 = _mm256_add_epi32(tmp1,tmp3);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm256_abs_epi32(tmp1);
+        tmp1 = _mm256_hadd_epi32(tmp1,tmp1);
+
+        sum+=_mm256_extract_epi32 (tmp1, 0);
+        sum+=_mm256_extract_epi32 (tmp1, 4);
+
+
         saAct += (uint64_t) sum;
-        //printf("Y %d x %d sum %d saAct %ld \n",y,x,sum,saAct);
+      }
+      // last collum
+      for (x=x; x < width - 1; x++) //
+      {
+        const int s = 12 * (int) pSrc[x  + y*iSrcStride ] - 2 * ((int) pSrc[x-1+y*iSrcStride] + (int) pSrc[x+1+y*iSrcStride] + (int) pSrc[x  -iSrcStride+y*iSrcStride] + (int) pSrc[x  +iSrcStride+y*iSrcStride])
+                                                       - ((int) pSrc[x-1-iSrcStride+y*iSrcStride] + (int) pSrc[x+1-iSrcStride+y*iSrcStride] + (int) pSrc[x-1+iSrcStride+y*iSrcStride] + (int) pSrc[x+1+iSrcStride+y*iSrcStride]);
+        saAct += abs (s);
       }
     }
-#endif
   }
   else
-#else
-
+#endif
   {
     for (int y = 1; y < height - 1; y++)
     {
       for (int x = 1; x < width - 1; x++) // center cols
       {
         const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
-                                           - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+                                                       - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
         saAct += abs (s);
       }
       pSrc += iSrcStride;
     }
   }
-#endif
-  printf("saAct %ld\n",saAct);
   return saAct;
 }
 #define _mm_storeu_si16(p, a) (void)(*(short*)(p) = (short)_mm_cvtsi128_si32((a)))

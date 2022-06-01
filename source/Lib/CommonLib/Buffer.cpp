@@ -334,6 +334,7 @@ void fillMapPtr_Core( void** ptrMap, const ptrdiff_t mapStride, int width, int h
 uint64_t AvgHighPassCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
   uint64_t saAct = 0;
+
   for (int y = 1; y < height - 1; y++)
   {
     for (int x = 1; x < width - 1; x++) // center cols
