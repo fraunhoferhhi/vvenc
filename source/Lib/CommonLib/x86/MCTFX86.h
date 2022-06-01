@@ -75,7 +75,7 @@ inline uint32_t _mm256_extract_epi32(__m256i vec, const int i )
 #endif
 
 template<X86_VEXT vext>
-int motionErrorLumaInt_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror )
+int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int besterror )
 {
   int error = 0;
 
@@ -86,8 +86,8 @@ int motionErrorLumaInt_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, 
   {
     for( int y1 = 0; y1 < bs; y1 += 2 )
     {
-      const Pel* origRowStart   = origOrigin + ( y + y1 + 0      )*origStride +   x;
-      const Pel* bufferRowStart = buffOrigin + ( y + y1 + 0 + dy )*buffStride + ( x + dx );
+      const Pel* origRowStart   = org + y1 * origStride;
+      const Pel* bufferRowStart = buf + y1 * buffStride;
 
       __m256i vsum = _mm256_setzero_si256();
 
@@ -133,8 +133,8 @@ int motionErrorLumaInt_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, 
 #endif
   for( int y1 = 0; y1 < bs; y1 += 2 )
   {
-    const Pel* origRowStart   = origOrigin + ( y + y1 + 0      )*origStride +   x;
-    const Pel* bufferRowStart = buffOrigin + ( y + y1 + 0 + dy )*buffStride + ( x + dx );
+    const Pel* origRowStart   = org + y1 * origStride;
+    const Pel* bufferRowStart = buf + y1 * buffStride;
 
     __m128i xsum = _mm_setzero_si128();
 
@@ -174,10 +174,10 @@ int motionErrorLumaInt_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, 
 }
 
 template<X86_VEXT vext>
-int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
+int motionErrorLumaFrac_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
-  const int base = x + ( dx >> 4 ) - 3;
+  const int base = -3;
   
   CHECK( bs & 7, "SIMD blockSize needs to be a multiple of 8" );
 
@@ -200,9 +200,9 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
   const __m256i vmax   = _mm256_set1_epi32( maxSampleValue );
   const __m256i vmin   = _mm256_setzero_si256();
   
-  const int yOffset    = y + 1 + ( dy >> 4 ) - 3;
-  const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
-  const Pel* origCol   = origOrigin + y * origStride + x;
+  const int yOffset    = 1 - 3;
+  const Pel* sourceCol = buf + base + yOffset * buffStride;
+  const Pel* origCol   = org;
 
   for( int x1 = 0; x1 < bs; x1 += 8, sourceCol += 8, origCol += 8 )
   {
@@ -327,9 +327,9 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
   const __m128i xmax   = _mm_set1_epi16( maxSampleValue );
   const __m128i xmin   = _mm_setzero_si128();
   
-  const int yOffset    = y + 1 + ( dy >> 4 ) - 3;
-  const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
-  const Pel* origCol   = origOrigin + y * origStride + x;
+  const int yOffset    = 1 - 3;
+  const Pel* sourceCol = buf + base + yOffset * buffStride;
+  const Pel* origCol   = org;
 
   for( int x1 = 0; x1 < bs; x1 += 8, sourceCol += 8, origCol += 8 )
   {
@@ -449,10 +449,10 @@ int motionErrorLumaFrac_SIMD( const Pel* origOrigin, const ptrdiff_t origStride,
 
 
 template<X86_VEXT vext>
-int motionErrorLumaFrac_loRes_SIMD( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
+int motionErrorLumaFrac_loRes_SIMD( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
-  const int base = x + ( dx >> 4 ) - 1;
+  const int base = -1;
   
   CHECK( bs & 7, "SIMD blockSize needs to be a multiple of 8" );
 
@@ -467,9 +467,9 @@ int motionErrorLumaFrac_loRes_SIMD( const Pel* origOrigin, const ptrdiff_t origS
   const __m128i xmax   = _mm_set1_epi16( maxSampleValue );
   const __m128i xmin   = _mm_setzero_si128();
   
-  const int yOffset    = y + ( dy >> 4 ) - 1;
-  const Pel* sourceCol = buffOrigin + base + yOffset * buffStride;
-  const Pel* origCol   = origOrigin + y * origStride + x;
+  const int yOffset    = -1;
+  const Pel* sourceCol = buf + base + yOffset * buffStride;
+  const Pel* origCol   = org;
 
   for( int x1 = 0; x1 < bs; x1 += 8, sourceCol += 8, origCol += 8 )
   {
