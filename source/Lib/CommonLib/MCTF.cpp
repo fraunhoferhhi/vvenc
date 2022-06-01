@@ -790,7 +790,7 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
     const int xInt = mv.x >> (4+csx) ;
     const int yInt = mv.y >> (4+csy) ;
 
-    if( m_lowResFltApply )
+    if( m_lowResFltApply || isChroma( compID ) )
     {
       const int16_t *xFilter = m_interpolationFilter4[dx & 0xf];
       const int16_t *yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
