@@ -905,7 +905,6 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
   const int blockSizeY = lumaBlockSize>>csy;
   const int width  = input.bufs[compID].width;
   int y = blockNumY*blockSizeY;
-  const Pel maxValue = (1<<m_encCfg->m_internalBitDepth[toChannelType(compID)])-1;
 
   const Pel* srcImage = input.bufs[compID].buf;
   const int srcStride  = input.bufs[compID].stride;
