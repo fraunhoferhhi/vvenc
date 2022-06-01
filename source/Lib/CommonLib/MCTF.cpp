@@ -941,10 +941,10 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const int blkSizeY = 8      >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
     const int blkSizeX = 8      >> getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
     const int yOut     = yStart >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-    const Pel* srcPelRow = orgPic.bufs[c].buf + yOut * srcStride;
+    const Pel* srcPelRow = orgPic   .bufs[c].buf + yOut * srcStride;
           Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
 
-    for( int by = yOut, yBlkAddr = 0; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
+    for( int by = yOut, yBlkAddr = yStart / 8; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
     {
       const Pel* srcPel = srcPelRow;
             Pel* dstPel = dstPelRow;
