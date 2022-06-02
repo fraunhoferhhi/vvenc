@@ -466,6 +466,8 @@ void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& 
 
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF );
+
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
   int idx = (int)m_encCfg->m_vvencMCTF.numFrames - 1;
@@ -671,6 +673,8 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
   const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH );
+
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
@@ -730,6 +734,8 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     }
     if (doubleRes)
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
+      PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
+
       prevBest = best;
       int doubleRange = m_searchPttrn ? 6 : 12;
       int step        = m_searchPttrn ? 4 :  6;
@@ -961,6 +967,8 @@ inline static double fastExp( double n, double d )
 void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
   std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_APPLY );
+
   const int numRefs = int(srcFrameInfo.size());
 
   int refStrengthRow = 2;
