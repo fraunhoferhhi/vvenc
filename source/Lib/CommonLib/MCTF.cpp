@@ -730,7 +730,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     if (doubleRes)
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
       prevBest = best;
-      int doubleRange = 3 * 4;
+      int doubleRange = 3 * 2;
       // first iteration, 25 - 1 checks
       for (int y2 = -doubleRange; y2 <= doubleRange; y2 += 6)
       {
