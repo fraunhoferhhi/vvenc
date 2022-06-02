@@ -38,6 +38,10 @@ ifneq ($(address-sanitizer),)
 CONFIG_OPTIONS += -DVVENC_USE_ADDRESS_SANITIZER=$(address-sanitizer)
 endif
 
+ifneq ($(thread-sanitizer),)
+CONFIG_OPTIONS += -DVVENC_USE_THREAD_SANITIZER=$(thread-sanitizer)
+endif
+
 ifneq ($(enable-arch),)
 CONFIG_OPTIONS += -DVVENC_OPT_TARGET_ARCH=$(enable-arch)
 endif
