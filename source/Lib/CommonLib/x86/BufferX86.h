@@ -1709,43 +1709,7 @@ void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, vo
         tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
         sum += _mm_extract_epi32 (tmp1, 0);
 
-template<X86_VEXT vext>
-void print128_num(__m128i var)
-{
-    uint16_t val[8];
-    memcpy(val, &var, sizeof(val));
-    printf(" %i %i %i %i %i %i %i %i \n",
-           val[0], val[1], val[2], val[3], val[4], val[5],
-           val[6], val[7]);
-}
-template<X86_VEXT vext>
-void print128_num32(__m128i var)
-{
-    uint32_t val[4];
-    memcpy(val, &var, sizeof(val));
-    printf(" %d %d %d %d \n",
-           val[0], val[1], val[2], val[3]);
-}
-template<X86_VEXT vext>
-void print256_num32( __m256i var)
-{
-    uint32_t val[8];
-    memcpy(val, &var, sizeof(val));
-    printf(" %d %d %d %d %d %d %d %d \n",
-        val[0], val[1], val[2], val[3], val[4], val[5], val[6], val[7]);
-}
-#define MULADD2(p0,p1, p2, scale0, scale1, tmp1, tmp2, tmp3, sum) \
-        tmp1 = _mm_madd_epi16 (p0, scale0); \
-        tmp2 = _mm_madd_epi16 (p1, scale1); \
-        tmp3 = _mm_madd_epi16 (p2, scale1); \
-        print128_num32<vext>(tmp1);\
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp2); \
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp3); \
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
-        tmp1 = _mm_abs_epi32(tmp1); \
-        sum += _mm_extract_epi32 (tmp1, 0);
-
+#define _mm_storeu_si16(p, a) (void)(*(short*)(p) = (short)_mm_cvtsi128_si32((a)))
 
 template<X86_VEXT vext>
 uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, const int iSrcStride)
@@ -1758,18 +1722,18 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
   int x;
   if (width > 16)
   {
+    __m256i scale1 = _mm256_set_epi16 (0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
+    __m256i scale0 = _mm256_set_epi16 (0,-2,12,-2,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
+    __m256i scale11 = _mm256_set_epi16(0,0,0,0,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
+    __m256i scale00 = _mm256_set_epi16 (0,0,0,0,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
+    __m256i tmp1, tmp2, tmp3;
+    __m256i line0, lineP1, lineM1;
+
     for (int y = 1; y < height-1; y += 1)
     {
       for (x = 1; x < width-1-14; x += 14)
       {
         sum=0;
-        __m256i scale1 = _mm256_set_epi16 (0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
-        __m256i scale0 = _mm256_set_epi16 (0,-2,12,-2,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
-        __m256i scale11 = _mm256_set_epi16(0,0,0,0,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
-        __m256i scale00 = _mm256_set_epi16 (0,0,0,0,0,-2,12,-2,0,-2,12,-2,0,-2,12,-2);
-        __m256i tmp1, tmp2, tmp3;
-        __m256i line0, lineP1, lineM1;
-
         lineM1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
         line0  = _mm256_lddqu_si256 ((__m256i*) &pSrc [(y)*iSrcStride + x-1]);
         lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-1]);
@@ -1831,8 +1795,6 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
 
         sum+=_mm256_extract_epi32 (tmp1, 0);
         sum+=_mm256_extract_epi32 (tmp1, 4);
-
-
         saAct += (uint64_t) sum;
       }
       // last collum
@@ -1860,7 +1822,6 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
   }
   return saAct;
 }
-#define _mm_storeu_si16(p, a) (void)(*(short*)(p) = (short)_mm_cvtsi128_si32((a)))
 
 template<X86_VEXT vext>
 uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride)
@@ -1879,7 +1840,6 @@ uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,co
       {
         __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */
         __m128i M1 = _mm_lddqu_si128 ((__m128i*) &pSM1  [y *iSM1Stride + x]);
-
         M1 = _mm_sub_epi16 (M0, M1);
         M1 = _mm_abs_epi16 (M1);
         M1 = _mm_hadd_epi16 (M1, M1);
@@ -1894,7 +1854,6 @@ uint64_t HDHighPass_SIMD  (const int width, const int height,const Pel*  pSrc,co
         M1 = _mm_hadds_epi16 (M1, M1);
         _mm_storeu_si16 (&act, M1);
         taAct += (uint64_t)act;
-
       }
       // last collum
       __m128i M0 = _mm_lddqu_si128 ((__m128i*) &pSrc  [ y   *iSrcStride + x]); /* load 8 16-bit values */

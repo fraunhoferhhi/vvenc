@@ -136,27 +136,10 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
     {
       CHECK (pSM2 == nullptr || iSM2Stride <= 0 || iSM2Stride < width, "Pel buffer pointer pSM2 must not be null!");
       pSM2 += iSM2Stride;
-#if 1
       taAct= g_pelBufOP.HDHighPass2(width, height,pSrc,pSM1,pSM2,iSrcStride, iSM1Stride, iSM2Stride);
-#else
-      for (int y = 1; y < height - 1; y++)
-      {
-        for (int x = 1; x < width - 1; x++)  // cnt cols
-        {
-          const int t = (int) pSrc[x] - 2 * (int) pSM1[x] + (int) pSM2[x];
-
-          taAct += abs (t);
-        }
-        pSrc += iSrcStride;
-        pSM1 += iSM1Stride;
-        pSM2 += iSM2Stride;
-      }
-#endif
     }
-
     meanAct += (2.0 * taAct) / double ((width - 2) * (height - 2));
   }
-
   // lower limit, compensate for high-pass amplification
   return std::max (meanAct, double (1 << (bitDepth - 6)));
 }

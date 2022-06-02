@@ -334,13 +334,12 @@ void fillMapPtr_Core( void** ptrMap, const ptrdiff_t mapStride, int width, int h
 uint64_t AvgHighPassCore( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
   uint64_t saAct = 0;
-
   for (int y = 1; y < height - 1; y++)
   {
     for (int x = 1; x < width - 1; x++) // center cols
     {
       const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
-                         - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+                             - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
       saAct += abs (s);
     }
     pSrc += iSrcStride;
@@ -351,7 +350,6 @@ uint64_t AvgHighPassCore( const int width, const int height, const Pel* pSrc, co
 uint64_t HDHighPassCore  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride)
 {
   uint64_t taAct = 0;
-
   for (int y = 1; y < height - 1; y++)
   {
     for (int x = 1; x < width - 1; x++)  // cnt cols
@@ -368,7 +366,6 @@ uint64_t HDHighPassCore  (const int width, const int height,const Pel*  pSrc,con
 uint64_t  HDHighPass2Core  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride)
 {
   uint64_t taAct = 0;
-
   for (int y = 1; y < height - 1; y++)
   {
     for (int x = 1; x < width - 1; x++)  // cnt cols
@@ -440,8 +437,8 @@ uint64_t AvgHighPassWithDownsamplingDiff2ndCore (const int width,const int heigh
     for (uint32_t x = 2; x < width-2; x += 2)
     {
       const int t = (int)pSrc  [y*iSrcStride + x] + (int)pSrc  [y*iSrcStride + x+1] + (int)pSrc  [(y+1)*iSrcStride + x] + (int)pSrc  [(y+1)*iSrcStride + x+1]
-                                                                                                                                      - 2 * ((int)pSrcM1[y*iSM1Stride + x] + (int)pSrcM1[y*iSM1Stride + x+1] + (int)pSrcM1[(y+1)*iSM1Stride + x] + (int)pSrcM1[(y+1)*iSM1Stride + x+1])
-                                                                                                                                      + (int)pSrcM2[y*iSM2Stride + x] + (int)pSrcM2[y*iSM2Stride + x+1] + (int)pSrcM2[(y+1)*iSM2Stride + x] + (int)pSrcM2[(y+1)*iSM2Stride + x+1];
+                            - 2 * ((int)pSrcM1[y*iSM1Stride + x] + (int)pSrcM1[y*iSM1Stride + x+1] + (int)pSrcM1[(y+1)*iSM1Stride + x] + (int)pSrcM1[(y+1)*iSM1Stride + x+1])
+                            + (int)pSrcM2[y*iSM2Stride + x] + (int)pSrcM2[y*iSM2Stride + x+1] + (int)pSrcM2[(y+1)*iSM2Stride + x] + (int)pSrcM2[(y+1)*iSM2Stride + x+1];
       taAct += (uint64_t) abs(t);
     }
   }
