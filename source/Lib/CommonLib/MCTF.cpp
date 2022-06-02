@@ -397,7 +397,7 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
   m_MCTFSpeedVal     = m_encCfg->m_vvencMCTF.MCTFSpeed > 1 ? ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 0) : 0;
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
-  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 2 ? 1 : 0;
+  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
 }
 
 // ====================================================================================================================
@@ -738,11 +738,11 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
 
       prevBest = best;
       int doubleRange = m_searchPttrn ? 6 : 12;
-      int step        = m_searchPttrn ? 4 :  6;
-      // first iteration, 25 - 1 or 16 checks
-      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += step )
+
+      // first iteration, 49 - 1 or 16 checks
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
       {
-        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += step )
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 4 )
         {
           if( x2 || y2 )
           {
@@ -756,8 +756,8 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
 
       prevBest = best;
-      doubleRange = m_searchPttrn == 1 ? 2 : 3;
-      // second iteration, 16 or 9 - 1 checks
+      doubleRange = 2;
+      // second iteration, 9 - 1 checks
       for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 2 )
       {
         for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 2 )
