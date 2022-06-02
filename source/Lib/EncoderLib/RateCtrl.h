@@ -170,6 +170,7 @@ namespace vvenc {
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
     std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    int                   lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
     std::list<EncRCPic*>    m_listRCPictures;
     EncRCSeq*   encRCSeq;

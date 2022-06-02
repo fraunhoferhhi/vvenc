@@ -119,6 +119,7 @@ private:
   std::vector<SAOBlkParam>     m_saoReconParams;
   std::vector<SAOStatData**>   m_saoStatData;
   std::vector<CtuEncParam>     ctuEncParams;
+  std::vector<int>             m_ctuAddrMap;
 
 public:
   EncSlice();
