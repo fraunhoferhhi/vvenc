@@ -65,6 +65,7 @@ namespace vvenc {
 
 class NoMallocThreadPool;
 class MsgLog;
+class GOPCfg;
 
 /// encoder class
 class EncLib
@@ -78,6 +79,7 @@ private:
   const VVEncCfg             m_encCfg;
   const VVEncCfg             m_orgCfg;
   VVEncCfg                   m_firstPassCfg;
+  GOPCfg*                    m_gopCfg;
   RateCtrl*                  m_rateCtrl;
   MCTF*                      m_MCTF;
   EncGOP*                    m_preEncoder;

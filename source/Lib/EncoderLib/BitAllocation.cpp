@@ -672,10 +672,9 @@ bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* 
 
   if (curPic == nullptr || encCfg == nullptr) return false;
 
-  const int gopSize    = encCfg->m_GOPSize;
-  const int curPoc     = slice->poc;
-  const int idr2Adj    = (encCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0);
-  const bool isHighRes = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
+  const GOPEntry& gopEntry = *(slice->pic->gopEntry);
+  const int curPoc         = slice->poc;
+  const bool isHighRes     = (encCfg->m_PadSourceWidth > 2048 || encCfg->m_PadSourceHeight > 1280);
 
   curPic->picVisActTL0 = curPic->picVisActY = 0;
 
@@ -687,14 +686,14 @@ bool BitAllocation::isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* 
     curPic->picVisActY   = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
   }
 
-  if (encCfg->m_sliceTypeAdapt && (curPoc >= 0) && (gopSize > 8) && ((curPoc + idr2Adj) % gopSize == 0))
+  if (encCfg->m_sliceTypeAdapt && curPoc >= 0 && encCfg->m_GOPSize > 8 && gopEntry.m_temporalId == 0)
   {
     const CPelBuf prvTL0 = curPic->getOrigBufPrev (COMP_Y, PREV_FRAME_TL0);
     const double visActY = (prvTL0.buf == nullptr ? 0.0 : getPicVisualActivity (slice, encCfg, &prvTL0));
 
     curPic->picVisActTL0 = ClipBD (uint16_t (0.5 + visActY), slice->sps->bitDepths[CH_L]);
 
-    if (!slice->isIntra() && curPoc >= (gopSize << idr2Adj)) // detect scene change if comparison is possible
+    if (!slice->isIntra()) // detect scene change if comparison is possible
     {
       const Picture* refPic = slice->getRefPic (REF_PIC_LIST_0, 0);
       const int scThreshold = (curPic->isSccStrong ? 3 : (curPic->isSccWeak ? 2 : 1)) * (isHighRes ? 19 : 15);

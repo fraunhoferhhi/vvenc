@@ -187,12 +187,12 @@ typedef enum
 /// supported IDR types
 typedef enum
 {
-  VVENC_DRT_NONE = 0,
-  VVENC_DRT_CRA,
-  VVENC_DRT_IDR,
-  VVENC_DRT_RECOVERY_POINT_SEI,
-  VVENC_DRT_IDR2,
-  VVENC_DRT_CRA_CRE,             //constrained RASL encoding
+  VVENC_DRT_NONE               = 0,
+  VVENC_DRT_CRA                = 1,
+  VVENC_DRT_IDR                = 2,
+  VVENC_DRT_RECOVERY_POINT_SEI = 3,
+  VVENC_DRT_IDR2               = 4,
+  VVENC_DRT_CRA_CRE            = 5,             //constrained RASL encoding
 }vvencDecodingRefreshType;
 
 typedef enum
@@ -404,9 +404,9 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  // TODO (jb): cleanup
-  int                 mctfUnused1;
-  int                 mctfUnused2;
+  // TODO (jb): remove unused memory from configuration
+  int                 mctfDeprecated1;
+  int                 mctfDeprecated2;
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -449,7 +449,8 @@ typedef struct vvenc_config
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
-  bool                m_reserved;
+  // TODO (jb): remove unused memory from configuration
+  bool                m_cfgDeprecated1;
 
   int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
@@ -489,14 +490,19 @@ typedef struct vvenc_config
 
   bool                m_rewriteParamSets;                                                // Flag to enable rewriting of parameter sets at random access points
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
-  vvencRPLEntry       m_RPLList0[ VVENC_MAX_GOP ];                                       // the RPL entries from the config file
-  vvencRPLEntry       m_RPLList1[ VVENC_MAX_GOP ];                                       // the RPL entries from the config file
-  vvencGOPEntry       m_GOPList [ VVENC_MAX_GOP ];                                       // the coding structure entries from the config file
-  int                 m_maxDecPicBuffering[ VVENC_MAX_TLAYER ];                          // total number of pictures in the decoded picture buffer
-  int                 m_maxNumReorderPics [ VVENC_MAX_TLAYER ];                          // total number of reorder pictures
-  int                 m_maxTempLayer;                                                    // Max temporal layer
-  int                 m_numRPLList0;
-  int                 m_numRPLList1;
+
+  // TODO (jb): remove unused memory from configuration
+  vvencRPLEntry       m_cfgDeprecated2[ 64 ];
+  vvencRPLEntry       m_cfgDeprecated3[ 64 ];
+
+  vvencGOPEntry       m_GOPList[ VVENC_MAX_GOP ];                                        // the coding structure entries from the config file
+
+  // TODO (jb): remove unused memory from configuration
+  int                 m_cfgDeprecated4[ 7 ];
+  int                 m_cfgDeprecated5[ 7 ];
+  int                 m_cfgDeprecated6;
+  int                 m_cfgDeprecated7;
+  int                 m_cfgDeprecated8;
 
   bool                m_useSameChromaQPTables;
   vvencChromaQpMappingTableParams m_chromaQpMappingTableParams;
@@ -750,8 +756,9 @@ typedef struct vvenc_config
   int                 m_trailFrames;                                                     // number of trailing frames to to be given after last frame to be encoded
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
-  
-  bool                m_reservedFlag[8];
+
+  bool                m_picReordering;
+  bool                m_reservedFlag[7];
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
 

@@ -79,6 +79,7 @@ class InputByteStream;
 class DecLib;
 class EncHRD;
 class MsgLog;
+class GOPCfg;
 
 struct FFwdDecoder
 {
@@ -134,6 +135,7 @@ private:
   std::mutex                m_unitCacheMutex;
 
   const VVEncCfg*           m_pcEncCfg;
+  const GOPCfg*             m_gopCfg;
   RateCtrl*                 m_pcRateCtrl;
   HLSWriter                 m_HLSWriter;
   SEIWriter                 m_seiWriter;
@@ -150,16 +152,13 @@ private:
   DCI                       m_DCI;
 
   bool                      m_isPreAnalysis;
-  bool                      m_bFirstInit;
   bool                      m_bFirstWrite;
   bool                      m_bRefreshPending;
   bool                      m_disableLMCSIP;
+  int                       m_lastCodingNum;
   int                       m_numPicsCoded;
-  int                       m_pocEncode;
   int                       m_pocRecOut;
-  int                       m_gopSizeLog2;
   int                       m_ticksPerFrameMul4;
-  int                       m_codingOrderIdx;
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
@@ -173,8 +172,6 @@ private:
   std::list<Picture*>       m_procList;
   std::list<Picture*>       m_rcUpdateList;
 
-  std::vector<int>          m_pocToGopId;
-  std::vector<int>          m_nextPocOffset;
   std::vector<int>          m_globalCtuQpVector;
 
   bool                      m_trySkipOrDecodePicture;
@@ -187,7 +184,7 @@ public:
 
   const EncReshape& getReshaper() const { return m_Reshaper; }
 
-  void init               ( const VVEncCfg& encCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
+  void init               ( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
   void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
   void getParameterSets   ( AccessUnitList& accessUnit );
@@ -199,11 +196,6 @@ protected:
   virtual void waitForFreeEncoders();
 
 private:
-  int  xGetGopIdFromPoc               ( int poc ) const { return m_pocToGopId[ poc % m_pcEncCfg->m_GOPSize ]; }
-
-  int  xGetNextPocICO                 ( int poc, int max, bool altGOP ) const;
-  Picture* xFindPicture               ( const PicList& picList, int poc ) const;
-  void xCreateCodingOrder             ( const PicList& picList, bool flush, std::vector<Picture*>& encList ) const;
   void xUpdateRasInit                 ( Slice* slice );
   void xEncodePictures                ( bool flush, AccessUnitList& auList, PicList& doneList );
   void xOutputRecYuv                  ( const PicList& picList );
@@ -218,18 +210,17 @@ private:
   void xInitRPL                       ( SPS &sps ) const;
   void xInitHrdParameters             ( SPS &sps );
 
-  vvencNalUnitType xGetNalUnitType    ( int pocCurr, int lastIdr ) const;
-  int  xGetSliceDepth                 ( int poc ) const;
-  bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList, int gopId ) const;
+  vvencNalUnitType xGetNalUnitType    ( const Slice* slice ) const;
+  bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList ) const;
 
-  void xInitPicsInCodingOrder         ( const std::vector<Picture*>& encList, const PicList& picList, bool isEncodeLtRef );
+  void xInitPicsInCodingOrder         ( const PicList& picList, bool flush );
   void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
   void xInitFirstSlice                ( Picture& pic, const PicList& picList, bool isEncodeLtRef );
-  void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice, int gopId );
+  void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice );
   void xUpdateRPRtmvp                 ( PicHeader* picHeader, Slice* slice );
   void xInitSliceMvdL1Zero            ( PicHeader* picHeader, const Slice* slice );
   void xInitLMCS                      ( Picture& pic );
-  void xSelectReferencePictureList    ( Slice* slice, int curPoc, int gopId, int ltPoc );
+  void xSelectReferencePictureList    ( Slice* slice ) const;
   void xSyncAlfAps                    ( Picture& pic, ParameterSetMap<APS>& dst, const ParameterSetMap<APS>& src );
 
   void xWritePicture                  ( Picture& pic, AccessUnitList& au, bool isEncodeLtRef );

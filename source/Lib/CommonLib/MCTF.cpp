@@ -468,23 +468,16 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
   PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF );
 
-  double overallStrength = -1.0;
-  bool isFilterThisFrame = false;
-  int idx = (int)m_encCfg->m_vvencMCTF.numFrames - 1;
-  for( ; idx >= 0; idx-- )
-  {
-    if ( m_filterPoc % m_encCfg->m_vvencMCTF.MCTFFrames[ idx ] == 0 )
-    {
-      overallStrength   = m_encCfg->m_vvencMCTF.MCTFStrengths[ idx ];
-      isFilterThisFrame = true;
-      break;
-    }
-  }
+  Picture* pic = picFifo[ filterIdx ];
+
+  const int mctfIdx            = pic->gopEntry ? pic->gopEntry->m_mctfIndex : -1;
+  const double overallStrength = mctfIdx >= 0 ? m_encCfg->m_vvencMCTF.MCTFStrengths[ mctfIdx ] : -1.0;
+  bool  isFilterThisFrame      = mctfIdx >= 0;
 
   int dropFrames = 0;
-  if( idx >= 0 )
+  if( mctfIdx >= 0 )
   {
-    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (idx + 1);
+    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (mctfIdx + 1);
     const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
     dropFrames          = std::min(VVENC_MCTF_RANGE, threshold);
@@ -496,7 +489,6 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFramesFront = std::min( std::max(                                          filterIdx - filterFrames, 0 ), dropFrames );
   int dropFramesBack  = std::min( std::max( static_cast<int>( picFifo.size() ) - 1 - filterIdx - filterFrames, 0 ), dropFrames );
 
-  Picture* pic = picFifo[ filterIdx ];
   if( ! pic->useScMCTF )
   {
     isFilterThisFrame = false;

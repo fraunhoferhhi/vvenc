@@ -124,7 +124,7 @@ void EncSampleAdaptiveOffset::disabledRate( CodingStructure& cs, double saoDisab
   {
     const PreCalcValues& pcv     = *cs.pcv;
     const int numberOfComponents = getNumberValidComponents( chromaFormat );
-    const int picTempLayer       = cs.slice->depth;
+    const int picTempLayer       = cs.slice->TLayer;
     int numCtusForSAOOff[MAX_NUM_COMP];
 
     for (int compIdx = 0; compIdx < numberOfComponents; compIdx++)
@@ -174,7 +174,7 @@ void EncSampleAdaptiveOffset::decidePicParams( const CodingStructure& cs, double
     saoEnabled[ compIdx ] = false;
   }
 
-  const int picTempLayer = slice.depth;
+  const int picTempLayer = slice.TLayer;
   for( int compIdx = 0; compIdx < numberOfComponents; compIdx++ )
   {
     // enable per default

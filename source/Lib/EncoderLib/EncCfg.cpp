@@ -45,6 +45,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 
 #include "EncCfg.h"
+#include "CommonLib/CommonDef.h"
 
 namespace vvenc {
 
@@ -63,6 +64,8 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
 void VVEncCfg::xInitCfgMembers()
 {
   m_stageParallelProc = m_numThreads > 0;
+  m_log2GopSize       = floorLog2( m_GOPSize );
+  m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? ceilLog2( m_GOPSize ) : 0;
 }
 
 }

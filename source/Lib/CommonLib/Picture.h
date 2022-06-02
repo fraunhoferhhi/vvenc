@@ -208,10 +208,10 @@ public:
   bool                          writePic;
   bool                          precedingDRAP; // preceding a DRAP picture in decoding order
 
+  const GOPEntry*               gopEntry;
+
   int                           refCounter;
   int                           poc;
-  int                           gopId;
-  int                           rcIdxInGop;
   unsigned                      TLayer;
   int                           layerId;
   bool                          isSubPicBorderSaved;

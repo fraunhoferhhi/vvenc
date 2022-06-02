@@ -51,7 +51,6 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/CommonDef.h"
 #include "CommonLib/dtrace_buffer.h"
 #include "CommonLib/dtrace_codingstruct.h"
-#include "vvenc/vvencCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -254,7 +253,7 @@ void EncPicture::xCalcDistortion( Picture& pic, const SPS& sps )
 
 void EncPicture::xInitPicEncoder( Picture& pic )
 {
-  m_SliceEncoder.initPic( &pic, pic.gopId);
+  m_SliceEncoder.initPic( &pic );
 
   Slice* slice = pic.cs->slice;
 
@@ -277,7 +276,7 @@ void EncPicture::xInitSliceColFromL0Flag( Slice* slice ) const
   {
     return;
   }
-  
+
   if ( slice->sliceType == VVENC_B_SLICE )
   {
     const int refIdx = 0; // Zero always assumed

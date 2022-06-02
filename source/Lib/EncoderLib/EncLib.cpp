@@ -52,6 +52,7 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/Rom.h"
 #include "Utilities/NoMallocThreadPool.h"
 #include "Utilities/MsgLog.h"
+#include "GOPCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
@@ -70,6 +71,7 @@ EncLib::EncLib( MsgLog& logger )
   , m_encCfg         ()
   , m_orgCfg         ()
   , m_firstPassCfg   ()
+  , m_gopCfg         ( nullptr )
   , m_rateCtrl       ( nullptr )
   , m_MCTF           ( nullptr )
   , m_preEncoder     ( nullptr )
@@ -207,6 +209,11 @@ void EncLib::initPass( int pass, const char* statsFName )
     }
   }
 
+  // GOP structure
+  m_gopCfg = new GOPCfg( msg );
+  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_picReordering, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
+  CHECK( m_gopCfg->getMaxTLayer() != m_encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
+
   // thread pool
   if( m_encCfg.m_numThreads > 0 )
   {
@@ -219,7 +226,7 @@ void EncLib::initPass( int pass, const char* statsFName )
     m_MCTF = new MCTF();
     const int leadFrames = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
     const int minDelay   = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
-    m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
+    m_MCTF->initStage( minDelay, true, true, true, m_encCfg.m_CTUSize, false );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
     m_maxNumPicShared += minDelay;
@@ -229,17 +236,17 @@ void EncLib::initPass( int pass, const char* statsFName )
   if( m_encCfg.m_LookAhead )
   {
     m_preEncoder = new EncGOP( msg );
-    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
-    m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
+    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, false, m_firstPassCfg.m_CTUSize, false );
+    m_preEncoder->init( m_firstPassCfg, m_gopCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
-    m_maxNumPicShared += m_firstPassCfg.m_GOPSize + 1 + Log2(m_firstPassCfg.m_GOPSize) + 2;
+    m_maxNumPicShared += m_firstPassCfg.m_GOPSize + 1 + m_firstPassCfg.m_log2GopSize + 2;
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
-  m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
-  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + Log2(m_encCfg.m_GOPSize) + 2 + (m_encCfg.m_LookAhead ? 0 : Log2(m_encCfg.m_GOPSize));
+  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
+  m_gopEncoder->init( m_encCfg, m_gopCfg, *m_rateCtrl, m_threadPool, false );
+  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + m_encCfg.m_log2GopSize + 2 + ( m_encCfg.m_LookAhead ? 0 : m_encCfg.m_log2GopSize );
 
   if( m_rateCtrl->rcIsFinalPass )
   {
@@ -324,6 +331,13 @@ void EncLib::xUninitLib()
     delete m_threadPool;
     m_threadPool = nullptr;
   }
+
+  // GOP structure
+  if( m_gopCfg )
+  {
+    delete m_gopCfg;
+    m_gopCfg = nullptr;
+  }
 }
 
 void EncLib::xInitRCCfg()
@@ -390,6 +404,10 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( picShared )
       {
         picShared->reuse( m_picsRcvd, yuvInBuf );
+        if( ! picShared->isLeadTrail() )
+        {
+          m_gopCfg->getNextGopEntry( picShared->m_gopEntry );
+        }
         if( m_encCfg.m_sliceTypeAdapt
             || m_encCfg.m_usePerceptQPA
             || m_encCfg.m_RCNumPasses == 2
@@ -524,9 +542,7 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
 
   if( m_encCfg.m_sliceTypeAdapt )
   {
-    const int idr2Adj = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
-
-    if( ( picShared->getPOC() + idr2Adj ) % m_encCfg.m_GOPSize == 0 )
+    if( picShared->m_gopEntry.m_temporalId == 0 )
     {
       if( m_prevSharedTL0 )
       {

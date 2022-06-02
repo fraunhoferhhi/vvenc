@@ -1219,7 +1219,7 @@ bool InterSearch::predInterSearch(CodingUnit& cu, Partitioner& partitioner, doub
         int L = (cu.slice->TLayer <= 2) ? 0 : (cu.slice->TLayer - 2);
         double besCostMerge = bestCostInter;
         bestCostInter = (uiCost[0] < uiCost[1]) ? uiCost[0] : uiCost[1];
-        if ((cu.slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7))) && bestCostInter > MRG_FAST_RATIOMYV[L] * besCostMerge)
+        if ((cu.slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7))) && bestCostInter > MRG_FAST_RATIOMYV[L] * besCostMerge)
         {
           m_skipPROF = false;
           m_encOnly = false;

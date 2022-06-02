@@ -906,6 +906,31 @@ struct XUCache
 };
 
 
+typedef struct GOPEntry : vvencGOPEntry
+{
+  int       m_codingNum;
+  int       m_gopNum;
+  int       m_defaultRPLIdx;
+  int       m_mctfIndex;
+  bool      m_isSTSA;
+  bool      m_useBckwdOnly;
+  bool      m_isStartOfGop;
+  bool      m_isStartOfIntra;
+
+  void setDefaultGOPEntry()
+  {
+    vvenc_GOPEntry_default( this );
+    m_codingNum        = -1;
+    m_gopNum           = -1;
+    m_defaultRPLIdx    = -1;
+    m_mctfIndex        = -1;
+    m_isSTSA           = false;
+    m_useBckwdOnly     = false;
+    m_isStartOfGop     = false;
+    m_isStartOfIntra   = false;
+  }
+} GOPEntry;
+
 
 } // namespace vvenc
 

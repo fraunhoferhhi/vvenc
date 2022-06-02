@@ -50,15 +50,17 @@ POSSIBILITY OF SUCH DAMAGE.
 #include "CommonLib/HRD.h"
 #include "CommonLib/Slice.h"
 #include "EncHRD.h"
+#include "GOPCfg.h"
 
 //! \ingroup EncoderLib
 //! \{
 
 namespace vvenc {
 
-void SEIEncoder::init( const VVEncCfg& encCfg, EncHRD& encHRD)
+void SEIEncoder::init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, EncHRD& encHRD)
 {
   m_pcEncCfg      = &encCfg;
+  m_gopCfg        = gopCfg;
   m_pcEncHRD      = &encHRD;
   m_isInitialized = true;
   ::memset(m_lastBPSEI,  0, sizeof(m_lastBPSEI));
@@ -72,8 +74,8 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   uint32_t uiInitialCpbRemovalDelay = (90000/2);                      // 0.5 sec
   bpSei.bpNalCpbParamsPresent = true;
   bpSei.bpVclCpbParamsPresent = true;
-  bpSei.bpMaxSubLayers = m_pcEncCfg->m_maxTempLayer;
-  bpSei.bpCpbCnt = 1;
+  bpSei.bpMaxSubLayers        = m_pcEncCfg->m_maxTLayer + 1;
+  bpSei.bpCpbCnt              = 1;
   for(int i=0; i < bpSei.bpMaxSubLayers; i++)
   {
     for(int j=0; j < bpSei.bpCpbCnt; j++)
@@ -96,7 +98,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   //       Using getIntraPeriod() should be avoided though, because it assumes certain GOP
   //       properties, which are only valid in CTC.
   //       Still copying this setting from HM for consistency, improvements welcome
-  bool isRandomAccess  = m_pcEncCfg->m_IntraPeriod > 0;
+  bool isRandomAccess  = m_pcEncCfg->m_picReordering;
   if( isRandomAccess && m_pcEncCfg->m_IntraPeriod < 256)
   {
     bpSei.cpbRemovalDelayLength =                                                           // 6  // 32 = 2^5 (plus 1)
@@ -113,6 +115,7 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
   bpSei.concatenationFlag = 0;
   //since the temporal layer HRDParameters is not ready, we assumed it is fixed
   bpSei.auCpbRemovalDelayDelta = 1;
+  CHECK( m_pcEncCfg->m_IntraPeriod % m_pcEncCfg->m_GOPSize != 0, "broken for aip" );
   bool bpDeltasGOPStructure = m_pcEncCfg->m_GOPSize == 8 || m_pcEncCfg->m_GOPSize == 16; //assume GOPs specified as in CTC
   bpSei.cpbRemovalDelayDeltasPresent = bpDeltasGOPStructure;
   if (bpSei.cpbRemovalDelayDeltasPresent)
@@ -173,12 +176,13 @@ void SEIEncoder::initBufferingPeriodSEI( SEIBufferingPeriod& bpSei, bool noLeadi
     }
   }
   bpSei.sublayerDpbOutputOffsetsPresent = true;
+  const std::vector<int>& numReorderPics = m_gopCfg->getNumReorderPics();
   for(int i = 0; i < bpSei.bpMaxSubLayers; i++)
   {
-    bpSei.dpbOutputTidOffset[i] = m_pcEncCfg->m_maxNumReorderPics[i] * (1<<(bpSei.bpMaxSubLayers-1-i));
-    if(bpSei.dpbOutputTidOffset[i] >= m_pcEncCfg->m_maxNumReorderPics[bpSei.bpMaxSubLayers-1])
+    bpSei.dpbOutputTidOffset[i] = numReorderPics[i] * (1<<(bpSei.bpMaxSubLayers-1-i));
+    if(bpSei.dpbOutputTidOffset[i] >= numReorderPics[bpSei.bpMaxSubLayers-1])
     {
-      bpSei.dpbOutputTidOffset[i] -= m_pcEncCfg->m_maxNumReorderPics[bpSei.bpMaxSubLayers-1];
+      bpSei.dpbOutputTidOffset[i] -= numReorderPics[bpSei.bpMaxSubLayers-1];
     }
     else
     {
@@ -258,6 +262,7 @@ void SEIEncoder::initPictureTimingSEI( SEIMessages& seiMessages, SEIMessages& ne
     const uint32_t temporalId = slice->TLayer;
     for( int i = temporalId ; i < maxNumSubLayers - 1 ; i ++ )
     {
+      CHECK( m_pcEncCfg->m_IntraPeriod % m_pcEncCfg->m_GOPSize != 0, "broken for aip" );
       int indexWithinGOP = (m_totalCoded[maxNumSubLayers - 1] - m_lastBPSEI[maxNumSubLayers - 1]) % m_pcEncCfg->m_GOPSize;
       ptSei->ptSubLayerDelaysPresent[i] = true;
       if( ((m_rapWithLeading == true) && (indexWithinGOP == 0)) || (m_totalCoded[maxNumSubLayers - 1] == 0) || bpPresentInAU || (slice->poc + m_pcEncCfg->m_GOPSize) > m_pcEncCfg->m_framesToBeEncoded )
