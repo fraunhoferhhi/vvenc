@@ -245,6 +245,15 @@ if( VVENC_USE_ADDRESS_SANITIZER )
    add_link_options( "-fsanitize=leak" )
 endif()
 
+# set thread sanitizer compiler arguments
+if( VVENC_USE_THREAD_SANITIZER )
+   # add compile options
+   add_compile_options( "-fno-omit-frame-pointer" )
+   add_compile_options( "-fsanitize=thread" )
+   add_link_options( "-fno-omit-frame-pointer" )
+   add_link_options( "-fsanitize=thread" )
+endif()
+
 # use ccache
 find_program( CCACHE_FOUND ccache )
 if( CCACHE_FOUND )

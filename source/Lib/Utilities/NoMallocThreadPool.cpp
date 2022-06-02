@@ -226,7 +226,7 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
         if( std::any_of( t.barriers.cbegin(), t.barriers.cend(), []( const Barrier* b ) { return b && b->isBlocked(); } ) )
         {
           // reschedule
-          t.state.store( WAITING, std::memory_order_relaxed );
+          t.state.store( WAITING );
           continue;
         }
         t.barriers.clear();   // clear barriers, so we don't need to check them on the next try (we assume they won't get locked again)
@@ -234,7 +234,7 @@ NoMallocThreadPool::TaskIterator NoMallocThreadPool::findNextTask( int threadId,
       if( t.readyCheck && t.readyCheck( threadId, t.param ) == false )
       {
         // reschedule
-        t.state.store( WAITING, std::memory_order_relaxed );
+        t.state.store( WAITING );
         continue;
       }
 
