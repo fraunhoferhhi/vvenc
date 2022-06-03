@@ -98,6 +98,7 @@ class EncPicture
   protected:
     void xInitPicEncoder        ( Picture& pic );
     void xWriteSliceData        ( Picture& pic );
+    void xCalcDistortion        ( Picture& pic, const SPS& sps );
 
     void xInitSliceColFromL0Flag( Slice* slice ) const;
     void xInitSliceCheckLDC     ( Slice* slice ) const;

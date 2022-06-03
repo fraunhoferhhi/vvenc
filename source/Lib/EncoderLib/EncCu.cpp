@@ -592,7 +592,7 @@ void EncCu::xCompressCU( CodingStructure*& tempCS, CodingStructure*& bestCS, Par
         m_tempQpDiff = pic->ctuAdaptedQP[ctuRsAddr] - BitAllocation::applyQPAdaptationSubCtu (&slice, m_pcEncCfg, lumaArea );
       }
 
-      if ((!slice.isIntra()) && // sub-CTU behavior, Museum fix
+      if ((!slice.isIntra()) && (pcv.maxCUSize > 64) && // sub-CTU behavior, Museum fix
           (uiLPelX + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceWidth)) &&
           (uiTPelY + (pcv.maxCUSize >> 1) < (m_pcEncCfg->m_PadSourceHeight)))
       {

@@ -103,6 +103,10 @@ namespace vvenc {
   E_( P_ALF_ENC_CTB             ) \
   E_( P_ALF_REC                 ) \
   E_( P_ALF                     ) \
+  E_( P_MCTF                    ) \
+  E_( P_MCTF_SEARCH             ) \
+  E_( P_MCTF_SEARCH_SUBPEL      ) \
+  E_( P_MCTF_APPLY              ) \
   E_( P_OTHER                   ) \
   E_( P_STAGES                  ) \
   E_( P_IGNORE                  )
@@ -407,7 +411,7 @@ typedef TimeProfiler TProfiler;
 typedef TimeProfiler2D TProfiler;
 #endif
 
-TProfiler* timeProfilerCreate ( const VVEncCfg& encCfg );
+TProfiler* timeProfilerCreate ( const vvenc_config& encCfg );
 void       timeProfilerResults( TProfiler* tp );
 
 #if ENABLE_TIME_PROFILING_MT_MODE

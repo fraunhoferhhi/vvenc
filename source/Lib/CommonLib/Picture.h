@@ -232,6 +232,8 @@ public:
   int                           picInitialQP;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
+  double                        psnr[MAX_NUM_COMP];
+  double                        mse [MAX_NUM_COMP];
 
   StopClock                     encTime;
   bool                          isSccWeak;

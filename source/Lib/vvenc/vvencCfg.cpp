@@ -1209,7 +1209,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     if ( c->m_updateCtrl > 0 && c->m_adpOption > 2 ) { c->m_adpOption -= 2; }
   }
 
-  if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400) )
+  if ( c->m_JointCbCrMode && ( c->m_internChromaFormat == VVENC_CHROMA_400 ) )
   {
     c->m_JointCbCrMode = false;
   }
@@ -1219,37 +1219,18 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     msg.log( VVENC_WARNING, "disable MCTF for QP < 17\n" );
     c->m_vvencMCTF.MCTF = 0;
   }
-  if( c->m_vvencMCTF.MCTF )
+  if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
   {
-    if( c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
+    const int nTLayers = std::min<int>( 6, log2( c->m_GOPSize ) );
+
+    c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = std::max( 1, nTLayers - ( ( c->m_QP - ( c->m_RCTargetBitrate > 0 ? 1 : 0 ) ) >> 4 ) );
+
+    for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
     {
-      if( c->m_GOPSize == 32 )
-      {
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-        c->m_vvencMCTF.MCTFFrames[2] = 32;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
-        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
-        c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
-      }
-      else if( c->m_GOPSize == 16 )
-      {
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
-        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
-      }
-      else if( c->m_GOPSize == 8 )
-      {
-        c->m_vvencMCTF.MCTFFrames[0]    = 8;
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.65625;     // 21/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 1;
-      }
+      c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
+      c->m_vvencMCTF.MCTFStrengths[i] = 2.0 / double ( c->m_vvencMCTF.numFrames - i );
     }
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = 1.5;  // used by JVET
   }
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
@@ -1646,8 +1627,8 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
                 c->m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
                 break;
         case 2: c->m_GOPList[i].m_QPOffset   = 0;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2353;
+                c->m_GOPList[i].m_QPOffsetModelOffset = -3.0625;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  0.1875;
                 break;
         case 3: c->m_GOPList[i].m_QPOffset   = 3;
                 c->m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
@@ -2221,7 +2202,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                     "Decoding Refresh Type must be comprised between 0 and 5 included" );
-  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );
   vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
@@ -2234,8 +2215,8 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_bipredSearchRange < 0 ,                                                   "Bi-prediction refinement search range must be more than 0" );
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
-  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 2,      "MCTFSpeed exceeds supported range (0..2)" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
 
@@ -2276,13 +2257,14 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
+  vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
   if( 1 << ( c->m_FastInferMerge & 7 ) > c->m_GOPSize )
   {
     const int hbm = c->m_FastInferMerge >> 3;
-    const int lbm = std::max<int>( 7, log2( c->m_GOPSize ) );
+    const int lbm = std::min<int>( 7, log2( c->m_GOPSize ) );
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
 
@@ -3053,7 +3035,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
@@ -3106,7 +3088,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_vvencMCTF.MCTFSpeed             = 2;
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
@@ -3232,7 +3214,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 4;
       c->m_MMVD                            = 3;
