@@ -737,7 +737,7 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
 
       prevBest = best;
-      int doubleRange = m_searchPttrn ? 6 : 10;
+      int doubleRange = m_searchPttrn ? 6 : 12;
 
       // first iteration, 36 or 16 checks
       for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
