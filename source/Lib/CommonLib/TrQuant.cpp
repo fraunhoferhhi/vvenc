@@ -824,7 +824,7 @@ void TrQuant::checktransformsNxN( TransformUnit &tu, std::vector<TrMode> *trMode
   const double                  thrTS    = trCosts.begin()->first;
   while (itC != trCosts.end())
   {
-    const bool testTr               = itC->first <= (itC->second == 1 ? thrTS : thr) && numTests <= maxCand;
+    const bool testTr               = itC->first <= (trModes->at(itC->second).first == 1 ? thrTS : thr) && numTests <= maxCand;
     trModes->at(itC->second).second = testTr;
     numTests += testTr;
     itC++;

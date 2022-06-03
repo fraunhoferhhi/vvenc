@@ -250,7 +250,7 @@ void EncRCPic::destroy()
   encRCSeq = NULL;
 }
 
-void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp)
+void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const int baseQP, int &qp)
 {
   int lastCurrTLQP = -1;
   int lastPrevTLQP = -1;
@@ -272,7 +272,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, int &qp
     }
   }
 
-  qp = Clip3 (0, MAX_QP, qp);
+  qp = Clip3 (frameLevel + std::max (0, baseQP >> 1), MAX_QP, qp);
 
   if (lastCurrTLQP >= 0) // limit QP changes among prev. frames from same temporal level
   {
@@ -649,7 +649,7 @@ double RateCtrl::getAverageBitsFromFirstPass()
   if (encRCSeq->intraPeriod > 1 && encRCSeq->gopSize > 1 && m_pcEncCfg->m_LookAhead)
   {
     const int gopsInIp  = encRCSeq->intraPeriod / encRCSeq->gopSize;
-    const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? -(m_pcEncCfg->m_GOPSize-1) : 0);
+    const int idr2Adj   = (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 - m_pcEncCfg->m_GOPSize : 0);
     int l = 1;
     uint64_t tlBits [8] = { 0 };
     unsigned tlCount[8] = { 0 };
@@ -869,6 +869,10 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           {
             encRcPic->targetBits = int( ( d *= 0.875 ) + 0.5 ); // increase QP of inserted I-frame by one if bit saving is necessary
           }
+          if ( d > 2.0 * encRcPic->tmpTargetBits )
+          {
+            encRcPic->targetBits = int( ( d = 2.0 * encRcPic->tmpTargetBits ) + 0.5 ); // avoid huge rate spending after easy scenes
+          }
 
           d /= (double)it->numBits;
           d = firstPassSliceQP - ( 105.0 / 128.0 ) * sqrt( (double)std::max( 1, firstPassSliceQP ) ) * log( d ) / log( 2.0 );
@@ -884,7 +888,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
               sliceQP = clipQP;
             }
           }
-          encRcPic->clipTargetQP( getPicList(), sliceQP );
+          encRcPic->clipTargetQP( getPicList(), m_pcEncCfg->m_QP + ( it->isIntra ? m_pcEncCfg->m_intraQPOffset : 0 ), sliceQP );
           lambda = it->lambda * pow( 2.0, double( sliceQP - firstPassSliceQP ) / 3.0 );
           lambda = Clip3( encRcSeq->minEstLambda, encRcSeq->maxEstLambda, lambda );
 
