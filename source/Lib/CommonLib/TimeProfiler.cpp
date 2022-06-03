@@ -70,7 +70,7 @@ namespace vvenc {
 #if ENABLE_TIME_PROFILING_EXTENDED
 static int profilerId = 0;
 #endif
-TProfiler* timeProfilerCreate( const VVEncCfg& encCfg )
+TProfiler* timeProfilerCreate( const vvenc_config& encCfg )
 {
   TProfiler* tp = nullptr;
 #if !ENABLE_TIME_PROFILING_EXTENDED

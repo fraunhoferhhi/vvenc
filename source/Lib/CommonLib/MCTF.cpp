@@ -397,6 +397,7 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
   m_MCTFSpeedVal     = m_encCfg->m_vvencMCTF.MCTFSpeed > 1 ? ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 0) : 0;
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
+  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
 }
 
 // ====================================================================================================================
@@ -465,6 +466,8 @@ void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& 
 
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF );
+
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
   int idx = (int)m_encCfg->m_vvencMCTF.numFrames - 1;
@@ -670,6 +673,8 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
   const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH );
+
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
@@ -729,12 +734,15 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     }
     if (doubleRes)
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
+      PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
+
       prevBest = best;
-      int doubleRange = 3 * 4;
-      // first iteration, 25 - 1 checks
-      for (int y2 = -doubleRange; y2 <= doubleRange; y2 += 6)
+      int doubleRange = m_searchPttrn ? 6 : 12;
+
+      // first iteration, 49 - 1 or 16 checks
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
       {
-        for (int x2 = -doubleRange; x2 <= doubleRange; x2 += 6)
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 4 )
         {
           if( x2 || y2 )
           {
@@ -748,8 +756,8 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
       }
 
       prevBest = best;
-      doubleRange = 3;
-      // second iteration, 16 checks
+      doubleRange = 2;
+      // second iteration, 9 - 1 checks
       for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 2 )
       {
         for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 2 )
@@ -959,6 +967,8 @@ inline static double fastExp( double n, double d )
 void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
   std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_APPLY );
+
   const int numRefs = int(srcFrameInfo.size());
 
   int refStrengthRow = 2;
