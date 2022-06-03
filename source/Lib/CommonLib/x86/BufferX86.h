@@ -1716,10 +1716,11 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
 {
   uint64_t saAct=0;
   pSrc -= iSrcStride;
-  int sum;
 
 #ifdef USE_AVX2
   int x;
+  int sum;
+
   if (width > 16)
   {
     __m256i scale1 = _mm256_set_epi16 (0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1,0,-1,-2,-1);
@@ -1809,15 +1810,87 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
   else
 #endif
   {
-    for (int y = 1; y < height - 1; y++)
+    int x;
+    int sum;
+
+    __m128i scale1 = _mm_set_epi16 (0,-1,-2,-1,0,-1,-2,-1);
+    __m128i scale0 = _mm_set_epi16 (0,-2,12,-2,0,-2,12,-2);
+    __m128i scale11 = _mm_set_epi16(0,0,0,0,0,-1,-2,-1);
+    __m128i scale00 = _mm_set_epi16 (0,0,0,0,0,-2,12,-2);
+    __m128i tmp1, tmp2, tmp3;
+    __m128i line0, lineP1, lineM1;
+
+    for (int y = 1; y < height-1; y += 1)
     {
-      for (int x = 1; x < width - 1; x++) // center cols
+      for (x = 1; x < width-1-6; x += 6)
       {
-        const int s = 12 * (int) pSrc[x  ] - 2 * ((int) pSrc[x-1] + (int) pSrc[x+1] + (int) pSrc[x  -iSrcStride] + (int) pSrc[x  +iSrcStride])
-                                                       - ((int) pSrc[x-1-iSrcStride] + (int) pSrc[x+1-iSrcStride] + (int) pSrc[x-1+iSrcStride] + (int) pSrc[x+1+iSrcStride]);
+        sum=0;
+        lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1]);
+        line0  = _mm_lddqu_si128 ((__m128i*) &pSrc [(y)*iSrcStride + x-1]);
+        lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-1]);
+
+        tmp1 = _mm_madd_epi16 (line0, scale0);
+        tmp2 = _mm_madd_epi16 (lineP1, scale1);
+        tmp3 = _mm_madd_epi16 (lineM1, scale1);
+        tmp1 = _mm_add_epi32(tmp1,tmp2);
+        tmp1 = _mm_add_epi32(tmp1,tmp3);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm_abs_epi32(tmp1);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+        sum+=_mm_extract_epi32 (tmp1, 0);
+
+        line0  = _mm_bsrli_si128 (line0 , 2);
+        lineP1 = _mm_bsrli_si128 (lineP1, 2);
+        lineM1 = _mm_bsrli_si128 (lineM1, 2);
+        tmp1 = _mm_madd_epi16 (line0, scale0);
+        tmp2 = _mm_madd_epi16 (lineP1, scale1);
+        tmp3 = _mm_madd_epi16 (lineM1, scale1);
+
+        tmp1 = _mm_add_epi32(tmp1,tmp2);
+        tmp1 = _mm_add_epi32(tmp1,tmp3);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm_abs_epi32(tmp1);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+
+        sum+=_mm_extract_epi32 (tmp1, 0);
+
+        lineM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[ (y -1)  *iSrcStride + x-1+2]);
+        line0  = _mm_lddqu_si128((__m128i*) &pSrc [(y)*iSrcStride + x-1+2]);
+        lineP1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-1+2]);
+        tmp1 = _mm_madd_epi16 (line0, scale00);
+        tmp2 = _mm_madd_epi16 (lineP1, scale11);
+        tmp3 = _mm_madd_epi16 (lineM1, scale11);
+        tmp1 = _mm_add_epi32(tmp1,tmp2);
+        tmp1 = _mm_add_epi32(tmp1,tmp3);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm_abs_epi32(tmp1);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+        sum+=_mm_extract_epi32 (tmp1, 0);
+
+        line0  = _mm_bsrli_si128 (line0 , 2);
+        lineP1 = _mm_bsrli_si128 (lineP1, 2);
+        lineM1 = _mm_bsrli_si128 (lineM1, 2);
+
+        tmp1 = _mm_madd_epi16 (line0, scale00);
+        tmp2 = _mm_madd_epi16 (lineP1, scale11);
+        tmp3 = _mm_madd_epi16 (lineM1, scale11);
+
+        tmp1 = _mm_add_epi32(tmp1,tmp2);
+        tmp1 = _mm_add_epi32(tmp1,tmp3);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+        tmp1 = _mm_abs_epi32(tmp1);
+        tmp1 = _mm_hadd_epi32(tmp1,tmp1);
+
+        sum+=_mm_extract_epi32 (tmp1, 0);
+        saAct += (uint64_t) sum;
+      }
+      // last collum
+      for (x=x; x < width - 1; x++) //
+      {
+        const int s = 12 * (int) pSrc[x  + y*iSrcStride ] - 2 * ((int) pSrc[x-1+y*iSrcStride] + (int) pSrc[x+1+y*iSrcStride] + (int) pSrc[x  -iSrcStride+y*iSrcStride] + (int) pSrc[x  +iSrcStride+y*iSrcStride])
+                                                       - ((int) pSrc[x-1-iSrcStride+y*iSrcStride] + (int) pSrc[x+1-iSrcStride+y*iSrcStride] + (int) pSrc[x-1+iSrcStride+y*iSrcStride] + (int) pSrc[x+1+iSrcStride+y*iSrcStride]);
         saAct += abs (s);
       }
-      pSrc += iSrcStride;
     }
   }
   return saAct;
@@ -2025,6 +2098,7 @@ uint64_t  HDHighPass2_SIMD  (const int width, const int height,const Pel*  pSrc,
   }
   return taAct;
 }
+
 template<X86_VEXT vext>
 uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, const Pel* pSrc, const int iSrcStride)
 {
@@ -2039,6 +2113,8 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
     const __m128i scale2 = _mm_set_epi16 (0, 0,-1,-3,12,12,-3,-1);
     const __m128i scale3 = _mm_set_epi16 (0, 0, 0,-1,-1,-1,-1, 0);
     __m128i tmp1, tmp2,tmp3,tmp4,tmp5;
+    __m128i l0, lP1, lM1, lP2, lM2, lP3;
+
     int sum;
 
     for (int y = 2; y < height-2; y += 2)
@@ -2051,26 +2127,26 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
         __m256i lineP1 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+1)*iSrcStride + x-2]);
         __m256i lineP2 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+2)*iSrcStride + x-2]);
         __m256i lineP3 = _mm256_lddqu_si256 ((__m256i*) &pSrc[(y+3)*iSrcStride + x-2]);
-        __m128i l0, lP1, lM1, lP2, lM2, lP3;
 
         for (int xx = 0; xx < 3; xx++)
         {
+          l0  = _mm256_castsi256_si128 (line0 );
+          lP1 = _mm256_castsi256_si128 (lineP1);
+          lM1 = _mm256_castsi256_si128 (lineM1);
+          lP2 = _mm256_castsi256_si128 (lineP2);
+          lM2 = _mm256_castsi256_si128 (lineM2);
+          lP3 = _mm256_castsi256_si128 (lineP3);
+
           if ((xx << 2) + x < width-2)
           {
             sum = 0;
-            l0  = _mm256_castsi256_si128 (line0 );
-            lP1 = _mm256_castsi256_si128 (lineP1);
             tmp1 = _mm_madd_epi16 (l0, scale2);
             tmp2 = _mm_madd_epi16 (lP1, scale2);
             tmp3 = _mm_add_epi32 (tmp1, tmp2);
-            lM1 = _mm256_castsi256_si128 (lineM1);
-            lP2 = _mm256_castsi256_si128 (lineP2);
             tmp1 = _mm_madd_epi16 (lM1, scale1);
             tmp2 = _mm_madd_epi16 (lP2, scale1);
             tmp4 = _mm_add_epi32(tmp1,tmp2);
             tmp4 = _mm_add_epi32(tmp4,tmp3);
-            lM2 = _mm256_castsi256_si128 (lineM2);
-            lP3 = _mm256_castsi256_si128 (lineP3);
             tmp1 = _mm_madd_epi16 (lM2, scale3);
             tmp2 = _mm_madd_epi16 (lP3, scale3);
             tmp5 = _mm_add_epi32(tmp1,tmp2);
@@ -2086,14 +2162,12 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
             sum = 0;
             l0  = _mm_bsrli_si128 (l0 , 4);
             lP1 = _mm_bsrli_si128 (lP1, 4);
-            //MULADD (l0 , lP1, scale2, tmp1, tmp2, sum)
             tmp1 = _mm_madd_epi16 (l0, scale2);
             tmp2 = _mm_madd_epi16 (lP1, scale2);
             tmp3 = _mm_add_epi32 (tmp1, tmp2);
 
             lM1 = _mm_bsrli_si128 (lM1, 4);
             lP2 = _mm_bsrli_si128 (lP2, 4);
-            //MULADD (lM1, lP2, scale1, tmp1, tmp2, sum)
             tmp1 = _mm_madd_epi16 (lM1, scale1);
             tmp2 = _mm_madd_epi16 (lP2, scale1);
             tmp4 = _mm_add_epi32(tmp1,tmp2);
@@ -2101,7 +2175,6 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
 
             lM2 = _mm_bsrli_si128 (lM2, 4);
             lP3 = _mm_bsrli_si128 (lP3, 4);
-            //MULADD (lM2, lP3, scale3, tmp1, tmp2, sum)
             tmp1 = _mm_madd_epi16 (lM2, scale3);
             tmp2 = _mm_madd_epi16 (lP3, scale3);
             tmp5 = _mm_add_epi32(tmp1,tmp2);
@@ -2127,22 +2200,82 @@ uint64_t AvgHighPassWithDownsampling_SIMD ( const int width, const int height, c
   else
 #endif
   {
-    for (int y = 2; y < height - 2; y += 2)
+    if (width > 6)
     {
-      for (int x = 2; x < width - 2; x += 2)
+      const __m128i scale1 = _mm_set_epi16 (0, 0,-1,-2,-3,-3,-2,-1);
+      const __m128i scale2 = _mm_set_epi16 (0, 0,-1,-3,12,12,-3,-1);
+      const __m128i scale3 = _mm_set_epi16 (0, 0, 0,-1,-1,-1,-1, 0);
+      __m128i tmp1, tmp2,tmp3,tmp4,tmp5;
+      __m128i l0, lP1, lM1, lP2, lM2, lP3;
+
+      int sum;
+
+      for (int y = 2; y < height-2; y += 2)
       {
-        const int f = 12 * ((int)pSrc[ y   *iSrcStride + x  ] + (int)pSrc[ y   *iSrcStride + x+1] + (int)pSrc[(y+1)*iSrcStride + x  ] + (int)pSrc[(y+1)*iSrcStride + x+1])
-                     - 3 * ((int)pSrc[(y-1)*iSrcStride + x  ] + (int)pSrc[(y-1)*iSrcStride + x+1] + (int)pSrc[(y+2)*iSrcStride + x  ] + (int)pSrc[(y+2)*iSrcStride + x+1])
-                     - 3 * ((int)pSrc[ y   *iSrcStride + x-1] + (int)pSrc[ y   *iSrcStride + x+2] + (int)pSrc[(y+1)*iSrcStride + x-1] + (int)pSrc[(y+1)*iSrcStride + x+2])
-                     - 2 * ((int)pSrc[(y-1)*iSrcStride + x-1] + (int)pSrc[(y-1)*iSrcStride + x+2] + (int)pSrc[(y+2)*iSrcStride + x-1] + (int)pSrc[(y+2)*iSrcStride + x+2])
-                         - ((int)pSrc[(y-2)*iSrcStride + x-1] + (int)pSrc[(y-2)*iSrcStride + x  ] + (int)pSrc[(y-2)*iSrcStride + x+1] + (int)pSrc[(y-2)*iSrcStride + x+2]
-                          + (int)pSrc[(y+3)*iSrcStride + x-1] + (int)pSrc[(y+3)*iSrcStride + x  ] + (int)pSrc[(y+3)*iSrcStride + x+1] + (int)pSrc[(y+3)*iSrcStride + x+2]
-                          + (int)pSrc[(y-1)*iSrcStride + x-2] + (int)pSrc[ y   *iSrcStride + x-2] + (int)pSrc[(y+1)*iSrcStride + x-2] + (int)pSrc[(y+2)*iSrcStride + x-2]
-                          + (int)pSrc[(y-1)*iSrcStride + x+3] + (int)pSrc[ y   *iSrcStride + x+3] + (int)pSrc[(y+1)*iSrcStride + x+3] + (int)pSrc[(y+2)*iSrcStride + x+3]);
-        saAct += (uint64_t) abs(f);
+        for (int x = 2; x < width-2; x += 4)
+        {
+          {
+            lM2 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y-2)*iSrcStride + x-2]);
+            lM1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y-1)*iSrcStride + x-2]);
+            l0  = _mm_lddqu_si128 ((__m128i*) &pSrc[ y   *iSrcStride + x-2]);
+            lP1 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+1)*iSrcStride + x-2]);
+            lP2 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+2)*iSrcStride + x-2]);
+            lP3 = _mm_lddqu_si128 ((__m128i*) &pSrc[(y+3)*iSrcStride + x-2]);
+
+            if ( x < width-2)
+            {
+              sum = 0;
+              tmp1 = _mm_madd_epi16 (l0, scale2);
+              tmp2 = _mm_madd_epi16 (lP1, scale2);
+              tmp3 = _mm_add_epi32 (tmp1, tmp2);
+              tmp1 = _mm_madd_epi16 (lM1, scale1);
+              tmp2 = _mm_madd_epi16 (lP2, scale1);
+              tmp4 = _mm_add_epi32(tmp1,tmp2);
+              tmp4 = _mm_add_epi32(tmp4,tmp3);
+              tmp1 = _mm_madd_epi16 (lM2, scale3);
+              tmp2 = _mm_madd_epi16 (lP3, scale3);
+              tmp5 = _mm_add_epi32(tmp1,tmp2);
+              tmp4 = _mm_add_epi32(tmp4,tmp5);
+              tmp1 = _mm_hadd_epi32 (tmp4, tmp4);
+              tmp1 = _mm_hadd_epi32 (tmp1, tmp1);
+              tmp1 = _mm_abs_epi32(tmp1);
+              sum += _mm_extract_epi32 (tmp1, 0);
+
+              saAct += (uint64_t) sum;
+             }
+            if (x + 2 < width-2)
+            {
+              sum = 0;
+              l0  = _mm_bsrli_si128 (l0 , 4);
+              lP1 = _mm_bsrli_si128 (lP1, 4);
+              tmp1 = _mm_madd_epi16 (l0, scale2);
+              tmp2 = _mm_madd_epi16 (lP1, scale2);
+              tmp3 = _mm_add_epi32 (tmp1, tmp2);
+
+              lM1 = _mm_bsrli_si128 (lM1, 4);
+              lP2 = _mm_bsrli_si128 (lP2, 4);
+              tmp1 = _mm_madd_epi16 (lM1, scale1);
+              tmp2 = _mm_madd_epi16 (lP2, scale1);
+              tmp4 = _mm_add_epi32(tmp1,tmp2);
+              tmp4 = _mm_add_epi32(tmp4,tmp3);
+
+              lM2 = _mm_bsrli_si128 (lM2, 4);
+              lP3 = _mm_bsrli_si128 (lP3, 4);
+              tmp1 = _mm_madd_epi16 (lM2, scale3);
+              tmp2 = _mm_madd_epi16 (lP3, scale3);
+              tmp5 = _mm_add_epi32(tmp1,tmp2);
+              tmp4 = _mm_add_epi32(tmp4,tmp5);
+              tmp1 = _mm_hadd_epi32 (tmp4, tmp4);
+              tmp1 = _mm_hadd_epi32 (tmp1, tmp1);
+              tmp1 = _mm_abs_epi32(tmp1);
+              sum += _mm_extract_epi32 (tmp1, 0);
+              saAct += (uint64_t) sum;
+              }
+          }
+        }
       }
     }
-  }
+ }
   return saAct;
 }
 template<X86_VEXT vext>

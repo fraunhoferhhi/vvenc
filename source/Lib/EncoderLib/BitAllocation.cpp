@@ -106,7 +106,6 @@ static double filterAndCalculateAverageActivity (const Pel* pSrc, const int iSrc
   // center rows
   if (isUHD) // high-pass with downsampling
   {
-    const int i2M0Stride = iSrcStride * 2;
     const int i2M1Stride = iSM1Stride * 2;
     CHECK (pSM1 == nullptr || iSM1Stride <= 0 || iSM1Stride < width, "Pel buffer pointer pSM1 must not be null!");
     pSrc += iSrcStride;
