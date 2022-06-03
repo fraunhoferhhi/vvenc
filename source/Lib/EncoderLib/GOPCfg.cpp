@@ -320,7 +320,7 @@ void GOPCfg::xCreateGopListRA( int maxNumRefs, int maxGopSize, int gopSize, cons
   {
     const GOPEntryList& prevList = *prevGopLists.back();
     const int prevGopSize = (int)prevList.size();
-    for( const auto gopEntry : prevList )
+    for( const auto& gopEntry : prevList )
     {
       if( gopEntry.m_temporalId == 0 || gopEntry.m_temporalId == 1 )
       {

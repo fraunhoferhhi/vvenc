@@ -1351,8 +1351,8 @@ bool EncGOP::xIsSliceTemporalSwitchingPoint( const Slice* slice, const PicList& 
 
 void EncGOP::xInitPicsInCodingOrder( const PicList& picList, bool flush )
 {
-  CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no multi-threading enabled, but multiple pics in flight" );
-  CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() > 0, "no multi-threading enabled, but multiple pics in flight" );
+  CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no frame parallel processing enabled, but multiple pics in flight" );
+  CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() > 0, "no frame parallel processing enabled, but multiple pics in flight" );
 
   // loop over pic list, which is sorted in coding number order 
   for( auto pic : picList )
