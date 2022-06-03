@@ -466,7 +466,7 @@ void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& 
 
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF );
+  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
 
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
