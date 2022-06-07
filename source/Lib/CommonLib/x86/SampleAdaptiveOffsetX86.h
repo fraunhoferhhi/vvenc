@@ -730,11 +730,188 @@ void offsetBlock_SIMD( const int     channelBitDepth,
 #endif
 }
 
+template <X86_VEXT vext>
+void calcSaoStatisticsBo_SIMD(Pel*  srcLine,Pel*  orgLine,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
+{
+  if ( endX % 16 == 0 )
+  {
+    int i_bo_range_shift = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+    __m128i vzero = _mm_setzero_si128();
+    for (int y=0; y<endY; y++)
+    {
+      for (int x=0; x<endX; x+=16)
+      {
+        __m128i vsrca, vsrcb;
+        __m128i vdiffa,vdiffb;
+        if (sizeof(Pel) == 1){
+          __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+          vsrca = _mm_unpacklo_epi8(vsrc, vzero);
+          vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
+          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
+          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        else
+        {
+          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
+          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        __m128i vbanda = _mm_srai_epi16(vsrca, i_bo_range_shift);
+        __m128i vbandb = _mm_srai_epi16(vsrcb, i_bo_range_shift);
+        int iBand;
+        // since gcc 4.6 synopsis of _mm_extract_epi16 has changed to (int)(unsigned short)_mm_extract_epi16()
+        // therefore cast result to short to have signed values
+        short iDiff;
+        iBand = _mm_extract_epi16(vbanda, 0);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 0);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 1);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 1);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 2);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 2);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 3);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 3);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 4);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 4);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 5);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 5);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 6);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 6);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbanda, 7);
+        iDiff = (short)_mm_extract_epi16(vdiffa, 7);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 0);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 0);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 1);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 1);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 2);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 2);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 3);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 3);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 4);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 4);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 5);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 5);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 6);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 6);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+        iBand = _mm_extract_epi16(vbandb, 7);
+        iDiff = (short)_mm_extract_epi16(vdiffb, 7);
+        diff[iBand]  += iDiff;
+        count[iBand] += 1;
+      }
+      srcLine += srcStride;
+      orgLine += orgStride;
+    }
+  }
+  else
+  {
+    int i,j;
+    int iBoRangeShift = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+    for ( i = 0; i < endY; i++ )
+    {
+      for ( j = 0; j < endX; j++, srcLine++, orgLine++ )
+      {
+        int iBand            = *srcLine >> iBoRangeShift;
+        diff[iBand]  += (*orgLine - *srcLine);
+        count[iBand] += 1;
+      }
+      srcLine += srcStride - endX;
+      orgLine += orgStride - endX;
+    }
+  }
+}
+
+template <X86_VEXT vext>
+void calcSaoStatisticsEo0_SIMD(int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *diff,int64_t  *count)
+{
+#if 0
+  // m_fnCalcSaoStatisticsEo0( pRec, pOrg, iSizeX, iSizeY, srcStride, iStrideOrg, iNaLeft, iNaRight, iNaTop, pcSaoStats->getSaoStatsCount(), pcSaoStats->getSaoStatsDiff() );
+  Pel* pRec      = srcLine + startX;
+  Pel* pOrg      = orgLine + startX;
+  int iNaWidth = iNaLeft + iNaRight;
+  int i,j;
+int iSizeY=endY;
+int iSizeX=endX-startX;
+
+
+  for ( i = 0; i < iSizeY; i++ )
+  {
+    Int iSignLeft = getSign( *pRec - *(pRec - 1) );
+    for ( j = 0; j < iSizeX - iNaWidth; j++, pRec++, pOrg++ )
+    {
+      Int iSignRight       = getSign( *pRec - *(pRec + 1) );
+      Int iType            = iSignLeft + iSignRight + 2;
+      iSignLeft            = -1 * iSignRight;
+      diff[iType]  += (*pOrg - *pRec);
+      count[iType] += 1;
+    }
+    pRec += srcStride - ( iSizeX - iNaWidth );
+    pOrg += iStrideOrg - ( iSizeX - iNaWidth );
+  }
+
+#else
+
+  int x,y,edgeType;
+  int8_t signLeft, signRight;
+  for (y=0; y<endY; y++)
+  {
+    signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
+    for (x=startX; x<endX; x++)
+    {
+      signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
+      edgeType  =  signRight + signLeft;
+      signLeft  = -signRight;
+      diff [edgeType] += (orgLine[x] - srcLine[x]);
+      count[edgeType] ++;
+    }
+    srcLine  += srcStride;
+    orgLine  += orgStride;
+  }
+#endif
+}
+
 
 template <X86_VEXT vext>
 void SampleAdaptiveOffset::_initSampleAdaptiveOffsetX86()
 {
   offsetBlock= offsetBlock_SIMD<vext>;
+  calcSaoStatisticsEo0 =  calcSaoStatisticsEo0_SIMD<vext>;
+  calcSaoStatisticsBo =  calcSaoStatisticsBo_SIMD<vext>;
+
 }
 
 template void SampleAdaptiveOffset::_initSampleAdaptiveOffsetX86<SIMDX86>();

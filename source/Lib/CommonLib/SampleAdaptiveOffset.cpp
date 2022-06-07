@@ -278,6 +278,48 @@ void offsetBlock_core(const int channelBitDepth, const ClpRng& clpRng, int typeI
   }
   }
 }
+void calcSaoStatisticsEo0_Core(int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *diff,int64_t  *count)
+{
+  int x,y,edgeType;
+  int8_t signLeft, signRight;
+  for (y=0; y<endY; y++)
+  {
+    signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
+    for (x=startX; x<endX; x++)
+    {
+      signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
+      edgeType  =  signRight + signLeft;
+      signLeft  = -signRight;
+      diff [edgeType] += (orgLine[x] - srcLine[x]);
+      count[edgeType] ++;
+    }
+    srcLine  += srcStride;
+    orgLine  += orgStride;
+  }
+
+}
+
+void calcSaoStatisticsBo_Core(Pel*  srcLine,Pel*  orgLine,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
+{
+  printf("calcSaoStatisticsBo_Core\n");
+  int x,y;
+  int startX=0;
+  int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+  for (y=0; y< endY; y++)
+  {
+    for (x=startX; x< endX; x++)
+    {
+      int bandIdx= srcLine[x] >> shiftBits;
+      diff [bandIdx] += (orgLine[x] - srcLine[x]);
+      count[bandIdx] ++;
+    }
+    srcLine += srcStride;
+    orgLine += orgStride;
+  }
+
+
+}
+
 
 void SAOOffset::reset()
 {
@@ -311,6 +353,8 @@ SampleAdaptiveOffset::~SampleAdaptiveOffset()
 void SampleAdaptiveOffset::init( ChromaFormat format, uint32_t maxCUWidth, uint32_t maxCUHeight, uint32_t lumaBitShift, uint32_t chromaBitShift )
 {
   offsetBlock = offsetBlock_core;
+  calcSaoStatisticsEo0 =  calcSaoStatisticsEo0_Core;
+  calcSaoStatisticsBo = calcSaoStatisticsBo_Core;
 #if ENABLE_SIMD_OPT_SAO && defined( TARGET_SIMD_X86 )
   initSampleAdaptiveOffsetX86();
 #endif
