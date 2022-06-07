@@ -1792,7 +1792,7 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
         saAct += (uint64_t) sum;
       }
       // last collum
-      for (x=x; x < width - 1; x++) //
+      for (; x < width - 1; x++) //
       {
         const int s = 12 * (int) pSrc[x  + y*iSrcStride ] - 2 * ((int) pSrc[x-1+y*iSrcStride] + (int) pSrc[x+1+y*iSrcStride] + (int) pSrc[x  -iSrcStride+y*iSrcStride] + (int) pSrc[x  +iSrcStride+y*iSrcStride])
                                                        - ((int) pSrc[x-1-iSrcStride+y*iSrcStride] + (int) pSrc[x+1-iSrcStride+y*iSrcStride] + (int) pSrc[x-1+iSrcStride+y*iSrcStride] + (int) pSrc[x+1+iSrcStride+y*iSrcStride]);
