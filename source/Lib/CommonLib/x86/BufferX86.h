@@ -1701,13 +1701,6 @@ void fillPtrMap_SIMD( void** ptr, ptrdiff_t ptrStride, int width, int height, vo
     }
   }
 }
-#define MULADD(p1, p2, scale, tmp1, tmp2, sum) \
-        tmp1 = _mm_madd_epi16 (p1, scale); \
-        tmp2 = _mm_madd_epi16 (p2, scale); \
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp2); \
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
-        tmp1 = _mm_hadd_epi32 (tmp1, tmp1); \
-        sum += _mm_extract_epi32 (tmp1, 0);
 
 #define _mm_storeu_si16(p, a) (void)(*(short*)(p) = (short)_mm_cvtsi128_si32((a)))
 
@@ -1885,7 +1878,7 @@ uint64_t AvgHighPass_SIMD( const int width, const int height, const Pel* pSrc, c
         saAct += (uint64_t) sum;
       }
       // last collum
-      for (x=x; x < width - 1; x++) //
+      for (; x < width - 1; x++) //
       {
         const int s = 12 * (int) pSrc[x  + y*iSrcStride ] - 2 * ((int) pSrc[x-1+y*iSrcStride] + (int) pSrc[x+1+y*iSrcStride] + (int) pSrc[x  -iSrcStride+y*iSrcStride] + (int) pSrc[x  +iSrcStride+y*iSrcStride])
                                                        - ((int) pSrc[x-1-iSrcStride+y*iSrcStride] + (int) pSrc[x+1-iSrcStride+y*iSrcStride] + (int) pSrc[x-1+iSrcStride+y*iSrcStride] + (int) pSrc[x+1+iSrcStride+y*iSrcStride]);
