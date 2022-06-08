@@ -404,7 +404,7 @@ void EncLib::encodePicture( bool flush, const vvencYUVBuffer* yuvInBuf, AccessUn
       if( picShared )
       {
         picShared->reuse( m_picsRcvd, yuvInBuf );
-        if( ! picShared->isLeadTrail() )
+        if( picShared->getPOC() >= 0 ) // skip lead frames
         {
           m_gopCfg->getNextGopEntry( picShared->m_gopEntry );
         }
@@ -542,7 +542,21 @@ void EncLib::xAssignPrevQpaBufs( PicShared* picShared )
 
   if( m_encCfg.m_sliceTypeAdapt )
   {
-    if( picShared->m_gopEntry.m_temporalId == 0 )
+    bool isTL0 = false;
+    if( picShared->getPOC() >= 0 )
+    {
+      isTL0 = picShared->m_gopEntry.m_temporalId == 0;
+    }
+    else
+    {
+      // lead pictures, before first I frame
+      const int numGops     = m_encCfg.m_IntraPeriod > 0 ? m_encCfg.m_IntraPeriod / m_encCfg.m_GOPSize               : 0;
+      const int numRemain   = m_encCfg.m_IntraPeriod > 0 ? m_encCfg.m_IntraPeriod - ( numGops * m_encCfg.m_GOPSize ) : 0;
+      const int lastGopSize = numRemain > 0 ? numRemain : m_encCfg.m_GOPSize;
+      const int idr2Adj     = m_encCfg.m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0;
+      isTL0                 = ( ( picShared->getPOC() + idr2Adj ) % lastGopSize ) == 0;
+    }
+    if( isTL0 )
     {
       if( m_prevSharedTL0 )
       {
