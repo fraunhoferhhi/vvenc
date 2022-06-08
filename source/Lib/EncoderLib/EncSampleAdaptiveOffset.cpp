@@ -818,7 +818,10 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         startX = (isLeftAvail  ? 0 : 1);
         endX   = (isRightAvail ? (width - skipLinesR) : (width - 1));
 #if 1
-        calcSaoStatisticsEo0(startX,endX,endY,srcLine,orgLine,srcStride,orgStride,diff,count);
+        calcSaoStatisticsEo0(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff);
+//        for (int tt=0;tt<MAX_NUM_SAO_CLASSES;tt++)
+//          printf("type %d diff %ld count %ld \n",tt,statsData.diff[tt],statsData.count[tt]);
+//        exit(1);
 #else
         for (y=0; y<endY; y++)
         {
@@ -828,13 +831,13 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
             signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
             edgeType  =  signRight + signLeft;
             signLeft  = -signRight;
-
             diff [edgeType] += (orgLine[x] - srcLine[x]);
             count[edgeType] ++;
           }
           srcLine  += srcStride;
           orgLine  += orgStride;
         }
+
 #endif
       }
       break;
@@ -997,23 +1000,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         startX = 0;
         endX   = isRightAvail ? (width - skipLinesR) : width;
         endY   = isBelowAvail ? (height- skipLinesB) : height;
-#if 1
         calcSaoStatisticsBo(srcLine,orgLine,endX,endY,srcStride,orgStride,channelBitDepth,count,diff);
-#else
-        int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
-        for (y=0; y< endY; y++)
-        {
-          for (x=startX; x< endX; x++)
-          {
-
-            int bandIdx= srcLine[x] >> shiftBits;
-            diff [bandIdx] += (orgLine[x] - srcLine[x]);
-            count[bandIdx] ++;
-          }
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
-#endif
       }
       break;
     default:

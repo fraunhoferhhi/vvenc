@@ -109,7 +109,7 @@ protected:
                         std::vector<int8_t> &signLineBuf2);
 
 
-  void (*calcSaoStatisticsEo0) (int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *count,int64_t  *diff);
+  void (*calcSaoStatisticsEo0) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *count,int64_t  *diff);
   void (*calcSaoStatisticsBo) (Pel*  srcLine,Pel*  orgLine,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff);
 
   void invertQuantOffsets       (ComponentID compIdx, int typeIdc, int typeAuxInfo, int* dstOffsets, int* srcOffsets);

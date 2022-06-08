@@ -57,6 +57,7 @@ namespace vvenc {
 
 #define SAO_NUM_OFFSETS                     4 /* number of SAO offset values */
 #define SAO_EO_NUM_CATEGORIES               (SAO_NUM_OFFSETS + 1) /* number of different eo categories */
+#define TH_SAO 0
 
 template <X86_VEXT vext>
 void offsetBlock_SIMD( const int     channelBitDepth,
@@ -854,54 +855,242 @@ void calcSaoStatisticsBo_SIMD(Pel*  srcLine,Pel*  orgLine,int endX,int endY,int 
     }
   }
 }
+template<X86_VEXT vext>
+void print128_num(__m128i var)
+{
+    uint16_t val[8];
+    memcpy(val, &var, sizeof(val));
+    printf(" %i %i %i %i %i %i %i %i \n",
+           val[0], val[1], val[2], val[3], val[4], val[5],
+           val[6], val[7]);
+}
+template<X86_VEXT vext>
+void print128_num32(__m128i var)
+{
+    uint32_t val[4];
+    memcpy(val, &var, sizeof(val));
+    printf(" %i %i %i %i \n",
+           val[0], val[1], val[2], val[3]);
+}
 
 template <X86_VEXT vext>
-void calcSaoStatisticsEo0_SIMD(int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *diff,int64_t  *count)
+void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff)
 {
-#if 0
-  // m_fnCalcSaoStatisticsEo0( pRec, pOrg, iSizeX, iSizeY, srcStride, iStrideOrg, iNaLeft, iNaRight, iNaTop, pcSaoStats->getSaoStatsCount(), pcSaoStats->getSaoStatsDiff() );
-  Pel* pRec      = srcLine + startX;
-  Pel* pOrg      = orgLine + startX;
+  int iNaLeft=startX;
+  int iNaRight=width-endX;
+  int iSizeY=endY;
+  int iSizeX=width;
+
+  Pel* pRec      = srcLine;
+  Pel* pOrg      =orgLine ;
   int iNaWidth = iNaLeft + iNaRight;
   int i,j;
-int iSizeY=endY;
-int iSizeX=endX-startX;
-
-
-  for ( i = 0; i < iSizeY; i++ )
+ if ( iSizeX % 16 == 0 )
+  // if (  0 )
   {
-    Int iSignLeft = getSign( *pRec - *(pRec - 1) );
-    for ( j = 0; j < iSizeX - iNaWidth; j++, pRec++, pOrg++ )
+   diff -=2;
+   count-=2;
+
+    __m128i vzero       = _mm_set1_epi8(0);
+    __m128i vplusone    = _mm_set1_epi8(1);
+    __m128i vbaseoffset = _mm_set1_epi8(2);
+
+    // store intermediate results in 32bit partial sums for each EO type
+    __m128i vdiffsum[NUM_SAO_EO_CLASSES];
+    __m128i vcountsum[NUM_SAO_EO_CLASSES];
+    __m128i vconst[NUM_SAO_EO_CLASSES];
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
     {
-      Int iSignRight       = getSign( *pRec - *(pRec + 1) );
-      Int iType            = iSignLeft + iSignRight + 2;
-      iSignLeft            = -1 * iSignRight;
-      diff[iType]  += (*pOrg - *pRec);
-      count[iType] += 1;
+      vdiffsum[i]  = _mm_set1_epi32(0);
+      vcountsum[i] = _mm_set1_epi32(0);
+      vconst[i]    = _mm_set1_epi16(i);
     }
-    pRec += srcStride - ( iSizeX - iNaWidth );
-    pOrg += iStrideOrg - ( iSizeX - iNaWidth );
+
+    // create masks for first and last pixel row
+    __m128i vmaskgs = _mm_set1_epi16(0);
+    __m128i vmaskge = _mm_set1_epi16(0);
+    if ( iNaLeft )
+    {
+      switch (iNaLeft)
+      {
+      case 1:
+        vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
+        break;
+      case 2:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0,0,0xffff,0xffff);
+        break;
+      case 3:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0,0xffff,0xffff,0xffff);
+        break;
+      case 4:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 5:
+        vmaskgs = _mm_set_epi16(0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 6:
+        vmaskgs = _mm_set_epi16(0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 7:
+        vmaskgs = _mm_set_epi16(0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      }
+    }
+    if ( iNaRight )
+    {
+      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
+      switch (iNaRight)
+      {
+      case 1:
+        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
+        break;
+      case 2:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
+        break;
+      case 3:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
+        break;
+      case 4:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
+        break;
+      case 5:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
+        break;
+      case 6:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
+        break;
+      case 7:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
+        break;
+      }
+    }
+    int x;
+    for ( int y = 0; y < iSizeY; y++)
+    {
+      __m128i vmaskga = vmaskgs;
+      __m128i vmaskgb = vzero;
+      for (  x= 0; x < iSizeX; x+=16 )
+      {
+        __m128i vsrcal,vsrcar;
+        __m128i vsrcbl,vsrcbr;
+        __m128i vdiffa,vdiffb;
+
+        // set mask for last pixel
+        if ( x >= iSizeX - 16 )
+        {
+          vmaskgb = vmaskge;
+        }
+
+        // load reconstruction and compute difference between original signal and reconstruction
+        if (sizeof(Pel) == 1){
+          __m128i vsrc = _mm_load_si128((__m128i*)&pRec[x]);
+          __m128i vsrcl = _mm_loadu_si128((__m128i*)&pRec[x-1]);
+          __m128i vsrcr = _mm_loadu_si128((__m128i*)&pRec[x+1]);
+          __m128i vsrca = _mm_unpacklo_epi8(vsrc, vzero);
+          __m128i vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
+          vsrcal = _mm_unpacklo_epi8(vsrcl, vzero);
+          vsrcbl = _mm_unpackhi_epi8(vsrcl, vzero);
+          vsrcar = _mm_unpacklo_epi8(vsrcr, vzero);
+          vsrcbr = _mm_unpackhi_epi8(vsrcr, vzero);
+          vsrcal = _mm_sub_epi16(vsrca, vsrcal);
+          vsrcar = _mm_sub_epi16(vsrca, vsrcar);
+          vsrcbl = _mm_sub_epi16(vsrcb, vsrcbl);
+          vsrcbr = _mm_sub_epi16(vsrcb, vsrcbr);
+          __m128i vorg  = _mm_loadu_si128((__m128i*)&pOrg[x]);
+          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
+          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }else {
+          __m128i vsrca = _mm_load_si128((__m128i*)&pRec[x]);
+          vsrcal = _mm_loadu_si128((__m128i*)&pRec[x-1]);
+          vsrcar = _mm_loadu_si128((__m128i*)&pRec[x+1]);
+          vsrcal = _mm_sub_epi16(vsrca, vsrcal);
+          vsrcar = _mm_sub_epi16(vsrca, vsrcar);
+          __m128i vsrcb = _mm_loadu_si128((__m128i*)&pRec[x+8]);
+          vsrcbl = _mm_loadu_si128((__m128i*)&pRec[x+8-1]);
+          vsrcbr = _mm_loadu_si128((__m128i*)&pRec[x+8+1]);
+          vsrcbl = _mm_sub_epi16(vsrcb, vsrcbl);
+          vsrcbr = _mm_sub_epi16(vsrcb, vsrcbr);
+          __m128i vorga = _mm_loadu_si128((__m128i*)&pOrg[x]);
+          __m128i vorgb = _mm_loadu_si128((__m128i*)&pOrg[x+8]);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+
+        // compute sign and type for 16 pixels
+        __m128i vsignl = _mm_packs_epi16(vsrcal, vsrcbl);
+        __m128i vsignr = _mm_packs_epi16(vsrcar, vsrcbr);
+        vsignl = _mm_sign_epi8(vplusone, vsignl);
+        vsignr = _mm_sign_epi8(vplusone, vsignr);
+        __m128i vtype  = _mm_add_epi8(_mm_add_epi8(vsignl, vsignr), vbaseoffset);
+        __m128i vtypea = _mm_unpacklo_epi8(vtype, vzero);
+        __m128i vtypeb = _mm_unpackhi_epi8(vtype, vzero);
+        vtypea = _mm_or_si128(vtypea, vmaskga);
+        vtypeb = _mm_or_si128(vtypeb, vmaskgb);
+
+        // count occurence of each type and accumulate partial sums for each type
+        for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+        {
+          __m128i vmaska = _mm_cmpeq_epi16(vtypea, vconst[i]);
+          __m128i vmaskb = _mm_cmpeq_epi16(vtypeb, vconst[i]);
+          __m128i vdiffma = _mm_and_si128(vmaska, vdiffa);
+          __m128i vdiffmb = _mm_and_si128(vmaskb, vdiffb);
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffma, vconst[1]));
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffmb, vconst[1]));
+          __m128i vcountma = _mm_srli_epi16(vmaska,15);
+          __m128i vcountmb = _mm_srli_epi16(vmaskb,15);
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountma, vconst[1]));
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountmb, vconst[1]));
+        }
+        // clear mask for first pixel
+        vmaskga = vzero;
+
+
+      }
+      // next pixel line
+      pRec += srcStride;
+      pOrg += orgStride;
+    }
+    // horizontal add of four 32 bit partial sums
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 8));
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 4));
+      diff[i] = _mm_cvtsi128_si32(vdiffsum[i]);
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 8));
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 4));
+      count[i] = _mm_cvtsi128_si32(vcountsum[i]);
+      //printf("FINAL: w %d h %d l %d r %d class %d  diff %ld count %ld \n",width,endY,startX,endX,i,diff[i],count[i]);
+    }
+
   }
-
-#else
-
-  int x,y,edgeType;
-  int8_t signLeft, signRight;
-  for (y=0; y<endY; y++)
+  else
   {
-    signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
-    for (x=startX; x<endX; x++)
+    pRec      = srcLine + iNaLeft;
+    pOrg      =orgLine + iNaLeft;
+
+    for ( i = 0; i < iSizeY; i++ )
     {
-      signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
-      edgeType  =  signRight + signLeft;
-      signLeft  = -signRight;
-      diff [edgeType] += (orgLine[x] - srcLine[x]);
-      count[edgeType] ++;
+      int iSignLeft = sgn( *pRec - *(pRec - 1) );
+      for ( j = 0; j < iSizeX - iNaWidth; j++, pRec++, pOrg++ )
+      {
+        int iSignRight       = sgn( *pRec - *(pRec + 1) );
+        //printf("%d ",*pRec);
+        int iType            = iSignLeft + iSignRight;
+        iSignLeft            = -1 * iSignRight;
+        diff[iType]  += (*pOrg - *pRec);
+        count[iType] += 1;
+      }
+      pRec += srcStride - ( iSizeX - iNaWidth );
+      pOrg += orgStride - ( iSizeX - iNaWidth );
     }
-    srcLine  += srcStride;
-    orgLine  += orgStride;
+//    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+//    {
+//      printf("FINAL: w %d h %d l %d r %d class %d  diff %ld count %ld \n",width,endY,startX,endX,i,diff[i],count[i]);
+//
+//    }
   }
-#endif
 }
 
 
