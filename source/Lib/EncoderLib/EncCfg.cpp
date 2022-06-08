@@ -65,7 +65,7 @@ void VVEncCfg::xInitCfgMembers()
 {
   m_stageParallelProc = m_numThreads > 0;
   m_log2GopSize       = floorLog2( m_GOPSize );
-  m_maxTLayer         = m_picReordering && m_GOPSize > 1 ? ceilLog2( m_GOPSize ) : 0;
+  m_maxTLayer         = m_lowDelay || m_GOPSize <= 1 ? 0 : vvenc::ceilLog2( m_GOPSize );
 }
 
 }

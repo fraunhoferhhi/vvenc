@@ -54,7 +54,7 @@ namespace vvenc {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
+void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bLowDelay, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg )
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
@@ -62,7 +62,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bP
   m_refreshType      = refreshType;
   m_fixedIntraPeriod = intraPeriod;
   m_maxGopSize       = gopSize;
-  m_gopMode          = m_fixedIntraPeriod != 1 ? ( bPicReordering ? GM_RA : GM_LD ) : GM_AI;
+  m_gopMode          = m_fixedIntraPeriod != 1 ? ( bLowDelay ? GM_LD : GM_RA ) : GM_AI;
   m_defGopSize       = m_fixedIntraPeriod > 0 ? std::min( m_maxGopSize, m_fixedIntraPeriod ) : m_maxGopSize;
   m_maxNumRefs       = m_gopMode == GM_LD && m_maxGopSize >= 8 ? MAX_NUM_ACTIVE_REFS_LD8 : MAX_NUM_ACTIVE_REFS_RA;
 

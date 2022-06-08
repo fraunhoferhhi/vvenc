@@ -997,7 +997,7 @@ void EncGOP::xInitSPS(SPS &sps) const
   sps.saoEnabled                    = m_pcEncCfg->m_bUseSAO;
   sps.jointCbCr                     = m_pcEncCfg->m_JointCbCrMode;
   sps.maxTLayers                    = m_pcEncCfg->m_maxTLayer + 1;
-  sps.rpl1CopyFromRpl0              = m_pcEncCfg->m_picReordering == 0;
+  sps.rpl1CopyFromRpl0              = m_pcEncCfg->m_lowDelay;
   sps.SbtMvp                        = m_pcEncCfg->m_SbTMVP;
   sps.CIIP                          = m_pcEncCfg->m_CIIP != 0;
   sps.SBT                           = m_pcEncCfg->m_SBT != 0;
@@ -2428,7 +2428,8 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
                                   slice->isIntra(),
                                   slice->TLayer,
                                   pic->gopEntry->m_isStartOfIntra,
-                                  pic->gopEntry->m_isStartOfGop );
+                                  pic->gopEntry->m_isStartOfGop,
+                                  pic->gopEntry->m_gopNum );
   }
 
   //===== add PSNR =====

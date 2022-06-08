@@ -64,12 +64,12 @@ namespace vvenc {
   struct TRCPassStats
   {
     TRCPassStats( const int _poc, const int _qp, const double _lambda, const uint16_t _visActY,
-                  uint32_t _numBits, double _psnrY, bool _isIntra, int _tempLayer,
-                  bool _isStartOfIntra, bool _isStartOfGop ) :
+                  const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
+                  const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
                   numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
                   tempLayer( _tempLayer ),
-                  isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ),
+                  isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {}
     int       poc;
@@ -82,6 +82,7 @@ namespace vvenc {
     int       tempLayer;
     bool      isStartOfIntra;
     bool      isStartOfGop;
+    int       gopNum;
     bool      isNewScene;
     bool      refreshParameters;
     double    frameInGopRatio;
@@ -163,7 +164,7 @@ namespace vvenc {
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                          const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer,
-                         const bool isStartOfIntra, const bool isStartOfGop);
+                         const bool isStartOfIntra, const bool isStartOfGop, const int gopNum);
     void processFirstPassData (const bool flush);
     void processFirstPassData (const bool flush, int poc);
     void processGops();

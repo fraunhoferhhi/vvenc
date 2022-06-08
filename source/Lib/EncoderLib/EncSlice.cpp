@@ -133,7 +133,7 @@ struct TileLineEncRsrc
   IbcBvCand               m_CachedBvs;
   EncSampleAdaptiveOffset m_encSao;
   int                     m_prevQp[ MAX_NUM_CH ];
-  TileLineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_picReordering ); }
+  TileLineEncRsrc( const VVEncCfg& encCfg ) : m_CABACEstimator( m_BitEstimator ), m_SaoCABACEstimator( m_SaoBitEstimator ) { m_AffineProfList.init( encCfg.m_lowDelay ); }
 };
 
 struct PerThreadRsrc

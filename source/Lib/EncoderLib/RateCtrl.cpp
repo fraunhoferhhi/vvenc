@@ -496,7 +496,8 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
     { "isIntra",        statsData.isIntra },
     { "tempLayer",      statsData.tempLayer },
     { "isStartOfIntra", statsData.isStartOfIntra },
-    { "isStartOfGop",   statsData.isStartOfGop }
+    { "isStartOfGop",   statsData.isStartOfGop },
+    { "gopNum",         statsData.gopNum },
   };
 
   if( m_rcStatsFHandle.is_open() )
@@ -530,7 +531,8 @@ void RateCtrl::storeStatsData( const TRCPassStats& statsData )
                                                     data[ "isIntra" ],
                                                     data[ "tempLayer" ],
                                                     data[ "isStartOfIntra" ],
-                                                    data[ "isStartOfGop" ]
+                                                    data[ "isStartOfGop" ],
+                                                    data[ "gopNum" ]
                                                     ) );
   }
   m_numPicStatsTotal++;
@@ -563,7 +565,8 @@ void RateCtrl::readStatsFile()
         || data.find( "isIntra" )        == data.end() || ! data[ "isIntra" ].is_boolean()
         || data.find( "tempLayer" )      == data.end() || ! data[ "tempLayer" ].is_number()
         || data.find( "isStartOfIntra" ) == data.end() || ! data[ "isStartOfIntra" ].is_boolean()
-        || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean() )
+        || data.find( "isStartOfGop" )   == data.end() || ! data[ "isStartOfGop" ].is_boolean()
+        || data.find( "gopNum" )         == data.end() || ! data[ "gopNum" ].is_number() )
     {
       THROW( "syntax of rate control statistics file in line " << lineNum << " not recognized: (" << line << ")" );
     }
@@ -576,7 +579,8 @@ void RateCtrl::readStatsFile()
                                                     data[ "isIntra" ],
                                                     data[ "tempLayer" ],
                                                     data[ "isStartOfIntra" ],
-                                                    data[ "isStartOfGop" ]
+                                                    data[ "isStartOfGop" ],
+                                                    data[ "gopNum" ]
                                                     ) );
     if( data.find( "pqpaStats" ) != data.end() )
     {
@@ -703,7 +707,6 @@ double RateCtrl::getAverageBitsFromFirstPass()
 void RateCtrl::detectSceneCuts()
 {
   const int minPocDif = encRCSeq->gopSize >> 1;
-  const int numLevels = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0)) + 2;
   double psnrTL01Prev = 0.0;
   int sceneCutPocPrev = -96;
   uint16_t visActPrev = 0;
@@ -725,7 +728,7 @@ void RateCtrl::detectSceneCuts()
     {
       if (it->poc >= sceneCutPocPrev + minPocDif)
       {
-        for (int frameLevel = 0; frameLevel < numLevels; frameLevel++)
+        for (int frameLevel = 0; frameLevel <= m_pcEncCfg->m_maxTLayer; frameLevel++)
         {
           needRefresh[frameLevel] = true;
         }
@@ -752,7 +755,7 @@ void RateCtrl::detectSceneCuts()
 void RateCtrl::processGops()
 {
   const unsigned fps = encRCSeq->frameRate;
-  const int gopShift = int (0.5 + log ((double) encRCSeq->gopSize) / log (2.0));
+  const int gopShift = m_pcEncCfg->m_log2GopSize;
   const int itOffset = m_listRCFirstPassStats.begin()->poc + 1 - (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0); // NOTE: in two-pass RC, this value is 1
   const int qpOffset = Clip3 (0, 6, ((m_pcEncCfg->m_QP + 1) >> 1) - 9);
   const double bp1pf = getAverageBitsFromFirstPass();  // first-pass bits/frame
@@ -781,9 +784,9 @@ void RateCtrl::processGops()
 
 void RateCtrl::addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
                                const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer,
-                               const bool isStartOfIntra, const bool isStartOfGop )
+                               const bool isStartOfIntra, const bool isStartOfGop, const int gopNum )
 {
-  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop));
+  storeStatsData (TRCPassStats (poc, qp, lambda, visActY, numBits, psnrY, isIntra, tempLayer + int (!isIntra), isStartOfIntra, isStartOfGop, gopNum));
 }
 
 void RateCtrl::xUpdateAfterPicRC( const Picture* pic )
@@ -850,7 +853,7 @@ void RateCtrl::initRateControlPic( Picture& pic, Slice* slice, int& qp, double& 
           CHECK( slice->TLayer >= 7, "analyzed RC frame must have TLayer < 7" );
 
           // try to reach target rate less aggressively in first coded frames, prevents temporary very low quality during second GOP
-          if ( it->isStartOfGop )
+          if ( it->isStartOfGop && it->poc == m_pcEncCfg->m_GOPSize )
           {
             d = std::max( 1.0, d - ( encRcSeq->estimatedBitUsage - encRcSeq->bitsUsed ) * 0.25 * it->frameInGopRatio );
             encRcPic->targetBits = int( d + 0.5 ); // update the member to be on the safe side

@@ -230,9 +230,9 @@ struct AffineProfList
     m_affMVListSize = 0;
   }
 
-  void init( bool bPicReordering )
+  void init( bool bLowDelay )
   {
-    m_affMVListMaxSize = bPicReordering ? AFFINE_ME_LIST_SIZE : AFFINE_ME_LIST_SIZE_LD;
+    m_affMVListMaxSize = bLowDelay ? AFFINE_ME_LIST_SIZE_LD : AFFINE_ME_LIST_SIZE;
     if( !m_affMVList)
     {
       m_affMVList = new AffineMVInfo[m_affMVListMaxSize];

@@ -405,8 +405,8 @@ typedef struct vvencMCTF
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
   // TODO (jb): remove unused memory from configuration
-  int                 mctfDeprecated1;
-  int                 mctfDeprecated2;
+  int                 mctfUnused1;
+  int                 mctfUnused2;
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -450,7 +450,7 @@ typedef struct vvenc_config
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
   // TODO (jb): remove unused memory from configuration
-  bool                m_cfgDeprecated1;
+  bool                m_cfgUnused1;
 
   int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
@@ -492,17 +492,17 @@ typedef struct vvenc_config
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
 
   // TODO (jb): remove unused memory from configuration
-  vvencRPLEntry       m_cfgDeprecated2[ 64 ];
-  vvencRPLEntry       m_cfgDeprecated3[ 64 ];
+  vvencRPLEntry       m_cfgUnused2[ 64 ];
+  vvencRPLEntry       m_cfgUnused3[ 64 ];
 
   vvencGOPEntry       m_GOPList[ VVENC_MAX_GOP ];                                        // the coding structure entries from the config file
 
   // TODO (jb): remove unused memory from configuration
-  int                 m_cfgDeprecated4[ 7 ];
-  int                 m_cfgDeprecated5[ 7 ];
-  int                 m_cfgDeprecated6;
-  int                 m_cfgDeprecated7;
-  int                 m_cfgDeprecated8;
+  int                 m_cfgUnused4[ 7 ];
+  int                 m_cfgUnused5[ 7 ];
+  int                 m_cfgUnused6;
+  int                 m_cfgUnused7;
+  int                 m_cfgUnused8;
 
   bool                m_useSameChromaQPTables;
   vvencChromaQpMappingTableParams m_chromaQpMappingTableParams;
@@ -757,7 +757,7 @@ typedef struct vvenc_config
   int                 m_LookAhead;                                                       // enable pre-analysis pass with picture look-ahead
   int                 m_explicitAPSid;
 
-  bool                m_picReordering;
+  bool                m_lowDelay;
   bool                m_reservedFlag[7];
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;

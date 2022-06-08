@@ -354,7 +354,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_IntraPeriodSec                          = 1;             ///< period of I-slice in seconds (random access period)
   c->m_DecodingRefreshType                     = VVENC_DRT_CRA;       ///< random access type
   c->m_GOPSize                                 = 32;            ///< GOP size
-  c->m_picReordering                           = 1;
+  c->m_lowDelay                                = 0;
 
   c->m_usePerceptQPA                           = false;         ///< perceptually motivated input-adaptive QP modification, abbrev. perceptual QP adaptation (QPA)
   c->m_sliceTypeAdapt                          = true;          ///< perceptually and opjectively motivated slice type (for now TL0 B-to-I frame) adaptation (STA)
@@ -1314,7 +1314,7 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_deblockLastTLayers > 0 )
   {
-    const int maxTLayer = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
+    const int maxTLayer = c->m_lowDelay || c->m_GOPSize <= 1 ? 0 : vvenc::ceilLog2( c->m_GOPSize );
     vvenc_confirmParameter( c, c->m_bLoopFilterDisable,                  "Error: DeblockLastTLayers can only be applied when deblocking filter is not disabled (LoopFilterDisable=0)" );
     vvenc_confirmParameter( c, maxTLayer - c->m_deblockLastTLayers <= 0, "Error: DeblockLastTLayers exceeds the range of possible deblockable temporal layers" );
     c->m_loopFilterOffsetInPPS = false;
@@ -1471,9 +1471,9 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_temporalSubsampleRatio < 1,                                               "Temporal subsample rate must be greater than or equal to 1" );
   vvenc_confirmParameter( c, c->m_framesToBeEncoded < c->m_switchPOC,                                          "debug POC out of range" );
 
-  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                     "Decoding Refresh Type must be comprised between 0 and 5 included" );
-  vvenc_confirmParameter( c, c->m_picReordering   && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );
-  vvenc_confirmParameter( c, ! c->m_picReordering && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
+  vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                "Decoding refresh type must be comprised between 0 and 5 included" );
+  vvenc_confirmParameter( c, ! c->m_lowDelay && (c->m_DecodingRefreshType == VVENC_DRT_NONE || c->m_DecodingRefreshType == VVENC_DRT_RECOVERY_POINT_SEI), "Decoding refresh type Recovery Point SEI for non low delay not supported" );
+  vvenc_confirmParameter( c,   c->m_lowDelay &&  c->m_DecodingRefreshType != VVENC_DRT_NONE,                                                              "Only decoding refresh type none for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
   for( int comp = 0; comp < 3; comp++)
@@ -1530,7 +1530,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
-  const int maxTLayer    = c->m_picReordering && c->m_GOPSize > 1 ? vvenc::ceilLog2( c->m_GOPSize ) : 0;
+  const int maxTLayer = c->m_lowDelay || c->m_GOPSize <= 1 ? 0 : vvenc::ceilLog2( c->m_GOPSize );
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
   if( ( c->m_FastInferMerge & 7 ) > maxTLayer )
   {
@@ -2566,7 +2566,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "Cb QP Offset (dual tree)               : " << c->m_chromaCbQpOffset << " (" << c->m_chromaCbQpOffsetDualTree << ")\n";
     css << "Cr QP Offset (dual tree)               : " << c->m_chromaCrQpOffset << " (" << c->m_chromaCrQpOffsetDualTree << ")\n";
     css << "GOP size                               : " << c->m_GOPSize << "\n";
-    css << "PicReordering                          : " << c->m_picReordering << "\n";
+    css << "LowDelay                               : " << c->m_lowDelay << "\n";
     css << "Input bit depth                        : (Y:" << c->m_inputBitDepth[ 0 ] << ", C:" << c->m_inputBitDepth[ 1 ] << ")\n";
     css << "MSB-extended bit depth                 : (Y:" << c->m_MSBExtendedBitDepth[ 0 ] << ", C:" << c->m_MSBExtendedBitDepth[ 1 ] << ")\n";
     css << "Internal bit depth                     : (Y:" << c->m_internalBitDepth[ 0 ] << ", C:" << c->m_internalBitDepth[ 1 ] << ")\n";

@@ -124,7 +124,7 @@ class GOPCfg
     {
     };
 
-    void initGopList( int refreshType, int intraPeriod, int gopSize, bool bPicReordering, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg );
+    void initGopList( int refreshType, int intraPeriod, int gopSize, bool bLowDelay, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const vvencMCTF& mctfCfg );
     void getNextGopEntry( GOPEntry& gopEntry );
     void getDefaultRPLLists( RPLList& rpl0, RPLList& rpl1 ) const;
 

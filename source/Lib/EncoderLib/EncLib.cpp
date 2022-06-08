@@ -211,7 +211,7 @@ void EncLib::initPass( int pass, const char* statsFName )
 
   // GOP structure
   m_gopCfg = new GOPCfg( msg );
-  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_picReordering, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
+  m_gopCfg->initGopList( m_encCfg.m_DecodingRefreshType, m_encCfg.m_IntraPeriod, m_encCfg.m_GOPSize, m_encCfg.m_lowDelay, m_encCfg.m_GOPList, m_encCfg.m_vvencMCTF );
   CHECK( m_gopCfg->getMaxTLayer() != m_encCfg.m_maxTLayer, "max temporal layer of gop configuration does not match pre-configured value" );
 
   // thread pool

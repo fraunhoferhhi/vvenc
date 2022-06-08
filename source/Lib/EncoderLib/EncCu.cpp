@@ -2996,7 +2996,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( m_pcEncCfg->m_BCW == 2 )
     {
-      if( ( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_picReordering == 0 )
+      if( ( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_lowDelay )
          || ( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) ) )
       {
         break;
@@ -3248,7 +3248,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
 
         if( m_pcEncCfg->m_BCW == 2 )
         {
-          if( isEqualUni == true && m_pcEncCfg->m_picReordering == 0 )
+          if( isEqualUni == true && m_pcEncCfg->m_lowDelay )
           {
             break;
           }
