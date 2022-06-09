@@ -120,6 +120,7 @@ struct Picture : public UnitArea
   void destroy( bool bPicHeader );
 
   void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared );
+  void releasePrevBuffers();
   void releaseSharedBuffers();
 
   void createTempBuffers( unsigned _maxCUSize );
