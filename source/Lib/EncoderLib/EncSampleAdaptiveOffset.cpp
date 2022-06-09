@@ -812,33 +812,10 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
     {
     case SAO_TYPE_EO_0:
       {
-        diff +=2;
-        count+=2;
         endY   =  isBelowAvail ? (height - skipLinesB) : height;
         startX = (isLeftAvail  ? 0 : 1);
         endX   = (isRightAvail ? (width - skipLinesR) : (width - 1));
-#if 1
         calcSaoStatisticsEo0(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff);
-//        for (int tt=0;tt<MAX_NUM_SAO_CLASSES;tt++)
-//          printf("type %d diff %ld count %ld \n",tt,statsData.diff[tt],statsData.count[tt]);
-//        exit(1);
-#else
-        for (y=0; y<endY; y++)
-        {
-          signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
-          for (x=startX; x<endX; x++)
-          {
-            signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
-            edgeType  =  signRight + signLeft;
-            signLeft  = -signRight;
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-          }
-          srcLine  += srcStride;
-          orgLine  += orgStride;
-        }
-
-#endif
       }
       break;
     case SAO_TYPE_EO_90:

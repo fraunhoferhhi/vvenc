@@ -280,61 +280,31 @@ void offsetBlock_core(const int channelBitDepth, const ClpRng& clpRng, int typeI
 }
 void calcSaoStatisticsEo0_Core(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff)
 {
-
-#if 1
-  int iNaLeft=startX;
   int iNaRight=width-endX;
-  int iSizeY=endY;
-  int iSizeX=width;
-
-  Pel* pRec      = srcLine + iNaLeft;
-  Pel* pOrg      =orgLine + iNaLeft;
-  int iNaWidth = iNaLeft + iNaRight;
+  srcLine      = srcLine + startX;
+  orgLine      =orgLine + startX;
+  int iNaWidth = startX + iNaRight;
   int i,j;
-
-  //printf("iSizeY %d iSizeX %d iNaWidth %d \n",iSizeY,iSizeX,iNaWidth);
-  for ( i = 0; i < iSizeY; i++ )
+  diff +=2;
+  count+=2;
+  for ( i = 0; i < endY; i++ )
   {
-    int iSignLeft = sgn( *pRec - *(pRec - 1) );
-    for ( j = 0; j < iSizeX - iNaWidth; j++, pRec++, pOrg++ )
+    int iSignLeft = sgn( *srcLine - *(srcLine - 1) );
+    for ( j = 0; j < width - iNaWidth; j++, srcLine++, orgLine++ )
     {
-      int iSignRight       = sgn( *pRec - *(pRec + 1) );
-      //printf("y %d x %d (srcLine[x] %d  srcLine[x+1] %d orgLine[x] %d \n",i,j,*pRec,*(pRec + 1),*pOrg);
-
+      int iSignRight       = sgn( *srcLine - *(srcLine + 1) );
       int iType            = iSignLeft + iSignRight;
       iSignLeft            = -1 * iSignRight;
-      diff[iType]  += (*pOrg - *pRec);
+      diff[iType]  += (*orgLine - *srcLine);
       count[iType] += 1;
     }
-    pRec += srcStride - ( iSizeX - iNaWidth );
-    pOrg += orgStride - ( iSizeX - iNaWidth );
+    srcLine += srcStride - ( width - iNaWidth );
+    orgLine += orgStride - ( width - iNaWidth );
   }
-
-#else
-  int x,y,edgeType;
-  int8_t signLeft, signRight;
-  for (y=0; y<endY; y++)
-  {
-    signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
-    for (x=startX; x<endX; x++)
-    {
-      signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
-      edgeType  =  signRight + signLeft;
-      signLeft  = -signRight;
-
-      diff [edgeType] += (orgLine[x] - srcLine[x]);
-      count[edgeType] ++;
-    }
-    srcLine  += srcStride;
-    orgLine  += orgStride;
-  }
-#endif
-  //exit(1);
 }
 
 void calcSaoStatisticsBo_Core(Pel*  srcLine,Pel*  orgLine,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
 {
-  printf("calcSaoStatisticsBo_Core\n");
   int x,y;
   int startX=0;
   int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
@@ -349,10 +319,7 @@ void calcSaoStatisticsBo_Core(Pel*  srcLine,Pel*  orgLine,int endX,int endY,int 
     srcLine += srcStride;
     orgLine += orgStride;
   }
-
-
 }
-
 
 void SAOOffset::reset()
 {
