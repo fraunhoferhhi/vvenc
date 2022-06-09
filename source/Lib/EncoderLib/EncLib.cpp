@@ -249,7 +249,7 @@ void EncLib::initPass( int pass, const char* statsFName )
   m_maxNumPicShared += minQueueSize;
   // additional pictures due to structural delay
   m_maxNumPicShared += m_encCfg.m_maxNumReorderPics[m_encCfg.m_maxTempLayer-1];
-  m_maxNumPicShared += 1;
+  m_maxNumPicShared += 3;
 
   // link encoder stages
   for( int i = 0; i < (int)m_encStages.size() - 1; i++ )
