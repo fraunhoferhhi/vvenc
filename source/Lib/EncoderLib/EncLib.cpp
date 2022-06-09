@@ -247,13 +247,8 @@ void EncLib::initPass( int pass, const char* statsFName )
   }
   m_encStages.push_back( m_gopEncoder );
   m_maxNumPicShared += minQueueSize;
-  // additional pictures due to some structural delay
-  // 
-  // compute an approximate number of total QPA prev.frames in GOP
-  // the exact number of prev.frames can be computed from the GOP referencing structure
-  // consider one more pic for TL0
-  const int maxQPAPrevFramesInGOP = m_encCfg.m_maxNumReorderPics[m_encCfg.m_maxTempLayer-1] * QPA_PREV_FRAMES + 1;
-  m_maxNumPicShared += m_encCfg.m_maxNumReorderPics[m_encCfg.m_maxTempLayer-1] + maxQPAPrevFramesInGOP;
+  // additional pictures due to structural delay
+  m_maxNumPicShared += m_encCfg.m_maxNumReorderPics[m_encCfg.m_maxTempLayer-1];
 
   // link encoder stages
   for( int i = 0; i < (int)m_encStages.size() - 1; i++ )
