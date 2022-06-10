@@ -1221,37 +1221,18 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     msg.log( VVENC_WARNING, "disable MCTF for QP < 17\n" );
     c->m_vvencMCTF.MCTF = 0;
   }
-  if( c->m_vvencMCTF.MCTF )
-  {
-    if( c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
+  if ( c->m_vvencMCTF.MCTF && c->m_vvencMCTF.numFrames == 0 && c->m_vvencMCTF.numStrength == 0 )
     {
-      if( c->m_GOPSize == 32 )
-      {
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
-        c->m_vvencMCTF.MCTFFrames[2] = 32;
+    const int nTLayers = std::min<int>( 6, log2( c->m_GOPSize ) );
 
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
-        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
-        c->m_vvencMCTF.MCTFStrengths[2] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 3;
-      }
-      else if( c->m_GOPSize == 16 )
-      {
-        c->m_vvencMCTF.MCTFFrames[0] = 8;
-        c->m_vvencMCTF.MCTFFrames[1] = 16;
+    c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = std::max( 1, nTLayers - ( ( c->m_QP - ( c->m_RCTargetBitrate > 0 ? 1 : 0 ) ) >> 4 ) );
 
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.95;
-        c->m_vvencMCTF.MCTFStrengths[1] = 1.5;
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 2;
-      }
-      else if( c->m_GOPSize == 8 )
+    for ( int i = 0; i < c->m_vvencMCTF.numFrames; i++ )
       {
-        c->m_vvencMCTF.MCTFFrames[0]    = 8;
-        c->m_vvencMCTF.MCTFStrengths[0] = 0.65625;     // 21/32
-        c->m_vvencMCTF.numFrames = c->m_vvencMCTF.numStrength = 1;
-      }
+      c->m_vvencMCTF.MCTFFrames[i] = c->m_GOPSize >> ( c->m_vvencMCTF.numFrames - i - 1 );
+      c->m_vvencMCTF.MCTFStrengths[i] = 2.0 / double ( c->m_vvencMCTF.numFrames - i );
     }
+    c->m_vvencMCTF.MCTFStrengths[c->m_vvencMCTF.numFrames - 1] = 1.5;  // used by JVET
   }
 
   if ( c->m_usePerceptQPATempFiltISlice < 0 )
@@ -1639,153 +1620,153 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
       }
       else
       {
-        c->m_GOPList[ 0].m_numRefPics[0] = 3;
-        c->m_GOPList[ 1].m_numRefPics[0] = 2;
-        c->m_GOPList[ 2].m_numRefPics[0] = 2;
-        c->m_GOPList[ 3].m_numRefPics[0] = 2;
-        c->m_GOPList[ 4].m_numRefPics[0] = 2;
-        c->m_GOPList[ 5].m_numRefPics[0] = 2;
-        c->m_GOPList[ 6].m_numRefPics[0] = 2;
-        c->m_GOPList[ 7].m_numRefPics[0] = 2;
-        c->m_GOPList[ 8].m_numRefPics[0] = 2;
-        c->m_GOPList[ 9].m_numRefPics[0] = 3;
-        c->m_GOPList[10].m_numRefPics[0] = 2;
-        c->m_GOPList[11].m_numRefPics[0] = 2;
-        c->m_GOPList[12].m_numRefPics[0] = 2;
-        c->m_GOPList[13].m_numRefPics[0] = 3;
-        c->m_GOPList[14].m_numRefPics[0] = 3;
-        c->m_GOPList[15].m_numRefPics[0] = 3;
+      c->m_GOPList[ 0].m_numRefPics[0] = 3;
+      c->m_GOPList[ 1].m_numRefPics[0] = 2;
+      c->m_GOPList[ 2].m_numRefPics[0] = 2;
+      c->m_GOPList[ 3].m_numRefPics[0] = 2;
+      c->m_GOPList[ 4].m_numRefPics[0] = 2;
+      c->m_GOPList[ 5].m_numRefPics[0] = 2;
+      c->m_GOPList[ 6].m_numRefPics[0] = 2;
+      c->m_GOPList[ 7].m_numRefPics[0] = 2;
+      c->m_GOPList[ 8].m_numRefPics[0] = 2;
+      c->m_GOPList[ 9].m_numRefPics[0] = 3;
+      c->m_GOPList[10].m_numRefPics[0] = 2;
+      c->m_GOPList[11].m_numRefPics[0] = 2;
+      c->m_GOPList[12].m_numRefPics[0] = 2;
+      c->m_GOPList[13].m_numRefPics[0] = 3;
+      c->m_GOPList[14].m_numRefPics[0] = 3;
+      c->m_GOPList[15].m_numRefPics[0] = 3;
 
-        c->m_GOPList[16].m_numRefPics[0] = 4;
-        c->m_GOPList[17].m_numRefPics[0] = 2;
-        c->m_GOPList[18].m_numRefPics[0] = 2;
-        c->m_GOPList[19].m_numRefPics[0] = 2;
-        c->m_GOPList[20].m_numRefPics[0] = 2;
-        c->m_GOPList[21].m_numRefPics[0] = 3;
-        c->m_GOPList[22].m_numRefPics[0] = 3;
-        c->m_GOPList[23].m_numRefPics[0] = 3;
-        c->m_GOPList[24].m_numRefPics[0] = 4;
-        c->m_GOPList[25].m_numRefPics[0] = 3;
-        c->m_GOPList[26].m_numRefPics[0] = 3;
-        c->m_GOPList[27].m_numRefPics[0] = 3;
-        c->m_GOPList[28].m_numRefPics[0] = 4;
-        c->m_GOPList[29].m_numRefPics[0] = 3;
-        c->m_GOPList[30].m_numRefPics[0] = 3;
-        c->m_GOPList[31].m_numRefPics[0] = 4;
+      c->m_GOPList[16].m_numRefPics[0] = 4;
+      c->m_GOPList[17].m_numRefPics[0] = 2;
+      c->m_GOPList[18].m_numRefPics[0] = 2;
+      c->m_GOPList[19].m_numRefPics[0] = 2;
+      c->m_GOPList[20].m_numRefPics[0] = 2;
+      c->m_GOPList[21].m_numRefPics[0] = 3;
+      c->m_GOPList[22].m_numRefPics[0] = 3;
+      c->m_GOPList[23].m_numRefPics[0] = 3;
+      c->m_GOPList[24].m_numRefPics[0] = 4;
+      c->m_GOPList[25].m_numRefPics[0] = 3;
+      c->m_GOPList[26].m_numRefPics[0] = 3;
+      c->m_GOPList[27].m_numRefPics[0] = 3;
+      c->m_GOPList[28].m_numRefPics[0] = 4;
+      c->m_GOPList[29].m_numRefPics[0] = 3;
+      c->m_GOPList[30].m_numRefPics[0] = 3;
+      c->m_GOPList[31].m_numRefPics[0] = 4;
 
-        c->m_GOPList[ 0].m_deltaRefPics[0][0] = 32; c->m_GOPList[ 0].m_deltaRefPics[0][1] = 64; c->m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
-        c->m_GOPList[ 1].m_deltaRefPics[0][0] = 16; c->m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
-        c->m_GOPList[ 2].m_deltaRefPics[0][0] =  8; c->m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
-        c->m_GOPList[ 3].m_deltaRefPics[0][0] =  4; c->m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
+      c->m_GOPList[ 0].m_deltaRefPics[0][0] = 32; c->m_GOPList[ 0].m_deltaRefPics[0][1] = 64; c->m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
+      c->m_GOPList[ 1].m_deltaRefPics[0][0] = 16; c->m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
+      c->m_GOPList[ 2].m_deltaRefPics[0][0] =  8; c->m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
+      c->m_GOPList[ 3].m_deltaRefPics[0][0] =  4; c->m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
 
-        c->m_GOPList[ 4].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
-        c->m_GOPList[ 5].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
-        c->m_GOPList[ 6].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
-        c->m_GOPList[ 7].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
+      c->m_GOPList[ 4].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
+      c->m_GOPList[ 5].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
+      c->m_GOPList[ 6].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
+      c->m_GOPList[ 7].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
 
-        c->m_GOPList[ 8].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
-        c->m_GOPList[ 9].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 9].m_deltaRefPics[0][1] =  3; c->m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
-        c->m_GOPList[10].m_deltaRefPics[0][0] =  4; c->m_GOPList[10].m_deltaRefPics[0][1] = 12;
-        c->m_GOPList[11].m_deltaRefPics[0][0] =  2; c->m_GOPList[11].m_deltaRefPics[0][1] = 10;
+      c->m_GOPList[ 8].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
+      c->m_GOPList[ 9].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 9].m_deltaRefPics[0][1] =  3; c->m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
+      c->m_GOPList[10].m_deltaRefPics[0][0] =  4; c->m_GOPList[10].m_deltaRefPics[0][1] = 12;
+      c->m_GOPList[11].m_deltaRefPics[0][0] =  2; c->m_GOPList[11].m_deltaRefPics[0][1] = 10;
 
-        c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] =  9;
-        c->m_GOPList[13].m_deltaRefPics[0][0] =  1; c->m_GOPList[13].m_deltaRefPics[0][1] =  3; c->m_GOPList[13].m_deltaRefPics[0][2] = 11;
-        c->m_GOPList[14].m_deltaRefPics[0][0] =  2; c->m_GOPList[14].m_deltaRefPics[0][1] =  6; c->m_GOPList[14].m_deltaRefPics[0][2] = 14;
-        c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] =  5; c->m_GOPList[15].m_deltaRefPics[0][2] = 13;
+      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] =  9;
+      c->m_GOPList[13].m_deltaRefPics[0][0] =  1; c->m_GOPList[13].m_deltaRefPics[0][1] =  3; c->m_GOPList[13].m_deltaRefPics[0][2] = 11;
+      c->m_GOPList[14].m_deltaRefPics[0][0] =  2; c->m_GOPList[14].m_deltaRefPics[0][1] =  6; c->m_GOPList[14].m_deltaRefPics[0][2] = 14;
+      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] =  5; c->m_GOPList[15].m_deltaRefPics[0][2] = 13;
 
-        c->m_GOPList[16].m_deltaRefPics[0][0] =  1; c->m_GOPList[16].m_deltaRefPics[0][1] =  3; c->m_GOPList[16].m_deltaRefPics[0][2] =  7; c->m_GOPList[16].m_deltaRefPics[0][3] = 15;
-        c->m_GOPList[17].m_deltaRefPics[0][0] =  8; c->m_GOPList[17].m_deltaRefPics[0][1] = 24;
-        c->m_GOPList[18].m_deltaRefPics[0][0] =  4; c->m_GOPList[18].m_deltaRefPics[0][1] = 20;
-        c->m_GOPList[19].m_deltaRefPics[0][0] =  2; c->m_GOPList[19].m_deltaRefPics[0][1] = 18;
+      c->m_GOPList[16].m_deltaRefPics[0][0] =  1; c->m_GOPList[16].m_deltaRefPics[0][1] =  3; c->m_GOPList[16].m_deltaRefPics[0][2] =  7; c->m_GOPList[16].m_deltaRefPics[0][3] = 15;
+      c->m_GOPList[17].m_deltaRefPics[0][0] =  8; c->m_GOPList[17].m_deltaRefPics[0][1] = 24;
+      c->m_GOPList[18].m_deltaRefPics[0][0] =  4; c->m_GOPList[18].m_deltaRefPics[0][1] = 20;
+      c->m_GOPList[19].m_deltaRefPics[0][0] =  2; c->m_GOPList[19].m_deltaRefPics[0][1] = 18;
 
-        c->m_GOPList[20].m_deltaRefPics[0][0] =  1; c->m_GOPList[20].m_deltaRefPics[0][1] = 17;
-        c->m_GOPList[21].m_deltaRefPics[0][0] =  1; c->m_GOPList[21].m_deltaRefPics[0][1] =  3; c->m_GOPList[21].m_deltaRefPics[0][2] = 19;
-        c->m_GOPList[22].m_deltaRefPics[0][0] =  2; c->m_GOPList[22].m_deltaRefPics[0][1] =  6; c->m_GOPList[22].m_deltaRefPics[0][2] = 22;
-        c->m_GOPList[23].m_deltaRefPics[0][0] =  1; c->m_GOPList[23].m_deltaRefPics[0][1] =  5; c->m_GOPList[23].m_deltaRefPics[0][2] = 21;
+      c->m_GOPList[20].m_deltaRefPics[0][0] =  1; c->m_GOPList[20].m_deltaRefPics[0][1] = 17;
+      c->m_GOPList[21].m_deltaRefPics[0][0] =  1; c->m_GOPList[21].m_deltaRefPics[0][1] =  3; c->m_GOPList[21].m_deltaRefPics[0][2] = 19;
+      c->m_GOPList[22].m_deltaRefPics[0][0] =  2; c->m_GOPList[22].m_deltaRefPics[0][1] =  6; c->m_GOPList[22].m_deltaRefPics[0][2] = 22;
+      c->m_GOPList[23].m_deltaRefPics[0][0] =  1; c->m_GOPList[23].m_deltaRefPics[0][1] =  5; c->m_GOPList[23].m_deltaRefPics[0][2] = 21;
 
-        c->m_GOPList[24].m_deltaRefPics[0][0] =  1; c->m_GOPList[24].m_deltaRefPics[0][1] =  3; c->m_GOPList[24].m_deltaRefPics[0][2] =  7; c->m_GOPList[24].m_deltaRefPics[0][3] = 23;
-        c->m_GOPList[25].m_deltaRefPics[0][0] =  4; c->m_GOPList[25].m_deltaRefPics[0][1] = 12; c->m_GOPList[25].m_deltaRefPics[0][2] = 28;
-        c->m_GOPList[26].m_deltaRefPics[0][0] =  2; c->m_GOPList[26].m_deltaRefPics[0][1] = 10; c->m_GOPList[26].m_deltaRefPics[0][2] = 26;
-        c->m_GOPList[27].m_deltaRefPics[0][0] =  1; c->m_GOPList[27].m_deltaRefPics[0][1] =  9; c->m_GOPList[27].m_deltaRefPics[0][2] = 25;
+      c->m_GOPList[24].m_deltaRefPics[0][0] =  1; c->m_GOPList[24].m_deltaRefPics[0][1] =  3; c->m_GOPList[24].m_deltaRefPics[0][2] =  7; c->m_GOPList[24].m_deltaRefPics[0][3] = 23;
+      c->m_GOPList[25].m_deltaRefPics[0][0] =  4; c->m_GOPList[25].m_deltaRefPics[0][1] = 12; c->m_GOPList[25].m_deltaRefPics[0][2] = 28;
+      c->m_GOPList[26].m_deltaRefPics[0][0] =  2; c->m_GOPList[26].m_deltaRefPics[0][1] = 10; c->m_GOPList[26].m_deltaRefPics[0][2] = 26;
+      c->m_GOPList[27].m_deltaRefPics[0][0] =  1; c->m_GOPList[27].m_deltaRefPics[0][1] =  9; c->m_GOPList[27].m_deltaRefPics[0][2] = 25;
 
-        c->m_GOPList[28].m_deltaRefPics[0][0] =  1; c->m_GOPList[28].m_deltaRefPics[0][1] =  3; c->m_GOPList[28].m_deltaRefPics[0][2] = 11; c->m_GOPList[28].m_deltaRefPics[0][3] = 27;
-        c->m_GOPList[29].m_deltaRefPics[0][0] =  2; c->m_GOPList[29].m_deltaRefPics[0][1] = 14; c->m_GOPList[29].m_deltaRefPics[0][2] = 30;
-        c->m_GOPList[30].m_deltaRefPics[0][0] =  1; c->m_GOPList[30].m_deltaRefPics[0][1] = 13; c->m_GOPList[30].m_deltaRefPics[0][2] = 29;
-        c->m_GOPList[31].m_deltaRefPics[0][0] =  1; c->m_GOPList[31].m_deltaRefPics[0][1] =  3; c->m_GOPList[31].m_deltaRefPics[0][2] = 15; c->m_GOPList[31].m_deltaRefPics[0][3] = 31;
+      c->m_GOPList[28].m_deltaRefPics[0][0] =  1; c->m_GOPList[28].m_deltaRefPics[0][1] =  3; c->m_GOPList[28].m_deltaRefPics[0][2] = 11; c->m_GOPList[28].m_deltaRefPics[0][3] = 27;
+      c->m_GOPList[29].m_deltaRefPics[0][0] =  2; c->m_GOPList[29].m_deltaRefPics[0][1] = 14; c->m_GOPList[29].m_deltaRefPics[0][2] = 30;
+      c->m_GOPList[30].m_deltaRefPics[0][0] =  1; c->m_GOPList[30].m_deltaRefPics[0][1] = 13; c->m_GOPList[30].m_deltaRefPics[0][2] = 29;
+      c->m_GOPList[31].m_deltaRefPics[0][0] =  1; c->m_GOPList[31].m_deltaRefPics[0][1] =  3; c->m_GOPList[31].m_deltaRefPics[0][2] = 15; c->m_GOPList[31].m_deltaRefPics[0][3] = 31;
 
-        c->m_GOPList[ 0].m_numRefPics[1] = 2;
-        c->m_GOPList[ 1].m_numRefPics[1] = 2;
-        c->m_GOPList[ 2].m_numRefPics[1] = 2;
-        c->m_GOPList[ 3].m_numRefPics[1] = 3;
-        c->m_GOPList[ 4].m_numRefPics[1] = 4;
-        c->m_GOPList[ 5].m_numRefPics[1] = 5;
-        c->m_GOPList[ 6].m_numRefPics[1] = 4;
-        c->m_GOPList[ 7].m_numRefPics[1] = 3;
-        c->m_GOPList[ 8].m_numRefPics[1] = 4;
-        c->m_GOPList[ 9].m_numRefPics[1] = 3;
-        c->m_GOPList[10].m_numRefPics[1] = 2;
-        c->m_GOPList[11].m_numRefPics[1] = 3;
-        c->m_GOPList[12].m_numRefPics[1] = 4;
-        c->m_GOPList[13].m_numRefPics[1] = 3;
-        c->m_GOPList[14].m_numRefPics[1] = 2;
-        c->m_GOPList[15].m_numRefPics[1] = 3;
+      c->m_GOPList[ 0].m_numRefPics[1] = 2;
+      c->m_GOPList[ 1].m_numRefPics[1] = 2;
+      c->m_GOPList[ 2].m_numRefPics[1] = 2;
+      c->m_GOPList[ 3].m_numRefPics[1] = 3;
+      c->m_GOPList[ 4].m_numRefPics[1] = 4;
+      c->m_GOPList[ 5].m_numRefPics[1] = 5;
+      c->m_GOPList[ 6].m_numRefPics[1] = 4;
+      c->m_GOPList[ 7].m_numRefPics[1] = 3;
+      c->m_GOPList[ 8].m_numRefPics[1] = 4;
+      c->m_GOPList[ 9].m_numRefPics[1] = 3;
+      c->m_GOPList[10].m_numRefPics[1] = 2;
+      c->m_GOPList[11].m_numRefPics[1] = 3;
+      c->m_GOPList[12].m_numRefPics[1] = 4;
+      c->m_GOPList[13].m_numRefPics[1] = 3;
+      c->m_GOPList[14].m_numRefPics[1] = 2;
+      c->m_GOPList[15].m_numRefPics[1] = 3;
 
-        c->m_GOPList[16].m_numRefPics[1] = 2;
-        c->m_GOPList[17].m_numRefPics[1] = 2;
-        c->m_GOPList[18].m_numRefPics[1] = 2;
-        c->m_GOPList[19].m_numRefPics[1] = 3;
-        c->m_GOPList[20].m_numRefPics[1] = 4;
-        c->m_GOPList[21].m_numRefPics[1] = 3;
-        c->m_GOPList[22].m_numRefPics[1] = 2;
-        c->m_GOPList[23].m_numRefPics[1] = 3;
-        c->m_GOPList[24].m_numRefPics[1] = 2;
-        c->m_GOPList[25].m_numRefPics[1] = 2;
-        c->m_GOPList[26].m_numRefPics[1] = 2;
-        c->m_GOPList[27].m_numRefPics[1] = 3;
-        c->m_GOPList[28].m_numRefPics[1] = 2;
-        c->m_GOPList[29].m_numRefPics[1] = 2;
-        c->m_GOPList[30].m_numRefPics[1] = 2;
-        c->m_GOPList[31].m_numRefPics[1] = 2;
+      c->m_GOPList[16].m_numRefPics[1] = 2;
+      c->m_GOPList[17].m_numRefPics[1] = 2;
+      c->m_GOPList[18].m_numRefPics[1] = 2;
+      c->m_GOPList[19].m_numRefPics[1] = 3;
+      c->m_GOPList[20].m_numRefPics[1] = 4;
+      c->m_GOPList[21].m_numRefPics[1] = 3;
+      c->m_GOPList[22].m_numRefPics[1] = 2;
+      c->m_GOPList[23].m_numRefPics[1] = 3;
+      c->m_GOPList[24].m_numRefPics[1] = 2;
+      c->m_GOPList[25].m_numRefPics[1] = 2;
+      c->m_GOPList[26].m_numRefPics[1] = 2;
+      c->m_GOPList[27].m_numRefPics[1] = 3;
+      c->m_GOPList[28].m_numRefPics[1] = 2;
+      c->m_GOPList[29].m_numRefPics[1] = 2;
+      c->m_GOPList[30].m_numRefPics[1] = 2;
+      c->m_GOPList[31].m_numRefPics[1] = 2;
 
-        c->m_GOPList[ 0].m_deltaRefPics[1][0] =  32; c->m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
-        c->m_GOPList[ 1].m_deltaRefPics[1][0] = -16; c->m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
-        c->m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; c->m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
-        c->m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; c->m_GOPList[ 3].m_deltaRefPics[1][1] = -12; c->m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
+      c->m_GOPList[ 0].m_deltaRefPics[1][0] =  32; c->m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
+      c->m_GOPList[ 1].m_deltaRefPics[1][0] = -16; c->m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
+      c->m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; c->m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
+      c->m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; c->m_GOPList[ 3].m_deltaRefPics[1][1] = -12; c->m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
 
-        c->m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; c->m_GOPList[ 4].m_deltaRefPics[1][2] = -14; c->m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
-        c->m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; c->m_GOPList[ 5].m_deltaRefPics[1][3] = -15; c->m_GOPList[5].m_deltaRefPics[1][4] = -31;
-        c->m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; c->m_GOPList[ 6].m_deltaRefPics[1][2] = -13; c->m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
-        c->m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 7].m_deltaRefPics[1][1] = -10; c->m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
+      c->m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; c->m_GOPList[ 4].m_deltaRefPics[1][2] = -14; c->m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
+      c->m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; c->m_GOPList[ 5].m_deltaRefPics[1][3] = -15; c->m_GOPList[5].m_deltaRefPics[1][4] = -31;
+      c->m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; c->m_GOPList[ 6].m_deltaRefPics[1][2] = -13; c->m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
+      c->m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 7].m_deltaRefPics[1][1] = -10; c->m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
 
-        c->m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 8].m_deltaRefPics[1][2] = -11; c->m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
-        c->m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; c->m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
-        c->m_GOPList[10].m_deltaRefPics[1][0] =  -4; c->m_GOPList[10].m_deltaRefPics[1][1] = -20;
-        c->m_GOPList[11].m_deltaRefPics[1][0] =  -2; c->m_GOPList[11].m_deltaRefPics[1][1] =  -6; c->m_GOPList[11].m_deltaRefPics[1][2] = -22;
+      c->m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 8].m_deltaRefPics[1][2] = -11; c->m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
+      c->m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; c->m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
+      c->m_GOPList[10].m_deltaRefPics[1][0] =  -4; c->m_GOPList[10].m_deltaRefPics[1][1] = -20;
+      c->m_GOPList[11].m_deltaRefPics[1][0] =  -2; c->m_GOPList[11].m_deltaRefPics[1][1] =  -6; c->m_GOPList[11].m_deltaRefPics[1][2] = -22;
 
-        c->m_GOPList[12].m_deltaRefPics[1][0] =  -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -3; c->m_GOPList[12].m_deltaRefPics[1][2] =  -7; c->m_GOPList[12].m_deltaRefPics[1][3] = -23;
-        c->m_GOPList[13].m_deltaRefPics[1][0] =  -1; c->m_GOPList[13].m_deltaRefPics[1][1] =  -5; c->m_GOPList[13].m_deltaRefPics[1][2] = -21;
-        c->m_GOPList[14].m_deltaRefPics[1][0] =  -2; c->m_GOPList[14].m_deltaRefPics[1][1] = -18;
-        c->m_GOPList[15].m_deltaRefPics[1][0] =  -1; c->m_GOPList[15].m_deltaRefPics[1][1] =  -3; c->m_GOPList[15].m_deltaRefPics[1][2] = -19;
+      c->m_GOPList[12].m_deltaRefPics[1][0] =  -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -3; c->m_GOPList[12].m_deltaRefPics[1][2] =  -7; c->m_GOPList[12].m_deltaRefPics[1][3] = -23;
+      c->m_GOPList[13].m_deltaRefPics[1][0] =  -1; c->m_GOPList[13].m_deltaRefPics[1][1] =  -5; c->m_GOPList[13].m_deltaRefPics[1][2] = -21;
+      c->m_GOPList[14].m_deltaRefPics[1][0] =  -2; c->m_GOPList[14].m_deltaRefPics[1][1] = -18;
+      c->m_GOPList[15].m_deltaRefPics[1][0] =  -1; c->m_GOPList[15].m_deltaRefPics[1][1] =  -3; c->m_GOPList[15].m_deltaRefPics[1][2] = -19;
 
-        c->m_GOPList[16].m_deltaRefPics[1][0] =  -1; c->m_GOPList[16].m_deltaRefPics[1][1] = -17;
-        c->m_GOPList[17].m_deltaRefPics[1][0] =  -8; c->m_GOPList[17].m_deltaRefPics[1][1] =   8;
-        c->m_GOPList[18].m_deltaRefPics[1][0] =  -4; c->m_GOPList[18].m_deltaRefPics[1][1] = -12;
-        c->m_GOPList[19].m_deltaRefPics[1][0] =  -2; c->m_GOPList[19].m_deltaRefPics[1][1] =  -6; c->m_GOPList[19].m_deltaRefPics[1][2] = -14;
+      c->m_GOPList[16].m_deltaRefPics[1][0] =  -1; c->m_GOPList[16].m_deltaRefPics[1][1] = -17;
+      c->m_GOPList[17].m_deltaRefPics[1][0] =  -8; c->m_GOPList[17].m_deltaRefPics[1][1] =   8;
+      c->m_GOPList[18].m_deltaRefPics[1][0] =  -4; c->m_GOPList[18].m_deltaRefPics[1][1] = -12;
+      c->m_GOPList[19].m_deltaRefPics[1][0] =  -2; c->m_GOPList[19].m_deltaRefPics[1][1] =  -6; c->m_GOPList[19].m_deltaRefPics[1][2] = -14;
 
-        c->m_GOPList[20].m_deltaRefPics[1][0] =  -1; c->m_GOPList[20].m_deltaRefPics[1][1] =  -3; c->m_GOPList[20].m_deltaRefPics[1][2] =  -7; c->m_GOPList[20].m_deltaRefPics[1][3] = -15;
-        c->m_GOPList[21].m_deltaRefPics[1][0] =  -1; c->m_GOPList[21].m_deltaRefPics[1][1] =  -5; c->m_GOPList[21].m_deltaRefPics[1][2] = -13;
-        c->m_GOPList[22].m_deltaRefPics[1][0] =  -2; c->m_GOPList[22].m_deltaRefPics[1][1] = -10;
-        c->m_GOPList[23].m_deltaRefPics[1][0] =  -1; c->m_GOPList[23].m_deltaRefPics[1][1] =  -3; c->m_GOPList[23].m_deltaRefPics[1][2] = -11;
+      c->m_GOPList[20].m_deltaRefPics[1][0] =  -1; c->m_GOPList[20].m_deltaRefPics[1][1] =  -3; c->m_GOPList[20].m_deltaRefPics[1][2] =  -7; c->m_GOPList[20].m_deltaRefPics[1][3] = -15;
+      c->m_GOPList[21].m_deltaRefPics[1][0] =  -1; c->m_GOPList[21].m_deltaRefPics[1][1] =  -5; c->m_GOPList[21].m_deltaRefPics[1][2] = -13;
+      c->m_GOPList[22].m_deltaRefPics[1][0] =  -2; c->m_GOPList[22].m_deltaRefPics[1][1] = -10;
+      c->m_GOPList[23].m_deltaRefPics[1][0] =  -1; c->m_GOPList[23].m_deltaRefPics[1][1] =  -3; c->m_GOPList[23].m_deltaRefPics[1][2] = -11;
 
-        c->m_GOPList[24].m_deltaRefPics[1][0] =  -1; c->m_GOPList[24].m_deltaRefPics[1][1] =  -9;
-        c->m_GOPList[25].m_deltaRefPics[1][0] =  -4; c->m_GOPList[25].m_deltaRefPics[1][1] =   4;
-        c->m_GOPList[26].m_deltaRefPics[1][0] =  -2; c->m_GOPList[26].m_deltaRefPics[1][1] =  -6;
-        c->m_GOPList[27].m_deltaRefPics[1][0] =  -1; c->m_GOPList[27].m_deltaRefPics[1][1] =  -3; c->m_GOPList[27].m_deltaRefPics[1][2] = -7;
+      c->m_GOPList[24].m_deltaRefPics[1][0] =  -1; c->m_GOPList[24].m_deltaRefPics[1][1] =  -9;
+      c->m_GOPList[25].m_deltaRefPics[1][0] =  -4; c->m_GOPList[25].m_deltaRefPics[1][1] =   4;
+      c->m_GOPList[26].m_deltaRefPics[1][0] =  -2; c->m_GOPList[26].m_deltaRefPics[1][1] =  -6;
+      c->m_GOPList[27].m_deltaRefPics[1][0] =  -1; c->m_GOPList[27].m_deltaRefPics[1][1] =  -3; c->m_GOPList[27].m_deltaRefPics[1][2] = -7;
 
-        c->m_GOPList[28].m_deltaRefPics[1][0] =  -1; c->m_GOPList[28].m_deltaRefPics[1][1] =  -5;
-        c->m_GOPList[29].m_deltaRefPics[1][0] =  -2; c->m_GOPList[29].m_deltaRefPics[1][1] =   2;
-        c->m_GOPList[30].m_deltaRefPics[1][0] =  -1; c->m_GOPList[30].m_deltaRefPics[1][1] =  -3;
-        c->m_GOPList[31].m_deltaRefPics[1][0] =  -1; c->m_GOPList[31].m_deltaRefPics[1][1] =   1;
+      c->m_GOPList[28].m_deltaRefPics[1][0] =  -1; c->m_GOPList[28].m_deltaRefPics[1][1] =  -5;
+      c->m_GOPList[29].m_deltaRefPics[1][0] =  -2; c->m_GOPList[29].m_deltaRefPics[1][1] =   2;
+      c->m_GOPList[30].m_deltaRefPics[1][0] =  -1; c->m_GOPList[30].m_deltaRefPics[1][1] =  -3;
+      c->m_GOPList[31].m_deltaRefPics[1][0] =  -1; c->m_GOPList[31].m_deltaRefPics[1][1] =   1;
       }
       for( int i = 0; i < 32; i++ )
       {
@@ -1799,9 +1780,9 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
                 c->m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
                 c->m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
                 break;
-        case 2: c->m_GOPList[i].m_QPOffset   = c->m_addGOP32refPics ? 1 : 0;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.5000;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  c->m_addGOP32refPics ? 0.1900 : 0.2353;
+        case 2: c->m_GOPList[i].m_QPOffset   = 0;
+                c->m_GOPList[i].m_QPOffsetModelOffset =  c->m_addGOP32refPics ? -4.5000 : -3.0625;
+                c->m_GOPList[i].m_QPOffsetModelScale  =  c->m_addGOP32refPics ?  0.1900 : 0.1875;
                 break;
         case 3: c->m_GOPList[i].m_QPOffset   = 3;
                 c->m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
@@ -2421,7 +2402,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, (c->m_IntraPeriod > 0 && c->m_IntraPeriod < c->m_GOPSize) || c->m_IntraPeriod == 0,     "Intra period must be more than GOP size, or -1 , not 0" );
 
   vvenc_confirmParameter( c, c->m_DecodingRefreshType < 0 || c->m_DecodingRefreshType > 5,                     "Decoding Refresh Type must be comprised between 0 and 5 included" );
-  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );                  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  vvenc_confirmParameter( c, c->m_IntraPeriod > 0 && !(c->m_DecodingRefreshType==1 || c->m_DecodingRefreshType==2 || c->m_DecodingRefreshType==4 || c->m_DecodingRefreshType==5), "Only Decoding Refresh Type CRA for non low delay supported" );
   vvenc_confirmParameter( c, c->m_IntraPeriod < 0 && c->m_DecodingRefreshType !=0,                             "Only Decoding Refresh Type 0 for low delay supported" );
 
   vvenc_confirmParameter( c, c->m_QP < -6 * (c->m_internalBitDepth[0] - 8) || c->m_QP > vvenc::MAX_QP,                "QP exceeds supported range (-QpBDOffsety to 63)" );
@@ -2435,7 +2416,7 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_minSearchWindow < 0,                                                      "Minimum motion search window size for the adaptive window ME must be greater than or equal to 0" );
 
   vvenc_confirmParameter( c, c->m_vvencMCTF.numFrames != c->m_vvencMCTF.numStrength,            "MCTF parameter list sizes differ");
-  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 4 ,        "MCTFSpeed exceeds supported range (0..4)" );
+  vvenc_confirmParameter( c, c->m_vvencMCTF.MCTFSpeed < 0 || c->m_vvencMCTF.MCTFSpeed > 3,      "MCTFSpeed exceeds supported range (0..3)" );
   static const std::string errorSegLessRng = std::string( "When using segment parallel encoding more then " ) + static_cast< char >( VVENC_MCTF_RANGE + '0' ) + " frames have to be encoded";
   vvenc_confirmParameter( c, c->m_SegmentMode != VVENC_SEG_OFF && c->m_framesToBeEncoded < VVENC_MCTF_RANGE, errorSegLessRng.c_str() );
 
@@ -2476,13 +2457,14 @@ static bool checkCfgParameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_FIMMode < 0 || c->m_FIMMode > 4,             "FastInferMerge out of range [0..4]");
   vvenc_confirmParameter( c, c->m_qtbttSpeedUp < 0 || c->m_qtbttSpeedUp > 7,   "QtbttExtraFast out of range [0..7]");
   vvenc_confirmParameter( c, c->m_fastTTSplit < 0 || c->m_fastTTSplit > 7,     "FastTTSplit out of range [0..7]");
+  vvenc_confirmParameter( c, c->m_MTSIntraMaxCand < 0 || c->m_MTSIntraMaxCand > 4, "MTSIntraMaxCand out of range [0..4]");
 
   const int fimModeMap[] = { 0, 3, 19, 27, 29 };
   c->m_FastInferMerge = fimModeMap[ c->m_FIMMode ];
   if( 1 << ( c->m_FastInferMerge & 7 ) > c->m_GOPSize )
   {
     const int hbm = c->m_FastInferMerge >> 3;
-    const int lbm = std::max<int>( 7, log2( c->m_GOPSize ) );
+    const int lbm = std::min<int>( 7, log2( c->m_GOPSize ) );
     c->m_FastInferMerge = ( hbm << 3 ) | lbm;
   }
 
@@ -3254,7 +3236,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_vvencMCTF.MCTFSpeed             = 3;
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
@@ -3307,7 +3289,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_SignDataHidingEnabled           = 1;
       c->m_LMChroma                        = 1;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 4;
+      c->m_vvencMCTF.MCTFSpeed             = 3;
       c->m_MTSImplicit                     = 1;
       // scc
       c->m_IBCFastMethod                   = 6;
@@ -3433,7 +3415,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
       c->m_LMChroma                        = 1;
       c->m_lumaReshapeEnable               = 2;
       c->m_vvencMCTF.MCTF                  = 2;
-      c->m_vvencMCTF.MCTFSpeed             = 0;
+      c->m_vvencMCTF.MCTFSpeed             = 1;
       c->m_MIP                             = 1;
       c->m_useFastMIP                      = 4;
       c->m_MMVD                            = 3;

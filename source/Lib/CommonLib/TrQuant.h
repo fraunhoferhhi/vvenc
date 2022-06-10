@@ -121,12 +121,13 @@ private:
   void                      (**m_invICT)(PelBuf&,PelBuf&);
   std::pair<int64_t,int64_t>(**m_fwdICT)(const PelBuf&,const PelBuf&,PelBuf&,PelBuf&);
 
+  void (*m_fwdLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
+  void (*m_invLfnstNxN)( int* src, int* dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
+
   uint32_t xGetLFNSTIntraMode( const Area& tuArea, const uint32_t dirMode );
   bool     xGetTransposeFlag(uint32_t intraMode);
   void     xFwdLfnst    ( const TransformUnit &tu, const ComponentID compID, const bool loadTr = false);
   void     xInvLfnst    ( const TransformUnit &tu, const ComponentID compID);
-  void     xFwdLfnstNxN ( int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
-  void     xInvLfnstNxN ( int *src, int *dst, const uint32_t mode, const uint32_t index, const uint32_t size, int zeroOutSize );
   void     xSetTrTypes  ( const TransformUnit& tu, const ComponentID compID, const int width, const int height, int &trTypeHor, int &trTypeVer );
 
   // forward Transform
@@ -147,12 +148,12 @@ private:
   void xTransformSkip(const TransformUnit& tu, const ComponentID& compID, const CPelBuf& resi, TCoeff* psCoeff);
   // inverse skipping transform
   void xITransformSkip(const CCoeffBuf& plCoef, PelBuf& pResidual, const TransformUnit& tu, const ComponentID component);
-  void xGetCoeffEnergy(
-                       TransformUnit  &tu,
-                 const ComponentID    &compID,
-                 const CoeffBuf       &coeffs,
-                       double*        diagRatio,
-                       double*        horVerRatio );
+  
+#ifdef TARGET_SIMD_X86
+  template<X86_VEXT vext>
+  void _initTrQuantX86();
+  void initTrQuantX86();
+#endif
 };// END CLASS DEFINITION TrQuant
 
 } // namespace vvenc

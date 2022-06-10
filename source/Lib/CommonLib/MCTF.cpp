@@ -70,7 +70,7 @@ const double MCTF::m_sigmaZeroPoint   = 10.0;
 const int MCTF::m_range               = VVENC_MCTF_RANGE;
 const int MCTF::m_motionVectorFactor  = 16;
 const int MCTF::m_padding             = MCTF_PADDING;
-const int16_t MCTF::m_interpolationFilter[16][8] =
+const int16_t MCTF::m_interpolationFilter8[16][8] =
 {
   {   0,   0,   0,  64,   0,   0,   0,   0 },   //0
   {   0,   1,  -3,  64,   4,  -2,   0,   0 },   //1 -->-->
@@ -90,6 +90,26 @@ const int16_t MCTF::m_interpolationFilter[16][8] =
   {   0,   0,  -2,   4,  64,  -3,   1,   0 }    //15-->-->
 };
 
+const int16_t MCTF::m_interpolationFilter4[16][4] =
+{
+  {  0, 64,  0,  0 },    //0
+  { -2, 62,  4,  0 },    //1 -->-->
+  { -2, 58, 10, -2 },    //2 -->
+  { -4, 56, 14, -2 },    //3 -->-->
+  { -4, 54, 16, -2 },    //4
+  { -6, 52, 20, -2 },    //5 -->-->
+  { -6, 46, 28, -4 },    //6 -->
+  { -4, 42, 30, -4 },    //7 -->-->
+  { -4, 36, 36, -4 },    //8
+  { -4, 30, 42, -4 },    //9 -->-->
+  { -4, 28, 46, -6 },    //10-->
+  { -2, 20, 52, -6 },    //11-->-->
+  { -2, 16, 54, -4 },    //12
+  { -2, 14, 56, -4 },    //13-->-->
+  { -2, 10, 58, -2 },    //14-->
+  {  0,  4, 62, -2 },    //15-->-->
+};
+
 const double MCTF::m_refStrengths[3][4] =
 { // abs(POC offset)
   //  1,    2     3     4
@@ -98,14 +118,15 @@ const double MCTF::m_refStrengths[3][4] =
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
 
-int motionErrorLumaInt( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int besterror )
+int motionErrorLumaInt( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int besterror )
 {
   int error = 0;
 
   for( int y1 = 0; y1 < bs; y1++ )
   {
-    const Pel* origRowStart = origOrigin + ( y + y1 )*origStride + x;
-    const Pel* bufferRowStart = buffOrigin + ( y + y1 + dy )*buffStride + ( x + dx );
+    const Pel* origRowStart   = org + y1 * origStride;
+    const Pel* bufferRowStart = buf + y1 * buffStride;
+
     for( int x1 = 0; x1 < bs; x1 += 2 )
     {
       int diff = origRowStart[x1] - bufferRowStart[x1];
@@ -122,7 +143,7 @@ int motionErrorLumaInt( const Pel* origOrigin, const ptrdiff_t origStride, const
   return error;
 }
 
-int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, const Pel* buffOrigin, const ptrdiff_t buffStride, const int bs, const int x, const int y, const int dx, const int dy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
+int motionErrorLumaFrac6( const Pel *org, const ptrdiff_t origStride, const Pel *buf, const ptrdiff_t buffStride, const int bs, const int16_t *xFilter, const int16_t *yFilter, const int bitDepth, const int besterror )
 {
   int error = 0;
   Pel tempArray[64 + 8][64];
@@ -131,13 +152,13 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
 
   for( int y1 = 1; y1 < bs + 7; y1++ )
   {
-    const int yOffset = y + y1 + ( dy >> 4 ) - 3;
-    const Pel* sourceRow = buffOrigin + ( yOffset ) *buffStride + 0;
+    const int yOffset = y1 - 3;
+    const Pel *sourceRow = buf + yOffset * buffStride;
     for( int x1 = 0; x1 < bs; x1++ )
     {
       sum = 0;
-      base = x + x1 + ( dx >> 4 ) - 3;
-      const Pel* rowStart = sourceRow + base;
+      base = x1 - 3;
+      const Pel *rowStart = sourceRow + base;
 
       sum += xFilter[1] * rowStart[1];
       sum += xFilter[2] * rowStart[2];
@@ -155,7 +176,7 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
 
   for( int y1 = 0; y1 < bs; y1++ )
   {
-    const Pel* origRow = origOrigin + ( y + y1 )*origStride + 0;
+    const Pel *origRow = org + y1 * origStride;
     for( int x1 = 0; x1 < bs; x1++ )
     {
       sum = 0;
@@ -169,7 +190,7 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
       sum = ( sum + ( 1 << 5 ) ) >> 6;
       sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
 
-      error += ( sum - origRow[x + x1] ) * ( sum - origRow[x + x1] );
+      error += ( sum - origRow[x1] ) * ( sum - origRow[x1] );
     }
     if( error > besterror )
     {
@@ -180,16 +201,180 @@ int motionErrorLumaFrac( const Pel* origOrigin, const ptrdiff_t origStride, cons
   return error;
 }
 
+int motionErrorLumaFrac4( const Pel* org, const ptrdiff_t origStride, const Pel* buf, const ptrdiff_t buffStride, const int bs, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth, const int besterror )
+{
+  int error = 0;
+  Pel tempArray[64 + 4][64];
+  int sum, base;
+  const Pel maxSampleValue = ( 1 << bitDepth ) - 1;
+
+  for( int y1 = 0; y1 < bs + 3; y1++ )
+  {
+    const int yOffset = y1 - 1;
+    const Pel* sourceRow = buf + yOffset * buffStride;
+    for( int x1 = 0; x1 < bs; x1++ )
+    {
+      sum = 0;
+      base = x1 - 1;
+      const Pel* rowStart = sourceRow + base;
+
+      sum += xFilter[0] * rowStart[0];
+      sum += xFilter[1] * rowStart[1];
+      sum += xFilter[2] * rowStart[2];
+      sum += xFilter[3] * rowStart[3];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+
+      tempArray[y1][x1] = sum;
+    }
+  }
+
+  for( int y1 = 0; y1 < bs; y1++ )
+  {
+    const Pel* origRow = org + y1 * origStride;
+    for( int x1 = 0; x1 < bs; x1++ )
+    {
+      sum = 0;
+      sum += yFilter[0] * tempArray[y1 + 0][x1];
+      sum += yFilter[1] * tempArray[y1 + 1][x1];
+      sum += yFilter[2] * tempArray[y1 + 2][x1];
+      sum += yFilter[3] * tempArray[y1 + 3][x1];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxSampleValue ? maxSampleValue : sum );
+
+      error += ( sum - origRow[x1] ) * ( sum - origRow[x1] );
+    }
+    if( error > besterror )
+    {
+      return error;
+    }
+  }
+
+  return error;
+}
+
+void applyFrac8Core_6Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  const int numFilterTaps   = 7;
+  const int centreTapOffset = 3;
+  const int maxValue        = ( 1 << bitDepth ) - 1;
+
+  static constexpr int lbs = 8;
+
+  Pel tempArray[lbs + numFilterTaps][lbs];
+
+  for( int by = 1; by < bsy + numFilterTaps - 1; by++ )
+  {
+    const int yOffset = by - centreTapOffset;
+    const Pel *sourceRow = org + yOffset * origStride;
+    for( int bx = 0; bx < bsx; bx++ )
+    {
+      int base = bx - centreTapOffset;
+      const Pel *rowStart = sourceRow + base;
+
+      int sum = 0;
+      sum += xFilter[1] * rowStart[1];
+      sum += xFilter[2] * rowStart[2];
+      sum += xFilter[3] * rowStart[3];
+      sum += xFilter[4] * rowStart[4];
+      sum += xFilter[5] * rowStart[5];
+      sum += xFilter[6] * rowStart[6];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      tempArray[by][bx] = sum;
+    }
+  }
+
+  Pel *dstRow = dst;
+  for( int by = 0; by < bsy; by++, dstRow += dstStride )
+  {
+    Pel *dstPel = dstRow;
+    for( int bx = 0; bx < bsx; bx++, dstPel++ )
+    {
+      int sum = 0;
+
+      sum += yFilter[1] * tempArray[by + 1][bx];
+      sum += yFilter[2] * tempArray[by + 2][bx];
+      sum += yFilter[3] * tempArray[by + 3][bx];
+      sum += yFilter[4] * tempArray[by + 4][bx];
+      sum += yFilter[5] * tempArray[by + 5][bx];
+      sum += yFilter[6] * tempArray[by + 6][bx];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxValue ? maxValue : sum );
+      *dstPel = sum;
+    }
+  }
+}
+
+void applyFrac8Core_4Tap( const Pel* org, const ptrdiff_t origStride, Pel* dst, const ptrdiff_t dstStride, const int bsx, const int bsy, const int16_t* xFilter, const int16_t* yFilter, const int bitDepth )
+{
+  const int numFilterTaps   = 3;
+  const int centreTapOffset = 1;
+  const int maxValue        = ( 1 << bitDepth ) - 1;
+
+  static constexpr int lbs = 8;
+
+  Pel tempArray[lbs + numFilterTaps][lbs];
+
+  for( int by = 0; by < bsy + numFilterTaps; by++ )
+  {
+    const int yOffset    = by - centreTapOffset;
+    const Pel* sourceRow = org + yOffset * origStride;
+
+    for( int bx = 0; bx < bsx; bx++ )
+    {
+      int base = bx - centreTapOffset;
+      const Pel* rowStart = sourceRow + base;
+
+      int sum = 0;
+      sum += xFilter[0] * rowStart[0];
+      sum += xFilter[1] * rowStart[1];
+      sum += xFilter[2] * rowStart[2];
+      sum += xFilter[3] * rowStart[3];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      tempArray[by][bx] = sum;
+    }
+  }
+
+  Pel* dstRow = dst;
+  for( int by = 0; by < bsy; by++, dstRow += dstStride )
+  {
+    Pel* dstPel = dstRow;
+    for( int bx = 0; bx < bsx; bx++, dstPel++ )
+    {
+      int sum = 0;
+      sum += yFilter[0] * tempArray[by + 0][bx];
+      sum += yFilter[1] * tempArray[by + 1][bx];
+      sum += yFilter[2] * tempArray[by + 2][bx];
+      sum += yFilter[3] * tempArray[by + 3][bx];
+
+      sum = ( sum + ( 1 << 5 ) ) >> 6;
+      sum = sum < 0 ? 0 : ( sum > maxValue ? maxValue : sum );
+      *dstPel = sum;
+    }
+  }
+}
+
 MCTF::MCTF()
   : m_encCfg    ( nullptr )
   , m_threadPool( nullptr )
   , m_filterPoc ( 0 )
   , m_lastPicIn ( nullptr )
 {
-  m_motionErrorLumaIntX  = motionErrorLumaInt;
-  m_motionErrorLumaInt8  = motionErrorLumaInt;
-  m_motionErrorLumaFracX = motionErrorLumaFrac;
-  m_motionErrorLumaFrac8 = motionErrorLumaFrac;
+  m_motionErrorLumaIntX     = motionErrorLumaInt;
+  m_motionErrorLumaInt8     = motionErrorLumaInt;
+  m_motionErrorLumaFracX[0] = motionErrorLumaFrac6;
+  m_motionErrorLumaFrac8[0] = motionErrorLumaFrac6;
+  m_motionErrorLumaFracX[1] = motionErrorLumaFrac4;
+  m_motionErrorLumaFrac8[1] = motionErrorLumaFrac4;
+  m_applyFrac[0][0]         = applyFrac8Core_6Tap;
+  m_applyFrac[0][1]         = applyFrac8Core_4Tap;
+  m_applyFrac[1][0]         = applyFrac8Core_6Tap;
+  m_applyFrac[1][1]         = applyFrac8Core_4Tap;
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_MCTF
   initMCTF_X86();
@@ -209,8 +394,12 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_area       = Area( 0, 0, m_encCfg->m_PadSourceWidth, m_encCfg->m_PadSourceHeight );
   m_filterPoc  = 0;
 
-  const uint8_t acMCTFSpeedVal[] = {0, 5, 6, 22, 26 };
-  m_MCTFSpeedVal = acMCTFSpeedVal[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
+  // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
+  const static int sMCTFSpeed[4] { 0, ((3<<12) + (2<<9) + (2<<6) + (2<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2),   ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 2) };
+
+  m_MCTFSpeedVal     = sMCTFSpeed[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
+  m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
+  m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
 }
 
 // ====================================================================================================================
@@ -279,6 +468,8 @@ void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& 
 
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
+  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
+
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;
   int idx = (int)m_encCfg->m_vvencMCTF.numFrames - 1;
@@ -295,15 +486,11 @@ void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
   int dropFrames = 0;
   if( idx >= 0 )
   {
-    // m_MCTFSpeedVal is specified for m_FiterFrames.size() == 3, with keyframe being idx == 2
-    // for m_FiterFrames.size() > 3, this is not a problem, since less important frames will be sped-up for
-    // low values for idx, and keyframe in idx == 3 or higher will get threshold == 0, i.e. full filtering
-    // for m_FiterFrames.size() < 3 (e.g. GOP16), the value of idx has to shifted so that keyframe is at idx == 2
-    if( m_encCfg->m_vvencMCTF.numFrames < 3 ) idx += ( 3 - ( int ) m_encCfg->m_vvencMCTF.numFrames );
+    const int idxTLayer = m_encCfg->m_vvencMCTF.numFrames - (idx + 1);
+    const int threshold = (m_MCTFSpeedVal >> (idxTLayer * 3)) & 7;
 
-    int threshold     = ( m_MCTFSpeedVal >> ( idx * 2 ) ) & 3;
-    isFilterThisFrame =   threshold < 2;
-    dropFrames        = ( threshold & 1 ) << 1;
+    dropFrames          = std::min(VVENC_MCTF_RANGE, threshold);
+    isFilterThisFrame   = threshold < VVENC_MCTF_RANGE;
   }
 
   const int filterFrames = VVENC_MCTF_RANGE - dropFrames;
@@ -412,38 +599,74 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
   const int bs,
   const int besterror = 8 * 8 * 1024 * 1024) const
 {
-  const Pel* origOrigin = orig.Y().buf;
-  const int origStride  = orig.Y().stride;
-  const Pel* buffOrigin = buffer.Y().buf;
-  const int buffStride  = buffer.Y().stride;
+  int fx = dx & 0xf;
+  int fy = dy & 0xf;
 
   int error = 0;// dx * 10 + dy * 10;
-  if (((dx | dy) & 0xF) == 0)
+
+  CHECKD( bs & 7, "Blocksize has to be a multiple of 8!" );
+
+  if( ( fx | fy ) == 0 )
   {
     dx /= m_motionVectorFactor;
     dy /= m_motionVectorFactor;
 
-    if( bs & 7 )
+    const int  origStride = orig.Y().stride;
+    const Pel* org        = orig.Y().buf + x + y * origStride;
+    const int  buffStride = buffer.Y().stride;
+    const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
+
+    //if( bs & 7 )
+    //{
+    //  return m_motionErrorLumaIntX( org, origStride, buf, buffStride, bs, besterror );
+    //}
+    //else
     {
-      return m_motionErrorLumaIntX( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, besterror );
+      return m_motionErrorLumaInt8( org, origStride, buf, buffStride, bs, besterror );
     }
-    else
+  }
+  else if( m_lowResFltSearch )
+  {
+    dx >>= 4;
+    dy >>= 4;
+
+    const int  origStride = orig.Y().stride;
+    const Pel* org        = orig.Y().buf + x + y * origStride;
+    const int  buffStride = buffer.Y().stride;
+    const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
+
+    const int16_t *xFilter = m_interpolationFilter4[fx];
+    const int16_t *yFilter = m_interpolationFilter4[fy];
+
+    //if( bs & 7 )
+    //{
+    //  return m_motionErrorLumaFracX[1]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
+    //}
+    //else
     {
-      return m_motionErrorLumaInt8( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, besterror );
+      return m_motionErrorLumaFrac8[1]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
     }
   }
   else
   {
-    const int16_t *xFilter = m_interpolationFilter[dx & 0xF];
-    const int16_t *yFilter = m_interpolationFilter[dy & 0xF];
+    dx >>= 4;
+    dy >>= 4;
 
-    if( bs & 7 )
+    const int  origStride = orig.Y().stride;
+    const Pel* org        = orig.Y().buf + x + y * origStride;
+    const int  buffStride = buffer.Y().stride;
+    const Pel* buf        = buffer.Y().buf + x + dx + ( y + dy ) * buffStride;
+
+    const int16_t *xFilter = m_interpolationFilter8[fx];
+    const int16_t *yFilter = m_interpolationFilter8[fy];
+
+    //if( bs & 7 )
+    //{
+    //  return m_motionErrorLumaFracX[0]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
+    //}
+    //else
     {
-      return m_motionErrorLumaFracX( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
-    }
-    else
-    {
-      return m_motionErrorLumaFrac8( origOrigin, origStride, buffOrigin, buffStride, bs, x, y, dx, dy, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
+      return m_motionErrorLumaFrac8[0]( org, origStride, buf, buffStride, bs, xFilter, yFilter, m_encCfg->m_internalBitDepth[CH_L], besterror );
     }
   }
   return error;
@@ -452,6 +675,8 @@ int MCTF::motionErrorLuma(const PelStorage &orig,
 bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX, Array2D<MotionVector> &mvs, const PelStorage &orig, const PelStorage &buffer, const int blockSize,
   const Array2D<MotionVector> *previous, const int factor, const bool doubleRes, int blockY ) const
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH );
+
   const int stepSize = blockSize;
   const int origWidth  = orig.Y().width;
 
@@ -511,30 +736,59 @@ bool MCTF::estimateLumaLn( std::atomic_int& blockX_, std::atomic_int* prevLineX,
     }
     if (doubleRes)
     { // merge into one loop, probably with precision array (here [12, 3] or maybe [4, 1]) with setable number of iterations
+      PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_SEARCH_SUBPEL );
+
       prevBest = best;
-      int doubleRange = 3 * 4;
-      for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2 += 4)
+      int doubleRange = m_searchPttrn ? 6 : 12;
+
+      // first iteration, 49 - 1 or 16 checks
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 4 )
       {
-        for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2 += 4)
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 4 )
         {
-          int error = motionErrorLuma(orig, buffer, blockX, blockY, x2, y2, blockSize, best.error);
-          if (error < best.error)
+          if( x2 || y2 )
           {
-            best.set(x2, y2, error);
+            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
+            if( error < best.error )
+            {
+              best.set( prevBest.x + x2, prevBest.y + y2, error );
+            }
           }
         }
       }
 
       prevBest = best;
-      doubleRange = 3;
-      for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2++)
+      doubleRange = 2;
+      // second iteration, 9 - 1 checks
+      for( int y2 = -doubleRange; y2 <= doubleRange; y2 += 2 )
       {
-        for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2++)
+        for( int x2 = -doubleRange; x2 <= doubleRange; x2 += 2 )
         {
-          int error = motionErrorLuma(orig, buffer, blockX, blockY, x2, y2, blockSize, best.error);
-          if (error < best.error)
+          if( x2 || y2 )
           {
-            best.set(x2, y2, error);
+            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
+            if( error < best.error )
+            {
+              best.set( prevBest.x + x2, prevBest.y + y2, error );
+            }
+          }
+        }
+      }
+
+      prevBest = best;
+      doubleRange = 1;
+      // third iteration, 9 - 1 checks
+      for (int y2 = -doubleRange; y2 <= doubleRange; y2++)
+      {
+        for (int x2 = -doubleRange; x2 <= doubleRange; x2++)
+        {
+          if( x2 || y2 )
+          {
+            int error = motionErrorLuma( orig, buffer, blockX, blockY, prevBest.x + x2, prevBest.y + y2, blockSize, best.error );
+            if( error < best.error )
+            {
+              best.set( prevBest.x + x2, prevBest.y + y2, error );
+            }
           }
         }
       }
@@ -664,7 +918,6 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
   const int blockSizeY = lumaBlockSize>>csy;
   const int width  = input.bufs[compID].width;
   int y = blockNumY*blockSizeY;
-  const Pel maxValue = (1<<m_encCfg->m_internalBitDepth[toChannelType(compID)])-1;
 
   const Pel* srcImage = input.bufs[compID].buf;
   const int srcStride  = input.bufs[compID].stride;
@@ -680,63 +933,33 @@ void MCTF::applyMotionLn(const Array2D<MotionVector> &mvs, const PelStorage &inp
     const int xInt = mv.x >> (4+csx) ;
     const int yInt = mv.y >> (4+csy) ;
 
-    const int16_t *xFilter = m_interpolationFilter[dx & 0xf];
-    const int16_t *yFilter = m_interpolationFilter[dy & 0xf]; // will add 6 bit.
-    const int numFilterTaps=7;
-    const int centreTapOffset=3;
+    const int yOffset = y + yInt;
+    const int xOffset = x + xInt;
+    const Pel* src = srcImage + yOffset * srcStride + xOffset;
+          Pel* dst = dstImage + y       * dstStride + x;
 
-    Pel tempArray[lumaBlockSize + numFilterTaps][lumaBlockSize];
-
-    for (int by = 1; by < blockSizeY + numFilterTaps; by++)
+    if( m_lowResFltApply ) // || isChroma( compID )
     {
-      const int yOffset = y + by + yInt - centreTapOffset;
-      const Pel* sourceRow = srcImage+yOffset*srcStride;
-      for (int bx = 0; bx < blockSizeX; bx++)
-      {
-        int base = x + bx + xInt - centreTapOffset;
-        const Pel* rowStart = sourceRow + base;
+      const int16_t* xFilter = m_interpolationFilter4[dx & 0xf];
+      const int16_t* yFilter = m_interpolationFilter4[dy & 0xf]; // will add 6 bit.
 
-        int sum = 0;
-        sum += xFilter[1] * rowStart[1];
-        sum += xFilter[2] * rowStart[2];
-        sum += xFilter[3] * rowStart[3];
-        sum += xFilter[4] * rowStart[4];
-        sum += xFilter[5] * rowStart[5];
-        sum += xFilter[6] * rowStart[6];
-
-        sum = ( sum + ( 1 << 5 ) ) >> 6;
-        tempArray[by][bx] = sum;
-      }
+      m_applyFrac[toChannelType( compID )][1]( src, srcStride, dst, dstStride, blockSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
     }
-
-    Pel* dstRow = dstImage+y*dstStride;
-    for (int by = 0; by < blockSizeY; by++, dstRow+=dstStride)
+    else
     {
-      Pel* dstPel=dstRow+x;
-      for (int bx = 0; bx < blockSizeX; bx++, dstPel++)
-      {
-        int sum = 0;
+      const int16_t *xFilter = m_interpolationFilter8[dx & 0xf];
+      const int16_t *yFilter = m_interpolationFilter8[dy & 0xf]; // will add 6 bit.
 
-        sum += yFilter[1] * tempArray[by + 1][bx];
-        sum += yFilter[2] * tempArray[by + 2][bx];
-        sum += yFilter[3] * tempArray[by + 3][bx];
-        sum += yFilter[4] * tempArray[by + 4][bx];
-        sum += yFilter[5] * tempArray[by + 5][bx];
-        sum += yFilter[6] * tempArray[by + 6][bx];
-
-        sum = ( sum + ( 1 << 5 ) ) >> 6;
-        sum = sum < 0 ? 0 : (sum > maxValue ? maxValue : sum);
-        *dstPel = sum;
-      }
+      m_applyFrac[toChannelType( compID )][0]( src, srcStride, dst, dstStride, blockSizeX, blockSizeY, xFilter, yFilter, m_encCfg->m_internalBitDepth[toChannelType( compID )] );
     }
   }
 }
 
 
-inline static double fastExp( double x )
+inline static double fastExp( double n, double d )
 {
   // using the e^x ~= ( 1 + x/n )^n for n -> inf
-  x = 1.0 + x / 1024;
+  double x = 1.0 + n / ( d * 1024 );
   x *= x; x *= x; x *= x; x *= x;
   x *= x; x *= x; x *= x; x *= x;
   x *= x; x *= x;
@@ -746,6 +969,8 @@ inline static double fastExp( double x )
 void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilterSourcePicInfo> &srcFrameInfo, PelStorage &newOrgPic,
   std::vector<PelStorage>& correctedPics, int yStart, const double sigmaSqCh[MAX_NUM_CH], double overallStrength ) const
 {
+  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF_APPLY );
+
   const int numRefs = int(srcFrameInfo.size());
 
   int refStrengthRow = 2;
@@ -758,6 +983,9 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     refStrengthRow = 1;
   }
 
+  int vnoise[MAX_NUM_REF] = { 0, };
+  int verror[MAX_NUM_REF] = { 0, };
+
   for(int c=0; c< getNumberValidComponents(m_encCfg->m_internChromaFormat); c++)
   {
     for (int i = 0; i < numRefs; i++)
@@ -765,9 +993,9 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
       applyMotionLn(srcFrameInfo[i].mvs, srcFrameInfo[i].picBuffer, correctedPics[i], yStart / 8, c);
     }
 
-    const ComponentID compID=(ComponentID)c;
-    const int height = orgPic.bufs[c].height;
-    const int width  = orgPic.bufs[c].width;
+    const ComponentID compID = ( ComponentID ) c;
+    const int height    = orgPic.bufs[c].height;
+    const int width     = orgPic.bufs[c].width;
     const int srcStride = orgPic.bufs[c].stride;
     const int dstStride = newOrgPic.bufs[c].stride;
 
@@ -775,97 +1003,97 @@ void MCTF::xFinalizeBlkLine( const PelStorage &orgPic, std::deque<TemporalFilter
     const double weightScaling = overallStrength * ( isChroma( compID ) ? m_chromaFactor : 0.4 );
     const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ toChannelType( compID) ])-1;
 
-    const int blkSizeY = 8 >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-    const int blkSizeX = 8 >> getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
-    int yOut = yStart >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
-    const Pel* srcPelRow = orgPic.bufs[c].buf + yOut * srcStride;
-    Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
-    for (int y = yOut; y < std::min(yOut+blkSizeY,height); y++, srcPelRow+=srcStride, dstPelRow+=dstStride)
+    const int blkSizeY = 8      >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
+    const int blkSizeX = 8      >> getComponentScaleX(compID, m_encCfg->m_internChromaFormat);
+    const int yOut     = yStart >> getComponentScaleY(compID, m_encCfg->m_internChromaFormat);
+    const Pel* srcPelRow = orgPic   .bufs[c].buf + yOut * srcStride;
+          Pel* dstPelRow = newOrgPic.bufs[c].buf + yOut * dstStride;
+
+    for( int by = yOut, yBlkAddr = yStart / 8; by < std::min( yOut + blkSizeY, height ); by += blkSizeY, yBlkAddr++, srcPelRow += ( srcStride * blkSizeY ), dstPelRow += ( dstStride * blkSizeY ) )
     {
-      const int yBlkAddr = y / blkSizeY;
+      const Pel* srcPel = srcPelRow;
+            Pel* dstPel = dstPelRow;
 
-      const Pel* srcPel=srcPelRow;
-      Pel* dstPel=dstPelRow;
-
-      double minError = 9999999;
-
-      for (int x = 0; x < width; x++, srcPel++, dstPel++)
+      for( int bx = 0, xBlkAddr = 0; bx < width; bx += blkSizeX, xBlkAddr++, srcPel += blkSizeX, dstPel += blkSizeX )
       {
-        const int xBlkAddr = x / blkSizeX;
-        const int orgVal = (int) *srcPel;
-        double temporalWeightSum = 1.0;
-        double newVal = (double) orgVal;
-        if( ( y % blkSizeY == 0 ) && ( x % blkSizeX == 0 ) )
-        {
-          for( int i = 0; i < numRefs; i++ )
-          {
-            int64_t variance = 0, diffsum = 0;
-            const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
-            const Pel *     refPel    = correctedPics[i].bufs[c].buf + y * refStride + x;
-            for (int y1 = 0; y1 < blkSizeY; y1++)
-            {
-              for (int x1 = 0; x1 < blkSizeX; x1++)
-              {
-                const Pel pix  = *(srcPel + srcStride * y1 + x1);
-                const Pel ref  = *(refPel + refStride * y1 + x1);
+        int minError = 9999999;
 
-                const int diff = pix - ref;
-                variance += diff * diff;
-                if (x1 != blkSizeX - 1)
-                {
-                  const Pel pixR  = *(srcPel + srcStride * y1 + x1 + 1);
-                  const Pel refR  = *(refPel + refStride * y1 + x1 + 1);
-                  const int diffR = pixR - refR;
-                  diffsum += (diffR - diff) * (diffR - diff);
-                }
-                if (y1 != blkSizeY - 1)
-                {
-                  const Pel pixD  = *(srcPel + srcStride * y1 + x1 + srcStride);
-                  const Pel refD  = *(refPel + refStride * y1 + x1 + refStride);
-                  const int diffD = pixD - refD;
-                  diffsum += (diffD - diff) * (diffD - diff);
-                }
+        for( int i = 0; i < numRefs; i++ )
+        {
+          int64_t variance = 0, diffsum = 0;
+          const ptrdiff_t refStride = correctedPics[i].bufs[c].stride;
+          const Pel *     refPel    = correctedPics[i].bufs[c].buf + by * refStride + bx;
+          for( int y1 = 0; y1 < blkSizeY; y1++ )
+          {
+            for( int x1 = 0; x1 < blkSizeX; x1++ )
+            {
+              const Pel pix = *( srcPel + srcStride * y1 + x1 );
+              const Pel ref = *( refPel + refStride * y1 + x1 );
+
+              const int diff = pix - ref;
+              variance += diff * diff;
+              if( x1 != blkSizeX - 1 )
+              {
+                const Pel pixR = *( srcPel + srcStride * y1 + x1 + 1 );
+                const Pel refR = *( refPel + refStride * y1 + x1 + 1 );
+                const int diffR = pixR - refR;
+                diffsum += ( diffR - diff ) * ( diffR - diff );
+              }
+              if( y1 != blkSizeY - 1 )
+              {
+                const Pel pixD = *( srcPel + srcStride * y1 + x1 + srcStride );
+                const Pel refD = *( refPel + refStride * y1 + x1 + refStride );
+                const int diffD = pixD - refD;
+                diffsum += ( diffD - diff ) * ( diffD - diff );
               }
             }
-            const int cntV = blkSizeX * blkSizeY;
-            const int cntD = 2 * cntV - blkSizeX - blkSizeY;
-            srcFrameInfo[i].mvs.get(xBlkAddr, yBlkAddr ).noise = (int) round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
           }
+          const int cntV = blkSizeX * blkSizeY;
+          const int cntD = 2 * cntV - blkSizeX - blkSizeY;
+          vnoise[i] = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
+          verror[i] = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error;
+          minError = std::min( minError, verror[i] );
+          //srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).noise = ( int ) round( ( 15.0 * cntD / cntV * variance + 5.0 ) / ( diffsum + 5.0 ) );
         }
-        if( x % blkSizeX == 0 )
+
+        int w = std::min( blkSizeX, width - bx );
+        int h = std::min( blkSizeY, std::min( yOut + blkSizeY, height ) - by );
+
+        for( int y = 0; y < h; y++ )
         {
-          minError = 9999999;
-          for( int i = 0; i < numRefs; i++ )
+          for( int x = 0; x < w; x++ )
           {
-            minError = std::min( minError, ( double ) srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr ).error );
+            const Pel orgVal  = *( srcPel + srcStride * y + x );
+            double temporalWeightSum = 1.0;
+            double newVal = ( double ) orgVal;
+
+            for( int i = 0; i < numRefs; i++ )
+            {
+              //const MotionVector& mv = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr );
+              const int error = verror[i];
+              const int noise = vnoise[i];
+              const Pel* pCorrectedPelPtr = correctedPics[i].bufs[c].buf + ( y + by ) * correctedPics[i].bufs[c].stride + ( x + bx );
+              const int    refVal = ( int ) *pCorrectedPelPtr;
+              const double diff = ( double ) ( refVal - orgVal );
+              const double diffSq = diff * diff;
+
+              double ww = 1, sw = 1;
+              ww *= ( noise < 25 ) ? 1.0 : 0.6;
+              sw *= ( noise < 25 ) ? 1.0 : 0.8;
+              ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
+              sw *= ( error < 50 ) ? 1.0 : 0.8;
+              ww *= ( ( minError + 1.0 ) / ( error + 1.0 ) );
+              const int index = srcFrameInfo[i].index;
+              double weight = weightScaling * m_refStrengths[refStrengthRow][index] * ww * fastExp( -diffSq, ( 2 * sw * sigmaSq ) );
+              newVal += weight * refVal;
+              temporalWeightSum += weight;
+            }
+            newVal /= temporalWeightSum;
+            Pel sampleVal = ( Pel ) ( newVal + 0.5 );
+            sampleVal = ( sampleVal < 0 ? 0 : ( sampleVal > maxSampleValue ? maxSampleValue : sampleVal ) );
+            *( dstPel + srcStride * y + x ) = sampleVal;
           }
         }
-
-        for (int i = 0; i < numRefs; i++)
-        {
-          const MotionVector& mv = srcFrameInfo[i].mvs.get( xBlkAddr, yBlkAddr );
-          const int error = mv.error;
-          const int noise = mv.noise;
-          const Pel*   pCorrectedPelPtr=correctedPics[i].bufs[c].buf+(y*correctedPics[i].bufs[c].stride+x);
-          const int    refVal = (int) *pCorrectedPelPtr;
-          const double diff   = (double)(refVal - orgVal);
-          const double diffSq = diff * diff;
-
-          double ww = 1, sw = 1;
-          ww *= ( noise < 25 ) ? 1.0 : 0.6;
-          sw *= ( noise < 25 ) ? 1.0 : 0.8;
-          ww *= ( error < 50 ) ? 1.2 : ( ( error > 100 ) ? 0.6 : 1.0 );
-          sw *= ( error < 50 ) ? 1.0 : 0.8;
-          ww *= ( ( minError + 1 ) / ( error + 1 ) );
-          const int index = srcFrameInfo[i].index;
-          double weight = weightScaling * m_refStrengths[refStrengthRow][index] * ww * fastExp( -diffSq / ( 2 * sw * sigmaSq ) );
-          newVal += weight * refVal;
-          temporalWeightSum  += weight;
-        }
-        newVal /= temporalWeightSum;
-        Pel sampleVal = (Pel)round(newVal);
-        sampleVal=(sampleVal<0?0 : (sampleVal>maxSampleValue ? maxSampleValue : sampleVal));
-        *dstPel = sampleVal;
       }
     }
   }
@@ -884,7 +1112,7 @@ void MCTF::bilateralFilter(const PelStorage& orgPic, std::deque<TemporalFilterSo
     const ChannelType ch=(ChannelType)c;
     const Pel maxSampleValue = (1<<m_encCfg->m_internalBitDepth[ch])-1;
     const double bitDepthDiffWeighting=1024.0 / (maxSampleValue+1);
-    sigmaSqCh[ch] = (isChroma(ch)? chromaSigmaSq : lumaSigmaSq)/(bitDepthDiffWeighting*bitDepthDiffWeighting);
+    sigmaSqCh[ch] = ( isChroma( ch ) ? chromaSigmaSq : lumaSigmaSq ) / ( bitDepthDiffWeighting * bitDepthDiffWeighting );
   }
 
 #

@@ -110,6 +110,12 @@ struct PelBufferOps
   void ( *weightCiip)     ( Pel* res, const Pel* intra, const int numSamples, int numIntra );
   void ( *applyLut )      ( const Pel* src, const ptrdiff_t srcStride, Pel* dst, ptrdiff_t dstStride, int width, int height, const Pel* lut );
   void ( *fillPtrMap )    ( void** ptrMap, const ptrdiff_t mapStride, int width, int height, void* val );
+  uint64_t ( *AvgHighPassWithDownsampling )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
+  uint64_t ( *AvgHighPass )    ( const int width, const int height, const Pel* pSrc, const int iSrcStride);
+  uint64_t ( *AvgHighPassWithDownsamplingDiff1st ) (const int width, const int height, const Pel* pSrc,const Pel* pSrcM1, const int iSrcStride, const int iSrcM1Stride);
+  uint64_t ( *AvgHighPassWithDownsamplingDiff2nd) (const int width,const int height,const Pel* pSrc,const Pel* pSM1,const Pel* pS21,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
+  uint64_t ( *HDHighPass) (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const int iSrcStride,const int iSM1Stride);
+  uint64_t ( *HDHighPass2)  (const int width, const int height,const Pel*  pSrc,const Pel* pSM1,const Pel* pSM2,const int iSrcStride,const int iSM1Stride,const int iSM2Stride);
 };
 
 extern PelBufferOps g_pelBufOP;
@@ -126,9 +132,15 @@ struct AreaBuf : public Size
   AreaBuf( T *_buf, const int& _stride, const Size& size )                                : Size( size ),            buf( _buf ), stride( _stride )    { }
   AreaBuf( T *_buf, const SizeType& _width, const SizeType& _height )                     : Size( _width, _height ), buf( _buf ), stride( _width )     { }
   AreaBuf( T *_buf, const int& _stride, const SizeType& _width, const SizeType& _height ) : Size( _width, _height ), buf( _buf ), stride( _stride )    { }
-//  AreaBuf( const AreaBuf<typename std::remove_const<T>::type >& other )                         : Size( other ),           buf( other.buf ), stride( other.stride ) { }
 
-  operator AreaBuf<const T>() const { auto ret = *reinterpret_cast< const AreaBuf<const T>* >( this ); return ret; }
+  AreaBuf( const AreaBuf& )  = default;
+  AreaBuf(       AreaBuf&& ) = default;
+  AreaBuf& operator=( const AreaBuf& )  = default;
+  AreaBuf& operator=(       AreaBuf&& ) = default;
+
+  // conversion from AreaBuf<const T> to AreaBuf<T>
+  template<bool T_IS_CONST = std::is_const<T>::value>
+  AreaBuf( const AreaBuf<typename std::remove_const_t<T>>& other, std::enable_if_t<T_IS_CONST>* = 0) : Size( other ), buf( other.buf ), stride( other.stride ) { }
 
   void fill                 ( const T &val );
   void memset               ( const int val );
@@ -674,10 +686,14 @@ struct UnitBuf
   UnitBuf( const ChromaFormat _chromaFormat, const AreaBuf<T>&  blkY, const AreaBuf<T>&  blkCb, const AreaBuf<T>  &blkCr ) : chromaFormat( _chromaFormat ), bufs{ blkY, blkCb, blkCr } { }
   UnitBuf( const ChromaFormat _chromaFormat,       AreaBuf<T>&& blkY,       AreaBuf<T>&& blkCb,       AreaBuf<T> &&blkCr ) : chromaFormat( _chromaFormat ), bufs{ std::forward<AreaBuf<T> >(blkY), std::forward<AreaBuf<T> >(blkCb), std::forward<AreaBuf<T> >(blkCr) } { }
 
-  operator UnitBuf<const T>() const
-  {
-    return UnitBuf<const T>( chromaFormat, ConstUnitBufBuffers( bufs.begin(), bufs.end() ) );
-  }
+  UnitBuf( const UnitBuf& other )  = default;
+  UnitBuf(       UnitBuf&& other ) = default;
+  UnitBuf& operator=( const UnitBuf& other )  = default;
+  UnitBuf& operator=(       UnitBuf&& other ) = default;
+
+  // conversion from UnitBuf<const T> to UnitBuf<T>
+  template<bool T_IS_COST = std::is_const<T>::value>
+  UnitBuf( const UnitBuf<typename std::remove_const<T>::type>& other, std::enable_if<T_IS_COST>* = 0 ) : chromaFormat( other.chromaFormat ), bufs( other.bufs.begin(), other.bufs.end() ) { }
 
         AreaBuf<T>& get( const ComponentID comp )        { return bufs[comp]; }
   const AreaBuf<T>& get( const ComponentID comp )  const { return bufs[comp]; }

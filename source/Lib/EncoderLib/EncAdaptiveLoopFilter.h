@@ -60,16 +60,16 @@ namespace vvenc {
 class NoMallocThreadPool;
 
 #if ALF_SINGLE_PREC_FLOAT
-typedef float AlfFltType;
+typedef float alf_float_t; 
 #else
-typedef double AlfFltType;
+typedef double alf_float_t;
 #endif
 
 struct AlfCovariance
 {
   static constexpr int MaxAlfNumClippingValues = AdaptiveLoopFilter::MaxAlfNumClippingValues;
-  using TE = AlfFltType[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
-  using Ty = AlfFltType[MAX_NUM_ALF_LUMA_COEFF];
+  using TE = alf_float_t[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
+  using Ty = alf_float_t[MAX_NUM_ALF_LUMA_COEFF];
   using TKE = TE**;
   using TKy = Ty*;
 
@@ -81,7 +81,7 @@ public:
 
   TKy y;
   TKE E;
-  AlfFltType pixAcc;
+  alf_float_t pixAcc;
   bool all0;
 
   AlfCovariance() : numBins( -1 ), _numBinsAlloc( -1 ), y( nullptr ), E( nullptr ), all0( true ) {}
@@ -283,39 +283,39 @@ public:
     }
   }
 
-  AlfFltType optimizeFilter( const int* clip, AlfFltType*f, int size ) const
+  alf_float_t optimizeFilter( const int* clip, alf_float_t*f, int size ) const
   {
     gnsSolveByChol( clip, f, size );
     return calculateError( clip, f );
   }
 
-  AlfFltType optimizeFilter    ( const AlfFilterShape& alfShape, int* clip, AlfFltType*f, bool optimize_clip) const;
-  AlfFltType optimizeFilterClip( const AlfFilterShape& alfShape, int* clip) const
+  alf_float_t optimizeFilter    ( const AlfFilterShape& alfShape, int* clip, alf_float_t*f, bool optimize_clip) const;
+  alf_float_t optimizeFilterClip( const AlfFilterShape& alfShape, int* clip) const
   {
     Ty f;
     return optimizeFilter( alfShape, clip, f, true );
   }
 
-  AlfFltType calculateError    ( const int *clip ) const;
-  AlfFltType calculateError    ( const int *clip, const AlfFltType*coeff ) const { return calculateError(clip, coeff, numCoeff); }
-  AlfFltType calculateError    ( const int *clip, const AlfFltType*coeff, const int numCoeff ) const;
+  alf_float_t calculateError    ( const int *clip ) const;
+  alf_float_t calculateError    ( const int *clip, const alf_float_t*coeff ) const { return calculateError(clip, coeff, numCoeff); }
+  alf_float_t calculateError    ( const int *clip, const alf_float_t*coeff, const int numCoeff ) const;
 
   template<bool doClip>
-  AlfFltType calcDiffErrorForCoeffs( const int *clip, const int *coeff, const int numCoeff, const int numCoeffBefore, const int numCoeffAfter, const int coeffPos, const AlfFltType invFactor ) const;
+  alf_float_t calcDiffErrorForCoeffs( const int *clip, const int *coeff, const int numCoeff, const int numCoeffBefore, const int numCoeffAfter, const int coeffPos, const alf_float_t invFactor ) const;
   template<bool doClip>
-  AlfFltType calcErrorForCoeffs( const int *clip, const int *coeff, const int numCoeff, const AlfFltType invFactor ) const;
-  AlfFltType calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const AlfFltType invFactor) const;
+  alf_float_t calcErrorForCoeffs( const int *clip, const int *coeff, const int numCoeff, const alf_float_t invFactor ) const;
+  alf_float_t calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const alf_float_t invFactor) const;
 
   void getClipMax          ( const AlfFilterShape& alfShape, int *clip_max) const;
   void reduceClipCost      ( const AlfFilterShape& alfShape, int *clip) const;
-  int  gnsSolveByChol              ( TE LHS, AlfFltType* rhs, AlfFltType*x, int numEq ) const;
+  int  gnsSolveByChol              ( TE LHS, alf_float_t* rhs, alf_float_t*x, int numEq ) const;
 
 private:
   // Cholesky decomposition
 
-  int  gnsSolveByChol              ( const int *clip, AlfFltType*x, int numEq ) const;
-  void gnsBacksubstitution         ( TE R, AlfFltType* z, int size, AlfFltType* A ) const;
-  void gnsTransposeBacksubstitution( TE U, AlfFltType* rhs, AlfFltType* x, int order ) const;
+  int  gnsSolveByChol              ( const int *clip, alf_float_t*x, int numEq ) const;
+  void gnsBacksubstitution         ( TE R, alf_float_t* z, int size, alf_float_t* A ) const;
+  void gnsTransposeBacksubstitution( TE U, alf_float_t* rhs, alf_float_t* x, int order ) const;
   int  gnsCholeskyDec              ( TE inpMatr, TE outMatr, int numEq ) const;
 };
 
@@ -422,15 +422,15 @@ private:
 
 
   double getFilterCoeffAndCost   ( CodingStructure& cs, double distUnfilter, ChannelType channel, bool bReCollectStat, int iShapeIdx, int& uiCoeffBits, bool onlyFilterCost = false );
-  double deriveFilterCoeffs      ( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, AlfFltType errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam);
+  double deriveFilterCoeffs      ( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam);
   int    deriveFilterCoefficientsPredictionMode( AlfFilterShape& alfShape, int **filterSet, int** filterCoeffDiff, const int numFilters );
   double deriveCoeffQuant        ( int *filterClipp, int *filterCoeffQuant, const AlfCovariance& cov, const AlfFilterShape& shape, const int bitDepth, const bool optimizeClip );
   double deriveCtbAlfEnableFlags ( CodingStructure& cs, const int iShapeIdx, ChannelType channel, const double chromaWeight,
                                    const int numClasses, const int numCoeff, double& distUnfilter );
-  void   roundFiltCoeff          ( int *filterCoeffQuant, AlfFltType*filterCoeff, const int numCoeff, const int factor );
-  void   roundFiltCoeffCCALF     ( int16_t *filterCoeffQuant, AlfFltType*filterCoeff, const int numCoeff, const int factor );
+  void   roundFiltCoeff          ( int *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor );
+  void   roundFiltCoeffCCALF     ( int16_t *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor );
 
-  AlfFltType getDistCoeffForce0  ( bool* codedVarBins, AlfFltType errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2], int* bitsVarBin, int zeroBitsVarBin, const int numFilters);
+  alf_float_t getDistCoeffForce0  ( bool* codedVarBins, alf_float_t errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2], int* bitsVarBin, int zeroBitsVarBin, const int numFilters);
   int    lengthUvlc              ( int uiCode );
   int    getNonFilterCoeffRate   ( AlfParam& alfParam );
 
@@ -438,7 +438,7 @@ private:
   int    getCostFilterCoeff      ( AlfFilterShape& alfShape, int **pDiffQFilterCoeffIntPP, const int numFilters );
   int    getCostFilterClipp      ( AlfFilterShape& alfShape, int **pDiffQFilterCoeffIntPP, const int numFilters );
   int    lengthFilterCoeffs      ( AlfFilterShape& alfShape, const int numFilters, int **FilterCoeff );
-  AlfFltType getDistForce0       ( AlfFilterShape& alfShape, const int numFilters, AlfFltType errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], bool* codedVarBins );
+  alf_float_t getDistForce0       ( AlfFilterShape& alfShape, const int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], bool* codedVarBins );
   int    getChromaCoeffRate      ( AlfParam& alfParam, int altIdx );
 
   double getUnfilteredDistortion ( AlfCovariance* cov, ChannelType channel );

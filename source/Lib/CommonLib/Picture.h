@@ -120,6 +120,7 @@ struct Picture : public UnitArea
   void destroy( bool bPicHeader );
 
   void linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ], PicShared* picShared );
+  void releasePrevBuffers();
   void releaseSharedBuffers();
 
   void createTempBuffers( unsigned _maxCUSize );
@@ -232,6 +233,8 @@ public:
   int                           picInitialQP;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
+  double                        psnr[MAX_NUM_COMP];
+  double                        mse [MAX_NUM_COMP];
 
   StopClock                     encTime;
   bool                          isSccWeak;

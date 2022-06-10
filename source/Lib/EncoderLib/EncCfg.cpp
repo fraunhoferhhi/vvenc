@@ -62,7 +62,7 @@ VVEncCfg& VVEncCfg::operator= ( const vvenc_config& extern_cfg )
 
 void VVEncCfg::xInitCfgMembers()
 {
-  m_stageParallelProc = m_numThreads > 0 && m_LookAhead;
+  m_stageParallelProc = m_numThreads > 0;
 }
 
 }

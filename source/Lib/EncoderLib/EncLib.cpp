@@ -218,34 +218,38 @@ void EncLib::initPass( int pass, const char* statsFName )
   {
     m_MCTF = new MCTF();
     const int leadFrames = std::min( VVENC_MCTF_RANGE, m_encCfg.m_leadFrames );
-    const int minDelay   = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
-    m_MCTF->initStage( minDelay, true, true, m_encCfg.m_CTUSize );
+    const int minQueueSize = m_encCfg.m_vvencMCTF.MCTFFutureReference ? ( leadFrames + 1 + VVENC_MCTF_RANGE ) : ( leadFrames + 1 );
+    m_MCTF->initStage( minQueueSize, true, true, m_encCfg.m_CTUSize );
     m_MCTF->init( m_encCfg, m_threadPool );
     m_encStages.push_back( m_MCTF );
-    m_maxNumPicShared += minDelay;
+    m_maxNumPicShared += minQueueSize - leadFrames;
   }
 
   // pre analysis encoder
   if( m_encCfg.m_LookAhead )
   {
     m_preEncoder = new EncGOP( msg );
-    m_preEncoder->initStage( m_firstPassCfg.m_GOPSize + 1, true, false, m_firstPassCfg.m_CTUSize );
+    const int minQueueSize = m_firstPassCfg.m_GOPSize + 1;
+    m_preEncoder->initStage( minQueueSize, true, false, m_firstPassCfg.m_CTUSize );
     m_preEncoder->init( m_firstPassCfg, *m_rateCtrl, m_threadPool, true );
     m_encStages.push_back( m_preEncoder );
-    m_maxNumPicShared += m_firstPassCfg.m_GOPSize + 1 + Log2(m_firstPassCfg.m_GOPSize) + 2;
+    m_maxNumPicShared += minQueueSize;
   }
 
   // gop encoder
   m_gopEncoder = new EncGOP( msg );
-  m_gopEncoder->initStage( m_encCfg.m_GOPSize + 1, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
+  const int minQueueSize = m_encCfg.m_GOPSize + 1;
+  m_gopEncoder->initStage( minQueueSize, false, false, m_encCfg.m_CTUSize, m_encCfg.m_stageParallelProc );
   m_gopEncoder->init( m_encCfg, *m_rateCtrl, m_threadPool, false );
-  m_maxNumPicShared += m_encCfg.m_GOPSize + 1 + Log2(m_encCfg.m_GOPSize) + 2;
-
   if( m_rateCtrl->rcIsFinalPass )
   {
     m_gopEncoder->setRecYUVBufferCallback( m_recYuvBufCtx, m_recYuvBufFunc );
   }
   m_encStages.push_back( m_gopEncoder );
+  m_maxNumPicShared += minQueueSize;
+  // additional pictures due to structural delay
+  m_maxNumPicShared += m_encCfg.m_maxNumReorderPics[m_encCfg.m_maxTempLayer-1];
+  m_maxNumPicShared += 3;
 
   // link encoder stages
   for( int i = 0; i < (int)m_encStages.size() - 1; i++ )

@@ -120,12 +120,12 @@ void AlfCovariance::reduceClipCost(const AlfFilterShape& alfShape, int *clip) co
   }
 }
 
-AlfFltType AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, AlfFltType *f, bool optimize_clip) const
+alf_float_t AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* clip, alf_float_t *f, bool optimize_clip) const
 {
   const int size = alfShape.numCoeff;
   int clip_max[MAX_NUM_ALF_LUMA_COEFF];
 
-  AlfFltType err_best, err_last;
+  alf_float_t err_best, err_last;
 
   TE kE;
   Ty ky;
@@ -150,7 +150,7 @@ AlfFltType AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* cl
 
   while( step > 0 )
   {
-    AlfFltType err_min = err_best;
+    alf_float_t err_min = err_best;
     int idx_min = -1;
     int inc_min = 0;
 
@@ -258,15 +258,15 @@ AlfFltType AlfCovariance::optimizeFilter(const AlfFilterShape& alfShape, int* cl
 }
 
 template<>
-AlfFltType AlfCovariance::calcDiffErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const AlfFltType invFactor ) const
+alf_float_t AlfCovariance::calcDiffErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const alf_float_t invFactor ) const
 {
-  AlfFltType error = 0;
+  alf_float_t error = 0;
   const int coeffDiff = (coeffAfter-coeffBefore);
   for( int i = 0; i < numCoeff; i++ )
   {
     if( i == coeffPos )
     {
-      AlfFltType sum = 0;
+      alf_float_t sum = 0;
       for( int j = i + 1; j < numCoeff; j++ )
       {
         sum += E[0][0][i][j] * coeff[j];
@@ -291,15 +291,15 @@ AlfFltType AlfCovariance::calcDiffErrorForCoeffs<false>( const int *clip, const 
 }
 
 template<>
-AlfFltType AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const AlfFltType invFactor ) const
+alf_float_t AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const int coeffBefore, const int coeffAfter, const int coeffPos, const alf_float_t invFactor ) const
 {
-  AlfFltType error = 0;
+  alf_float_t error = 0;
   const int coeffDiff = (coeffAfter-coeffBefore);
   for( int i = 0; i < numCoeff; i++ )
   {
     if( i == coeffPos )
     {
-      AlfFltType sum = 0;
+      alf_float_t sum = 0;
       for( int j = i + 1; j < numCoeff; j++ )
       {
         sum += E[clip[i]][clip[j]][i][j] * coeff[j];
@@ -326,13 +326,13 @@ AlfFltType AlfCovariance::calcDiffErrorForCoeffs<true>( const int *clip, const i
 
 
 template<int numCoeff>
-static AlfFltType calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const AlfFltType invFactor )
+static alf_float_t calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
 {
-  AlfFltType error = 0;
+  alf_float_t error = 0;
 
   for( int i = 0; i < numCoeff; i++ )   //diagonal
   {
-    AlfFltType sum = 0;
+    alf_float_t sum = 0;
     for( int j = i + 1; j < numCoeff; j++ )
     {
       // E[j][i] = E[i][j], sum will be multiplied by 2 later
@@ -345,14 +345,14 @@ static AlfFltType calcErrorForCoeffsLin( const AlfCovariance::TKE& E, const AlfC
 }
 
 #if defined( TARGET_SIMD_X86 ) && ENABLE_SIMD_OPT_ALF
-static AlfFltType calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const AlfFltType invFactor )
+static alf_float_t calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* coeff, const alf_float_t invFactor )
 {
 #if ALF_SINGLE_PREC_FLOAT
-  //AlfFltType orgerror = 0;
+  //alf_float_t orgerror = 0;
   //
   //for( int i = 0; i < 13; i++ )   //diagonal
   //{
-  //  AlfFltType sum = 0;
+  //  alf_float_t sum = 0;
   //  for( int j = i + 1; j < 13; j++ )
   //  {
   //    // E[j][i] = E[i][j], sum will be multiplied by 2 later
@@ -363,7 +363,7 @@ static AlfFltType calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, con
   //
   //orgerror *= invFactor;
 
-  AlfFltType error = 0;
+  alf_float_t error = 0;
 
   const __m128 mzero = _mm_setzero_ps();
   const __m128 minvf = _mm_set1_ps( invFactor );
@@ -615,7 +615,7 @@ static AlfFltType calcErrorForCoeffsLin_13_SSE( const AlfCovariance::TKE& E, con
 
   return error * invFactor;
 #else
-  AlfFltType error = 0;
+  alf_float_t error = 0;
 
   const __m128d mzero = _mm_setzero_pd();
   const __m128d minvf = _mm_set1_pd( invFactor );
@@ -1003,8 +1003,8 @@ const AlfCovariance& AlfCovariance::operator+= ( const AlfCovariance& src )
 
         CHECKD( ( sumLen & 3 ) != 1, "sumLen has to have 1 extra element over multiples of 4" );
         
-              AlfFltType* d = &    E[b0][b1][0][0];
-        const AlfFltType* s = &src.E[b0][b1][0][0];
+              alf_float_t* d = &    E[b0][b1][0][0];
+        const alf_float_t* s = &src.E[b0][b1][0][0];
         
         int i = 0;
         for( ; i < ( sumLen - 1 ); i += 4 )
@@ -1020,8 +1020,8 @@ const AlfCovariance& AlfCovariance::operator+= ( const AlfCovariance& src )
 
     for( int b = 0; b < numBins; b++ )
     {
-            AlfFltType* d = &    y[b][0];
-      const AlfFltType* s = &src.y[b][0];
+            alf_float_t* d = &    y[b][0];
+      const alf_float_t* s = &src.y[b][0];
       int i = 0;
       for( ; i < ( numCoeff - 1 ); i += 4 )
       {
@@ -1065,13 +1065,13 @@ const AlfCovariance& AlfCovariance::operator+= ( const AlfCovariance& src )
 }
 
 template<int numCoeff>
-static AlfFltType calcErrorForCoeffsNonLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* clip, const int* coeff, const AlfFltType invFactor )
+static alf_float_t calcErrorForCoeffsNonLin( const AlfCovariance::TKE& E, const AlfCovariance::TKy& y, const int* clip, const int* coeff, const alf_float_t invFactor )
 {
-  AlfFltType error = 0;
+  alf_float_t error = 0;
 
   for( int i = 0; i < numCoeff; i++ )   //diagonal
   {
-    AlfFltType sum = 0;
+    alf_float_t sum = 0;
     for( int j = i + 1; j < numCoeff; j++ )
     {
       // E[j][i] = E[i][j], sum will be multiplied by 2 later
@@ -1084,7 +1084,7 @@ static AlfFltType calcErrorForCoeffsNonLin( const AlfCovariance::TKE& E, const A
 }
 
 template<>
-AlfFltType AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const AlfFltType invFactor ) const
+alf_float_t AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *coeff, const int numCoeff, const alf_float_t invFactor ) const
 {
   if( numCoeff ==  7 ) return calcErrorForCoeffsNonLin< 7>( E, y, clip, coeff, invFactor );
   if( numCoeff == 13 ) return calcErrorForCoeffsNonLin<13>( E, y, clip, coeff, invFactor );
@@ -1094,7 +1094,7 @@ AlfFltType AlfCovariance::calcErrorForCoeffs<true>( const int *clip, const int *
 }
 
 template<>
-AlfFltType AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const AlfFltType invFactor ) const
+alf_float_t AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int *coeff, const int numCoeff, const alf_float_t invFactor ) const
 {
   if( numCoeff ==  7 ) return calcErrorForCoeffsLin< 7>( E, y, coeff, invFactor );
   if( numCoeff == 13 )
@@ -1111,13 +1111,13 @@ AlfFltType AlfCovariance::calcErrorForCoeffs<false>( const int *clip, const int 
   return 0.0;
 }
 
-AlfFltType AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const AlfFltType invFactor) const
+alf_float_t AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const int numCoeff, const alf_float_t invFactor) const
 {
-  AlfFltType error = 0;
+  alf_float_t error = 0;
 
   for (int i = 0; i < numCoeff; i++)   // diagonal
   {
-    AlfFltType sum = 0;
+    alf_float_t sum = 0;
     for (int j = i + 1; j < numCoeff; j++)
     {
       // E[j][i] = E[i][j], sum will be multiplied by 2 later
@@ -1129,9 +1129,9 @@ AlfFltType AlfCovariance::calcErrorForCcAlfCoeffs(const int16_t* coeff, const in
   return error * invFactor;
 }
 
-AlfFltType AlfCovariance::calculateError( const int *clip, const AlfFltType*coeff, const int numCoeff ) const
+alf_float_t AlfCovariance::calculateError( const int *clip, const alf_float_t*coeff, const int numCoeff ) const
 {
-  AlfFltType sum = 0;
+  alf_float_t sum = 0;
   for( int i = 0; i < numCoeff; i++ )
   {
     sum += coeff[i] * y[clip[i]][i];
@@ -1140,7 +1140,7 @@ AlfFltType AlfCovariance::calculateError( const int *clip, const AlfFltType*coef
   return pixAcc - sum;
 }
 
-AlfFltType AlfCovariance::calculateError( const int *clip ) const
+alf_float_t AlfCovariance::calculateError( const int *clip ) const
 {
   Ty c;
   return optimizeFilter( clip, c, numCoeff );
@@ -1151,8 +1151,8 @@ AlfFltType AlfCovariance::calculateError( const int *clip ) const
 //********************************
 
 #define ROUND(a)  (((a) < 0)? (int)((a) - 0.5) : (int)((a) + 0.5))
-#define REG              AlfFltType( 0.0001    )
-#define REG_SQR          AlfFltType( 0.0000001 )
+#define REG              alf_float_t( 0.0001    )
+#define REG_SQR          alf_float_t( 0.0000001 )
 
 //Find filter coeff related
 int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
@@ -1164,7 +1164,7 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
     for( int j = i; j < numEq; j++ )
     {
       /* Compute the scaling factor */
-      AlfFltType scale = inpMatr[i][j];
+      alf_float_t scale = inpMatr[i][j];
       if( i > 0 )
       {
         for( int k = i - 1; k >= 0; k-- )
@@ -1193,14 +1193,14 @@ int AlfCovariance::gnsCholeskyDec( TE inpMatr, TE outMatr, int numEq ) const
   return 1; /* Signal that Cholesky factorization is successfully performed */
 }
 
-void AlfCovariance::gnsTransposeBacksubstitution( TE U, AlfFltType* rhs, AlfFltType* x, int order ) const
+void AlfCovariance::gnsTransposeBacksubstitution( TE U, alf_float_t* rhs, alf_float_t* x, int order ) const
 {
   /* Backsubstitution starts */
   x[0] = rhs[0] / U[0][0];               /* First row of U'                   */
   for( int i = 1; i < order; i++ )
   {         /* For the rows 1..order-1           */
 
-    AlfFltType sum = 0; //Holds backsubstitution from already handled rows
+    alf_float_t sum = 0; //Holds backsubstitution from already handled rows
 
     for( int j = 0; j < i; j++ ) /* Backsubst already solved unknowns */
     {
@@ -1211,14 +1211,14 @@ void AlfCovariance::gnsTransposeBacksubstitution( TE U, AlfFltType* rhs, AlfFltT
   }
 }
 
-void AlfCovariance::gnsBacksubstitution( TE R, AlfFltType* z, int size, AlfFltType* A ) const
+void AlfCovariance::gnsBacksubstitution( TE R, alf_float_t* z, int size, alf_float_t* A ) const
 {
   size--;
   A[size] = z[size] / R[size][size];
 
   for( int i = size - 1; i >= 0; i-- )
   {
-    AlfFltType sum = 0;
+    alf_float_t sum = 0;
 
     for( int j = i + 1; j <= size; j++ )
     {
@@ -1229,7 +1229,7 @@ void AlfCovariance::gnsBacksubstitution( TE R, AlfFltType* z, int size, AlfFltTy
   }
 }
 
-int AlfCovariance::gnsSolveByChol( const int *clip, AlfFltType*x, int numEq ) const
+int AlfCovariance::gnsSolveByChol( const int *clip, alf_float_t*x, int numEq ) const
 {
   TE LHS;
   Ty rhs;
@@ -1238,7 +1238,7 @@ int AlfCovariance::gnsSolveByChol( const int *clip, AlfFltType*x, int numEq ) co
   return gnsSolveByChol( LHS, rhs, x, numEq );
 }
 
-int AlfCovariance::gnsSolveByChol( TE LHS, AlfFltType* rhs, AlfFltType*x, int numEq ) const
+int AlfCovariance::gnsSolveByChol( TE LHS, alf_float_t* rhs, alf_float_t*x, int numEq ) const
 {
   Ty aux;     /* Auxiliary vector */
   TE U;    /* Upper triangular Cholesky factor of LHS */
@@ -1274,7 +1274,7 @@ int AlfCovariance::gnsSolveByChol( TE LHS, AlfFltType* rhs, AlfFltType*x, int nu
 
     if( !res )
     {
-      std::memset( x, 0, sizeof( AlfFltType )*numEq );
+      std::memset( x, 0, sizeof( alf_float_t )*numEq );
       return 0;
     }
 
@@ -2360,7 +2360,7 @@ double EncAdaptiveLoopFilter::deriveCtbAlfEnableFlags( CodingStructure& cs, cons
         // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
         assert( cs.picture->m_alfCtbFilterIndex[ctuIdx] == NUM_FIXED_FILTER_SETS );
         assert( cs.slice->tileGroupNumAps == 1 );
-        m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
+        m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, m_alfParamTemp.alfEnabled[COMP_Y]);
       }
       double costOn = distUnfilterCtu + ctuLambda * FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
 
@@ -2636,7 +2636,7 @@ double EncAdaptiveLoopFilter::getFilterCoeffAndCost( CodingStructure& cs, double
       // Evaluate cost of signaling filter set index for convergence of filters enabled flag / filter derivation
       assert( cs.picture->m_alfCtbFilterIndex[ctuIdx] == NUM_FIXED_FILTER_SETS );
       assert( cs.slice->tileGroupNumAps == 1 );
-      m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
+      m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctuIdx, m_alfParamTemp.alfEnabled[COMP_Y]);
     }
   }
   m_CABACEstimator->codeAlfCtuAlternatives( cs, channel, &m_alfParamTemp );
@@ -2714,7 +2714,7 @@ double EncAdaptiveLoopFilter::mergeFiltersAndCost( AlfParam& alfParam, AlfFilter
   int numFiltersBest = 0;
   int numFilters = MAX_NUM_ALF_CLASSES;
   bool codedVarBins[MAX_NUM_ALF_CLASSES];
-  AlfFltType errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2];
+  alf_float_t errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2];
 
   double cost, cost0, dist, distForce0, costMin = MAX_DOUBLE;
   int coeffBits, coeffBitsForce0;
@@ -2891,7 +2891,7 @@ int EncAdaptiveLoopFilter::lengthFilterCoeffs( AlfFilterShape& alfShape, const i
 }
 
 
-AlfFltType EncAdaptiveLoopFilter::getDistForce0( AlfFilterShape& alfShape, const int numFilters, AlfFltType errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], bool* codedVarBins )
+alf_float_t EncAdaptiveLoopFilter::getDistForce0( AlfFilterShape& alfShape, const int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], bool* codedVarBins )
 {
   int bitsVarBin[MAX_NUM_ALF_CLASSES];
 
@@ -2929,7 +2929,7 @@ AlfFltType EncAdaptiveLoopFilter::getDistForce0( AlfFilterShape& alfShape, const
 
   return distForce0;
 }
-AlfFltType EncAdaptiveLoopFilter::getDistCoeffForce0( bool* codedVarBins, AlfFltType errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2], int* bitsVarBin, int zeroBitsVarBin, const int numFilters)
+alf_float_t EncAdaptiveLoopFilter::getDistCoeffForce0( bool* codedVarBins, alf_float_t errorForce0CoeffTab[MAX_NUM_ALF_CLASSES][2], int* bitsVarBin, int zeroBitsVarBin, const int numFilters)
 {
   double distForce0 = 0;
   std::memset( codedVarBins, 0, sizeof( *codedVarBins ) * MAX_NUM_ALF_CLASSES );
@@ -2961,7 +2961,7 @@ int EncAdaptiveLoopFilter::lengthUvlc( int uiCode )
 }
 
 
-double EncAdaptiveLoopFilter::deriveFilterCoeffs( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, AlfFltType errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam )
+double EncAdaptiveLoopFilter::deriveFilterCoeffs( AlfCovariance* cov, AlfCovariance* covMerged, int clipMerged[MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_CLASSES][MAX_NUM_ALF_LUMA_COEFF], AlfFilterShape& alfShape, short* filterIndices, int numFilters, alf_float_t errorTabForce0Coeff[MAX_NUM_ALF_CLASSES][2], AlfParam& alfParam )
 {
   PROFILER_SCOPE_AND_STAGE( 0, _TPROF, P_ALF_DERIVE_COEF );
   double error = 0.0;
@@ -2998,11 +2998,11 @@ double EncAdaptiveLoopFilter::deriveCoeffQuant( int *filterClipp, int *filterCoe
   const int factor = 1 << ( bitDepth - 1 );
   const int max_value = factor - 1;
   const int min_value = -factor + 1;
-  const AlfFltType invFactor = 1.0 /((double)factor);
+  const alf_float_t invFactor = 1.0 /((double)factor);
   const bool doClip = m_encCfg->m_useNonLinearAlfLuma || m_encCfg->m_useNonLinearAlfChroma;
 
   const int numCoeff = shape.numCoeff;
-  AlfFltType filterCoeff[MAX_NUM_ALF_LUMA_COEFF];
+  alf_float_t filterCoeff[MAX_NUM_ALF_LUMA_COEFF];
 
   cov.optimizeFilter( shape, filterClipp, filterCoeff, optimizeClip );
   roundFiltCoeff( filterCoeffQuant, filterCoeff, numCoeff, factor );
@@ -3051,7 +3051,7 @@ double EncAdaptiveLoopFilter::deriveCoeffQuant( int *filterClipp, int *filterCoe
   return errRef;
 }
 
-void EncAdaptiveLoopFilter::roundFiltCoeff( int *filterCoeffQuant, AlfFltType*filterCoeff, const int numCoeff, const int factor )
+void EncAdaptiveLoopFilter::roundFiltCoeff( int *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor )
 {
   for( int i = 0; i < numCoeff; i++ )
   {
@@ -3060,7 +3060,7 @@ void EncAdaptiveLoopFilter::roundFiltCoeff( int *filterCoeffQuant, AlfFltType*fi
   }
 }
 
-void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, AlfFltType*filterCoeff, const int numCoeff, const int factor )
+void EncAdaptiveLoopFilter::roundFiltCoeffCCALF( int16_t *filterCoeffQuant, alf_float_t*filterCoeff, const int numCoeff, const int factor )
 {
   for( int i = 0; i < numCoeff; i++ )
   {
@@ -3356,7 +3356,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
 
         if( m_alfWSSD )
         {
-          AlfFltType weight[4][4];
+          alf_float_t weight[4][4];
           for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
           {
             weight[ii][jj] = m_lumaLevelToWeightPLUT[org[j + jj + ii * orgStride]];
@@ -3369,7 +3369,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             for( int k = 0; k < shape.numCoeff; k++ )
             {
               const Pel* Elocalk  = &ELocal[k << 4];
-              AlfFltType* cov     = &alfCovariance[classIdx].E[0][0][k][k];
+              alf_float_t* cov     = &alfCovariance[classIdx].E[0][0][k][k];
 
               for( int l = k; l < shape.numCoeff; l++ )
               {
@@ -3448,7 +3448,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             for( int k = 0; k < shape.numCoeff; k++ )
             {
               const Pel* Elocalk  = &ELocal[k << 4];
-              AlfFltType* cov     = &alfCovariance[classIdx].E[0][0][k][k];
+              alf_float_t* cov     = &alfCovariance[classIdx].E[0][0][k][k];
 
               for( int l = k; l < shape.numCoeff; l++ )
               {
@@ -3550,13 +3550,13 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             for( int k = 0; k < shape.numCoeff; k++ )
             {
               const Pel* Elocalk  = &ELocal[k << 4];
-              AlfFltType* cov     = &alfCovariance[classIdx].E[0][0][k][k];
+              alf_float_t* cov     = &alfCovariance[classIdx].E[0][0][k][k];
 
               for( int l = k; l < shape.numCoeff; l++ )
               {
                 const Pel* Elocall = &ELocal[l << 4];
 
-                AlfFltType sum = 0.0;
+                alf_float_t sum = 0.0;
                 for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
                 {
                   sum += weight[ii][jj] * Elocall[(ii << 2) + jj] * Elocalk[(ii << 2) + jj];
@@ -3565,7 +3565,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                 *cov++ += sum;
               }
 
-              AlfFltType sum = 0.0;
+              alf_float_t sum = 0.0;
               for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
               {
                 sum += weight[ii][jj] * Elocalk[(ii << 2) + jj] * yLocal[ii][jj];
@@ -3574,7 +3574,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
               alfCovariance[classIdx].y[0][k] += sum;
             }
 
-            AlfFltType sum = 0.0;
+            alf_float_t sum = 0.0;
             for( int ii = 0; ii < 4; ii++ ) for( int jj = 0; jj < 4; jj++ )
             {
               sum += weight[ii][jj] * yLocal[ii][jj] * yLocal[ii][jj];
@@ -3595,12 +3595,45 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             for( int k = 0; k < shape.numCoeff; k++ )
             {
               const Pel* Elocalk = &ELocal[k << 4];
-              AlfFltType* cov = &alfCovariance[classIdx].E[0][0][k][k];
+              alf_float_t* cov = &alfCovariance[classIdx].E[0][0][k][k];
 
               const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[0] );
               const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[8] );
 
               int l = k;
+              
+              
+              for( ; l < ( shape.numCoeff - 3 ); l += 4 )
+              {
+                __m128i vmacc[4];
+
+                for( int ll = 0; ll < 4; ll++ )
+                {
+                  const Pel *Elocall = &ELocal[( l + ll ) << 4];
+
+                  __m128i melocall0 = _mm_loadu_si128( ( const __m128i * ) &Elocall[0] );
+                  __m128i melocall8 = _mm_loadu_si128( ( const __m128i * ) &Elocall[8] );
+
+                  __m128i mmacc0 = _mm_madd_epi16( melocalk0, melocall0 );
+                  __m128i mmacc8 = _mm_madd_epi16( melocalk8, melocall8 );
+
+                  __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
+
+                  vmacc[ll] = mmacc;
+                }
+
+                __m128i
+                mmacc = _mm_hadd_epi32( _mm_hadd_epi32( vmacc[0], vmacc[1] ),
+                                        _mm_hadd_epi32( vmacc[2], vmacc[3] ) );
+                
+                __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
+
+                __m128 mcov = _mm_loadu_ps( cov );
+                mcov = _mm_add_ps( mcov, mmaccf );
+                _mm_storeu_ps( cov, mcov );
+
+                cov += 4;
+              }
               
               for( ; l < shape.numCoeff; l++ )
               {
@@ -3615,8 +3648,10 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
                 __m128i mmacc = _mm_add_epi32( mmacc0, mmacc8 );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
                 mmacc = _mm_hadd_epi32( mmacc, mmacc );
+                
+                __m128 mmaccf = _mm_cvtepi32_ps( mmacc );
 
-                *cov++ += _mm_cvtsi128_si32( mmacc );
+                *cov++ += _mm_cvtss_f32( mmaccf );
               }
 
               const __m128i mmacc0 = _mm_madd_epi16( melocalk0, mylocal0 );
@@ -3644,7 +3679,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             for( int k = 0; k < shape.numCoeff; k++ )
             {
               const Pel* Elocalk = &ELocal[k << 4];
-              AlfFltType* cov = &alfCovariance[classIdx].E[0][0][k][k];
+              alf_float_t* cov = &alfCovariance[classIdx].E[0][0][k][k];
 
               const __m128i melocalk0 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[0] );
               const __m128i melocalk8 = _mm_loadu_si128( ( const __m128i* ) &Elocalk[8] );
@@ -3727,7 +3762,7 @@ void EncAdaptiveLoopFilter::getPreBlkStats(AlfCovariance* alfCovariance, const A
             for( int k = 0; k < shape.numCoeff; k++ )
             {
               const Pel* Elocalk = &ELocal[k << 4];
-              AlfFltType* cov    = &alfCovariance[classIdx].E[0][0][k][k];
+              alf_float_t* cov    = &alfCovariance[classIdx].E[0][0][k][k];
 
               for( int l = k; l < shape.numCoeff; l++ )
               {
@@ -4866,7 +4901,7 @@ void  EncAdaptiveLoopFilter::alfEncoderCtb( CodingStructure& cs, AlfParam& alfPa
             m_CABACEstimator->resetBits();
             m_CABACEstimator->codeAlfCtuEnabledFlag(cs, ctbIdx, COMP_Y, &m_alfParamTemp);
             alfCtbFilterSetIndex[ctbIdx] = filterSetIdx;
-            m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctbIdx, &m_alfParamTemp.alfEnabled[COMP_Y]);
+            m_CABACEstimator->codeAlfCtuFilterIndex(cs, ctbIdx, m_alfParamTemp.alfEnabled[COMP_Y]);
             double rateOn = FRAC_BITS_SCALE * m_CABACEstimator->getEstFracBits();
             //distortion
             double dist = distUnfilterCtb;
@@ -5305,10 +5340,10 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const Pe
     forward_tab[CCALF_CANDS_COEFF_NR - 1 + i] = CCALF_SMALL_TAB[i];
     forward_tab[CCALF_CANDS_COEFF_NR - 1 - i] = (-1) * CCALF_SMALL_TAB[i];
   }
-  using TE = AlfFltType[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
-  using Ty = AlfFltType[MAX_NUM_ALF_LUMA_COEFF];
+  using TE = alf_float_t[MAX_NUM_ALF_LUMA_COEFF][MAX_NUM_ALF_LUMA_COEFF];
+  using Ty = alf_float_t[MAX_NUM_ALF_LUMA_COEFF];
 
-  AlfFltType filterCoeffDbl[MAX_NUM_CC_ALF_CHROMA_COEFF];
+  alf_float_t filterCoeffDbl[MAX_NUM_CC_ALF_CHROMA_COEFF];
   int16_t filterCoeffInt[MAX_NUM_CC_ALF_CHROMA_COEFF];
 
   std::fill_n(filterCoeffInt, MAX_NUM_CC_ALF_CHROMA_COEFF, 0);
@@ -5335,7 +5370,7 @@ void EncAdaptiveLoopFilter::deriveCcAlfFilterCoeff( ComponentID compID, const Pe
     CHECK( filterCoeffInt[k] > (1 << CCALF_DYNAMIC_RANGE), "this is not possible: filterCoeffInt[k] >  (1 << CCALF_DYNAMIC_RANGE)");
   }
 
-  const AlfFltType invFactor = 1.0 / ( AlfFltType )( 1 << m_scaleBits );
+  const alf_float_t invFactor = 1.0 / ( alf_float_t )( 1 << m_scaleBits );
   // Refine quanitzation
   int modified       = 1;
   double errRef      = m_alfCovarianceFrameCcAlf[compID - 1][0][filterIdx].calcErrorForCcAlfCoeffs(filterCoeffInt, size, invFactor);
@@ -6163,7 +6198,7 @@ void EncAdaptiveLoopFilter::getBlkStatsCcAlf(AlfCovariance &alfCovariance, const
           for (int k = 0; k < shape.numCoeff; k++)
           {
             const Pel* Elocalk = &ELocal[k][0];
-            AlfFltType* cov = &alfCovariance.E[0][0][k][k];
+            alf_float_t* cov = &alfCovariance.E[0][0][k][k];
 
             const __m128i melocalk0 = _mm_loadu_si128((const __m128i*) & Elocalk[0]);
             const __m128i melocalk8 = _mm_loadu_si128((const __m128i*) & Elocalk[8]);

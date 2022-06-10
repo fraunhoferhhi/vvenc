@@ -325,6 +325,29 @@ void TCoeffOps::initTCoeffOpsX86()
   }
 }
 
+void TrQuant::initTrQuantX86()
+{
+  auto vext = read_x86_extension_flags();
+  switch( vext )
+  {
+  case AVX512:
+  case AVX2:
+  _initTrQuantX86<AVX2 >();
+  break;
+  case AVX:
+  _initTrQuantX86<AVX  >();
+  break;
+  case SSE42:
+  _initTrQuantX86<SSE42>();
+  break;
+  case SSE41:
+  _initTrQuantX86<SSE41>();
+  break;
+  default:
+  break;
+  }
+}
+
 #endif
 
 #if ENABLE_SIMD_OPT_QUANT
