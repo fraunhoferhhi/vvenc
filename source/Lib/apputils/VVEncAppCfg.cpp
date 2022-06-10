@@ -795,7 +795,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("FDM",                                             c->m_useFastDecisionForMerge,                        "Fast decision for Merge RD Cost")
 
     ("DisableIntraInInter",                             c->m_bDisableIntraCUsInInterSlices,                  "Flag to disable intra CUs in inter slices")
-    ("ConstrainedIntraPred",                            c->m_bUseConstrainedIntraPred,                       "Constrained Intra Prediction")
     ("FastUDIUseMPMEnabled",                            c->m_bFastUDIUseMPMEnabled,                          "If enabled, adapt intra direction search, accounting for MPM")
     ("FastMEForGenBLowDelayEnabled",                    c->m_bFastMEForGenBLowDelayEnabled,                  "If enabled use a fast ME for generalised B Low Delay slices")
 
@@ -840,7 +839,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("LoopFilterCbTcOffset_div2",                       c->m_loopFilterTcOffsetDiv2[1],                      "")
     ("LoopFilterCrBetaOffset_div2",                     c->m_loopFilterBetaOffsetDiv2[2],                    "")
     ("LoopFilterCrTcOffset_div2",                       c->m_loopFilterTcOffsetDiv2[2],                      "")
-    ("DeblockingFilterMetric",                          c->m_deblockingFilterMetric,                         "")
 
     ("DeblockLastTLayers",                              c->m_deblockLastTLayers,                             "Deblock only the highest n temporal layers, 0: all temporal layers are deblocked")
     
@@ -884,7 +882,6 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("ChromaSampleLocType",                             c->m_chromaSampleLocType,                            "Specifies the location of chroma samples for progressive content")
     ("OverscanInfoPresent",                             c->m_overscanInfoPresent,                            "Indicates whether conformant decoded pictures are suitable for display using overscan")
     ("OverscanAppropriate",                             c->m_overscanAppropriateFlag,                        "Indicates whether conformant decoded pictures are suitable for display using overscan")
-    ("VideoSignalTypePresent",                          c->m_videoSignalTypePresent,                         "Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present")
     ("VideoFullRange",                                  c->m_videoFullRangeFlag,                             "Indicates the black level and range of luma and chroma signals")
 
 
