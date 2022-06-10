@@ -441,7 +441,7 @@ void EncGOP::waitForFreeEncoders()
 {
   {
     std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    bool rcPicOnTheFly = (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames; 
+    bool rcPicOnTheFly = m_freePicEncoderList.empty() || (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames; 
     if( rcPicOnTheFly )
     {
       CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
@@ -458,7 +458,8 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // create list of pictures ordered in coding order and ready to be encoded
   std::vector<Picture*> encList;
   xCreateCodingOrder( picList, flush, encList );
-  if( ! encList.empty() )
+  // if parallel frames mode is not used, next picture may be initialized after the last picture is reconstructed
+  if( ! encList.empty() && ( m_pcEncCfg->m_maxParallelFrames > 0 || m_gopEncListOutput.empty() ) )
   {
     xInitPicsInCodingOrder( encList, picList, false );
   }
@@ -468,7 +469,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // output reconstructed YUV
   xOutputRecYuv( picList );
 
-  // release pictures not needed andmore
+  // release pictures not needed anymore
   const bool allDone = flush && m_numPicsCoded >= m_picCount;
   xReleasePictures( picList, freeList, allDone );
 
@@ -1593,6 +1594,8 @@ bool EncGOP::xIsSliceTemporalSwitchingPoint( const Slice* slice, const PicList& 
 
 void EncGOP::xInitPicsInCodingOrder( const std::vector<Picture*>& encList, const PicList& picList, bool isEncodeLtRef )
 {
+  CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListInput.size() > 0,  "no multi-threading enabled, but multiple pics in flight" );
+  CHECK( m_pcEncCfg->m_maxParallelFrames <= 0 && m_gopEncListOutput.size() > 0, "no multi-threading enabled, but multiple pics in flight" );
   const size_t size = m_pcEncCfg->m_maxParallelFrames > 0 ? encList.size() : 1;
   for( int i = 0; i < size; i++ )
   {
