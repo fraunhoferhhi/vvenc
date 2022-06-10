@@ -171,11 +171,11 @@ void CABACWriter::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
       codeAlfCtuEnabledFlag(cs, ctuRsAddr, compIdx, NULL);
       if (isLuma(ComponentID(compIdx)))
       {
-        codeAlfCtuFilterIndex(cs, ctuRsAddr, cs.slice->tileGroupAlfEnabled[COMP_Y]);
+        codeAlfCtuFilterIndex(cs, ctuRsAddr, cs.slice->alfEnabled[COMP_Y]);
       }
       if (isChroma(ComponentID(compIdx)))
       {
-        const uint8_t* ctbAlfFlag = cs.slice->tileGroupAlfEnabled[compIdx] ? cs.slice->pic->m_alfCtuEnabled[ compIdx ].data() : nullptr;
+        const uint8_t* ctbAlfFlag = cs.slice->alfEnabled[compIdx] ? cs.slice->pic->m_alfCtuEnabled[ compIdx ].data() : nullptr;
         if( ctbAlfFlag && ctbAlfFlag[ctuRsAddr] )
         {
           codeAlfCtuAlternative( cs, ctuRsAddr, compIdx );
@@ -2899,7 +2899,7 @@ void CABACWriter::codeAlfCtuEnabled( CodingStructure& cs, ComponentID compID, Al
 
 void CABACWriter::codeAlfCtuEnabledFlag( CodingStructure& cs, uint32_t ctuRsAddr, const int compIdx, AlfParam* alfParam)
 {
-  const bool alfComponentEnabled = (alfParam != NULL) ? alfParam->alfEnabled[compIdx] : cs.slice->tileGroupAlfEnabled[compIdx];
+  const bool alfComponentEnabled = (alfParam != NULL) ? alfParam->alfEnabled[compIdx] : cs.slice->alfEnabled[compIdx];
 
   if( cs.sps->alfEnabled && alfComponentEnabled )
   {
@@ -3022,7 +3022,7 @@ void CABACWriter::codeAlfCtuFilterIndex(CodingStructure& cs, uint32_t ctuRsAddr,
 
   const short* alfCtbFilterIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
   const unsigned filterSetIdx = alfCtbFilterIndex[ctuRsAddr];
-  unsigned numAps = cs.slice->tileGroupNumAps;
+  unsigned numAps = cs.slice->numAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
   if (numAvailableFiltSets > NUM_FIXED_FILTER_SETS)
   {
@@ -3083,10 +3083,10 @@ void CABACWriter::codeAlfCtuAlternative( CodingStructure& cs, uint32_t ctuRsAddr
 {
   if( compIdx == COMP_Y )
     return;
-  int apsIdx = alfParam ? 0 : cs.slice->tileGroupChromaApsId;
+  int apsIdx = alfParam ? 0 : cs.slice->chromaApsId;
   const AlfParam& alfParamRef = alfParam ? (*alfParam) : cs.slice->alfAps[apsIdx]->alfParam;
 
-  if( alfParam || (cs.sps->alfEnabled && cs.slice->tileGroupAlfEnabled[compIdx]) )
+  if( alfParam || (cs.sps->alfEnabled && cs.slice->alfEnabled[compIdx]) )
   {
     const uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
 
