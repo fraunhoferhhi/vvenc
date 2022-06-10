@@ -497,7 +497,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_useFastDecisionForMerge                 = true;
 
   c->m_bDisableIntraCUsInInterSlices           = false;
-  c->m_bUseConstrainedIntraPred                = false;
   c->m_bFastUDIUseMPMEnabled                   = true;
   c->m_bFastMEForGenBLowDelayEnabled           = true;
 
@@ -582,8 +581,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   memset(&c->m_loopFilterBetaOffsetDiv2,0, sizeof(c->m_loopFilterBetaOffsetDiv2));
   memset(&c->m_loopFilterTcOffsetDiv2,0, sizeof(c->m_loopFilterTcOffsetDiv2));
 
-  c->m_deblockingFilterMetric                  = 0;
-
   c->m_bDisableLFCrossTileBoundaryFlag         = false;
   c->m_bDisableLFCrossSliceBoundaryFlag        = false;
 
@@ -610,7 +607,6 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
   c->m_chromaSampleLocType                     = 0;
   c->m_overscanInfoPresent                     = false;
   c->m_overscanAppropriateFlag                 = false;
-  c->m_videoSignalTypePresent                  = false;
   c->m_videoFullRangeFlag                      = false;
 
   memset(&c->m_masteringDisplay,0, sizeof(c->m_masteringDisplay));
@@ -3522,7 +3518,6 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
   css << "CODING TOOL CFG: ";
   css << "CTU" << c->m_CTUSize << " QT" << vvenc::Log2( c->m_CTUSize / c->m_MinQT[0] ) << vvenc::Log2( c->m_CTUSize / c->m_MinQT[1] ) << "BTT" << c->m_maxMTTDepthI << c->m_maxMTTDepth << " ";
   css << "IBD:" << ((c->m_internalBitDepth[ 0 ] > c->m_MSBExtendedBitDepth[ 0 ]) || (c->m_internalBitDepth[ 1 ] > c->m_MSBExtendedBitDepth[ 1 ])) << " ";
-  css << "CIP:" << c->m_bUseConstrainedIntraPred << " ";
   css << "SAO:" << (c->m_bUseSAO ? 1 : 0) << " ";
   css << "ALF:" << (c->m_alf ? 1 : 0) << " ";
   if( c->m_alf )
