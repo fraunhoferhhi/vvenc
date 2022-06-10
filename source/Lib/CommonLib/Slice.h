@@ -1275,14 +1275,14 @@ class Slice
   uint32_t                    sliceSubPicId;
   SliceType                   encCABACTableIdx;           // Used to transmit table selection across slices.
   APS*                        alfAps[ALF_CTB_MAX_NUM_APS];
-  bool                        tileGroupAlfEnabled[MAX_NUM_COMP];
-  int                         tileGroupNumAps;
-  std::vector<int>            tileGroupLumaApsId;
-  int                         tileGroupChromaApsId;
-  bool                        tileGroupCcAlfCbEnabled;
-  bool                        tileGroupCcAlfCrEnabled;
-  int                         tileGroupCcAlfCbApsId;
-  int                         tileGroupCcAlfCrApsId;
+  bool                        alfEnabled[MAX_NUM_COMP];
+  int                         numAps;
+  std::vector<int>            lumaApsId;
+  int                         chromaApsId;
+  bool                        ccAlfCbEnabled;
+  bool                        ccAlfCrEnabled;
+  int                         ccAlfCbApsId;
+  int                         ccAlfCrApsId;
 
   bool                        disableSATDForRd;
   bool                        isLossless;
