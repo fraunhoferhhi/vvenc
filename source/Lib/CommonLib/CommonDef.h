@@ -705,6 +705,7 @@ const char* read_x86_extension(const std::string &extStrId);
 template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
 template <typename ValueType> inline ValueType rightShiftU (const ValueType value, const unsigned shift) { return value >> shift; }
 
+#if ENABLE_SIMD_LOG2
 #if defined( _WIN32 ) && defined( TARGET_SIMD_X86 )
 static inline unsigned int bit_scan_reverse( int a )
 {
@@ -724,8 +725,6 @@ static inline unsigned int bit_scan_reverse( int a )
   return __builtin_clz( a ) ^ ( 8 * sizeof( a ) - 1 );
 }
 #endif
-
-#if ENABLE_SIMD_LOG2
 static inline int floorLog2( int val )
 {
   return bit_scan_reverse( val );
