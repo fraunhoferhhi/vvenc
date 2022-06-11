@@ -1072,12 +1072,561 @@ void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcL
     }
   }
 }
+template <X86_VEXT vext>
+void calcSaoStatisticsEo90_SIMD(int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
+{
+  if ( endX % 16 == 0 )
+  {
+    __m128i vzero       = _mm_set1_epi8(0);
+    __m128i vplusone    = _mm_set1_epi8(1);
+    __m128i vbaseoffset = _mm_set1_epi8(2);
+    // store intermediate results in 32bit partial sums for each EO type
+    __m128i vdiffsum[NUM_SAO_EO_CLASSES];
+    __m128i vcountsum[NUM_SAO_EO_CLASSES];
+    __m128i vconst[NUM_SAO_EO_CLASSES];
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i]  = _mm_set1_epi32(0);
+      vcountsum[i] = _mm_set1_epi32(0);
+      vconst[i]    = _mm_set1_epi16(i);
+    }
+    __m128i vsigns[MAX_CU_SIZE/16 +1];  //+1 to avoid MSVC error
+    for (int x=0; x< endX; x+=16)
+    {
+      __m128i vsrca,vsrcb;
+      __m128i vsrcat,vsrcbt;
+      if (sizeof(Pel) == 1)
+      {
+        __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+        __m128i vsrct = _mm_load_si128((__m128i*)&srcLine[x-srcStride]);
+        vsrca = _mm_unpacklo_epi8(vsrc, vzero);
+        vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
+        vsrcat = _mm_unpacklo_epi8(vsrct, vzero);
+        vsrcbt = _mm_unpackhi_epi8(vsrct, vzero);
+      }
+      else
+      {
+        vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+        vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
+        vsrcat = _mm_load_si128((__m128i*)&srcLine[x   - srcStride]);
+        vsrcbt = _mm_load_si128((__m128i*)&srcLine[x+8 - srcStride]);
+      }
+      vsrcat = _mm_sub_epi16(vsrcat, vsrca);
+      vsrcbt = _mm_sub_epi16(vsrcbt, vsrcb);
+      vsigns[x/16] = _mm_sign_epi8(vplusone, _mm_packs_epi16(vsrcat, vsrcbt));
+    }
+    /* filter all lines */
+    for (int j = startY; j < endY ; j++)
+    {
+      /* start with first pixel */
+      /* filter all pixels of this line */
+      for (int x = 0; x < endX; x+=16)
+      {
+        __m128i vsrca,vsrcb;
+        __m128i vsrcad, vsrcbd;
+        __m128i vdiffa,vdiffb;
+        // load reconstruction and compute difference between original signal and reconstruction
+        if (sizeof(Pel) == 1)
+        {
+          __m128i vsrc = _mm_load_si128((__m128i*)&srcLine[x]);
+          __m128i vsrcd = _mm_load_si128((__m128i*)&srcLine[x+srcStride]);
+          vsrca = _mm_unpacklo_epi8(vsrc, vzero);
+          vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
+          vsrcad = _mm_unpacklo_epi8(vsrcd, vzero);
+          vsrcbd = _mm_unpackhi_epi8(vsrcd, vzero);
 
+          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
+          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        else
+        {
+          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
+          vsrcad = _mm_load_si128((__m128i*)&srcLine[x   + srcStride]);
+          vsrcbd = _mm_load_si128((__m128i*)&srcLine[x+8 + srcStride]);
+          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        // compute sign and type for 16 pixels
+        vsrcad = _mm_sub_epi16(vsrca, vsrcad);
+        vsrcbd = _mm_sub_epi16(vsrcb, vsrcbd);
+        __m128i vsignd = _mm_sign_epi8(vplusone, _mm_packs_epi16(vsrcad, vsrcbd));
+        __m128i vsignt = vsigns[x/16];
+        vsigns[x/16] = vsignd;
+        __m128i vtype  = _mm_add_epi8(_mm_sub_epi8(vsignd, vsignt), vbaseoffset);
+        __m128i vtypea = _mm_unpacklo_epi8(vtype, vzero);
+        __m128i vtypeb = _mm_unpackhi_epi8(vtype, vzero);
+
+        // count occurence of each type and accumulate partial sums for each type
+        for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+        {
+          __m128i vmaska = _mm_cmpeq_epi16(vtypea, vconst[i]);
+          __m128i vmaskb = _mm_cmpeq_epi16(vtypeb, vconst[i]);
+          __m128i vdiffma = _mm_and_si128(vmaska, vdiffa);
+          __m128i vdiffmb = _mm_and_si128(vmaskb, vdiffb);
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffma, vconst[1]));
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffmb, vconst[1]));
+          __m128i vcountma = _mm_srli_epi16(vmaska,15);
+          __m128i vcountmb = _mm_srli_epi16(vmaskb,15);
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountma, vconst[1]));
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountmb, vconst[1]));
+        }
+      }
+      // next pixel line
+      srcLine += srcStride;
+      orgLine += orgStride;
+    }
+    // horizontal add of four 32 bit partial sums
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 8));
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 4));
+      diff[i] = _mm_cvtsi128_si32(vdiffsum[i]);
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 8));
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 4));
+      count[i] = _mm_cvtsi128_si32(vcountsum[i]);
+    }
+  }
+  else
+  {
+    diff +=2;
+    count+=2;
+    int x,y,edgeType;
+    Pel* srcLineAbove = srcLine - srcStride;
+    int8_t signDown;
+    for (x=0; x<endX; x++)
+    {
+      signUpLine[x] = (int8_t)sgn(srcLine[x] - srcLineAbove[x]);
+    }
+    Pel* srcLineBelow;
+    for (y=startY; y<endY; y++)
+    {
+      srcLineBelow = srcLine + srcStride;
+
+      for (x=0; x<endX; x++)
+      {
+        signDown  = (int8_t)sgn(srcLine[x] - srcLineBelow[x]);
+        edgeType  = signDown + signUpLine[x];
+        signUpLine[x]= -signDown;
+
+        diff [edgeType] += (orgLine[x] - srcLine[x]);
+        count[edgeType] ++;
+      }
+      srcLine += srcStride;
+      orgLine += orgStride;
+    }
+  }
+}
+template <X86_VEXT vext>
+void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine,int8_t *signDownLine)
+{
+  if ( width % 16 == 0 )
+  {
+    int iNaRight=width-endX;
+    int iNaWidth = startX + iNaRight;
+    diff -=2;
+    count-=2;
+    __m128i vzero       = _mm_set1_epi8(0);
+    __m128i vplusone    = _mm_set1_epi8(1);
+    __m128i vbaseoffset = _mm_set1_epi8(2);
+    // store intermediate results in 32bit partial sums for each EO type
+    __m128i vdiffsum[NUM_SAO_EO_CLASSES];
+    __m128i vcountsum[NUM_SAO_EO_CLASSES];
+    __m128i vconst[NUM_SAO_EO_CLASSES];
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i]  = _mm_set1_epi32(0);
+      vcountsum[i] = _mm_set1_epi32(0);
+      vconst[i]    = _mm_set1_epi16(i);
+    }
+    // create masks for first and last pixel row
+    __m128i vmaskgs = _mm_set1_epi16(0);
+    __m128i vmaskge = _mm_set1_epi16(0);
+    if ( startX )
+    {
+      switch (startX)
+      {
+      case 1:
+        vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
+        break;
+      case 2:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0,0,0xffff,0xffff);
+        break;
+      case 3:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0,0xffff,0xffff,0xffff);
+        break;
+      case 4:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 5:
+        vmaskgs = _mm_set_epi16(0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 6:
+        vmaskgs = _mm_set_epi16(0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 7:
+        vmaskgs = _mm_set_epi16(0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      }
+    }
+    if ( iNaRight )
+    {
+      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
+      switch (iNaRight)
+      {
+      case 1:
+        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
+        break;
+      case 2:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
+        break;
+      case 3:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
+        break;
+      case 4:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
+        break;
+      case 5:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
+        break;
+      case 6:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
+        break;
+      case 7:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
+        break;
+      }
+    }
+    /* filter all lines */
+    for (int j = 1; j < endY; j++)
+    {
+      __m128i vmaskga = vmaskgs;
+      __m128i vmaskgb = vconst[0];
+      /* start with first pixel */
+      /* filter all pixels of this line */
+      for (int x = 0; x < width; x+=16)
+      {
+        __m128i vsrca,vsrcb;
+        __m128i vsrcad,vsrcbd;
+        __m128i vsrcat,vsrcbt;
+        __m128i vdiffa,vdiffb;
+        // set mask for last pixel
+        if ( x >= width - 16 )
+        {
+          vmaskgb = vmaskge;
+        }
+        if (sizeof(Pel) == 1)
+        {
+          __m128i vsrct = _mm_loadu_si128((__m128i*)&srcLine[ x-srcStride-1 ]);
+          __m128i vsrc  = _mm_load_si128((__m128i*)&srcLine[ x ]);
+          __m128i vsrcd = _mm_loadu_si128((__m128i*)&srcLine[ x+srcStride+1 ]);
+          vsrcat = _mm_unpacklo_epi8(vsrct, vzero);
+          vsrcbt = _mm_unpackhi_epi8(vsrct, vzero);
+          vsrca = _mm_unpacklo_epi8(vsrc, vzero);
+          vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
+          vsrcad = _mm_unpacklo_epi8(vsrcd, vzero);
+          vsrcbd = _mm_unpackhi_epi8(vsrcd, vzero);
+          __m128i vorg  = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
+          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        else
+        {
+          vsrcat = _mm_loadu_si128((__m128i*)&srcLine[x - 1 - srcStride ]);
+          vsrcbt = _mm_loadu_si128((__m128i*)&srcLine[x - 1 + 8 - srcStride]);
+          vsrca = _mm_load_si128((__m128i*)&srcLine[x]);
+          vsrcb = _mm_load_si128((__m128i*)&srcLine[x+8]);
+          vsrcad = _mm_loadu_si128((__m128i*)&srcLine[x + 1 + srcStride ]);
+          vsrcbd = _mm_loadu_si128((__m128i*)&srcLine[x + 1 + 8 + srcStride]);
+          __m128i vorga = _mm_load_si128((__m128i*)&orgLine[x]);
+          __m128i vorgb = _mm_load_si128((__m128i*)&orgLine[x+8]);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        // compute sign and type for 16 pixels
+        vsrcat = _mm_sub_epi16(vsrca, vsrcat);
+        vsrcbt = _mm_sub_epi16(vsrcb, vsrcbt);
+        vsrcad = _mm_sub_epi16(vsrca, vsrcad);
+        vsrcbd = _mm_sub_epi16(vsrcb, vsrcbd);
+        __m128i vsignt = _mm_sign_epi8(vplusone, _mm_packs_epi16(vsrcat, vsrcbt));
+        __m128i vsignd = _mm_sign_epi8(vplusone, _mm_packs_epi16(vsrcad, vsrcbd));
+        __m128i vtype = _mm_add_epi8(_mm_add_epi8(vsignd, vsignt), vbaseoffset);
+        __m128i vtypea = _mm_unpacklo_epi8(vtype, vzero);
+        __m128i vtypeb = _mm_unpackhi_epi8(vtype, vzero);
+        vtypea = _mm_or_si128(vtypea, vmaskga);
+        vtypeb = _mm_or_si128(vtypeb, vmaskgb);
+        // count occurence of each type and accumulate partial sums for each type
+        for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+        {
+          __m128i vmaska = _mm_cmpeq_epi16(vtypea, vconst[i]);
+          __m128i vmaskb = _mm_cmpeq_epi16(vtypeb, vconst[i]);
+          __m128i vdiffma = _mm_and_si128(vmaska, vdiffa);
+          __m128i vdiffmb = _mm_and_si128(vmaskb, vdiffb);
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffma, vconst[1]));
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffmb, vconst[1]));
+          __m128i vcountma = _mm_srli_epi16(vmaska,15);
+          __m128i vcountmb = _mm_srli_epi16(vmaskb,15);
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountma, vconst[1]));
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountmb, vconst[1]));
+        }
+        // clear mask for first pixel
+        vmaskga = vconst[0];
+      }
+      // next pixel line
+      srcLine += srcStride;
+      orgLine += orgStride;
+    }
+    // horizontal add of four 32 bit partial sums
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 8));
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 4));
+      diff[i] += _mm_cvtsi128_si32(vdiffsum[i]);
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 8));
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 4));
+      count[i] += _mm_cvtsi128_si32(vcountsum[i]);
+    }
+  }
+  else
+  {
+    int x,y,edgeType;
+    int8_t signDown;
+    int8_t *signTmpLine;
+    //middle lines
+     for (y=1; y<endY; y++)
+     {
+       int8_t* pTopSign = NULL;
+       Pel* srcLineBelow = srcLine + srcStride;
+       int8_t iTmpSign =  (int8_t)sgn( srcLineBelow[startX]   - srcLine[startX-1] );
+       for ( x=startX,pTopSign = &signUpLine[startX]; x<endX; x++ , pTopSign++ )
+       {
+         signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x+1]);
+         edgeType = signDown + *pTopSign;
+         *pTopSign            = iTmpSign;
+         iTmpSign             = -signDown;
+         diff [edgeType] += (orgLine[x] - srcLine[x]);
+         count[edgeType] ++;
+       }
+       srcLine += srcStride;
+       orgLine += orgStride;
+     }
+  }
+}
+template <X86_VEXT vext>
+void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
+{
+  Pel* pRec = srcLine;
+  Pel* pOrg = orgLine;
+  Pel* srcLineBelow = srcLine + srcStride;
+  if (width % 16 == 0 )
+  {
+    int iNaRight=width-endX;
+    int iNaWidth = startX + iNaRight;
+    diff -=2;
+    count-=2;
+    __m128i vzero       = _mm_set1_epi8(0);
+    __m128i vplusone    = _mm_set1_epi8(1);
+    __m128i vbaseoffset = _mm_set1_epi8(2);
+    // store intermediate results in 32bit partial sums for each EO type
+    __m128i vdiffsum[NUM_SAO_EO_CLASSES];
+    __m128i vcountsum[NUM_SAO_EO_CLASSES];
+    __m128i vconst[NUM_SAO_EO_CLASSES];
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i]  = _mm_set1_epi32(0);
+      vcountsum[i] = _mm_set1_epi32(0);
+      vconst[i]    = _mm_set1_epi16(i);
+    }
+    // create masks for first and last pixel row
+    __m128i vmaskgs = _mm_set1_epi16(0);
+    __m128i vmaskge = _mm_set1_epi16(0);
+    if ( startX )
+    {
+      switch (startX)
+      {
+      case 1:
+        vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
+        break;
+      case 2:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0,0,0xffff,0xffff);
+        break;
+      case 3:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0,0xffff,0xffff,0xffff);
+        break;
+      case 4:
+        vmaskgs = _mm_set_epi16(0,0,0,0,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 5:
+        vmaskgs = _mm_set_epi16(0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 6:
+        vmaskgs = _mm_set_epi16(0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      case 7:
+        vmaskgs = _mm_set_epi16(0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
+        break;
+      }
+    }
+    if ( iNaRight )
+    {
+      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
+      switch (iNaRight)
+      {
+      case 1:
+        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
+        break;
+      case 2:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
+        break;
+      case 3:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
+        break;
+      case 4:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
+        break;
+      case 5:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
+        break;
+      case 6:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
+        break;
+      case 7:
+        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
+        break;
+      }
+    }
+    /* filter all lines */
+    for (int j = 1; j < endY; j++)
+    {
+      __m128i vmaskga = vmaskgs;
+      __m128i vmaskgb = vconst[0];
+      /* start with first pixel */
+      /* filter all pixels of this line */
+      for (int x = 0; x < width; x+=16)
+      {
+        __m128i vsrca,vsrcb;
+        __m128i vsrcad,vsrcbd;
+        __m128i vsrcat,vsrcbt;
+        __m128i vdiffa,vdiffb;
+
+        // set mask for last pixel
+        if ( x >= width - 16 )
+        {
+          vmaskgb = vmaskge;
+        }
+
+        if (sizeof(Pel) == 1)
+        {
+          __m128i vsrct = _mm_loadu_si128((__m128i*)&pRec[ x-srcStride+1 ]);
+          __m128i vsrc  = _mm_load_si128((__m128i*)&pRec[ x ]);
+          __m128i vsrcd = _mm_loadu_si128((__m128i*)&pRec[ x+srcStride-1 ]);
+          vsrcat = _mm_unpacklo_epi8(vsrct, vzero);
+          vsrcbt = _mm_unpackhi_epi8(vsrct, vzero);
+          vsrca = _mm_unpacklo_epi8(vsrc, vzero);
+          vsrcb = _mm_unpackhi_epi8(vsrc, vzero);
+          vsrcad = _mm_unpacklo_epi8(vsrcd, vzero);
+          vsrcbd = _mm_unpackhi_epi8(vsrcd, vzero);
+          __m128i vorg  = _mm_load_si128((__m128i*)&pOrg[x]);
+          __m128i vorga = _mm_unpacklo_epi8(vorg, vzero);
+          __m128i vorgb = _mm_unpackhi_epi8(vorg, vzero);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        else
+        {
+          vsrcat = _mm_loadu_si128((__m128i*)&pRec[x + 1 - srcStride ]);
+          vsrcbt = _mm_loadu_si128((__m128i*)&pRec[x + 1 + 8 - srcStride]);
+          vsrca = _mm_load_si128((__m128i*)&pRec[x]);
+          vsrcb = _mm_load_si128((__m128i*)&pRec[x+8]);
+          vsrcad = _mm_loadu_si128((__m128i*)&pRec[x - 1 + srcStride ]);
+          vsrcbd = _mm_loadu_si128((__m128i*)&pRec[x - 1 + 8 + srcStride]);
+          __m128i vorga = _mm_load_si128((__m128i*)&pOrg[x]);
+          __m128i vorgb = _mm_load_si128((__m128i*)&pOrg[x+8]);
+          vdiffa = _mm_sub_epi16(vorga, vsrca);
+          vdiffb = _mm_sub_epi16(vorgb, vsrcb);
+        }
+        // compute sign and type for 16 pixels
+        vsrcat = _mm_sub_epi16(vsrca, vsrcat);
+        vsrcbt = _mm_sub_epi16(vsrcb, vsrcbt);
+        vsrcad = _mm_sub_epi16(vsrca, vsrcad);
+        vsrcbd = _mm_sub_epi16(vsrcb, vsrcbd);
+        __m128i vsignt = _mm_sign_epi8(vplusone, _mm_packs_epi16(vsrcat, vsrcbt));
+        __m128i vsignd = _mm_sign_epi8(vplusone, _mm_packs_epi16(vsrcad, vsrcbd));
+        __m128i vtype = _mm_add_epi8(_mm_add_epi8(vsignd, vsignt), vbaseoffset);
+        __m128i vtypea = _mm_unpacklo_epi8(vtype, vzero);
+        __m128i vtypeb = _mm_unpackhi_epi8(vtype, vzero);
+        vtypea = _mm_or_si128(vtypea, vmaskga);
+        vtypeb = _mm_or_si128(vtypeb, vmaskgb);
+        // count occurence of each type and accumulate partial sums for each type
+        for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+        {
+          __m128i vmaska = _mm_cmpeq_epi16(vtypea, vconst[i]);
+          __m128i vmaskb = _mm_cmpeq_epi16(vtypeb, vconst[i]);
+          __m128i vdiffma = _mm_and_si128(vmaska, vdiffa);
+          __m128i vdiffmb = _mm_and_si128(vmaskb, vdiffb);
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffma, vconst[1]));
+          vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_madd_epi16(vdiffmb, vconst[1]));
+          __m128i vcountma = _mm_srli_epi16(vmaska,15);
+          __m128i vcountmb = _mm_srli_epi16(vmaskb,15);
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountma, vconst[1]));
+          vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_madd_epi16(vcountmb, vconst[1]));
+        }
+        // clear mask for first pixel
+        vmaskga = vconst[0];
+      }
+      // next pixel line
+      pRec += srcStride;
+      pOrg += orgStride;
+    }
+
+    // horizontal add of four 32 bit partial sums
+    for ( int i = 0; i < NUM_SAO_EO_CLASSES; i++ )
+    {
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 8));
+      vdiffsum[i] = _mm_add_epi32(vdiffsum[i], _mm_srli_si128(vdiffsum[i], 4));
+      diff[i] += _mm_cvtsi128_si32(vdiffsum[i]);
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 8));
+      vcountsum[i] = _mm_add_epi32(vcountsum[i], _mm_srli_si128(vcountsum[i], 4));
+      count[i] += _mm_cvtsi128_si32(vcountsum[i]);
+    }
+  }
+  else
+  {
+    int x,y,edgeType;
+    int8_t signDown;
+    //middle lines
+    for (y=1; y<endY; y++)
+    {
+      srcLineBelow = srcLine + srcStride;
+      for(x=startX; x<endX; x++)
+      {
+        signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x-1]);
+        edgeType = signDown + signUpLine[x];
+        diff [edgeType] += (orgLine[x] - srcLine[x]);
+        count[edgeType] ++;
+        signUpLine[x-1] = -signDown;
+      }
+      signUpLine[endX-1] = (int8_t)sgn(srcLineBelow[endX-1] - srcLine[endX]);
+      srcLine  += srcStride;
+      orgLine  += orgStride;
+    }
+  }
+}
 template <X86_VEXT vext>
 void SampleAdaptiveOffset::_initSampleAdaptiveOffsetX86()
 {
   offsetBlock= offsetBlock_SIMD<vext>;
   calcSaoStatisticsEo0 =  calcSaoStatisticsEo0_SIMD<vext>;
+  calcSaoStatisticsEo90 =  calcSaoStatisticsEo90_SIMD<vext>;
+  calcSaoStatisticsEo135 =  calcSaoStatisticsEo135_SIMD<vext>;
+  calcSaoStatisticsEo45 =  calcSaoStatisticsEo45_SIMD<vext>;
   calcSaoStatisticsBo =  calcSaoStatisticsBo_SIMD<vext>;
 
 }
