@@ -705,21 +705,30 @@ const char* read_x86_extension(const std::string &extStrId);
 template <typename ValueType> inline ValueType leftShiftU  (const ValueType value, const unsigned shift) { return value << shift; }
 template <typename ValueType> inline ValueType rightShiftU (const ValueType value, const unsigned shift) { return value >> shift; }
 
-#ifdef TARGET_SIMD_X86
-#ifdef _WIN32
-static inline unsigned long _bit_scan_reverse( long a )
+#if defined( _WIN32 ) && defined( TARGET_SIMD_X86 )
+static inline unsigned int bit_scan_reverse( int a )
 {
   unsigned long idx = 0;
   _BitScanReverse( &idx, a );
   return idx;
 }
-#endif
-
-static inline int floorLog2( uint32_t x )
+// disabled because it requires x86intrin.h which conflicts with simd-everywhere
+// #elif defined( __GNUC__ ) && defined( TARGET_SIMD_X86 ) && !defined( REAL_TARGET_WASM )
+// static inline unsigned int bit_scan_reverse( int a )
+// {
+//   return _bit_scan_reverse( a );
+// }
+#elif defined( __GNUC__ )
+static inline unsigned int bit_scan_reverse( int a )
 {
-  return ( int ) _bit_scan_reverse( x );
+  return __builtin_clz( a ) ^ ( 8 * sizeof( a ) - 1 );
 }
-
+#endif
+#if ENABLE_SIMD_LOG2
+static inline int floorLog2( int val )
+{
+  return bit_scan_reverse( val );
+}
 #else
 static inline int floorLog2(uint32_t x)
 {

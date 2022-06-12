@@ -649,25 +649,6 @@ namespace DQIntern
     int64_t           m_DistOrgFact;
   };
 
-  inline int ceil_log2(uint64_t x)
-  {
-#ifdef TARGET_SIMD_X86
-    uint64_t y = _bit_scan_reverse( x ) + ( ( ( x & ( x - 1 ) ) == 0 ) ? 0 : 1 );
-#else
-    static const uint64_t t[6] = { 0xFFFFFFFF00000000ull, 0x00000000FFFF0000ull, 0x000000000000FF00ull, 0x00000000000000F0ull, 0x000000000000000Cull, 0x0000000000000002ull };
-    int y = (((x & (x - 1)) == 0) ? 0 : 1);
-    int j = 32;
-    for( int i = 0; i < 6; i++)
-    {
-      int k = (((x & t[i]) == 0) ? 0 : j);
-      y += k;
-      x >>= k;
-      j >>= 1;
-    }
-#endif
-
-    return y;
-  }
   void Quantizer::initQuantBlock(const TransformUnit& tu, const ComponentID compID, const QpParam& cQP, const double lambda, int gValue = -1)
   {
     CHECKD( lambda <= 0.0, "Lambda must be greater than 0" );
@@ -703,7 +684,7 @@ namespace DQIntern
     const double  qScale2       = double( qScale * qScale );
     const double  nomDistFactor = ( nomDShift < 0 ? 1.0/(double(int64_t(1)<<(-nomDShift))*qScale2*lambda) : double(int64_t(1)<<nomDShift)/(qScale2*lambda) );
     const int64_t pow2dfShift   = (int64_t)( nomDistFactor * qScale2 ) + 1;
-    const int     dfShift       = ceil_log2( pow2dfShift );
+    const int     dfShift       = ceilLog2( pow2dfShift );
     m_DistShift                 = 62 + m_QShift - 2*maxLog2TrDynamicRange - dfShift;
     m_DistAdd                   = (int64_t(1) << m_DistShift) >> 1;
     m_DistStepAdd               = ((m_DistShift+m_QShift)>=64 ? (int64_t)( nomDistFactor * pow(2,m_DistShift+m_QShift) + .5 ) : (int64_t)( nomDistFactor * double(int64_t(1)<<(m_DistShift+m_QShift)) + .5 ));
