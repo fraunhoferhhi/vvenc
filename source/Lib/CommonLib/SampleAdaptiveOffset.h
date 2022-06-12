@@ -110,8 +110,8 @@ protected:
 
 
   void (*calcSaoStatisticsEo0) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride, int64_t *count,int64_t  *diff);
-  void (*calcSaoStatisticsBo) (Pel*  srcLine,Pel*  orgLine,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff);
-  void (*calcSaoStatisticsEo90) (int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine);
+  void (*calcSaoStatisticsBo) (Pel*  srcLine,Pel*  orgLine,int width,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff);
+  void (*calcSaoStatisticsEo90) (int width,int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine);
   void (*calcSaoStatisticsEo135) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine,int8_t *signDownLine);
   void (*calcSaoStatisticsEo45) (int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine);
 

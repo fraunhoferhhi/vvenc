@@ -302,7 +302,7 @@ void calcSaoStatisticsEo0_Core(int width,int startX,int endX,int endY,Pel*  srcL
     orgLine += orgStride - ( width - iNaWidth );
   }
 }
-void calcSaoStatisticsEo90_Core(int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
+void calcSaoStatisticsEo90_Core(int width,int endX,int startY,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff,int8_t *signUpLine)
 {
   diff +=2;
   count+=2;
@@ -380,7 +380,7 @@ void calcSaoStatisticsEo45_Core(int width,int startX,int endX,int endY,Pel*  src
     orgLine  += orgStride;
   }
 }
-void calcSaoStatisticsBo_Core(Pel*  srcLine,Pel*  orgLine,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
+void calcSaoStatisticsBo_Core(Pel*  srcLine,Pel*  orgLine,int width,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
 {
   int x,y;
   int startX=0;

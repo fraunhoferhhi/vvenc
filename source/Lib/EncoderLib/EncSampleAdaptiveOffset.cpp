@@ -829,7 +829,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine += srcStride;
           orgLine += orgStride;
         }
-        calcSaoStatisticsEo90(endX,startY,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine);
+        calcSaoStatisticsEo90(width,endX,startY,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine);
       }
       break;
     case SAO_TYPE_EO_135:
@@ -899,7 +899,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         startX = 0;
         endX   = isRightAvail ? (width - skipLinesR) : width;
         endY   = isBelowAvail ? (height- skipLinesB) : height;
-        calcSaoStatisticsBo(srcLine,orgLine,endX,endY,srcStride,orgStride,channelBitDepth,count,diff);
+        calcSaoStatisticsBo(srcLine,orgLine,width,endX,endY,srcStride,orgStride,channelBitDepth,count,diff);
       }
       break;
     default:
