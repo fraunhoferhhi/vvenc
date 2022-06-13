@@ -114,10 +114,7 @@ public:
   void shareData( Picture* pic )
   {
     PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ];
-    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
-    {
-      prevOrigBufs[ i ] = sharePrevOrigBuffer( i );
-    }
+    sharePrevBuffers( prevOrigBufs );
     pic->linkSharedBuffers( &m_origBuf, &m_filteredBuf, prevOrigBufs, this );
     pic->isSccWeak   = m_isSccWeak;
     pic->isSccStrong = m_isSccStrong;
@@ -129,35 +126,36 @@ public:
 
   void releaseShared( Picture* pic )
   {
+    releasePrevBuffers( pic );
     pic->releaseSharedBuffers();
-    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
-    {
-      releasePrevOrigBuffer( i );
-    }
     m_refCount -= 1;
     CHECK( m_refCount < 0, "PicShared invalid state" );
   };
 
-private:
-  PelStorage* sharePrevOrigBuffer( int idx )
+  void sharePrevBuffers( PelStorage* prevOrigBufs[ NUM_PREV_FRAMES ] )
   {
-    CHECK( idx >= NUM_PREV_FRAMES, "array access out of bounds" );
-    if( m_prevShared[ idx ] )
+    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
     {
-      m_prevShared[ idx ]->m_refCount += 1;
-      return &( m_prevShared[ idx ]->m_origBuf );
+      prevOrigBufs[ i ] = nullptr;
+      if( m_prevShared[ i ] )
+      {
+        m_prevShared[ i ]->m_refCount += 1;
+        prevOrigBufs[ i ] = &( m_prevShared[ i ]->m_origBuf );
+      }
     }
-    return nullptr;
   }
 
-  void releasePrevOrigBuffer( int idx )
+  void releasePrevBuffers( Picture* pic )
   {
-    CHECK( idx >= NUM_PREV_FRAMES, "array access out of bounds" );
-    if( m_prevShared[ idx ] )
+    for( int i = 0; i < NUM_PREV_FRAMES; i++ )
     {
-      m_prevShared[ idx ]->m_refCount -= 1;
-      CHECK( m_refCount < 0, "PicShared invalid state" );
+      if( m_prevShared[ i ] && pic->m_bufsOrigPrev[ i ] )
+      {
+        m_prevShared[ i ]->m_refCount -= 1;
+        CHECK( m_prevShared[ i ]->m_refCount < 0, "PicShared invalid state" );
+      }
     }
+    pic->releasePrevBuffers();
   }
 
 public:
@@ -293,11 +291,16 @@ public:
         processPictures( m_procList, flush, auList, doneList, freeList );
 
         // send processed/finalized pictures to next stage
-        if( m_nextStage )
+        for( auto pic : doneList )
         {
-          for( auto pic : doneList )
+          // release previous pictures original buffers
+          // will not be needed by this picture and this stage anymore
+          // helps reducing overall memory footprint
+          PicShared* picShared = pic->m_picShared;
+          picShared->releasePrevBuffers( pic );
+          if( m_nextStage )
           {
-            m_nextStage->addPicSorted( pic->m_picShared );
+            m_nextStage->addPicSorted( picShared );
           }
         }
 

@@ -54,7 +54,6 @@ POSSIBILITY OF SUCH DAMAGE.
 //struct VVEncCfg;
 
 namespace vvenc {
-
   // BitAllocation functions
   namespace BitAllocation
   {
@@ -68,8 +67,7 @@ namespace vvenc {
                                  std::vector<int>& ctuPumpRedQP, const uint32_t ctuRsAddr, const int baseQP);
     double getPicVisualActivity (const Slice* slice, const VVEncCfg* encCfg, const CPelBuf* origPrev = nullptr);
     bool isTempLayer0IntraFrame (const Slice* slice, const VVEncCfg* encCfg, const PicList& picList, const bool rcIsFinalPass);
-  }
-
+   }
 } // namespace vvenc
 
 //! \}

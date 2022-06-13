@@ -395,7 +395,9 @@ void MCTF::init( const VVEncCfg& encCfg, NoMallocThreadPool* threadPool )
   m_filterPoc  = 0;
 
   // TLayer (TL) dependent definition of drop frames: TL = 4,  TL = 3,  TL = 2,  TL = 1,  TL = 0
-  m_MCTFSpeedVal     = m_encCfg->m_vvencMCTF.MCTFSpeed > 1 ? ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 0) : 0;
+  const static int sMCTFSpeed[4] { 0, ((3<<12) + (2<<9) + (2<<6) + (2<<3) + 0),   ((3<<12) + (3<<9) + (2<<6) + (2<<3) + 2),   ((3<<12) + (3<<9) + (3<<6) + (2<<3) + 2) };
+
+  m_MCTFSpeedVal     = sMCTFSpeed[ m_encCfg->m_vvencMCTF.MCTFSpeed ];
   m_lowResFltSearch  = m_encCfg->m_vvencMCTF.MCTFSpeed > 0;
   m_searchPttrn      = m_encCfg->m_vvencMCTF.MCTFSpeed > 0 ? 1 : 0;
 }
@@ -466,7 +468,7 @@ void MCTF::processPictures( const PicList& picList, bool flush, AccessUnitList& 
 
 void MCTF::filter( const std::deque<Picture*>& picFifo, int filterIdx )
 {
-  PROFILER_SCOPE_AND_STAGE( 1, _TPROF, P_MCTF );
+  PROFILER_SCOPE_AND_STAGE( 1, g_timeProfiler, P_MCTF );
 
   double overallStrength = -1.0;
   bool isFilterThisFrame = false;

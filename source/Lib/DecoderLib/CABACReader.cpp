@@ -137,7 +137,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
 
   sao( cs, ctuRsAddr );
-  if (cs.sps->alfEnabled && (cs.slice->tileGroupAlfEnabled[COMP_Y]))
+  if (cs.sps->alfEnabled && (cs.slice->alfEnabled[COMP_Y]))
   {
     const PreCalcValues& pcv = *cs.pcv;
     int                 frame_width_in_ctus = pcv.widthInCtus;
@@ -154,7 +154,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 
     for( int compIdx = 0; compIdx < MAX_NUM_COMP; compIdx++ )
     {
-      if (cs.slice->tileGroupAlfEnabled[compIdx])
+      if (cs.slice->alfEnabled[compIdx])
       {
         uint8_t* ctbAlfFlag = cs.slice->pic->m_alfCtuEnabled[ compIdx ].data();
         int ctx = 0;
@@ -169,7 +169,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
         }
         if( isChroma( (ComponentID)compIdx ) )
         {
-          int apsIdx = cs.slice->tileGroupChromaApsId;
+          int apsIdx = cs.slice->chromaApsId;
           CHECK(cs.slice->alfAps[apsIdx] == nullptr, "APS not initialized");
           const AlfParam& alfParam = cs.slice->alfAps[apsIdx]->alfParam;
           const int numAlts = alfParam.numAlternativesChroma;
@@ -234,7 +234,7 @@ void CABACReader::coding_tree_unit( CodingStructure& cs, const UnitArea& area, i
 void CABACReader::readAlfCtuFilterIndex(CodingStructure& cs, unsigned ctuRsAddr)
 {
   short* alfCtbFilterSetIndex = cs.slice->pic->m_alfCtbFilterIndex.data();
-  unsigned numAps = cs.slice->tileGroupNumAps;
+  unsigned numAps = cs.slice->numAps;
   unsigned numAvailableFiltSets = numAps + NUM_FIXED_FILTER_SETS;
   uint32_t filtIndex = 0;
   if (numAvailableFiltSets > NUM_FIXED_FILTER_SETS)

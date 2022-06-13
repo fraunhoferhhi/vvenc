@@ -2627,15 +2627,15 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   pcSlice->saoEnabled[CH_L]                 = picHeader->saoEnabled[CH_L];
   pcSlice->saoEnabled[CH_C]                 = picHeader->saoEnabled[CH_C];
 
-  pcSlice->tileGroupAlfEnabled[COMP_Y]      = picHeader->alfEnabled[COMP_Y];
-  pcSlice->tileGroupAlfEnabled[COMP_Cb]     = picHeader->alfEnabled[COMP_Cb];
-  pcSlice->tileGroupAlfEnabled[COMP_Cr]     = picHeader->alfEnabled[COMP_Cr];
-  pcSlice->tileGroupNumAps                  = picHeader->numAlfAps;
-  pcSlice->tileGroupChromaApsId             = picHeader->alfChromaApsId;
-  pcSlice->tileGroupCcAlfCbEnabled          = picHeader->ccalfEnabled[COMP_Cb];
-  pcSlice->tileGroupCcAlfCrEnabled          = picHeader->ccalfEnabled[COMP_Cr];
-  pcSlice->tileGroupCcAlfCbApsId            = picHeader->ccalfCbApsId;
-  pcSlice->tileGroupCcAlfCrApsId            = picHeader->ccalfCrApsId;
+  pcSlice->alfEnabled[COMP_Y]      = picHeader->alfEnabled[COMP_Y];
+  pcSlice->alfEnabled[COMP_Cb]     = picHeader->alfEnabled[COMP_Cb];
+  pcSlice->alfEnabled[COMP_Cr]     = picHeader->alfEnabled[COMP_Cr];
+  pcSlice->numAps                  = picHeader->numAlfAps;
+  pcSlice->chromaApsId             = picHeader->alfChromaApsId;
+  pcSlice->ccAlfCbEnabled          = picHeader->ccalfEnabled[COMP_Cb];
+  pcSlice->ccAlfCrEnabled          = picHeader->ccalfEnabled[COMP_Cr];
+  pcSlice->ccAlfCbApsId            = picHeader->ccalfCbApsId;
+  pcSlice->ccAlfCrApsId            = picHeader->ccalfCrApsId;
   pcSlice->ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cb - 1] = picHeader->ccalfEnabled[COMP_Cb];
   pcSlice->ccAlfFilterParam.ccAlfFilterEnabled[COMP_Cr - 1] = picHeader->ccalfEnabled[COMP_Cr];
 
@@ -2647,14 +2647,14 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
   if (sps->alfEnabled && !pps->alfInfoInPh)
   {
     READ_FLAG(uiCode, "sh_alf_enabled_flag");
-    pcSlice->tileGroupAlfEnabled[COMP_Y] = uiCode;
+    pcSlice->alfEnabled[COMP_Y] = uiCode;
     bool alfCbEnabledFlag = false;
     bool alfCrEnabledFlag = false;
     if (uiCode)
     {
       READ_CODE(3, uiCode, "sh_num_alf_aps_ids_luma");
       int numAps = uiCode;
-      pcSlice->tileGroupNumAps = (numAps);
+      pcSlice->numAps = (numAps);
       std::vector<int> apsId(numAps, -1);
       for (int i = 0; i < numAps; i++)
       {
@@ -2675,7 +2675,7 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
       if (alfCbEnabledFlag || alfCrEnabledFlag)
       {
         READ_CODE(3, uiCode, "sh_alf_aps_id_chroma");
-        pcSlice->tileGroupChromaApsId = uiCode;
+        pcSlice->chromaApsId = uiCode;
         APS* APStoCheckChroma = parameterSetManager->getAPS(uiCode, ALF_APS);
         CHECK(APStoCheckChroma->alfParam.newFilterFlag[CH_C] != 1, "bitstream conformance error, alf_chroma_filter_signal_flag shall be equal to 1");
         pcSlice->ccAlfFilterParam = APStoCheckChroma->ccAlfParam; 
@@ -2683,29 +2683,29 @@ void HLSyntaxReader::parseSliceHeader (Slice* pcSlice, PicHeader* picHeader, Par
     }
     else
     {
-      pcSlice->tileGroupNumAps = (0);
+      pcSlice->numAps = (0);
     }
-    pcSlice->tileGroupAlfEnabled[COMP_Cb] = alfCbEnabledFlag;
-    pcSlice->tileGroupAlfEnabled[COMP_Cr] = alfCrEnabledFlag;
+    pcSlice->alfEnabled[COMP_Cb] = alfCbEnabledFlag;
+    pcSlice->alfEnabled[COMP_Cr] = alfCrEnabledFlag;
 
-    if (sps->ccalfEnabled && pcSlice->tileGroupAlfEnabled[COMP_Y])
+    if (sps->ccalfEnabled && pcSlice->alfEnabled[COMP_Y])
     {
-      READ_FLAG(pcSlice->tileGroupCcAlfCbEnabled, "sh_cc_alf_cb_enabled_flag");
+      READ_FLAG(pcSlice->ccAlfCbEnabled, "sh_cc_alf_cb_enabled_flag");
 
-      if (pcSlice->tileGroupCcAlfCbEnabled)
+      if (pcSlice->ccAlfCbEnabled)
       {
         // parse APS ID
         READ_CODE(3, uiCode, "sh_cc_alf_cb_aps_id");
-        pcSlice->tileGroupCcAlfCbApsId = (uiCode);
+        pcSlice->ccAlfCbApsId = (uiCode);
         pcSlice->ccAlfFilterParam = parameterSetManager->getAPS( uiCode, ALF_APS )->ccAlfParam;
       }
       // Cr
-      READ_FLAG(pcSlice->tileGroupCcAlfCrEnabled, "sh_cc_alf_cr_enabled_flag");
-      if (pcSlice->tileGroupCcAlfCrEnabled)
+      READ_FLAG(pcSlice->ccAlfCrEnabled, "sh_cc_alf_cr_enabled_flag");
+      if (pcSlice->ccAlfCrEnabled)
       {
         // parse APS ID
         READ_CODE(3, uiCode, "sh_cc_alf_cr_aps_id");
-        pcSlice->tileGroupCcAlfCrApsId = (uiCode);
+        pcSlice->ccAlfCrApsId = (uiCode);
         pcSlice->ccAlfFilterParam = parameterSetManager->getAPS( uiCode, ALF_APS )->ccAlfParam;
       }
     }

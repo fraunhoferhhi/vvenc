@@ -104,8 +104,8 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
         __m256i vtmp1 = _mm256_madd_epi16( vsum1, vsum1 );
         __m256i vtmp2 = _mm256_madd_epi16( vsum2, vsum2 );
 
-        vtmp1         = _mm256_hadd_epi32( vtmp1, vtmp2 );
         vsum          = _mm256_add_epi32 ( vsum,  vtmp1 );
+        vsum          = _mm256_add_epi32 ( vsum,  vtmp2 );
 
         //int diff = origRowStart[x1] - bufferRowStart[x1];
         //error += diff * diff;
@@ -113,14 +113,13 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
         //error += diff * diff;
       }
       
-      vsum = _mm256_hadd_epi32     ( vsum, vsum );
       __m128i
       xtmp = _mm256_extractf128_si256( vsum, 1 );
+      xtmp = _mm_add_epi32( xtmp, _mm256_castsi256_si128( vsum ) );
+      xtmp = _mm_hadd_epi32( xtmp, xtmp );
 
-      error += _mm256_extract_epi32( vsum, 0 );
-      error += _mm256_extract_epi32( vsum, 1 );
-      error += _mm_extract_epi32   ( xtmp, 0 );
-      error += _mm_extract_epi32   ( xtmp, 1 );
+      error += _mm_extract_epi32( xtmp, 1 );
+      error += _mm_extract_epi32( xtmp, 0 );
 
       if( error > besterror )
       {
@@ -151,8 +150,8 @@ int motionErrorLumaInt_SIMD( const Pel* org, const ptrdiff_t origStride, const P
       __m128i xtmp1 = _mm_madd_epi16( xsum1, xsum1 );
       __m128i xtmp2 = _mm_madd_epi16( xsum2, xsum2 );
 
-      xtmp1         = _mm_hadd_epi32( xtmp1, xtmp2 );
       xsum          = _mm_add_epi32 ( xsum,  xtmp1 );
+      xsum          = _mm_add_epi32 ( xsum,  xtmp2 );
 
       //int diff = origRowStart[x1] - bufferRowStart[x1];
       //error += diff * diff;

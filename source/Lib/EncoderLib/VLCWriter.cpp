@@ -1779,42 +1779,42 @@ void HLSWriter::codeSliceHeader( const Slice* slice )
 
   if (slice->sps->alfEnabled && !slice->pps->alfInfoInPh)
   {
-    const int alfEnabled = slice->tileGroupAlfEnabled[COMP_Y];
+    const int alfEnabled = slice->alfEnabled[COMP_Y];
     WRITE_FLAG(alfEnabled, "sh_alf_enabled_flag");
 
     if (alfEnabled)
     {
-      WRITE_CODE(slice->tileGroupNumAps, 3, "sh_num_alf_aps_ids_luma");
-      for (int i = 0; i < slice->tileGroupNumAps; i++)
+      WRITE_CODE(slice->numAps, 3, "sh_num_alf_aps_ids_luma");
+      for (int i = 0; i < slice->numAps; i++)
       {
-        WRITE_CODE(slice->tileGroupLumaApsId[i], 3, "sh_alf_aps_id_luma");
+        WRITE_CODE(slice->lumaApsId[i], 3, "sh_alf_aps_id_luma");
       }
 
-      const int alfChromaIdc = slice->tileGroupAlfEnabled[COMP_Cb] + slice->tileGroupAlfEnabled[COMP_Cr] * 2;
+      const int alfChromaIdc = slice->alfEnabled[COMP_Cb] + slice->alfEnabled[COMP_Cr] * 2;
       if (chromaEnabled)
       {
-        WRITE_FLAG(slice->tileGroupAlfEnabled[COMP_Cb], "sh_alf_cb_enabled_flag");
-        WRITE_FLAG(slice->tileGroupAlfEnabled[COMP_Cr], "sh_alf_cr_enabled_flag");
+        WRITE_FLAG(slice->alfEnabled[COMP_Cb], "sh_alf_cb_enabled_flag");
+        WRITE_FLAG(slice->alfEnabled[COMP_Cr], "sh_alf_cr_enabled_flag");
       }
       if (alfChromaIdc)
       {
-        WRITE_CODE(slice->tileGroupChromaApsId, 3,      "sh_alf_aps_id_chroma");
+        WRITE_CODE(slice->chromaApsId, 3,      "sh_alf_aps_id_chroma");
       }
 
       if (slice->sps->ccalfEnabled)
       {
-        WRITE_FLAG(slice->tileGroupCcAlfCbEnabled,      "sh_cc_alf_cb_enabled_flag");
-        if( slice->tileGroupCcAlfCbEnabled )
+        WRITE_FLAG(slice->ccAlfCbEnabled,      "sh_cc_alf_cb_enabled_flag");
+        if( slice->ccAlfCbEnabled )
         {
           // write CC ALF Cb APS ID
-          WRITE_CODE(slice->tileGroupCcAlfCbApsId, 3,   "sh_cc_alf_cb_aps_id");
+          WRITE_CODE(slice->ccAlfCbApsId, 3,   "sh_cc_alf_cb_aps_id");
         }
         // Cr
-        WRITE_FLAG(slice->tileGroupCcAlfCrEnabled,      "sh_cc_alf_cr_enabled_flag");
-        if( slice->tileGroupCcAlfCrEnabled )
+        WRITE_FLAG(slice->ccAlfCrEnabled,      "sh_cc_alf_cr_enabled_flag");
+        if( slice->ccAlfCrEnabled )
         {
           // write CC ALF Cr APS ID
-          WRITE_CODE(slice->tileGroupCcAlfCrApsId, 3,   "sh_cc_alf_cr_aps_id");
+          WRITE_CODE(slice->ccAlfCrApsId, 3,   "sh_cc_alf_cr_aps_id");
         }
       }
     }
