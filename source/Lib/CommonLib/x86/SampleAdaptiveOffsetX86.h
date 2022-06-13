@@ -836,7 +836,7 @@ void calcSaoStatisticsBo_SIMD(Pel*  srcLine,Pel*  orgLine,int width,int endX,int
         diff[iBand]  += iDiff;
         count[iBand] += 1;
       }
-      //last collum
+      //last colum
       {
         __m128i vsrca, vsrcb;
         __m128i vdiffa,vdiffb;
