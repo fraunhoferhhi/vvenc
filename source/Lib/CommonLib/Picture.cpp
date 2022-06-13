@@ -276,6 +276,12 @@ void Picture::linkSharedBuffers( PelStorage* origBuf, PelStorage* filteredBuf, P
     m_bufsOrigPrev[ i ] = prevOrigBufs[ i ];
 }
 
+void Picture::releasePrevBuffers()
+{
+  for( int i = 0; i < NUM_PREV_FRAMES; i++ )
+    m_bufsOrigPrev[ i ] = nullptr;
+}
+
 void Picture::releaseSharedBuffers()
 {
   m_picShared                      = nullptr;
