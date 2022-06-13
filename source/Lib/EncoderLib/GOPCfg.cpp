@@ -58,37 +58,32 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
 {
   CHECK( gopSize < 1, "gop size has to be greater than 0" );
 
-  m_mctfCfg          = &mctfCfg;
-  m_refreshType      = refreshType;
-  m_fixedIntraPeriod = intraPeriod;
-  m_maxGopSize       = gopSize;
-  m_gopMode          = m_fixedIntraPeriod != 1 ? ( bLowDelay ? GM_LD : GM_RA ) : GM_AI;
-  m_defGopSize       = m_fixedIntraPeriod > 0 ? std::min( m_maxGopSize, m_fixedIntraPeriod ) : m_maxGopSize;
-  m_maxNumRefs       = m_gopMode == GM_LD && m_maxGopSize >= 8 ? MAX_NUM_ACTIVE_REFS_LD8 : MAX_NUM_ACTIVE_REFS_RA;
+  m_mctfCfg            = &mctfCfg;
+  m_refreshType        = refreshType;
+  m_fixIntraPeriod     = intraPeriod;
+  m_maxGopSize         = gopSize;
+  m_defGopSize         = m_fixIntraPeriod > 0 ? std::min( m_maxGopSize, m_fixIntraPeriod ) : m_maxGopSize;
 
-  const int numGops    = m_fixedIntraPeriod > 0 ? m_fixedIntraPeriod / m_defGopSize               : 0;
-  const int remainSize = m_fixedIntraPeriod > 0 ? m_fixedIntraPeriod - ( m_defGopSize * numGops ) : 0;
-  const int numDefault = m_gopMode == GM_RA ? 2 : ( m_gopMode == GM_LD ? m_maxNumRefs : 1 );
+  const int numGops    = m_fixIntraPeriod > 0 ? m_fixIntraPeriod / m_defGopSize               : 0;
+  const int remainSize = m_fixIntraPeriod > 0 ? m_fixIntraPeriod - ( m_defGopSize * numGops ) : 0;
+  const int minPrevPoc = xGetMinPoc( m_maxGopSize, cfgGopList );
+  const int numDefault = ( ( -1 * minPrevPoc ) + m_maxGopSize - 1 ) / m_maxGopSize + 1;
 
   // setup default gop lists
-  std::vector<GOPEntryList*> prevGopLists;
-  prevGopLists.reserve( numDefault );
+  GOPEntryList* prevGopList = nullptr;
+  int pocOffset             = 0;
   m_defaultGopLists.resize( numDefault );
   for( int i = 0; i < numDefault; i++ )
   {
-    xCreateGopList( m_gopMode, m_maxNumRefs, m_maxGopSize, m_defGopSize, prevGopLists, m_defaultGopLists[ i ] );
-    prevGopLists.push_back( &m_defaultGopLists[ i ] );
+    xCreateGopList( m_maxGopSize, m_defGopSize, pocOffset, cfgGopList, prevGopList, m_defaultGopLists[ i ] );
+    prevGopList = &m_defaultGopLists[ i ];
+    pocOffset += m_defGopSize;
   }
   if( remainSize && remainSize != m_defGopSize )
   {
-    const int numPrev = std::min( numDefault - 1, numGops );
-    prevGopLists.clear();
-    prevGopLists.resize( numPrev );
-    for( int i = 0; i < numPrev; i++ )
-    {
-      prevGopLists[ i ] = &m_defaultGopLists.back();
-    }
-    xCreateGopList( m_gopMode, m_maxNumRefs, m_maxGopSize, remainSize, prevGopLists, m_remainGopList );
+    prevGopList = numGops < (int)m_defaultGopLists.size() ? &m_defaultGopLists[ numGops ] : &m_defaultGopLists.back();
+    pocOffset   = numGops * m_defGopSize;
+    xCreateGopList( m_maxGopSize, remainSize, pocOffset, cfgGopList, prevGopList, m_remainGopList );
   }
 
   // set some defaults based on gop list layouts
@@ -114,7 +109,7 @@ void GOPCfg::initGopList( int refreshType, int intraPeriod, int gopSize, bool bL
   m_nextPoc      = 0;
   m_pocOffset    = 0;
   m_cnOffset     = 0;
-  CHECK( m_refreshType == VVENC_DRT_IDR2 && m_gopMode != GM_RA, "refresh type idr2 only for random access possible" );
+  CHECK( m_refreshType == VVENC_DRT_IDR2 && ( m_fixIntraPeriod == 1 || bLowDelay ), "refresh type idr2 only for random access possible" );
   m_numTillGop   = m_refreshType == VVENC_DRT_IDR2 ? (int)m_gopList->size() - 1 : 0;
   m_numTillIntra = m_refreshType == VVENC_DRT_IDR2 ? (int)m_gopList->size() - 1 : 0;
 
@@ -182,7 +177,7 @@ void GOPCfg::getNextGopEntry( GOPEntry& gopEntry )
     {
       m_gopList      = &m_defaultGopLists[ 0 ];
       m_nextListIdx  = std::min( 1, (int)m_defaultGopLists.size() - 1 );
-      m_numTillIntra = m_fixedIntraPeriod;
+      m_numTillIntra = m_fixIntraPeriod;
     }
     else
     {
@@ -288,158 +283,178 @@ bool GOPCfg::isChromaDeltaQPEnabled() const
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void GOPCfg::xCreateGopList( GOPMode gopMode, int maxNumRefs, int maxGopSize, int gopSize, const std::vector<GOPEntryList*>& prevGopLists, GOPEntryList& gopList ) const
+int GOPCfg::xGetMinPoc( int maxGopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ] ) const
 {
-  switch( gopMode )
+  int minPoc = 0;
+  for( int i = 0; i < maxGopSize; i++ )
   {
-    case GM_AI:
-      CHECK( gopSize != 1, "for all intra gop gop size has to be 1" );
-      xCreateGopListAI( gopList );
-      break;
-    case GM_LD:
-      xCreateGopListLD( maxNumRefs, maxGopSize, gopSize, prevGopLists, gopList );
-      break;
-    case GM_RA:
-      xCreateGopListRA( maxNumRefs, maxGopSize, gopSize, prevGopLists, gopList );
-      break;
-    default:
-      THROW( "unknown gop mode" );
-  };
-
-  xSetMctfIndex( maxGopSize, gopList );
-}
-
-void GOPCfg::xCreateGopListRA( int maxNumRefs, int maxGopSize, int gopSize, const std::vector<GOPEntryList*>& prevGopLists, GOPEntryList& gopList ) const
-{
-  gopList.clear();
-  gopList.reserve( maxGopSize );
-
-  // prepare pseudo previous gop, containing TL0 and TL1 pic
-  int prevGopTL01[ 2 ] = { 0, 0 };
-  if( prevGopLists.size() )
-  {
-    const GOPEntryList& prevList = *prevGopLists.back();
-    const int prevGopSize = (int)prevList.size();
-    for( const auto& gopEntry : prevList )
+    for( int l = 0; l < 2; l++ )
     {
-      if( gopEntry.m_temporalId == 0 || gopEntry.m_temporalId == 1 )
+      for( int j = 0; j < cfgGopList[ i ].m_numRefPics[ l ]; j++ )
       {
-        const int prevPoc = ( gopEntry.m_POC % prevGopSize ) - prevGopSize;
-        prevGopTL01[ gopEntry.m_temporalId ] = prevPoc;
+        const int refPoc = cfgGopList[ i ].m_POC - cfgGopList[ i ].m_deltaRefPics[ l ][ j ];
+        if( refPoc < minPoc )
+          minPoc = refPoc;
       }
     }
   }
+  return minPoc;
+}
+
+void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const GOPEntryList* prevGopList, GOPEntryList& gopList ) const
+{
+  const bool bSkipPrev = prevGopList == nullptr || (int)prevGopList->size() < maxGopSize;
+  std::vector< std::pair<int, int> > prevGopRefs;
+  if( ! bSkipPrev )
+  {
+    xGetPrevGopRefs( prevGopList, prevGopRefs );
+  }
 
   //
-  // fill in gop entries with default dyadic pattern for maximum gop size
+  // copy given gop configuration
   //
 
-  GOPEntry e1;
-  e1.setDefaultGOPEntry();
-  e1.m_POC        = maxGopSize;
-  e1.m_temporalId = 0;
-  gopList.push_back( e1 );
-  xAddDyadicGopEntry( 0, maxGopSize, 1, gopList );
+  // store given configuration in master list
+  GOPEntryList masterList;
+  masterList.resize( maxGopSize );
+  for( int i = 0; i < maxGopSize; i++ )
+  {
+    masterList[ i ].setDefaultGOPEntry();
+    masterList[ i ].copyFromGopCfg( cfgGopList[ i ] );
+  }
 
   // find max temporal id
-  const int maxTid = xGetMaxTid( gopList );
+  const int maxTid = xGetMaxTid( masterList );
 
-  //
   // prune gop list
-  //
-
   CHECK( gopSize > maxGopSize, "only pruning of gop list supported" );
   if( gopSize < maxGopSize )
   {
-    std::list<GOPEntry> prunedList;
-    prunedList.push_back( gopList[ 0 ] ); // always include TL01, end of pruned gop and start of following gop
-    for( int i = 1; i < (int)gopList.size(); i++ )
-    {
-      if( gopList[ i ].m_POC < gopSize )
-      {
-        prunedList.push_back( gopList[ i ] );
-      }
-    }
-
-    gopList.clear();
-    gopList.reserve( gopSize );
-    for( const auto& gopEntry : prunedList )
-    {
-      gopList.push_back( gopEntry );
-    }
-
-    // fix poc of TL0 pic
-    gopList[ 0 ].m_POC = gopSize;
-
-    CHECK( gopList.size() != gopSize, "pruned gop list incomplete" );
+    xPruneGopList( gopSize, bSkipPrev, masterList );
   }
 
-  //
-  // construct prediction pattern
+  // copy master to current gop list
+  gopList.clear();
+  gopList.resize( (int)masterList.size() );
+  for( int i = 0; i < (int)masterList.size(); i++ )
+  {
+    gopList[ i ] = masterList[ i ];
+  }
+
+  // 
+  // fix prediction pattern
   //
 
-  const bool skip24 = ENABLE_SKIP24 && maxGopSize == 32;
-  // use list of available entries for prediction and insert poc 0 to be always available
+  // use list of available entries for prediction
   std::vector<GOPEntry*> availList;
   availList.resize( gopSize + 1, nullptr );
-  e1.setDefaultGOPEntry();
-  e1.m_POC = 0;
-  availList[ 0 ] = &e1;
+  GOPEntry e1;
+  if( prevGopRefs.size() == 0 || prevGopRefs[ 0 ].first == 0 )
+  {
+    // insert leading poc 0 to be available
+    CHECK( prevGopRefs.size() && prevGopRefs[ 0 ].first == 0 && prevGopRefs[ 0 ].second != 0, "gop structure should start and end with temporalId 0" );
+    e1.setDefaultGOPEntry();
+    e1.m_POC = 0;
+    availList[ 0 ] = &e1;
+    // remove leading poc 0 from prev 
+    if( prevGopRefs.size() && prevGopRefs[ 0 ].first == 0 )
+    {
+      for( int i = 0; i < (int)prevGopRefs.size() - 1; i++ )
+      {
+        prevGopRefs[ i ] = prevGopRefs[ i + 1 ];
+      }
+      prevGopRefs.pop_back();
+    }
+  }
+
+  // loop over gop list
+  std::vector<int> newFwd;
+  std::vector<int> newBckwd;
+  std::vector<int> availFwd;
+  std::vector<int> availBckwd;
+  newFwd.reserve( MAX_REF_PICS );
+  newBckwd.reserve( MAX_REF_PICS );
+  availFwd.reserve( MAX_REF_PICS );
+  availBckwd.reserve( MAX_REF_PICS );
   for( int i = 0; i < gopList.size(); i++ )
   {
     GOPEntry* gopEntry = &gopList[ i ];
 
-    // LIST 0 (backward prediction list)
-
-    std::vector<int> deltaList;
-    deltaList.reserve( maxNumRefs );
-
-    // first, search for available pics in backward direction of current gop
-    xAddRefPicsBckwd( deltaList, gopEntry, availList, maxNumRefs, skip24 );
-    // second, fill missing delta poc entries with pics from previous GOPs, if allowed (is not used/allowed for non-ref pics at the highest temporal layer) 
-    if( (int)deltaList.size() < maxNumRefs && ( gopEntry->m_temporalId <= 1 || gopEntry->m_temporalId < maxTid ) )
+    // loop over both reference lists
+    for( int l = 0; l < 2; l++ )
     {
-      xAddRefPicsPrevGOP( deltaList, gopEntry, maxNumRefs, prevGopTL01 );
-    }
-    // third, if still refs missing, search into forward direction
-    if( (int)deltaList.size() < maxNumRefs )
-    {
-      xAddRefPicsFwd( deltaList, gopEntry, availList, maxNumRefs );
-    }
+      newFwd.clear();
+      newBckwd.clear();
+      availFwd.clear();
+      availBckwd.clear();
 
-    // copy delta poc list 0
-    CHECK( (int)deltaList.size() >= VVENC_MAX_NUM_REF_PICS, "number of delta ref pic entries exceeds array bounds" );
-    gopEntry->m_numRefPics[ 0 ]       = (int)deltaList.size();
-    gopEntry->m_numRefPicsActive[ 0 ] = (int)deltaList.size();
-    for( int j = 0; j < gopEntry->m_numRefPics[ 0 ]; j++ )
-    {
-      gopEntry->m_deltaRefPics[ 0 ][ j ] = deltaList[ j ];
-    }
+      // fill list of possible reference pictures in forward / backward direction
+      xAddRefPicsFwd( availFwd, gopEntry, availList );
+      xAddRefPicsBckwd( availBckwd, gopEntry, availList );
+      // access to previous gop not used/allowed for non-ref pics at highest temporal layer
+      if( gopEntry->m_temporalId <= 1 || gopEntry->m_temporalId < maxTid )
+      {
+        xAddRefPicsPrevGOP( availBckwd, gopEntry, prevGopRefs );
+      }
 
-    // LIST 1 (forward prediction list)
+      // check / fix all active references
+      for( int j = 0; j < gopEntry->m_numRefPicsActive[ l ]; j++ )
+      {
+        const int delta = gopEntry->m_deltaRefPics[ l ][ j ];
+        CHECK( delta == 0, "error in gop configuration: try to reference own picture" );
+        // start with forward or backward prediction
+        std::vector<int>& sameDir   = delta < 0 ? availFwd   : availBckwd;
+        std::vector<int>& invertDir = delta < 0 ? availBckwd : availFwd;
+        // check if candidates are available in same direction list
+        if( sameDir.size() )
+        {
+          // try to find correct match
+          auto itr = find( sameDir.begin(), sameDir.end(), delta );
+          if( itr == sameDir.end() )
+          {
+            // no match found, choose replacement
+            itr = sameDir.begin();
+          }
+          // use delta candidate and remove candidate to prevent doublets
+          std::vector<int>& newDst = *itr < 0 ? newFwd : newBckwd;
+          newDst.push_back( *itr );
+          sameDir.erase( itr );
+        }
+        else if( invertDir.size() )
+        {
+          // corret match not possible, we are inverting the prediction direction
+          auto itr = invertDir.begin();
+          // use delta candidate and remove candidate to prevent doublets
+          std::vector<int>& newDst = *itr < 0 ? newFwd : newBckwd;
+          newDst.push_back( *itr );
+          invertDir.erase( itr );
+        }
+      }
 
-    deltaList.clear();
+      // clear old delta list
+      std::memset( gopEntry->m_deltaRefPics[ l ], 0, sizeof( gopEntry->m_deltaRefPics[ l ] ) );
 
-    // first, search for available pics in forward direction
-    xAddRefPicsFwd( deltaList, gopEntry, availList, maxNumRefs );
-    // second, if refs missing, search into backward direction
-    if( (int)deltaList.size() < maxNumRefs )
-    {
-      xAddRefPicsBckwd( deltaList, gopEntry, availList, maxNumRefs, false );
-    }
-    // third, fill missing delta poc entries with pics from previous GOPs, if allowed (is not used/allowed for non-ref pics at the highest temporal layer) 
-    if( (int)deltaList.size() < maxNumRefs && ( gopEntry->m_temporalId <= 1 || gopEntry->m_temporalId < maxTid ) )
-    {
-      xAddRefPicsPrevGOP( deltaList, gopEntry, maxNumRefs, prevGopTL01 );
-    }
+      // ensure new delta lists are sorted
+      std::sort( newFwd.begin(), newFwd.end(),     []( auto& a, auto& b ){ return a > b; } );
+      std::sort( newBckwd.begin(), newBckwd.end(), []( auto& a, auto& b ){ return a < b; } );
 
-    // copy delta poc list 1
-    CHECK( (int)deltaList.size() >= VVENC_MAX_NUM_REF_PICS, "number of delta ref pic entries exceeds array bounds" );
-    gopEntry->m_numRefPics[ 1 ]       = (int)deltaList.size();
-    gopEntry->m_numRefPicsActive[ 1 ] = (int)deltaList.size();
-    for( int j = 0; j < gopEntry->m_numRefPics[ 1 ]; j++ )
-    {
-      gopEntry->m_deltaRefPics[ 1 ][ j ] = deltaList[ j ];
+      // copy new delta poc list
+      CHECK( (int)newFwd.size() + (int)newBckwd.size() >= VVENC_MAX_NUM_REF_PICS, "number of delta ref pic entries exceeds array bounds" );
+      gopEntry->m_numRefPics[ l ]       = (int)newFwd.size() + (int)newBckwd.size();
+      gopEntry->m_numRefPicsActive[ l ] = (int)newFwd.size() + (int)newBckwd.size();
+      std::vector<int>& src1 = l == 0 ? newBckwd : newFwd;
+      std::vector<int>& src2 = l == 0 ? newFwd   : newBckwd;
+      int dstIdx = 0;
+      for( int j = 0; j < (int)src1.size(); j++ )
+      {
+        gopEntry->m_deltaRefPics[ l ][ dstIdx ] = src1[ j ];
+        dstIdx += 1;
+      }
+      for( int j = 0; j < (int)src2.size(); j++ )
+      {
+        gopEntry->m_deltaRefPics[ l ][ dstIdx ] = src2[ j ];
+        dstIdx += 1;
+      }
     }
 
     // available for later use as ref
@@ -450,25 +465,24 @@ void GOPCfg::xCreateGopListRA( int maxNumRefs, int maxGopSize, int gopSize, cons
   // add entries to ref lists, which are required as reference for later pictures in coding order
   //
 
-  // create fake entry as start of potential next gop, to ensure TL0 and TL1 are kept alive
+  // create fake entry as start of potential next gop, 
+  // to ensure pictures referenced from next gop are keept alive
   GOPEntry e2;
   e2.setDefaultGOPEntry();
-  e2.m_POC        = gopList[ 0 ].m_POC + gopSize;
-  e2.m_temporalId = gopList[ 0 ].m_temporalId;
-  // add TL0 pics of previous gop
-  CHECK( gopList[ 0 ].m_POC != gopSize,  "first entry in dyadic gop list must have poc equal gop size" );
-  CHECK( gopList[ 0 ].m_temporalId != 0, "first entry in dyadic gop list must have temporal id 0" );
-  for( int l = 0; l < 2; l++ )
+  e2.m_POC           = 2 * maxGopSize;
+  e2.m_temporalId    = 0;
+  const bool bIsLast = m_maxGopSize != gopSize;
+  if( ! bIsLast )
   {
-    e2.m_deltaRefPics[ l ][ 0 ] = e2.m_POC - gopList[ 0 ].m_POC;
-    e2.m_deltaRefPics[ l ][ 1 ] = e2.m_POC - 0;
-    e2.m_numRefPics[ l ] = 2;
-  }
-  // add TL1, if available
-  if( gopSize > 1 && gopList[ 1 ].m_temporalId == e2.m_temporalId + 1)
-  {
-    e2.m_deltaRefPics[ 0 ][ e2.m_numRefPics[ 0 ] ]  = e2.m_POC - gopList[ 1 ].m_POC;
-    e2.m_numRefPics[ 0 ]                           += 1;
+    std::vector<int> pocList;
+    pocList.reserve( (int)masterList.size() );
+    xGetRefsOfNextGop( masterList, pocOffset, pocList );
+    e2.m_numRefPics[ 0 ] = (int)pocList.size();
+    for( int i = 0; i < (int)pocList.size(); i++ )
+    {
+      const int reqPoc = pocList[ i ] + maxGopSize; // shift poc from next to current gop
+      e2.m_deltaRefPics[ 0 ][ i ] = e2.m_POC - reqPoc;
+    }
   }
   const GOPEntry* prevEntry = &e2;
 
@@ -508,18 +522,18 @@ void GOPCfg::xCreateGopListRA( int maxNumRefs, int maxGopSize, int gopSize, cons
         // if required poc not found, add this poc to current entry lists
         if( ! bAvail )
         {
-          const int deltaPoc = gopEntry->m_POC - reqPoc;
-          const int addIdx   = deltaPoc > 0 ? 0 : 1; // add to backward L0 or forward L1 list
-          CHECK( gopEntry->m_numRefPics[ addIdx ] >= VVENC_MAX_NUM_REF_PICS, "out of array bounds" );
-          gopEntry->m_deltaRefPics[ addIdx ][ gopEntry->m_numRefPics[ addIdx ] ] = deltaPoc;
-          gopEntry->m_numRefPics[ addIdx ] += 1;
+          const int delta   = gopEntry->m_POC - reqPoc;
+          const int addList = delta > 0 ? 0 : 1; // add to backward L0 or forward L1 list
+          CHECK( gopEntry->m_numRefPics[ addList ] >= VVENC_MAX_NUM_REF_PICS, "out of array bounds" );
+          gopEntry->m_deltaRefPics[ addList ][ gopEntry->m_numRefPics[ addList ] ] = delta;
+          gopEntry->m_numRefPics[ addList ] += 1;
           // small optimization: sort additional poc by value to decrease required bits for encoding the list
-          const int sign = deltaPoc > 0 ? 1 : -1;
-          for( int n = gopEntry->m_numRefPics[ addIdx ] - 1; n > maxNumRefs; n-- )
+          const int sign = delta > 0 ? 1 : -1;
+          for( int n = gopEntry->m_numRefPics[ addList ] - 1; n > gopEntry->m_numRefPicsActive[ addList ]; n-- )
           {
-            if( gopEntry->m_deltaRefPics[ addIdx ][ n ] * sign > gopEntry->m_deltaRefPics[ addIdx ][ n - 1 ] * sign )
+            if( gopEntry->m_deltaRefPics[ addList ][ n ] * sign > gopEntry->m_deltaRefPics[ addList ][ n - 1 ] * sign )
               break;
-            std::swap( gopEntry->m_deltaRefPics[ addIdx ][ n ], gopEntry->m_deltaRefPics[ addIdx ][ n - 1 ] );
+            std::swap( gopEntry->m_deltaRefPics[ addList ][ n ], gopEntry->m_deltaRefPics[ addList ][ n - 1 ] );
           }
         }
       }
@@ -527,144 +541,167 @@ void GOPCfg::xCreateGopListRA( int maxNumRefs, int maxGopSize, int gopSize, cons
     prevEntry = gopEntry;
   }
 
-  //
-  // fill in qp model parameters
-  //
-
-  CHECK( maxGopSize > 32, "array out of bounds" );
-  const int* qpOffset       = maxGopSize > 16 ? GOP32_QPOFFSET              : GOP16_QPOFFSET;
-  const double* modelOffset = maxGopSize > 16 ? GOP32_QPOFFSET_MODEL_OFFSET : GOP16_QPOFFSET_MODEL_OFFSET;
-  const double* modelScale  = maxGopSize > 16 ? GOP32_QPOFFSET_MODEL_SCALE  : GOP16_QPOFFSET_MODEL_SCALE;
-  for( int i = 0; i < gopList.size(); i++ )
-  {
-    GOPEntry* gopEntry = &gopList[ i ];
-    const int tid      = gopEntry->m_temporalId;
-    gopEntry->m_sliceType           = 'B';
-    gopEntry->m_QPOffset            = qpOffset   [ tid ];
-    gopEntry->m_QPOffsetModelOffset = modelOffset[ tid ];
-    gopEntry->m_QPOffsetModelScale  = modelScale [ tid ];
-  }
-
   // poc to gop map for fastwr access
   std::vector<int> pocToGopIdx;
   xCreatePocToGopIdx( gopList, false, pocToGopIdx );
 
-  // STSA and forward B flags
+  // STSA, forward B flags, MCTF index
   xSetSTSA     ( gopList, pocToGopIdx );
   xSetBckwdOnly( gopList );
+  xSetMctfIndex( maxGopSize, gopList );
 
   // mark first gop entry
   gopList[ 0 ].m_isStartOfGop = true;
 }
 
-void GOPCfg::xCreateGopListLD( int maxNumRefs, int maxGopSize, int gopSize, const std::vector<GOPEntryList*>& prevGopLists, GOPEntryList& gopList ) const
+void GOPCfg::xGetPrevGopRefs( const GOPEntryList* prevGopList, std::vector< std::pair<int, int> >& prevGopRefs ) const
 {
-  gopList.clear();
-  gopList.resize( gopSize );
-
-  // prepare pseudo list of pics from previous gop
-  std::vector<int> prevGopPocs;
-  prevGopPocs.reserve( prevGopLists.size() + 1 );
-  // poc 0 always available
-  prevGopPocs.push_back( 0 );
-  // add pocs from previous gops
-  int prevPoc = 0;
-  for( int i = (int)prevGopLists.size() - 1; i >= 0; i-- )
+  if( ! prevGopList )
   {
-    prevPoc -= (int)prevGopLists[ i ]->size();
-    prevGopPocs.push_back( prevPoc );
+    return;
   }
 
-  //
-  // fill in gop entries with ordered pattern
-  //
+  prevGopRefs.reserve( MAX_REF_PICS );
 
-  for( int i = 0; i < gopSize; i++ )
+  const int gopSize         = (int)prevGopList->size();
+  const GOPEntry& lastEntry = prevGopList->back();
+
+  // last encoded picture available for reference
+  prevGopRefs.push_back( std::make_pair( lastEntry.m_POC, lastEntry.m_temporalId ) );
+
+  // insert all available reference pictures
+  for( int l = 0; l < 2; l++ )
   {
-    GOPEntry& gopEntry = gopList[ i ];
-    gopEntry.setDefaultGOPEntry();
-    gopEntry.m_POC        = i + 1;
-    gopEntry.m_temporalId = 0;
-    gopEntry.m_sliceType  = 'B';
-    gopEntry.m_QPOffset   = 1;
-    if( i < gopSize - 1 )
+    for( int i = 0; i < lastEntry.m_numRefPics[ l ]; i++ )
     {
-      gopEntry.m_QPOffset            = i % 2 == 0 ? 5 : 4;
-      gopEntry.m_QPOffsetModelOffset = -6.5;
-      gopEntry.m_QPOffsetModelScale  = 0.2590;
-    }
-  }
-
-  //
-  // construct prediction pattern
-  //
-
-  for( int i = 0; i < gopList.size(); i++ )
-  {
-    GOPEntry* gopEntry = &gopList[ i ];
-
-    std::vector<int> deltaList;
-    deltaList.reserve( maxNumRefs );
-
-    // use next poc (-1) and start pics of previous gops
-    // if not enough previous gops available try to fill with nearby pocs
-    const int furthestPoc  = prevGopPocs.back();
-          int nearbyRefs   = std::max( maxNumRefs - (int)prevGopPocs.size(), 1 );
-          int nearbyPoc    = gopEntry->m_POC - 1;
-          int prevGopStart = 0;
-    while( nearbyRefs && nearbyPoc >= furthestPoc )
-    {
-      // skip pocs from previous gops if already used as nearby poc
-      if( prevGopStart < (int)prevGopPocs.size() && prevGopPocs[ prevGopStart ] == nearbyPoc )
+      // check referenced poc already found
+      const int refPoc = lastEntry.m_POC - lastEntry.m_deltaRefPics[ l ][ i ];
+      bool bFound = false;
+      for( int j = 0; j < (int)prevGopRefs.size(); j++ )
       {
-        prevGopStart += 1;
-        const int prevAvail = (int)prevGopPocs.size() - prevGopStart;
-        if( prevAvail < maxNumRefs - 1 )
+        if( prevGopRefs[ j ].first == refPoc )
         {
-          nearbyRefs += 1;
+          bFound = true;
+          break;
         }
       }
-      deltaList.push_back( gopEntry->m_POC - nearbyPoc );
-      nearbyRefs -= 1;
-      nearbyPoc  -= 1;
-    }
-    // copy remaining pocs from previous gops
-    while( (int)deltaList.size() < maxNumRefs && prevGopStart < (int)prevGopPocs.size() )
-    {
-      deltaList.push_back( gopEntry->m_POC - prevGopPocs[ prevGopStart ] );
-      prevGopStart += 1;
-    }
-
-    // copy delta poc list
-    CHECK( (int)deltaList.size() >= VVENC_MAX_NUM_REF_PICS, "number of delta ref pic entries exceeds array bounds" );
-    for( int l = 0; l < 2; l++ )
-    {
-      gopEntry->m_numRefPics[ l ]       = (int)deltaList.size();
-      gopEntry->m_numRefPicsActive[ l ] = (int)deltaList.size();
-      for( int j = 0; j < gopEntry->m_numRefPics[ l ]; j++ )
+      if( bFound )
       {
-        gopEntry->m_deltaRefPics[ l ][ j ] = deltaList[ j ];
+        continue;
       }
+      // find temporal layer of referenced poc
+      int refTid = -1;
+      int cmpPoc = refPoc;
+      if( cmpPoc < 0 )
+      {
+        // ensure value positive
+        const int numGops = -1 * cmpPoc / gopSize + 1;
+        cmpPoc += numGops * gopSize;
+      }
+      cmpPoc = cmpPoc % gopSize;
+      for( int j = 0; j < gopSize; j++ )
+      {
+        if( ( (*prevGopList)[ j ].m_POC % gopSize ) == cmpPoc )
+        {
+          refTid = (*prevGopList)[ j ].m_temporalId;
+          break;
+        }
+      }
+      CHECK( refTid < 0, "error in gop configuration: gop entry not found or temporalId negative" );
+      // store referenced poc
+      prevGopRefs.push_back( std::make_pair( refPoc, refTid ) );
     }
   }
 
-  // mark first gop entry
-  gopList.back().m_isStartOfGop = true;
+  // correct poc of referenced pictures by previous gop size
+  for( int i = 0; i < (int)prevGopRefs.size(); i++ )
+  {
+    prevGopRefs[ i ].first -= gopSize;
+    CHECK( prevGopRefs[ i ].first > 0, "error in gop configuration: reference picture points to future gop" );
+  }
+
+  std::sort( prevGopRefs.begin(), prevGopRefs.end(), []( auto& a, auto& b ){ return a.first > b.first; } );
 }
 
-void GOPCfg::xCreateGopListAI( GOPEntryList& gopList ) const
+void GOPCfg::xPruneGopList( int gopSize, bool bSkipPrev, GOPEntryList& gopList ) const
 {
-  gopList.clear();
-  gopList.resize( 1 );
+  const int oldSize = (int)gopList.size();
+  CHECK( oldSize <= gopSize, "gop list to short for prunning" );
 
-  gopList[ 0 ].setDefaultGOPEntry();
-  gopList[ 0 ].m_POC                   = 1;
-  gopList[ 0 ].m_temporalId            = 0;
-  gopList[ 0 ].m_sliceType             = 'I';
-  gopList[ 0 ].m_isStartOfGop          = true;
-  // TODO (jb): check smaller number of active ref pics for AI, number has to be set to 1 at least
-  gopList[ 0 ].m_numRefPicsActive[ 0 ] = 4;
-  gopList[ 0 ].m_numRefPicsActive[ 1 ] = 4;
+  std::vector<GOPEntry> prunedList;
+  prunedList.reserve( gopSize );
+  for( int i = 0; i < (int)gopList.size(); i++ )
+  {
+    if( gopList[ i ].m_POC == oldSize )
+    {
+      // always include end of old gop, which is the start of following gop
+      prunedList.push_back( gopList[ i ] );
+      // fix poc and delta lists of new end of pruned gop
+      GOPEntry& gopEntry = prunedList.back();
+      std::vector<int> newDelta;
+      newDelta.reserve( std::max( gopEntry.m_numRefPics[ 0 ], gopEntry.m_numRefPics[ 1 ] ) );
+      const int sizeDiff = oldSize - gopSize;
+      for( int l = 0; l < 2; l++ )
+      {
+        newDelta.clear();
+        int numActive = 0;
+        for( int j = 0; j < gopEntry.m_numRefPics[ l ]; j++ )
+        {
+          CHECK( gopEntry.m_deltaRefPics[ l ][ j ] < oldSize, "tl0 references picture in own gop" );
+          if( gopEntry.m_deltaRefPics[ l ][ j ] == oldSize || ( ! bSkipPrev && gopEntry.m_deltaRefPics[ l ][ j ] >= oldSize ) )
+          {
+            newDelta.push_back( gopEntry.m_deltaRefPics[ l ][ j ] - sizeDiff );
+            if( j < gopEntry.m_numRefPicsActive[ l ] )
+              numActive += 1;
+          }
+        }
+        memset( gopEntry.m_deltaRefPics[ l ], 0, sizeof( gopEntry.m_deltaRefPics[ l ] ) );
+        gopEntry.m_numRefPics[ l ]       = (int)newDelta.size();
+        gopEntry.m_numRefPicsActive[ l ] = numActive;
+        for( int j = 0; j < (int)newDelta.size(); j++ )
+        {
+          gopEntry.m_deltaRefPics[ l ][ j ] = newDelta[ j ];
+        }
+      }
+      gopEntry.m_POC -= sizeDiff;
+    }
+    else if( gopList[ i ].m_POC < gopSize )
+    {
+      prunedList.push_back( gopList[ i ] );
+    }
+  }
+
+  gopList.clear();
+  gopList.resize( (int)prunedList.size() );
+  for( int i = 0; i < (int)prunedList.size(); i++ )
+  {
+    gopList[ i ] = prunedList[ i ];
+  }
+
+  CHECK( gopList.size() != gopSize, "pruned gop list incomplete" );
+}
+
+void GOPCfg::xGetRefsOfNextGop( const GOPEntryList& gopList, int pocOffset, std::vector<int>& pocList ) const
+{
+  const int minPoc = -1 * ( pocOffset + (int)gopList.size() );
+  for( int i = 0; i < (int)gopList.size(); i++ )
+  {
+    const GOPEntry& gopEntry = gopList[ i ];
+    for( int l = 0; l < 2; l++ )
+    {
+      for( int j = 0; j < gopEntry.m_numRefPics[ l ]; j++ )
+      {
+        const int refPoc = gopEntry.m_POC - gopEntry.m_deltaRefPics[ l ][ j ];
+        if( refPoc >= minPoc && refPoc < 0 )
+        {
+          auto itr = find( pocList.begin(), pocList.end(), refPoc );
+          if( itr == pocList.end() )
+            pocList.push_back( refPoc );
+        }
+      }
+    }
+  }
+  std::sort( pocList.begin(), pocList.end() );
 }
 
 void GOPCfg::xSetMctfIndex( int maxGopSize, GOPEntryList& gopList ) const
@@ -924,74 +961,47 @@ bool GOPCfg::xCheckDBPConstraints( const GOPEntryList& gopList ) const
   return true;
 }
 
-void GOPCfg::xAddDyadicGopEntry( int start, int end, int tid, GOPEntryList& gopList ) const
+void GOPCfg::xAddRefPicsBckwd( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList ) const
 {
-  if( end - start <= 1 )
-    return;
-
-  const int mid = start + ( ( end - start + 1 ) / 2 );
-
-  GOPEntry e1;
-  e1.setDefaultGOPEntry();
-  e1.m_POC        = mid;
-  e1.m_temporalId = tid;
-  gopList.push_back( e1 );
-
-  xAddDyadicGopEntry( start, mid, tid + 1, gopList );
-  xAddDyadicGopEntry( mid, end, tid + 1, gopList );
-}
-
-void GOPCfg::xAddRefPicsBckwd( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList, int maxNumRefs, bool skip24 ) const
-{
-  int refTid = gopEntry->m_temporalId;
   for( int i = ( gopEntry->m_POC - 1 ); i >= 0; i-- )
   {
     const GOPEntry* refEntry = availList[ i ];
     if( refEntry )
     {
-      if( skip24 && refEntry->m_POC == 24 && gopEntry->m_POC > 28 )
-        continue;
-      if( refEntry->m_temporalId < refTid || refEntry->m_temporalId == 0 )
+      if( refEntry->m_temporalId <= gopEntry->m_temporalId )
       {
         deltaList.push_back( gopEntry->m_POC - refEntry->m_POC );
-        refTid = refEntry->m_temporalId;
+        CHECK( deltaList.back() <= 0, "error in backward list: try to access future ref" );
       }
     }
-    if( (int)deltaList.size() >= maxNumRefs )
-      break;
   }
 }
 
-void GOPCfg::xAddRefPicsFwd( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList, int maxNumRefs ) const
+void GOPCfg::xAddRefPicsFwd( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList ) const
 {
-  int refTid = gopEntry->m_temporalId;
   for( int i = ( gopEntry->m_POC + 1 ); i < (int)availList.size(); i++ )
   {
     const GOPEntry* refEntry = availList[ i ];
     if( refEntry )
     {
-      if( refEntry->m_temporalId < refTid || refEntry->m_temporalId == 0 )
+      if( refEntry->m_temporalId <= gopEntry->m_temporalId )
       {
         deltaList.push_back( gopEntry->m_POC - refEntry->m_POC );
-        refTid = refEntry->m_temporalId;
+        CHECK( deltaList.back() >= 0, "error in forward list: try to access past ref" );
       }
     }
-    if( (int)deltaList.size() >= maxNumRefs )
-      break;
   }
 }
 
-void GOPCfg::xAddRefPicsPrevGOP( std::vector<int>& deltaList, const GOPEntry* gopEntry, const int maxNumRefs, const int prevGopTL01[ 2 ] ) const
+void GOPCfg::xAddRefPicsPrevGOP( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector< std::pair<int, int> >& prevGopRefs ) const
 {
-  // use prev TID 1 pic, if possible
-  if( prevGopTL01[ 1 ] && gopEntry->m_temporalId > 0 )
+  for( int i = 0; i < (int)prevGopRefs.size(); i++ )
   {
-    deltaList.push_back( gopEntry->m_POC - prevGopTL01[ 1 ] );
-  }
-  // if still necessary, use also prev TID 0 pic
-  if( prevGopTL01[ 0 ] && (int)deltaList.size() < maxNumRefs  )
-  {
-    deltaList.push_back( gopEntry->m_POC - prevGopTL01[ 0 ] );
+    if( prevGopRefs[ i ].second <= gopEntry->m_temporalId )
+    {
+      deltaList.push_back( gopEntry->m_POC - prevGopRefs[ i ].first );
+      CHECK( deltaList.back() <= 0, "error in backward list: try to access future ref" );
+    }
   }
 }
 

@@ -1172,8 +1172,8 @@ void EncGOP::xInitPPS(PPS &pps, const SPS &sps) const
     pps.usePPSChromaTool = chromaQPOffsetNotZero || chromaDbfOffsetNotAsLuma;
   }
 
-  pps.numRefIdxL0DefaultActive = m_gopCfg->getDefaultNumActive( 0 );
-  pps.numRefIdxL1DefaultActive = m_gopCfg->getDefaultNumActive( 1 );
+  pps.numRefIdxL0DefaultActive = std::max( m_gopCfg->getDefaultNumActive( 0 ), 1 );
+  pps.numRefIdxL1DefaultActive = std::max( m_gopCfg->getDefaultNumActive( 1 ), 1 );
   CHECK( pps.numRefIdxL0DefaultActive > 15, "num default ref index active exceeds maximum value");
   CHECK( pps.numRefIdxL1DefaultActive > 15, "num default ref index active exceeds maximum value");
 

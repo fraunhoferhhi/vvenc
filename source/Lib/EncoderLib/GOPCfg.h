@@ -60,13 +60,6 @@ class GOPCfg
 {
   typedef std::vector<GOPEntry> GOPEntryList;
 
-  typedef enum
-  {
-    GM_AI,
-    GM_LD,
-    GM_RA
-  } GOPMode;
-
   private:
     MsgLog&                      msg;
 
@@ -82,12 +75,10 @@ class GOPCfg
 
     const vvencMCTF*             m_mctfCfg;
 
-    GOPMode m_gopMode;
     int m_refreshType;
-    int m_fixedIntraPeriod;
+    int m_fixIntraPeriod;
     int m_maxGopSize;
     int m_defGopSize;
-    int m_maxNumRefs;
     int m_nextListIdx;
     int m_gopNum;
     int m_nextPoc;
@@ -100,23 +91,21 @@ class GOPCfg
 
   public:
     GOPCfg( MsgLog& _m )
-      : msg               ( _m )
-      , m_gopList         ( nullptr )
-      , m_mctfCfg         ( nullptr )
-      , m_gopMode         ( GM_RA )
-      , m_refreshType     ( 0 )
-      , m_fixedIntraPeriod( 0 )
-      , m_maxGopSize      ( 0 )
-      , m_defGopSize      ( 0 )
-      , m_maxNumRefs      ( 0 )
-      , m_nextListIdx     ( 0 )
-      , m_gopNum          ( 0 )
-      , m_nextPoc         ( 0 )
-      , m_pocOffset       ( 0 )
-      , m_cnOffset        ( 0 )
-      , m_numTillGop      ( 0 )
-      , m_numTillIntra    ( 0 )
-      , m_maxTid          ( 0 )
+      : msg             ( _m )
+      , m_gopList       ( nullptr )
+      , m_mctfCfg       ( nullptr )
+      , m_refreshType   ( 0 )
+      , m_fixIntraPeriod( 0 )
+      , m_maxGopSize    ( 0 )
+      , m_defGopSize    ( 0 )
+      , m_nextListIdx   ( 0 )
+      , m_gopNum        ( 0 )
+      , m_nextPoc       ( 0 )
+      , m_pocOffset     ( 0 )
+      , m_cnOffset      ( 0 )
+      , m_numTillGop    ( 0 )
+      , m_numTillIntra  ( 0 )
+      , m_maxTid        ( 0 )
     {
     };
 
@@ -138,10 +127,11 @@ class GOPCfg
     bool isChromaDeltaQPEnabled() const;
 
   private:
-    void xCreateGopList      ( GOPMode gopMode, int maxNumRefs, int maxGopSize, int gopSize, const std::vector<GOPEntryList*>& prevGopLists, GOPEntryList& gopList ) const;
-    void xCreateGopListRA    ( int maxNumRefs, int maxGopSize, int gopSize, const std::vector<GOPEntryList*>& prevGopLists, GOPEntryList& gopList ) const;
-    void xCreateGopListLD    ( int maxNumRefs, int maxGopSize, int gopSize, const std::vector<GOPEntryList*>& prevGopLists, GOPEntryList& gopList ) const;
-    void xCreateGopListAI    ( GOPEntryList& gopList ) const;
+    int  xGetMinPoc          ( int maxGopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ] ) const;
+    void xCreateGopList      ( int maxGopSize, int gopSize, int pocOffset, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const GOPEntryList* prevGopList, GOPEntryList& gopList ) const;
+    void xGetPrevGopRefs     ( const GOPEntryList* prevGopList, std::vector< std::pair<int, int> >& prevGopRefs ) const;
+    void xPruneGopList       ( int gopSize, bool bSkipPrev, GOPEntryList& gopList ) const;
+    void xGetRefsOfNextGop   ( const GOPEntryList& gopList, int pocOffset, std::vector<int>& pocList ) const;
     void xSetMctfIndex       ( int maxGopSize, GOPEntryList& gopList ) const;
     void xCreatePocToGopIdx  ( const GOPEntryList& gopList, bool bShift, std::vector<int>& pocToGopIdx ) const;
     void xSetSTSA            ( GOPEntryList& gopList, const std::vector<int>& pocToGopIdx ) const;
@@ -149,10 +139,9 @@ class GOPCfg
     void xSetDefaultRPL      ( std::vector<GOPEntryList>& defaultLists );
     void xSetDBPConstraints  ( std::vector<GOPEntryList>& defaultLists );
     bool xCheckDBPConstraints( const GOPEntryList& gopList ) const;
-    void xAddDyadicGopEntry  ( int start, int end, int tid, GOPEntryList& gopList ) const;
-    void xAddRefPicsBckwd    ( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList, int maxNumRefs, bool skip24 ) const;
-    void xAddRefPicsFwd      ( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList, int maxNumRefs ) const;
-    void xAddRefPicsPrevGOP  ( std::vector<int>& deltaList, const GOPEntry* gopEntry, const int maxNumRefs, const int prevGopTL01[ 2 ] ) const;
+    void xAddRefPicsBckwd    ( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList ) const;
+    void xAddRefPicsFwd      ( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector<GOPEntry*>& availList ) const;
+    void xAddRefPicsPrevGOP  ( std::vector<int>& deltaList, const GOPEntry* gopEntry, const std::vector< std::pair<int, int> >& prevGopRefs ) const;
     int  xGetMaxTid          ( const GOPEntryList& gopList ) const;
     int  xGetMaxRefPics      ( const GOPEntry& gopEntry ) const;
     int  xGetMaxNumReorder   ( const GOPEntry& gopEntry, const GOPEntryList& gopList ) const;

@@ -929,6 +929,11 @@ typedef struct GOPEntry : vvencGOPEntry
     m_isStartOfGop     = false;
     m_isStartOfIntra   = false;
   }
+
+  void copyFromGopCfg( const vvencGOPEntry& cfgEntry )
+  {
+    this->vvencGOPEntry::operator=( cfgEntry );
+  }
 } GOPEntry;
 
 
