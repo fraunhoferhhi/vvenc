@@ -130,8 +130,8 @@ class GOPCfg
     int  xGetMinPoc          ( int maxGopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ] ) const;
     void xCreateGopList      ( int maxGopSize, int gopSize, int pocOffset, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], const GOPEntryList* prevGopList, GOPEntryList& gopList ) const;
     void xGetPrevGopRefs     ( const GOPEntryList* prevGopList, std::vector< std::pair<int, int> >& prevGopRefs ) const;
-    void xPruneGopList       ( int gopSize, bool bSkipPrev, GOPEntryList& gopList ) const;
-    void xGetRefsOfNextGop   ( const GOPEntryList& gopList, int pocOffset, std::vector<int>& pocList ) const;
+    void xPruneGopList       ( int gopSize, GOPEntryList& gopList ) const;
+    void xGetRefsOfNextGop   ( int gopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], int pocOffset, std::vector<int>& pocList ) const;
     void xSetMctfIndex       ( int maxGopSize, GOPEntryList& gopList ) const;
     void xCreatePocToGopIdx  ( const GOPEntryList& gopList, bool bShift, std::vector<int>& pocToGopIdx ) const;
     void xSetSTSA            ( GOPEntryList& gopList, const std::vector<int>& pocToGopIdx ) const;

@@ -314,31 +314,22 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   // copy given gop configuration
   //
 
-  // store given configuration in master list
-  GOPEntryList masterList;
-  masterList.resize( maxGopSize );
+  gopList.clear();
+  gopList.resize( maxGopSize );
   for( int i = 0; i < maxGopSize; i++ )
   {
-    masterList[ i ].setDefaultGOPEntry();
-    masterList[ i ].copyFromGopCfg( cfgGopList[ i ] );
+    gopList[ i ].setDefaultGOPEntry();
+    gopList[ i ].copyFromGopCfg( cfgGopList[ i ] );
   }
 
   // find max temporal id
-  const int maxTid = xGetMaxTid( masterList );
+  const int maxTid = xGetMaxTid( gopList );
 
   // prune gop list
   CHECK( gopSize > maxGopSize, "only pruning of gop list supported" );
   if( gopSize < maxGopSize )
   {
-    xPruneGopList( gopSize, bSkipPrev, masterList );
-  }
-
-  // copy master to current gop list
-  gopList.clear();
-  gopList.resize( (int)masterList.size() );
-  for( int i = 0; i < (int)masterList.size(); i++ )
-  {
-    gopList[ i ] = masterList[ i ];
+    xPruneGopList( gopSize, gopList );
   }
 
   // 
@@ -475,8 +466,8 @@ void GOPCfg::xCreateGopList( int maxGopSize, int gopSize, int pocOffset, const v
   if( ! bIsLast )
   {
     std::vector<int> pocList;
-    pocList.reserve( (int)masterList.size() );
-    xGetRefsOfNextGop( masterList, pocOffset, pocList );
+    pocList.reserve( gopSize );
+    xGetRefsOfNextGop( gopSize, cfgGopList, pocOffset, pocList );
     e2.m_numRefPics[ 0 ] = (int)pocList.size();
     for( int i = 0; i < (int)pocList.size(); i++ )
     {
@@ -623,7 +614,7 @@ void GOPCfg::xGetPrevGopRefs( const GOPEntryList* prevGopList, std::vector< std:
   std::sort( prevGopRefs.begin(), prevGopRefs.end(), []( auto& a, auto& b ){ return a.first > b.first; } );
 }
 
-void GOPCfg::xPruneGopList( int gopSize, bool bSkipPrev, GOPEntryList& gopList ) const
+void GOPCfg::xPruneGopList( int gopSize, GOPEntryList& gopList ) const
 {
   const int oldSize = (int)gopList.size();
   CHECK( oldSize <= gopSize, "gop list to short for prunning" );
@@ -638,29 +629,12 @@ void GOPCfg::xPruneGopList( int gopSize, bool bSkipPrev, GOPEntryList& gopList )
       prunedList.push_back( gopList[ i ] );
       // fix poc and delta lists of new end of pruned gop
       GOPEntry& gopEntry = prunedList.back();
-      std::vector<int> newDelta;
-      newDelta.reserve( std::max( gopEntry.m_numRefPics[ 0 ], gopEntry.m_numRefPics[ 1 ] ) );
       const int sizeDiff = oldSize - gopSize;
       for( int l = 0; l < 2; l++ )
       {
-        newDelta.clear();
-        int numActive = 0;
         for( int j = 0; j < gopEntry.m_numRefPics[ l ]; j++ )
         {
-          CHECK( gopEntry.m_deltaRefPics[ l ][ j ] < oldSize, "tl0 references picture in own gop" );
-          if( gopEntry.m_deltaRefPics[ l ][ j ] == oldSize || ( ! bSkipPrev && gopEntry.m_deltaRefPics[ l ][ j ] >= oldSize ) )
-          {
-            newDelta.push_back( gopEntry.m_deltaRefPics[ l ][ j ] - sizeDiff );
-            if( j < gopEntry.m_numRefPicsActive[ l ] )
-              numActive += 1;
-          }
-        }
-        memset( gopEntry.m_deltaRefPics[ l ], 0, sizeof( gopEntry.m_deltaRefPics[ l ] ) );
-        gopEntry.m_numRefPics[ l ]       = (int)newDelta.size();
-        gopEntry.m_numRefPicsActive[ l ] = numActive;
-        for( int j = 0; j < (int)newDelta.size(); j++ )
-        {
-          gopEntry.m_deltaRefPics[ l ][ j ] = newDelta[ j ];
+          gopEntry.m_deltaRefPics[ l ][ j ] = std::min( gopEntry.m_deltaRefPics[ l ][ j ] - sizeDiff, gopSize );
         }
       }
       gopEntry.m_POC -= sizeDiff;
@@ -681,17 +655,16 @@ void GOPCfg::xPruneGopList( int gopSize, bool bSkipPrev, GOPEntryList& gopList )
   CHECK( gopList.size() != gopSize, "pruned gop list incomplete" );
 }
 
-void GOPCfg::xGetRefsOfNextGop( const GOPEntryList& gopList, int pocOffset, std::vector<int>& pocList ) const
+void GOPCfg::xGetRefsOfNextGop( int gopSize, const vvencGOPEntry cfgGopList[ VVENC_MAX_GOP ], int pocOffset, std::vector<int>& pocList ) const
 {
-  const int minPoc = -1 * ( pocOffset + (int)gopList.size() );
-  for( int i = 0; i < (int)gopList.size(); i++ )
+  const int minPoc = -1 * ( pocOffset + gopSize );
+  for( int i = 0; i < gopSize; i++ )
   {
-    const GOPEntry& gopEntry = gopList[ i ];
     for( int l = 0; l < 2; l++ )
     {
-      for( int j = 0; j < gopEntry.m_numRefPics[ l ]; j++ )
+      for( int j = 0; j < cfgGopList[ i ].m_numRefPics[ l ]; j++ )
       {
-        const int refPoc = gopEntry.m_POC - gopEntry.m_deltaRefPics[ l ][ j ];
+        const int refPoc = cfgGopList[ i ].m_POC - cfgGopList[ i ].m_deltaRefPics[ l ][ j ];
         if( refPoc >= minPoc && refPoc < 0 )
         {
           auto itr = find( pocList.begin(), pocList.end(), refPoc );
