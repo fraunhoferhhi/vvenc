@@ -995,6 +995,7 @@ void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  or
     }
   }
 }
+
 template <X86_VEXT vext>
 void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int64_t  *count, int64_t *diff)
 {
@@ -1018,62 +1019,16 @@ void calcSaoStatisticsEo0_SIMD(int width,int startX,int endX,int endY,Pel*  srcL
       vconst[i]    = _mm_set1_epi16(i);
     }
     // create masks for first and last pixel row
+    const unsigned short mask[16]={0,0,0,0,0,0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
     __m128i vmaskgs = _mm_set1_epi16(0);
-    __m128i vmaskge = _mm_set1_epi16(0);
+    __m128i vmaskge= _mm_set1_epi16(0);
     if ( startX )
     {
-      switch (startX)
-      {
-      case 1:
-        vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
-        break;
-      case 2:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0,0,0xffff,0xffff);
-        break;
-      case 3:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0,0xffff,0xffff,0xffff);
-        break;
-      case 4:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 5:
-        vmaskgs = _mm_set_epi16(0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 6:
-        vmaskgs = _mm_set_epi16(0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 7:
-        vmaskgs = _mm_set_epi16(0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      }
+      vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
     }
     if ( iNaRight )
     {
-      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-      switch (iNaRight)
-      {
-      case 1:
-        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-        break;
-      case 2:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
-        break;
-      case 3:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
-        break;
-      case 4:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
-        break;
-      case 5:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
-        break;
-      case 6:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
-        break;
-      case 7:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
-        break;
-      }
+      vmaskge = _mm_loadu_si128((__m128i*)&mask[iNaRight]);
     }
     for ( int y = 0; y < endY; y++)
     {
@@ -1214,34 +1169,11 @@ void calcSaoStatisticsEo90_SIMD(int width,int endX,int startY,int endY,Pel*  src
       vconst[i]    = _mm_set1_epi16(i);
     }
     // create masks for first and last pixel row
-    __m128i vmaskge = _mm_set1_epi16(0);
+    const unsigned short mask[16]={0,0,0,0,0,0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
+    __m128i vmaskge= _mm_set1_epi16(0);
     if ( iNaRight )
     {
-      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-      switch (iNaRight)
-      {
-      case 1:
-        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-        break;
-      case 2:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
-        break;
-      case 3:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
-        break;
-      case 4:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
-        break;
-      case 5:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
-        break;
-      case 6:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
-        break;
-      case 7:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
-        break;
-      }
+      vmaskge = _mm_loadu_si128((__m128i*)&mask[iNaRight]);
     }
 
     __m128i vsigns[MAX_CU_SIZE/16 +1];  //+1 to avoid MSVC error
@@ -1390,7 +1322,6 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
   if ( width % 16 == 0 )
   {
     int iNaRight=width-endX;
-    int iNaWidth = startX + iNaRight;
     diff -=2;
     count-=2;
     __m128i vzero       = _mm_set1_epi8(0);
@@ -1407,62 +1338,16 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
       vconst[i]    = _mm_set1_epi16(i);
     }
     // create masks for first and last pixel row
+    const unsigned short mask[16]={0,0,0,0,0,0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
     __m128i vmaskgs = _mm_set1_epi16(0);
     __m128i vmaskge = _mm_set1_epi16(0);
     if ( startX )
     {
-      switch (startX)
-      {
-      case 1:
-        vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
-        break;
-      case 2:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0,0,0xffff,0xffff);
-        break;
-      case 3:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0,0xffff,0xffff,0xffff);
-        break;
-      case 4:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 5:
-        vmaskgs = _mm_set_epi16(0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 6:
-        vmaskgs = _mm_set_epi16(0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 7:
-        vmaskgs = _mm_set_epi16(0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      }
+      vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
     }
     if ( iNaRight )
     {
-      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-      switch (iNaRight)
-      {
-      case 1:
-        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-        break;
-      case 2:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
-        break;
-      case 3:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
-        break;
-      case 4:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
-        break;
-      case 5:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
-        break;
-      case 6:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
-        break;
-      case 7:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
-        break;
-      }
+      vmaskge = _mm_loadu_si128((__m128i*)&mask[iNaRight]);
     }
     /* filter all lines */
     for (int j = 1; j < endY; j++)
@@ -1560,7 +1445,6 @@ void calcSaoStatisticsEo135_SIMD(int width,int startX,int endX,int endY,Pel*  sr
   {
     int x,y,edgeType;
     int8_t signDown;
-    int8_t *signTmpLine;
     //middle lines
      for (y=1; y<endY; y++)
      {
@@ -1589,8 +1473,8 @@ void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  src
   Pel* srcLineBelow = srcLine + srcStride;
   if (width % 16 == 0 )
   {
+    //const unsigned short mask[16]={0,0,0,0,0,0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
     int iNaRight=width-endX;
-    int iNaWidth = startX + iNaRight;
     diff -=2;
     count-=2;
     __m128i vzero       = _mm_set1_epi8(0);
@@ -1607,62 +1491,16 @@ void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  src
       vconst[i]    = _mm_set1_epi16(i);
     }
     // create masks for first and last pixel row
+    const unsigned short mask[16]={0,0,0,0,0,0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff};
     __m128i vmaskgs = _mm_set1_epi16(0);
     __m128i vmaskge = _mm_set1_epi16(0);
     if ( startX )
     {
-      switch (startX)
-      {
-      case 1:
-        vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
-        break;
-      case 2:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0,0,0xffff,0xffff);
-        break;
-      case 3:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0,0xffff,0xffff,0xffff);
-        break;
-      case 4:
-        vmaskgs = _mm_set_epi16(0,0,0,0,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 5:
-        vmaskgs = _mm_set_epi16(0,0,0,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 6:
-        vmaskgs = _mm_set_epi16(0,0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      case 7:
-        vmaskgs = _mm_set_epi16(0,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff);
-        break;
-      }
+      vmaskgs = _mm_insert_epi16( vmaskgs, 0xffff, 0);
     }
     if ( iNaRight )
     {
-      vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-      switch (iNaRight)
-      {
-      case 1:
-        vmaskge = _mm_insert_epi16( vmaskge, 0xffff, 7);
-        break;
-      case 2:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0,0,0,0,0,0);
-        break;
-      case 3:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0,0,0,0,0);
-        break;
-      case 4:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0,0,0,0);
-        break;
-      case 5:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0,0,0);
-        break;
-      case 6:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0,0);
-        break;
-      case 7:
-        vmaskge = _mm_set_epi16(0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0);
-        break;
-      }
+      vmaskge = _mm_loadu_si128((__m128i*)&mask[iNaRight]);
     }
     /* filter all lines */
     for (int j = 1; j < endY; j++)
@@ -1677,13 +1515,11 @@ void calcSaoStatisticsEo45_SIMD(int width,int startX,int endX,int endY,Pel*  src
         __m128i vsrcad,vsrcbd;
         __m128i vsrcat,vsrcbt;
         __m128i vdiffa,vdiffb;
-
         // set mask for last pixel
         if ( x >= width - 16 )
         {
           vmaskgb = vmaskge;
         }
-
         if (sizeof(Pel) == 1)
         {
           __m128i vsrct = _mm_loadu_si128((__m128i*)&pRec[ x-srcStride+1 ]);
