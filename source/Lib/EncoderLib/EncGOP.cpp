@@ -2471,11 +2471,11 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
       std::string cInfo;
       if( m_pcRateCtrl->rcIsFinalPass ) // single pass RC
       {
-        cInfo = prnt("RC analyze poc %4d", slice->poc );
+        cInfo = prnt("RC analyze POC %5d", slice->poc );
       }
       else
       {
-        cInfo = prnt("RC pass %d/%d, analyze poc %4d",
+        cInfo = prnt("RC pass %d/%d, analyze POC %5d",
             m_pcRateCtrl->rcPass + 1,
             m_pcEncCfg->m_RCNumPasses,
             slice->poc );
@@ -2490,7 +2490,7 @@ void EncGOP::xAddPSNRStats( const Picture* pic, CPelUnitBuf cPicD, AccessUnitLis
       else
         sMctf << ")      ";
 
-      std::string cInfo = prnt("POC %4d TId: %1d (%10s, %c-SLICE, QP %d%s %10d bits",
+      std::string cInfo = prnt("POC %5d TId: %1d (%10s, %c-SLICE, QP %d%s %10d bits",
           slice->poc,
           slice->TLayer,
           nalUnitTypeToString( slice->nalUnitType ),
