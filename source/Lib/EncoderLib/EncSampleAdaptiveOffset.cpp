@@ -792,8 +792,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
                         , Pel* srcBlk, Pel* orgBlk, int srcStride, int orgStride, int width, int height
                         , bool isLeftAvail,  bool isRightAvail, bool isAboveAvail, bool isBelowAvail, bool isAboveLeftAvail, bool isAboveRightAvail )
 {
-  int x,y, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
-  int8_t signLeft, signRight, signDown;
+  int x, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
   int64_t *diff, *count;
   Pel* srcLine, *orgLine;
   const int skipLinesR = compIdx == COMP_Y ? 5 : 3;
@@ -836,7 +835,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
       {
         diff +=2;
         count+=2;
-        int8_t *signUpLine, *signDownLine, *signTmpLine;
+        int8_t *signUpLine, *signDownLine;
         signUpLine  = &m_signLineBuf1[0];
         signDownLine= &m_signLineBuf2[0];
         startX = isLeftAvail  ? 0 : 1;
