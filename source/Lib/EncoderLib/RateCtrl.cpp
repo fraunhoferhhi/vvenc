@@ -276,7 +276,7 @@ void EncRCPic::clipTargetQP (std::list<EncRCPic*>& listPreviousPictures, const i
 
   if (lastCurrTLQP >= 0) // limit QP changes among prev. frames from same temporal level
   {
-    const int clipRange = (refreshParams ? 5 + encRCSeq->intraPeriod / encRCSeq->gopSize : std::max (3, 6 - (frameLevel >> 1)));
+    const int clipRange = (refreshParams ? 5 + (encRCSeq->intraPeriod + (encRCSeq->gopSize >> 1)) / encRCSeq->gopSize : std::max (3, 6 - (frameLevel >> 1)));
 
     qp = Clip3 (lastCurrTLQP - clipRange, std::min (MAX_QP, lastCurrTLQP + clipRange), qp);
   }
@@ -739,7 +739,7 @@ void RateCtrl::detectSceneCuts()
         it->isNewScene = false;
       }
     }
-    if (it->isIntra && !needRefresh[0] && !it->isStartOfIntra) // extra I
+    if (it->isIntra && !needRefresh[0] && !it->isStartOfIntra) // assume scene cuts at inserted I-frames
     {
       it->isNewScene = needRefresh[0] = true;
     }
@@ -755,30 +755,31 @@ void RateCtrl::detectSceneCuts()
 void RateCtrl::processGops()
 {
   const unsigned fps = encRCSeq->frameRate;
-  const int gopShift = m_pcEncCfg->m_log2GopSize;
-  const int itOffset = m_listRCFirstPassStats.begin()->poc + 1 - (m_pcEncCfg->m_DecodingRefreshType == VVENC_DRT_IDR2 ? 1 : 0); // NOTE: in two-pass RC, this value is 1
   const int qpOffset = Clip3 (0, 6, ((m_pcEncCfg->m_QP + 1) >> 1) - 9);
   const double bp1pf = getAverageBitsFromFirstPass();  // first-pass bits/frame
   const double ratio = (double) encRCSeq->targetRate / (fps * bp1pf);  // ratio of second and first pass
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
+  int vecIdx;
   std::list<TRCPassStats>::iterator it;
-  std::vector<uint32_t> gopBits (2 + (m_listRCFirstPassStats.size() - 1) / encRCSeq->gopSize); // +2 for the first I frame (GOP) and a potential last incomplete GOP
-  std::vector<uint32_t> tgtBits (2 + (m_listRCFirstPassStats.size() - 1) / encRCSeq->gopSize);
+  std::vector<uint32_t> gopBits (2 + (m_listRCFirstPassStats.end()->gopNum - m_listRCFirstPassStats.begin()->gopNum)); // +2 for the first I frame (GOP) and a potential last incomplete GOP
+  std::vector<float>    tgtBits (2 + (m_listRCFirstPassStats.end()->gopNum - m_listRCFirstPassStats.begin()->gopNum));
 
+  vecIdx = 0;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 1
   {
-    const int vecIdx = 1 + ((it->poc - itOffset) >> gopShift);
-
     it->targetBits = std::max (0, int (0.5 + it->numBits * (it->tempLayer + qpOffset < 6 ? rp[it->tempLayer + qpOffset] : ratio)));
     gopBits[vecIdx] += (uint32_t) it->targetBits; // similar to g in VCIP paper
-    tgtBits[vecIdx] += (uint32_t) (0.5 + it->numBits * ratio);
+    tgtBits[vecIdx] += (float) (it->numBits * ratio);
+    if (it->isStartOfGop)
+      vecIdx++;
   }
+  vecIdx = 0;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 2
   {
-    const int vecIdx = 1 + ((it->poc - itOffset) >> gopShift);
-
     it->frameInGopRatio = (double) it->targetBits / gopBits[vecIdx];
     it->targetBits = std::max (1, int (0.5 + it->frameInGopRatio * tgtBits[vecIdx]));
+    if (it->isStartOfGop)
+      vecIdx++;
   }
 }
 
