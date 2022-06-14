@@ -104,12 +104,12 @@ Slice::Slice()
   , cabacInitFlag                       ( false )
   , sliceSubPicId                       ( 0 )
   , encCABACTableIdx                    ( VVENC_I_SLICE )
-  , tileGroupNumAps                     ( 0 )
-  , tileGroupChromaApsId                ( -1 )
-  , tileGroupCcAlfCbEnabled             ( false )
-  , tileGroupCcAlfCrEnabled             ( false )
-  , tileGroupCcAlfCbApsId               ( -1 )
-  , tileGroupCcAlfCrApsId               ( -1 )
+  , numAps                     ( 0 )
+  , chromaApsId                ( -1 )
+  , ccAlfCbEnabled             ( false )
+  , ccAlfCrEnabled             ( false )
+  , ccAlfCbApsId               ( -1 )
+  , ccAlfCrApsId               ( -1 )
   , disableSATDForRd                    ( 0 )
   , isLossless                          ( false )
 {
@@ -117,7 +117,7 @@ Slice::Slice()
   ::memset( numRefIdx,               0, sizeof( numRefIdx ) );
   ::memset( sliceChromaQpDelta,      0, sizeof( sliceChromaQpDelta ) );
   ::memset( lambdas,                 0, sizeof( lambdas ) );
-  ::memset( tileGroupAlfEnabled,     0, sizeof( tileGroupAlfEnabled ) );
+  ::memset( alfEnabled,     0, sizeof( alfEnabled ) );
   ::memset( alfAps,                  0, sizeof( alfAps ) );
   ::memset( refPicList,              0, sizeof( refPicList ) );
   ::memset( refPOCList,              0, sizeof( refPOCList ) );
@@ -158,11 +158,11 @@ void Slice::resetSlicePart()
   ::memset( numRefIdx,           0, sizeof( numRefIdx ) );
   ::memset( sliceChromaQpDelta,  0, sizeof( sliceChromaQpDelta ) );
   ::memset( lambdas,             0, sizeof( lambdas ) );
-  ::memset( tileGroupAlfEnabled, 0, sizeof( tileGroupAlfEnabled ) );
+  ::memset( alfEnabled, 0, sizeof( alfEnabled ) );
 
   ccAlfFilterParam.reset();
-  tileGroupCcAlfCbEnabled = false;
-  tileGroupCcAlfCrEnabled = false;
+  ccAlfCbEnabled = false;
+  ccAlfCrEnabled = false;
 
   sliceMap = SliceMap();
 }
@@ -695,10 +695,10 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
 
   cabacInitFlag                 = slice->cabacInitFlag;
   memcpy( alfAps, slice->alfAps, sizeof(alfAps)); // this might be quite unsafe
-  memcpy( tileGroupAlfEnabled, slice->tileGroupAlfEnabled, sizeof(tileGroupAlfEnabled));
-  tileGroupNumAps               = slice->tileGroupNumAps;
-  tileGroupLumaApsId            = slice->tileGroupLumaApsId;
-  tileGroupChromaApsId          = slice->tileGroupChromaApsId;
+  memcpy( alfEnabled, slice->alfEnabled, sizeof(alfEnabled));
+  numAps               = slice->numAps;
+  lumaApsId            = slice->lumaApsId;
+  chromaApsId          = slice->chromaApsId;
   disableSATDForRd              = slice->disableSATDForRd;
   isLossless                    = slice->isLossless;
 
@@ -707,10 +707,10 @@ void Slice::copySliceInfo( const Slice* slice, bool cpyAlmostAll)
   ccAlfFilterParam              = slice->ccAlfFilterParam;
   ccAlfFilterControl[0]         = slice->ccAlfFilterControl[0];
   ccAlfFilterControl[1]         = slice->ccAlfFilterControl[1];
-  tileGroupCcAlfCbEnabled       = slice->tileGroupCcAlfCbEnabled;
-  tileGroupCcAlfCrEnabled       = slice->tileGroupCcAlfCrEnabled;
-  tileGroupCcAlfCbApsId         = slice->tileGroupCcAlfCbApsId;
-  tileGroupCcAlfCrApsId         = slice->tileGroupCcAlfCrApsId;
+  ccAlfCbEnabled       = slice->ccAlfCbEnabled;
+  ccAlfCrEnabled       = slice->ccAlfCrEnabled;
+  ccAlfCbApsId         = slice->ccAlfCbApsId;
+  ccAlfCrApsId         = slice->ccAlfCrApsId;
 
   if( cpyAlmostAll ) encCABACTableIdx  = slice->encCABACTableIdx;
 }
@@ -1320,10 +1320,10 @@ bool Slice::isPocRestrictedByDRAP( int poc, bool precedingDRAPInDecodingOrder ) 
 
 void Slice::setAlfApsIds( const std::vector<int>& ApsIDs)
 {
-  tileGroupLumaApsId.resize(tileGroupNumAps);
-  for (int i = 0; i < tileGroupNumAps; i++)
+  lumaApsId.resize(numAps);
+  for (int i = 0; i < numAps; i++)
   {
-    tileGroupLumaApsId[i] = ApsIDs[i];
+    lumaApsId[i] = ApsIDs[i];
   }
 }
 

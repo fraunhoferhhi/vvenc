@@ -415,7 +415,7 @@ void EncGOP::waitForFreeEncoders()
 {
   {
     std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    bool rcPicOnTheFly = (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames; 
+    bool rcPicOnTheFly = m_freePicEncoderList.empty() || (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames; 
     if( rcPicOnTheFly )
     {
       CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
@@ -437,7 +437,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   // output reconstructed YUV
   xOutputRecYuv( picList );
 
-  // release pictures not needed andmore
+  // release pictures not needed anymore
   const bool allDone = flush && m_numPicsCoded >= m_picCount;
   xReleasePictures( picList, freeList, allDone );
 
@@ -2074,7 +2074,7 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
   }
 
   // send ALF APS
-  if ( sps.alfEnabled && (slice->tileGroupAlfEnabled[COMP_Y] || slice->tileGroupCcAlfCbEnabled || slice->tileGroupCcAlfCrEnabled ))
+  if ( sps.alfEnabled && (slice->alfEnabled[COMP_Y] || slice->ccAlfCbEnabled || slice->ccAlfCrEnabled ))
   {
     for ( int apsId = 0; apsId < ALF_CTB_MAX_NUM_APS; apsId++ )
     {
@@ -2088,15 +2088,15 @@ int EncGOP::xWriteParameterSets( Picture& pic, AccessUnitList& accessUnit, HLSWr
         *aps  = *slice->alfAps[ apsId ]; // copy aps from slice header
         writeAps = true;
       }
-      else if (slice->tileGroupCcAlfCbEnabled && !aps && apsId == slice->tileGroupCcAlfCbApsId)
+      else if (slice->ccAlfCbEnabled && !aps && apsId == slice->ccAlfCbApsId)
       {
         writeAps = true;
-        aps = apsMap.getPS((slice->tileGroupCcAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
+        aps = apsMap.getPS((slice->ccAlfCbApsId << NUM_APS_TYPE_LEN) + ALF_APS);
       }
-      else if (slice->tileGroupCcAlfCrEnabled && !aps && apsId == slice->tileGroupCcAlfCrApsId)
+      else if (slice->ccAlfCrEnabled && !aps && apsId == slice->ccAlfCrApsId)
       {
         writeAps = true;
-        aps = apsMap.getPS((slice->tileGroupCcAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
+        aps = apsMap.getPS((slice->ccAlfCrApsId << NUM_APS_TYPE_LEN) + ALF_APS);
       }
 
       if ( writeAps )

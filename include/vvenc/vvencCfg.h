@@ -404,9 +404,8 @@ typedef struct vvencMCTF
   int                 MCTF;
   int                 MCTFSpeed;
   bool                MCTFFutureReference;
-  // TODO (jb): remove unused memory from configuration
-  int                 mctfUnused1;
-  int                 mctfUnused2;
+  int                 mctfUnused1;                                                       // TODO: remove unused memory from configuration
+  int                 mctfUnused2;                                                       // TODO: remove unused memory from configuration
 
   int                 numFrames;
   int                 MCTFFrames[VVENC_MAX_MCTF_FRAMES];
@@ -449,8 +448,7 @@ typedef struct vvenc_config
 
   int                 m_RCNumPasses;                                                     // number of rc passes (default: -1, if not set and bitrate > 0 2-pass rc will be used)
   int                 m_RCPass;                                                          // current pass (0,1) for rc (only needed for 2-pass rc) 
-  // TODO (jb): remove unused memory from configuration
-  bool                m_cfgUnused1;
+  bool                m_cfgUnused1;                                                      // TODO: remove unused memory from configuration
 
   int                 m_internalBitDepth[ 2 ];                                           // bit-depth codec operates at (input/output files will be converted) (2d array for luma,chroma)
 
@@ -491,18 +489,16 @@ typedef struct vvenc_config
   bool                m_rewriteParamSets;                                                // Flag to enable rewriting of parameter sets at random access points
   bool                m_idrRefParamList;                                                 // indicates if reference picture list syntax elements are present in slice headers of IDR pictures
 
-  // TODO (jb): remove unused memory from configuration
-  vvencRPLEntry       m_cfgUnused2[ 64 ];
-  vvencRPLEntry       m_cfgUnused3[ 64 ];
+  vvencRPLEntry       m_cfgUnused2[ 64 ];                                                // TODO: remove unused memory from configuration
+  vvencRPLEntry       m_cfgUnused3[ 64 ];                                                // TODO: remove unused memory from configuration
 
   vvencGOPEntry       m_GOPList[ VVENC_MAX_GOP ];                                        // the coding structure entries from the config file
 
-  // TODO (jb): remove unused memory from configuration
-  int                 m_cfgUnused4[ 7 ];
-  int                 m_cfgUnused5[ 7 ];
-  int                 m_cfgUnused6;
-  int                 m_cfgUnused7;
-  int                 m_cfgUnused8;
+  int                 m_cfgUnused4[ 7 ];                                                 // TODO: remove unused memory from configuration
+  int                 m_cfgUnused5[ 7 ];                                                 // TODO: remove unused memory from configuration
+  int                 m_cfgUnused6;                                                      // TODO: remove unused memory from configuration
+  int                 m_cfgUnused7;                                                      // TODO: remove unused memory from configuration
+  int                 m_cfgUnused8;                                                      // TODO: remove unused memory from configuration
 
   bool                m_useSameChromaQPTables;
   vvencChromaQpMappingTableParams m_chromaQpMappingTableParams;
@@ -579,7 +575,7 @@ typedef struct vvenc_config
   bool                m_useFastDecisionForMerge;                                         // flag for using Fast Decision Merge RD-Cost
 
   bool                m_bDisableIntraCUsInInterSlices;                                   // Flag for disabling intra predicted CUs in inter slices.
-  bool                m_bUseConstrainedIntraPred;                                        // flag for using constrained intra prediction
+  bool                m_cfgUnused9;                                                      // TODO: remove unused memory from configuration
   bool                m_bFastUDIUseMPMEnabled;
   bool                m_bFastMEForGenBLowDelayEnabled;
 
@@ -662,7 +658,7 @@ typedef struct vvenc_config
   bool                m_loopFilterOffsetInPPS;                                           // offset for deblocking filter in 0 = slice header, 1 = PPS
   int                 m_loopFilterBetaOffsetDiv2[3];                                     // beta offset for deblocking filter
   int                 m_loopFilterTcOffsetDiv2[3];                                       // tc offset for deblocking filter
-  int                 m_deblockingFilterMetric;
+  int                 m_cfgUnused10;                                                     // TODO: remove unused memory from configuration
 
   bool                m_bDisableLFCrossTileBoundaryFlag;                                 // 0: filter across tile boundaries 1: do not filter across tile boundaries
   bool                m_bDisableLFCrossSliceBoundaryFlag;                                // 0: filter across slice boundaries 1: do not filter across slice boundaries
@@ -690,7 +686,7 @@ typedef struct vvenc_config
   int                 m_chromaSampleLocType;                                             // Specifies the location of chroma samples for progressive content
   bool                m_overscanInfoPresent;                                             // Signals whether overscan_appropriate_flag is present
   bool                m_overscanAppropriateFlag;                                         // Indicates whether conformant decoded pictures are suitable for display using overscan
-  bool                m_videoSignalTypePresent;                                          // Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
+  bool                m_cfgUnused11;                                                     // TODO: remove unused memory from configuration
   bool                m_videoFullRangeFlag;                                              // Indicates the black level and range of luma and chroma signals
 
   unsigned int        m_masteringDisplay[10];                                            // mastering display colour volume, vector of size 10, format: G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min), 0 <= GBR,WP <= 50000, 0 <= L <= uint (SEI)

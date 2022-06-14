@@ -722,7 +722,6 @@ void GOPCfg::xCreatePocToGopIdx( const GOPEntryList& gopList, bool bShift, std::
   }
 }
 
-// TODO (jb): check over all temporal level over all GOPs
 void GOPCfg::xSetSTSA( GOPEntryList& gopList, const std::vector<int>& pocToGopIdx ) const
 {
   // check STSA condition satisfied for each GOPEntry

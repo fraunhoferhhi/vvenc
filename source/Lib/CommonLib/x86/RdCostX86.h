@@ -369,6 +369,7 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
 #ifdef USE_AVX2
     if( vext >= AVX2 && iWidth >= 16 )
     {
+      static constexpr bool earlyExitAllowed = iWidth >= 64;
       // Do for width that multiple of 16
       __m256i vone   = _mm256_set1_epi16( 1 );
       __m256i vsum32 = _mm256_setzero_si256();
@@ -387,15 +388,26 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
         }
 
         __m256i vsumtemp = _mm256_madd_epi16( vsum16, vone );
-        vsum32 = _mm256_add_epi32( vsum32, vsumtemp );
+        if( earlyExitAllowed ) vsum32 = _mm256_hadd_epi32( vsum32, vsumtemp );
+        else                   vsum32 = _mm256_add_epi32 ( vsum32, vsumtemp );
 
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
+
+        if( earlyExitAllowed && ( iY & 1 ) )
+        {
+          Distortion distTemp = _mm256_extract_epi32( vsum32, 0 ) + _mm256_extract_epi32( vsum32, 4 );
+          distTemp <<= iSubShift;
+          distTemp >>= DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+          if( distTemp > rcDtParam.maximumDistortionForEarlyExit ) return distTemp;
+        }
       }
 
-      vsum32 = _mm256_hadd_epi32( vsum32, vone );
-      vsum32 = _mm256_hadd_epi32( vsum32, vone );
-      uiSum =  _mm_cvtsi128_si32( _mm256_castsi256_si128( vsum32 ) ) + _mm_cvtsi128_si32( _mm256_extracti128_si256( vsum32, 1 ) );
+      __m128i
+      xsum32 = _mm_add_epi32( _mm256_castsi256_si128( vsum32 ), _mm256_extracti128_si256( vsum32, 1 ) );
+      xsum32 = _mm_hadd_epi32( xsum32, xsum32 );
+      xsum32 = _mm_hadd_epi32( xsum32, xsum32 );
+      uiSum  = _mm_cvtsi128_si32( xsum32 );
     }
     else
 #endif
@@ -484,6 +496,8 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
     }
     else
     {
+      static constexpr bool earlyExitAllowed = iWidth >= 64;
+
       // For width that multiple of 8
       __m128i vone   = _mm_set1_epi16( 1 );
       __m128i vsum32 = _mm_setzero_si128();
@@ -513,10 +527,19 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
         }
 
         __m128i vsumtemp = _mm_madd_epi16( vsum16, vone );
-        vsum32 = _mm_add_epi32( vsum32, vsumtemp );
+        if( earlyExitAllowed ) vsum32 = _mm_hadd_epi32( vsum32, vsumtemp );
+        else                   vsum32 = _mm_add_epi32 ( vsum32, vsumtemp );
 
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
+
+        if( earlyExitAllowed && ( iY & 1 ) )
+        {
+          Distortion distTemp = _mm_cvtsi128_si32( vsum32 );
+          distTemp <<= iSubShift;
+          distTemp >>= DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
+          if( distTemp > rcDtParam.maximumDistortionForEarlyExit ) return distTemp;
+        }
       }
       vsum32 = _mm_hadd_epi32( vsum32, vone );
       vsum32 = _mm_hadd_epi32( vsum32, vone );
