@@ -79,7 +79,7 @@ TProfiler* timeProfilerCreate( const vvenc_config& encCfg )
 #if ENABLE_TIME_PROFILING_PIC_TYPES
   tp = new TProfiler( 3, 1, 1, profilerId );
 #elif ENABLE_TIME_PROFILING_TL
-  tp = new TProfiler( Log2( encCfg.m_GOPSize ) + 2, 1, 1, profilerId );
+  tp = new TProfiler( encCfg.m_log2GopSize + 2, 1, 1, profilerId );
 #elif ENABLE_TIME_PROFILING_CTUS_IN_PIC
   int   widthInCTU  = ( encCfg.m_PadSourceWidth % encCfg.m_CTUSize )  ? encCfg.m_PadSourceWidth/encCfg.m_CTUSize  + 1 : encCfg.m_PadSourceWidth/encCfg.m_CTUSize;
   int   heightInCTU = ( encCfg.m_PadSourceHeight % encCfg.m_CTUSize ) ? encCfg.m_PadSourceHeight/encCfg.m_CTUSize + 1 : encCfg.m_PadSourceHeight/encCfg.m_CTUSize;

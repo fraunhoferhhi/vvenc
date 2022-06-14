@@ -576,7 +576,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   const bool qtBeforeBt = ( (  cuLeft  &&  cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth && cuAbove->qtDepth > partitioner.currQtDepth )
                          || (  cuLeft  && !cuAbove  && cuLeft ->qtDepth > partitioner.currQtDepth )
                          || ( !cuLeft  &&  cuAbove  && cuAbove->qtDepth > partitioner.currQtDepth )
-                         || ( !cuAbove && !cuLeft   && cs.area.lwidth() >= ( 32 << cs.slice->depth ) )
+                         || ( !cuAbove && !cuLeft   && cs.area.lwidth() >= ( 32 << cs.slice->TLayer ) )
                          || ( m_pcEncCfg->m_qtbttSpeedUp > 1 && partitioner.maxBTD < ( ( cs.slice->isIntra() && !cs.sps->IBC ) ? 3 : 2 ) ) )
                          && ( cs.area.lwidth() > ( cs.pcv->getMinQtSize( *cs.slice, partitioner.chType ) << 1 ) );
 
@@ -592,7 +592,6 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
   cuECtx.doHorChromaSplit = true;
   cuECtx.doVerChromaSplit = true;
   cuECtx.doQtChromaSplit  = true;
-  
 
   if( m_pcEncCfg->m_contentBasedFastQtbt && cs.pcv->getMaxMTTDepth(*cs.slice, partitioner.chType))
   {
@@ -612,7 +611,7 @@ void EncModeCtrl::initCULevel( Partitioner &partitioner, const CodingStructure& 
       Intermediate_Int dowVal = 0;
 
       unsigned j, k;
-      
+
       for( k = 0; k < cuHeight - 1; k++ )
       {
         for( j = 0; j < cuWidth - 1; j++ )
@@ -946,7 +945,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
     // also isXXAvailable in IntraPrediction.cpp need to be fixed to check availability within the same CU without isDecomp
     if (m_pcEncCfg->m_FastInferMerge && !slice.isIntra() && !slice.isIRAP() && !(cs.area.lwidth() == 4 && cs.area.lheight() == 4) && !partitioner.isConsIntra())
     {
-      if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+      if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
         && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
       {
         return false;
@@ -1033,7 +1032,7 @@ bool EncModeCtrl::tryMode( const EncTestMode& encTestmode, const CodingStructure
       {
         if (m_pcEncCfg->m_FastInferMerge)
         {
-          if ((bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7)))
+          if ((bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7)))
             && (bestCS->bestParent != nullptr) && bestCS->bestParent->cus.size() && (bestCS->bestParent->cus[0]->skip))
           {
             return false;

@@ -560,6 +560,15 @@ static const uint8_t MIP_OFFSET_MATRIX = 32;
 static const uint8_t SORTED_BUFS = 9;
 static const uint8_t MAX_TMP_BUFS = 6;
 
+// TODO (jb): cleanup
+static const int GOP32_QPOFFSET[ 6 ]                 = { -1,       0,       0,       3,       5,       6 };
+static const double GOP32_QPOFFSET_MODEL_OFFSET[ 6 ] = {  0, -4.9309, -3.0625, -5.4095, -4.4895, -5.4429 };
+static const double GOP32_QPOFFSET_MODEL_SCALE[ 6 ]  = {  0,  0.2265,  0.1875,  0.2571,  0.1947,  0.2429 };
+
+static const int GOP16_QPOFFSET[ 5 ]                 = { 1,       1,       4,      5,       6 };
+static const double GOP16_QPOFFSET_MODEL_OFFSET[ 5 ] = { 0, -4.8848, -5.7476,   -5.9, -7.1444 };
+static const double GOP16_QPOFFSET_MODEL_SCALE[ 5 ]  = { 0,  0.2061,  0.2286, 0.2333,     0.3 };
+
 // ====================================================================================================================
 // Macro functions
 // ====================================================================================================================

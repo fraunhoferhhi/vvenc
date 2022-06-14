@@ -52,6 +52,7 @@ namespace vvenc {
 
 // forward declarations
 class EncHRD;
+class GOPCfg;
 
 struct DUData
 {
@@ -67,13 +68,14 @@ class SEIEncoder
 public:
   SEIEncoder()
     : m_pcEncCfg      ( nullptr )
+    , m_gopCfg        ( nullptr )
     , m_pcEncHRD      ( nullptr )
     , m_isInitialized ( false )
     , m_rapWithLeading( false )
   {};
   virtual ~SEIEncoder(){};
 
-  void init( const VVEncCfg& encCfg, EncHRD& encHRD);
+  void init( const VVEncCfg& encCfg, const GOPCfg* gopCfg, EncHRD& encHRD);
   void initDecodedPictureHashSEI  ( SEIDecodedPictureHash& dphSei, const CPelUnitBuf& pic, std::string &rHashString, const BitDepths &bitDepths);
 
   void initBufferingPeriodSEI     ( SEIBufferingPeriod& bpSei, bool noLeadingPictures);
@@ -86,6 +88,7 @@ public:
 
 private:
   const VVEncCfg* m_pcEncCfg;
+  const GOPCfg*   m_gopCfg;
   EncHRD*         m_pcEncHRD;
   bool            m_isInitialized;
   bool            m_rapWithLeading;

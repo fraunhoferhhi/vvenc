@@ -2950,7 +2950,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
     bool testBcw = (bcwIdx != BCW_DEFAULT);
 
     bool StopInterRes = (m_pcEncCfg->m_FastInferMerge >> 3) & 1;
-    StopInterRes &= bestCS->slice->TLayer > (log2(m_pcEncCfg->m_GOPSize) - (m_pcEncCfg->m_FastInferMerge & 7));
+    StopInterRes &= bestCS->slice->TLayer > (m_pcEncCfg->m_maxTLayer - (m_pcEncCfg->m_FastInferMerge & 7));
     double bestCostInter = StopInterRes ? m_mergeBestSATDCost : MAX_DOUBLE;
 
     bool stopTest = m_cInterSearch.predInterSearch(cu, partitioner, bestCostInter);
@@ -2996,7 +2996,7 @@ void EncCu::xCheckRDCostInter( CodingStructure *&tempCS, CodingStructure *&bestC
 
     if( m_pcEncCfg->m_BCW == 2 )
     {
-      if( ( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_IntraPeriod == -1 )
+      if( ( cu.interDir != 3 && testBcw == 0 && m_pcEncCfg->m_lowDelay )
          || ( g_BcwSearchOrder[bcwLoopIdx] == BCW_DEFAULT && xIsBcwSkip( cu ) ) )
       {
         break;
@@ -3238,7 +3238,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
         {
            Fpel_cost = costCur;
         }
-        
+
         double skipTH = MAX_DOUBLE;
         skipTH = (m_pcEncCfg->m_BCW == 2 ? 1.05 : MAX_DOUBLE);
         if( equBcwCost > curBestCost * skipTH )
@@ -3248,7 +3248,7 @@ void EncCu::xCheckRDCostInterIMV(CodingStructure *&tempCS, CodingStructure *&bes
 
         if( m_pcEncCfg->m_BCW == 2 )
         {
-          if( isEqualUni == true && m_pcEncCfg->m_IntraPeriod == -1 )
+          if( isEqualUni == true && m_pcEncCfg->m_lowDelay )
           {
             break;
           }

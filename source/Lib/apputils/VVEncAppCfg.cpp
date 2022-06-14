@@ -559,6 +559,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("RefreshSec,-rs",                                 c->m_IntraPeriodSec,                                  "Intra period/refresh in seconds")
     ("DecodingRefreshType,-dr",                        toDecRefreshType,                                     "Intra refresh type (0:none, 1:CRA, 2:IDR, 3:RecPointSEI, 4:IDR2, 5:CRA_CRE - CRA with constrained encoding for RASL pictures)")
     ("GOPSize,g",                                      c->m_GOPSize,                                         "GOP size of temporal structure (16,32)")
+    ("LowDelay",                                       c->m_lowDelay,                                        "Disable picture reordering for low delay encoding (0:off, 1:on)")
     ;
 
     opts.setSubSection("Rate control, Perceptual Quantization");
@@ -841,7 +842,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     ("LoopFilterCrTcOffset_div2",                       c->m_loopFilterTcOffsetDiv2[2],                      "")
 
     ("DeblockLastTLayers",                              c->m_deblockLastTLayers,                             "Deblock only the highest n temporal layers, 0: all temporal layers are deblocked")
-    
+
     ("DisableLoopFilterAcrossTiles",                    c->m_bDisableLFCrossTileBoundaryFlag,                "Loop filtering applied across tile boundaries or not (0: filter across tile boundaries  1: do not filter across tile boundaries)")
     ("DisableLoopFilterAcrossSlices",                   c->m_bDisableLFCrossSliceBoundaryFlag,               "Loop filtering applied across tile boundaries or not (0: filter across slice boundaries  1: do not filter across slice boundaries)")
 
