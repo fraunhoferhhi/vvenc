@@ -792,8 +792,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
                         , Pel* srcBlk, Pel* orgBlk, int srcStride, int orgStride, int width, int height
                         , bool isLeftAvail,  bool isRightAvail, bool isAboveAvail, bool isBelowAvail, bool isAboveLeftAvail, bool isAboveRightAvail )
 {
-  int x,y, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
-  int8_t signLeft, signRight, signDown;
+  int x, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
   int64_t *diff, *count;
   Pel* srcLine, *orgLine;
   const int skipLinesR = compIdx == COMP_Y ? 5 : 3;
@@ -803,7 +802,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
   {
     SAOStatData& statsData= statsDataTypes[typeIdx];
     statsData.reset();
-
     srcLine = srcBlk;
     orgLine = orgBlk;
     diff    = statsData.diff;
@@ -812,35 +810,15 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
     {
     case SAO_TYPE_EO_0:
       {
-        diff +=2;
-        count+=2;
         endY   =  isBelowAvail ? (height - skipLinesB) : height;
         startX = (isLeftAvail  ? 0 : 1);
         endX   = (isRightAvail ? (width - skipLinesR) : (width - 1));
-
-        for (y=0; y<endY; y++)
-        {
-          signLeft = (int8_t)sgn(srcLine[startX] - srcLine[startX-1]);
-          for (x=startX; x<endX; x++)
-          {
-            signRight =  (int8_t)sgn(srcLine[x] - srcLine[x+1]);
-            edgeType  =  signRight + signLeft;
-            signLeft  = -signRight;
-
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-          }
-          srcLine  += srcStride;
-          orgLine  += orgStride;
-        }
+        calcSaoStatisticsEo0(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff);
       }
       break;
     case SAO_TYPE_EO_90:
       {
-        diff +=2;
-        count+=2;
         int8_t *signUpLine = &m_signLineBuf1[0];
-
         startX = 0;
         startY = isAboveAvail ? 0 : 1;
         endX   = (isRightAvail ? (width - skipLinesR) : width);
@@ -850,53 +828,25 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           srcLine += srcStride;
           orgLine += orgStride;
         }
-
-        Pel* srcLineAbove = srcLine - srcStride;
-        for (x=startX; x<endX; x++)
-        {
-          signUpLine[x] = (int8_t)sgn(srcLine[x] - srcLineAbove[x]);
-        }
-
-        Pel* srcLineBelow;
-        for (y=startY; y<endY; y++)
-        {
-          srcLineBelow = srcLine + srcStride;
-
-          for (x=startX; x<endX; x++)
-          {
-            signDown  = (int8_t)sgn(srcLine[x] - srcLineBelow[x]);
-            edgeType  = signDown + signUpLine[x];
-            signUpLine[x]= -signDown;
-
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-          }
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
+        calcSaoStatisticsEo90(width,endX,startY,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine);
       }
       break;
     case SAO_TYPE_EO_135:
       {
         diff +=2;
         count+=2;
-        int8_t *signUpLine, *signDownLine, *signTmpLine;
-
+        int8_t *signUpLine, *signDownLine;
         signUpLine  = &m_signLineBuf1[0];
         signDownLine= &m_signLineBuf2[0];
-
         startX = isLeftAvail  ? 0 : 1;
-
         endX   = isRightAvail ? (width - skipLinesR): (width - 1);
         endY   = isBelowAvail ? (height - skipLinesB) : (height - 1);
-
         //prepare 2nd line's upper sign
         Pel* srcLineBelow = srcLine + srcStride;
         for (x=startX; x<endX+1; x++)
         {
           signUpLine[x] = (int8_t)sgn(srcLineBelow[x] - srcLine[x-1]);
         }
-
         //1st line
         Pel* srcLineAbove = srcLine - srcStride;
         firstLineStartX = isAboveLeftAvail ? 0    : 1;
@@ -909,31 +859,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         }
         srcLine  += srcStride;
         orgLine  += orgStride;
-
-
-        //middle lines
-        for (y=1; y<endY; y++)
-        {
-          srcLineBelow = srcLine + srcStride;
-
-          for (x=startX; x<endX; x++)
-          {
-            signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x+1]);
-            edgeType = signDown + signUpLine[x];
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-
-            signDownLine[x+1] = -signDown;
-          }
-          signDownLine[startX] = (int8_t)sgn(srcLineBelow[startX] - srcLine[startX-1]);
-
-          signTmpLine  = signUpLine;
-          signUpLine   = signDownLine;
-          signDownLine = signTmpLine;
-
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
+        calcSaoStatisticsEo135(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine,signDownLine);
       }
       break;
     case SAO_TYPE_EO_45:
@@ -952,8 +878,6 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         {
           signUpLine[x] = (int8_t)sgn(srcLineBelow[x] - srcLine[x+1]);
         }
-
-
         //first line
         Pel* srcLineAbove = srcLine - srcStride;
         firstLineStartX = isAboveAvail ? startX : endX;
@@ -964,29 +888,9 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
           diff [edgeType] += (orgLine[x] - srcLine[x]);
           count[edgeType] ++;
         }
-
         srcLine += srcStride;
         orgLine += orgStride;
-
-        //middle lines
-        for (y=1; y<endY; y++)
-        {
-          srcLineBelow = srcLine + srcStride;
-
-          for(x=startX; x<endX; x++)
-          {
-            signDown = (int8_t)sgn(srcLine[x] - srcLineBelow[x-1]);
-            edgeType = signDown + signUpLine[x];
-
-            diff [edgeType] += (orgLine[x] - srcLine[x]);
-            count[edgeType] ++;
-
-            signUpLine[x-1] = -signDown;
-          }
-          signUpLine[endX-1] = (int8_t)sgn(srcLineBelow[endX-1] - srcLine[endX]);
-          srcLine  += srcStride;
-          orgLine  += orgStride;
-        }
+        calcSaoStatisticsEo45(width,startX,endX,endY,srcLine,orgLine,srcStride,orgStride,count,diff,signUpLine);
       }
       break;
     case SAO_TYPE_BO:
@@ -994,19 +898,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         startX = 0;
         endX   = isRightAvail ? (width - skipLinesR) : width;
         endY   = isBelowAvail ? (height- skipLinesB) : height;
-        int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
-        for (y=0; y< endY; y++)
-        {
-          for (x=startX; x< endX; x++)
-          {
-
-            int bandIdx= srcLine[x] >> shiftBits;
-            diff [bandIdx] += (orgLine[x] - srcLine[x]);
-            count[bandIdx] ++;
-          }
-          srcLine += srcStride;
-          orgLine += orgStride;
-        }
+        calcSaoStatisticsBo(width,endX,endY,srcLine,orgLine,srcStride,orgStride,channelBitDepth,count,diff);
       }
       break;
     default:
