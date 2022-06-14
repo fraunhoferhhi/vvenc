@@ -761,13 +761,14 @@ void RateCtrl::processGops()
   const double rp[6] = { pow (ratio, 0.5), pow (ratio, 0.75), pow (ratio, 0.875), pow (ratio, 0.9375), pow (ratio, 0.96875), pow (ratio, 0.984375) };
   int vecIdx;
   std::list<TRCPassStats>::iterator it;
-  std::vector<uint32_t> gopBits (2 + (m_listRCFirstPassStats.end()->gopNum - m_listRCFirstPassStats.begin()->gopNum)); // +2 for the first I frame (GOP) and a potential last incomplete GOP
-  std::vector<float>    tgtBits (2 + (m_listRCFirstPassStats.end()->gopNum - m_listRCFirstPassStats.begin()->gopNum));
+  std::vector<uint32_t> gopBits (2 + (m_listRCFirstPassStats.back().gopNum - m_listRCFirstPassStats.front().gopNum)); // +2 for the first I frame (GOP) and a potential last incomplete GOP
+  std::vector<float>    tgtBits (2 + (m_listRCFirstPassStats.back().gopNum - m_listRCFirstPassStats.front().gopNum));
 
   vecIdx = 0;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 1
   {
     it->targetBits = std::max (0, int (0.5 + it->numBits * (it->tempLayer + qpOffset < 6 ? rp[it->tempLayer + qpOffset] : ratio)));
+    CHECKD( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     gopBits[vecIdx] += (uint32_t) it->targetBits; // similar to g in VCIP paper
     tgtBits[vecIdx] += (float) (it->numBits * ratio);
     if (it->isStartOfGop)
@@ -776,6 +777,7 @@ void RateCtrl::processGops()
   vecIdx = 0;
   for (it = m_listRCFirstPassStats.begin(); it != m_listRCFirstPassStats.end(); it++) // scaling, part 2
   {
+    CHECKD( vecIdx >= (int)gopBits.size(), "array idx out of bounds" );
     it->frameInGopRatio = (double) it->targetBits / gopBits[vecIdx];
     it->targetBits = std::max (1, int (0.5 + it->frameInGopRatio * tgtBits[vecIdx]));
     if (it->isStartOfGop)
