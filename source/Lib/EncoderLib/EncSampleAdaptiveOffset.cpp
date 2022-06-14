@@ -899,7 +899,7 @@ void EncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const int c
         startX = 0;
         endX   = isRightAvail ? (width - skipLinesR) : width;
         endY   = isBelowAvail ? (height- skipLinesB) : height;
-        calcSaoStatisticsBo(srcLine,orgLine,width,endX,endY,srcStride,orgStride,channelBitDepth,count,diff);
+        calcSaoStatisticsBo(width,endX,endY,srcLine,orgLine,srcStride,orgStride,channelBitDepth,count,diff);
       }
       break;
     default:

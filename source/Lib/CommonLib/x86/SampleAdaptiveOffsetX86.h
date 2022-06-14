@@ -57,7 +57,6 @@ namespace vvenc {
 
 #define SAO_NUM_OFFSETS                     4 /* number of SAO offset values */
 #define SAO_EO_NUM_CATEGORIES               (SAO_NUM_OFFSETS + 1) /* number of different eo categories */
-#define TH_SAO 0
 
 template <X86_VEXT vext>
 void offsetBlock_SIMD( const int     channelBitDepth,
@@ -732,7 +731,7 @@ void offsetBlock_SIMD( const int     channelBitDepth,
 }
 
 template <X86_VEXT vext>
-void calcSaoStatisticsBo_SIMD(Pel*  srcLine,Pel*  orgLine,int width,int endX,int endY,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
+void calcSaoStatisticsBo_SIMD(int width,int endX,int endY,Pel*  srcLine,Pel*  orgLine,int srcStride,int orgStride,int channelBitDepth, int64_t *count,int64_t  *diff)
 {
   if ( width % 16 == 0 )
   {
