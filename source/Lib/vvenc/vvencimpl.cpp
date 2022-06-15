@@ -368,9 +368,13 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 
   if( *pbEncodeDone )
   {
-    if( m_eState == INTERNAL_STATE_FLUSHING || m_eState == INTERNAL_STATE_INITIALIZED )
+    if( m_eState == INTERNAL_STATE_FLUSHING )
     {
       m_eState = INTERNAL_STATE_FINALIZED;
+    }
+    if( m_eState == INTERNAL_STATE_INITIALIZED )
+    {
+      m_eState = INTERNAL_STATE_INITIALIZED; // keep initialized state, when flushing without having encoded anything, we still can start to encode
     }
     else
     {
