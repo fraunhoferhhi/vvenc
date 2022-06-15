@@ -557,7 +557,7 @@ typedef struct vvenc_config
   int                 m_log2MinCodingBlockSize;
 
   bool                m_bUseASR;                                                         // flag for using adaptive motion search range
-  int                 m_bUseHADME;                                                       // flag for using HAD in sub-pel ME
+  bool                m_bUseHADME;                                                       // flag for using HAD in sub-pel ME
   int                 m_RDOQ;                                                            // flag for using RD optimized quantization
   bool                m_useRDOQTS;                                                       // flag for using RD optimized quantization for transform skip
   bool                m_useSelectiveRDOQ;                                                // flag for using selective RDOQ
@@ -754,7 +754,8 @@ typedef struct vvenc_config
   int                 m_explicitAPSid;
 
   bool                m_lowDelay;
-  bool                m_reservedFlag[7];
+  bool                m_reservedFlag[6];
+  bool                m_fastHad;
   bool                m_sliceTypeAdapt;                                                  // enable slice type (for now B-to-I frame) adaptation (STA)
   bool                m_treatAsSubPic;
 
