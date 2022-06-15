@@ -585,10 +585,13 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
       }
     }
   }
+  
+  // in lock-step mode:
+  // the output of a picture is connected to evaluation of the lock-step-chunk
+  // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
-  // in lock-step mode, do output if all pictures in RC-chunk finished (all encoders are free)
   if( !nextPicReadyForOutput() ||
-    ( lockStepMode && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && m_rcUpdateList.front() == m_gopEncListOutput.front() ) )
+    ( lockStepMode && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && m_gopEncListOutput.front() == m_rcUpdateList.front() ) )
   {
     return;
   }
