@@ -608,6 +608,8 @@ bool YuvFileIO::isFail()
 
 int YuvFileIO::countYuvFrames( int width, int height, bool countFromStart )
 {
+  if( m_readStdin ) return -1;
+  
   //set the frame size according to the chroma format
   std::streamoff frameSize      = 0;
   const int numComp = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
@@ -695,33 +697,37 @@ int YuvFileIO::skipYuvFrames( int numFrames, int width, int height )
 
   const std::streamoff offset = frameSize * numFrames;
   
+  std::istream& inStream = m_readStdin ? std::cin : m_cHandle;
+  
   // check for file size
-  std::streamoff fsize = m_cHandle.tellg();
-  m_cHandle.seekg( 0, std::ios::end );
-  std::streamoff filelength = m_cHandle.tellg() - fsize;
-  m_cHandle.seekg( fsize, std::ios::beg );
-  if( offset >= filelength )
+  if( !m_readStdin )
   {
-    return -1;
-  }
-      
+    std::streamoff fsize = m_cHandle.tellg();
+    m_cHandle.seekg( 0, std::ios::end );
+    std::streamoff filelength = m_cHandle.tellg() - fsize;
+    m_cHandle.seekg( fsize, std::ios::beg );
+    if( offset >= filelength )
+    {
+      return -1;
+    }
+  } 
 
   // attempt to seek
-  if ( !! m_cHandle.seekg( offset, std::ios::cur ) )
+  if ( !! inStream.seekg( offset, std::ios::cur ) )
   {
     return 0; /* success */
   }
 
-  m_cHandle.clear();
+  inStream.clear();
 
   // fall back to consuming the input
   char buf[ 512 ];
   const std::streamoff offset_mod_bufsize = offset % sizeof( buf );
   for ( std::streamoff i = 0; i < offset - offset_mod_bufsize; i += sizeof( buf ) )
   {
-    m_cHandle.read( buf, sizeof( buf ) );
+    inStream.read( buf, sizeof( buf ) );
   }
-  m_cHandle.read( buf, offset_mod_bufsize );
+  inStream.read( buf, offset_mod_bufsize );
   
   return 0;
 }
