@@ -759,7 +759,7 @@ void GOPCfg::xSetSTSA( GOPEntryList& gopList, const std::vector<int>& pocToGopId
   {
     const GOPEntry& gopEntry = gopList[ i ];
     const int tid            = gopEntry.m_temporalId;
-    const bool isSTSA        = isTlSTSA[ tid ] & isLocalSTSA[ i ];
+    const bool isSTSA        = isTlSTSA[ tid ] && isLocalSTSA[ i ];
     isTlSTSA[ tid ]          = isSTSA;
   }
 
