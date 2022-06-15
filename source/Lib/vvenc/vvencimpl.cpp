@@ -368,7 +368,7 @@ int VVEncImpl::encode( vvencYUVBuffer* pcYUVBuffer, vvencAccessUnit* pcAccessUni
 
   if( *pbEncodeDone )
   {
-    if( m_eState == INTERNAL_STATE_FLUSHING )
+    if( m_eState == INTERNAL_STATE_FLUSHING || m_eState == INTERNAL_STATE_INITIALIZED )
     {
       m_eState = INTERNAL_STATE_FINALIZED;
     }

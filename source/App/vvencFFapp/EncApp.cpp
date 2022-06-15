@@ -285,7 +285,15 @@ int EncApp::encode()
     }
     if( remSkipFrames > 0 )
     {
-      m_yuvInputFile.skipYuvFrames( remSkipFrames, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
+      if( 0 != m_yuvInputFile.skipYuvFrames(remSkipFrames, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) )
+      {
+        msgApp( VVENC_ERROR, "skip %d frames failed. file contains %d frames only.\n", remSkipFrames, m_yuvInputFile.countYuvFrames( vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) );
+        vvenc_encoder_close( m_encCtx );
+        vvenc_YUVBuffer_free_buffer( &yuvInBuf );
+        vvenc_accessUnit_free_payload( &au );
+        closeFileIO();    
+        return -1;  
+      }
     }
 
     // initialize encoder pass
@@ -358,7 +366,15 @@ int EncApp::encode()
       // temporally skip frames
       if( vvencCfg.m_temporalSubsampleRatio > 1 && ! inputDone )
       {
-        m_yuvInputFile.skipYuvFrames( vvencCfg.m_temporalSubsampleRatio - 1, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight );
+        if( 0 != m_yuvInputFile.skipYuvFrames(vvencCfg.m_temporalSubsampleRatio - 1, vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight) )
+        {
+          msgApp( VVENC_ERROR, "skip %d temporally frames failed. only %d frames left to proceed.\n", remSkipFrames, m_yuvInputFile.countYuvFrames( vvencCfg.m_SourceWidth, vvencCfg.m_SourceHeight, false) );
+          vvenc_encoder_close( m_encCtx );
+          vvenc_YUVBuffer_free_buffer( &yuvInBuf );
+          vvenc_accessUnit_free_payload( &au );
+          closeFileIO();    
+          return -1;  
+        }
       }
     }
 

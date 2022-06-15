@@ -606,11 +606,60 @@ bool YuvFileIO::isFail()
   return m_cHandle.fail();
 }
 
-void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
+int YuvFileIO::countYuvFrames( int width, int height, bool countFromStart )
+{
+  //set the frame size according to the chroma format
+  std::streamoff frameSize      = 0;
+  const int numComp = (m_fileChrFmt==VVENC_CHROMA_400) ? 1 : 3;
+
+  if( m_packedYUVMode)
+  {
+    for ( int i = 0; i < numComp; i++ )
+    {
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += (( ( width * 5 / 4 ) >> csx_file) * (height >> csy_file));
+    }
+  }
+  else
+  {
+    unsigned wordsize             = ( m_fileBitdepth > 8 ) ? 2 : 1;
+    for ( int i = 0; i < numComp; i++ )
+    {
+      const int csx_file = ( (i == 0) || (m_fileChrFmt==VVENC_CHROMA_444) ) ? 0 : 1;
+      const int csy_file = ( (i == 0) || (m_fileChrFmt!=VVENC_CHROMA_420) ) ? 0 : 1;
+      frameSize += ( width >> csx_file ) * ( height >> csy_file );
+    }
+    frameSize *= wordsize;
+  }
+
+  if( m_y4mMode )
+  {
+    const char Y4MHeader[] = {'F','R','A','M','E'};
+    frameSize += (sizeof(Y4MHeader) + 1);  /* assume basic FRAME\n headers */;
+  }
+  
+  std::streamoff lastPos = m_cHandle.tellg();  // backup last position
+  
+  if( countFromStart )
+  {
+    m_cHandle.seekg( 0, std::ios::beg );
+  }
+  std::streamoff curPos = m_cHandle.tellg();
+    
+  m_cHandle.seekg( 0, std::ios::end );
+  std::streamoff filelength = m_cHandle.tellg() - curPos;
+  
+  m_cHandle.seekg( lastPos, std::ios::beg ); // rewind to last pos
+  
+  return filelength / frameSize;
+}
+
+int YuvFileIO::skipYuvFrames( int numFrames, int width, int height )
 {
   if ( numFrames <= 0 )
   {
-    return;
+    return -1;
   }
 
   //set the frame size according to the chroma format
@@ -645,11 +694,22 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
   }
 
   const std::streamoff offset = frameSize * numFrames;
+  
+  // check for file size
+  std::streamoff fsize = m_cHandle.tellg();
+  m_cHandle.seekg( 0, std::ios::end );
+  std::streamoff filelength = m_cHandle.tellg() - fsize;
+  m_cHandle.seekg( fsize, std::ios::beg );
+  if( offset >= filelength )
+  {
+    return -1;
+  }
+      
 
   // attempt to seek
   if ( !! m_cHandle.seekg( offset, std::ios::cur ) )
   {
-    return; /* success */
+    return 0; /* success */
   }
 
   m_cHandle.clear();
@@ -662,6 +722,8 @@ void YuvFileIO::skipYuvFrames( int numFrames, int width, int height  )
     m_cHandle.read( buf, sizeof( buf ) );
   }
   m_cHandle.read( buf, offset_mod_bufsize );
+  
+  return 0;
 }
 
 int YuvFileIO::readYuvBuf( vvencYUVBuffer& yuvInBuf, bool& eof )

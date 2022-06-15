@@ -335,7 +335,15 @@ int main( int argc, char* argv[] )
 
     if( iRemSkipFrames > 0 )
     {
-      cYuvFileInput.skipYuvFrames(iRemSkipFrames, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight);
+      if( 0 != cYuvFileInput.skipYuvFrames(iRemSkipFrames, vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight) )
+      {
+        msgApp( nullptr, VVENC_ERROR, "vvencapp [error]: skip %d frames failed. file contains %d frames only.\n", iRemSkipFrames, cYuvFileInput.countYuvFrames( vvenccfg.m_SourceWidth, vvenccfg.m_SourceHeight ) );
+        vvenc_YUVBuffer_free_buffer( &cYUVInputBuffer );
+        vvenc_accessUnit_free_payload( &AU );
+        vvenc_encoder_close( enc );
+        return -1;  
+      }
+      
       iSeqNumber=iRemSkipFrames;
     }
 
