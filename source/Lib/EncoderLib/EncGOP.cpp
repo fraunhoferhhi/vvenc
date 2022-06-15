@@ -466,7 +466,7 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
         // in lockstep mode, check all pictures encoded
-        if( m_procList.empty() && ( ! lockStepMode || (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
+        if( isNonBlocking() && m_procList.empty() && ( ! lockStepMode || (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
         {
           break;
         }
