@@ -1902,7 +1902,7 @@ Distortion RdCost::xGetHADs( const DistParam &rcDtParam )
       piCur += iStrideCur * 8;
     }
   }
-  else if( fastHad && ( ( iRows % 32 == 0 ) && ( iCols % 32 == 0 ) ) )
+  else if( fastHad && ( ( iRows % 32 == 0 ) && ( iCols % 32 == 0 ) ) && iRows == iCols )
   {
     for( y = 0; y < iRows; y += 16 )
     {
