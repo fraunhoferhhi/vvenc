@@ -778,7 +778,7 @@ int VVEncAppCfg::parse( int argc, char* argv[], vvenc_config* c, std::ostream& r
     opts.addOptions()
     ("CostMode",                                        toCostMode,                                          "Use alternative cost functions: choose between 'lossy', 'sequence_level_lossless', 'lossless' (which forces QP to " MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP) ") and 'mixed_lossless_lossy' (which used QP'=" MACRO_TO_STRING(LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME) " for pre-estimates of transquant-bypass blocks).")
     ("ASR",                                             c->m_bUseASR,                                        "Adaptive motion search range")
-    ("HadamardME",                                      c->m_bUseHADME,                                      "Hadamard ME for fractional-pel")
+    ("HadamardME",                                      c->m_bUseHADME,                                      "Hadamard ME for fractional-pel (1:yes, 2:fast)")
     ("RDOQ",                                            c->m_RDOQ,                                           "Rate-Distortion Optimized Quantization mode")
     ("RDOQTS",                                          c->m_useRDOQTS,                                      "Rate-Distortion Optimized Quantization mode for TransformSkip")
     ("SelectiveRDOQ",                                   c->m_useSelectiveRDOQ,                               "Enable selective RDOQ")

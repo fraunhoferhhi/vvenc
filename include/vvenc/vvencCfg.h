@@ -557,7 +557,7 @@ typedef struct vvenc_config
   int                 m_log2MinCodingBlockSize;
 
   bool                m_bUseASR;                                                         // flag for using adaptive motion search range
-  bool                m_bUseHADME;                                                       // flag for using HAD in sub-pel ME
+  char                m_bUseHADME;                                                       // flag for using HAD in sub-pel ME
   int                 m_RDOQ;                                                            // flag for using RD optimized quantization
   bool                m_useRDOQTS;                                                       // flag for using RD optimized quantization for transform skip
   bool                m_useSelectiveRDOQ;                                                // flag for using selective RDOQ

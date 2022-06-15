@@ -394,10 +394,20 @@ enum DFunc
   DF_HAD64           = DF_HAD+6,      ///<  64xM HAD
   DF_HAD128          = DF_HAD+7,      ///< 16NxM HAD
 
-  DF_HAD_2SAD                  = 24,  //tbd th remove
+  DF_HAD_2SAD        = 24,            //tbd th remove
 
-  DF_SAD_WITH_MASK = 25,
-  DF_TOTAL_FUNCTIONS = 26,
+  DF_SAD_WITH_MASK   = 25,
+  
+  DF_HAD_fast        = 26,            ///< general size Hadamard
+  DF_HAD2_fast       = DF_HAD_fast+1,      ///<   2xM fast HAD
+  DF_HAD4_fast       = DF_HAD_fast+2,      ///<   4xM fast HAD
+  DF_HAD8_fast       = DF_HAD_fast+3,      ///<   8xM fast HAD
+  DF_HAD16_fast      = DF_HAD_fast+4,      ///<  16xM fast HAD
+  DF_HAD32_fast      = DF_HAD_fast+5,      ///<  32xM fast HAD
+  DF_HAD64_fast      = DF_HAD_fast+6,      ///<  64xM fast HAD
+  DF_HAD128_fast     = DF_HAD_fast+7,      ///< 16NxM fast HAD
+
+  DF_TOTAL_FUNCTIONS = 34,
 
   DF_SSE_WTD         = 0xfedc          // out of func scope
 };
