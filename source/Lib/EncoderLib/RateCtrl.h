@@ -67,8 +67,7 @@ namespace vvenc {
                   const uint32_t _numBits, const double _psnrY, const bool _isIntra, const int _tempLayer,
                   const bool _isStartOfIntra, const bool _isStartOfGop, const int _gopNum ) :
                   poc( _poc ), qp( _qp ), lambda( _lambda ), visActY( _visActY ),
-                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ),
-                  tempLayer( _tempLayer ),
+                  numBits( _numBits ), psnrY( _psnrY ), isIntra( _isIntra ), tempLayer( _tempLayer ),
                   isStartOfIntra( _isStartOfIntra ), isStartOfGop( _isStartOfGop ), gopNum( _gopNum ),
                   isNewScene( false ), refreshParameters( false ), frameInGopRatio( -1.0 ), targetBits( 0 ), addedToList( false )
                   {}
@@ -136,9 +135,7 @@ namespace vvenc {
 
     int     targetBits;
     int     tmpTargetBits;
-    int     picQPOffsetQPA;
     int     poc;
-    double  picLambdaOffsetQPA;
     uint16_t visActSteady;
 
   protected:
@@ -163,10 +160,12 @@ namespace vvenc {
     int  getBaseQP();
     void setRCPass (const VVEncCfg& encCfg, const int pass, const char* statsFName);
     void addRCPassStats (const int poc, const int qp, const double lambda, const uint16_t visActY,
-                         const uint32_t numBits, const double psnrY, const bool isIntra, const int tempLayer,
+                         const uint32_t numBits, const double psnrY, const bool isIntra, const uint32_t tempLayer,
                          const bool isStartOfIntra, const bool isStartOfGop, const int gopNum);
     void processFirstPassData (const bool flush);
-    void processFirstPassData (const bool flush, int poc);
+    void processFirstPassData (const bool flush, const int poc);
+    void prepareNoiseMinStats (const uint64_t* const inputNoiseMinStats);
+    void utilizeNoiseMinStats (const uint32_t temporalLevel);
     void processGops();
     double getAverageBitsFromFirstPass();
     void detectSceneCuts();
@@ -176,12 +175,12 @@ namespace vvenc {
     std::list<EncRCPic*>& getPicList() { return m_listRCPictures; }
     std::list<TRCPassStats>& getFirstPassStats() { return m_listRCFirstPassStats; }
     std::vector<uint8_t>* getIntraPQPAStats() { return &m_listRCIntraPQPAStats; }
+    uint64_t* const getNoiseMinStats() { return m_noiseMinStats; }
     int                   lastPOCInCache()    { CHECK(m_firstPassCache.empty(), "Accessing empty cache"); return m_firstPassCache.back().poc; }
 
     std::list<EncRCPic*>    m_listRCPictures;
     EncRCSeq*   encRCSeq;
     EncRCPic*   encRCPic;
-    std::mutex  rcMutex;
     int         flushPOC;
     int         rcPass;
     bool        rcIsFinalPass;
@@ -207,6 +206,8 @@ namespace vvenc {
 #endif
     int                     m_numPicStatsTotal;
     int                     m_numPicAddedToList;
+    unsigned                m_noiseMinStatsCnt;
+    uint64_t                m_noiseMinStats[4];
   };
 
 }
