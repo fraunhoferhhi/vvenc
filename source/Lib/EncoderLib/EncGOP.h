@@ -162,7 +162,9 @@ private:
   int                       m_lastIDR;
   int                       m_lastRasPoc;
   int                       m_pocCRA;
-  int                       m_appliedSwitchDQQ;
+  std::mutex                m_noiseMinimaMutex;
+  uint64_t                  m_noiseMinimaStats;
+  int                       m_appliedSwitchDQP;
   int                       m_associatedIRAPPOC;
   vvencNalUnitType          m_associatedIRAPType;
 
@@ -185,7 +187,6 @@ public:
   const EncReshape& getReshaper() const { return m_Reshaper; }
 
   void init               ( const VVEncCfg& encCfg, const GOPCfg* gopCfg, RateCtrl& rateCtrl, NoMallocThreadPool* threadPool, bool isPreAnalysis );
-  void picInitRateControl ( Picture& pic, Slice* slice, EncPicture *picEncoder );
   void printOutSummary    ( const bool printMSEBasedSNR, const bool printSequenceMSE, const bool printHexPsnr );
   void getParameterSets   ( AccessUnitList& accessUnit );
   bool nextPicReadyForOutput    () { return !m_gopEncListOutput.empty() && m_gopEncListOutput.front()->isReconstructed; }
@@ -214,7 +215,7 @@ private:
   bool xIsSliceTemporalSwitchingPoint ( const Slice* slice, const PicList& picList ) const;
 
   void xInitPicsInCodingOrder         ( const PicList& picList, bool flush );
-  void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList );
+  void xGetProcessingLists            ( std::list<Picture*>& procList, std::list<Picture*>& rcUpdateList, const bool lockStepMode );
   void xInitFirstSlice                ( Picture& pic, const PicList& picList, bool isEncodeLtRef );
   void xInitSliceTMVPFlag             ( PicHeader* picHeader, const Slice* slice );
   void xUpdateRPRtmvp                 ( PicHeader* picHeader, Slice* slice );
