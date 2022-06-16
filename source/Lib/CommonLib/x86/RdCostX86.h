@@ -2746,7 +2746,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
 
-      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) < rcDtParam.maximumDistortionForEarlyExit )
+      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) > rcDtParam.maximumDistortionForEarlyExit )
       {
         break;
       }
@@ -2766,7 +2766,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       piOrg += 16*iStrideOrg;
       piCur += 16*iStrideCur;
 
-      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) < rcDtParam.maximumDistortionForEarlyExit )
+      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) > rcDtParam.maximumDistortionForEarlyExit )
       {
         break;
       }
@@ -2807,7 +2807,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       piOrg += 32 * iStrideOrg;
       piCur += 32 * iStrideCur;
 
-      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) < rcDtParam.maximumDistortionForEarlyExit )
+      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) > rcDtParam.maximumDistortionForEarlyExit )
       {
         break;
       }
@@ -2824,7 +2824,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       piOrg += 16 * iStrideOrg;
       piCur += 16 * iStrideCur;
 
-      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) < rcDtParam.maximumDistortionForEarlyExit )
+      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) > rcDtParam.maximumDistortionForEarlyExit )
       {
         break;
       }
@@ -2841,7 +2841,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       piOrg += 16*iStrideOrg;
       piCur += 16*iStrideCur;
 
-      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) < rcDtParam.maximumDistortionForEarlyExit )
+      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) > rcDtParam.maximumDistortionForEarlyExit )
       {
         break;
       }
@@ -2858,7 +2858,7 @@ Distortion RdCost::xGetHADs_SIMD( const DistParam &rcDtParam )
       piOrg += 8*iStrideOrg;
       piCur += 8*iStrideCur;
 
-      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) < rcDtParam.maximumDistortionForEarlyExit )
+      if( ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth ) ) > rcDtParam.maximumDistortionForEarlyExit )
       {
         break;
       }
