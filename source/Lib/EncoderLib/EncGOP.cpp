@@ -406,11 +406,9 @@ void EncGOP::waitForFreeEncoders()
 {
   {
     std::unique_lock<std::mutex> lock( m_gopEncMutex );
-    bool rcPicOnTheFly = m_freePicEncoderList.empty() || (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames; 
-    if( rcPicOnTheFly )
+    if( ! xEncodersFinished() )
     {
       CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-      CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
       m_gopEncCond.wait( lock );
     }
   }
@@ -465,8 +463,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         std::unique_lock<std::mutex> lock( m_gopEncMutex, std::defer_lock );
         if( m_pcEncCfg->m_numThreads > 0) lock.lock();
 
-        // in lockstep mode, check all pictures encoded
-        if( m_procList.empty() && ( ! lockStepMode || (int)m_freePicEncoderList.size() >= m_pcEncCfg->m_maxParallelFrames ) )
+        // leave the loop when nothing to do (when all encoders are finished or in non-blocking mode)
+        if( m_procList.empty() && ( isNonBlocking() || xEncodersFinished() ) ) 
         {
           break;
         }
@@ -478,14 +476,14 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
         // check at least one picture and one pic encoder ready
         if( m_freePicEncoderList.empty() || ! nextPicReady )
         {
-          // non-blocking mode: wait on top level, let other stages do their jobs
+          // non-blocking stage: wait on top level, let other stages do their jobs
           // in non-lockstep mode, check if next picture can be output
           if( isNonBlocking() || ( ! lockStepMode && m_gopEncListOutput.front()->isReconstructed ) )
           {
             break;
           }
           CHECK( m_pcEncCfg->m_numThreads <= 0, "run into MT code, but no threading enabled" );
-          CHECK( (int)m_freePicEncoderList.size() >= std::max( 1, m_pcEncCfg->m_maxParallelFrames ), "wait for picture to be finished, but no pic encoder running" );
+          CHECK( xEncodersFinished(), "wait for picture to be finished, but no pic encoder running" );
           m_gopEncCond.wait( lock );
           continue;
         }
@@ -587,12 +585,14 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
     }
   }
   
+  // picture/AU output
+  // 
   // in lock-step mode:
   // the output of a picture is connected to evaluation of the lock-step-chunk
   // if the next picture to output belongs to the current chunk, do output (evaluation) when all pictures of the chunk are finished
 
-  if( !nextPicReadyForOutput() ||
-    ( lockStepMode && (int)m_freePicEncoderList.size() < m_pcEncCfg->m_maxParallelFrames && m_gopEncListOutput.front() == m_rcUpdateList.front() ) )
+  if( m_gopEncListOutput.empty() || !m_gopEncListOutput.front()->isReconstructed ||
+    ( lockStepMode && !m_rcUpdateList.empty() && m_gopEncListOutput.front() == m_rcUpdateList.front() && !xEncodersFinished() ) )
   {
     return;
   }
