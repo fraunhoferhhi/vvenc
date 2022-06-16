@@ -1286,73 +1286,85 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     if( c->m_IntraPeriod == 1 )
     {
       vvenc_confirmParameter( c, c->m_GOPSize != 1, "gop auto configuration for all intra supports only gop size 1" );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
       c->m_GOPList[  0 ] = vvenc::GOPEntry( 'I',     1,    0,           0.0,     0.0,  0.0,         0,             0,   { },                          0,   { } );
     }
     else if( c->m_GOPSize == 8 )
     {
       vvenc_confirmParameter( c, c->m_lowDelay == 0, "gop auto configuration for gop size 8 supports only low delay" );
-      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',     1,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 9, 17, 25 },             4,    { 1, 9, 17, 25 } );
-      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     2,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 2, 10, 18 },             4,    { 1, 2, 10, 18 } );
-      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     3,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 3, 11, 19 },             4,    { 1, 3, 11, 19 } );
-      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 4, 12, 20 },             4,    { 1, 4, 12, 20 } );
-      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     5,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 5, 13, 21 },             4,    { 1, 5, 13, 21 } );
-      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     6,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 6, 14, 22 },             4,    { 1, 6, 14, 22 } );
-      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     7,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 7, 15, 23 },             4,    { 1, 7, 15, 23 } );
-      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     8,    1,          0.0,      0.0,  1.0,         0,             4,   { 1, 8, 16, 24 },             4,    { 1, 8, 16, 24 } );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',     1,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 9, 17, 25 },             4,   { 1, 9, 17, 25 } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     2,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 2, 10, 18 },             4,   { 1, 2, 10, 18 } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     3,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 3, 11, 19 },             4,   { 1, 3, 11, 19 } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 4, 12, 20 },             4,   { 1, 4, 12, 20 } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     5,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 5, 13, 21 },             4,   { 1, 5, 13, 21 } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     6,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 6, 14, 22 },             4,   { 1, 6, 14, 22 } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     7,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 7, 15, 23 },             4,   { 1, 7, 15, 23 } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     8,    1,          0.0,      0.0,  1.0,         0,             4,   { 1, 8, 16, 24 },             4,   { 1, 8, 16, 24 } );
     }
     else if( c->m_GOPSize == 16 )
     {
-      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    16,    1,           0.0,     0.0,  1.0,         0,             2,   { 16, 32, 24     },            2,   { 16,  32           } );
-      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     8,    1,       -4.8848,  0.2061,  1.0,         1,             2,   {  8, 16         },            2,   { -8,   8           } );
-      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     4,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },            2,   { -4, -12           } );
-      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     2,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },            2,   { -2,  -6, -14      } );
-      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     1,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1, -1         },            2,   { -1,  -3,  -7, -15 } );
-      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     3,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3         },            2,   { -1,  -5, -13      } );
-      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     6,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6         },            2,   { -2, -10           } );
-      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     5,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5         },            2,   { -1,  -3, -11      } );
-      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     7,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7     },            2,   { -1,  -9           } );
-      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',    12,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },            2,   { -4,   4           } );
-      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    10,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },            2,   { -2,  -6           } );
-      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',     9,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  9         },            2,   { -1,  -3,  -7      } );
-      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',    11,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3, 11     },            2,   { -1,  -5           } );
-      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    14,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6, 14     },            2,   { -2,   2           } );
-      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    13,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5, 13     },            2,   { -1,  -3           } );
-      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    15,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7, 15 },            2,   { -1,   1           } );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    16,    1,           0.0,     0.0,  1.0,         0,             2,   { 16, 32, 24     },           2,   { 16,  32           } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     8,    1,       -4.8848,  0.2061,  1.0,         1,             2,   {  8, 16         },           2,   { -8,   8           } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     4,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },           2,   { -4, -12           } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     2,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },           2,   { -2,  -6, -14      } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     1,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1, -1         },           2,   { -1,  -3,  -7, -15 } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     3,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3         },           2,   { -1,  -5, -13      } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     6,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6         },           2,   { -2, -10           } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     5,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5         },           2,   { -1,  -3, -11      } );
+      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     7,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7     },           2,   { -1,  -9           } );
+      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',    12,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },           2,   { -4,   4           } );
+      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    10,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },           2,   { -2,  -6           } );
+      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',     9,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  9         },           2,   { -1,  -3,  -7      } );
+      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',    11,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3, 11     },           2,   { -1,  -5           } );
+      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    14,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6, 14     },           2,   { -2,   2           } );
+      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    13,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5, 13     },           2,   { -1,  -3           } );
+      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    15,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7, 15 },           2,   { -1,   1           } );
     }
     else if( c->m_GOPSize == 32 )
     {
-      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48     },            2,   {  32,  64                } );
-      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',    16,    0,       -4.9309,  0.2265,  1.0,         1,             2,   { 16, 32         },            2,   { -16,  16                } );
-      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     8,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },            2,   {  -8, -24                } );
-      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },            2,   {  -4, -12, -28           } );
-      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     2,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },            2,   {  -2,  -6, -14, -30      } );
-      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     1,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, -1         },            2,   {  -1,  -3,  -7, -15, -31 } );
-      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3         },            2,   {  -1,  -5, -13, -29      } );
-      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     6,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6         },            2,   {  -2, -10, -26           } );
-      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5         },            2,   {  -1,  -3, -11, -27      } );
-      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',     7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 7      },            2,   {  -1,  -9, -25           } );
-      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    12,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12         },            2,   {  -4, -20                } );
-      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',    10,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10         },            2,   {  -2,  -6, -22           } );
-      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',     9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9         },            2,   {  -1,  -3,  -7, -23      } );
-      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11     },            2,   {  -1,  -5, -21           } );
-      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    14,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 14     },            2,   {  -2, -18                } );
-      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13     },            2,   {  -1,  -3, -19           } );
-      c->m_GOPList[ 16 ] = vvenc::GOPEntry( 'B',    15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15     },            2,   {  -1, -17                } );
-      c->m_GOPList[ 17 ] = vvenc::GOPEntry( 'B',    24,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },            2,   {  -8,   8                } );
-      c->m_GOPList[ 18 ] = vvenc::GOPEntry( 'B',    20,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },            2,   {  -4, -12                } );
-      c->m_GOPList[ 19 ] = vvenc::GOPEntry( 'B',    18,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },            2,   {  -2,  -6, -14           } );
-      c->m_GOPList[ 20 ] = vvenc::GOPEntry( 'B',    17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 17         },            2,   {  -1,  -3,  -7, -15      } );
-      c->m_GOPList[ 21 ] = vvenc::GOPEntry( 'B',    19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19     },            2,   {  -1,  -5, -13           } );
-      c->m_GOPList[ 22 ] = vvenc::GOPEntry( 'B',    22,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 22     },            2,   {  -2, -10                } );
-      c->m_GOPList[ 23 ] = vvenc::GOPEntry( 'B',    21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21     },            2,   {  -1,  -3, -11           } );
-      c->m_GOPList[ 24 ] = vvenc::GOPEntry( 'B',    23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23 },            2,   {  -1,  -9                } );
-      c->m_GOPList[ 25 ] = vvenc::GOPEntry( 'B',    28,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12, 28     },            2,   {  -4,   4                } );
-      c->m_GOPList[ 26 ] = vvenc::GOPEntry( 'B',    26,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10, 26     },            2,   {  -2,  -6                } );
-      c->m_GOPList[ 27 ] = vvenc::GOPEntry( 'B',    25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 25     },            2,   {  -1,  -3, -7            } );
-      c->m_GOPList[ 28 ] = vvenc::GOPEntry( 'B',    27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27 },            2,   {  -1,  -5                } );
-      c->m_GOPList[ 29 ] = vvenc::GOPEntry( 'B',    30,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 14, 30     },            2,   {  -2,   2                } );
-      c->m_GOPList[ 30 ] = vvenc::GOPEntry( 'B',    29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 13, 29     },            2,   {  -1,  -3                } );
-      c->m_GOPList[ 31 ] = vvenc::GOPEntry( 'B',    31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15, 31 },            2,   {  -1,   1                } );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48     },           2,   {  32,  64                } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',    16,    0,       -4.9309,  0.2265,  1.0,         1,             2,   { 16, 32         },           2,   { -16,  16                } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     8,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8, -24                } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12, -28           } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     2,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14, -30      } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     1,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, -1         },           2,   {  -1,  -3,  -7, -15, -31 } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3         },           2,   {  -1,  -5, -13, -29      } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     6,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6         },           2,   {  -2, -10, -26           } );
+      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5         },           2,   {  -1,  -3, -11, -27      } );
+      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',     7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 7      },           2,   {  -1,  -9, -25           } );
+      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    12,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12         },           2,   {  -4, -20                } );
+      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',    10,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10         },           2,   {  -2,  -6, -22           } );
+      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',     9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9         },           2,   {  -1,  -3,  -7, -23      } );
+      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11     },           2,   {  -1,  -5, -21           } );
+      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    14,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 14     },           2,   {  -2, -18                } );
+      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13     },           2,   {  -1,  -3, -19           } );
+      c->m_GOPList[ 16 ] = vvenc::GOPEntry( 'B',    15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15     },           2,   {  -1, -17                } );
+      c->m_GOPList[ 17 ] = vvenc::GOPEntry( 'B',    24,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8,   8                } );
+      c->m_GOPList[ 18 ] = vvenc::GOPEntry( 'B',    20,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12                } );
+      c->m_GOPList[ 19 ] = vvenc::GOPEntry( 'B',    18,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14           } );
+      c->m_GOPList[ 20 ] = vvenc::GOPEntry( 'B',    17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 17         },           2,   {  -1,  -3,  -7, -15      } );
+      c->m_GOPList[ 21 ] = vvenc::GOPEntry( 'B',    19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19     },           2,   {  -1,  -5, -13           } );
+      c->m_GOPList[ 22 ] = vvenc::GOPEntry( 'B',    22,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 22     },           2,   {  -2, -10                } );
+      c->m_GOPList[ 23 ] = vvenc::GOPEntry( 'B',    21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21     },           2,   {  -1,  -3, -11           } );
+      c->m_GOPList[ 24 ] = vvenc::GOPEntry( 'B',    23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23 },           2,   {  -1,  -9                } );
+      c->m_GOPList[ 25 ] = vvenc::GOPEntry( 'B',    28,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12, 28     },           2,   {  -4,   4                } );
+      c->m_GOPList[ 26 ] = vvenc::GOPEntry( 'B',    26,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10, 26     },           2,   {  -2,  -6                } );
+      c->m_GOPList[ 27 ] = vvenc::GOPEntry( 'B',    25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 25     },           2,   {  -1,  -3, -7            } );
+      c->m_GOPList[ 28 ] = vvenc::GOPEntry( 'B',    27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27 },           2,   {  -1,  -5                } );
+      c->m_GOPList[ 29 ] = vvenc::GOPEntry( 'B',    30,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 14, 30     },           2,   {  -2,   2                } );
+      c->m_GOPList[ 30 ] = vvenc::GOPEntry( 'B',    29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 13, 29     },           2,   {  -1,  -3                } );
+      c->m_GOPList[ 31 ] = vvenc::GOPEntry( 'B',    31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15, 31 },           2,   {  -1,   1                } );
     }
     else
     {
