@@ -711,7 +711,6 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
   vvenc_confirmParameter( c, c->m_IntraPeriodSec < 0,                                          "IDR period (in seconds) must be >= 0");
 
   vvenc_confirmParameter( c, c->m_GOPSize < 1 || c->m_GOPSize > VVENC_MAX_GOP,                           "GOP Size must be between 1 and 64" );
-  vvenc_confirmParameter( c, c->m_GOPList[0].m_POC == -1 && c->m_GOPSize != 1 && c->m_GOPSize != 16 && c->m_GOPSize != 32, "GOP list auto config only supported GOP sizes: 1, 16, 32" );
   vvenc_confirmParameter( c, c->m_leadFrames < 0 || c->m_leadFrames > VVENC_MAX_GOP,                     "Lead frames exceeds supported range (0 to 64)" );
   vvenc_confirmParameter( c, c->m_trailFrames < 0 || c->m_trailFrames > VVENC_MCTF_RANGE,                "Trail frames exceeds supported range (0 to 4)" );
 
@@ -1283,352 +1282,95 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
     vvenc_ReshapeCW_default( &c->m_reshapeCW );
   }
 
-  /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
-   * This permits the ability to omit a GOP structure specification */
-  if ( c->m_IntraPeriod == 1 && c->m_GOPList[0].m_POC == -1 )
+  if( c->m_GOPList[ 0 ].m_POC == -1 )
   {
-    vvenc_GOPEntry_default( &c->m_GOPList[0] );
-    c->m_GOPList[0].m_POC        = 1;
-    c->m_GOPList[0].m_temporalId = 0;
-    c->m_GOPList[0].m_sliceType  = 'I';
-  }
-  else
-  {
-    // set default RA config
-    if( c->m_GOPSize == 16 && c->m_GOPList[0].m_POC == -1 && c->m_GOPList[1].m_POC == -1 )
+    if( c->m_IntraPeriod == 1 || c->m_GOPSize == 1 )
     {
-      for( int i = 0; i < 16; i++ )
-      {
-        vvenc_GOPEntry_default( &c->m_GOPList[i] );
-        c->m_GOPList[i].m_sliceType = 'B';
-        c->m_GOPList[i].m_QPFactor = 1;
-
-        c->m_GOPList[i].m_numRefPicsActive[0] = 2;
-        c->m_GOPList[i].m_numRefPicsActive[1] = 2;
-        c->m_GOPList[i].m_numRefPics[0] = 2;
-        c->m_GOPList[i].m_numRefPics[1] = 2;
-      }
-      c->m_GOPList[0].m_POC  = 16;  c->m_GOPList[0].m_temporalId  = 0;
-      c->m_GOPList[1].m_POC  =  8;  c->m_GOPList[1].m_temporalId  = 1;
-      c->m_GOPList[2].m_POC  =  4;  c->m_GOPList[2].m_temporalId  = 2;
-      c->m_GOPList[3].m_POC  =  2;  c->m_GOPList[3].m_temporalId  = 3;
-      c->m_GOPList[4].m_POC  =  1;  c->m_GOPList[4].m_temporalId  = 4;
-      c->m_GOPList[5].m_POC  =  3;  c->m_GOPList[5].m_temporalId  = 4;
-      c->m_GOPList[6].m_POC  =  6;  c->m_GOPList[6].m_temporalId  = 3;
-      c->m_GOPList[7].m_POC  =  5;  c->m_GOPList[7].m_temporalId  = 4;
-      c->m_GOPList[8].m_POC  =  7;  c->m_GOPList[8].m_temporalId  = 4;
-      c->m_GOPList[9].m_POC  = 12;  c->m_GOPList[9].m_temporalId  = 2;
-      c->m_GOPList[10].m_POC = 10;  c->m_GOPList[10].m_temporalId = 3;
-      c->m_GOPList[11].m_POC =  9;  c->m_GOPList[11].m_temporalId = 4;
-      c->m_GOPList[12].m_POC = 11;  c->m_GOPList[12].m_temporalId = 4;
-      c->m_GOPList[13].m_POC = 14;  c->m_GOPList[13].m_temporalId = 3;
-      c->m_GOPList[14].m_POC = 13;  c->m_GOPList[14].m_temporalId = 4;
-      c->m_GOPList[15].m_POC = 15;  c->m_GOPList[15].m_temporalId = 4;
-
-      c->m_GOPList[0].m_numRefPics[0]  = 3;
-      c->m_GOPList[8].m_numRefPics[0]  = 3;
-      c->m_GOPList[12].m_numRefPics[0] = 3;
-      c->m_GOPList[13].m_numRefPics[0] = 3;
-      c->m_GOPList[14].m_numRefPics[0] = 3;
-      c->m_GOPList[15].m_numRefPics[0] = 4;
-
-      c->m_GOPList[0].m_deltaRefPics[0][0]  = 16; c->m_GOPList[0].m_deltaRefPics[0][1]  = 32; c->m_GOPList[0].m_deltaRefPics[0][2]  = 24;
-      c->m_GOPList[1].m_deltaRefPics[0][0]  =  8; c->m_GOPList[1].m_deltaRefPics[0][1]  = 16;
-      c->m_GOPList[2].m_deltaRefPics[0][0]  =  4; c->m_GOPList[2].m_deltaRefPics[0][1]  = 12;
-      c->m_GOPList[3].m_deltaRefPics[0][0]  =  2; c->m_GOPList[3].m_deltaRefPics[0][1]  = 10;
-      c->m_GOPList[4].m_deltaRefPics[0][0]  =  1; c->m_GOPList[4].m_deltaRefPics[0][1]  = -1;
-      c->m_GOPList[5].m_deltaRefPics[0][0]  =  1; c->m_GOPList[5].m_deltaRefPics[0][1]  = 3;
-      c->m_GOPList[6].m_deltaRefPics[0][0]  =  2; c->m_GOPList[6].m_deltaRefPics[0][1]  = 6;
-      c->m_GOPList[7].m_deltaRefPics[0][0]  =  1; c->m_GOPList[7].m_deltaRefPics[0][1]  = 5;
-      c->m_GOPList[8].m_deltaRefPics[0][0]  =  1; c->m_GOPList[8].m_deltaRefPics[0][1]  = 3; c->m_GOPList[8].m_deltaRefPics[0][2]  = 7;
-      c->m_GOPList[9].m_deltaRefPics[0][0]  =  4; c->m_GOPList[9].m_deltaRefPics[0][1]  = 12;
-      c->m_GOPList[10].m_deltaRefPics[0][0] =  2; c->m_GOPList[10].m_deltaRefPics[0][1] = 10;
-      c->m_GOPList[11].m_deltaRefPics[0][0] =  1; c->m_GOPList[11].m_deltaRefPics[0][1] = 9;
-      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] = 3; c->m_GOPList[12].m_deltaRefPics[0][2]  = 11;
-      c->m_GOPList[13].m_deltaRefPics[0][0] =  2; c->m_GOPList[13].m_deltaRefPics[0][1] = 6; c->m_GOPList[13].m_deltaRefPics[0][2]  = 14;
-      c->m_GOPList[14].m_deltaRefPics[0][0] =  1; c->m_GOPList[14].m_deltaRefPics[0][1] = 5; c->m_GOPList[14].m_deltaRefPics[0][2]  = 13;
-      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] = 3; c->m_GOPList[15].m_deltaRefPics[0][2]  = 7; c->m_GOPList[15].m_deltaRefPics[0][3]  = 15;
-
-      c->m_GOPList[3].m_numRefPics[1]  = 3;
-      c->m_GOPList[4].m_numRefPics[1]  = 4;
-      c->m_GOPList[5].m_numRefPics[1]  = 3;
-      c->m_GOPList[7].m_numRefPics[1]  = 3;
-      c->m_GOPList[11].m_numRefPics[1] = 3;
-
-      c->m_GOPList[0].m_deltaRefPics[1][0]  = 16; c->m_GOPList[0].m_deltaRefPics[1][1]  =  32;
-      c->m_GOPList[1].m_deltaRefPics[1][0]  = -8; c->m_GOPList[1].m_deltaRefPics[1][1]  =   8;
-      c->m_GOPList[2].m_deltaRefPics[1][0]  = -4; c->m_GOPList[2].m_deltaRefPics[1][1]  = -12;
-      c->m_GOPList[3].m_deltaRefPics[1][0]  = -2; c->m_GOPList[3].m_deltaRefPics[1][1]  =  -6; c->m_GOPList[3].m_deltaRefPics[1][2]  = -14;
-      c->m_GOPList[4].m_deltaRefPics[1][0]  = -1; c->m_GOPList[4].m_deltaRefPics[1][1]  =  -3; c->m_GOPList[4].m_deltaRefPics[1][2]  =  -7;  c->m_GOPList[4].m_deltaRefPics[1][3]  = -15;
-      c->m_GOPList[5].m_deltaRefPics[1][0]  = -1; c->m_GOPList[5].m_deltaRefPics[1][1]  =  -5; c->m_GOPList[5].m_deltaRefPics[1][2]  = -13;
-      c->m_GOPList[6].m_deltaRefPics[1][0]  = -2; c->m_GOPList[6].m_deltaRefPics[1][1]  =  -10;
-      c->m_GOPList[7].m_deltaRefPics[1][0]  = -1; c->m_GOPList[7].m_deltaRefPics[1][1]  =  -3; c->m_GOPList[7].m_deltaRefPics[1][2]  = -11;
-      c->m_GOPList[8].m_deltaRefPics[1][0]  = -1; c->m_GOPList[8].m_deltaRefPics[1][1]  =  -9;
-      c->m_GOPList[9].m_deltaRefPics[1][0]  = -4; c->m_GOPList[9].m_deltaRefPics[1][1]  =   4;
-      c->m_GOPList[10].m_deltaRefPics[1][0] = -2; c->m_GOPList[10].m_deltaRefPics[1][1] =  -6;
-      c->m_GOPList[11].m_deltaRefPics[1][0] = -1; c->m_GOPList[11].m_deltaRefPics[1][1] =  -3; c->m_GOPList[11].m_deltaRefPics[1][2]  = -7;
-      c->m_GOPList[12].m_deltaRefPics[1][0] = -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -5;
-      c->m_GOPList[13].m_deltaRefPics[1][0] = -2; c->m_GOPList[13].m_deltaRefPics[1][1] =   2;
-      c->m_GOPList[14].m_deltaRefPics[1][0] = -1; c->m_GOPList[14].m_deltaRefPics[1][1] =  -3;
-      c->m_GOPList[15].m_deltaRefPics[1][0] = -1; c->m_GOPList[15].m_deltaRefPics[1][1] =   1;
-
-      for( int i = 0; i < 16; i++ )
-      {
-        switch( c->m_GOPList[i].m_temporalId )
-        {
-        case 0: c->m_GOPList[i].m_QPOffset   = 1;
-                c->m_GOPList[i].m_QPOffsetModelOffset = 0.0;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.0;
-        break;
-        case 1: c->m_GOPList[i].m_QPOffset   = 1;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.8848;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2061;
-        break;
-        case 2: c->m_GOPList[i].m_QPOffset   = 4;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.7476;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2286;
-        break;
-        case 3: c->m_GOPList[i].m_QPOffset   = 5;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.90;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.2333;
-        break;
-        case 4: c->m_GOPList[i].m_QPOffset   = 6;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -7.1444;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.3;
-        break;
-        default: break;
-        }
-      }
+      vvenc_confirmParameter( c, c->m_GOPSize != 1,     "gop auto configuration for all intra supports only gop size 1" );
+      vvenc_confirmParameter( c, c->m_IntraPeriod != 1, "gop auto configuration for gop size 1 supports only all intra" );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'I',     1,    0,           0.0,     0.0,  0.0,         0,             0,   { },                          0,   { } );
     }
-    else if( c->m_GOPSize == 32 &&
-            ( (c->m_GOPList[0].m_POC == -1 && c->m_GOPList[1].m_POC == -1) ||
-              (c->m_GOPList[16].m_POC == -1 && c->m_GOPList[17].m_POC == -1)
-              ) )
+    else if( c->m_GOPSize == 8 )
     {
-      for( int i = 0; i < 32; i++ )
-      {
-        vvenc_GOPEntry_default(&c->m_GOPList[i]);
-        c->m_GOPList[i].m_sliceType = 'B';
-        c->m_GOPList[i].m_QPFactor = 1;
-
-        c->m_GOPList[i].m_numRefPicsActive[0] = 2;
-        c->m_GOPList[i].m_numRefPicsActive[1] = 2;
-        c->m_GOPList[i].m_numRefPics[0] = 2;
-        c->m_GOPList[i].m_numRefPics[1] = 2;
-      }
-      c->m_GOPList[ 0].m_POC = 32;   c->m_GOPList[0].m_temporalId  = 0;
-      c->m_GOPList[ 1].m_POC = 16;   c->m_GOPList[1].m_temporalId  = 1;
-      c->m_GOPList[ 2].m_POC =  8;   c->m_GOPList[2].m_temporalId  = 2;
-      c->m_GOPList[ 3].m_POC =  4;   c->m_GOPList[3].m_temporalId  = 3;
-      c->m_GOPList[ 4].m_POC =  2;   c->m_GOPList[4].m_temporalId  = 4;
-      c->m_GOPList[ 5].m_POC =  1;   c->m_GOPList[5].m_temporalId  = 5;
-      c->m_GOPList[ 6].m_POC =  3;   c->m_GOPList[6].m_temporalId  = 5;
-      c->m_GOPList[ 7].m_POC =  6;   c->m_GOPList[7].m_temporalId  = 4;
-      c->m_GOPList[ 8].m_POC =  5;   c->m_GOPList[8].m_temporalId  = 5;
-      c->m_GOPList[ 9].m_POC =  7;   c->m_GOPList[9].m_temporalId  = 5;
-      c->m_GOPList[10].m_POC = 12;   c->m_GOPList[10].m_temporalId = 3;
-      c->m_GOPList[11].m_POC = 10;   c->m_GOPList[11].m_temporalId = 4;
-      c->m_GOPList[12].m_POC =  9;   c->m_GOPList[12].m_temporalId = 5;
-      c->m_GOPList[13].m_POC = 11;   c->m_GOPList[13].m_temporalId = 5;
-      c->m_GOPList[14].m_POC = 14;   c->m_GOPList[14].m_temporalId = 4;
-      c->m_GOPList[15].m_POC = 13;   c->m_GOPList[15].m_temporalId = 5;
-
-      c->m_GOPList[16].m_POC = 15;   c->m_GOPList[16].m_temporalId = 5;
-      c->m_GOPList[17].m_POC = 24;   c->m_GOPList[17].m_temporalId = 2;
-      c->m_GOPList[18].m_POC = 20;   c->m_GOPList[18].m_temporalId = 3;
-      c->m_GOPList[19].m_POC = 18;   c->m_GOPList[19].m_temporalId = 4;
-      c->m_GOPList[20].m_POC = 17;   c->m_GOPList[20].m_temporalId = 5;
-      c->m_GOPList[21].m_POC = 19;   c->m_GOPList[21].m_temporalId = 5;
-      c->m_GOPList[22].m_POC = 22;   c->m_GOPList[22].m_temporalId = 4;
-      c->m_GOPList[23].m_POC = 21;   c->m_GOPList[23].m_temporalId = 5;
-      c->m_GOPList[24].m_POC = 23;   c->m_GOPList[24].m_temporalId = 5;
-      c->m_GOPList[25].m_POC = 28;   c->m_GOPList[25].m_temporalId = 3;
-      c->m_GOPList[26].m_POC = 26;   c->m_GOPList[26].m_temporalId = 4;
-      c->m_GOPList[27].m_POC = 25;   c->m_GOPList[27].m_temporalId = 5;
-      c->m_GOPList[28].m_POC = 27;   c->m_GOPList[28].m_temporalId = 5;
-      c->m_GOPList[29].m_POC = 30;   c->m_GOPList[29].m_temporalId = 4;
-      c->m_GOPList[30].m_POC = 29;   c->m_GOPList[30].m_temporalId = 5;
-      c->m_GOPList[31].m_POC = 31;   c->m_GOPList[31].m_temporalId = 5;
-
-      c->m_GOPList[ 0].m_numRefPics[0] = 3;
-      c->m_GOPList[ 1].m_numRefPics[0] = 2;
-      c->m_GOPList[ 2].m_numRefPics[0] = 2;
-      c->m_GOPList[ 3].m_numRefPics[0] = 2;
-      c->m_GOPList[ 4].m_numRefPics[0] = 2;
-      c->m_GOPList[ 5].m_numRefPics[0] = 2;
-      c->m_GOPList[ 6].m_numRefPics[0] = 2;
-      c->m_GOPList[ 7].m_numRefPics[0] = 2;
-      c->m_GOPList[ 8].m_numRefPics[0] = 2;
-      c->m_GOPList[ 9].m_numRefPics[0] = 3;
-      c->m_GOPList[10].m_numRefPics[0] = 2;
-      c->m_GOPList[11].m_numRefPics[0] = 2;
-      c->m_GOPList[12].m_numRefPics[0] = 2;
-      c->m_GOPList[13].m_numRefPics[0] = 3;
-      c->m_GOPList[14].m_numRefPics[0] = 3;
-      c->m_GOPList[15].m_numRefPics[0] = 3;
-
-      c->m_GOPList[16].m_numRefPics[0] = 3;
-      c->m_GOPList[17].m_numRefPics[0] = 2;
-      c->m_GOPList[18].m_numRefPics[0] = 2;
-      c->m_GOPList[19].m_numRefPics[0] = 2;
-      c->m_GOPList[20].m_numRefPics[0] = 2;
-      c->m_GOPList[21].m_numRefPics[0] = 3;
-      c->m_GOPList[22].m_numRefPics[0] = 3;
-      c->m_GOPList[23].m_numRefPics[0] = 3;
-      c->m_GOPList[24].m_numRefPics[0] = 4;
-      c->m_GOPList[25].m_numRefPics[0] = 3;
-      c->m_GOPList[26].m_numRefPics[0] = 3;
-      c->m_GOPList[27].m_numRefPics[0] = 3;
-      c->m_GOPList[28].m_numRefPics[0] = 4;
-      c->m_GOPList[29].m_numRefPics[0] = 3;
-      c->m_GOPList[30].m_numRefPics[0] = 3;
-      c->m_GOPList[31].m_numRefPics[0] = 4;
-
-      c->m_GOPList[ 0].m_deltaRefPics[0][0] = 32; c->m_GOPList[ 0].m_deltaRefPics[0][1] = 64; c->m_GOPList[ 0].m_deltaRefPics[0][2] = 48; //th swapped order of ref-pic 1 and 2
-      c->m_GOPList[ 1].m_deltaRefPics[0][0] = 16; c->m_GOPList[ 1].m_deltaRefPics[0][1] = 32;
-      c->m_GOPList[ 2].m_deltaRefPics[0][0] =  8; c->m_GOPList[ 2].m_deltaRefPics[0][1] = 24;
-      c->m_GOPList[ 3].m_deltaRefPics[0][0] =  4; c->m_GOPList[ 3].m_deltaRefPics[0][1] = 20;
-
-      c->m_GOPList[ 4].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 4].m_deltaRefPics[0][1] = 18;
-      c->m_GOPList[ 5].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 5].m_deltaRefPics[0][1] = -1;
-      c->m_GOPList[ 6].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 6].m_deltaRefPics[0][1] =  3;
-      c->m_GOPList[ 7].m_deltaRefPics[0][0] =  2; c->m_GOPList[ 7].m_deltaRefPics[0][1] =  6;
-
-      c->m_GOPList[ 8].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 8].m_deltaRefPics[0][1] =  5;
-      c->m_GOPList[ 9].m_deltaRefPics[0][0] =  1; c->m_GOPList[ 9].m_deltaRefPics[0][1] =  3; c->m_GOPList[ 9].m_deltaRefPics[0][2] =  7;
-      c->m_GOPList[10].m_deltaRefPics[0][0] =  4; c->m_GOPList[10].m_deltaRefPics[0][1] = 12;
-      c->m_GOPList[11].m_deltaRefPics[0][0] =  2; c->m_GOPList[11].m_deltaRefPics[0][1] = 10;
-
-      c->m_GOPList[12].m_deltaRefPics[0][0] =  1; c->m_GOPList[12].m_deltaRefPics[0][1] =  9;
-      c->m_GOPList[13].m_deltaRefPics[0][0] =  1; c->m_GOPList[13].m_deltaRefPics[0][1] =  3; c->m_GOPList[13].m_deltaRefPics[0][2] = 11;
-      c->m_GOPList[14].m_deltaRefPics[0][0] =  2; c->m_GOPList[14].m_deltaRefPics[0][1] =  6; c->m_GOPList[14].m_deltaRefPics[0][2] = 14;
-      c->m_GOPList[15].m_deltaRefPics[0][0] =  1; c->m_GOPList[15].m_deltaRefPics[0][1] =  5; c->m_GOPList[15].m_deltaRefPics[0][2] = 13;
-
-      c->m_GOPList[16].m_deltaRefPics[0][0] =  1; c->m_GOPList[16].m_deltaRefPics[0][1] =  3; c->m_GOPList[16].m_deltaRefPics[0][2] = 15;
-      c->m_GOPList[17].m_deltaRefPics[0][0] =  8; c->m_GOPList[17].m_deltaRefPics[0][1] = 24;
-      c->m_GOPList[18].m_deltaRefPics[0][0] =  4; c->m_GOPList[18].m_deltaRefPics[0][1] = 20;
-      c->m_GOPList[19].m_deltaRefPics[0][0] =  2; c->m_GOPList[19].m_deltaRefPics[0][1] = 18;
-
-      c->m_GOPList[20].m_deltaRefPics[0][0] =  1; c->m_GOPList[20].m_deltaRefPics[0][1] = 17;
-      c->m_GOPList[21].m_deltaRefPics[0][0] =  1; c->m_GOPList[21].m_deltaRefPics[0][1] =  3; c->m_GOPList[21].m_deltaRefPics[0][2] = 19;
-      c->m_GOPList[22].m_deltaRefPics[0][0] =  2; c->m_GOPList[22].m_deltaRefPics[0][1] =  6; c->m_GOPList[22].m_deltaRefPics[0][2] = 22;
-      c->m_GOPList[23].m_deltaRefPics[0][0] =  1; c->m_GOPList[23].m_deltaRefPics[0][1] =  5; c->m_GOPList[23].m_deltaRefPics[0][2] = 21;
-
-      c->m_GOPList[24].m_deltaRefPics[0][0] =  1; c->m_GOPList[24].m_deltaRefPics[0][1] =  3; c->m_GOPList[24].m_deltaRefPics[0][2] =  7; c->m_GOPList[24].m_deltaRefPics[0][3] = 23;
-      c->m_GOPList[25].m_deltaRefPics[0][0] =  4; c->m_GOPList[25].m_deltaRefPics[0][1] = 12; c->m_GOPList[25].m_deltaRefPics[0][2] = 28;
-      c->m_GOPList[26].m_deltaRefPics[0][0] =  2; c->m_GOPList[26].m_deltaRefPics[0][1] = 10; c->m_GOPList[26].m_deltaRefPics[0][2] = 26;
-      c->m_GOPList[27].m_deltaRefPics[0][0] =  1; c->m_GOPList[27].m_deltaRefPics[0][1] =  9; c->m_GOPList[27].m_deltaRefPics[0][2] = 25;
-
-      c->m_GOPList[28].m_deltaRefPics[0][0] =  1; c->m_GOPList[28].m_deltaRefPics[0][1] =  3; c->m_GOPList[28].m_deltaRefPics[0][2] = 11; c->m_GOPList[28].m_deltaRefPics[0][3] = 27;
-      c->m_GOPList[29].m_deltaRefPics[0][0] =  2; c->m_GOPList[29].m_deltaRefPics[0][1] = 14; c->m_GOPList[29].m_deltaRefPics[0][2] = 30;
-      c->m_GOPList[30].m_deltaRefPics[0][0] =  1; c->m_GOPList[30].m_deltaRefPics[0][1] = 13; c->m_GOPList[30].m_deltaRefPics[0][2] = 29;
-      c->m_GOPList[31].m_deltaRefPics[0][0] =  1; c->m_GOPList[31].m_deltaRefPics[0][1] =  3; c->m_GOPList[31].m_deltaRefPics[0][2] = 15; c->m_GOPList[31].m_deltaRefPics[0][3] = 31;
-
-      c->m_GOPList[ 0].m_numRefPics[1] = 2;
-      c->m_GOPList[ 1].m_numRefPics[1] = 2;
-      c->m_GOPList[ 2].m_numRefPics[1] = 2;
-      c->m_GOPList[ 3].m_numRefPics[1] = 3;
-      c->m_GOPList[ 4].m_numRefPics[1] = 4;
-      c->m_GOPList[ 5].m_numRefPics[1] = 5;
-      c->m_GOPList[ 6].m_numRefPics[1] = 4;
-      c->m_GOPList[ 7].m_numRefPics[1] = 3;
-      c->m_GOPList[ 8].m_numRefPics[1] = 4;
-      c->m_GOPList[ 9].m_numRefPics[1] = 3;
-      c->m_GOPList[10].m_numRefPics[1] = 2;
-      c->m_GOPList[11].m_numRefPics[1] = 3;
-      c->m_GOPList[12].m_numRefPics[1] = 4;
-      c->m_GOPList[13].m_numRefPics[1] = 3;
-      c->m_GOPList[14].m_numRefPics[1] = 2;
-      c->m_GOPList[15].m_numRefPics[1] = 3;
-
-      c->m_GOPList[16].m_numRefPics[1] = 2;
-      c->m_GOPList[17].m_numRefPics[1] = 2;
-      c->m_GOPList[18].m_numRefPics[1] = 2;
-      c->m_GOPList[19].m_numRefPics[1] = 3;
-      c->m_GOPList[20].m_numRefPics[1] = 4;
-      c->m_GOPList[21].m_numRefPics[1] = 3;
-      c->m_GOPList[22].m_numRefPics[1] = 2;
-      c->m_GOPList[23].m_numRefPics[1] = 3;
-      c->m_GOPList[24].m_numRefPics[1] = 2;
-      c->m_GOPList[25].m_numRefPics[1] = 2;
-      c->m_GOPList[26].m_numRefPics[1] = 2;
-      c->m_GOPList[27].m_numRefPics[1] = 3;
-      c->m_GOPList[28].m_numRefPics[1] = 2;
-      c->m_GOPList[29].m_numRefPics[1] = 2;
-      c->m_GOPList[30].m_numRefPics[1] = 2;
-      c->m_GOPList[31].m_numRefPics[1] = 2;
-
-      c->m_GOPList[ 0].m_deltaRefPics[1][0] =  32; c->m_GOPList[ 0].m_deltaRefPics[1][1] =  64; //th48
-      c->m_GOPList[ 1].m_deltaRefPics[1][0] = -16; c->m_GOPList[ 1].m_deltaRefPics[1][1] =  16;
-      c->m_GOPList[ 2].m_deltaRefPics[1][0] =  -8; c->m_GOPList[ 2].m_deltaRefPics[1][1] = -24;
-      c->m_GOPList[ 3].m_deltaRefPics[1][0] =  -4; c->m_GOPList[ 3].m_deltaRefPics[1][1] = -12; c->m_GOPList[ 3].m_deltaRefPics[1][2] = -28;
-
-      c->m_GOPList[ 4].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 4].m_deltaRefPics[1][1] =  -6; c->m_GOPList[ 4].m_deltaRefPics[1][2] = -14; c->m_GOPList[ 4].m_deltaRefPics[1][3] = -30;
-      c->m_GOPList[ 5].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 5].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 5].m_deltaRefPics[1][2] =  -7; c->m_GOPList[ 5].m_deltaRefPics[1][3] = -15; c->m_GOPList[5].m_deltaRefPics[1][4] = -31;
-      c->m_GOPList[ 6].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 6].m_deltaRefPics[1][1] =  -5; c->m_GOPList[ 6].m_deltaRefPics[1][2] = -13; c->m_GOPList[ 6].m_deltaRefPics[1][3] = -29;
-      c->m_GOPList[ 7].m_deltaRefPics[1][0] =  -2; c->m_GOPList[ 7].m_deltaRefPics[1][1] = -10; c->m_GOPList[ 7].m_deltaRefPics[1][2] = -26;
-
-      c->m_GOPList[ 8].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 8].m_deltaRefPics[1][1] =  -3; c->m_GOPList[ 8].m_deltaRefPics[1][2] = -11; c->m_GOPList[ 8].m_deltaRefPics[1][3] = -27;
-      c->m_GOPList[ 9].m_deltaRefPics[1][0] =  -1; c->m_GOPList[ 9].m_deltaRefPics[1][1] =  -9; c->m_GOPList[ 9].m_deltaRefPics[1][2] = -25;
-      c->m_GOPList[10].m_deltaRefPics[1][0] =  -4; c->m_GOPList[10].m_deltaRefPics[1][1] = -20;
-      c->m_GOPList[11].m_deltaRefPics[1][0] =  -2; c->m_GOPList[11].m_deltaRefPics[1][1] =  -6; c->m_GOPList[11].m_deltaRefPics[1][2] = -22;
-
-      c->m_GOPList[12].m_deltaRefPics[1][0] =  -1; c->m_GOPList[12].m_deltaRefPics[1][1] =  -3; c->m_GOPList[12].m_deltaRefPics[1][2] =  -7; c->m_GOPList[12].m_deltaRefPics[1][3] = -23;
-      c->m_GOPList[13].m_deltaRefPics[1][0] =  -1; c->m_GOPList[13].m_deltaRefPics[1][1] =  -5; c->m_GOPList[13].m_deltaRefPics[1][2] = -21;
-      c->m_GOPList[14].m_deltaRefPics[1][0] =  -2; c->m_GOPList[14].m_deltaRefPics[1][1] = -18;
-      c->m_GOPList[15].m_deltaRefPics[1][0] =  -1; c->m_GOPList[15].m_deltaRefPics[1][1] =  -3; c->m_GOPList[15].m_deltaRefPics[1][2] = -19;
-
-      c->m_GOPList[16].m_deltaRefPics[1][0] =  -1; c->m_GOPList[16].m_deltaRefPics[1][1] = -17;
-      c->m_GOPList[17].m_deltaRefPics[1][0] =  -8; c->m_GOPList[17].m_deltaRefPics[1][1] =   8;
-      c->m_GOPList[18].m_deltaRefPics[1][0] =  -4; c->m_GOPList[18].m_deltaRefPics[1][1] = -12;
-      c->m_GOPList[19].m_deltaRefPics[1][0] =  -2; c->m_GOPList[19].m_deltaRefPics[1][1] =  -6; c->m_GOPList[19].m_deltaRefPics[1][2] = -14;
-
-      c->m_GOPList[20].m_deltaRefPics[1][0] =  -1; c->m_GOPList[20].m_deltaRefPics[1][1] =  -3; c->m_GOPList[20].m_deltaRefPics[1][2] =  -7; c->m_GOPList[20].m_deltaRefPics[1][3] = -15;
-      c->m_GOPList[21].m_deltaRefPics[1][0] =  -1; c->m_GOPList[21].m_deltaRefPics[1][1] =  -5; c->m_GOPList[21].m_deltaRefPics[1][2] = -13;
-      c->m_GOPList[22].m_deltaRefPics[1][0] =  -2; c->m_GOPList[22].m_deltaRefPics[1][1] = -10;
-      c->m_GOPList[23].m_deltaRefPics[1][0] =  -1; c->m_GOPList[23].m_deltaRefPics[1][1] =  -3; c->m_GOPList[23].m_deltaRefPics[1][2] = -11;
-
-      c->m_GOPList[24].m_deltaRefPics[1][0] =  -1; c->m_GOPList[24].m_deltaRefPics[1][1] =  -9;
-      c->m_GOPList[25].m_deltaRefPics[1][0] =  -4; c->m_GOPList[25].m_deltaRefPics[1][1] =   4;
-      c->m_GOPList[26].m_deltaRefPics[1][0] =  -2; c->m_GOPList[26].m_deltaRefPics[1][1] =  -6;
-      c->m_GOPList[27].m_deltaRefPics[1][0] =  -1; c->m_GOPList[27].m_deltaRefPics[1][1] =  -3; c->m_GOPList[27].m_deltaRefPics[1][2] = -7;
-
-      c->m_GOPList[28].m_deltaRefPics[1][0] =  -1; c->m_GOPList[28].m_deltaRefPics[1][1] =  -5;
-      c->m_GOPList[29].m_deltaRefPics[1][0] =  -2; c->m_GOPList[29].m_deltaRefPics[1][1] =   2;
-      c->m_GOPList[30].m_deltaRefPics[1][0] =  -1; c->m_GOPList[30].m_deltaRefPics[1][1] =  -3;
-      c->m_GOPList[31].m_deltaRefPics[1][0] =  -1; c->m_GOPList[31].m_deltaRefPics[1][1] =   1;
-
-      for( int i = 0; i < 32; i++ )
-      {
-        switch( c->m_GOPList[i].m_temporalId )
-        {
-        case 0: c->m_GOPList[i].m_QPOffset   = -1;
-                c->m_GOPList[i].m_QPOffsetModelOffset = 0.0;
-                c->m_GOPList[i].m_QPOffsetModelScale  = 0.0;
-                break;
-        case 1: c->m_GOPList[i].m_QPOffset   = 0;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.9309;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2265;
-                break;
-        case 2: c->m_GOPList[i].m_QPOffset   = 0;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -3.0625;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.1875;
-                break;
-        case 3: c->m_GOPList[i].m_QPOffset   = 3;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.4095;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2571;
-                break;
-        case 4: c->m_GOPList[i].m_QPOffset   = 5;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -4.4895;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.1947;
-                break;
-        case 5: c->m_GOPList[i].m_QPOffset   = 6;
-                c->m_GOPList[i].m_QPOffsetModelOffset = -5.4429;
-                c->m_GOPList[i].m_QPOffsetModelScale  =  0.2429;
-                break;
-        default: break;
-        }
-      }
+      vvenc_confirmParameter( c, c->m_lowDelay == 0, "gop auto configuration for gop size 8 supports only low delay" );
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',     1,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 9, 17, 25 },             4,   { 1, 9, 17, 25 } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     2,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 2, 10, 18 },             4,   { 1, 2, 10, 18 } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     3,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 3, 11, 19 },             4,   { 1, 3, 11, 19 } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 4, 12, 20 },             4,   { 1, 4, 12, 20 } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     5,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 5, 13, 21 },             4,   { 1, 5, 13, 21 } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     6,    4,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 6, 14, 22 },             4,   { 1, 6, 14, 22 } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     7,    5,         -6.5,   0.2590,  1.0,         0,             4,   { 1, 7, 15, 23 },             4,   { 1, 7, 15, 23 } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     8,    1,          0.0,      0.0,  1.0,         0,             4,   { 1, 8, 16, 24 },             4,   { 1, 8, 16, 24 } );
+    }
+    else if( c->m_GOPSize == 16 )
+    {
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    16,    1,           0.0,     0.0,  1.0,         0,             2,   { 16, 32, 24     },           2,   { 16,  32           } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',     8,    1,       -4.8848,  0.2061,  1.0,         1,             2,   {  8, 16         },           2,   { -8,   8           } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     4,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },           2,   { -4, -12           } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     2,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },           2,   { -2,  -6, -14      } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     1,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1, -1         },           2,   { -1,  -3,  -7, -15 } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     3,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3         },           2,   { -1,  -5, -13      } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     6,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6         },           2,   { -2, -10           } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     5,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5         },           2,   { -1,  -3, -11      } );
+      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     7,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7     },           2,   { -1,  -9           } );
+      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',    12,    4,       -5.7476,  0.2286,  1.0,         2,             2,   {  4, 12         },           2,   { -4,   4           } );
+      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    10,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2, 10         },           2,   { -2,  -6           } );
+      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',     9,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  9         },           2,   { -1,  -3,  -7      } );
+      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',    11,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3, 11     },           2,   { -1,  -5           } );
+      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    14,    5,         -5.90,  0.2333,  1.0,         3,             2,   {  2,  6, 14     },           2,   { -2,   2           } );
+      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    13,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  5, 13     },           2,   { -1,  -3           } );
+      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    15,    6,       -7.1444,     0.3,  1.0,         4,             2,   {  1,  3,  7, 15 },           2,   { -1,   1           } );
+    }
+    else if( c->m_GOPSize == 32 )
+    {
+      //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
+      //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
+      //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
+      c->m_GOPList[  0 ] = vvenc::GOPEntry( 'B',    32,   -1,           0.0,     0.0,  1.0,         0,             2,   { 32, 64, 48     },           2,   {  32,  64                } );
+      c->m_GOPList[  1 ] = vvenc::GOPEntry( 'B',    16,    0,       -4.9309,  0.2265,  1.0,         1,             2,   { 16, 32         },           2,   { -16,  16                } );
+      c->m_GOPList[  2 ] = vvenc::GOPEntry( 'B',     8,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8, -24                } );
+      c->m_GOPList[  3 ] = vvenc::GOPEntry( 'B',     4,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12, -28           } );
+      c->m_GOPList[  4 ] = vvenc::GOPEntry( 'B',     2,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14, -30      } );
+      c->m_GOPList[  5 ] = vvenc::GOPEntry( 'B',     1,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, -1         },           2,   {  -1,  -3,  -7, -15, -31 } );
+      c->m_GOPList[  6 ] = vvenc::GOPEntry( 'B',     3,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3         },           2,   {  -1,  -5, -13, -29      } );
+      c->m_GOPList[  7 ] = vvenc::GOPEntry( 'B',     6,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6         },           2,   {  -2, -10, -26           } );
+      c->m_GOPList[  8 ] = vvenc::GOPEntry( 'B',     5,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5         },           2,   {  -1,  -3, -11, -27      } );
+      c->m_GOPList[  9 ] = vvenc::GOPEntry( 'B',     7,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 7      },           2,   {  -1,  -9, -25           } );
+      c->m_GOPList[ 10 ] = vvenc::GOPEntry( 'B',    12,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12         },           2,   {  -4, -20                } );
+      c->m_GOPList[ 11 ] = vvenc::GOPEntry( 'B',    10,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10         },           2,   {  -2,  -6, -22           } );
+      c->m_GOPList[ 12 ] = vvenc::GOPEntry( 'B',     9,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9         },           2,   {  -1,  -3,  -7, -23      } );
+      c->m_GOPList[ 13 ] = vvenc::GOPEntry( 'B',    11,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11     },           2,   {  -1,  -5, -21           } );
+      c->m_GOPList[ 14 ] = vvenc::GOPEntry( 'B',    14,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 14     },           2,   {  -2, -18                } );
+      c->m_GOPList[ 15 ] = vvenc::GOPEntry( 'B',    13,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 13     },           2,   {  -1,  -3, -19           } );
+      c->m_GOPList[ 16 ] = vvenc::GOPEntry( 'B',    15,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15     },           2,   {  -1, -17                } );
+      c->m_GOPList[ 17 ] = vvenc::GOPEntry( 'B',    24,    0,       -3.0625,  0.1875,  1.0,         2,             2,   {  8, 24         },           2,   {  -8,   8                } );
+      c->m_GOPList[ 18 ] = vvenc::GOPEntry( 'B',    20,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 20         },           2,   {  -4, -12                } );
+      c->m_GOPList[ 19 ] = vvenc::GOPEntry( 'B',    18,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 18         },           2,   {  -2,  -6, -14           } );
+      c->m_GOPList[ 20 ] = vvenc::GOPEntry( 'B',    17,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 17         },           2,   {  -1,  -3,  -7, -15      } );
+      c->m_GOPList[ 21 ] = vvenc::GOPEntry( 'B',    19,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 19     },           2,   {  -1,  -5, -13           } );
+      c->m_GOPList[ 22 ] = vvenc::GOPEntry( 'B',    22,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2,  6, 22     },           2,   {  -2, -10                } );
+      c->m_GOPList[ 23 ] = vvenc::GOPEntry( 'B',    21,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  5, 21     },           2,   {  -1,  -3, -11           } );
+      c->m_GOPList[ 24 ] = vvenc::GOPEntry( 'B',    23,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3,  7, 23 },           2,   {  -1,  -9                } );
+      c->m_GOPList[ 25 ] = vvenc::GOPEntry( 'B',    28,    3,       -5.4095,  0.2571,  1.0,         3,             2,   {  4, 12, 28     },           2,   {  -4,   4                } );
+      c->m_GOPList[ 26 ] = vvenc::GOPEntry( 'B',    26,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 10, 26     },           2,   {  -2,  -6                } );
+      c->m_GOPList[ 27 ] = vvenc::GOPEntry( 'B',    25,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  9, 25     },           2,   {  -1,  -3, -7            } );
+      c->m_GOPList[ 28 ] = vvenc::GOPEntry( 'B',    27,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 11, 27 },           2,   {  -1,  -5                } );
+      c->m_GOPList[ 29 ] = vvenc::GOPEntry( 'B',    30,    5,       -4.4895,  0.1947,  1.0,         4,             2,   {  2, 14, 30     },           2,   {  -2,   2                } );
+      c->m_GOPList[ 30 ] = vvenc::GOPEntry( 'B',    29,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1, 13, 29     },           2,   {  -1,  -3                } );
+      c->m_GOPList[ 31 ] = vvenc::GOPEntry( 'B',    31,    6,       -5.4429,  0.2429,  1.0,         5,             2,   {  1,  3, 15, 31 },           2,   {  -1,   1                } );
+    }
+    else
+    {
+      vvenc_confirmParameter( c, true, "gop auto configuration only supported for gop size (1,8,16,32)" );
     }
   }
 

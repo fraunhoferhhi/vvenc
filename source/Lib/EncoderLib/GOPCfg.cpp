@@ -634,7 +634,10 @@ void GOPCfg::xPruneGopList( int gopSize, GOPEntryList& gopList ) const
       {
         for( int j = 0; j < gopEntry.m_numRefPics[ l ]; j++ )
         {
-          gopEntry.m_deltaRefPics[ l ][ j ] = std::min( gopEntry.m_deltaRefPics[ l ][ j ] - sizeDiff, gopSize );
+          if( gopEntry.m_deltaRefPics[ l ][ j ] > sizeDiff )
+            gopEntry.m_deltaRefPics[ l ][ j ] -= sizeDiff;
+          else
+            gopEntry.m_deltaRefPics[ l ][ j ] = gopSize; // ref points inside removed pics, lets point to start of gop (poc 0) as default
         }
       }
       gopEntry.m_POC -= sizeDiff;

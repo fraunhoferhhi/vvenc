@@ -374,6 +374,8 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
       __m256i vone   = _mm256_set1_epi16( 1 );
       __m256i vsum32 = _mm256_setzero_si256();
 
+      int checkExit = 3;
+
       for( int iY = 0; iY < iRows; iY+=iSubStep )
       {
         __m256i vsrc1  = _mm256_loadu_si256( ( __m256i* )( pSrc1 ) );
@@ -394,12 +396,17 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
 
-        if( earlyExitAllowed && ( iY & 1 ) )
+        if( earlyExitAllowed && checkExit == 0 )
         {
           Distortion distTemp = _mm256_extract_epi32( vsum32, 0 ) + _mm256_extract_epi32( vsum32, 4 );
           distTemp <<= iSubShift;
           distTemp >>= DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
           if( distTemp > rcDtParam.maximumDistortionForEarlyExit ) return distTemp;
+          checkExit = 3;
+        }
+        else if( earlyExitAllowed )
+        {
+          checkExit--;
         }
       }
 
@@ -502,6 +509,8 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
       __m128i vone   = _mm_set1_epi16( 1 );
       __m128i vsum32 = _mm_setzero_si128();
 
+      int checkExit = 3;
+
       for( int iY = 0; iY < iRows; iY+=iSubStep )
       {
         __m128i vsrc1  = _mm_loadu_si128( ( const __m128i* )( pSrc1 ) );
@@ -533,12 +542,17 @@ Distortion RdCost::xGetSAD_NxN_SIMD( const DistParam &rcDtParam )
         pSrc1   += iStrideSrc1;
         pSrc2   += iStrideSrc2;
 
-        if( earlyExitAllowed && ( iY & 1 ) )
+        if( earlyExitAllowed && checkExit == 0 )
         {
           Distortion distTemp = _mm_cvtsi128_si32( vsum32 );
           distTemp <<= iSubShift;
           distTemp >>= DISTORTION_PRECISION_ADJUSTMENT( rcDtParam.bitDepth );
           if( distTemp > rcDtParam.maximumDistortionForEarlyExit ) return distTemp;
+          checkExit = 3;
+        }
+        else if( earlyExitAllowed )
+        {
+          checkExit--;
         }
       }
       vsum32 = _mm_hadd_epi32( vsum32, vone );
