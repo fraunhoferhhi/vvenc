@@ -935,6 +935,37 @@ typedef struct GOPEntry : vvencGOPEntry
   {
     this->vvencGOPEntry::operator=( cfgEntry );
   }
+
+  GOPEntry() = default;
+
+  GOPEntry( char sliceType, int poc, int qpOffset, double qpOffsetModelOffset, double qpOffsetModelScale, double qpFactor, int temporalId, int numRefPicsActiveL0, const std::vector<int>& deltaRefPicsL0, int numRefPicsActiveL1, const std::vector<int>& deltaRefPicsL1 )
+  {
+    setDefaultGOPEntry();
+    m_sliceType             = sliceType;
+    m_POC                   = poc;
+    m_QPOffset              = qpOffset;
+    m_QPOffsetModelOffset   = qpOffsetModelOffset;
+    m_QPOffsetModelScale    = qpOffsetModelScale;
+    m_QPFactor              = qpFactor;
+    m_temporalId            = temporalId;
+    m_numRefPicsActive[ 0 ] = numRefPicsActiveL0;
+    m_numRefPics[ 0 ]       = (int)deltaRefPicsL0.size();
+    CHECK( m_numRefPicsActive[ 0 ] > m_numRefPics[ 0 ], "try to use more active reference pictures then are available" );
+    CHECK( m_numRefPics[ 0 ] > VVENC_MAX_NUM_REF_PICS,  "array index out of bounds" );
+    for( int i = 0; i < m_numRefPics[ 0 ]; i++ )
+    {
+      m_deltaRefPics[ 0 ][ i ] = deltaRefPicsL0[ i ];
+    }
+    m_numRefPicsActive[ 1 ] = numRefPicsActiveL1;
+    m_numRefPics[ 1 ]       = (int)deltaRefPicsL1.size();
+    CHECK( m_numRefPicsActive[ 1 ] > m_numRefPics[ 1 ], "try to use more active reference pictures then are available" );
+    CHECK( m_numRefPics[ 1 ] > VVENC_MAX_NUM_REF_PICS,  "array index out of bounds" );
+    for( int i = 0; i < m_numRefPics[ 1 ]; i++ )
+    {
+      m_deltaRefPics[ 1 ][ i ] = deltaRefPicsL1[ i ];
+    }
+  }
+
 } GOPEntry;
 
 

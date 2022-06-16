@@ -135,24 +135,22 @@ public:
                                 NoMallocThreadPool* threadPool,
                                 WaitCounter* ctuTasksDoneCounter );
 
-  void    initPic             ( Picture* pic );
+  void    initPic             ( Picture* pic, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex );
 
   // compress and encode slice
-  void    compressSlice       ( Picture* pic );      ///< analysis stage of slice                     s
+  void    compressSlice       ( Picture* pic );      ///< analysis stage of slices
   void    encodeSliceData     ( Picture* pic );
   void    saoDisabledRate     ( CodingStructure& cs, SAOBlkParam* reconParams );
   void    finishCompressSlice ( Picture* pic, Slice& slice );
 
-  void    resetQP             ( Picture* pic, int sliceQP, double& lambda );
-
 private:
-  void    xInitSliceLambdaQP   ( Slice* slice );
-  double  xCalculateLambda     ( const Slice* slice, const int depth, const double refQP, const double dQP, int& iQP );
-  void    xProcessCtus         ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
+  void    xInitSliceLambdaQP  ( Slice* slice, uint64_t* noiseMinimaStats, std::mutex* noiseMinimaMutex );
+  double  xCalculateLambda    ( const Slice* slice, const int depth, const double refQP, const double dQP, int& iQP );
+  void    xProcessCtus        ( Picture* pic, const unsigned startCtuTsAddr, const unsigned boundingCtuTsAddr );
   template<bool checkReadyState=false>
-  static bool xProcessCtuTask  ( int taskIdx, CtuEncParam* ctuEncParam );
+  static bool xProcessCtuTask ( int taskIdx, CtuEncParam* ctuEncParam );
 
-  int     xGetQPForPicture     ( const Slice* slice );
+  int     xGetQPForPicture    ( const Slice* slice );
 };
 
 } // namespace vvenc

@@ -72,6 +72,8 @@ class EncPicture
     CABACWriter              m_CABACEstimator;
     CtxCache                 m_CtxCache;
     RateCtrl*                m_pcRateCtrl;
+    std::mutex*              m_noiseMinMutex;
+    uint64_t*                m_noiseMinStats;
 
   public:
     WaitCounter              m_ctuTasksDoneCounter;
@@ -80,6 +82,9 @@ class EncPicture
     EncPicture()
       : m_pcEncCfg      ( nullptr )
       , m_CABACEstimator( m_BitEstimator )
+      , m_pcRateCtrl    ( nullptr )
+      , m_noiseMinMutex ( nullptr )
+      , m_noiseMinStats ( nullptr )
     {}
     virtual ~EncPicture() {}
 
@@ -88,12 +93,15 @@ class EncPicture
                                   const SPS& sps,
                                   const PPS& pps,
                                   RateCtrl& rateCtrl,
+                                  std::mutex* const noiseMinimaMutex,
+                                  uint64_t* const noiseMinimaStats,
                                   NoMallocThreadPool* threadPool );
     void compressPicture        ( Picture& pic, EncGOP& gopEncoder );
     void skipCompressPicture    ( Picture& pic, ParameterSetMap<APS>& shrdApsMap );
     void finalizePicture        ( Picture& pic );
 
     EncSlice* getEncSlice       () { return &m_SliceEncoder; }
+    uint64_t* getNoiseMinStatPtr() { return m_noiseMinStats; }
 
   protected:
     void xInitPicEncoder        ( Picture& pic );

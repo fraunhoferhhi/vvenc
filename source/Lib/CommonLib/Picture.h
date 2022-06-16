@@ -231,6 +231,7 @@ public:
   std::vector<Pel>              ctuAdaptedQP;
   std::mutex                    wppMutex;
   int                           picInitialQP;
+  double                        picInitialLambda;
   uint16_t                      picVisActTL0;
   uint16_t                      picVisActY;
   double                        psnr[MAX_NUM_COMP];
