@@ -1662,7 +1662,7 @@ void EncCu::xCheckRDCostMerge( CodingStructure *&tempCS, CodingStructure *&bestC
 
       cu.initPuData();
 
-      const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : DF_HAD;
+      const DFunc dfunc = encTestMode.lossless || tempCS->slice->disableSATDForRd ? DF_SAD : ( m_pcEncCfg->m_fastHad ? DF_HAD_fast : DF_HAD );
       DistParam distParam = m_cRdCost.setDistParam(tempCS->getOrgBuf(COMP_Y), m_SortedPelUnitBufs.getTestBuf(COMP_Y), sps.bitDepths[ CH_L ],  dfunc);
 
       bool sameMV[ MRG_MAX_NUM_CANDS ] = { false, };
@@ -4003,7 +4003,7 @@ uint64_t EncCu::xCalcPuMeBits(const CodingUnit& cu)
 
 double EncCu::xCalcDistortion(CodingStructure *&cur_CS, ChannelType chType, int BitDepth, int imv)
 {
-  const auto currDist1 = m_cRdCost.getDistPart(cur_CS->getOrgBuf( COMP_Y ), cur_CS->getPredBuf( COMP_Y ), BitDepth, COMP_Y, DF_HAD);
+  const auto currDist1 = m_cRdCost.getDistPart(cur_CS->getOrgBuf( COMP_Y ), cur_CS->getPredBuf( COMP_Y ), BitDepth, COMP_Y, m_pcEncCfg->m_fastHad ? DF_HAD_fast : DF_HAD );
   unsigned int uiMvBits = 0;
   unsigned imvShift = imv == IMV_HPEL ? 1 : (imv << 1);
   const CodingUnit& cu = *cur_CS->getCU( chType, TREE_D);

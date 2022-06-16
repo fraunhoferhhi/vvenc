@@ -475,6 +475,7 @@ VVENC_DECL void vvenc_config_default(vvenc_config *c )
 
   c->m_bUseASR                                 = false;                                 ///< flag for using adaptive motion search range
   c->m_bUseHADME                               = true;                                  ///< flag for using HAD in sub-pel ME
+  c->m_fastHad                                 = false;
   c->m_RDOQ                                    = 1;                                     ///< flag for using RD optimized quantization
   c->m_useRDOQTS                               = true;                                  ///< flag for using RD optimized quantization for transform skip
   c->m_useSelectiveRDOQ                        = false;                                 ///< flag for using selective RDOQ
@@ -2097,6 +2098,7 @@ VVENC_DECL int vvenc_init_preset( vvenc_config *c, vvencPresetMode preset )
   c->m_log2DiffMaxMinCodingBlockSize   = 5;
   c->m_bUseASR                         = true;
   c->m_bUseHADME                       = true;
+  c->m_fastHad                         = false;
   c->m_useRDOQTS                       = true;
   c->m_useSelectiveRDOQ                = false;
   c->m_fastQtBtEnc                     = true;
@@ -2756,6 +2758,7 @@ VVENC_DECL const char* vvenc_get_config_as_string( vvenc_config *c, vvencMsgLeve
     css << "\nENC. ALG. CFG: ";
     css << "QPA:" << c->m_usePerceptQPA << " ";
     css << "HAD:" << c->m_bUseHADME << " ";
+    if( c->m_fastHad ) css << "(fast) ";
     css << "RDQ:" << c->m_RDOQ << " ";
     css << "RDQTS:" << c->m_useRDOQTS << " ";
     css << "ASR:" << c->m_bUseASR << " ";
