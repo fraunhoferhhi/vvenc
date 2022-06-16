@@ -197,7 +197,8 @@ protected:
 
 private:
   void xUpdateRasInit                 ( Slice* slice );
-  void xEncodePictures                ( bool flush, AccessUnitList& auList, PicList& doneList );
+  void xProcessPictures               ( bool flush, AccessUnitList& auList, PicList& doneList );
+  void xEncodePicture                 ( Picture* pic, EncPicture* picEncoder );
   void xOutputRecYuv                  ( const PicList& picList );
   void xReleasePictures               ( const PicList& picList, PicList& freeList, bool allDone );
 

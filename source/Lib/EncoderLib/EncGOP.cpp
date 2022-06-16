@@ -422,7 +422,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   xInitPicsInCodingOrder( picList, flush );
 
   // encode pictures
-  xEncodePictures( flush, auList, doneList );
+  xProcessPictures( flush, auList, doneList );
   // output reconstructed YUV
   xOutputRecYuv( picList );
 
@@ -437,8 +437,7 @@ void EncGOP::processPictures( const PicList& picList, bool flush, AccessUnitList
   }
 }
 
-
-void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneList )
+void EncGOP::xProcessPictures( bool flush, AccessUnitList& auList, PicList& doneList )
 {
   // in lockstep mode, process all pictures in processing list
   const bool lockStepMode = (m_pcEncCfg->m_RCTargetBitrate > 0 || (m_pcEncCfg->m_LookAhead > 0 && !m_isPreAnalysis)) && (m_pcEncCfg->m_maxParallelFrames > 0);
@@ -518,70 +517,8 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
       CHECK( picEncoder == nullptr, "no free picture encoder available" );
       CHECK( pic        == nullptr, "no picture to be encoded, ready for encoding" );
       m_procList.remove( pic );
-
-      // decoder in encoder
-      bool decPic = false;
-      bool encPic = false;
-      DTRACE_UPDATE( g_trace_ctx, std::make_pair( "finalpass", m_pcRateCtrl->rcIsFinalPass ? 1: 0 ) );
-      if( m_trySkipOrDecodePicture )
-      {
-        DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
-        trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
-        if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
-        {
-          pic->picInitialQP     = -1;
-          pic->picInitialLambda = -1.0;
-
-          m_pcRateCtrl->initRateControlPic( *pic, pic->slices[0], pic->picInitialQP, pic->picInitialLambda );
-        }
-      }
-      else
-      {
-        encPic = true;
-      }
-      DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
-      pic->writePic = decPic || encPic;
-      pic->encPic   = encPic;
-      pic->isPreAnalysis = m_isPreAnalysis;
-
-      if( m_pcEncCfg->m_alfTempPred || !encPic )
-      {
-        xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
-      }
-
-      // compress next picture
-      if( pic->encPic )
-      {
-        picEncoder->compressPicture( *pic, *this );
-      }
-      else
-      {
-        picEncoder->skipCompressPicture( *pic, m_gopApsMap );
-      }
-
-      // finish picture encoding and cleanup
-      if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
-      {
-        static auto finishTask = []( int, FinishTaskParam* param ) {
-          param->picEncoder->finalizePicture( *param->pic );
-          {
-            std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
-            param->pic->isReconstructed = true;
-            param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
-            param->gopEncoder->m_gopEncCond.notify_one();
-          }
-          delete param;
-          return true;
-        };
-        FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
-        m_threadPool->addBarrierTask<FinishTaskParam>( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
-      }
-      else
-      {
-        picEncoder->finalizePicture( *pic );
-        pic->isReconstructed = true;
-        m_freePicEncoderList.push_back( picEncoder );
-      }
+      
+      xEncodePicture( pic, picEncoder );
     }
   }
   
@@ -652,6 +589,72 @@ void EncGOP::xEncodePictures( bool flush, AccessUnitList& auList, PicList& doneL
   doneList.push_back( outPic );
 
   m_numPicsCoded += 1;
+}
+
+void EncGOP::xEncodePicture( Picture* pic, EncPicture* picEncoder )
+{
+  // decoder in encoder
+  bool decPic = false;
+  bool encPic = false;
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "finalpass", m_pcRateCtrl->rcIsFinalPass ? 1: 0 ) );
+  if( m_trySkipOrDecodePicture )
+  {
+    DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 1 ) );
+    trySkipOrDecodePicture( decPic, encPic, *m_pcEncCfg, pic, m_ffwdDecoder, m_gopApsMap, msg );
+    if( !encPic && m_pcEncCfg->m_RCTargetBitrate > 0 )
+    {
+      pic->picInitialQP     = -1;
+      pic->picInitialLambda = -1.0;
+      m_pcRateCtrl->initRateControlPic( *pic, pic->slices[0], pic->picInitialQP, pic->picInitialLambda );
+    }
+  }
+  else
+  {
+    encPic = true;
+  }
+  DTRACE_UPDATE( g_trace_ctx, std::make_pair( "encdec", 0 ) );
+  pic->writePic = decPic || encPic;
+  pic->encPic   = encPic;
+  pic->isPreAnalysis = m_isPreAnalysis;
+
+  if( m_pcEncCfg->m_alfTempPred || !encPic )
+  {
+    xSyncAlfAps( *pic, pic->picApsMap, m_gopApsMap );
+  }
+
+  // compress next picture
+  if( pic->encPic )
+  {
+    picEncoder->compressPicture( *pic, *this );
+  }
+  else
+  {
+    picEncoder->skipCompressPicture( *pic, m_gopApsMap );
+  }
+
+  // finish picture encoding and cleanup
+  if( pic->encPic && m_pcEncCfg->m_numThreads > 0 )
+  {
+    static auto finishTask = []( int, FinishTaskParam* param ) {
+      param->picEncoder->finalizePicture( *param->pic );
+      {
+        std::lock_guard<std::mutex> lock( param->gopEncoder->m_gopEncMutex );
+        param->pic->isReconstructed = true;
+        param->gopEncoder->m_freePicEncoderList.push_back( param->picEncoder );
+        param->gopEncoder->m_gopEncCond.notify_one();
+      }
+      delete param;
+      return true;
+    };
+    FinishTaskParam* param = new FinishTaskParam( this, picEncoder, pic );
+    m_threadPool->addBarrierTask<FinishTaskParam>( finishTask, param, nullptr, nullptr, { &picEncoder->m_ctuTasksDoneCounter.done } );
+  }
+  else
+  {
+    picEncoder->finalizePicture( *pic );
+    pic->isReconstructed = true;
+    m_freePicEncoderList.push_back( picEncoder );
+  }
 }
 
 void EncGOP::xOutputRecYuv( const PicList& picList )
