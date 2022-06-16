@@ -84,9 +84,11 @@ public:
   bool  isOpen();
   bool  isEof();
   bool  isFail();
-  void  skipYuvFrames( int numFrames, int width, int height );
-  int   readYuvBuf   ( vvencYUVBuffer& yuvInBuf, bool& eof );
-  bool  writeYuvBuf  ( const vvencYUVBuffer& yuvOutBuf );
+  int   skipYuvFrames ( int numFrames, int width, int height );
+  int   readYuvBuf    ( vvencYUVBuffer& yuvInBuf, bool& eof );
+  bool  writeYuvBuf   ( const vvencYUVBuffer& yuvOutBuf );
+  int   countYuvFrames( int width, int height, bool countFromStart = true ); 
+  
   std::string getLastError() const { return m_lastError; }   
 
   static int parseY4mHeader( const std::string &fileName, vvenc_config& config, VVEncAppCfg& appconfig );
