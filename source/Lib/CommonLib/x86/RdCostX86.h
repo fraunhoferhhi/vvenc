@@ -828,8 +828,8 @@ static uint32_t xCalcHAD16x16_fast_SSE( const Torg *piOrg, const Tcur *piCur, co
 
     r0 = _mm_add_epi16( r0, _mm_set1_epi16( 2 ) );
     r1 = _mm_add_epi16( r1, _mm_set1_epi16( 2 ) );
-    r0 = _mm_srli_epi16( r0, 2 );
-    r1 = _mm_srli_epi16( r1, 2 );
+    r0 = _mm_srai_epi16( r0, 2 );
+    r1 = _mm_srai_epi16( r1, 2 );
 
     m2[0][k] = _mm_sub_epi16( r0, r1 ); // 11bit
     //m2[1][k] = _mm_cvtepi16_epi32( _mm_srli_si128( m2[0][k], 8 ) );
@@ -1681,8 +1681,8 @@ static uint32_t xCalcHAD32x32_fast_AVX2( const Torg *piOrg, const Tcur *piCur, c
       r0 = _mm256_add_epi16( r0, _mm256_set1_epi16( 2 ) );
       r1 = _mm256_add_epi16( r1, _mm256_set1_epi16( 2 ) );
 
-      r0 = _mm256_srli_epi16( r0, 2 );
-      r1 = _mm256_srli_epi16( r1, 2 );
+      r0 = _mm256_srai_epi16( r0, 2 );
+      r1 = _mm256_srai_epi16( r1, 2 );
 
       m2[0][k] = _mm256_permute4x64_epi64( _mm256_sub_epi16( r0, r1 ), 0 + ( 2 << 2 ) + ( 1 << 4 ) + ( 3 << 6 ) ); // 11 bit
       //m2[1][k] = _mm256_cvtepi16_epi32( _mm256_extracti128_si256( m2[0][k], 1 ) );
