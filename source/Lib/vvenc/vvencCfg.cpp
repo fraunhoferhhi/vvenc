@@ -1283,9 +1283,10 @@ VVENC_DECL bool vvenc_init_config_parameter( vvenc_config *c )
 
   if( c->m_GOPList[ 0 ].m_POC == -1 )
   {
-    if( c->m_IntraPeriod == 1 )
+    if( c->m_IntraPeriod == 1 || c->m_GOPSize == 1 )
     {
-      vvenc_confirmParameter( c, c->m_GOPSize != 1, "gop auto configuration for all intra supports only gop size 1" );
+      vvenc_confirmParameter( c, c->m_GOPSize != 1,     "gop auto configuration for all intra supports only gop size 1" );
+      vvenc_confirmParameter( c, c->m_IntraPeriod != 1, "gop auto configuration for gop size 1 supports only all intra" );
       //                                    m_sliceType                m_QPOffsetModelOffset       m_temporalId   m_numRefPicsActive[ 0 ]            m_numRefPicsActive[ 1 ]
       //                                     |      m_POC               |      m_QPOffsetModelScale |              |   m_deltaRefPics[ 0 ]            |   m_deltaRefPics[ 1 ]
       //                                     |       |    m_QPOffset    |        |    m_QPFactor    |              |    |                             |    |
